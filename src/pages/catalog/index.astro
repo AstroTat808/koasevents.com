@@ -2,9 +2,18 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
-import { catalogCategories, catalogItems, catalogPricingNote } from '../../data/catalog';
+import { catalogCategories, catalogItems, catalogPricingNote, catalogBundles, bundleSavingsTiers } from '../../data/catalog';
 
 const featured = catalogItems.filter((item) => item.featured);
+const catalogClientData = catalogItems.map((item) => ({
+  id: item.id,
+  name: item.name,
+  bundleEligible: Boolean(item.bundleEligible),
+  includedWith: item.includedWith || [],
+  priceLabel: item.priceLabel,
+}));
+const bundleClientData = catalogBundles;
+const tierClientData = bundleSavingsTiers;
 
 const badgeClass = {
   flagship: 'bg-[var(--koa-amber-light)] text-[var(--koa-ink)]',
@@ -46,6 +55,51 @@ const badgeClass = {
       </div>
     </section>
 
+
+    <section class="bg-[var(--koa-forest)] py-20 text-white lg:py-28">
+      <div class="container-shell">
+        <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
+            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Curated combinations that work better together.</h2>
+          </div>
+          <p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">Bundle savings apply to eligible paid add-ons. Items already included in the Signature Wedding Experience are treated as included value—not discounted again.</p>
+        </div>
+
+        <div class="mt-12 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {catalogBundles.map((bundle) => (
+            <article class="flex min-h-[21rem] flex-col rounded-[1.4rem] border border-white/12 bg-white/[.05] p-6">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="eyebrow text-[var(--koa-amber-light)]">{bundle.eyebrow}</span>
+                {bundle.badge && <span class="rounded-full bg-white/10 px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
+              </div>
+              <h3 class="display mt-6 text-4xl">{bundle.name}</h3>
+              <p class="mt-4 text-sm leading-6 text-white/62">{bundle.description}</p>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {bundle.itemIds.map((id) => {
+                  const item = catalogItems.find((entry) => entry.id === id);
+                  return item ? <span class="rounded-full border border-white/12 px-3 py-2 text-[.62rem] font-bold text-white/70">{item.name}</span> : null;
+                })}
+              </div>
+              <div class="mt-auto flex items-end justify-between gap-5 pt-7">
+                <p class="text-xs font-black uppercase tracking-[.13em] text-[var(--koa-amber-light)]">Up to {bundle.savingsPercent}% bundle savings</p>
+                <button type="button" data-add-bundle={bundle.id} class="text-xs font-black uppercase tracking-[.12em] text-white">Add bundle +</button>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div class="mt-8 grid gap-px overflow-hidden rounded-[1.2rem] bg-white/10 sm:grid-cols-3">
+          {bundleSavingsTiers.map((tier) => (
+            <div class="bg-[var(--koa-forest)] p-5">
+              <p class="eyebrow text-white/38">{tier.minimumItems}+ eligible add-ons</p>
+              <p class="display mt-2 text-3xl">{tier.savingsPercent}% savings</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
     <section class="sticky top-0 z-30 border-y border-[var(--koa-line)] bg-[rgba(251,248,241,.94)] py-4 backdrop-blur">
       <div class="container-shell flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0" data-catalog-filters>
@@ -81,6 +135,8 @@ const badgeClass = {
                 data-catalog-item
                 data-id={item.id}
                 data-category={item.category}
+                data-bundle-eligible={item.bundleEligible ? 'true' : 'false'}
+                data-included-with={(item.includedWith || []).join('|')}
                 data-search={[item.name, item.description, ...(item.keywords || [])].join(' ').toLowerCase()}
                 class="card-lift flex min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6"
               >
@@ -98,6 +154,9 @@ const badgeClass = {
                 <h3 class:list={['display text-3xl leading-[1.03]', item.badges?.length ? 'mt-5' : 'mt-7']}>{item.name}</h3>
                 <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/62">{item.description}</p>
                 {item.note && <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/42">{item.note}</p>}
+                {item.bundleEligible && (
+                  <p class="mt-3 text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Eligible for Koa’s Bundle Savings</p>
+                )}
 
                 {(item.includedWith?.length || item.availableQuantity || item.colors?.length || item.dimensions || item.options?.length || item.specs?.length) && (
                   <div class="mt-5 grid gap-2 border-t border-[var(--koa-line)] pt-4">
@@ -159,6 +218,11 @@ const badgeClass = {
             <div class="mt-6 grid gap-2" data-quote-list>
               <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No items selected yet.</p>
             </div>
+            <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
+              <p class="display mt-2 text-3xl" data-savings-headline></p>
+              <p class="mt-2 text-xs leading-5 text-white/58" data-savings-detail></p>
+            </div>
             <a href="#quote-request" data-quote-jump class="mt-6 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
           </div>
           <p class="mt-5 text-xs leading-5 text-[var(--koa-ink)]/48">{catalogPricingNote}</p>
@@ -177,6 +241,8 @@ const badgeClass = {
         <form name="koa-catalog-quote-request" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]">
           <input type="hidden" name="form-name" value="koa-catalog-quote-request" />
           <input type="hidden" name="selectedCatalogItems" value="" data-selected-items />
+          <input type="hidden" name="estimatedBundleSavings" value="" data-estimated-savings />
+          <input type="hidden" name="matchedCatalogBundle" value="" data-matched-bundle />
           <p class="hidden"><label>Don’t fill this out: <input name="bot-field" /></label></p>
           <div class="grid gap-5 sm:grid-cols-2">
             <label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required /></label>
@@ -187,6 +253,7 @@ const badgeClass = {
             <div class="sm:col-span-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
               <p class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Selected items</p>
               <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58" data-selected-preview>Choose items above and they’ll appear here.</p>
+              <p class="mt-3 hidden text-xs font-bold leading-5 text-[var(--koa-clay)]" data-selected-savings></p>
             </div>
             <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Notes or quantities<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes" placeholder="Tell us quantities, colors, setup ideas or anything else that helps us quote accurately."></textarea></label>
             <button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Request custom quote</button>
@@ -197,7 +264,7 @@ const badgeClass = {
   </main>
   <Footer />
 
-  <script is:inline>
+  <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData }}>
     const filterButtons = [...document.querySelectorAll('[data-catalog-filters] [data-category]')];
     const cards = [...document.querySelectorAll('[data-catalog-item]')];
     const search = document.querySelector('[data-catalog-search]');
@@ -207,13 +274,39 @@ const badgeClass = {
     const quoteEmpty = document.querySelector('[data-quote-empty]');
     const selectedInput = document.querySelector('[data-selected-items]');
     const selectedPreview = document.querySelector('[data-selected-preview]');
+    const selectedSavings = document.querySelector('[data-selected-savings]');
+    const estimatedSavingsInput = document.querySelector('[data-estimated-savings]');
+    const matchedBundleInput = document.querySelector('[data-matched-bundle]');
+    const savingsPanel = document.querySelector('[data-savings-panel]');
+    const savingsHeadline = document.querySelector('[data-savings-headline]');
+    const savingsDetail = document.querySelector('[data-savings-detail]');
+    const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
     let activeCategory = 'all';
     const selected = new Map();
 
     function applyFilters() {
       const term = (search?.value || '').trim().toLowerCase();
       let visible = 0;
-      cards.forEach((card) => {
+      document.querySelectorAll('[data-add-bundle]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const bundle = bundleClientData.find((item) => item.id === button.dataset.addBundle);
+        if (!bundle) return;
+        bundle.itemIds.forEach((id) => {
+          const item = itemById.get(id);
+          if (!item) return;
+          selected.set(id, item.name);
+          const cardButton = document.querySelector('[data-catalog-item][data-id="' + CSS.escape(id) + '"] [data-add-to-quote]');
+          if (cardButton) {
+            cardButton.textContent = 'Added ✓';
+            cardButton.classList.add('text-[var(--koa-clay)]');
+          }
+        });
+        syncQuote();
+        document.querySelector('[data-quote-list]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+
+    cards.forEach((card) => {
         const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
         const searchMatch = !term || (card.dataset.search || '').includes(term);
         const show = categoryMatch && searchMatch;
@@ -240,6 +333,45 @@ const badgeClass = {
     });
     search?.addEventListener('input', applyFilters);
 
+    function selectedPackageIds() {
+      return [...selected.keys()].filter((id) => ['signature-wedding','hibiscus','orchid','gardenia'].includes(id));
+    }
+
+    function isIncludedBySelectedPackage(item) {
+      const packages = selectedPackageIds();
+      if (!packages.length || !item?.includedWith?.length) return false;
+      const names = packages.map((id) => id === 'signature-wedding' ? 'Signature' : id.charAt(0).toUpperCase() + id.slice(1));
+      return names.some((name) => item.includedWith.includes(name) || item.includedWith.includes(name + ' Wedding Experience'));
+    }
+
+    function calculateSavings() {
+      const selectedIds = [...selected.keys()];
+      const eligiblePaid = selectedIds.filter((id) => {
+        const item = itemById.get(id);
+        return item?.bundleEligible && !isIncludedBySelectedPackage(item);
+      });
+
+      let tier = null;
+      for (const candidate of tierClientData) {
+        if (eligiblePaid.length >= candidate.minimumItems) tier = candidate;
+      }
+
+      let bestBundle = null;
+      for (const bundle of bundleClientData) {
+        const paidBundleItems = bundle.itemIds.filter((id) => {
+          const item = itemById.get(id);
+          return !isIncludedBySelectedPackage(item);
+        });
+        const complete = paidBundleItems.length > 1 && paidBundleItems.every((id) => selectedIds.includes(id));
+        if (complete && (!bestBundle || bundle.savingsPercent > bestBundle.savingsPercent)) bestBundle = bundle;
+      }
+
+      const tierPercent = tier?.savingsPercent || 0;
+      const bundlePercent = bestBundle?.savingsPercent || 0;
+      const percent = Math.max(tierPercent, bundlePercent);
+      return { eligiblePaid, tier, bestBundle, percent };
+    }
+
     function syncQuote() {
       const names = [...selected.values()];
       quoteList?.querySelectorAll('[data-selected-row]').forEach((row) => row.remove());
@@ -264,6 +396,28 @@ const badgeClass = {
       const joined = names.join(' | ');
       if (selectedInput) selectedInput.value = joined;
       if (selectedPreview) selectedPreview.textContent = joined || 'Choose items above and they’ll appear here.';
+
+      const savings = calculateSavings();
+      const hasSavings = savings.percent > 0;
+      savingsPanel?.classList.toggle('hidden', !hasSavings);
+      selectedSavings?.classList.toggle('hidden', !hasSavings);
+
+      if (hasSavings) {
+        const headline = savings.bestBundle && savings.bestBundle.savingsPercent >= (savings.tier?.savingsPercent || 0)
+          ? savings.bestBundle.name
+          : savings.percent + '% estimated bundle savings';
+        const detail = savings.bestBundle && savings.bestBundle.savingsPercent >= (savings.tier?.savingsPercent || 0)
+          ? 'You completed the ' + savings.bestBundle.name + ', qualifying for up to ' + savings.percent + '% savings on eligible paid add-ons.'
+          : savings.eligiblePaid.length + ' eligible paid add-ons qualify for up to ' + savings.percent + '% Koa’s Bundle Savings.';
+        if (savingsHeadline) savingsHeadline.textContent = headline;
+        if (savingsDetail) savingsDetail.textContent = detail;
+        if (selectedSavings) selectedSavings.textContent = detail;
+        if (estimatedSavingsInput) estimatedSavingsInput.value = String(savings.percent) + '% estimated';
+        if (matchedBundleInput) matchedBundleInput.value = savings.bestBundle?.name || '';
+      } else {
+        if (estimatedSavingsInput) estimatedSavingsInput.value = '';
+        if (matchedBundleInput) matchedBundleInput.value = '';
+      }
     }
 
     cards.forEach((card) => {
