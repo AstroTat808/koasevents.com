@@ -199,10 +199,11 @@ a { text-underline-offset: 0.18em; }
 
 .site-nav-link {
   position: relative;
-  color: rgba(10,33,26,.73);
-  font-size: .68rem;
+  color: rgba(10,33,26,.82);
+  font-size: .8rem;
   font-weight: 800;
-  letter-spacing: .075em;
+  letter-spacing: .055em;
+  line-height: 1.2;
   transition: color 180ms ease;
 }
 
@@ -234,9 +235,9 @@ a { text-underline-offset: 0.18em; }
   background: var(--koa-forest);
   color: white;
   padding: .88rem 1.35rem;
-  font-size: .66rem;
+  font-size: .72rem;
   font-weight: 900;
-  letter-spacing: .13em;
+  letter-spacing: .115em;
   text-transform: uppercase;
   box-shadow: 0 8px 22px rgba(20,58,45,.16);
   transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
