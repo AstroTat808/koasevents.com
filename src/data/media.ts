@@ -7,49 +7,49 @@ export type MediaAsset = {
 
 export const media = {
   hero: {
-    src: 'https://static.wixstatic.com/media/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg/v1/fill/w_1800,h_1200,al_c,q_90/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg',
+    src: '/media/wix/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg',
     alt: "Koa's Events pavilion illuminated at night in Mountain View, Hawaiʻi",
     width: 1800,
     height: 1200,
   },
   venueWide: {
-    src: 'https://static.wixstatic.com/media/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg/v1/fill/w_1800,h_1200,al_c,q_90/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg',
+    src: '/media/wix/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg',
     alt: "Event setting at Koa's Events on Hawaiʻi Island",
     width: 1800,
     height: 1200,
   },
   hospitality: {
-    src: 'https://static.wixstatic.com/media/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg/v1/fill/w_1200,h_1600,al_c,q_90/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg',
+    src: '/media/wix/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg',
     alt: "Koa's Events hospitality and celebration detail",
     width: 1200,
     height: 1600,
   },
   mobileBar: {
-    src: 'https://static.wixstatic.com/media/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg/v1/fill/w_1600,h_1100,al_c,q_90/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg',
+    src: '/media/wix/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg',
     alt: "Koa's Mobile Bar set for an event on Hawaiʻi Island",
     width: 1600,
     height: 1100,
   },
   plumeria: {
-    src: 'https://static.wixstatic.com/media/02b2df_e52c9276c32541ee81d7a9f9e37ed332~mv2.jpg/v1/fill/w_1600,h_1050,al_c,q_90/plumeria.jpg',
+    src: '/media/wix/02b2df_e52c9276c32541ee81d7a9f9e37ed332~mv2.jpg',
     alt: "Plumeria wedding package setting at Koa's Events",
     width: 1600,
     height: 1050,
   },
   hibiscus: {
-    src: 'https://static.wixstatic.com/media/02b2df_42eefaaa7fe94a06b3f8de17227cfe71~mv2.jpg/v1/fill/w_1400,h_1000,al_c,q_90/hibiscus.jpg',
+    src: '/media/wix/02b2df_42eefaaa7fe94a06b3f8de17227cfe71~mv2.jpg',
     alt: "Hibiscus wedding package setting at Koa's Events",
     width: 1400,
     height: 1000,
   },
   orchid: {
-    src: 'https://static.wixstatic.com/media/02b2df_300c97b1e5034a84af4a24b8004d0839~mv2.jpg/v1/fill/w_1400,h_1000,al_c,q_90/orchid.jpg',
+    src: '/media/wix/02b2df_300c97b1e5034a84af4a24b8004d0839~mv2.jpg',
     alt: "Orchid wedding package setting at Koa's Events",
     width: 1400,
     height: 1000,
   },
   gardenia: {
-    src: 'https://static.wixstatic.com/media/02b2df_ffed23b2d69e4bb3b12da0482778d19f~mv2.jpg/v1/fill/w_1400,h_1000,al_c,q_90/gardenia.jpg',
+    src: '/media/wix/02b2df_ffed23b2d69e4bb3b12da0482778d19f~mv2.jpg',
     alt: "Gardenia intimate wedding setting at Koa's Events",
     width: 1400,
     height: 1000,
@@ -85,7 +85,7 @@ const galleryIds = [
 ];
 
 export const galleryMedia: MediaAsset[] = galleryIds.map((id, index) => ({
-  src: 'https://static.wixstatic.com/media/' + id,
+  src: '/media/wix/' + id,
   alt: "Koa's Events wedding and venue gallery photograph " + (index + 1),
   width: 1800,
   height: 1350,
