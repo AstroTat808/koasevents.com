@@ -31,6 +31,7 @@ export interface CatalogItem {
   colors?: string[];
   dimensions?: string;
   options?: string[];
+  bundleEligible?: boolean;
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -163,6 +164,7 @@ export const catalogItems: CatalogItem[] = [
     note: 'Current published add-on price.',
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
+    bundleEligible: true,
     keywords: ['barware', 'wine glass', 'champagne'],
   },
   {
@@ -206,6 +208,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
+    bundleEligible: true,
     keywords: ['bistro', 'market lights', 'uplight', 'deluxe lighting'],
   },
   {
@@ -228,6 +231,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
+    bundleEligible: true,
     keywords: ['games', 'cocktail hour'],
   },
 
@@ -244,8 +248,13 @@ export const catalogItems: CatalogItem[] = [
       { kind: 'included', label: 'Included With Signature' },
     ],
     includedWith: ['Signature'],
-    specs: [{ label: 'Promotion', value: 'Discount available when added to an eligible event package' }],
-    keywords: ['photos', 'mirror', 'guest'],
+    options: ['Mirrored photo booth', 'LED backdrop'],
+    bundleEligible: true,
+    specs: [
+      { label: 'Promotion', value: 'Preferred bundle pricing when added to an eligible event package' },
+      { label: 'Style', value: 'Mirrored booth + LED backdrop' },
+    ],
+    keywords: ['photos', 'mirror', 'guest', 'led backdrop'],
   },
   {
     id: 'audio',
@@ -317,7 +326,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'Add a coordinated champagne toast to your beverage-service plan.',
     priceType: 'starting',
     priceLabel: 'Starting at $70',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
     note: 'Current published add-on price.',
+    bundleEligible: true,
     keywords: ['toast', 'champagne'],
   },
   {
@@ -382,6 +393,7 @@ export const catalogItems: CatalogItem[] = [
     description: 'Reflective dance-floor accent for evening reception styling.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    bundleEligible: true,
     keywords: ['dance', 'lighting', 'mirror ball'],
   },
   {
@@ -391,6 +403,7 @@ export const catalogItems: CatalogItem[] = [
     description: 'Dance-floor setup sized and positioned for the final reception layout.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    bundleEligible: true,
     keywords: ['dancing', 'floor'],
   },
   {
@@ -421,27 +434,14 @@ export const catalogItems: CatalogItem[] = [
     keywords: ['mic', 'lavalier', 'ceremony audio'],
   },
   {
-    id: 'mirror-photo-booth',
-    category: 'production',
-    name: 'Mirrored Photo Booth + LED Backdrop',
-    description: 'Interactive guest photo experience with illuminated backdrop styling.',
-    priceType: 'quote',
-    priceLabel: 'Custom quote',
-    badges: [
-      { kind: 'popular', label: 'Popular' },
-      { kind: 'deal', label: 'Add-On Savings' },
-    ],
-    options: ['Mirrored booth', 'LED backdrop'],
-    specs: [{ label: 'Style', value: 'Mirrored booth + LED backdrop' }],
-    keywords: ['photo booth', 'mirror', 'led'],
-  },
-  {
     id: 'vintage-phone',
     category: 'production',
     name: 'Vintage Phone Audio Guestbook',
     description: 'Audio guestbook experience that records spoken messages from guests.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
+    bundleEligible: true,
     keywords: ['guestbook', 'phone', 'audio'],
   },
   {
@@ -478,6 +478,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Display-style champagne service enhancement for guest arrival or celebration moments.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
+    bundleEligible: true,
     keywords: ['champagne', 'wall', 'tower'],
   },
   {
@@ -487,6 +489,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Personalized logo treatment for the bar presentation.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
+    bundleEligible: true,
     keywords: ['logo', 'personalized', 'branding'],
   },
   {
@@ -496,7 +500,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'Custom drink stirrers personalized for the event.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
     note: 'Current published guidance requires a minimum six-week lead time.',
+    bundleEligible: true,
     keywords: ['stirrer', 'personalized', 'cocktail'],
   },
   {
@@ -552,6 +558,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Decorative styling for the bar or bar-cart presentation.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
+    bundleEligible: true,
     keywords: ['bar styling', 'decor'],
   },
   {
@@ -561,6 +569,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Custom acrylic beverage menu designed for the event bar presentation.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'deal', label: 'Add-On Savings' }],
+    bundleEligible: true,
     keywords: ['menu', 'acrylic', 'personalized'],
   },
 
@@ -598,6 +608,68 @@ export const catalogItems: CatalogItem[] = [
     keywords: ['vendors', 'planning', 'coordination'],
   },
 ];
+
+export interface CatalogBundle {
+  id: string;
+  name: string;
+  eyebrow: string;
+  description: string;
+  itemIds: string[];
+  savingsPercent: number;
+  badge?: string;
+}
+
+export const catalogBundles: CatalogBundle[] = [
+  {
+    id: 'guest-experience',
+    name: 'Guest Experience Bundle',
+    eyebrow: 'Memories + play',
+    description: 'Photo Booth, Vintage Phone Audio Guestbook and Lawn Games—three different ways to keep guests engaged and preserve the memories.',
+    itemIds: ['photo-booth', 'vintage-phone', 'lawn-games'],
+    savingsPercent: 12,
+    badge: 'Popular pairing',
+  },
+  {
+    id: 'after-dark',
+    name: 'After Dark Bundle',
+    eyebrow: 'Reception transformation',
+    description: 'Lighting Enhancements, Disco Ball and Dance Floor packaged around the moment the celebration shifts into evening.',
+    itemIds: ['lighting', 'disco-ball', 'dance-floor'],
+    savingsPercent: 10,
+  },
+  {
+    id: 'styled-bar',
+    name: 'Styled Bar Bundle',
+    eyebrow: 'Personalized bar design',
+    description: 'Custom Vinyl Logo, Acrylic Bar Menu, Personalized Stirrers and Bar Décor for a bar presentation that feels intentionally designed.',
+    itemIds: ['vinyl-logo', 'acrylic-bar-menu', 'personalized-stirrers', 'bar-decor'],
+    savingsPercent: 15,
+    badge: 'Best bundle value',
+  },
+  {
+    id: 'celebration-toast',
+    name: 'Celebration Toast Bundle',
+    eyebrow: 'Arrival + toast moment',
+    description: 'Champagne Tower Wall, coordinated Champagne Toast and Glassware for a polished celebration moment.',
+    itemIds: ['champagne-wall', 'champagne-toast', 'glassware'],
+    savingsPercent: 10,
+  },
+  {
+    id: 'reception-experience',
+    name: 'Reception Experience Bundle',
+    eyebrow: 'High-impact reception',
+    description: 'Photo Booth, Lighting Enhancements and Vintage Phone Audio Guestbook—the guest-facing upgrades we would combine for a more memorable reception.',
+    itemIds: ['photo-booth', 'lighting', 'vintage-phone'],
+    savingsPercent: 12,
+    badge: 'Koa’s pick',
+  },
+];
+
+export const bundleSavingsTiers = [
+  { minimumItems: 2, savingsPercent: 5 },
+  { minimumItems: 3, savingsPercent: 10 },
+  { minimumItems: 4, savingsPercent: 12.5 },
+] as const;
 
 export const catalogPricingNote =
   'Prices labeled “starting at” are starting prices. Items marked “custom quote” depend on quantity, event scope, availability, logistics and selected package. Final pricing is confirmed in your proposal.';
