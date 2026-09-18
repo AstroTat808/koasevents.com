@@ -215,7 +215,6 @@ export const koaMarketingMedia = {
   cottageExteriorEvents: koaMarketing('cottage-exterior-events.webp', 'Koa’s cottage exterior styled for wedding and private-event arrivals'),
   mobileBarGuestService: koaMarketing('mobile-bar-guest-service.webp', 'Guest ordering a signature drink from Koa’s Mobile Bar'),
   signatureCocktailPour: koaMarketing('signature-cocktail-pour.webp', 'Close-up of a signature cocktail being prepared at Koa’s Mobile Bar'),
-  mobileBarCouplePortrait: koaMarketing('mobile-bar-couple-portrait.webp', 'Couple posing in front of Koa’s Mobile Bar styled for a celebration'),
 } satisfies Record<string, MediaAsset>;
 
 export const koaMarketingGallery = [
@@ -264,7 +263,6 @@ export const koaMarketingGallery = [
   // Mobile Bar — newest human-centered marketing imagery first.
   { ...koaMarketingMedia.mobileBarGuestService, category: 'Mobile Bar' },
   { ...koaMarketingMedia.signatureCocktailPour, category: 'Mobile Bar' },
-  { ...koaMarketingMedia.mobileBarCouplePortrait, category: 'Mobile Bar' },
   { ...koaMarketingMedia.mobileBarHero, category: 'Mobile Bar' },
   { ...koaMarketingMedia.mobileBarDetail, category: 'Mobile Bar' },
 
