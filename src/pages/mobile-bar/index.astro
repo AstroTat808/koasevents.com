@@ -6,6 +6,11 @@ import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { businessRules } from '../../data/businessRules';
 import { media, koaMarketingMedia } from '../../data/media';
 const packages=businessRules.mobileBar.packages;
+const mobileBarMoments = [
+  { image: koaMarketingMedia.mobileBarGuestService, label: 'Guest service' },
+  { image: koaMarketingMedia.signatureCocktailPour, label: 'Signature pours' },
+  { image: koaMarketingMedia.mobileBarCouplePortrait, label: 'Celebration-ready' },
+];
 const schema={'@context':'https://schema.org','@type':'LocalBusiness',name:"Koa's Mobile Bar",url:'https://www.koasevents.com/mobile-bar/',telephone:businessRules.contact.phone,email:businessRules.contact.email,areaServed:{'@type':'AdministrativeArea',name:'Hawaiʻi Island'}};
 ---
 <BaseLayout title="Koa’s Mobile Bar | Big Island Wedding & Event Bartending" description="Bring Koa’s Mobile Bar to your Hawaiʻi Island wedding, private event or corporate gathering. Dry-bar packages include bartender labor under standard assumptions." canonical="https://www.koasevents.com/mobile-bar/">
@@ -18,6 +23,24 @@ const schema={'@context':'https://schema.org','@type':'LocalBusiness',name:"Koa'
 </div></section>
 
 <section class="py-24 lg:py-36"><div class="container-shell grid gap-14 lg:grid-cols-[.82fr_1.18fr] lg:items-center lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The dry-bar model</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">You buy the alcohol. We make the service feel effortless.</h2><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">{businessRules.mobileBar.model.value}</p><p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/56">Staffing scales with guest count, menu complexity, event duration and service demand so the quote reflects the actual event—not a vague percentage fee.</p></div><div class="relative h-[29rem] sm:h-[34rem] lg:h-[40rem]"><div class="absolute right-0 top-0 h-[24rem] w-[82%] overflow-hidden rounded-[1.6rem] sm:h-[28rem] lg:h-[33rem] lg:w-[78%] lg:rounded-[2rem]"><ResponsiveImage {...koaMarketingMedia.mobileBarDetail} width={1100} height={1350} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover"/></div><div class="absolute bottom-0 left-0 rounded-[1.3rem] bg-[var(--koa-clay)] p-7 text-white shadow-xl"><p class="eyebrow text-white/58">Service philosophy</p><p class="display mt-3 max-w-xs text-3xl">Good drinks. Better flow. Less for the host to manage.</p></div></div></div></section>
+
+<section class="bg-[var(--koa-sand)] py-24 lg:py-32">
+  <div class="container-shell">
+    <div class="grid gap-8 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+      <div>
+        <p class="eyebrow text-[var(--koa-clay)]">See it in service</p>
+        <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">The bar is part of the guest experience.</h2>
+      </div>
+      <p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/62 lg:justify-self-end">From the first order to the final toast, the setup should feel intentional, approachable and visually connected to the celebration around it.</p>
+    </div>
+    <div class="mt-12 grid gap-4 lg:grid-cols-3">
+      {mobileBarMoments.map((item)=><figure class="group overflow-hidden rounded-[1.5rem] bg-[var(--koa-ivory)]">
+        <div class="relative h-[26rem] overflow-hidden sm:h-[30rem]"><ResponsiveImage {...item.image} width={900} height={1200} sizes="(min-width:1024px) 33vw,100vw" class="h-full w-full object-cover transition duration-700 group-hover:scale-[1.02]"/></div>
+        <figcaption class="px-6 py-5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.label}</figcaption>
+      </figure>)}
+    </div>
+  </div>
+</section>
 
 <section id="packages" class="bg-[var(--koa-forest)] py-24 text-white lg:py-32"><div class="container-shell"><div class="grid gap-8 lg:grid-cols-[.76fr_1.24fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-amber-light)]">Package starting points</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Choose the beverage experience first. We’ll scale the operation around it.</h2></div><p class="max-w-xl text-sm leading-7 text-white/60 lg:justify-self-end">Current starting prices assume the standard service framework. Larger or more complex events receive a custom staffing and logistics quote.</p></div><div class="mt-14 grid gap-4 lg:grid-cols-3">{packages.map((item,index)=><article class="flex flex-col rounded-[1.5rem] border border-white/12 bg-white/[.05] p-7 lg:min-h-[29rem]"><p class="eyebrow text-[var(--koa-amber-light)]">0{index+1}</p><h3 class="display mt-10 text-5xl">{item.name}</h3><p class="mt-2 text-xs font-black uppercase tracking-[.13em] text-white/48">Starting at {'$'+item.price.toLocaleString()}</p><ul class="mt-8 grid gap-3 text-sm leading-6 text-white/70">{item.includes.map(x=><li class="flex gap-3"><span class="text-[var(--koa-amber-light)]">—</span><span>{x}</span></li>)}</ul><a href={'/inquire/?service=mobile-bar&package='+item.name.toLowerCase().replace(' ','-')} class="link-arrow mt-auto pt-8 text-white">Ask about {item.name} →</a></article>)}</div></div></section>
 
