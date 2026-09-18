@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout title="Blog Admin | Koa’s Events" description="Manage Koa’s Events blog." canonical="https://www.koasevents.com/admin/blog/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Admin</p><h1 class="display mt-3 text-5xl">Blog entries</h1></div><a href="/admin/" class="link-arrow">Admin home →</a></div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+      <div data-admin-ui class="hidden grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
+        <form data-post-form class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <input type="hidden" name="originalSlug" />
+          <div class="grid gap-4">
+            <label class="grid gap-2 text-sm font-semibold">Title<input name="title" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Slug<input name="slug" placeholder="auto-generated-from-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Excerpt<textarea name="excerpt" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+            <label class="grid gap-2 text-sm font-semibold">Article<textarea name="body" rows="14" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+            <label class="grid gap-2 text-sm font-semibold">Status<select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="draft">Draft</option><option value="published">Published</option></select></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save entry</button>
+            <button type="button" data-new class="text-left text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Clear form / new entry</button>
+            <p data-message class="text-sm text-[var(--koa-ink)]/58"></p>
+          </div>
+        </form>
+        <div><div data-post-list class="grid gap-3"></div></div>
+      </div>
+    </div>
+  </main>
+  <script>
+    import { getUser } from '@netlify/identity';
+    const ui = document.querySelector('[data-admin-ui]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const form = document.querySelector('[data-post-form]');
+    const list = document.querySelector('[data-post-list]');
+    const message = document.querySelector('[data-message]');
+    let posts = [];
+
+    function clearForm() {
+      form?.reset();
+      if (form?.elements.originalSlug) form.elements.originalSlug.value = '';
+    }
+
+    function renderList() {
+      if (!list) return;
+      list.innerHTML = '';
+      posts.forEach((post) => {
+        const row = document.createElement('article');
+        row.className = 'rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5';
+        const title = document.createElement('h2'); title.className='display text-2xl'; title.textContent=post.title;
+        const meta = document.createElement('p'); meta.className='mt-2 text-xs text-[var(--koa-ink)]/48'; meta.textContent=post.status+' · '+post.slug;
+        const actions = document.createElement('div'); actions.className='mt-4 flex gap-4';
+        const edit = document.createElement('button'); edit.className='link-arrow'; edit.textContent='Edit';
+        edit.addEventListener('click', () => {
+          form.elements.title.value=post.title; form.elements.slug.value=post.slug; form.elements.originalSlug.value=post.slug;
+          form.elements.excerpt.value=post.excerpt; form.elements.body.value=post.body; form.elements.status.value=post.status;
+          form.scrollIntoView({behavior:'smooth'});
+        });
+        const del = document.createElement('button'); del.className='text-sm font-semibold text-red-700'; del.textContent='Delete';
+        del.addEventListener('click', async () => {
+          if (!confirm('Delete this blog entry?')) return;
+          await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',slug:post.slug})});
+          await load();
+        });
+        actions.append(edit,del); row.append(title,meta,actions); list.append(row);
+      });
+    }
+
+    async function load() {
+      const user=await getUser();
+      if(!user){ unauthorized?.classList.remove('hidden'); return; }
+      ui?.classList.remove('hidden');
+      const response=await fetch('/api/blog?admin=1');
+      if(response.status===401){ ui?.classList.add('hidden'); unauthorized?.classList.remove('hidden'); return; }
+      posts=(await response.json()).posts || [];
+      renderList();
+    }
+
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data=new FormData(form);
+      const original=String(data.get('originalSlug')||'');
+      const payload={action:'save',title:data.get('title'),slug:data.get('slug'),excerpt:data.get('excerpt'),body:data.get('body'),status:data.get('status')};
+      if(original && original!==payload.slug) await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',slug:original})});
+      const response=await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      if(message) message.textContent=response.ok?'Saved.':'Save failed.';
+      if(response.ok){clearForm();await load();}
+    });
+    document.querySelector('[data-new]')?.addEventListener('click',clearForm);
+    load();
+  </script>
+</BaseLayout>
