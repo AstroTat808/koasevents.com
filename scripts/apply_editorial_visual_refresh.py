@@ -209,7 +209,6 @@ def main():
     # Homepage: editorial-only marketing photography and less hero CTA competition.
     patch('src/pages/index.astro', [
         ("import { media, galleryMedia } from '../data/media';", "import { media } from '../data/media';"),
-        ("const celebrations = [", "const homepageLookbook = [media.weddingPortrait, media.receptionTable, media.bartenderDetail, media.eveningReception, media.privateEventDetail];\n\nconst celebrations = ["),
         ("          <a href=\"/gallery/\" class=\"rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-white backdrop-blur\">View the gallery</a>\n", ""),
         ("{galleryMedia.slice(0,5).map((image,index)=>", "{homepageLookbook.map((image,index)=>"),
     ])
