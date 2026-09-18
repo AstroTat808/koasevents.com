@@ -267,6 +267,7 @@ const badgeClass = {
   <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData }}>
     const filterButtons = [...document.querySelectorAll('[data-catalog-filters] [data-category]')];
     const cards = [...document.querySelectorAll('[data-catalog-item]')];
+    const bundleButtons = [...document.querySelectorAll('[data-add-bundle]')];
     const search = document.querySelector('[data-catalog-search]');
     const count = document.querySelector('[data-catalog-count]');
     const empty = document.querySelector('[data-catalog-empty]');
@@ -281,71 +282,62 @@ const badgeClass = {
     const savingsHeadline = document.querySelector('[data-savings-headline]');
     const savingsDetail = document.querySelector('[data-savings-detail]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
+
     let activeCategory = 'all';
     const selected = new Map();
+
+    function cardFor(id) {
+      return cards.find((card) => card.dataset.id === id);
+    }
+
+    function setItemButtonState(id, isSelected) {
+      const button = cardFor(id)?.querySelector('[data-add-to-quote]');
+      if (!button) return;
+      button.textContent = isSelected ? 'Added ✓' : 'Add to quote +';
+      button.classList.toggle('text-[var(--koa-clay)]', isSelected);
+    }
 
     function applyFilters() {
       const term = (search?.value || '').trim().toLowerCase();
       let visible = 0;
-      document.querySelectorAll('[data-add-bundle]').forEach((button) => {
-      button.addEventListener('click', () => {
-        const bundle = bundleClientData.find((item) => item.id === button.dataset.addBundle);
-        if (!bundle) return;
-        bundle.itemIds.forEach((id) => {
-          const item = itemById.get(id);
-          if (!item) return;
-          selected.set(id, item.name);
-          const cardButton = document.querySelector('[data-catalog-item][data-id="' + CSS.escape(id) + '"] [data-add-to-quote]');
-          if (cardButton) {
-            cardButton.textContent = 'Added ✓';
-            cardButton.classList.add('text-[var(--koa-clay)]');
-          }
-        });
-        syncQuote();
-        document.querySelector('[data-quote-list]')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    });
 
-    cards.forEach((card) => {
+      cards.forEach((card) => {
         const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
         const searchMatch = !term || (card.dataset.search || '').includes(term);
         const show = categoryMatch && searchMatch;
         card.classList.toggle('hidden', !show);
         if (show) visible += 1;
       });
+
       if (count) count.textContent = visible + (visible === 1 ? ' item' : ' items');
       empty?.classList.toggle('hidden', visible !== 0);
     }
 
-    filterButtons.forEach((button) => {
-      button.addEventListener('click', () => {
-        activeCategory = button.dataset.category || 'all';
-        filterButtons.forEach((item) => {
-          const on = item === button;
-          item.classList.toggle('bg-[var(--koa-forest)]', on);
-          item.classList.toggle('text-white', on);
-          item.classList.toggle('border-[var(--koa-forest)]', on);
-          item.classList.toggle('bg-white', !on);
-          item.classList.toggle('text-[var(--koa-forest)]', !on);
-        });
-        applyFilters();
-      });
-    });
-    search?.addEventListener('input', applyFilters);
-
     function selectedPackageIds() {
-      return [...selected.keys()].filter((id) => ['signature-wedding','hibiscus','orchid','gardenia'].includes(id));
+      return [...selected.keys()].filter((id) =>
+        ['signature-wedding', 'hibiscus', 'orchid', 'gardenia'].includes(id)
+      );
     }
 
     function isIncludedBySelectedPackage(item) {
       const packages = selectedPackageIds();
       if (!packages.length || !item?.includedWith?.length) return false;
-      const names = packages.map((id) => id === 'signature-wedding' ? 'Signature' : id.charAt(0).toUpperCase() + id.slice(1));
-      return names.some((name) => item.includedWith.includes(name) || item.includedWith.includes(name + ' Wedding Experience'));
+
+      const selectedPackageNames = packages.map((id) =>
+        id === 'signature-wedding'
+          ? 'Signature'
+          : id.charAt(0).toUpperCase() + id.slice(1)
+      );
+
+      return selectedPackageNames.some((name) =>
+        item.includedWith.includes(name) ||
+        item.includedWith.includes(name + ' Wedding Experience')
+      );
     }
 
     function calculateSavings() {
       const selectedIds = [...selected.keys()];
+
       const eligiblePaid = selectedIds.filter((id) => {
         const item = itemById.get(id);
         return item?.bundleEligible && !isIncludedBySelectedPackage(item);
@@ -360,83 +352,189 @@ const badgeClass = {
       for (const bundle of bundleClientData) {
         const paidBundleItems = bundle.itemIds.filter((id) => {
           const item = itemById.get(id);
-          return !isIncludedBySelectedPackage(item);
+          return item && !isIncludedBySelectedPackage(item);
         });
-        const complete = paidBundleItems.length > 1 && paidBundleItems.every((id) => selectedIds.includes(id));
-        if (complete && (!bestBundle || bundle.savingsPercent > bestBundle.savingsPercent)) bestBundle = bundle;
+
+        const complete =
+          paidBundleItems.length > 1 &&
+          paidBundleItems.every((id) => selectedIds.includes(id));
+
+        if (
+          complete &&
+          (!bestBundle || bundle.savingsPercent > bestBundle.savingsPercent)
+        ) {
+          bestBundle = bundle;
+        }
       }
 
       const tierPercent = tier?.savingsPercent || 0;
       const bundlePercent = bestBundle?.savingsPercent || 0;
       const percent = Math.max(tierPercent, bundlePercent);
+
       return { eligiblePaid, tier, bestBundle, percent };
     }
 
-    function syncQuote() {
-      const names = [...selected.values()];
-      quoteList?.querySelectorAll('[data-selected-row]').forEach((row) => row.remove());
-      quoteEmpty?.classList.toggle('hidden', names.length > 0);
-      names.forEach((name) => {
-        const row = document.createElement('div');
-        row.dataset.selectedRow = 'true';
-        row.className = 'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
-        row.innerHTML = '<span></span><button type="button" class="text-white/45 hover:text-white" aria-label="Remove item">×</button>';
-        row.querySelector('span').textContent = name;
-        row.querySelector('button').addEventListener('click', () => {
-          const id = [...selected.entries()].find(([, value]) => value === name)?.[0];
-          if (id) {
-            selected.delete(id);
-            document.querySelector('[data-catalog-item][data-id="' + CSS.escape(id) + '"] [data-add-to-quote]')?.classList.remove('text-[var(--koa-clay)]');
-            document.querySelector('[data-catalog-item][data-id="' + CSS.escape(id) + '"] [data-add-to-quote]').textContent = 'Add to quote +';
-          }
-          syncQuote();
-        });
-        quoteList?.appendChild(row);
-      });
-      const joined = names.join(' | ');
-      if (selectedInput) selectedInput.value = joined;
-      if (selectedPreview) selectedPreview.textContent = joined || 'Choose items above and they’ll appear here.';
-
+    function renderSavings() {
       const savings = calculateSavings();
       const hasSavings = savings.percent > 0;
+
       savingsPanel?.classList.toggle('hidden', !hasSavings);
       selectedSavings?.classList.toggle('hidden', !hasSavings);
 
-      if (hasSavings) {
-        const headline = savings.bestBundle && savings.bestBundle.savingsPercent >= (savings.tier?.savingsPercent || 0)
-          ? savings.bestBundle.name
-          : savings.percent + '% estimated bundle savings';
-        const detail = savings.bestBundle && savings.bestBundle.savingsPercent >= (savings.tier?.savingsPercent || 0)
-          ? 'You completed the ' + savings.bestBundle.name + ', qualifying for up to ' + savings.percent + '% savings on eligible paid add-ons.'
-          : savings.eligiblePaid.length + ' eligible paid add-ons qualify for up to ' + savings.percent + '% Koa’s Bundle Savings.';
-        if (savingsHeadline) savingsHeadline.textContent = headline;
-        if (savingsDetail) savingsDetail.textContent = detail;
-        if (selectedSavings) selectedSavings.textContent = detail;
-        if (estimatedSavingsInput) estimatedSavingsInput.value = String(savings.percent) + '% estimated';
-        if (matchedBundleInput) matchedBundleInput.value = savings.bestBundle?.name || '';
-      } else {
+      if (!hasSavings) {
         if (estimatedSavingsInput) estimatedSavingsInput.value = '';
         if (matchedBundleInput) matchedBundleInput.value = '';
+        if (selectedSavings) selectedSavings.textContent = '';
+        return;
+      }
+
+      const curatedWins =
+        savings.bestBundle &&
+        savings.bestBundle.savingsPercent >= (savings.tier?.savingsPercent || 0);
+
+      const headline = curatedWins
+        ? savings.bestBundle.name
+        : savings.percent + '% estimated bundle savings';
+
+      const detail = curatedWins
+        ? 'You completed the ' +
+          savings.bestBundle.name +
+          ', qualifying for up to ' +
+          savings.percent +
+          '% savings on eligible paid add-ons.'
+        : savings.eligiblePaid.length +
+          ' eligible paid add-ons qualify for up to ' +
+          savings.percent +
+          '% Koa’s Bundle Savings.';
+
+      if (savingsHeadline) savingsHeadline.textContent = headline;
+      if (savingsDetail) savingsDetail.textContent = detail;
+      if (selectedSavings) selectedSavings.textContent = detail;
+      if (estimatedSavingsInput) {
+        estimatedSavingsInput.value = String(savings.percent) + '% estimated';
+      }
+      if (matchedBundleInput) {
+        matchedBundleInput.value = curatedWins ? savings.bestBundle.name : '';
       }
     }
+
+    function syncQuote() {
+      const entries = [...selected.entries()];
+
+      quoteList
+        ?.querySelectorAll('[data-selected-row]')
+        .forEach((row) => row.remove());
+
+      quoteEmpty?.classList.toggle('hidden', entries.length > 0);
+
+      entries.forEach(([id, name]) => {
+        const row = document.createElement('div');
+        row.dataset.selectedRow = 'true';
+        row.className =
+          'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
+
+        const label = document.createElement('span');
+        label.textContent = name;
+
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'text-white/45 hover:text-white';
+        remove.setAttribute('aria-label', 'Remove ' + name);
+        remove.textContent = '×';
+
+        remove.addEventListener('click', () => {
+          selected.delete(id);
+          setItemButtonState(id, false);
+          syncQuote();
+        });
+
+        row.append(label, remove);
+        quoteList?.appendChild(row);
+      });
+
+      const names = entries.map(([, name]) => name);
+      const joined = names.join(' | ');
+
+      if (selectedInput) selectedInput.value = joined;
+      if (selectedPreview) {
+        selectedPreview.textContent =
+          joined || 'Choose items above and they’ll appear here.';
+      }
+
+      renderSavings();
+    }
+
+    filterButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        activeCategory = button.dataset.category || 'all';
+
+        filterButtons.forEach((item) => {
+          const on = item === button;
+          item.classList.toggle('bg-[var(--koa-forest)]', on);
+          item.classList.toggle('text-white', on);
+          item.classList.toggle('border-[var(--koa-forest)]', on);
+          item.classList.toggle('bg-white', !on);
+          item.classList.toggle('text-[var(--koa-forest)]', !on);
+        });
+
+        applyFilters();
+      });
+    });
+
+    search?.addEventListener('input', applyFilters);
 
     cards.forEach((card) => {
       const button = card.querySelector('[data-add-to-quote]');
       button?.addEventListener('click', () => {
         const id = card.dataset.id;
-        const name = card.querySelector('h3')?.textContent?.trim();
-        if (!id || !name) return;
+        const item = id ? itemById.get(id) : null;
+        if (!id || !item) return;
+
         if (selected.has(id)) {
           selected.delete(id);
-          button.textContent = 'Add to quote +';
-          button.classList.remove('text-[var(--koa-clay)]');
+          setItemButtonState(id, false);
         } else {
-          selected.set(id, name);
-          button.textContent = 'Added ✓';
-          button.classList.add('text-[var(--koa-clay)]');
+          selected.set(id, item.name);
+          setItemButtonState(id, true);
         }
+
         syncQuote();
       });
     });
+
+    bundleButtons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const bundle = bundleClientData.find(
+          (item) => item.id === button.dataset.addBundle
+        );
+        if (!bundle) return;
+
+        bundle.itemIds.forEach((id) => {
+          const item = itemById.get(id);
+          if (!item) return;
+          selected.set(id, item.name);
+          setItemButtonState(id, true);
+        });
+
+        syncQuote();
+
+        const originalText = button.textContent;
+        button.textContent = 'Bundle added ✓';
+        button.disabled = true;
+
+        window.setTimeout(() => {
+          button.textContent = originalText;
+          button.disabled = false;
+        }, 1400);
+
+        quoteList?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        });
+      });
+    });
+
+    applyFilters();
+    syncQuote();
   </script>
 </BaseLayout>
