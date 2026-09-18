@@ -32,7 +32,14 @@ const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:i
     const uploadMessage=document.querySelector('[data-upload-message]');
     const uploadedGrid=document.querySelector('[data-uploaded-grid]');
     const curatedGrid=document.querySelector('[data-curated-grid]');
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let state={uploads:[],hiddenCurated:[]};
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+    }
 
     async function optimizedFile(file) {
       const bitmap=await createImageBitmap(file);
@@ -70,7 +77,7 @@ const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:i
 
     async function load(){
       const user=await getUser();
-      if(!user){unauthorized?.classList.remove('hidden');return;}
+      if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       ui?.classList.remove('hidden');
       const response=await fetch('/api/gallery');
       state=await response.json(); render();

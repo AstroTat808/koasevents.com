@@ -31,7 +31,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const form = document.querySelector('[data-post-form]');
     const list = document.querySelector('[data-post-list]');
     const message = document.querySelector('[data-message]');
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let posts = [];
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+    }
 
     function clearForm() {
       form?.reset();
@@ -65,7 +72,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load() {
       const user=await getUser();
-      if(!user){ unauthorized?.classList.remove('hidden'); return; }
+      if(!hasAdminAccess(user)){ unauthorized?.classList.remove('hidden'); return; }
       ui?.classList.remove('hidden');
       const response=await fetch('/api/blog?admin=1');
       if(response.status===401){ ui?.classList.add('hidden'); unauthorized?.classList.remove('hidden'); return; }

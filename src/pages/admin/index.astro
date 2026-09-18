@@ -27,8 +27,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </form>
 
           <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
-            <p class="font-semibold text-[var(--koa-ink)]">Your account is signed in, but it does not have the <code>admin</code> role yet.</p>
-            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Assign the <code>admin</code> role to this Identity user in Netlify, then sign out and back in.</p>
+            <p class="font-semibold text-[var(--koa-ink)]">This account is signed in but is not approved for Content Admin.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Use one of the approved Koa’s administrator accounts, then sign in again.</p>
             <button data-logout-warning class="mt-4 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Sign out</button>
           </div>
 
@@ -52,13 +52,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const inviteError = document.querySelector('[data-invite-error]');
     let inviteToken = '';
 
-    function hasAdminRole(user) {
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
       const roles = user?.app_metadata?.roles || [];
-      return Array.isArray(roles) && roles.includes('admin');
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
     }
 
     function showAuthState(user) {
-      const isAdmin = Boolean(user) && hasAdminRole(user);
+      const isAdmin = Boolean(user) && hasAdminAccess(user);
       loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken));
       inviteForm?.classList.toggle('hidden', !inviteToken);
       links?.classList.toggle('hidden', !isAdmin);
