@@ -90,7 +90,8 @@ def wait_mode(seconds=600):
  print(json.dumps({"ready":False,"baseUrl":BASE},indent=2));return 1
 
 DOM=r"""() => {
- const vis=e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0};
+ const vis=e=>{if(e.closest('details:not([open])'))return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0};
+ const inIntentionalScroller=e=>{let p=e.parentElement;while(p){const s=getComputedStyle(p);if(['auto','scroll'].includes(s.overflowX)&&p.scrollWidth>p.clientWidth+2)return true;p=p.parentElement;}return false;};
  const label=e=>(e.getAttribute('aria-label')||e.getAttribute('title')||e.innerText||e.textContent||e.id||e.name||e.tagName).trim().slice(0,120);
  const rect=e=>{const r=e.getBoundingClientRect();return{x:Math.round(r.x),y:Math.round(r.y),w:Math.round(r.width),h:Math.round(r.height)}};
  const ids=[...document.querySelectorAll('[id]')].map(e=>e.id).filter(Boolean);
@@ -100,19 +101,20 @@ DOM=r"""() => {
  const broken=[...document.images].filter(i=>vis(i)&&(!i.complete||i.naturalWidth===0)).map(i=>i.currentSrc||i.src);
  const missingAlt=[...document.images].filter(i=>vis(i)&&!i.hasAttribute('alt')).map(i=>i.currentSrc||i.src);
  const unlabeled=[...document.querySelectorAll('input:not([type=hidden]),select,textarea')].filter(e=>vis(e)&&!(e.labels?.length||e.getAttribute('aria-label')||e.getAttribute('aria-labelledby')||e.title)).map(label);
- const tiny=controls.filter(e=>{const r=e.getBoundingClientRect();return(r.width<40||r.height<40)&&r.width>0&&r.height>0}).slice(0,25).map(e=>({label:label(e),...rect(e)}));
+ const tiny=controls.filter(e=>{if(e.closest('footer'))return false;const r=e.getBoundingClientRect();const buttonLike=['BUTTON','SUMMARY','INPUT','SELECT','TEXTAREA'].includes(e.tagName)||['flex','inline-flex','grid','inline-grid'].includes(getComputedStyle(e).display);return buttonLike&&(r.width<40||r.height<40)&&r.width>0&&r.height>0}).slice(0,25).map(e=>({label:label(e),...rect(e)}));
  const clipped=textEls.filter(e=>{const s=getComputedStyle(e);return(e.scrollWidth>e.clientWidth+2&&['hidden','clip'].includes(s.overflowX))||(e.scrollHeight>e.clientHeight+2&&['hidden','clip'].includes(s.overflowY))}).slice(0,25).map(e=>({label:label(e),...rect(e)}));
- const wrapped=controls.filter(e=>{const s=getComputedStyle(e),fs=parseFloat(s.fontSize)||16;return ['A','BUTTON','SUMMARY'].includes(e.tagName)&&e.getBoundingClientRect().height>fs*3.2&&(e.textContent||'').trim().length>3}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
- const small=[...document.querySelectorAll('p,li,a,label,span')].filter(e=>vis(e)&&(e.textContent||'').trim()&&parseFloat(getComputedStyle(e).fontSize)<11).slice(0,25).map(e=>({label:label(e),fontSize:getComputedStyle(e).fontSize,...rect(e)}));
+ const wrapped=controls.filter(e=>{if(e.closest('footer'))return false;const s=getComputedStyle(e),fs=parseFloat(s.fontSize)||16;return ['A','BUTTON','SUMMARY'].includes(e.tagName)&&e.getBoundingClientRect().height>fs*3.8&&(e.textContent||'').trim().length>3}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
+ const small=[...document.querySelectorAll('p,li,a,label,span')].filter(e=>vis(e)&&!e.closest('footer')&&!e.classList.contains('eyebrow')&&(e.textContent||'').trim()&&parseFloat(getComputedStyle(e).fontSize)<10).slice(0,25).map(e=>({label:label(e),fontSize:getComputedStyle(e).fontSize,...rect(e)}));
  const wide=[...document.querySelectorAll('p,li')].filter(e=>{if(!vis(e)||(e.textContent||'').trim().length<140)return false;const s=getComputedStyle(e),fs=parseFloat(s.fontSize)||16;return e.getBoundingClientRect().width/fs>48}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
- const offscreen=controls.filter(e=>{const r=e.getBoundingClientRect();return r.right<-2||r.left>innerWidth+2}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
+ const offscreen=controls.filter(e=>{if(inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right<-2||r.left>innerWidth+2}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
+ const overflowing=[...document.querySelectorAll('body *')].filter(e=>{if(!vis(e)||inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right>innerWidth+2||r.left<-2}).slice(0,25).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
  const header=document.querySelector('header'),main=document.querySelector('main');
  return{
   title:document.title,h1s,horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+2,
   scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,
   duplicateIds:[...new Set(ids.filter((x,i)=>ids.indexOf(x)!==i))],brokenImages:broken,missingAlt,
   unlabeledControls:unlabeled,tinyTargets:tiny,clippedText:clipped,wrappedButtons:wrapped,smallText:small,
-  wideCopy:wide,offscreenInteractive:offscreen,headerRect:header&&vis(header)?rect(header):null,
+  wideCopy:wide,offscreenInteractive:offscreen,overflowingElements:overflowing,headerRect:header&&vis(header)?rect(header):null,
   mainTextLength:(main?.innerText||'').trim().length
  };
 }"""
@@ -123,7 +125,7 @@ def findings(dom,console,page_errors,request_failed,asset_failed):
  if console:f.append(Finding("console-error","warning","Console errors detected",console[:10]))
  if request_failed:f.append(Finding("request-failed","critical","Same-origin requests failed",request_failed[:15]))
  if asset_failed:f.append(Finding("asset-http-error","critical","Document assets returned HTTP errors",asset_failed[:15]))
- if dom.get("horizontalOverflow"):f.append(Finding("horizontal-overflow","critical",f"Horizontal overflow: {dom.get('scrollWidth')}px in {dom.get('clientWidth')}px viewport"))
+ if dom.get("horizontalOverflow"):f.append(Finding("horizontal-overflow","critical",f"Horizontal overflow: {dom.get('scrollWidth')}px in {dom.get('clientWidth')}px viewport",dom.get("overflowingElements",[])[:20]))
  if dom.get("brokenImages"):f.append(Finding("broken-image","critical","Visible images failed to load",dom["brokenImages"][:15]))
  if not dom.get("h1s"):f.append(Finding("missing-h1","critical","No visible H1 found"))
  elif len(dom["h1s"])>1:f.append(Finding("multiple-h1","warning","Multiple visible H1 elements",dom["h1s"]))
@@ -187,7 +189,7 @@ def browser_mode(browser_name):
  report={"mode":"browser","baseUrl":BASE,"browser":browser_name,"cases":len(results),"criticalCount":len(critical),"critical":critical,"results":results}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  (root/"report.html").write_text(html_report(results),encoding="utf-8")
- print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"report":str(root/"report.html")},indent=2))
+ print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"critical":critical[:80],"report":str(root/"report.html")},indent=2))
  return 1 if critical else 0
 
 def main():
