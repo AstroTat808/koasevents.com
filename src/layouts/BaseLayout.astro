@@ -5,10 +5,77 @@ interface Props {
   title: string;
   description: string;
   canonical?: string;
+  noindex?: boolean;
+  socialImage?: string;
+  socialImageAlt?: string;
 }
 
-const { title, description, canonical = Astro.url.href } = Astro.props;
-const socialImage = '/media/wix/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg';
+const {
+  title,
+  description,
+  canonical,
+  noindex = false,
+  socialImage = '/media/koa/pavilion-sunset-wide.webp',
+  socialImageAlt = "Koa's Events pavilion and tropical grounds on Hawaiʻi Island",
+} = Astro.props;
+
+const siteUrl = Astro.site ?? new URL('https://www.koasevents.com');
+const canonicalUrl = new URL(canonical ?? Astro.url.pathname, siteUrl).href;
+const socialImageUrl = new URL(socialImage, siteUrl).href;
+const logoUrl = new URL('/brand/koa-mark.png', siteUrl).href;
+const organizationId = new URL('/#organization', siteUrl).href;
+const websiteId = new URL('/#website', siteUrl).href;
+const robotsContent = noindex
+  ? 'noindex, nofollow, noarchive'
+  : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+
+const seoSchema = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': organizationId,
+      name: "Koa's Events",
+      url: new URL('/', siteUrl).href,
+      logo: {
+        '@type': 'ImageObject',
+        url: logoUrl,
+      },
+      email: 'aloha@koasevents.com',
+      telephone: '+1-844-808-5627',
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: '11-3334 Hibiscus St',
+        addressLocality: 'Mountain View',
+        addressRegion: 'HI',
+        postalCode: '96771',
+        addressCountry: 'US',
+      },
+      areaServed: {
+        '@type': 'AdministrativeArea',
+        name: 'Hawaiʻi Island, Hawaii',
+      },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': websiteId,
+      url: new URL('/', siteUrl).href,
+      name: "Koa's Events",
+      publisher: { '@id': organizationId },
+      inLanguage: 'en-US',
+    },
+    {
+      '@type': 'WebPage',
+      '@id': canonicalUrl + '#webpage',
+      url: canonicalUrl,
+      name: title,
+      description,
+      isPartOf: { '@id': websiteId },
+      about: { '@id': organizationId },
+      inLanguage: 'en-US',
+    },
+  ],
+};
 ---
 <!doctype html>
 <html lang="en">
@@ -18,16 +85,28 @@ const socialImage = '/media/wix/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg'
     <meta name="generator" content={Astro.generator} />
     <title>{title}</title>
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonical} />
+    <meta name="robots" content={robotsContent} />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     <link rel="icon" type="image/png" href="/brand/koa-mark.png" />
+
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Koa's Events" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:url" content={canonical} />
-    <meta property="og:image" content={socialImage} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:image" content={socialImageUrl} />
+    <meta property="og:image:alt" content={socialImageAlt} />
+
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImageUrl} />
+    <meta name="twitter:image:alt" content={socialImageAlt} />
+
     <meta name="theme-color" content="#173d30" />
+    <script type="application/ld+json" set:html={JSON.stringify(seoSchema)} />
   </head>
   <body>
     <script is:inline>
