@@ -1,0 +1,51 @@
+name: Apply editorial visual refresh
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/apply_editorial_visual_refresh.py
+      - .github/workflows/apply-editorial-visual-refresh.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-editorial-visual-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply visual and UX refinement
+        run: python scripts/apply_editorial_visual_refresh.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Commit refreshed design
+        run: |
+          git config user.name "Koa Events Site Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src
+          if git diff --cached --quiet; then
+            echo "No visual refresh changes to commit."
+            exit 0
+          fi
+          git commit -m "Refresh site with professional editorial photography"
+          git push origin HEAD:main
