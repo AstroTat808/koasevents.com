@@ -110,8 +110,7 @@ const spans = [
     let current = 0;
 
     function optimized(src) {
-      const params = new URLSearchParams({ url: src, w: '1800', q: '88', fit: 'contain' });
-      return '/.netlify/images?' + params.toString();
+      return src;
     }
 
     function show(index) {

@@ -1,6 +1,4 @@
 ---
-import { netlifyImage, netlifySrcSet } from '../data/media';
-
 interface Props {
   src: string;
   alt: string;
@@ -22,14 +20,10 @@ const {
   class: className = '',
   sizes = '100vw',
   priority = false,
-  fit = 'cover',
-  position = 'center',
-  quality = 82,
 } = Astro.props;
 ---
 <img
-  src={netlifyImage(src, width, height, fit, position, quality)}
-  srcset={netlifySrcSet(src, width, height, fit, position, quality)}
+  src={src}
   sizes={sizes}
   width={width}
   height={height}
