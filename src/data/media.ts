@@ -10,26 +10,54 @@ const editorial = (name: string, alt: string): MediaAsset => ({
   alt,
 });
 
+const koa = (name: string, alt: string, width?: number, height?: number): MediaAsset => ({
+  src: '/media/koa/' + name,
+  alt,
+  width,
+  height,
+});
+
 export const media = {
-  hero: editorial(
-    'wedding-forest-couple.jpg',
-    'Couple standing among lush trees at an outdoor wedding'
+  homeHero: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events open-air pavilion glowing at twilight on Hawaiʻi Island"
   ),
-  venueWide: editorial(
-    'garden-wedding-ceremony.jpg',
-    'Elegant outdoor garden ceremony beneath mature trees'
+  koaVenueTwilight: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion prepared for an evening celebration"
   ),
-  hospitality: editorial(
-    'garden-reception-table.jpg',
-    'Refined outdoor reception table arranged on a lawn'
+  koaMobileBar: koa(
+    'tropical-golden-hour-wedding-bar.webp',
+    "Koa's Mobile Bar trailer styled with tropical florals"
   ),
-  mobileBar: editorial(
-    'bartender-outdoor-event.jpg',
-    'Professional bartender preparing cocktails at an outdoor event'
+  koaMobileBarDetail: koa(
+    'koa-s-tropical-luxury-mobile-bar.webp',
+    "Koa's Mobile Bar service window with tropical styling"
   ),
-  plumeria: editorial(
-    'garden-wedding-moment.jpg',
-    'Romantic wedding moment in a lush garden setting'
+  koaHospitality: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Tropical tablescape styled for a gathering at Koa’s'
+  ),
+
+  hero: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events open-air pavilion glowing at twilight"
+  ),
+  venueWide: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion and tropical grounds at twilight"
+  ),
+  hospitality: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Tropical tablescape styled for a gathering at Koa’s'
+  ),
+  mobileBar: koa(
+    'tropical-golden-hour-wedding-bar.webp',
+    "Koa's Mobile Bar trailer styled for an event"
+  ),
+  plumeria: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion transformed for an evening wedding"
   ),
   hibiscus: editorial(
     'garden-wedding-portrait.jpg',
@@ -39,9 +67,9 @@ export const media = {
     'botanical-reception.jpg',
     'Polished outdoor reception with botanical floral styling'
   ),
-  gardenia: editorial(
-    'private-event-detail.jpg',
-    'Elegant outdoor celebration detail with styled dessert table'
+  gardenia: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Tropical table styling for a private event at Koa’s'
   ),
 
   weddingForestCouple: editorial(
@@ -52,53 +80,53 @@ export const media = {
     'garden-wedding-ceremony.jpg',
     'Outdoor garden wedding ceremony beneath a large tree'
   ),
-  gardenWeddingMoment: editorial(
-    'garden-wedding-moment.jpg',
-    'Romantic outdoor wedding moment surrounded by greenery'
+  gardenWeddingMoment: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion transformed for a wedding celebration"
   ),
   weddingPortrait: editorial(
     'garden-wedding-portrait.jpg',
     'Elegant couple portrait in a lush garden'
   ),
-  receptionTable: editorial(
-    'garden-reception-table.jpg',
-    'Reception table set outdoors on a green lawn'
+  receptionTable: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Styled tropical table setting at Koa’s'
   ),
-  botanicalReception: editorial(
-    'botanical-reception.jpg',
-    'Outdoor reception styled with botanical floral decor'
+  botanicalReception: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion glowing during an evening event"
   ),
-  venueAtmosphere: editorial(
-    'venue-atmosphere.jpg',
-    'Warm outdoor wedding venue atmosphere with refined event styling'
+  venueAtmosphere: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion and grounds at twilight"
   ),
-  tableSettings: editorial(
-    'garden-table-settings.jpg',
-    'Elegant table settings arranged in a garden'
+  tableSettings: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Tropical table setting showing one way to style Koa’s'
   ),
-  rusticTableDetail: editorial(
-    'rustic-table-detail.jpg',
-    'Outdoor dining table with floral centerpiece and natural textures'
+  rusticTableDetail: koa(
+    'koa-s-tropical-luxury-mobile-bar.webp',
+    "Koa's Mobile Bar styled with tropical florals and warm wood"
   ),
-  eveningReception: editorial(
-    'evening-reception.jpg',
-    'Elegant outdoor evening reception illuminated after sunset'
+  eveningReception: koa(
+    'twilight-tropical-pavilion-wedding-venue.webp',
+    "Koa's Events pavilion illuminated for an evening celebration"
   ),
-  privateEventDetail: editorial(
-    'private-event-detail.jpg',
-    'Styled outdoor celebration detail with dessert display'
+  privateEventDetail: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Styled table detail for a private gathering at Koa’s'
   ),
-  bartenderOutdoor: editorial(
-    'bartender-outdoor-event.jpg',
-    'Professional bartender mixing drinks at an outdoor event'
+  bartenderOutdoor: koa(
+    'tropical-golden-hour-wedding-bar.webp',
+    "Koa's Mobile Bar styled for an outdoor event"
   ),
-  bartenderDetail: editorial(
-    'bartender-detail.jpg',
-    'Bartender preparing a crafted drink'
+  bartenderDetail: koa(
+    'koa-s-tropical-luxury-mobile-bar.webp',
+    "Koa's Mobile Bar service window and event styling"
   ),
-  tropicalDining: editorial(
-    'tropical-resort-dining.jpg',
-    'Refined dining table in a tropical outdoor setting'
+  tropicalDining: koa(
+    'tropical-resort-brunch-tablescape.webp',
+    'Tropical dining table styled at Koa’s'
   ),
   tropicalBedroom: editorial(
     'tropical-bedroom.jpg',
@@ -109,6 +137,25 @@ export const media = {
     'Bright tropical room opening toward palm trees'
   ),
 } satisfies Record<string, MediaAsset>;
+
+export const styledGalleryMedia: MediaAsset[] = [
+  {
+    ...media.homeHero,
+    alt: "Styled inspiration: Koa's pavilion transformed for an evening reception",
+  },
+  {
+    ...media.koaMobileBar,
+    alt: "Styled inspiration: Koa's Mobile Bar with tropical florals",
+  },
+  {
+    ...media.koaHospitality,
+    alt: "Styled inspiration: tropical tablescape at Koa's",
+  },
+  {
+    ...media.koaMobileBarDetail,
+    alt: "Styled inspiration: Koa's Mobile Bar service window",
+  },
+];
 
 const galleryIds = [
   '02b2df_f3a265b46b6b47e8a5ea6e1d9bc306c5~mv2.jpg',
