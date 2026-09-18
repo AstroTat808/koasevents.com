@@ -240,6 +240,7 @@ const badgeClass = {
 
         <form name="koa-catalog-quote-request" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]">
           <input type="hidden" name="form-name" value="koa-catalog-quote-request" />
+          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Catalog Quote (%{submissionId})" />
           <input type="hidden" name="selectedCatalogItems" value="" data-selected-items />
           <input type="hidden" name="estimatedBundleSavings" value="" data-estimated-savings />
           <input type="hidden" name="matchedCatalogBundle" value="" data-matched-bundle />
