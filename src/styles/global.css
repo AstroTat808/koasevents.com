@@ -1,15 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  --koa-ink: #17231f;
-  --koa-forest: #1f4a3d;
-  --koa-moss: #60705d;
-  --koa-sand: #eee8dd;
-  --koa-ivory: #fbf8f1;
-  --koa-amber: #b77a45;
-  --koa-clay: #8f5b48;
-  --koa-line: rgba(23, 35, 31, 0.16);
-  --shadow-soft: 0 24px 70px rgba(23, 35, 31, 0.12);
+  --koa-ink: #102b23;
+  --koa-forest: #173d30;
+  --koa-forest-2: #2d5a45;
+  --koa-moss: #5e7656;
+  --koa-sage: #91a06a;
+  --koa-sand: #e8dfce;
+  --koa-logo-sand: #d9c9a7;
+  --koa-ivory: #faf7ef;
+  --koa-amber: #b96f36;
+  --koa-amber-light: #d49553;
+  --koa-clay: #9a542b;
+  --koa-line: rgba(23, 61, 48, 0.16);
+  --shadow-soft: 0 24px 70px rgba(16, 43, 35, 0.12);
   --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --font-sans: Inter, "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
 }
@@ -27,6 +31,8 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
+
+a { text-underline-offset: 0.18em; }
 
 ::selection {
   background: var(--koa-forest);
@@ -67,8 +73,22 @@ body {
 .koa-grain {
   background-image:
     radial-gradient(circle at 15% 30%, rgba(255,255,255,.45) 0 1px, transparent 1.5px),
-    radial-gradient(circle at 70% 20%, rgba(23,35,31,.08) 0 1px, transparent 1.5px);
+    radial-gradient(circle at 70% 20%, rgba(23,61,48,.08) 0 1px, transparent 1.5px);
   background-size: 24px 24px, 31px 31px;
+}
+
+.hero-shade {
+  background:
+    linear-gradient(90deg, rgba(9, 30, 24, .88) 0%, rgba(9, 30, 24, .52) 54%, rgba(9, 30, 24, .14) 100%);
+}
+
+.card-lift {
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {

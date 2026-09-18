@@ -1,31 +1,72 @@
 ---
+interface Props {
+  overlay?: boolean;
+}
+
+const { overlay = true } = Astro.props;
+
 const nav = [
-  { label: 'Venue', href: '#venue' },
-  { label: 'Mobile Bar', href: '#mobile-bar' },
-  { label: 'Weddings', href: '#celebrations' },
-  { label: 'Private Events', href: '#celebrations' },
-  { label: 'Corporate', href: '#celebrations' },
-  { label: 'Gallery', href: '#gallery' },
+  { label: 'Venue', href: '/venue/' },
+  { label: 'Mobile Bar', href: '/mobile-bar/' },
+  { label: 'Weddings', href: '/#celebrations' },
+  { label: 'Private Events', href: '/#celebrations' },
+  { label: 'Corporate', href: '/#celebrations' },
+  { label: 'Gallery', href: '/#gallery' },
 ];
+
+const shell = overlay
+  ? 'absolute inset-x-0 top-0 z-50 border-b border-white/20 text-white'
+  : 'relative z-50 border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-ink)]';
+
+const navColor = overlay
+  ? 'text-white/82 hover:text-white'
+  : 'text-[var(--koa-ink)]/68 hover:text-[var(--koa-ink)]';
+
+const button = overlay
+  ? 'border-white/60 text-white hover:bg-white hover:text-[var(--koa-ink)]'
+  : 'border-[var(--koa-forest)] text-[var(--koa-forest)] hover:bg-[var(--koa-forest)] hover:text-white';
 ---
-<header class="absolute inset-x-0 top-0 z-50 border-b border-white/20 text-white">
-  <div class="container-shell flex h-24 items-center justify-between gap-6">
-    <a href="/" class="group flex items-center gap-3" aria-label="Koa's Events home">
-      <span class="grid size-10 place-items-center rounded-full border border-white/50 text-[0.68rem] font-black tracking-[0.16em] transition group-hover:bg-white group-hover:text-[var(--koa-ink)]">KE</span>
-      <span class="leading-none">
-        <span class="block font-semibold tracking-[0.14em]">KOA’S EVENTS</span>
-        <span class="mt-1 block text-[0.62rem] tracking-[0.22em] text-white/70">HAWAIʻI ISLAND</span>
+<header class={shell}>
+  <div class="container-shell flex min-h-24 items-center justify-between gap-5 py-4">
+    <a href="/" class="group flex min-w-0 items-center gap-3" aria-label="Koa's Events home">
+      <span class:list={[
+        'display grid size-11 shrink-0 place-items-center rounded-full border text-2xl leading-none',
+        overlay ? 'border-white/45' : 'border-[var(--koa-line)] text-[var(--koa-forest)]',
+      ]}>K</span>
+      <span class="min-w-0 leading-none">
+        <span class="display block truncate text-xl tracking-[0.01em] sm:text-2xl">Koa’s Events</span>
+        <span class:list={[
+          'mt-1.5 hidden text-[0.58rem] font-bold uppercase tracking-[0.19em] sm:block',
+          overlay ? 'text-white/58' : 'text-[var(--koa-ink)]/48',
+        ]}>Hawaiʻi Island · Venue + Mobile Bar</span>
       </span>
     </a>
 
-    <nav class="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
+    <nav class="hidden items-center gap-5 xl:flex" aria-label="Primary navigation">
       {nav.map((item) => (
-        <a class="text-xs font-bold tracking-[0.08em] text-white/85 transition hover:text-white" href={item.href}>{item.label}</a>
+        <a class:list={['text-[0.7rem] font-bold tracking-[0.08em] transition', navColor]} href={item.href}>{item.label}</a>
       ))}
     </nav>
 
-    <a href="#start-planning" class="rounded-full border border-white/60 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] transition hover:bg-white hover:text-[var(--koa-ink)]">
-      Check availability
-    </a>
+    <div class="flex items-center gap-2">
+      <a href="/inquire/" class:list={[
+        'hidden rounded-full border px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.12em] transition sm:inline-flex',
+        button,
+      ]}>
+        Check availability
+      </a>
+      <details class="relative xl:hidden">
+        <summary class:list={[
+          'cursor-pointer list-none rounded-full border px-4 py-3 text-[0.68rem] font-black uppercase tracking-[0.12em]',
+          overlay ? 'border-white/60' : 'border-[var(--koa-line)]',
+        ]}>Menu</summary>
+        <div class="absolute right-0 mt-3 w-64 rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-[var(--koa-ink)] shadow-2xl">
+          {nav.map((item) => (
+            <a class="block rounded-xl px-4 py-3 text-sm font-semibold hover:bg-[var(--koa-sand)]" href={item.href}>{item.label}</a>
+          ))}
+          <a class="mt-2 block rounded-xl bg-[var(--koa-forest)] px-4 py-3 text-sm font-bold text-white" href="/inquire/">Check availability</a>
+        </div>
+      </details>
+    </div>
   </div>
 </header>
