@@ -2,22 +2,14 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import ResponsiveImage from '../components/ResponsiveImage.astro';
 import { businessRules } from '../data/businessRules';
-
-const hero = 'https://static.wixstatic.com/media/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg/v1/fill/w_1600,h_1067,al_c,q_88/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg';
-const portrait = 'https://static.wixstatic.com/media/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg/v1/fill/w_900,h_1200,al_c,q_88/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg';
-const wide = 'https://static.wixstatic.com/media/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg/v1/fill/w_1400,h_933,al_c,q_88/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg';
-
-const serviceCards = [
-  { number: '01', title: 'Host at Koa’s', copy: 'A private Mountain View venue for weddings, celebrations, retreats and corporate gatherings.', href: '/venue/' },
-  { number: '02', title: 'Bring Koa’s to you', copy: 'Professional dry-bar service across Hawaiʻi Island, with planning, setup and bartender labor built into the package framework.', href: '/mobile-bar/' },
-  { number: '03', title: 'Use both', copy: 'Combine venue and bar service so the guest experience runs from one connected plan.', href: '/inquire/?service=both' },
-];
+import { media, galleryMedia } from '../data/media';
 
 const celebrations = [
-  { title: 'Weddings', text: 'Venue, Mobile Bar or both—built around the way you want the day to feel.', href: '/weddings/' },
-  { title: 'Private Events', text: 'Birthdays, showers, graduations, retreats and milestones without wedding-package baggage.', href: '/private-events/' },
-  { title: 'Corporate', text: 'Retreats, client events and team gatherings with practical production thinking.', href: '/corporate-events/' },
+  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.plumeria },
+  { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: media.gardenia },
+  { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: media.orchid },
 ];
 
 const schema = {
@@ -38,130 +30,135 @@ const schema = {
   },
 };
 ---
-<BaseLayout
-  title="Koa’s Events | Big Island Event Venue & Mobile Bar"
-  description="Host a wedding or event for up to 100 guests at Koa’s Events in Mountain View, Hawaiʻi, or bring Koa’s Mobile Bar anywhere on the Big Island."
-  canonical="https://www.koasevents.com/"
->
-  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
-  <main>
-    <section class="relative min-h-[94svh] overflow-hidden bg-[var(--koa-ink)] text-white">
-      <img src={hero} alt="Koa's Events venue in Mountain View, Hawaiʻi" class="absolute inset-0 h-full w-full object-cover opacity-90" fetchpriority="high" />
-      <div class="hero-shade absolute inset-0"></div>
-      <Header />
-      <div class="container-shell relative z-10 flex min-h-[94svh] items-end pb-16 pt-40 lg:pb-20">
-        <div class="max-w-4xl">
-          <p class="eyebrow mb-6 text-white/70">Private venue · Mobile bar · Hawaiʻi Island</p>
-          <h1 class="display max-w-4xl text-6xl leading-[.92] sm:text-7xl lg:text-[6.7rem]">Big Island celebrations, beautifully hosted.</h1>
-          <p class="mt-7 max-w-2xl text-base leading-7 text-white/82 sm:text-lg">Gather at our private Mountain View venue for up to {businessRules.venue.maximumOccupancy.value} guests, bring Koa’s Mobile Bar to your location, or combine both into one more connected event experience.</p>
-          <div class="mt-9 flex flex-wrap gap-3">
-            <a href="/inquire/" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[0.12em] text-[var(--koa-ink)] transition hover:bg-[var(--koa-sand)]">Check your date</a>
-            <a href="/venue/" class="rounded-full border border-white/55 px-6 py-3.5 text-xs font-black uppercase tracking-[0.12em] text-white transition hover:bg-white/10">Explore the venue</a>
-          </div>
+<BaseLayout title="Koa’s Events | Big Island Event Venue & Mobile Bar" description="Host a wedding or event for up to 100 guests at Koa’s Events in Mountain View, Hawaiʻi, or bring Koa’s Mobile Bar anywhere on the Big Island." canonical="https://www.koasevents.com/">
+<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+<main>
+  <section class="relative min-h-[96svh] overflow-hidden bg-[var(--koa-ink)] text-white">
+    <ResponsiveImage {...media.hero} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
+    <div class="hero-shade absolute inset-0"></div>
+    <Header />
+    <div class="container-shell relative z-10 flex min-h-[96svh] items-end pb-16 pt-40 lg:pb-24">
+      <div class="max-w-5xl">
+        <p class="eyebrow text-white/65">Private venue · Mobile bar · Hawaiʻi Island</p>
+        <h1 class="display mt-6 max-w-5xl text-6xl leading-[.9] sm:text-7xl lg:text-[7.2rem]">Big Island celebrations, beautifully hosted.</h1>
+        <p class="mt-7 max-w-2xl text-base leading-7 text-white/78 sm:text-lg">Gather at our private Mountain View venue for up to {businessRules.venue.maximumOccupancy.value} guests, bring Koa’s Mobile Bar to your location, or combine both into one seamless event experience.</p>
+        <div class="mt-10 flex flex-wrap gap-3">
+          <a href="/inquire/" class="rounded-full bg-[var(--koa-ivory)] px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-[var(--koa-ink)]">Check your date</a>
+          <a href="/gallery/" class="rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-white backdrop-blur">View the gallery</a>
         </div>
       </div>
-      <div class="hero-detail-card absolute bottom-6 right-6 z-10 hidden max-w-sm rounded-[1.2rem] px-7 py-6 md:block">
-        <p class="eyebrow text-[var(--koa-clay)]">Mountain View, Hawaiʻi</p>
-        <p class="mt-2 max-w-xs text-sm leading-6 text-[var(--koa-ink)]/68">Four tropical acres · 1,500 sq. ft. pavilion · Up to {businessRules.venue.maximumOccupancy.value} guests.</p>
-      </div>
-    </section>
+    </div>
+    <div class="hero-detail-card absolute bottom-6 right-6 z-10 hidden max-w-sm rounded-[1.2rem] px-7 py-6 md:block">
+      <p class="eyebrow text-[var(--koa-clay)]">Mountain View, Hawaiʻi</p>
+      <p class="mt-2 max-w-xs text-sm leading-6 text-[var(--koa-ink)]/68">Four tropical acres · 1,500 sq. ft. pavilion · Up to {businessRules.venue.maximumOccupancy.value} guests.</p>
+    </div>
+  </section>
 
-    <section class="border-b border-[var(--koa-line)] bg-[var(--koa-sand)] py-5">
-      <div class="container-shell flex flex-wrap items-center justify-between gap-x-8 gap-y-3 text-[0.69rem] font-black uppercase tracking-[0.15em] text-[var(--koa-ink)]/65">
-        <span>Up to {businessRules.venue.maximumOccupancy.value} guests</span><span>Weddings</span><span>Private celebrations</span><span>Corporate gatherings</span><span>Island-wide mobile bar</span>
-      </div>
-    </section>
-
-    <section class="py-24 lg:py-32">
-      <div class="container-shell grid gap-12 lg:grid-cols-[.82fr_1.18fr] lg:gap-20">
-        <div>
-          <p class="eyebrow text-[var(--koa-clay)]">One brand. Two ways to gather.</p>
-          <h2 class="display mt-5 text-5xl leading-[1.02] sm:text-6xl">A calmer way to host something meaningful.</h2>
+  <section class="relative overflow-hidden py-24 lg:py-36">
+    <div class="container-shell grid gap-14 lg:grid-cols-[.92fr_1.08fr] lg:items-center lg:gap-24">
+      <div class="relative min-h-[38rem]">
+        <div class="absolute left-0 top-0 h-[32rem] w-[72%] overflow-hidden rounded-[1.8rem]">
+          <ResponsiveImage {...media.venueWide} width={1100} height={1350} sizes="(min-width:1024px) 38vw, 75vw" class="h-full w-full object-cover" />
         </div>
-        <div class="grid border-t border-[var(--koa-line)]">
-          {serviceCards.map((service) => (
-            <a href={service.href} class="group grid gap-4 border-b border-[var(--koa-line)] py-7 sm:grid-cols-[3rem_1fr_auto] sm:items-start">
-              <span class="text-xs font-black tracking-[0.15em] text-[var(--koa-clay)]">{service.number}</span>
-              <div><h3 class="display text-3xl">{service.title}</h3><p class="mt-2 max-w-xl text-sm leading-6 text-[var(--koa-ink)]/68">{service.copy}</p></div>
-              <span class="mt-1 text-xl transition group-hover:translate-x-1" aria-hidden="true">↗</span>
-            </a>
-          ))}
+        <div class="absolute bottom-0 right-0 h-[24rem] w-[52%] overflow-hidden rounded-[1.5rem] border-[10px] border-[var(--koa-ivory)] shadow-2xl">
+          <ResponsiveImage {...media.hospitality} width={700} height={900} sizes="(min-width:1024px) 24vw, 50vw" class="h-full w-full object-cover" />
         </div>
+        <div class="absolute bottom-10 left-8 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.65rem] font-black uppercase tracking-[.16em] text-white shadow-xl">Gather beautifully.</div>
       </div>
-    </section>
-
-    <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
-      <div class="container-shell grid items-center gap-12 lg:grid-cols-[1.1fr_.9fr] lg:gap-20">
-        <div class="relative min-h-[38rem] overflow-hidden rounded-[2rem] shadow-2xl"><img src={wide} alt="Celebration setting at Koa's Events" loading="lazy" class="absolute inset-0 h-full w-full object-cover" /></div>
-        <div>
-          <p class="eyebrow text-white/55">The venue</p>
-          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Private, lush, and designed to flex.</h2>
-          <p class="mt-7 text-base leading-7 text-white/78">Koa’s Events is set on four tropical acres in Mountain View with an open-air pavilion, guest-preparation spaces and room to shape the day around your priorities rather than a ballroom formula.</p>
-          <div class="mt-9 grid grid-cols-3 gap-px overflow-hidden rounded-2xl bg-white/15">
-            <div class="bg-white/5 p-5"><strong class="display block text-3xl">4</strong><span class="mt-1 block text-[.66rem] uppercase tracking-[.12em] text-white/55">tropical acres</span></div>
-            <div class="bg-white/5 p-5"><strong class="display block text-3xl">1,500</strong><span class="mt-1 block text-[.66rem] uppercase tracking-[.12em] text-white/55">sq. ft. pavilion</span></div>
-            <div class="bg-white/5 p-5"><strong class="display block text-3xl">{businessRules.venue.maximumOccupancy.value}</strong><span class="mt-1 block text-[.66rem] uppercase tracking-[.12em] text-white/55">guest maximum</span></div>
-          </div>
-          <div class="mt-9 flex flex-wrap gap-5"><a href="/venue/" class="link-arrow text-white">Explore the venue →</a><a href="/venue/packages/" class="link-arrow text-white">Wedding packages →</a></div>
+      <div>
+        <p class="eyebrow text-[var(--koa-clay)]">The Koa’s way</p>
+        <h2 class="display mt-5 text-5xl leading-[.98] sm:text-6xl">Warm hospitality, island character, and fewer moving pieces for you.</h2>
+        <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">Koa’s is built around a simple idea: the most memorable events feel personal, not processed. Our venue gives you privacy and flexibility; our Mobile Bar brings the same hospitality anywhere on Hawaiʻi Island.</p>
+        <div class="mt-9 grid gap-5 border-t border-[var(--koa-line)] pt-7 sm:grid-cols-3">
+          <div><strong class="display block text-4xl">4</strong><span class="mt-1 block text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-clay)]">tropical acres</span></div>
+          <div><strong class="display block text-4xl">100</strong><span class="mt-1 block text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-clay)]">guest maximum</span></div>
+          <div><strong class="display block text-4xl">2</strong><span class="mt-1 block text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-clay)]">ways to gather</span></div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="celebrations" class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
-      <div class="container-shell">
-        <div class="max-w-3xl"><p class="eyebrow text-[var(--koa-clay)]">Celebrations</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Built around the reason you’re gathering.</h2></div>
-        <div class="mt-14 grid gap-5 lg:grid-cols-3">
-          {celebrations.map((item, index) => (
-            <a href={item.href} class="card-lift flex min-h-[22rem] flex-col rounded-[1.6rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-7">
-              <span class="eyebrow text-[var(--koa-clay)]">0{index + 1}</span><h3 class="display mt-16 text-4xl">{item.title}</h3><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68">{item.text}</p><span class="link-arrow mt-auto pt-7">Explore →</span>
-            </a>
-          ))}
+  <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
+    <div class="container-shell">
+      <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+        <div><p class="eyebrow text-[var(--koa-amber-light)]">Choose the experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Host here. Bring us there. Or make it one connected plan.</h2></div>
+        <p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">You do not have to fit your event into one rigid format. Start with the setting, the bar, or both—and build from what matters most to your guests.</p>
+      </div>
+      <div class="mt-14 grid gap-4 lg:grid-cols-3">
+        <a href="/venue/" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
+          <ResponsiveImage {...media.venueWide} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
+          <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">01 · The venue</p><h3 class="display mt-3 text-4xl">Host at Koa’s</h3><p class="mt-3 text-sm leading-6 text-white/68">A private Mountain View property for weddings, celebrations and gatherings.</p></div>
+        </a>
+        <a href="/mobile-bar/" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
+          <ResponsiveImage {...media.mobileBar} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
+          <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">02 · Mobile Bar</p><h3 class="display mt-3 text-4xl">Bring Koa’s to you</h3><p class="mt-3 text-sm leading-6 text-white/68">Professional dry-bar service across Hawaiʻi Island.</p></div>
+        </a>
+        <a href="/inquire/?service=both" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
+          <ResponsiveImage {...media.plumeria} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
+          <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">03 · Combined</p><h3 class="display mt-3 text-4xl">Keep it connected</h3><p class="mt-3 text-sm leading-6 text-white/68">One inquiry, one shared plan, fewer loose ends.</p></div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+    <div class="container-shell">
+      <div class="max-w-3xl"><p class="eyebrow text-[var(--koa-clay)]">Reasons to gather</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Different celebrations deserve different energy.</h2></div>
+      <div class="mt-14 grid gap-4 lg:grid-cols-3">
+        {celebrations.map((item, index) => (
+          <a href={item.href} class="group overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
+            <div class="relative h-72 overflow-hidden"><ResponsiveImage {...item.image} width={900} height={650} sizes="(min-width:1024px) 33vw, 100vw" class="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" /><span class="absolute left-5 top-5 rounded-full bg-[rgba(251,248,241,.9)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">0{index+1}</span></div>
+            <div class="p-7"><h3 class="display text-4xl">{item.title}</h3><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/64">{item.copy}</p><span class="link-arrow mt-6">Explore →</span></div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="overflow-hidden py-24 lg:py-36">
+    <div class="container-shell grid gap-14 lg:grid-cols-[.82fr_1.18fr] lg:items-center lg:gap-24">
+      <div>
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+        <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Island hospitality, poured with intention.</h2>
+        <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">{businessRules.mobileBar.model.value}</p>
+        <div class="mt-8 grid gap-4 border-y border-[var(--koa-line)] py-6 text-sm text-[var(--koa-ink)]/66 sm:grid-cols-2">
+          <p><strong class="text-[var(--koa-ink)]">Bartender labor</strong><br/>Included under standard package assumptions.</p>
+          <p><strong class="text-[var(--koa-ink)]">Gratuity</strong><br/>Optional; no default tip jar.</p>
         </div>
+        <div class="mt-8 flex flex-wrap gap-5"><a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a><a href="/mobile-bar/faq/" class="link-arrow">Read the FAQ →</a></div>
       </div>
-    </section>
+      <div class="relative min-h-[42rem]">
+        <div class="absolute right-0 top-0 h-[35rem] w-[78%] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.mobileBar} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
+        <div class="absolute bottom-0 left-0 w-[58%] rounded-[1.4rem] bg-[var(--koa-forest)] p-7 text-white shadow-2xl"><p class="eyebrow text-[var(--koa-amber-light)]">Across Hawaiʻi Island</p><p class="display mt-3 text-3xl">Good drinks bring great people together.</p></div>
+      </div>
+    </div>
+  </section>
 
-    <section class="py-24 lg:py-32">
-      <div class="container-shell grid items-center gap-14 lg:grid-cols-2 lg:gap-24">
-        <div>
-          <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
-          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">The Koa’s experience, wherever the party is.</h2>
-          <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/70">{businessRules.mobileBar.model.value}</p>
-          <div class="mt-8 grid gap-3 text-sm text-[var(--koa-ink)]/68">
-            <p><strong class="text-[var(--koa-ink)]">Bartender labor:</strong> included within standard package assumptions.</p>
-            <p><strong class="text-[var(--koa-ink)]">Gratuity:</strong> optional.</p>
-            <p><strong class="text-[var(--koa-ink)]">Tip jar:</strong> not used by default.</p>
-            <p><strong class="text-[var(--koa-ink)]">Larger/complex events:</strong> custom staffing quoted to protect service quality.</p>
-          </div>
-          <div class="mt-9 flex flex-wrap gap-5"><a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a><a href="/mobile-bar/faq/" class="link-arrow">Read the FAQ →</a></div>
-        </div>
-        <div class="relative min-h-[38rem] overflow-hidden rounded-[2rem] bg-[var(--koa-ink)]"><img src={portrait} alt="Koa's event hospitality" loading="lazy" class="absolute inset-0 h-full w-full object-cover opacity-90" /><div class="absolute inset-x-5 bottom-5 rounded-2xl border border-white/20 bg-black/30 p-5 text-white backdrop-blur"><p class="eyebrow text-white/55">Across Hawaiʻi Island</p><p class="display mt-2 text-3xl">Bar service that looks intentional and works hard.</p></div></div>
-      </div>
-    </section>
+  <section class="bg-[var(--koa-ink)] py-24 text-white lg:py-32">
+    <div class="container-shell grid gap-12 lg:grid-cols-[.72fr_1.28fr] lg:items-start lg:gap-24">
+      <div><p class="eyebrow text-[var(--koa-amber-light)]">What couples remember</p><div class="luxury-rule mt-5"></div></div>
+      <blockquote class="display text-4xl leading-[1.12] sm:text-5xl lg:text-6xl">“Our wedding was absolutely magical at this venue. The staff’s attention to detail and beautiful setting made our day unforgettable.”<footer class="mt-8 font-sans text-xs font-black uppercase tracking-[.15em] text-white/48">Cristina & Remo</footer></blockquote>
+    </div>
+  </section>
 
-    <section class="bg-[var(--koa-ink)] py-24 text-white lg:py-32">
-      <div class="container-shell grid gap-10 lg:grid-cols-[.75fr_1.25fr] lg:gap-24">
-        <p class="eyebrow text-white/45">What couples remember</p>
-        <blockquote class="display text-4xl leading-[1.13] sm:text-5xl">“Our wedding was absolutely magical at this venue. The staff’s attention to detail and beautiful setting made our day unforgettable.”<footer class="mt-7 font-sans text-sm font-bold uppercase tracking-[.12em] text-white/55">Cristina & Remo</footer></blockquote>
+  <section id="gallery" class="py-24 lg:py-32">
+    <div class="container-shell">
+      <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">The lookbook</p><h2 class="display mt-4 text-5xl sm:text-6xl">A sense of place.</h2></div><a href="/gallery/" class="link-arrow text-[var(--koa-forest)]">Open the full gallery →</a></div>
+      <div class="mt-10 grid auto-rows-[17rem] gap-3 md:grid-cols-12">
+        {galleryMedia.slice(0,5).map((image,index)=><a href="/gallery/" class:list={['group relative overflow-hidden rounded-[1.3rem]', index===0 ? 'md:col-span-7 md:row-span-2' : index===1 ? 'md:col-span-5' : index===2 ? 'md:col-span-5' : 'md:col-span-6']}><ResponsiveImage {...image} width={1200} height={900} sizes="(min-width:1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" /></a>)}
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section id="gallery" class="py-24 lg:py-32">
-      <div class="container-shell">
-        <div class="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">A sense of place</p><h2 class="display mt-4 text-5xl sm:text-6xl">Made for memories.</h2></div><a href="/inquire/" class="link-arrow text-[var(--koa-forest)]">Check availability →</a></div>
-        <div class="mt-10 grid auto-rows-[18rem] gap-4 md:grid-cols-12">
-          <img src={hero} alt="Koa's Events outdoor venue" loading="lazy" class="h-full w-full rounded-[1.5rem] object-cover md:col-span-7 md:row-span-2" />
-          <img src={portrait} alt="Event detail at Koa's Events" loading="lazy" class="h-full w-full rounded-[1.5rem] object-cover md:col-span-5" />
-          <img src={wide} alt="Koa's Events celebration" loading="lazy" class="h-full w-full rounded-[1.5rem] object-cover md:col-span-5" />
-        </div>
-      </div>
-    </section>
-
-    <section class="bg-[var(--koa-sand)] py-24 lg:py-32">
-      <div class="container-shell grid gap-12 lg:grid-cols-[1.05fr_.95fr] lg:items-end lg:gap-20">
-        <div><p class="eyebrow text-[var(--koa-clay)]">Start planning</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-7xl">Tell us what you’re gathering for.</h2><p class="mt-6 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">One inquiry now routes you to Venue, Mobile Bar, or both and collects the event details we need to give you a useful next step.</p></div>
-        <div class="rounded-[1.6rem] bg-[var(--koa-forest)] p-7 text-white sm:p-9"><p class="eyebrow text-white/50">Koa’s Events</p><p class="display mt-5 text-4xl">Your date is the first decision.</p><a href="/inquire/" class="mt-7 inline-flex rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check availability</a><div class="mt-8 border-t border-white/15 pt-6 text-sm leading-6 text-white/65">Venue in Mountain View · Mobile bar throughout Hawaiʻi Island · 844-808-KOAS</div></div>
-      </div>
-    </section>
-  </main>
-  <Footer />
+  <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+    <div class="container-shell grid gap-12 lg:grid-cols-[1.1fr_.9fr] lg:items-end lg:gap-20">
+      <div><p class="eyebrow text-[var(--koa-clay)]">Start planning</p><h2 class="display mt-5 text-5xl leading-[.98] sm:text-7xl">Tell us what you’re gathering for.</h2><p class="mt-6 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">One inquiry routes you to Venue, Mobile Bar, or both and gives us enough detail to make the next conversation useful.</p></div>
+      <div class="rounded-[1.6rem] bg-[var(--koa-forest)] p-8 text-white shadow-xl"><p class="eyebrow text-[var(--koa-amber-light)]">Your date is the first decision</p><p class="display mt-5 text-4xl">Let’s see whether Koa’s is the right fit.</p><a href="/inquire/" class="mt-7 inline-flex rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check availability</a></div>
+    </div>
+  </section>
+</main>
+<Footer />
 </BaseLayout>

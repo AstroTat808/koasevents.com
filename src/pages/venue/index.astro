@@ -2,59 +2,46 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { businessRules } from '../../data/businessRules';
+import { media, galleryMedia } from '../../data/media';
 
-const hero = 'https://static.wixstatic.com/media/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg/v1/fill/w_1600,h_1067,al_c,q_88/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg';
-const detail = 'https://static.wixstatic.com/media/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg/v1/fill/w_1200,h_800,al_c,q_88/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg';
 const packages = businessRules.venueWeddingPackages;
-
-const eventTypes = [
-  { title: 'Weddings', text: 'From intimate weekday vows to full weekend celebrations, build the experience around the way you actually want to gather.', href: '/weddings/' },
-  { title: 'Private Events', text: 'Birthdays, showers, graduations, reunions, retreats and milestone celebrations in a private setting that can flex with the occasion.', href: '/private-events/' },
-  { title: 'Corporate Gatherings', text: 'Team celebrations, client gatherings and retreats with room for programming, hospitality and a more memorable sense of place.', href: '/corporate-events/' },
-];
-
-const essentials = [
-  'Maximum venue occupancy is 100 persons.',
-  'Event insurance proof is due 60 days before the event.',
-  'Outside vendors must be insured; current client documents require vendor proof 30 days before the event.',
-  'Only pre-approved bartenders may serve alcohol. Self-service bars are not permitted.',
-  'Current event-day rules end shot service at 8 PM and music at 10 PM.',
-];
-
 const schema = {
-  '@context': 'https://schema.org',
-  '@type': 'EventVenue',
-  name: "Koa's Events",
-  url: 'https://www.koasevents.com/venue/',
-  telephone: businessRules.contact.phone,
-  email: businessRules.contact.email,
-  maximumAttendeeCapacity: businessRules.venue.maximumOccupancy.value,
-  address: {
-    '@type': 'PostalAddress',
-    streetAddress: '11-3334 Hibiscus St',
-    addressLocality: 'Mountain View',
-    addressRegion: 'HI',
-    postalCode: '96771',
-    addressCountry: 'US',
-  },
+  '@context':'https://schema.org','@type':'EventVenue',name:"Koa's Events",url:'https://www.koasevents.com/venue/',
+  telephone:businessRules.contact.phone,email:businessRules.contact.email,maximumAttendeeCapacity:businessRules.venue.maximumOccupancy.value,
+  address:{'@type':'PostalAddress',streetAddress:'11-3334 Hibiscus St',addressLocality:'Mountain View',addressRegion:'HI',postalCode:'96771',addressCountry:'US'}
 };
 ---
-<BaseLayout title="Koa’s Events Venue | Weddings & Private Events on Hawaiʻi Island" description="Explore Koa’s Events in Mountain View, Hawaiʻi: a private event venue for weddings, celebrations, retreats and corporate gatherings for up to 100 guests." canonical="https://www.koasevents.com/venue/">
+<BaseLayout title="Koa’s Events Venue | Weddings & Private Events on Hawaiʻi Island" description="Explore Koa’s Events in Mountain View, Hawaiʻi: a private tropical event venue for weddings, celebrations, retreats and corporate gatherings for up to 100 guests." canonical="https://www.koasevents.com/venue/">
 <script type="application/ld+json" set:html={JSON.stringify(schema)} />
 <main>
-<section class="relative min-h-[82svh] overflow-hidden bg-[var(--koa-ink)] text-white"><img src={hero} alt="Koa's Events venue in Mountain View, Hawaiʻi" class="absolute inset-0 h-full w-full object-cover opacity-90" fetchpriority="high"/><div class="hero-shade absolute inset-0"></div><Header/>
-<div class="container-shell relative z-10 flex min-h-[82svh] items-end pb-16 pt-40 lg:pb-20"><div class="max-w-4xl"><p class="eyebrow text-white/62">The venue · Mountain View, Hawaiʻi</p><h1 class="display mt-5 max-w-4xl text-6xl leading-[.92] sm:text-7xl lg:text-[6.6rem]">A private place to gather beautifully.</h1><p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Four tropical acres, a 1,500 sq. ft. pavilion and room for celebrations of up to {businessRules.venue.maximumOccupancy.value} guests.</p><div class="mt-9 flex flex-wrap gap-3"><a href="/inquire/?service=venue" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check your date</a><a href="/venue/packages/" class="rounded-full border border-white/55 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em]">Wedding packages</a></div></div></div></section>
+<section class="relative min-h-[88svh] overflow-hidden bg-[var(--koa-ink)] text-white">
+  <ResponsiveImage {...media.venueWide} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
+  <div class="hero-shade absolute inset-0"></div><Header/>
+  <div class="container-shell relative z-10 flex min-h-[88svh] items-end pb-16 pt-40 lg:pb-24"><div class="max-w-4xl"><p class="eyebrow text-white/65">The venue · Mountain View, Hawaiʻi</p><h1 class="display mt-5 text-6xl leading-[.9] sm:text-7xl lg:text-[6.8rem]">A private island setting with room to make it yours.</h1><p class="mt-7 max-w-2xl text-base leading-7 text-white/78 sm:text-lg">Four tropical acres, an open-air pavilion and space for celebrations of up to {businessRules.venue.maximumOccupancy.value} guests.</p><div class="mt-9 flex flex-wrap gap-3"><a href="/inquire/?service=venue" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check your date</a><a href="/gallery/" class="rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em]">View the property</a></div></div></div>
+</section>
 
-<section class="border-b border-[var(--koa-line)] bg-[var(--koa-sand)] py-5"><div class="container-shell flex flex-wrap items-center justify-between gap-x-8 gap-y-3 text-[.69rem] font-black uppercase tracking-[.15em] text-[var(--koa-ink)]/64"><span>Mountain View</span><span>{businessRules.venue.pavilionSqFt.value.toLocaleString()} sq. ft. pavilion</span><span>Up to {businessRules.venue.maximumOccupancy.value} guests</span><span>Wedding collections</span><span>Private + corporate</span></div></section>
+<section class="py-24 lg:py-36"><div class="container-shell grid gap-14 lg:grid-cols-[.72fr_1.28fr] lg:gap-24">
+  <div><p class="eyebrow text-[var(--koa-clay)]">The estate</p><h2 class="display mt-5 text-5xl leading-[.98] sm:text-6xl">Not a ballroom. Not a resort corridor. A place with its own rhythm.</h2><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/67">Koa’s gives hosts a more private, nature-forward way to gather in Mountain View. The property can support intimate celebrations and larger events up to the approved venue maximum, while package inventory and rentals scale separately.</p></div>
+  <div class="relative min-h-[42rem]"><div class="absolute right-0 top-0 h-[34rem] w-[78%] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.hero} width={1200} height={1400} sizes="(min-width:1024px) 48vw, 90vw" class="h-full w-full object-cover" /></div><div class="absolute bottom-0 left-0 grid w-[58%] gap-5 rounded-[1.4rem] bg-[var(--koa-sand)] p-7 shadow-xl"><div><p class="eyebrow text-[var(--koa-clay)]">Capacity</p><p class="display mt-1 text-4xl">{businessRules.venue.maximumOccupancy.value} guests</p></div><div><p class="eyebrow text-[var(--koa-clay)]">Pavilion</p><p class="display mt-1 text-4xl">{businessRules.venue.pavilionSqFt.value.toLocaleString()} sq. ft.</p></div></div></div>
+</div></section>
 
-<section class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Enough structure to make planning easier. Enough flexibility to make it yours.</h2></div><div class="grid gap-6 text-base leading-7 text-[var(--koa-ink)]/70"><p>Koa’s is designed for hosts who want an event to feel considered without feeling manufactured. The property gives you a private setting, an open-air pavilion and multiple ways to layer in rentals, décor, sound, bar service and planning support.</p><p>Wedding offerings range from short weekday celebrations to one-day and weekend packages. Private and corporate events can be shaped around timing, layout, beverage service and guest experience.</p><div class="flex flex-wrap gap-5"><a href="/venue/faq/" class="link-arrow text-[var(--koa-forest)]">Venue FAQ →</a><a href="/inquire/?service=venue" class="link-arrow text-[var(--koa-forest)]">Tell us what you’re planning →</a></div></div></div></section>
+<section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32"><div class="container-shell">
+  <div class="grid gap-10 lg:grid-cols-[.78fr_1.22fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-amber-light)]">Move through the property</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A venue should support the whole event, not just the ceremony.</h2></div><p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">Arrival, getting ready, ceremony, reception, bar service, weather planning and the end of the night all shape how the property feels.</p></div>
+  <div class="mt-14 grid gap-4 lg:grid-cols-3">
+    {[
+      ['Arrival + gathering','A private Mountain View setting that gives guests a clear sense of arrival and hosts room to shape the flow.',galleryMedia[2]],
+      ['Open-air celebration','The pavilion provides a covered center for dining, dancing, entertainment and weather-aware planning.',media.venueWide],
+      ['After dark','Lighting, music and hospitality shift the property into a warmer evening atmosphere without losing the island setting.',media.hero]
+    ].map(([title,copy,image],i)=><article class="overflow-hidden rounded-[1.5rem] border border-white/12 bg-white/[.045]"><div class="relative h-72"><ResponsiveImage {...image} width={900} height={650} sizes="(min-width:1024px) 33vw, 100vw" class="h-full w-full object-cover" /></div><div class="p-7"><p class="eyebrow text-[var(--koa-amber-light)]">0{i+1}</p><h3 class="display mt-3 text-3xl">{title}</h3><p class="mt-3 text-sm leading-6 text-white/64">{copy}</p></div></article>)}
+  </div>
+</div></section>
 
-<section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32"><div class="container-shell grid items-center gap-12 lg:grid-cols-[1.08fr_.92fr] lg:gap-20"><div class="relative min-h-[36rem] overflow-hidden rounded-[2rem]"><img src={detail} alt="Event setting at Koa's Events" loading="lazy" class="absolute inset-0 h-full w-full object-cover"/></div><div><p class="eyebrow text-white/48">Choose your reason to gather</p><div class="mt-8 grid border-t border-white/16">{eventTypes.map((item,index)=><a href={item.href} class="grid gap-3 border-b border-white/16 py-7 sm:grid-cols-[3rem_1fr]"><span class="text-xs font-black tracking-[.12em] text-[var(--koa-amber-light)]">0{index+1}</span><div><h2 class="display text-3xl">{item.title}</h2><p class="mt-2 text-sm leading-6 text-white/64">{item.text}</p></div></a>)}</div></div></div></section>
+<section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell">
+  <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-clay)]">Wedding collections</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Different starting points, one venue maximum.</h2></div><p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/62 lg:justify-self-end">Included furniture and services vary by package; the venue itself is approved for up to {businessRules.venue.maximumOccupancy.value} persons.</p></div>
+  <div class="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{packages.map((item,index)=><a href="/venue/packages/" class="card-lift rounded-[1.4rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6"><span class="eyebrow text-[var(--koa-clay)]">0{index+1}</span><p class="mt-8 text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{item.position}</p><h3 class="display mt-2 text-4xl">{item.name}</h3><p class="mt-2 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">From {'$'+item.price.toLocaleString()}</p><p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62">{item.access}</p><span class="link-arrow mt-7">See package →</span></a>)}</div>
+</div></section>
 
-<section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell"><div class="grid gap-8 lg:grid-cols-[.8fr_1.2fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-clay)]">Wedding collection</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Four starting points. One venue maximum.</h2></div><p class="max-w-xl text-sm leading-6 text-[var(--koa-ink)]/62 lg:justify-self-end">The venue maximum is {businessRules.venue.maximumOccupancy.value} persons. Package prices include different furniture, access and service levels; larger configurations can require added rentals or a custom quote.</p></div><div class="mt-14 grid gap-5 md:grid-cols-2 xl:grid-cols-4">{packages.map((item,index)=><article class="card-lift flex min-h-[24rem] flex-col rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-7"><span class="eyebrow text-[var(--koa-clay)]">0{index+1}</span><p class="mt-8 text-xs font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{item.position}</p><h3 class="display mt-2 text-4xl">{item.name}</h3><p class="mt-2 text-xs font-black uppercase tracking-[.13em] text-[var(--koa-forest)]">Starting at {'$'+item.price.toLocaleString()}</p><p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/66">{item.baseConfiguration}</p><a href="/venue/packages/" class="link-arrow mt-auto pt-8">See details →</a></article>)}</div></div></section>
-
-<section class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Planning essentials</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Clear expectations make better events.</h2><p class="mt-6 max-w-md text-sm leading-6 text-[var(--koa-ink)]/60">These are early-planning highlights. Your signed agreement controls your event.</p></div><div class="grid border-t border-[var(--koa-line)]">{essentials.map((item,index)=><div class="grid gap-4 border-b border-[var(--koa-line)] py-6 sm:grid-cols-[3rem_1fr]"><span class="eyebrow text-[var(--koa-clay)]">0{index+1}</span><p class="text-sm leading-6 text-[var(--koa-ink)]/70">{item}</p></div>)}</div></div></section>
-
-<section class="bg-[var(--koa-ink)] py-20 text-white"><div class="container-shell flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between"><div class="max-w-3xl"><p class="eyebrow text-white/45">Your date is the first decision</p><h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">See whether Koa’s fits the celebration you have in mind.</h2></div><a href="/inquire/?service=venue" class="shrink-0 rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check availability</a></div></section>
+<section class="py-24 lg:py-32"><div class="container-shell grid gap-14 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-20"><div class="relative min-h-[36rem] overflow-hidden rounded-[2rem]"><ResponsiveImage {...galleryMedia[6]} width={1200} height={1100} sizes="(min-width:1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover" /></div><div><p class="eyebrow text-[var(--koa-clay)]">Plan with clarity</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Know the important rules before you fall in love with the date.</h2><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Insurance, vendor requirements, alcohol rules, setup timing and music cutoff are all part of the planning conversation. We surface them early because clarity makes better events.</p><div class="mt-8 flex flex-wrap gap-5"><a href="/venue/faq/" class="link-arrow">Venue FAQ →</a><a href="/inquire/?service=venue" class="link-arrow">Check availability →</a></div></div></div></section>
 </main><Footer/></BaseLayout>
