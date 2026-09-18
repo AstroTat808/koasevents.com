@@ -22,8 +22,10 @@ const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:i
       </div>
     </div>
   </main>
-  <script define:vars={{ curated }}>
+  <script id="curated-data" type="application/json" set:html={JSON.stringify(curated)}></script>
+  <script>
     import { getUser } from '@netlify/identity';
+    const curated = JSON.parse(document.getElementById('curated-data')?.textContent || '[]');
     const ui=document.querySelector('[data-admin-ui]');
     const unauthorized=document.querySelector('[data-unauthorized]');
     const uploadForm=document.querySelector('[data-upload-form]');
