@@ -9,6 +9,13 @@ export type CatalogCategory =
 
 export type CatalogPriceType = 'starting' | 'fixed' | 'per-item' | 'quote' | 'included';
 
+export type CatalogBadgeKind = 'flagship' | 'featured' | 'favorite' | 'popular' | 'deal' | 'included';
+
+export interface CatalogBadge {
+  kind: CatalogBadgeKind;
+  label: string;
+}
+
 export interface CatalogItem {
   id: string;
   category: CatalogCategory;
@@ -18,6 +25,9 @@ export interface CatalogItem {
   priceLabel: string;
   note?: string;
   featured?: boolean;
+  badges?: CatalogBadge[];
+  includedWith?: string[];
+  specs?: { label: string; value: string }[];
   keywords?: string[];
 }
 
@@ -41,6 +51,9 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $20,000',
     featured: true,
+    badges: [{ kind: 'flagship', label: 'Koa’s Flagship' }],
+    includedWith: ['Signature Wedding Experience'],
+    specs: [{ label: 'Venue maximum', value: 'Up to 100 persons' }, { label: 'Included seating', value: '50 ceremony + 50 reception chairs' }],
     keywords: ['plumeria', 'weekend', 'wedding', 'full service'],
   },
   {
@@ -79,6 +92,9 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'quote',
     priceLabel: 'Custom quote',
     note: 'Quantity and event configuration determine final pricing.',
+    badges: [{ kind: 'included', label: 'Included With Select Packages' }],
+    includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
+    specs: [{ label: 'Signature includes', value: '50 ceremony chairs' }],
     keywords: ['chair', 'seating'],
   },
   {
@@ -88,6 +104,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'Reception seating added to match your final guest count and floor plan.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Select Packages' }],
+    includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
+    specs: [{ label: 'Signature includes', value: '50 reception chairs' }],
     keywords: ['chair', 'seating'],
   },
   {
@@ -97,6 +116,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'Classic reception tables used throughout Koa’s wedding and private-event layouts.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Select Packages' }],
+    includedWith: ['Gardenia', 'Hibiscus', 'Signature'],
+    specs: [{ label: 'Size', value: '60-inch round' }, { label: 'Signature includes', value: '10 tables' }],
     keywords: ['table', 'round', 'reception'],
   },
   {
@@ -106,6 +128,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'Flexible banquet, service, display or head-table inventory.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
+    specs: [{ label: 'Size', value: '6-foot rectangle' }, { label: 'Signature includes', value: '2 tables' }],
     keywords: ['table', 'banquet', 'rectangle'],
   },
   {
@@ -115,6 +140,9 @@ export const catalogItems: CatalogItem[] = [
     description: 'High-top tables for cocktail hour, mingling and bar-adjacent guest flow.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
+    specs: [{ label: 'Size', value: '36-inch cocktail table' }, { label: 'Signature includes', value: '10 tables' }],
     keywords: ['cocktail', 'high top', 'table'],
   },
 
@@ -126,6 +154,8 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'per-item',
     priceLabel: '$1.50 / piece',
     note: 'Current published add-on price.',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['barware', 'wine glass', 'champagne'],
   },
   {
@@ -135,6 +165,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Elevated place-setting and tablescape support included in the Signature Wedding Experience and available for custom scope.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['place settings', 'dishes', 'flatware', 'tablescape'],
   },
   {
@@ -154,6 +186,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Signature ceremony pieces used as a foundation for floral and décor design.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['arbor', 'arch', 'barrel', 'ceremony'],
   },
   {
@@ -163,6 +197,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Event lighting beyond the venue’s base pavilion lighting, scaled to the space and event design.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['bistro', 'market lights', 'uplight', 'deluxe lighting'],
   },
   {
@@ -172,6 +208,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Bouquets, ceremony florals and elevated floral arrangements based on event design and seasonal availability.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Select Packages' }],
+    includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     keywords: ['flowers', 'bouquet', 'floral'],
   },
   {
@@ -181,6 +219,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Guest entertainment for cocktail hour and relaxed outdoor portions of the celebration.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['games', 'cocktail hour'],
   },
 
@@ -191,6 +231,13 @@ export const catalogItems: CatalogItem[] = [
     description: 'Guest photo experience available within the Signature Wedding Experience and for select custom events.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [
+      { kind: 'popular', label: 'Popular' },
+      { kind: 'deal', label: 'Add-On Savings' },
+      { kind: 'included', label: 'Included With Signature' },
+    ],
+    includedWith: ['Signature'],
+    specs: [{ label: 'Promotion', value: 'Discount available when added to an eligible event package' }],
     keywords: ['photos', 'mirror', 'guest'],
   },
   {
@@ -200,6 +247,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Venue audio support for announcements and event music within property operating rules.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Wedding Packages' }],
+    includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     keywords: ['speaker', 'sound', 'microphone', 'sonos'],
   },
   {
@@ -209,6 +258,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Raw aerial footage included in the Signature Wedding Experience and available by custom scope where conditions permit.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['video', 'aerial', 'drone'],
   },
 
@@ -238,6 +289,8 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $1,800',
     featured: true,
+    badges: [{ kind: 'featured', label: 'Featured Bar Package' }],
+    specs: [{ label: 'Published service', value: '4 hours' }, { label: 'Standard framework', value: 'Up to 100 guests' }],
     keywords: ['mixed cocktails', 'full bar'],
   },
   {
@@ -367,6 +420,11 @@ export const catalogItems: CatalogItem[] = [
     description: 'Interactive guest photo experience with illuminated backdrop styling.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [
+      { kind: 'popular', label: 'Popular' },
+      { kind: 'deal', label: 'Add-On Savings' },
+    ],
+    specs: [{ label: 'Style', value: 'Mirrored booth + LED backdrop' }],
     keywords: ['photo booth', 'mirror', 'led'],
   },
   {
@@ -505,6 +563,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Event-day operational support available within select wedding collections and custom event scopes.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Select Packages' }],
+    includedWith: ['Hibiscus', 'Signature'],
     keywords: ['coordinator', 'planning'],
   },
   {
@@ -514,6 +574,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Guest arrival and parking-flow support included in the Signature Wedding Experience and available for custom scope.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Signature' }],
+    includedWith: ['Signature'],
     keywords: ['parking', 'arrival'],
   },
   {
@@ -523,6 +585,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Communication and event-day support for approved vendors working at Koa’s.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    badges: [{ kind: 'included', label: 'Included With Wedding Packages' }],
+    includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     keywords: ['vendors', 'planning', 'coordination'],
   },
 ];
