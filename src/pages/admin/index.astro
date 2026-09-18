@@ -8,12 +8,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
         <h1 class="display mt-4 text-5xl">Content Admin</h1>
         <div data-auth-panel class="mt-8">
+          <form data-invite-form class="hidden grid gap-4">
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="eyebrow text-[var(--koa-clay)]">Accept your invitation</p>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Create the password you’ll use to sign in to Koa’s Content Admin.</p>
+            </div>
+            <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Create account</button>
+            <p data-invite-error class="hidden text-sm text-red-700"></p>
+          </form>
+
           <form data-login-form class="grid gap-4">
-            <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-            <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" autocomplete="current-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
             <p data-auth-error class="hidden text-sm text-red-700"></p>
           </form>
+
+          <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+            <p class="font-semibold text-[var(--koa-ink)]">Your account is signed in, but it does not have the <code>admin</code> role yet.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Assign the <code>admin</code> role to this Identity user in Netlify, then sign out and back in.</p>
+            <button data-logout-warning class="mt-4 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Sign out</button>
+          </div>
+
           <div data-admin-links class="hidden grid gap-4 sm:grid-cols-2">
             <a href="/admin/blog/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-white/65">Create, edit, publish and delete journal entries.</span></a>
             <a href="/admin/gallery/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-white/65">Upload, remove and hide gallery photography.</span></a>
@@ -24,38 +42,101 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { getUser, handleAuthCallback, login, logout } from '@netlify/identity';
-    const form = document.querySelector('[data-login-form]');
-    const links = document.querySelector('[data-admin-links]');
-    const error = document.querySelector('[data-auth-error]');
+    import { acceptInvite, getUser, handleAuthCallback, login, logout } from '@netlify/identity';
 
-    async function render() {
-      await handleAuthCallback();
-      const user = await getUser();
-      form?.classList.toggle('hidden', Boolean(user));
-      links?.classList.toggle('hidden', !user);
+    const loginForm = document.querySelector('[data-login-form]');
+    const inviteForm = document.querySelector('[data-invite-form]');
+    const links = document.querySelector('[data-admin-links]');
+    const roleWarning = document.querySelector('[data-role-warning]');
+    const authError = document.querySelector('[data-auth-error]');
+    const inviteError = document.querySelector('[data-invite-error]');
+    let inviteToken = '';
+
+    function hasAdminRole(user) {
+      const roles = user?.app_metadata?.roles || [];
+      return Array.isArray(roles) && roles.includes('admin');
     }
 
-    form?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const data = new FormData(form);
+    function showAuthState(user) {
+      const isAdmin = Boolean(user) && hasAdminRole(user);
+      loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken));
+      inviteForm?.classList.toggle('hidden', !inviteToken);
+      links?.classList.toggle('hidden', !isAdmin);
+      roleWarning?.classList.toggle('hidden', !user || isAdmin);
+    }
+
+    async function initialize() {
       try {
-        await login(String(data.get('email')), String(data.get('password')));
-        if (error) error.classList.add('hidden');
-        await render();
+        const result = await handleAuthCallback();
+
+        if (result?.type === 'invite' && result.token) {
+          inviteToken = result.token;
+          showAuthState(null);
+          return;
+        }
+
+        const user = await getUser();
+        showAuthState(user);
       } catch (err) {
-        if (error) {
-          error.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
-          error.classList.remove('hidden');
+        if (authError) {
+          authError.textContent = err instanceof Error ? err.message : 'Unable to process the sign-in link.';
+          authError.classList.remove('hidden');
+        }
+        showAuthState(await getUser());
+      }
+    }
+
+    inviteForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(inviteForm);
+      const password = String(data.get('password') || '');
+      const confirmPassword = String(data.get('confirmPassword') || '');
+
+      if (password !== confirmPassword) {
+        if (inviteError) {
+          inviteError.textContent = 'The passwords do not match.';
+          inviteError.classList.remove('hidden');
+        }
+        return;
+      }
+
+      try {
+        const user = await acceptInvite(inviteToken, password);
+        inviteToken = '';
+        history.replaceState(null, '', '/admin/');
+        if (inviteError) inviteError.classList.add('hidden');
+        showAuthState(user);
+      } catch (err) {
+        if (inviteError) {
+          inviteError.textContent = err instanceof Error ? err.message : 'Unable to accept the invitation.';
+          inviteError.classList.remove('hidden');
         }
       }
     });
 
-    document.querySelector('[data-logout]')?.addEventListener('click', async () => {
-      await logout();
-      await render();
+    loginForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(loginForm);
+      try {
+        const user = await login(String(data.get('email')), String(data.get('password')));
+        if (authError) authError.classList.add('hidden');
+        showAuthState(user);
+      } catch (err) {
+        if (authError) {
+          authError.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
+          authError.classList.remove('hidden');
+        }
+      }
     });
 
-    render();
+    async function signOut() {
+      await logout();
+      showAuthState(null);
+    }
+
+    document.querySelector('[data-logout]')?.addEventListener('click', signOut);
+    document.querySelector('[data-logout-warning]')?.addEventListener('click', signOut);
+
+    initialize();
   </script>
 </BaseLayout>
