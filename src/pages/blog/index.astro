@@ -1,0 +1,80 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+---
+<BaseLayout
+  title="Koa’s Events Blog | Hawaiʻi Island Weddings & Gatherings"
+  description="Planning ideas, venue guidance and event inspiration from Koa’s Events on Hawaiʻi Island."
+  canonical="https://www.koasevents.com/blog/"
+>
+  <Header overlay={false} />
+  <main>
+    <section class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-28">
+      <div class="container-shell max-w-4xl">
+        <p class="eyebrow text-[var(--koa-clay)]">Journal</p>
+        <h1 class="display mt-5 text-6xl leading-[.93] sm:text-7xl">Planning notes from Koa’s.</h1>
+        <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/66">Venue ideas, rental guidance, wedding planning details and real-world ways to make a celebration feel like your own.</p>
+      </div>
+    </section>
+
+    <section class="py-20 lg:py-28">
+      <div class="container-shell">
+        <div data-blog-loading class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-8 text-sm text-[var(--koa-ink)]/58">Loading journal entries…</div>
+        <div data-blog-grid class="hidden grid gap-5 lg:grid-cols-2"></div>
+        <div data-blog-empty class="hidden rounded-[1.4rem] bg-[var(--koa-sand)] p-10 text-center">
+          <h2 class="display text-4xl">The journal is getting ready.</h2>
+          <p class="mt-4 text-sm text-[var(--koa-ink)]/58">New planning notes and event inspiration will appear here.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  <script>
+    const loading = document.querySelector('[data-blog-loading]');
+    const grid = document.querySelector('[data-blog-grid]');
+    const empty = document.querySelector('[data-blog-empty]');
+
+    function textEl(tag, value, className = '') {
+      const el = document.createElement(tag);
+      el.textContent = value;
+      el.className = className;
+      return el;
+    }
+
+    fetch('/api/blog')
+      .then((response) => response.json())
+      .then(({ posts = [] }) => {
+        loading?.classList.add('hidden');
+        if (!posts.length) {
+          empty?.classList.remove('hidden');
+          return;
+        }
+        grid?.classList.remove('hidden');
+        posts.forEach((post) => {
+          const article = document.createElement('article');
+          article.className = 'rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]';
+          article.append(
+            textEl('p', new Date(post.publishedAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), 'eyebrow text-[var(--koa-clay)]'),
+            textEl('h2', post.title, 'display mt-4 text-4xl leading-[1.02]'),
+            textEl('p', post.excerpt || '', 'mt-4 text-sm leading-6 text-[var(--koa-ink)]/62')
+          );
+          const details = document.createElement('details');
+          details.className = 'mt-6 border-t border-[var(--koa-line)] pt-5';
+          const summary = document.createElement('summary');
+          summary.className = 'cursor-pointer text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]';
+          summary.textContent = 'Read article';
+          const body = document.createElement('div');
+          body.className = 'mt-5 grid gap-4 text-sm leading-7 text-[var(--koa-ink)]/68';
+          String(post.body || '').split(/\n\s*\n/).filter(Boolean).forEach((paragraph) => body.append(textEl('p', paragraph)));
+          details.append(summary, body);
+          article.append(details);
+          grid?.append(article);
+        });
+      })
+      .catch(() => {
+        if (loading) loading.textContent = 'Journal entries are temporarily unavailable.';
+      });
+  </script>
+</BaseLayout>

@@ -5,6 +5,29 @@
 [build.environment]
   NODE_VERSION = "22"
 
+# Admin pages require an authenticated Netlify Identity user with the admin role.
+[[redirects]]
+  from = "/admin/blog/*"
+  to = "/admin/blog/:splat"
+  status = 200
+  conditions = { Role = ["admin"] }
+
+[[redirects]]
+  from = "/admin/blog/*"
+  to = "/admin/"
+  status = 302
+
+[[redirects]]
+  from = "/admin/gallery/*"
+  to = "/admin/gallery/:splat"
+  status = 200
+  conditions = { Role = ["admin"] }
+
+[[redirects]]
+  from = "/admin/gallery/*"
+  to = "/admin/"
+  status = 302
+
 [[redirects]]
   from = "/wedding-packages"
   to = "/venue/packages/"

@@ -54,16 +54,29 @@ def source_mode():
  for path in required:
   if not path.exists():failures.append("Missing required source file: "+str(path.relative_to(ROOT)))
  files=[p for p in SRC.rglob("*") if p.is_file() and p.suffix in {".astro",".ts",".js",".css"}]
- remote=[];placeholders=[];inline=[]
+ remote=[];placeholders=[];inline=[];media_refs=set();legacy_marketing_pages=[]
  for path in files:
   text=path.read_text(encoding="utf-8",errors="ignore")
-  if "static.wixstatic.com" in text:remote.append(str(path.relative_to(ROOT)))
+  media_refs.update(ref for ref in re.findall(r"""['"](/media/[^'")?#]+)['"]""",text) if not ref.endswith("/"))
+  if path.name=="media.ts":
+   for name in re.findall(r"""koaMarketing\(['"]([^'"]+)['"]""",text): media_refs.add("/media/koa/"+name)
+   for name in re.findall(r"""koa\(\s*['"]([^'"]+)['"]""",text): media_refs.add("/media/koa/"+name)
+   for name in re.findall(r"""editorial\(\s*['"]([^'"]+)['"]""",text): media_refs.add("/media/editorial/"+name)
+   for name in re.findall(r"""['"](02b2df_[^'"]+~mv2\.jpg)['"]""",text): media_refs.add("/media/wix/"+name)
+  rel=str(path.relative_to(ROOT))
+  if path.suffix==".astro" and "/pages/" in ("/"+rel) and not rel.endswith("pages/gallery/index.astro") and not "/pages/admin/" in ("/"+rel):
+   if "/media/editorial/" in text or "/media/wix/" in text:
+    legacy_marketing_pages.append(rel)
+  if "static.wixstatic.com" in text:remote.append(rel)
   if re.search(r'href=["\']#["\']',text):placeholders.append(str(path.relative_to(ROOT)))
   if text.count("style=")>8:inline.append(str(path.relative_to(ROOT)))
  if remote:warnings.append("Wix-hosted image dependencies remain in: "+", ".join(remote[:20]))
  if placeholders:warnings.append("Placeholder # links found in: "+", ".join(placeholders[:20]))
  if inline:warnings.append("Heavy inline styles found in: "+", ".join(inline[:20]))
- report={"mode":"source","sourceFiles":len(files),"failures":failures,"warnings":warnings}
+ if legacy_marketing_pages:failures.append("Legacy editorial/Wix imagery remains on marketing pages: "+", ".join(sorted(set(legacy_marketing_pages))[:40]))
+ missing_media=[ref for ref in sorted(media_refs) if not (ROOT/"public"/ref.lstrip("/")).is_file()]
+ if missing_media:failures.append("Missing local media assets referenced by source: "+", ".join(missing_media[:40]))
+ report={"mode":"source","sourceFiles":len(files),"mediaReferences":len(media_refs),"legacyMarketingPages":sorted(set(legacy_marketing_pages)),"missingMedia":missing_media,"failures":failures,"warnings":warnings}
  (OUT/"source-audit.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  print(json.dumps(report,indent=2));return 1 if failures else 0
 

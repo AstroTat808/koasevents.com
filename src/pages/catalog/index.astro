@@ -11,6 +11,8 @@ const catalogClientData = catalogItems.map((item) => ({
   bundleEligible: Boolean(item.bundleEligible),
   includedWith: item.includedWith || [],
   priceLabel: item.priceLabel,
+  quantityMode: item.quantityMode || null,
+  quantityLabel: item.quantityLabel || item.name,
 }));
 const bundleClientData = catalogBundles;
 const tierClientData = bundleSavingsTiers;
@@ -55,6 +57,46 @@ const badgeClass = {
       </div>
     </section>
 
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-24">
+      <div class="container-shell">
+        <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Start here</p>
+            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Guests first. Then choose your starting point.</h2>
+          </div>
+          <div class="max-w-xl lg:justify-self-end">
+            <label class="grid gap-2 text-sm font-semibold">
+              Total guest count
+              <input data-builder-guests type="number" min="1" max="100" value="50" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-lg" />
+            </label>
+            <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/52">We use this to suggest quantities for guest-based rentals. For 60-inch rounds, the comfortable planning default is 8 guests per table; 10 is the maximum and leaves much less room.</p>
+          </div>
+        </div>
+
+        <div class="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-5" data-starting-points>
+          {catalogItems.filter((item) => item.category === 'packages').map((item) => (
+            <button type="button" data-starting-point={item.id} class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
+              <span class="eyebrow text-[var(--koa-clay)]">Base wedding package</span>
+              <span class="display mt-3 block text-3xl">{item.name.replace(' Wedding Collection','').replace('Koa’s Signature Wedding Experience','Signature')}</span>
+              <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
+              <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
+            </button>
+          ))}
+          <button type="button" data-starting-point="ala-carte" class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
+            <span class="eyebrow text-[var(--koa-clay)]">Build from scratch</span>
+            <span class="display mt-3 block text-3xl">À la carte</span>
+            <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Custom quote</span>
+            <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">Skip a base wedding package and build the event from the bundles and individual rental catalog below.</span>
+          </button>
+        </div>
+
+        <div class="mt-6 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
+          <p class="eyebrow text-[var(--koa-amber-light)]">Your starting point</p>
+          <p class="mt-2 text-sm" data-starting-summary-text></p>
+        </div>
+      </div>
+    </section>
 
     <section class="bg-[var(--koa-forest)] py-20 text-white lg:py-28">
       <div class="container-shell">
@@ -199,6 +241,12 @@ const badgeClass = {
                   </div>
                 )}
 
+                {item.quantityMode && (
+                  <label class="mt-6 grid gap-2 border-t border-[var(--koa-line)] pt-4 text-xs font-semibold text-[var(--koa-ink)]/72">
+                    Quantity
+                    <input data-item-quantity type="number" min="0" value="1" class="w-28 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2 text-sm text-[var(--koa-ink)]" />
+                  </label>
+                )}
                 <button type="button" data-add-to-quote class="mt-auto pt-7 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
               </article>
             ))}
@@ -244,12 +292,13 @@ const badgeClass = {
           <input type="hidden" name="selectedCatalogItems" value="" data-selected-items />
           <input type="hidden" name="estimatedBundleSavings" value="" data-estimated-savings />
           <input type="hidden" name="matchedCatalogBundle" value="" data-matched-bundle />
+          <input type="hidden" name="startingPoint" value="" data-starting-point-input />
           <p class="hidden"><label>Don’t fill this out: <input name="bot-field" /></label></p>
           <div class="grid gap-5 sm:grid-cols-2">
             <label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required /></label>
             <label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required /></label>
             <label class="grid gap-2 text-sm font-semibold">Event date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="eventDate" required /></label>
-            <label class="grid gap-2 text-sm font-semibold">Estimated guests<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" name="guestCount" required /></label>
+            <label class="grid gap-2 text-sm font-semibold">Estimated guests<input data-quote-guests class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" required /></label>
             <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Event type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="eventType" required><option value="">Choose one</option><option>Wedding</option><option>Private event</option><option>Corporate event</option><option>Mobile Bar only</option><option>Other</option></select></label>
             <div class="sm:col-span-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
               <p class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Selected items</p>
@@ -283,9 +332,69 @@ const badgeClass = {
     const savingsHeadline = document.querySelector('[data-savings-headline]');
     const savingsDetail = document.querySelector('[data-savings-detail]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
+    const guestInput = document.querySelector('[data-builder-guests]');
+    const quoteGuestInput = document.querySelector('[data-quote-guests]');
+    const startingButtons = [...document.querySelectorAll('[data-starting-point]')];
+    const startingSummary = document.querySelector('[data-starting-summary]');
+    const startingSummaryText = document.querySelector('[data-starting-summary-text]');
+    const startingPointInput = document.querySelector('[data-starting-point-input]');
 
     let activeCategory = 'all';
+    let startingPoint = '';
     const selected = new Map();
+
+    function guestCount() {
+      return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
+    }
+
+    function suggestedQuantity(item) {
+      const guests = guestCount();
+      if (item?.quantityMode === 'guest-count') return guests;
+      if (item?.quantityMode === 'round-tables') return Math.ceil(guests / 8);
+      return 1;
+    }
+
+    function syncSuggestedQuantities() {
+      cards.forEach((card) => {
+        const id = card.dataset.id;
+        const item = id ? itemById.get(id) : null;
+        const input = card.querySelector('[data-item-quantity]');
+        if (!item || !input || item.quantityMode === 'manual') return;
+        input.value = String(suggestedQuantity(item));
+        if (selected.has(id)) {
+          selected.set(id, { name: item.name, quantity: Number(input.value) || 1 });
+        }
+      });
+      if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
+      syncQuote();
+    }
+
+    function chooseStartingPoint(id) {
+      startingPoint = id;
+      if (startingPointInput) startingPointInput.value = id;
+      startingButtons.forEach((button) => {
+        const on = button.dataset.startingPoint === id;
+        button.classList.toggle('bg-[var(--koa-forest)]', on);
+        button.classList.toggle('text-white', on);
+        button.classList.toggle('border-[var(--koa-forest)]', on);
+      });
+
+      const packageItem = itemById.get(id);
+      if (id !== 'ala-carte' && packageItem) {
+        selected.set(id, { name: packageItem.name, quantity: 1 });
+        ['signature-wedding','hibiscus','orchid','gardenia'].filter((pkg) => pkg !== id).forEach((pkg) => selected.delete(pkg));
+      } else {
+        ['signature-wedding','hibiscus','orchid','gardenia'].forEach((pkg) => selected.delete(pkg));
+      }
+
+      startingSummary?.classList.remove('hidden');
+      if (startingSummaryText) {
+        startingSummaryText.textContent = id === 'ala-carte'
+          ? 'À la carte selected. Build with bundles and individual rentals below.'
+          : (packageItem?.name || id) + ' selected. Included items will be recognized before bundle savings are calculated.';
+      }
+      syncQuote();
+    }
 
     function cardFor(id) {
       return cards.find((card) => card.dataset.id === id);
@@ -428,14 +537,14 @@ const badgeClass = {
 
       quoteEmpty?.classList.toggle('hidden', entries.length > 0);
 
-      entries.forEach(([id, name]) => {
+      entries.forEach(([id, entry]) => {
         const row = document.createElement('div');
         row.dataset.selectedRow = 'true';
         row.className =
           'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
 
         const label = document.createElement('span');
-        label.textContent = name;
+        label.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -453,7 +562,7 @@ const badgeClass = {
         quoteList?.appendChild(row);
       });
 
-      const names = entries.map(([, name]) => name);
+      const names = entries.map(([, entry]) => entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name);
       const joined = names.join(' | ');
 
       if (selectedInput) selectedInput.value = joined;
@@ -495,7 +604,9 @@ const badgeClass = {
           selected.delete(id);
           setItemButtonState(id, false);
         } else {
-          selected.set(id, item.name);
+          const quantityInput = card.querySelector('[data-item-quantity]');
+          const quantity = quantityInput ? Math.max(1, Number(quantityInput.value || 1)) : 1;
+          selected.set(id, { name: item.name, quantity });
           setItemButtonState(id, true);
         }
 
@@ -513,7 +624,10 @@ const badgeClass = {
         bundle.itemIds.forEach((id) => {
           const item = itemById.get(id);
           if (!item) return;
-          selected.set(id, item.name);
+          selected.set(id, { name: item.name, quantity: suggestedQuantity(item) });
+          const card = cardFor(id);
+          const quantityInput = card?.querySelector('[data-item-quantity]');
+          if (quantityInput && item.quantityMode !== 'manual') quantityInput.value = String(suggestedQuantity(item));
           setItemButtonState(id, true);
         });
 
@@ -535,7 +649,24 @@ const badgeClass = {
       });
     });
 
+    startingButtons.forEach((button) => button.addEventListener('click', () => chooseStartingPoint(button.dataset.startingPoint || '')));
+    guestInput?.addEventListener('input', syncSuggestedQuantities);
+    quoteGuestInput?.addEventListener('input', () => {
+      if (guestInput) guestInput.value = quoteGuestInput.value;
+      syncSuggestedQuantities();
+    });
+    cards.forEach((card) => {
+      card.querySelector('[data-item-quantity]')?.addEventListener('input', (event) => {
+        const id = card.dataset.id;
+        const item = id ? itemById.get(id) : null;
+        if (!id || !item || !selected.has(id)) return;
+        selected.set(id, { name: item.name, quantity: Math.max(1, Number(event.target.value || 1)) });
+        syncQuote();
+      });
+    });
+
+    if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
     applyFilters();
-    syncQuote();
+    syncSuggestedQuantities();
   </script>
 </BaseLayout>

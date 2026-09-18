@@ -32,6 +32,8 @@ export interface CatalogItem {
   dimensions?: string;
   options?: string[];
   bundleEligible?: boolean;
+  quantityMode?: 'guest-count' | 'round-tables' | 'manual';
+  quantityLabel?: string;
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -100,6 +102,8 @@ export const catalogItems: CatalogItem[] = [
     badges: [{ kind: 'popular', label: 'Popular' }, { kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     specs: [{ label: 'Signature includes', value: '50 ceremony chairs' }],
+    quantityMode: 'guest-count',
+    quantityLabel: 'Ceremony chairs',
     keywords: ['chair', 'seating'],
   },
   {
@@ -112,6 +116,8 @@ export const catalogItems: CatalogItem[] = [
     badges: [{ kind: 'popular', label: 'Popular' }, { kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     specs: [{ label: 'Signature includes', value: '50 reception chairs' }],
+    quantityMode: 'guest-count',
+    quantityLabel: 'Reception chairs',
     keywords: ['chair', 'seating'],
   },
   {
@@ -124,7 +130,9 @@ export const catalogItems: CatalogItem[] = [
     badges: [{ kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Hibiscus', 'Signature'],
     dimensions: '60-inch round',
-    specs: [{ label: 'Signature includes', value: '10 tables' }],
+    quantityMode: 'round-tables',
+    quantityLabel: '60-inch round tables',
+    specs: [{ label: 'Guest capacity', value: '8 comfortably · 10 maximum' }, { label: 'Signature includes', value: '10 tables' }],
     keywords: ['table', 'round', 'reception'],
   },
   {
@@ -165,6 +173,8 @@ export const catalogItems: CatalogItem[] = [
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
     bundleEligible: true,
+    quantityMode: 'guest-count',
+    quantityLabel: 'Glassware pieces',
     keywords: ['barware', 'wine glass', 'champagne'],
   },
   {
@@ -176,6 +186,8 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'popular', label: 'Popular' }, { kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
+    quantityMode: 'guest-count',
+    quantityLabel: 'Place settings',
     keywords: ['place settings', 'dishes', 'flatware', 'tablescape'],
   },
   {
@@ -344,6 +356,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Table linens and textile options selected to fit the table plan and event palette.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    quantityMode: 'manual',
+    quantityLabel: 'Linens',
     keywords: ['tablecloth', 'napkin', 'linen'],
   },
   {
@@ -353,7 +367,64 @@ export const catalogItems: CatalogItem[] = [
     description: 'Dinnerware and place-setting components for custom reception tablescapes.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    quantityMode: 'guest-count',
+    quantityLabel: 'Dinnerware settings',
     keywords: ['plates', 'flatware', 'dinnerware'],
+  },
+  {
+    id: 'flatware',
+    category: 'tabletop',
+    name: 'Silverware / Flatware',
+    description: 'Flatware quantities matched to the final guest count and meal-service plan.',
+    priceType: 'quote',
+    priceLabel: 'Custom quote',
+    quantityMode: 'guest-count',
+    quantityLabel: 'Flatware settings',
+    keywords: ['silverware', 'flatware', 'forks', 'knives', 'spoons'],
+  },
+  {
+    id: 'napkins',
+    category: 'tabletop',
+    name: 'Napkins',
+    description: 'Guest napkins selected to coordinate with the event palette and place settings.',
+    priceType: 'quote',
+    priceLabel: 'Custom quote',
+    quantityMode: 'guest-count',
+    quantityLabel: 'Napkins',
+    keywords: ['napkin', 'linen', 'place setting'],
+  },
+  {
+    id: 'charger-plates',
+    category: 'tabletop',
+    name: 'Charger Plates',
+    description: 'Decorative charger plates that add color, texture and polish beneath each place setting.',
+    priceType: 'quote',
+    priceLabel: 'Custom quote',
+    quantityMode: 'guest-count',
+    quantityLabel: 'Charger plates',
+    keywords: ['charger', 'plate', 'tablescape'],
+  },
+  {
+    id: 'votives',
+    category: 'decor',
+    name: 'Votives',
+    description: 'Small candle accents for reception tables, guestbook displays and styled focal points.',
+    priceType: 'quote',
+    priceLabel: 'Custom quote',
+    quantityMode: 'manual',
+    quantityLabel: 'Votives',
+    keywords: ['votive', 'candle', 'table decor'],
+  },
+  {
+    id: 'pillar-candles',
+    category: 'decor',
+    name: 'Pillar Candles',
+    description: 'Pillar candles for aisle, reception and feature-table styling where permitted.',
+    priceType: 'quote',
+    priceLabel: 'Custom quote',
+    quantityMode: 'manual',
+    quantityLabel: 'Pillar candles',
+    keywords: ['candle', 'pillar', 'lantern'],
   },
   {
     id: 'centerpieces',
@@ -362,6 +433,8 @@ export const catalogItems: CatalogItem[] = [
     description: 'Reception centerpiece styling coordinated with the event design and table plan.',
     priceType: 'quote',
     priceLabel: 'Custom quote',
+    quantityMode: 'round-tables',
+    quantityLabel: 'Centerpieces',
     keywords: ['table decor', 'centrepiece'],
   },
   {
