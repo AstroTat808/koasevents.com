@@ -1,3 +1,4 @@
+# Visual refresh verification trigger 2026-09-18
 #!/usr/bin/env python3
 from __future__ import annotations
 import argparse, json, os, re, sys, time
