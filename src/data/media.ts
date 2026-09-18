@@ -5,55 +5,109 @@ export type MediaAsset = {
   height?: number;
 };
 
+const editorial = (name: string, alt: string): MediaAsset => ({
+  src: '/media/editorial/' + name,
+  alt,
+});
+
 export const media = {
-  hero: {
-    src: '/media/wix/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg',
-    alt: "Koa's Events pavilion illuminated at night in Mountain View, Hawaiʻi",
-    width: 1800,
-    height: 1200,
-  },
-  venueWide: {
-    src: '/media/wix/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg',
-    alt: "Event setting at Koa's Events on Hawaiʻi Island",
-    width: 1800,
-    height: 1200,
-  },
-  hospitality: {
-    src: '/media/wix/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg',
-    alt: "Koa's Events hospitality and celebration detail",
-    width: 1200,
-    height: 1600,
-  },
-  mobileBar: {
-    src: '/media/wix/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg',
-    alt: "Koa's Mobile Bar set for an event on Hawaiʻi Island",
-    width: 1600,
-    height: 1100,
-  },
-  plumeria: {
-    src: '/media/wix/02b2df_e52c9276c32541ee81d7a9f9e37ed332~mv2.jpg',
-    alt: "Plumeria wedding package setting at Koa's Events",
-    width: 1600,
-    height: 1050,
-  },
-  hibiscus: {
-    src: '/media/wix/02b2df_42eefaaa7fe94a06b3f8de17227cfe71~mv2.jpg',
-    alt: "Hibiscus wedding package setting at Koa's Events",
-    width: 1400,
-    height: 1000,
-  },
-  orchid: {
-    src: '/media/wix/02b2df_300c97b1e5034a84af4a24b8004d0839~mv2.jpg',
-    alt: "Orchid wedding package setting at Koa's Events",
-    width: 1400,
-    height: 1000,
-  },
-  gardenia: {
-    src: '/media/wix/02b2df_ffed23b2d69e4bb3b12da0482778d19f~mv2.jpg',
-    alt: "Gardenia intimate wedding setting at Koa's Events",
-    width: 1400,
-    height: 1000,
-  },
+  hero: editorial(
+    'wedding-forest-couple.jpg',
+    'Couple standing among lush trees at an outdoor wedding'
+  ),
+  venueWide: editorial(
+    'garden-wedding-ceremony.jpg',
+    'Elegant outdoor garden ceremony beneath mature trees'
+  ),
+  hospitality: editorial(
+    'garden-reception-table.jpg',
+    'Refined outdoor reception table arranged on a lawn'
+  ),
+  mobileBar: editorial(
+    'bartender-outdoor-event.jpg',
+    'Professional bartender preparing cocktails at an outdoor event'
+  ),
+  plumeria: editorial(
+    'garden-wedding-moment.jpg',
+    'Romantic wedding moment in a lush garden setting'
+  ),
+  hibiscus: editorial(
+    'garden-wedding-portrait.jpg',
+    'Elegant wedding portrait in a botanical garden'
+  ),
+  orchid: editorial(
+    'botanical-reception.jpg',
+    'Polished outdoor reception with botanical floral styling'
+  ),
+  gardenia: editorial(
+    'private-event-detail.jpg',
+    'Elegant outdoor celebration detail with styled dessert table'
+  ),
+
+  weddingForestCouple: editorial(
+    'wedding-forest-couple.jpg',
+    'Couple standing among lush trees at an outdoor wedding'
+  ),
+  gardenCeremony: editorial(
+    'garden-wedding-ceremony.jpg',
+    'Outdoor garden wedding ceremony beneath a large tree'
+  ),
+  gardenWeddingMoment: editorial(
+    'garden-wedding-moment.jpg',
+    'Romantic outdoor wedding moment surrounded by greenery'
+  ),
+  weddingPortrait: editorial(
+    'garden-wedding-portrait.jpg',
+    'Elegant couple portrait in a lush garden'
+  ),
+  receptionTable: editorial(
+    'garden-reception-table.jpg',
+    'Reception table set outdoors on a green lawn'
+  ),
+  botanicalReception: editorial(
+    'botanical-reception.jpg',
+    'Outdoor reception styled with botanical floral decor'
+  ),
+  venueAtmosphere: editorial(
+    'venue-atmosphere.jpg',
+    'Warm outdoor wedding venue atmosphere with refined event styling'
+  ),
+  tableSettings: editorial(
+    'garden-table-settings.jpg',
+    'Elegant table settings arranged in a garden'
+  ),
+  rusticTableDetail: editorial(
+    'rustic-table-detail.jpg',
+    'Outdoor dining table with floral centerpiece and natural textures'
+  ),
+  eveningReception: editorial(
+    'evening-reception.jpg',
+    'Elegant outdoor evening reception illuminated after sunset'
+  ),
+  privateEventDetail: editorial(
+    'private-event-detail.jpg',
+    'Styled outdoor celebration detail with dessert display'
+  ),
+  bartenderOutdoor: editorial(
+    'bartender-outdoor-event.jpg',
+    'Professional bartender mixing drinks at an outdoor event'
+  ),
+  bartenderDetail: editorial(
+    'bartender-detail.jpg',
+    'Bartender preparing a crafted drink'
+  ),
+  tropicalDining: editorial(
+    'tropical-resort-dining.jpg',
+    'Refined dining table in a tropical outdoor setting'
+  ),
+  tropicalBedroom: editorial(
+    'tropical-bedroom.jpg',
+    'Airy tropical bedroom with natural textures and greenery'
+  ),
+  tropicalRoomView: editorial(
+    'tropical-room-view.jpg',
+    'Bright tropical room opening toward palm trees'
+  ),
 } satisfies Record<string, MediaAsset>;
 
 const galleryIds = [
@@ -86,7 +140,7 @@ const galleryIds = [
 
 export const galleryMedia: MediaAsset[] = galleryIds.map((id, index) => ({
   src: '/media/wix/' + id,
-  alt: "Koa's Events wedding and venue gallery photograph " + (index + 1),
+  alt: "Koa's Events real venue and event gallery photograph " + (index + 1),
   width: 1800,
   height: 1350,
 }));

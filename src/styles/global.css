@@ -340,3 +340,68 @@ form textarea {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* 2026 UX refinement pass */
+@media (max-width: 767px) {
+  .site-nav-shell {
+    min-height: 4.15rem;
+    padding: .4rem .55rem;
+  }
+
+  .brand-medallion {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+
+  .brand-medallion img {
+    width: 1.95rem;
+    height: 1.95rem;
+  }
+
+  .site-brand {
+    gap: .58rem;
+  }
+
+  .site-brand-name {
+    font-size: 1.28rem;
+    line-height: .95;
+  }
+
+  .site-menu-trigger {
+    gap: .42rem;
+    padding: .65rem .78rem;
+    font-size: .61rem;
+  }
+
+  main h1.display {
+    font-size: clamp(2.65rem, 13.5vw, 3.45rem) !important;
+    line-height: .94 !important;
+    letter-spacing: -.038em;
+  }
+
+  main h2.display {
+    font-size: clamp(2.35rem, 10.8vw, 3rem) !important;
+    line-height: 1 !important;
+  }
+
+  main p.text-sm.leading-6,
+  main p.text-sm.leading-7 {
+    font-size: 1rem !important;
+    line-height: 1.75rem !important;
+  }
+
+  main section[class*="py-24"]:not(:first-child) {
+    padding-top: 4.5rem !important;
+    padding-bottom: 4.5rem !important;
+  }
+
+  main section[class*="py-20"]:not(:first-child) {
+    padding-top: 4rem !important;
+    padding-bottom: 4rem !important;
+  }
+
+  main .link-arrow {
+    line-height: 1.35;
+  }
+}
