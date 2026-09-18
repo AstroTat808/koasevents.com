@@ -111,11 +111,11 @@ DOM=r"""() => {
  const header=document.querySelector('header'),main=document.querySelector('main');
  const sections=[...document.querySelectorAll('main > section')].filter(vis).map((e,i)=>{const s=getComputedStyle(e);return{index:i,...rect(e),background:s.backgroundColor,textLength:(e.innerText||'').trim().length,imageCount:[...e.querySelectorAll('img')].filter(vis).length};});
  const headings=[...document.querySelectorAll('h1,h2,h3')].filter(vis).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{tag:e.tagName,label:label(e),fontSize:parseFloat(s.fontSize)||0,lineHeight:parseFloat(s.lineHeight)||0,...rect(e)}});
- const paragraphs=[...document.querySelectorAll('p')].filter(e=>vis(e)&&(e.textContent||'').trim().length>20).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{chars:(e.textContent||'').trim().length,fontSize:parseFloat(s.fontSize)||0,lineHeight:parseFloat(s.lineHeight)||0,width:r.width,y:r.y,label:label(e),...rect(e)}}).slice(0,120);
+ const paragraphs=[...document.querySelectorAll('main p')].filter(e=>vis(e)&&(e.textContent||'').trim().length>20).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{chars:(e.textContent||'').trim().length,fontSize:parseFloat(s.fontSize)||0,lineHeight:parseFloat(s.lineHeight)||0,width:r.width,y:r.y,label:label(e),...rect(e)}}).slice(0,120);
  const images=[...document.images].filter(vis).map(i=>({src:i.currentSrc||i.src,alt:i.alt||'',...rect(i)}));
  const imageCounts={}; images.forEach(i=>imageCounts[i.src]=(imageCounts[i.src]||0)+1);
- const repeatedImages=Object.entries(imageCounts).filter(([,n])=>n>1).map(([src,count])=>({src,count}));
- const ctas=controls.filter(e=>['A','BUTTON'].includes(e.tagName)&&(e.textContent||'').trim().length>1).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
+ const repeatedImages=Object.entries(imageCounts).filter(([src,n])=>n>1&&!src.includes('/brand/')).map(([src,count])=>({src,count}));
+ const ctas=controls.filter(e=>['A','BUTTON'].includes(e.tagName)&&e.closest('main')&&(e.textContent||'').trim().length>1).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
  const formControls=[...document.querySelectorAll('form input:not([type=hidden]),form select,form textarea')].filter(vis).length;
  return{
   title:document.title,h1s,horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+2,
@@ -252,7 +252,23 @@ def browser_mode(browser_name):
     try:
      response=page.goto(BASE+path,wait_until="networkidle",timeout=45000)
      if response and response.status>=400:nav=f"Document returned HTTP {response.status}"
-     page.wait_for_timeout(250)
+     page.evaluate("""async () => {
+       const imgs=[...document.images];
+       imgs.forEach(img=>{img.loading='eager';});
+       const step=Math.max(500,Math.floor(innerHeight*.8));
+       for(let y=0;y<document.documentElement.scrollHeight;y+=step){
+         window.scrollTo(0,y);
+         await new Promise(r=>setTimeout(r,35));
+       }
+       window.scrollTo(0,0);
+       await Promise.all(imgs.map(img=>img.complete?Promise.resolve():new Promise(r=>{
+         const done=()=>r();
+         img.addEventListener('load',done,{once:true});
+         img.addEventListener('error',done,{once:true});
+         setTimeout(done,2500);
+       })));
+     }""")
+     page.wait_for_timeout(150)
     except Exception as e:nav=str(e)
     dom={} if nav else page.evaluate(DOM)
     fs=[Finding("navigation-failed","critical",nav)] if nav else findings(dom,console,page_errors,request_failed,asset_failed)
@@ -267,10 +283,21 @@ def browser_mode(browser_name):
   browser.close()
  critical=[{"route":r["route"],"viewport":r["viewport"],"finding":x} for r in results for x in r["findings"] if x["severity"]=="critical"]
  design=[{"route":r["route"],"viewport":r["viewport"],"finding":x} for r in results for x in r["findings"] if x["severity"]=="design"]
- report={"mode":"browser","baseUrl":BASE,"browser":browser_name,"cases":len(results),"criticalCount":len(critical),"critical":critical,"designCount":len(design),"topDesignRecommendations":design[:120],"results":results}
+ unique_design={}
+ for item in design:
+  key=(item["route"],item["finding"]["code"])
+  if key not in unique_design:
+   unique_design[key]={**item,"occurrences":1,"viewports":[item["viewport"]]}
+  else:
+   unique_design[key]["occurrences"]+=1
+   if item["viewport"] not in unique_design[key]["viewports"]: unique_design[key]["viewports"].append(item["viewport"])
+ prioritized=list(unique_design.values())
+ priority_order={"hero-wrap":0,"hero-hierarchy":1,"mobile-header-footprint":2,"body-copy-scale":3,"mobile-copy-density":4,"cta-saturation":5,"section-rhythm":6,"weak-section-hierarchy":7,"image-scarcity":8,"repeated-page-imagery":9,"mobile-page-length":10}
+ prioritized.sort(key=lambda x:(priority_order.get(x["finding"]["code"],50),-x["occurrences"],x["route"]))
+ report={"mode":"browser","baseUrl":BASE,"browser":browser_name,"cases":len(results),"criticalCount":len(critical),"critical":critical,"designCount":len(design),"uniqueDesignCount":len(prioritized),"topDesignRecommendations":prioritized[:120],"results":results}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  (root/"report.html").write_text(html_report(results),encoding="utf-8")
- print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"critical":critical[:80],"designCount":len(design),"topDesignRecommendations":design[:60],"report":str(root/"report.html")},indent=2))
+ print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"critical":critical[:80],"designCount":len(design),"uniqueDesignCount":len(prioritized),"topDesignRecommendations":prioritized[:60],"report":str(root/"report.html")},indent=2))
  return 1 if critical else 0
 
 def main():
