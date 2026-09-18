@@ -40,20 +40,21 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
       </div>
     </section>
 
-    <section class="bg-[var(--koa-ink)] py-20 text-white lg:py-28">
+    <section class="bg-[var(--koa-ink)] py-16 text-white sm:py-20 lg:py-28">
       <div class="container-shell">
         <div class="grid gap-10 lg:grid-cols-[.7fr_1.3fr] lg:items-end">
           <div><p class="eyebrow text-[var(--koa-amber-light)]">Styled possibilities</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">The venue is the canvas. The event becomes the art.</h2></div>
           <p class="max-w-xl text-sm leading-7 text-white/58 lg:justify-self-end">Move from bright tropical ceremony to romantic white florals, rust-and-navy reception styling, blush details, dramatic lighting or a completely different design direction. Open any image to see it larger.</p>
         </div>
 
-        <div class="mt-16 space-y-16">
+        <div class="mt-12 space-y-14 sm:mt-16 sm:space-y-16">
           {grouped.map((group) => (
             <section>
-              <div class="mb-6 flex items-end justify-between gap-4 border-b border-white/12 pb-4">
-                <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-3xl sm:text-4xl">{group.images.length} views</h3></div>
+              <div class="mb-5 flex items-end justify-between gap-4 border-b border-white/12 pb-4 sm:mb-6">
+                <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-[2.1rem] leading-none sm:text-4xl">{group.images.length} photos</h3></div>
+                <span class="pb-1 text-[.62rem] font-bold uppercase tracking-[.14em] text-white/38 sm:hidden">Swipe →</span>
               </div>
-              <div class="grid auto-rows-[12rem] gap-3 sm:grid-cols-2 sm:auto-rows-[14rem] lg:grid-cols-12 lg:auto-rows-[11rem]">
+              <div class="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
                 {group.images.map((image, categoryIndex) => {
                   const globalIndex = koaMarketingGallery.indexOf(image);
                   const editorialClass =
@@ -65,11 +66,11 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
                     categoryIndex % 6 === 5 ? 'lg:col-span-4 lg:row-span-2' :
                     'lg:col-span-4 lg:row-span-2';
                   return (
-                    <button type="button" class:list={['gallery-trigger group relative min-h-[18rem] overflow-hidden rounded-[1.2rem] bg-white/5', editorialClass]} data-gallery-index={globalIndex} data-gallery-src={image.src}>
+                    <button type="button" class:list={['gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-white/5 shadow-[0_16px_36px_rgba(0,0,0,.2)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[18rem] sm:rounded-[1.2rem] sm:shadow-none', editorialClass]} data-gallery-index={globalIndex} data-gallery-src={image.src}>
                       <ResponsiveImage {...image} width={1200} height={900} sizes="(min-width:1024px) 38vw, (min-width:640px) 50vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
                       <span class="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"></span>
-                      <span class="absolute bottom-4 left-4 max-w-[80%] text-left text-xs font-semibold leading-5 text-white/90">{image.alt}</span>
-                      <span class="absolute bottom-4 right-4 grid size-9 place-items-center rounded-full border border-white/30 bg-black/20 text-lg text-white backdrop-blur">+</span>
+                      <span class="absolute bottom-4 left-4 max-w-[calc(100%-2rem)] text-left text-[.72rem] font-semibold leading-5 text-white/92 sm:max-w-[80%] sm:text-xs">{image.alt}</span>
+                      <span class="absolute bottom-4 right-4 hidden size-9 place-items-center rounded-full border border-white/30 bg-black/20 text-lg text-white backdrop-blur sm:grid">+</span>
                     </button>
                   );
                 })}
@@ -86,7 +87,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
           <div><p class="eyebrow text-[var(--koa-clay)]">Recently added</p><h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">More ways Koa’s has been transformed.</h2></div>
           <p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/58 lg:justify-self-end">New gallery photographs added by the Koa’s team appear here automatically.</p>
         </div>
-        <div data-managed-gallery-grid class="mt-12 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+        <div data-managed-gallery-grid class="mt-10 -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-12 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3"></div>
       </div>
     </section>
 
@@ -190,7 +191,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
           const button = document.createElement('button');
           button.type = 'button';
           button.dataset.galleryIndex = String(index);
-          button.className = 'gallery-trigger group relative min-h-[20rem] overflow-hidden rounded-[1.2rem] bg-[var(--koa-sand)]';
+          button.className = 'gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-[var(--koa-sand)] shadow-[0_16px_36px_rgba(0,0,0,.12)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[20rem] sm:rounded-[1.2rem] sm:shadow-none';
 
           const img = document.createElement('img');
           img.src = item.src;
