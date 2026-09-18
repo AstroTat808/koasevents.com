@@ -39,6 +39,17 @@ body {
 
 a { text-underline-offset: 0.18em; }
 
+form { min-width: 0; }
+
+form input:not([type="checkbox"]):not([type="radio"]),
+form select,
+form textarea {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 ::selection {
   background: var(--koa-forest);
   color: var(--koa-ivory);
@@ -227,7 +238,6 @@ a { text-underline-offset: 0.18em; }
 }
 
 .site-nav-cta {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--koa-forest);
