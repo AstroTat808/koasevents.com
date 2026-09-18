@@ -1,6 +1,3 @@
-[images]
-  remote_images = ['https://static\\.wixstatic\\.com/.*']
-
 [build]
   command = "npm run build"
   publish = "dist"
@@ -35,7 +32,7 @@
 
 [[redirects]]
   from = "/custom-event-package-questionnaire"
-  to = "/inquire/"
+  to = "/wedding-inquiry/"
   status = 301
 
 [[headers]]
