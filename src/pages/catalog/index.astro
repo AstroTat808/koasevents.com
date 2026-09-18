@@ -58,7 +58,7 @@ const badgeClass = {
     </section>
 
 
-    <section class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-24">
+    <section class="koa-grain bg-[var(--koa-sand)] pb-8 pt-16 lg:pb-10 lg:pt-20">
       <div class="container-shell">
         <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
           <div>
@@ -91,14 +91,14 @@ const badgeClass = {
           </button>
         </div>
 
-        <div class="mt-6 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
+        <div class="mt-4 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
           <p class="eyebrow text-[var(--koa-amber-light)]">Your starting point</p>
           <p class="mt-2 text-sm" data-starting-summary-text></p>
         </div>
       </div>
     </section>
 
-    <section class="bg-[var(--koa-forest)] py-20 text-white lg:py-28">
+    <section id="bundle-savings" data-bundle-section class="scroll-mt-24 bg-[var(--koa-forest)] pb-20 pt-10 text-white lg:pb-24 lg:pt-12">
       <div class="container-shell">
         <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
           <div>
@@ -338,6 +338,7 @@ const badgeClass = {
     const startingSummary = document.querySelector('[data-starting-summary]');
     const startingSummaryText = document.querySelector('[data-starting-summary-text]');
     const startingPointInput = document.querySelector('[data-starting-point-input]');
+    const bundleSection = document.querySelector('[data-bundle-section]');
 
     let activeCategory = 'all';
     let startingPoint = '';
@@ -394,6 +395,13 @@ const badgeClass = {
           : (packageItem?.name || id) + ' selected. Included items will be recognized before bundle savings are calculated.';
       }
       syncQuote();
+
+      window.setTimeout(() => {
+        bundleSection?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }, 180);
     }
 
     function cardFor(id) {
@@ -549,7 +557,7 @@ const badgeClass = {
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'text-white/45 hover:text-white';
-        remove.setAttribute('aria-label', 'Remove ' + name);
+        remove.setAttribute('aria-label', 'Remove ' + entry.name);
         remove.textContent = '×';
 
         remove.addEventListener('click', () => {
