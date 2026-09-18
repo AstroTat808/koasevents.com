@@ -109,15 +109,93 @@ DOM=r"""() => {
  const offscreen=controls.filter(e=>{if(inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right<-2||r.left>innerWidth+2}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
  const overflowing=[...document.querySelectorAll('body *')].filter(e=>{if(!vis(e)||inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right>innerWidth+2||r.left<-2}).slice(0,25).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
  const header=document.querySelector('header'),main=document.querySelector('main');
+ const sections=[...document.querySelectorAll('main > section')].filter(vis).map((e,i)=>{const s=getComputedStyle(e);return{index:i,...rect(e),background:s.backgroundColor,textLength:(e.innerText||'').trim().length,imageCount:[...e.querySelectorAll('img')].filter(vis).length};});
+ const headings=[...document.querySelectorAll('h1,h2,h3')].filter(vis).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{tag:e.tagName,label:label(e),fontSize:parseFloat(s.fontSize)||0,lineHeight:parseFloat(s.lineHeight)||0,...rect(e)}});
+ const paragraphs=[...document.querySelectorAll('p')].filter(e=>vis(e)&&(e.textContent||'').trim().length>20).map(e=>{const s=getComputedStyle(e),r=e.getBoundingClientRect();return{chars:(e.textContent||'').trim().length,fontSize:parseFloat(s.fontSize)||0,lineHeight:parseFloat(s.lineHeight)||0,width:r.width,y:r.y,label:label(e),...rect(e)}}).slice(0,120);
+ const images=[...document.images].filter(vis).map(i=>({src:i.currentSrc||i.src,alt:i.alt||'',...rect(i)}));
+ const imageCounts={}; images.forEach(i=>imageCounts[i.src]=(imageCounts[i.src]||0)+1);
+ const repeatedImages=Object.entries(imageCounts).filter(([,n])=>n>1).map(([src,count])=>({src,count}));
+ const ctas=controls.filter(e=>['A','BUTTON'].includes(e.tagName)&&(e.textContent||'').trim().length>1).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
+ const formControls=[...document.querySelectorAll('form input:not([type=hidden]),form select,form textarea')].filter(vis).length;
  return{
   title:document.title,h1s,horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+2,
   scrollWidth:document.documentElement.scrollWidth,clientWidth:document.documentElement.clientWidth,
   duplicateIds:[...new Set(ids.filter((x,i)=>ids.indexOf(x)!==i))],brokenImages:broken,missingAlt,
   unlabeledControls:unlabeled,tinyTargets:tiny,clippedText:clipped,wrappedButtons:wrapped,smallText:small,
   wideCopy:wide,offscreenInteractive:offscreen,overflowingElements:overflowing,headerRect:header&&vis(header)?rect(header):null,
+  sections,headings,paragraphs,images,repeatedImages,ctas,formControls,
+  documentHeight:document.documentElement.scrollHeight,viewportHeight:innerHeight,viewportWidth:innerWidth,
   mainTextLength:(main?.innerText||'').trim().length
  };
 }"""
+
+def expert_design_findings(dom, route, viewport):
+ f=[]
+ vw=dom.get("viewportWidth",0); vh=dom.get("viewportHeight",0)
+ headings=dom.get("headings",[]); paragraphs=dom.get("paragraphs",[]); sections=dom.get("sections",[])
+ images=dom.get("images",[]); ctas=dom.get("ctas",[]); repeated=dom.get("repeatedImages",[])
+ h1=next((h for h in headings if h.get("tag")=="H1"),None)
+ h2s=[h for h in headings if h.get("tag")=="H2"]
+
+ def add(code,message,why,recommendation,detail=None):
+  payload={"whyItMatters":why,"recommendation":recommendation}
+  if detail is not None: payload["evidence"]=detail
+  f.append(Finding(code,"design",message,payload))
+
+ if h1:
+  lines=(h1.get("h",0)/(h1.get("lineHeight") or max(h1.get("fontSize",1)*1.05,1))) if h1.get("h") else 0
+  if vw>=1200 and h1.get("fontSize",0)<54:
+   add("hero-hierarchy","Hero headline lacks premium-scale authority.","Luxury hospitality sites benefit from a decisive first visual anchor.","Increase the H1 scale or reduce competing elements so the headline clearly dominates the first viewport.",h1)
+  if vw<500 and lines>4.2:
+   add("hero-wrap","Hero headline is wrapping into too many lines on mobile.","Excessive wrapping slows comprehension and pushes the value proposition below the fold.","Shorten the mobile line length, slightly reduce display size, or introduce a deliberate mobile line break.",{"estimatedLines":round(lines,1),"heading":h1})
+
+ long_mobile=[p for p in paragraphs if vw<500 and p.get("chars",0)>280]
+ if long_mobile:
+  add("mobile-copy-density","Long body-copy blocks are visually dense on mobile.","Luxury experiences should feel calm and easy to scan, especially on a phone.","Break long paragraphs into shorter editorial blocks, bullets, or a pull quote; keep one idea per paragraph.",long_mobile[:5])
+
+ tiny_body=[p for p in paragraphs if p.get("chars",0)>90 and p.get("fontSize",99)<15]
+ if tiny_body:
+  add("body-copy-scale","Some substantive body copy is undersized.","Small text makes premium pages feel compressed and reduces reading comfort.","Raise long-form copy to roughly 15–18px depending on viewport and preserve generous line-height.",tiny_body[:5])
+
+ if len(ctas)>12:
+  add("cta-saturation","The page presents many simultaneous calls to action.","Too many equal-weight CTAs dilute the primary conversion path.","Choose one dominant action per section and demote secondary actions to text links or quieter buttons.",{"ctaCount":len(ctas),"examples":ctas[:12]})
+
+ above_fold=[x for x in ctas if x.get("y",99999)<vh]
+ if not above_fold and route not in ["/gallery/"]:
+  add("missing-above-fold-cta","No clear CTA appears in the initial viewport.","High-intent visitors should understand the next step without scrolling.","Place a single high-contrast primary CTA near the hero value proposition.",None)
+
+ if repeated:
+  add("repeated-page-imagery","The same image appears more than once on this page.","Repeated photography reduces the sense of editorial richness and can make a premium site feel templated.","Use each hero-quality image once per page unless repetition is intentional branding; replace repeats with complementary angles or detail shots.",repeated[:8])
+
+ if len(images)<2 and dom.get("mainTextLength",0)>1600 and route not in ["/inquire/","/wedding-inquiry/","/venue/faq/","/mobile-bar/faq/"]:
+  add("image-scarcity","A text-heavy marketing page has very little supporting photography.","For a venue and hospitality brand, imagery carries emotional proof that copy cannot.","Add one strong contextual image every 1–2 major content sections, favoring people, atmosphere, and spatial variety.",{"imageCount":len(images),"textLength":dom.get("mainTextLength",0)})
+
+ if len(sections)>=5:
+  backgrounds=[s.get("background") for s in sections]
+  longest=1; cur=1
+  for i in range(1,len(backgrounds)):
+   if backgrounds[i]==backgrounds[i-1]: cur+=1; longest=max(longest,cur)
+   else: cur=1
+  if longest>=4:
+   add("section-rhythm","Several consecutive sections use the same visual field.","Long stretches without a tonal or spatial change can flatten the page and make premium storytelling feel repetitive.","Alternate editorial treatments—image-led, ivory, sand, forest, full-bleed, split layout—while keeping the palette restrained.",{"longestSameBackgroundRun":longest})
+
+ if h2s:
+  body_sizes=[p.get("fontSize",0) for p in paragraphs if p.get("fontSize",0)>0]
+  body=max(body_sizes) if body_sizes else 16
+  weak=[h for h in h2s if h.get("fontSize",0)<body*1.65]
+  if weak:
+   add("weak-section-hierarchy","Some section headings are too close in scale to body copy.","Clear typographic hierarchy helps visitors understand the page architecture instantly.","Increase H2 contrast through size, spacing, or weight; keep display typography visibly distinct from explanatory copy.",weak[:5])
+
+ if dom.get("formControls",0)>14:
+  add("form-friction","The page asks for many inputs in a single visible form.","Long forms can feel like work before the visitor has committed to the conversation.","Group fields into logical stages, hide conditional questions until relevant, and keep the first step focused on date, event type, guest count, and contact information.",{"visibleControls":dom.get("formControls")})
+
+ if vw<500 and dom.get("headerRect") and dom["headerRect"].get("h",0)>92:
+  add("mobile-header-footprint","The mobile header consumes a large share of the first viewport.","A tall header competes with the hero and reduces visual drama.","Compress vertical padding and keep only logo + menu trigger visible until interaction.",dom["headerRect"])
+
+ if dom.get("documentHeight",0)>vh*11 and vw<500:
+  add("mobile-page-length","This page is exceptionally long on mobile.","Very long sales pages can work, but only when section variety and progress cues sustain momentum.","Audit for duplicate arguments, combine low-value sections, and vary layout every 2–3 sections to preserve pacing.",{"pageHeight":dom.get("documentHeight"),"viewportHeight":vh})
+
+ return f
 
 def findings(dom,console,page_errors,request_failed,asset_failed):
  f=[]
@@ -178,6 +256,8 @@ def browser_mode(browser_name):
     except Exception as e:nav=str(e)
     dom={} if nav else page.evaluate(DOM)
     fs=[Finding("navigation-failed","critical",nav)] if nav else findings(dom,console,page_errors,request_failed,asset_failed)
+    if not nav:
+     fs.extend(expert_design_findings(dom,path,vp))
     shot=root/f"{name}-{vp}.png"
     try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
     except Exception:shot=Path("")
@@ -186,10 +266,11 @@ def browser_mode(browser_name):
    ctx.close()
   browser.close()
  critical=[{"route":r["route"],"viewport":r["viewport"],"finding":x} for r in results for x in r["findings"] if x["severity"]=="critical"]
- report={"mode":"browser","baseUrl":BASE,"browser":browser_name,"cases":len(results),"criticalCount":len(critical),"critical":critical,"results":results}
+ design=[{"route":r["route"],"viewport":r["viewport"],"finding":x} for r in results for x in r["findings"] if x["severity"]=="design"]
+ report={"mode":"browser","baseUrl":BASE,"browser":browser_name,"cases":len(results),"criticalCount":len(critical),"critical":critical,"designCount":len(design),"topDesignRecommendations":design[:120],"results":results}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  (root/"report.html").write_text(html_report(results),encoding="utf-8")
- print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"critical":critical[:80],"report":str(root/"report.html")},indent=2))
+ print(json.dumps({"baseUrl":BASE,"cases":len(results),"criticalCount":len(critical),"critical":critical[:80],"designCount":len(design),"topDesignRecommendations":design[:60],"report":str(root/"report.html")},indent=2))
  return 1 if critical else 0
 
 def main():
