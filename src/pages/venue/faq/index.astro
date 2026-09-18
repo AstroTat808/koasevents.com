@@ -20,7 +20,7 @@ const faqs = [
 ];
 const schema={'@context':'https://schema.org','@type':'FAQPage','mainEntity':faqs.map(([q,a])=>({'@type':'Question','name':q,'acceptedAnswer':{'@type':'Answer','text':a}}))};
 ---
-<BaseLayout title="Venue FAQ | Koa’s Events" description="Answers about Koa’s Events venue capacity, insurance, vendors, alcohol, setup, music, deposits, cancellations and event-day rules." canonical="https://www.koasevents.com/venue/faq/">
+<BaseLayout title="Big Island Event Venue FAQ | Koa’s Events" description="Answers about Koa’s Events venue capacity, insurance, vendors, alcohol, setup, music, deposits, cancellations and event-day rules." canonical="https://www.koasevents.com/venue/faq/">
 <script type="application/ld+json" set:html={JSON.stringify(schema)} />
 <Header overlay={false}/>
 <main><section class="py-20 lg:py-28"><div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Venue FAQ</p><h1 class="display mt-5 text-6xl leading-[.95] sm:text-7xl">Know the rules before they become surprises.</h1><p class="mt-7 text-sm leading-6 text-[var(--koa-ink)]/62">These answers summarize current Koa’s venue rules. Your signed agreement is the controlling document for your event.</p><a href="/inquire/?service=venue" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check availability</a></div><div class="grid gap-3">{faqs.map(([q,a])=><details class="group rounded-2xl border border-[var(--koa-line)] bg-white p-5"><summary class="cursor-pointer list-none pr-8 text-base font-bold">{q}</summary><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68">{a}</p></details>)}</div></div></section></main><Footer/>
