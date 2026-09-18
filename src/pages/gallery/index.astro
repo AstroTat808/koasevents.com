@@ -6,9 +6,11 @@ import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { galleryMedia, koaMarketingGallery, koaMarketingMedia } from '../../data/media';
 
 const categories = ['Venue','Ceremony','Reception','Mobile Bar','Enhancements','Hospitality','Stay'];
+const featuredImage = koaMarketingMedia.pavilionSunsetWide;
+const primaryGalleryImages = koaMarketingGallery.filter((image) => image.src !== featuredImage.src);
 const grouped = categories.map((category) => ({
   category,
-  images: koaMarketingGallery.filter((image) => image.category === category),
+  images: primaryGalleryImages.filter((image) => image.category === category),
 }));
 const styledImages = koaMarketingGallery.map(({ category, ...image }) => image);
 const allGalleryImages = [...styledImages, ...galleryMedia];
@@ -80,22 +82,35 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
       </div>
     </section>
 
-    <section class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-28">
-      <div class="container-shell grid gap-12 lg:grid-cols-[.68fr_1.32fr] lg:gap-20">
-        <div class="lg:sticky lg:top-28 lg:self-start">
-          <p class="eyebrow text-[var(--koa-clay)]">Real event archive</p>
-          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">The documentary side of Koa’s.</h2>
-          <p class="mt-6 max-w-md text-sm leading-7 text-[var(--koa-ink)]/62">These photographs were migrated from the previous Koa’s site and remain isolated here as the historical event gallery. They show the property and celebrations as they were actually photographed.</p>
-          <a href="/inquire/" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check availability</a>
-        </div>
-        <div class="grid auto-rows-[15rem] gap-3 sm:grid-cols-2 md:auto-rows-[17rem]">
-          {galleryMedia.map((image, index) => (
-            <button type="button" class:list={['gallery-trigger group relative overflow-hidden rounded-[1.1rem] bg-white', index % 6 === 0 ? 'sm:row-span-2' : '']} data-gallery-index={styledImages.length + index} data-gallery-src={image.src}>
-              <ResponsiveImage {...image} width={1000} height={800} sizes="(min-width:1024px) 34vw, 50vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
-              <span class="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition group-hover:opacity-100"></span>
-            </button>
-          ))}
-        </div>
+    <section class="koa-grain bg-[var(--koa-sand)] py-16 lg:py-20">
+      <div class="container-shell">
+        <details class="group overflow-hidden rounded-[1.6rem] border border-[var(--koa-line)] bg-white/78 shadow-[var(--shadow-soft)]">
+          <summary class="flex cursor-pointer list-none items-center justify-between gap-6 p-6 sm:p-8 lg:p-10">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Real event archive</p>
+              <h2 class="display mt-3 text-4xl leading-[1] sm:text-5xl">Older Wix gallery · {galleryMedia.length} photographs</h2>
+              <p class="mt-4 max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/58">The 25-photo Koa’s collection above is the primary gallery. Open this archive only if you want to browse photographs migrated from the previous website.</p>
+            </div>
+            <span class="grid size-12 shrink-0 place-items-center rounded-full border border-[var(--koa-line)] bg-[var(--koa-sand)] text-2xl transition group-open:rotate-45" aria-hidden="true">+</span>
+          </summary>
+          <div class="border-t border-[var(--koa-line)] p-5 sm:p-8 lg:p-10">
+            <div class="mb-7 flex flex-wrap items-end justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Historical archive</p>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">These images remain available for documentary context, but they are intentionally separated from the current 25-photo marketing gallery.</p>
+              </div>
+              <a href="/inquire/" class="inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check availability</a>
+            </div>
+            <div class="grid auto-rows-[15rem] gap-3 sm:grid-cols-2 md:auto-rows-[17rem] lg:grid-cols-3">
+              {galleryMedia.map((image, index) => (
+                <button type="button" class:list={['gallery-trigger group relative overflow-hidden rounded-[1.1rem] bg-[var(--koa-sand)]', index % 7 === 0 ? 'sm:row-span-2' : '']} data-gallery-index={styledImages.length + index} data-gallery-src={image.src}>
+                  <ResponsiveImage {...image} width={1000} height={800} sizes="(min-width:1024px) 32vw, 50vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+                  <span class="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 transition group-hover:opacity-100"></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 
