@@ -1,0 +1,167 @@
+{
+  "provider": "Pexels",
+  "license": "https://www.pexels.com/license/",
+  "usageNote": "Editorial/design imagery. Koa's own migrated Wix photography is reserved for the Gallery page.",
+  "assets": [
+    {
+      "name": "wedding-forest-couple.jpg",
+      "photo_id": "27269420",
+      "source": "https://www.pexels.com/photo/a-bride-and-groom-standing-in-the-woods-27269420/",
+      "photographer": "Anastasia Nagibina",
+      "path": "/media/editorial/wedding-forest-couple.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/27269420/pexels-photo-27269420.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 1618410,
+      "sha256": "0b38f2cc5c0af66a77a7e4012ccbfbc7c0850ebddfcc9e791df999fa4c39e746"
+    },
+    {
+      "name": "garden-wedding-ceremony.jpg",
+      "photo_id": "36723067",
+      "source": "https://www.pexels.com/photo/outdoor-garden-wedding-ceremony-under-tree-36723067/",
+      "photographer": "Alexander Mass",
+      "path": "/media/editorial/garden-wedding-ceremony.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/36723067/pexels-photo-36723067.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 1498572,
+      "sha256": "82bf65f182eb117c25c036869b455bd412b70134c4db4b594d5aa19ca7ad3474"
+    },
+    {
+      "name": "garden-wedding-moment.jpg",
+      "photo_id": "36723082",
+      "source": "https://www.pexels.com/photo/romantic-outdoor-wedding-in-lush-garden-setting-36723082/",
+      "photographer": "Alexander Mass",
+      "path": "/media/editorial/garden-wedding-moment.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/36723082/pexels-photo-36723082.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 1412656,
+      "sha256": "4667bb85bedb403504bde67c713e4e3d5cc8ad550988908f8044a1063fd61f5d"
+    },
+    {
+      "name": "garden-wedding-portrait.jpg",
+      "photo_id": "32187199",
+      "source": "https://www.pexels.com/photo/elegant-outdoor-wedding-portrait-in-lush-garden-32187199/",
+      "photographer": "ART MEDIA PHOTO & FILM STUDIO",
+      "path": "/media/editorial/garden-wedding-portrait.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/32187199/pexels-photo-32187199.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 896023,
+      "sha256": "eb79171892331d592725a0b8ef32c583b20a0b993b2883196c26e4b95abd4166"
+    },
+    {
+      "name": "garden-reception-table.jpg",
+      "photo_id": "26975888",
+      "source": "https://www.pexels.com/photo/wedding-reception-table-set-on-grass-field-26975888/",
+      "photographer": "Josh Withers",
+      "path": "/media/editorial/garden-reception-table.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/26975888/pexels-photo-26975888.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 598582,
+      "sha256": "5a3961f83344eb9d4197d8de2c3ab7a83ce6cdd76def51c2b0e5c4cba788aa6a"
+    },
+    {
+      "name": "botanical-reception.jpg",
+      "photo_id": "37665541",
+      "source": "https://www.pexels.com/photo/elegant-outdoor-wedding-reception-setup-with-floral-decor-37665541/",
+      "photographer": "Kimy Moto",
+      "path": "/media/editorial/botanical-reception.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/37665541/pexels-photo-37665541.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 452725,
+      "sha256": "ba054d19c630a90c2c7c40c141ef5b215a64967728bc8efc3fcbc450deb01c03"
+    },
+    {
+      "name": "venue-atmosphere.jpg",
+      "photo_id": "12954022",
+      "source": "https://www.pexels.com/photo/a-wedding-venue-12954022/",
+      "photographer": "Amar Preciado",
+      "path": "/media/editorial/venue-atmosphere.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/12954022/pexels-photo-12954022.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 626931,
+      "sha256": "469e5cf0db320cc75a225659030484d921ed1c754040d8578e3d8e0813e8bd2d"
+    },
+    {
+      "name": "garden-table-settings.jpg",
+      "photo_id": "17596023",
+      "source": "https://www.pexels.com/photo/elegant-table-settings-in-the-garden-17596023/",
+      "photographer": "Hamza Uran",
+      "path": "/media/editorial/garden-table-settings.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/17596023/pexels-photo-17596023.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 531476,
+      "sha256": "3492fb3a083446d2e53ac811135550c97b7a94b6ee93c657410546caf783975d"
+    },
+    {
+      "name": "rustic-table-detail.jpg",
+      "photo_id": "35920484",
+      "source": "https://www.pexels.com/photo/rustic-outdoor-dining-setup-with-floral-centerpiece-35920484/",
+      "photographer": "Gerardo Pantoja",
+      "path": "/media/editorial/rustic-table-detail.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/35920484/pexels-photo-35920484.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 398143,
+      "sha256": "2ad813bad69ba01325448a02a27854f7053c83f437e24dece28d933f85445473"
+    },
+    {
+      "name": "evening-reception.jpg",
+      "photo_id": "34241958",
+      "source": "https://www.pexels.com/photo/elegant-outdoor-evening-wedding-reception-setup-34241958/",
+      "photographer": "Andrea Prochilo",
+      "path": "/media/editorial/evening-reception.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/34241958/pexels-photo-34241958.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 680645,
+      "sha256": "a0af57cfbe24174566dbe073a5a85495752c417eae02f11a96bee877f2680ea9"
+    },
+    {
+      "name": "private-event-detail.jpg",
+      "photo_id": "34180404",
+      "source": "https://www.pexels.com/photo/elegant-outdoor-wedding-dessert-table-decor-34180404/",
+      "photographer": "Jonathan Goncalves",
+      "path": "/media/editorial/private-event-detail.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/34180404/pexels-photo-34180404.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 1401379,
+      "sha256": "c478924c2fbd963db8d7a05b287fa0674ea2b80d769faafa9a498154a7878d4f"
+    },
+    {
+      "name": "bartender-outdoor-event.jpg",
+      "photo_id": "32435269",
+      "source": "https://www.pexels.com/photo/bartender-mixing-cocktails-at-outdoor-event-32435269/",
+      "photographer": "Rafaela Freire",
+      "path": "/media/editorial/bartender-outdoor-event.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/32435269/pexels-photo-32435269.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 561010,
+      "sha256": "27f34d604254ea0d52113b89614fb8f4d0fe6adc8d3ec7514ce8933be0549bff"
+    },
+    {
+      "name": "bartender-detail.jpg",
+      "photo_id": "16654869",
+      "source": "https://www.pexels.com/photo/barmaid-preparing-drink-16654869/",
+      "photographer": "Takeshi Arai",
+      "path": "/media/editorial/bartender-detail.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/16654869/pexels-photo-16654869.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 775734,
+      "sha256": "55d8b2d8939b0c964c6d15562833ecdbca769b219f7229ef9d7d7b5469c63221"
+    },
+    {
+      "name": "tropical-resort-dining.jpg",
+      "photo_id": "6127022",
+      "source": "https://www.pexels.com/photo/a-dining-table-set-up-at-a-resort-6127022/",
+      "photographer": "Rachel Claire",
+      "path": "/media/editorial/tropical-resort-dining.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/6127022/pexels-photo-6127022.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 1175853,
+      "sha256": "2c3d56a8a7677c523cb8f234f2a074dc8c492dab7ef2444641214a1764ae991d"
+    },
+    {
+      "name": "tropical-bedroom.jpg",
+      "photo_id": "29000313",
+      "source": "https://www.pexels.com/photo/luxurious-tropical-resort-bedroom-with-canopy-bed-29000313/",
+      "photographer": "Quang Nguyen Vinh",
+      "path": "/media/editorial/tropical-bedroom.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/29000313/pexels-photo-29000313.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 560519,
+      "sha256": "a170624eeefba52e92f9470f4dbfb2d1d67ada66e0cafa5fed16cde595a6ba13"
+    },
+    {
+      "name": "tropical-room-view.jpg",
+      "photo_id": "16436921",
+      "source": "https://www.pexels.com/photo/room-with-the-view-of-palm-trees-in-a-tropical-resort-16436921/",
+      "photographer": "Luis Zambrano",
+      "path": "/media/editorial/tropical-room-view.jpg",
+      "downloadUrl": "https://images.pexels.com/photos/16436921/pexels-photo-16436921.jpeg?auto=compress&cs=tinysrgb&w=2400",
+      "bytes": 736500,
+      "sha256": "07345e757baba94386d273d9d38c600e778b3b1b9f3e31d5a0ccf01867cf24a2"
+    }
+  ]
+}
