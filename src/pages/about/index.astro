@@ -1,0 +1,132 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import ResponsiveImage from '../../components/ResponsiveImage.astro';
+import { koaMarketingMedia } from '../../data/media';
+
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: "Koa's Events",
+  url: 'https://www.koasevents.com/',
+  founder: [
+    { '@type': 'Person', name: 'Shaun Scott' },
+    { '@type': 'Person', name: 'Chris Sibel' },
+  ],
+};
+---
+<BaseLayout
+  title="About Koa’s Events | Our Story on Hawaiʻi Island"
+  description="Meet Shaun and Chris and learn the story behind Koa’s Events, a private Hawaiʻi Island venue and mobile bar built around warm hospitality, flexibility and meaningful gatherings."
+  canonical="https://www.koasevents.com/about/"
+>
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+  <main>
+    <section class="relative min-h-[82svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[90svh]">
+      <ResponsiveImage {...koaMarketingMedia.pavilionTwilightFrontAlt} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
+      <div class="hero-shade absolute inset-0"></div>
+      <Header />
+      <div class="container-shell relative z-10 flex min-h-[82svh] items-end pb-14 pt-32 md:min-h-[90svh] md:pt-40 lg:pb-24">
+        <div class="max-w-5xl">
+          <p class="eyebrow text-white/65">Our story · Shaun + Chris</p>
+          <h1 class="display mt-6 max-w-5xl text-6xl leading-[.9] sm:text-7xl lg:text-[7rem]">Built together. Built to bring people together.</h1>
+          <p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Koa’s began with a shared idea between the two of us: create a place—and a way of hosting—where people could slow down, feel cared for and celebrate in a way that actually felt like them.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-36">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.76fr_1.24fr] lg:items-start lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">The beginning</p>
+          <h2 class="display mt-5 text-5xl leading-[.98] sm:text-6xl">It started with a conversation about how people should feel when they gather.</h2>
+        </div>
+        <div class="max-w-2xl lg:pt-2">
+          <p class="text-lg leading-8 text-[var(--koa-ink)]/72">We kept coming back to the same thing: the celebrations people remember most are not necessarily the ones that feel the most produced. They are the ones where the people at the center of the day are present enough to actually experience it.</p>
+          <p class="mt-6 text-base leading-7 text-[var(--koa-ink)]/64">We wanted to build something warm and personal, but still organized. Beautiful, but not rigid. A place where a couple, a family or a team could bring their own ideas instead of being handed one formula for what an event was supposed to look like.</p>
+          <p class="mt-6 text-base leading-7 text-[var(--koa-ink)]/64">That became the foundation of Koa’s: give people a strong setting, thoughtful support and genuine hospitality—then leave enough room for the event to become their own.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:gap-24">
+        <div class="relative h-[30rem] overflow-hidden rounded-[1.8rem] sm:h-[36rem] lg:h-[42rem]">
+          <ResponsiveImage {...koaMarketingMedia.pavilionDayLush} width={1300} height={1450} sizes="(min-width:1024px) 55vw,100vw" class="absolute inset-0 h-full w-full object-cover" />
+        </div>
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">The place</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">At Mountain View, the idea has a home.</h2>
+          <p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">The property expresses what we wanted Koa’s to feel like from the beginning: private, tropical, flexible and intentionally different from a ballroom or resort corridor.</p>
+          <p class="mt-5 text-sm leading-7 text-[var(--koa-ink)]/58">We never wanted every event here to look the same. Koa’s is a canvas. Florals can be lush or restrained. The pavilion can feel romantic, modern, tropical, candlelit or completely unexpected. Our job is not to impose a house style—it is to help create the conditions for your style to work.</p>
+          <a href="/venue/" class="link-arrow mt-8 text-[var(--koa-forest)]">Explore the venue →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.72fr_1.28fr] lg:items-center lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-amber-light)]">Shaun + Chris</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Two people, building one experience side by side.</h2>
+        </div>
+        <div>
+          <p class="text-lg leading-8 text-white/72">We bring different experiences, instincts and strengths to Koa’s, but we agree on the part that matters most: people should feel welcomed, communication should be clear and the details should support the celebration rather than take it over.</p>
+          <p class="mt-6 text-sm leading-7 text-white/60">What began as the two of us talking about the kind of experience we wanted to create has grown into a place filled with vows, first dances, birthdays, dinners, retreats and all the ordinary moments in between that make a gathering feel real.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-36">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.9fr_1.1fr] lg:items-center lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">How the idea shows up today</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">One philosophy, whether you gather here or bring Koa’s with you.</h2>
+          <p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Today, that same approach runs through both sides of Koa’s. At the Mountain View property, we host weddings and gatherings in a private setting that can be transformed around the people using it. Through Koa’s Mobile Bar, we bring the same hospitality to celebrations around Hawaiʻi Island.</p>
+          <p class="mt-5 text-sm leading-7 text-[var(--koa-ink)]/58">The services are different. The standard is the same: be prepared, be welcoming, communicate clearly and make the experience feel personal.</p>
+          <div class="mt-8 flex flex-wrap gap-5">
+            <a href="/weddings/" class="link-arrow">Explore weddings →</a>
+            <a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a>
+          </div>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div class="relative min-h-[25rem] overflow-hidden rounded-[1.6rem] sm:row-span-2 sm:min-h-[34rem]">
+            <ResponsiveImage {...koaMarketingMedia.firstDancePavilion} width={1000} height={1250} sizes="(min-width:1024px) 34vw,100vw" class="absolute inset-0 h-full w-full object-cover" />
+          </div>
+          <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]">
+            <ResponsiveImage {...koaMarketingMedia.mobileBarGuestService} width={800} height={650} sizes="(min-width:1024px) 24vw,50vw" class="absolute inset-0 h-full w-full object-cover" />
+          </div>
+          <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]">
+            <ResponsiveImage {...koaMarketingMedia.ceremonyVowsCloseup} width={800} height={650} sizes="(min-width:1024px) 24vw,50vw" class="absolute inset-0 h-full w-full object-cover object-top" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">What guides us</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">People. Place. Good company.</h2>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-3">
+          <div class="rounded-[1.2rem] bg-white p-6"><p class="eyebrow text-[var(--koa-clay)]">People</p><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/62">Make people feel welcomed, heard and cared for.</p></div>
+          <div class="rounded-[1.2rem] bg-white p-6"><p class="eyebrow text-[var(--koa-clay)]">Place</p><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/62">Let Hawaiʻi Island character be part of the experience, not something pasted onto it.</p></div>
+          <div class="rounded-[1.2rem] bg-white p-6"><p class="eyebrow text-[var(--koa-clay)]">Good company</p><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/62">Create the conditions for people to connect, celebrate and remember why they gathered.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-ink)] py-24 text-white lg:py-32">
+      <div class="container-shell grid gap-10 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div class="max-w-4xl">
+          <p class="eyebrow text-[var(--koa-amber-light)]">From our story to yours</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-7xl">If Koa’s feels like the kind of place you want to gather, we would love to hear what you are planning.</h2>
+        </div>
+        <a href="/inquire/" class="inline-flex rounded-full bg-white px-7 py-4 text-xs font-black uppercase tracking-[.13em] text-[var(--koa-ink)]">Start a conversation</a>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>
