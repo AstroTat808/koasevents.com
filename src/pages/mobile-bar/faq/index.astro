@@ -1,0 +1,31 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import { businessRules } from '../../../data/businessRules';
+
+const faqs = [
+  ['What exactly is Koa’s Mobile Bar?', 'A professionally staffed dry-bar service for weddings and events across Hawaiʻi Island. Koa’s provides bar service, planning, setup and the supplies included in the selected package; the client purchases the alcohol.'],
+  ['Do you provide the alcohol?', 'No. Under the dry-bar model, the client purchases the alcohol. Koa’s helps plan what and how much to buy based on the guest count, event length and selected drink menu.'],
+  ['Is bartender labor included?', businessRules.mobileBar.bartenderLabor.value],
+  ['Is gratuity required?', 'No. Gratuity is optional. It is not built into a mandatory percentage bartender fee.'],
+  ['Will there be a tip jar?', 'Not by default. Koa’s does not place a tip jar unless the client specifically requests one.'],
+  ['How do you decide staffing?', 'Staffing is based on guest count, drink-menu complexity, service duration, venue logistics and expected service demand. Events outside the standard package assumptions receive a custom staffing quote.'],
+  ['How many guests can you serve?', 'The standard published package framework is built around up to 100 guests. Larger events can be served when logistics allow, but require a custom service and staffing quote.'],
+  ['What types of bar service do you offer?', 'Beer and wine service, signature-cocktail service, fuller mixed-cocktail service, and zero-proof or sober-friendly options.'],
+  ['Do you offer signature cocktails?', 'Yes. The Maui and Big Island package scopes currently include two signature drinks, and custom menus can be discussed for other service levels.'],
+  ['Do you handle setup and breakdown?', 'Yes. Koa’s plans the service area, sets up the bar and service equipment, and handles the bar breakdown according to the agreed event scope.'],
+  ['Do you provide ice, mixers and bar tools?', 'The current published framework includes essential bar tools, up to 150 lbs of ice and a choice of five mixers. Package-specific details are confirmed in the quote.'],
+  ['How long is service?', 'The current published framework is four hours, with additional time available.'],
+  ['Do you travel across the Big Island?', 'Yes. Current published pricing includes travel within 20 miles and lists additional mileage after that threshold. Your quote confirms the travel charge for the event location.'],
+  ['Can you work with our venue or planner?', 'Yes. Koa’s can coordinate timing, layout, service rules and logistics with your venue, planner or coordinator.'],
+  ['Can you serve mocktails and non-drinkers?', 'Yes. Zero-proof service can include mocktails, sparkling water and other non-alcoholic options so non-drinkers receive the same intentional hospitality.'],
+  ['How do we get pricing?', 'Start with the event date, location, guest count and preferred service style. Koa’s will confirm availability and build the quote around the package, logistics and staffing required.'],
+];
+const schema={'@context':'https://schema.org','@type':'FAQPage','mainEntity':faqs.map(([q,a])=>({'@type':'Question','name':q,'acceptedAnswer':{'@type':'Answer','text':a}}))};
+---
+<BaseLayout title="Mobile Bar FAQ | Koa’s Events" description="Answers about Koa’s Mobile Bar dry-bar service, alcohol purchasing, bartender labor, gratuity, tip jars, staffing, packages and Hawaiʻi Island travel." canonical="https://www.koasevents.com/mobile-bar/faq/">
+<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+<Header overlay={false}/>
+<main><section class="py-20 lg:py-28"><div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Mobile Bar FAQ</p><h1 class="display mt-5 text-6xl leading-[.95] sm:text-7xl">Clear answers before the first pour.</h1><p class="mt-7 text-sm leading-6 text-[var(--koa-ink)]/62">The redesigned policy is intentionally straightforward: standard bartender labor is included, gratuity is optional, there is no default tip jar, and staffing scales when the event requires it.</p><a href="/inquire/?service=mobile-bar" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Get a bar quote</a></div><div class="grid gap-3">{faqs.map(([q,a])=><details class="group rounded-2xl border border-[var(--koa-line)] bg-white p-5"><summary class="cursor-pointer list-none pr-8 text-base font-bold">{q}</summary><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68">{a}</p></details>)}</div></div></section></main><Footer/>
+</BaseLayout>

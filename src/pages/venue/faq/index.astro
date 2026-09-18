@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import Header from '../../../components/Header.astro';
+import Footer from '../../../components/Footer.astro';
+import { businessRules } from '../../../data/businessRules';
+
+const faqs = [
+  ['What is the maximum venue occupancy?', 'The approved maximum occupancy for Koa’s Events is 100 persons. Package-included furniture may be lower than the venue maximum, so larger layouts can require added rentals or a custom quote.'],
+  ['When can setup begin?', businessRules.policies.setup.value],
+  ['When does music need to end?', 'Music must be off by 10:00 PM. The current Event Day Checklist also sets a 75 dB sound limit.'],
+  ['What are the alcohol rules?', businessRules.policies.alcohol.value],
+  ['Do we need event insurance?', businessRules.policies.insurance.value],
+  ['Do vendors need insurance?', 'Yes. Vendors must be insured and current client documents require proof 30 days before the event.'],
+  ['What is the reservation deposit?', businessRules.policies.reservationDeposit.value + '. The current payment schedule then calls for the second payment 90 days before the event and final payment 60 days before the event.'],
+  ['Is there a damage deposit?', businessRules.policies.damageDeposit.value + '.'],
+  ['What is the cancellation policy?', businessRules.policies.cancellation.value],
+  ['Can we change our date?', businessRules.policies.dateChange.value],
+  ['Can we use outside vendors?', 'Yes, subject to venue requirements. Vendors must meet insurance requirements and follow the approved event-day schedule and property rules.'],
+  ['What happens with cleanup?', 'Clients are responsible for guest conduct and for removing personal items and décor. Excess cleanup can be charged at $50/hour or per occurrence under the current agreement.'],
+];
+const schema={'@context':'https://schema.org','@type':'FAQPage','mainEntity':faqs.map(([q,a])=>({'@type':'Question','name':q,'acceptedAnswer':{'@type':'Answer','text':a}}))};
+---
+<BaseLayout title="Venue FAQ | Koa’s Events" description="Answers about Koa’s Events venue capacity, insurance, vendors, alcohol, setup, music, deposits, cancellations and event-day rules." canonical="https://www.koasevents.com/venue/faq/">
+<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+<Header overlay={false}/>
+<main><section class="py-20 lg:py-28"><div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Venue FAQ</p><h1 class="display mt-5 text-6xl leading-[.95] sm:text-7xl">Know the rules before they become surprises.</h1><p class="mt-7 text-sm leading-6 text-[var(--koa-ink)]/62">These answers summarize current Koa’s venue rules. Your signed agreement is the controlling document for your event.</p><a href="/inquire/?service=venue" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Check availability</a></div><div class="grid gap-3">{faqs.map(([q,a])=><details class="group rounded-2xl border border-[var(--koa-line)] bg-white p-5"><summary class="cursor-pointer list-none pr-8 text-base font-bold">{q}</summary><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68">{a}</p></details>)}</div></div></section></main><Footer/>
+</BaseLayout>

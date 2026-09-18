@@ -5,6 +5,36 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[[redirects]]
+  from = "/wedding-packages"
+  to = "/venue/packages/"
+  status = 301
+
+[[redirects]]
+  from = "/copy-of-wedding-packages"
+  to = "/private-events/"
+  status = 301
+
+[[redirects]]
+  from = "/koas-mobile-bar"
+  to = "/mobile-bar/"
+  status = 301
+
+[[redirects]]
+  from = "/booking"
+  to = "/inquire/"
+  status = 301
+
+[[redirects]]
+  from = "/contact"
+  to = "/inquire/"
+  status = 301
+
+[[redirects]]
+  from = "/custom-event-package-questionnaire"
+  to = "/inquire/"
+  status = 301
+
 [[headers]]
   for = "/*"
   [headers.values]
