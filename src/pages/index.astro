@@ -6,12 +6,12 @@ import ResponsiveImage from '../components/ResponsiveImage.astro';
 import { businessRules } from '../data/businessRules';
 import { media } from '../data/media';
 
-const homepageLookbook = [media.tableSettings, media.rusticTableDetail, media.tropicalDining, media.tropicalBedroom, media.tropicalRoomView];
+const homepageLookbook = [media.homeHero, media.koaMobileBar, media.koaHospitality, media.koaMobileBarDetail, media.eveningReception];
 
 const celebrations = [
-  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.weddingPortrait },
-  { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: media.gardenia },
-  { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: media.orchid },
+  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.homeHero },
+  { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: media.koaHospitality },
+  { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: media.venueWide },
 ];
 
 const schema = {
@@ -78,6 +78,24 @@ const schema = {
         </div>
       </div>
     </div>
+  </section>
+
+  <section class="koa-grain bg-[var(--koa-ivory)] py-24 lg:py-32">
+    <div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24">
+      <div>
+        <p class="eyebrow text-[var(--koa-clay)]">Make it unmistakably yours</p>
+        <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A blank canvas, styled your way.</h2>
+        <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">Koa’s gives you the setting, privacy and flexibility to build the atmosphere that fits your event. Bring your planner, florist and design team, choose from Koa’s rental catalog where it helps, or combine both approaches.</p>
+        <p class="mt-5 max-w-xl text-sm leading-7 text-[var(--koa-ink)]/58">One celebration may lean tropical and organic; another may be candlelit, modern, romantic or bold. The property is designed to support different palettes, themes and priorities rather than forcing every event into one house style.</p>
+        <a href="/gallery/" class="link-arrow mt-8 text-[var(--koa-forest)]">See styled inspiration →</a>
+      </div>
+      <div class="grid gap-3 sm:grid-cols-2">
+        <div class="relative min-h-[25rem] overflow-hidden rounded-[1.6rem] sm:row-span-2 sm:min-h-[34rem]"><ResponsiveImage {...media.homeHero} width={1000} height={1200} sizes="(min-width:1024px) 34vw, 100vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...media.koaHospitality} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...media.koaMobileBarDetail} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+      </div>
+    </div>
+    <div class="container-shell mt-8"><p class="max-w-4xl text-[.7rem] leading-5 text-[var(--koa-ink)]/48">Styling shown varies by event and may include client- or vendor-provided décor, florals, furnishings and table settings, as well as optional Koa’s rentals. Package pages define what is included with each booking.</p></div>
   </section>
 
   <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
