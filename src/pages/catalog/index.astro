@@ -76,15 +76,17 @@ const badgeClass = {
 
         <div class="mt-10 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-5" data-starting-points>
           {catalogItems.filter((item) => item.category === 'packages').map((item) => (
-            <button type="button" data-starting-point={item.id} class="flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
-              <span class="eyebrow text-[var(--koa-clay)]">Base wedding package</span>
+            <button type="button" data-starting-point={item.id} aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
+              <span data-selected-indicator class="absolute right-5 top-5 hidden rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em] text-white">Selected</span>
+              <span class="eyebrow pr-20 text-[var(--koa-clay)]">Base wedding package</span>
               <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">{item.name.replace(' Wedding Collection','').replace('Koa’s Signature Wedding Experience','Signature')}</span>
               <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
               <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
             </button>
           ))}
-          <button type="button" data-starting-point="ala-carte" class="flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
-            <span class="eyebrow text-[var(--koa-clay)]">Build from scratch</span>
+          <button type="button" data-starting-point="ala-carte" aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
+            <span data-selected-indicator class="absolute right-5 top-5 hidden rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em] text-white">Selected</span>
+            <span class="eyebrow pr-20 text-[var(--koa-clay)]">Build from scratch</span>
             <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">À la carte</span>
             <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Custom quote</span>
             <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">Skip a base wedding package and build the event from the bundles and individual rental catalog below.</span>
@@ -375,9 +377,10 @@ const badgeClass = {
       if (startingPointInput) startingPointInput.value = id;
       startingButtons.forEach((button) => {
         const on = button.dataset.startingPoint === id;
-        button.classList.toggle('bg-[var(--koa-forest)]', on);
-        button.classList.toggle('text-white', on);
+        button.setAttribute('aria-pressed', String(on));
         button.classList.toggle('border-[var(--koa-forest)]', on);
+        button.classList.toggle('shadow-[0_14px_40px_rgba(23,61,48,.16)]', on);
+        button.querySelector('[data-selected-indicator]')?.classList.toggle('hidden', !on);
       });
 
       const packageItem = itemById.get(id);
