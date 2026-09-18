@@ -1,0 +1,53 @@
+name: Migrate editorial media
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - scripts/migrate_editorial_media.py
+      - .github/workflows/migrate-editorial-media.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: migrate-editorial-media
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    name: Localize professional editorial photos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download licensed editorial media
+        run: python scripts/migrate_editorial_media.py
+
+      - name: Verify editorial asset set
+        run: |
+          test -f public/media/editorial/manifest.json
+          test "$(find public/media/editorial -maxdepth 1 -name '*.jpg' | wc -l)" -ge 16
+
+      - name: Commit editorial images
+        run: |
+          git config user.name "Koa Events Site Bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add public/media/editorial
+          if git diff --cached --quiet; then
+            echo "No editorial media changes to commit."
+            exit 0
+          fi
+          git commit -m "Localize professional editorial photography"
+          git push origin HEAD:main
