@@ -204,6 +204,18 @@ export const koaMarketingMedia = {
   pavilionReceptionDaylightAlt: koaMarketing('pavilion-reception-daylight-alt.webp', 'Daylight reception setup inside the open-air Koa’s pavilion'),
   pavilionTwilightFrontAlt: koaMarketing('pavilion-twilight-front-alt.webp', 'Twilight front view of the Koa’s pavilion and landscaped entrance'),
   pavilionVenueShowcaseCollage: koaMarketing('pavilion-venue-showcase-collage.webp', 'Koa’s venue showcase collage featuring the pavilion and tropical grounds'),
+
+  // Enhanced cottage, hospitality and Mobile Bar gallery assets.
+  bridalSuiteWeddingReady: koaMarketing('bridal-suite-wedding-ready.webp', 'Wedding-ready bridal suite with soft blush styling and welcome details'),
+  bridalLoungeWeddingReady: koaMarketing('bridal-lounge-wedding-ready.webp', 'Styled bridal lounge nook with flowers and comfortable seating'),
+  guestBathroomStyled: koaMarketing('guest-bathroom-styled.webp', 'Bright guest bathroom styled with fresh towels, greenery and spa details'),
+  cottageKitchenetteStyled: koaMarketing('cottage-kitchenette-styled.webp', 'Bright cottage kitchenette styled with tropical hospitality details'),
+  cottageLoftSuite: koaMarketing('cottage-loft-suite.webp', 'Warm wood loft suite styled as a cozy wedding-weekend retreat'),
+  cottagePorchDining: koaMarketing('cottage-porch-dining.webp', 'Covered cottage porch arranged for an intimate event dining setup'),
+  cottageExteriorEvents: koaMarketing('cottage-exterior-events.webp', 'Koa’s cottage exterior styled for wedding and private-event arrivals'),
+  mobileBarGuestService: koaMarketing('mobile-bar-guest-service.webp', 'Guest ordering a signature drink from Koa’s Mobile Bar'),
+  signatureCocktailPour: koaMarketing('signature-cocktail-pour.webp', 'Close-up of a signature cocktail being prepared at Koa’s Mobile Bar'),
+  mobileBarCouplePortrait: koaMarketing('mobile-bar-couple-portrait.webp', 'Couple posing in front of Koa’s Mobile Bar styled for a celebration'),
 } satisfies Record<string, MediaAsset>;
 
 export const koaMarketingGallery = [
@@ -249,6 +261,18 @@ export const koaMarketingGallery = [
   { ...koaMarketingMedia.pavilionNightExperienceCollage, category: 'Venue' },
   { ...koaMarketingMedia.pavilionNightLightingCollage, category: 'Venue' },
   { ...koaMarketingMedia.pavilionVenueShowcaseCollage, category: 'Venue' },
+
+  // Enhanced cottage, hospitality and Mobile Bar gallery additions.
+  { ...koaMarketingMedia.bridalSuiteWeddingReady, category: 'Stay' },
+  { ...koaMarketingMedia.bridalLoungeWeddingReady, category: 'Stay' },
+  { ...koaMarketingMedia.guestBathroomStyled, category: 'Stay' },
+  { ...koaMarketingMedia.cottageKitchenetteStyled, category: 'Stay' },
+  { ...koaMarketingMedia.cottageLoftSuite, category: 'Stay' },
+  { ...koaMarketingMedia.cottagePorchDining, category: 'Hospitality' },
+  { ...koaMarketingMedia.cottageExteriorEvents, category: 'Stay' },
+  { ...koaMarketingMedia.mobileBarGuestService, category: 'Mobile Bar' },
+  { ...koaMarketingMedia.signatureCocktailPour, category: 'Mobile Bar' },
+  { ...koaMarketingMedia.mobileBarCouplePortrait, category: 'Mobile Bar' },
 ];
 
 const galleryIds = [
