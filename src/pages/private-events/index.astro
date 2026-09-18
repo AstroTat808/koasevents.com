@@ -1,0 +1,29 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+
+const hero='https://static.wixstatic.com/media/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg/v1/fill/w_1600,h_1067,al_c,q_88/02b2df_ef974bce03ba4e3d8e142a172d0acec0~mv2.jpg';
+const occasions=['Birthdays','Baby showers','Graduations','Anniversaries','Family reunions','Retreats','Celebrations of life','Just-because gatherings'];
+---
+<BaseLayout title="Private Events on Hawaiʻi Island | Koa’s Events" description="Host birthdays, showers, graduations, reunions, retreats and milestone celebrations at Koa’s Events or bring Koa’s Mobile Bar to you." canonical="https://www.koasevents.com/private-events/">
+<main>
+<section class="relative min-h-[80svh] overflow-hidden bg-[var(--koa-ink)] text-white"><img src={hero} alt="Private event setting at Koa's Events" class="absolute inset-0 h-full w-full object-cover opacity-68" fetchpriority="high"/><div class="hero-shade absolute inset-0"></div><Header/>
+<div class="container-shell relative z-10 flex min-h-[80svh] items-end pb-16 pt-40 lg:pb-20"><div class="max-w-4xl"><p class="eyebrow text-white/60">Private events</p>
+<h1 class="display mt-5 text-6xl leading-[.92] sm:text-7xl lg:text-[6.4rem]">Make the occasion feel like an occasion.</h1>
+<p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Host at Koa’s, bring our Mobile Bar to your location, or combine the pieces you need for a private celebration that feels thoughtful without becoming complicated.</p>
+<a href="/inquire/?service=venue" class="mt-9 inline-flex rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Plan a private event</a></div></div></section>
+
+<section class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:gap-24"><div>
+<p class="eyebrow text-[var(--koa-clay)]">Reasons to gather</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Flexible enough for the events that do not fit a wedding template.</h2></div>
+<div class="grid gap-3 sm:grid-cols-2">{occasions.map(x=><div class="rounded-2xl border border-[var(--koa-line)] bg-white p-5 text-sm font-semibold">{x}</div>)}</div></div></section>
+
+<section class="bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-5 lg:grid-cols-3">
+<article class="rounded-[1.6rem] bg-[var(--koa-forest)] p-7 text-white"><p class="eyebrow text-white/48">Host here</p><h2 class="display mt-12 text-4xl">Venue</h2><p class="mt-4 text-sm leading-6 text-white/68">Use the Mountain View property as the setting and build around your timing, layout and guest experience.</p><a href="/inquire/?service=venue" class="link-arrow mt-8 text-white">Check venue availability →</a></article>
+<article class="rounded-[1.6rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-7"><p class="eyebrow text-[var(--koa-clay)]">Bring us to you</p><h2 class="display mt-12 text-4xl">Mobile Bar</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">Professional dry-bar service for private events throughout Hawaiʻi Island.</p><a href="/inquire/?service=mobile-bar" class="link-arrow mt-8">Get a bar quote →</a></article>
+<article class="rounded-[1.6rem] border border-[var(--koa-line)] bg-white p-7"><p class="eyebrow text-[var(--koa-clay)]">Keep it connected</p><h2 class="display mt-12 text-4xl">Both</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">Let venue and beverage service work from one shared plan instead of two separate experiences.</p><a href="/inquire/?service=both" class="link-arrow mt-8">Plan both →</a></article>
+</div></section>
+
+<section class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">A better inquiry</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Tell us the date, guest count and feeling you want.</h2></div>
+<div><p class="text-base leading-7 text-[var(--koa-ink)]/68">Private events vary too much for a single package chart to be useful. We qualify the event first—occasion, timing, guest count, location, budget and beverage needs—then match the right venue or bar configuration.</p><a href="/inquire/" class="link-arrow mt-8 text-[var(--koa-forest)]">Start your inquiry →</a></div></div></section>
+</main><Footer/></BaseLayout>

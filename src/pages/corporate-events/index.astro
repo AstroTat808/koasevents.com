@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+
+const hero='https://static.wixstatic.com/media/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg/v1/fill/w_1400,h_1000,al_c,q_88/02b2df_aba14915428b45348a220f7ab88f3d2a~mv2.jpg';
+const useCases=['Team retreats','Client appreciation','Holiday gatherings','Leadership off-sites','Networking events','Company celebrations','Workshops + trainings','Brand / community gatherings'];
+const ops=['Run-of-show timing','Guest arrival + parking','AV / sound needs','Food + beverage flow','Vendor coordination','Insurance requirements','Bar service + zero-proof options','Billing contact + proposal scope'];
+---
+<BaseLayout title="Corporate Events on Hawaiʻi Island | Koa’s Events" description="Plan team retreats, client events, company celebrations and mobile bar service with Koa’s Events on Hawaiʻi Island." canonical="https://www.koasevents.com/corporate-events/">
+<main>
+<section class="relative min-h-[80svh] overflow-hidden bg-[var(--koa-ink)] text-white"><img src={hero} alt="Corporate gathering hospitality at Koa's Events" class="absolute inset-0 h-full w-full object-cover opacity-62" fetchpriority="high"/><div class="hero-shade absolute inset-0"></div><Header/>
+<div class="container-shell relative z-10 flex min-h-[80svh] items-end pb-16 pt-40 lg:pb-20"><div class="max-w-4xl"><p class="eyebrow text-white/60">Corporate + organization events</p>
+<h1 class="display mt-5 text-6xl leading-[.92] sm:text-7xl lg:text-[6.2rem]">Professional enough for the agenda. Memorable enough to matter.</h1>
+<p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Bring teams, clients and communities together with a private venue, mobile beverage service, or a combined event plan built around the operational details.</p>
+<a href="/inquire/?service=both" class="mt-9 inline-flex rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request a proposal</a></div></div></section>
+
+<section class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Built for more than parties</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Hospitality with an operations brain.</h2><p class="mt-6 text-sm leading-6 text-[var(--koa-ink)]/62">Corporate buyers need clarity, timing and accountability. The new Koa’s process is designed to collect those requirements up front.</p></div>
+<div class="grid gap-3 sm:grid-cols-2">{useCases.map(x=><div class="rounded-2xl border border-[var(--koa-line)] bg-white p-5 text-sm font-semibold">{x}</div>)}</div></div></section>
+
+<section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-24">
+<div><p class="eyebrow text-white/48">Proposal-ready details</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">We qualify the logistics before we quote the experience.</h2></div>
+<div class="grid border-t border-white/16">{ops.map((x,i)=><div class="grid gap-3 border-b border-white/16 py-5 sm:grid-cols-[3rem_1fr]"><span class="eyebrow text-[var(--koa-amber-light)]">0{i+1}</span><p class="text-sm font-semibold text-white/75">{x}</p></div>)}</div>
+</div></section>
+
+<section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-5 lg:grid-cols-3">
+<article class="rounded-[1.6rem] bg-white p-7"><p class="eyebrow text-[var(--koa-clay)]">Venue</p><h2 class="display mt-12 text-4xl">A private place to meet differently.</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">Use Koa’s for retreats, workshops, appreciation events and team celebrations in Mountain View.</p></article>
+<article class="rounded-[1.6rem] bg-white p-7"><p class="eyebrow text-[var(--koa-clay)]">Mobile Bar</p><h2 class="display mt-12 text-4xl">Hospitality at your location.</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">Add polished beverage service—including zero-proof planning—to off-site corporate events.</p></article>
+<article class="rounded-[1.6rem] bg-[var(--koa-ink)] p-7 text-white"><p class="eyebrow text-white/45">Combined</p><h2 class="display mt-12 text-4xl">One event plan, fewer loose ends.</h2><p class="mt-4 text-sm leading-6 text-white/65">Venue and beverage service can be scoped together, with one inquiry gathering the information we need.</p></article>
+</div></section>
+
+<section class="bg-[var(--koa-ink)] py-20 text-white"><div class="container-shell flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between"><div class="max-w-3xl">
+<p class="eyebrow text-white/45">Start with the objective</p><h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">Tell us what the event needs to accomplish.</h2></div>
+<a href="/inquire/?service=both" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request a proposal</a></div></section>
+</main><Footer/></BaseLayout>
