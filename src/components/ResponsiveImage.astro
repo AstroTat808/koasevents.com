@@ -1,0 +1,41 @@
+---
+import { netlifyImage, netlifySrcSet } from '../data/media';
+
+interface Props {
+  src: string;
+  alt: string;
+  width?: number;
+  height?: number;
+  class?: string;
+  sizes?: string;
+  priority?: boolean;
+  fit?: 'cover' | 'contain' | 'fill';
+  position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
+  quality?: number;
+}
+
+const {
+  src,
+  alt,
+  width = 1600,
+  height = 1067,
+  class: className = '',
+  sizes = '100vw',
+  priority = false,
+  fit = 'cover',
+  position = 'center',
+  quality = 82,
+} = Astro.props;
+---
+<img
+  src={netlifyImage(src, width, height, fit, position, quality)}
+  srcset={netlifySrcSet(src, width, height, fit, position, quality)}
+  sizes={sizes}
+  width={width}
+  height={height}
+  alt={alt}
+  class={className}
+  loading={priority ? 'eager' : 'lazy'}
+  fetchpriority={priority ? 'high' : 'auto'}
+  decoding="async"
+/>

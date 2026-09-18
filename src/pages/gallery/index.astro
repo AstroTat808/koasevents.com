@@ -1,0 +1,139 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import ResponsiveImage from '../../components/ResponsiveImage.astro';
+import { galleryMedia, media } from '../../data/media';
+
+const feature = galleryMedia.slice(0, 3);
+const grid = galleryMedia.slice(3);
+const spans = [
+  'md:col-span-7 md:row-span-2',
+  'md:col-span-5',
+  'md:col-span-5',
+  'md:col-span-4',
+  'md:col-span-8 md:row-span-2',
+  'md:col-span-4',
+  'md:col-span-5',
+  'md:col-span-7',
+  'md:col-span-7 md:row-span-2',
+  'md:col-span-5',
+  'md:col-span-5',
+  'md:col-span-4',
+  'md:col-span-8',
+  'md:col-span-4',
+  'md:col-span-6',
+  'md:col-span-6',
+  'md:col-span-8 md:row-span-2',
+  'md:col-span-4',
+  'md:col-span-4',
+  'md:col-span-8',
+  'md:col-span-5',
+  'md:col-span-7',
+];
+---
+<BaseLayout
+  title="Gallery | Koa’s Events Hawaiʻi Island"
+  description="Explore Koa’s Events through an editorial gallery of the Mountain View venue, celebrations and event details on Hawaiʻi Island."
+  canonical="https://www.koasevents.com/gallery/"
+>
+  <Header overlay={false} />
+  <main>
+    <section class="overflow-hidden pb-20 pt-10 lg:pb-28">
+      <div class="container-shell">
+        <div class="grid gap-10 lg:grid-cols-[.76fr_1.24fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">The Koa’s lookbook</p>
+            <h1 class="display mt-5 text-6xl leading-[.93] sm:text-7xl lg:text-[6.3rem]">A sense of place, in photographs.</h1>
+            <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/66">Rainforest greens, warm light, open-air celebrations and the details that make an event feel considered rather than staged.</p>
+          </div>
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {feature.map((image, index) => (
+              <button type="button" class:list={['gallery-trigger relative overflow-hidden rounded-[1.2rem]', index === 0 ? 'col-span-2 row-span-2 sm:col-span-2' : 'min-h-48']} data-gallery-index={index}>
+                <ResponsiveImage {...image} width={index === 0 ? 1100 : 600} height={index === 0 ? 900 : 700} sizes={index === 0 ? '(min-width: 1024px) 42vw, 70vw' : '(min-width: 1024px) 18vw, 45vw'} class="absolute inset-0 h-full w-full object-cover transition duration-700 hover:scale-[1.025]" priority={index === 0} />
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-ink)] py-20 text-white lg:py-28">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.7fr_1.3fr] lg:gap-24">
+        <div class="lg:sticky lg:top-28 lg:self-start">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Gather beautifully</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Less slideshow. More editorial story.</h2>
+          <p class="mt-6 max-w-md text-sm leading-7 text-white/58">This gallery is intentionally image-led. Open any photograph to view it larger, then move through the collection with the arrows or your keyboard.</p>
+          <a href="/inquire/" class="mt-8 inline-flex rounded-full border border-white/35 px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] transition hover:bg-white hover:text-[var(--koa-ink)]">Check availability</a>
+        </div>
+
+        <div class="grid auto-rows-[16rem] gap-3 md:grid-cols-12 md:auto-rows-[14rem]">
+          {grid.map((image, index) => (
+            <button type="button" class:list={['gallery-trigger group relative min-h-64 overflow-hidden rounded-[1.1rem] bg-white/5', spans[index] || 'md:col-span-6']} data-gallery-index={index + 3}>
+              <ResponsiveImage {...image} width={1200} height={900} sizes="(min-width: 1024px) 45vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+              <span class="absolute inset-0 bg-gradient-to-t from-black/25 via-transparent to-transparent opacity-0 transition group-hover:opacity-100"></span>
+              <span class="absolute bottom-4 right-4 grid size-10 place-items-center rounded-full border border-white/30 bg-black/20 text-xl text-white opacity-0 backdrop-blur transition group-hover:opacity-100" aria-hidden="true">+</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid items-center gap-12 lg:grid-cols-[1.15fr_.85fr] lg:gap-20">
+        <div class="relative min-h-[34rem] overflow-hidden rounded-[2rem]">
+          <ResponsiveImage {...media.hero} width={1300} height={1000} sizes="(min-width: 1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover" />
+        </div>
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">See it in person</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Photographs set the mood. A tour tells you whether it feels right.</h2>
+          <p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/66">Tell us your date and event type. For venue inquiries, we can move the conversation toward the right package and a private tour.</p>
+          <a href="/inquire/?service=venue" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Start an inquiry</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+
+  <dialog id="gallery-lightbox" class="m-auto h-[92svh] w-[94vw] max-w-7xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-[rgba(6,23,18,.96)] p-0 text-white backdrop:bg-black/80">
+    <div class="relative flex h-full items-center justify-center p-4 sm:p-8">
+      <button type="button" data-close class="absolute right-4 top-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Close gallery">×</button>
+      <button type="button" data-prev class="absolute left-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Previous image">←</button>
+      <img data-lightbox-image src="" alt="" class="max-h-full max-w-full rounded-lg object-contain" />
+      <button type="button" data-next class="absolute right-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Next image">→</button>
+    </div>
+  </dialog>
+
+  <script is:inline define:vars={{ lightboxImages: galleryMedia.map((item) => ({ src: item.src, alt: item.alt })) }}>
+    const dialog = document.getElementById('gallery-lightbox');
+    const image = dialog?.querySelector('[data-lightbox-image]');
+    let current = 0;
+
+    function optimized(src) {
+      const params = new URLSearchParams({ url: src, w: '1800', q: '88', fit: 'contain' });
+      return '/.netlify/images?' + params.toString();
+    }
+
+    function show(index) {
+      if (!dialog || !image) return;
+      current = (index + lightboxImages.length) % lightboxImages.length;
+      image.src = optimized(lightboxImages[current].src);
+      image.alt = lightboxImages[current].alt;
+      if (!dialog.open) dialog.showModal();
+    }
+
+    document.querySelectorAll('[data-gallery-index]').forEach((button) => {
+      button.addEventListener('click', () => show(Number(button.dataset.galleryIndex)));
+    });
+    dialog?.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
+    dialog?.querySelector('[data-prev]')?.addEventListener('click', () => show(current - 1));
+    dialog?.querySelector('[data-next]')?.addEventListener('click', () => show(current + 1));
+    dialog?.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+    document.addEventListener('keydown', (event) => {
+      if (!dialog?.open) return;
+      if (event.key === 'ArrowLeft') show(current - 1);
+      if (event.key === 'ArrowRight') show(current + 1);
+      if (event.key === 'Escape') dialog.close();
+    });
+  </script>
+</BaseLayout>
