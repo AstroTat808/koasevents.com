@@ -35,17 +35,17 @@ const schema = {
 <BaseLayout title="Koa’s Events | Big Island Event Venue & Mobile Bar" description="Host a wedding or event for up to 100 guests at Koa’s Events in Mountain View, Hawaiʻi, or bring Koa’s Mobile Bar anywhere on the Big Island." canonical="https://www.koasevents.com/">
 <script type="application/ld+json" set:html={JSON.stringify(schema)} />
 <main>
-  <section class="relative min-h-[96svh] overflow-hidden bg-[var(--koa-ink)] text-white">
+  <section class="relative min-h-[90svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[96svh]">
     <ResponsiveImage {...media.hero} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
     <div class="hero-shade absolute inset-0"></div>
     <Header />
-    <div class="container-shell relative z-10 flex min-h-[96svh] items-end pb-16 pt-40 lg:pb-24">
+    <div class="container-shell relative z-10 flex min-h-[90svh] items-end pb-14 pt-32 md:min-h-[96svh] md:pt-40 lg:pb-24">
       <div class="max-w-5xl">
         <p class="eyebrow text-white/65">A private rainforest wedding venue on Hawaiʻi Island</p>
         <h1 class="display mt-6 max-w-5xl text-6xl leading-[.9] sm:text-7xl lg:text-[7.2rem]">Big Island celebrations, beautifully hosted.</h1>
         <p class="mt-7 max-w-2xl text-base leading-7 text-white/78 sm:text-lg">Gather at our private Mountain View venue for up to {businessRules.venue.maximumOccupancy.value} guests, bring Koa’s Mobile Bar to your location, or combine both into one seamless event experience.</p>
         <div class="mt-10 flex flex-wrap gap-3">
-          <a href="/signature-wedding/" class="rounded-full bg-[var(--koa-ivory)] px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-[var(--koa-ink)]">Explore Signature Wedding</a><a href="/wedding-inquiry/" class="rounded-full border border-white/45 px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-white backdrop-blur">Check your date</a>
+          <a href="/signature-wedding/" class="rounded-full bg-[var(--koa-ivory)] px-6 py-3.5 text-xs font-black uppercase tracking-[.13em] text-[var(--koa-ink)]">Explore Signature Wedding</a><a href="/wedding-inquiry/" class="link-arrow px-2 py-3.5 text-white">Check your date →</a>
         </div>
       </div>
     </div>
@@ -55,14 +55,14 @@ const schema = {
     </div>
   </section>
 
-  <section class="bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The flagship experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A wedding weekend designed around what you want to feel—not what you need to rent.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">The Koa’s Signature Wedding Experience brings together the private property, ceremony and reception foundation, Mobile Bar, guest-facing details and coordination support.</p><p class="mt-4 text-xs font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">Starting at $20,000</p><a href="/signature-wedding/" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Explore Signature Wedding</a></div><div class="relative min-h-[36rem] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.plumeria} width={1200} height={1100} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/></div></div></section>
+  <section class="bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The flagship experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A wedding weekend designed around what you want to feel—not what you need to rent.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">The Koa’s Signature Wedding Experience brings together the private property, ceremony and reception foundation, Mobile Bar, guest-facing details and coordination support.</p><p class="mt-4 text-xs font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">Starting at $20,000</p><a href="/signature-wedding/" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Explore Signature Wedding</a></div><div class="relative h-[24rem] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[36rem] lg:rounded-[2rem]"><ResponsiveImage {...media.plumeria} width={1200} height={1100} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/></div></div></section>
 <section class="relative overflow-hidden py-24 lg:py-36">
     <div class="container-shell grid gap-14 lg:grid-cols-[.92fr_1.08fr] lg:items-center lg:gap-24">
-      <div class="relative min-h-[38rem]">
-        <div class="absolute left-0 top-0 h-[32rem] w-[72%] overflow-hidden rounded-[1.8rem]">
+      <div class="relative h-[29rem] sm:h-[34rem] lg:h-[38rem]">
+        <div class="absolute left-0 top-0 h-[24rem] w-[74%] overflow-hidden rounded-[1.5rem] sm:h-[28rem] lg:h-[32rem] lg:w-[72%] lg:rounded-[1.8rem]">
           <ResponsiveImage {...media.venueWide} width={1100} height={1350} sizes="(min-width:1024px) 38vw, 75vw" class="h-full w-full object-cover" />
         </div>
-        <div class="absolute bottom-0 right-0 h-[24rem] w-[52%] overflow-hidden rounded-[1.5rem] border-[10px] border-[var(--koa-ivory)] shadow-2xl">
+        <div class="absolute bottom-0 right-0 h-[17rem] w-[54%] overflow-hidden rounded-[1.25rem] border-[7px] border-[var(--koa-ivory)] shadow-2xl sm:h-[21rem] lg:h-[24rem] lg:w-[52%] lg:border-[10px]">
           <ResponsiveImage {...media.hospitality} width={700} height={900} sizes="(min-width:1024px) 24vw, 50vw" class="h-full w-full object-cover" />
         </div>
         <div class="absolute bottom-10 left-8 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.65rem] font-black uppercase tracking-[.16em] text-white shadow-xl">Gather beautifully.</div>
@@ -87,7 +87,7 @@ const schema = {
         <p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">You do not have to fit your event into one rigid format. Start with the setting, the bar, or both—and build from what matters most to your guests.</p>
       </div>
       <div class="mt-14 grid gap-4 lg:grid-cols-3">
-        <a href="/venue/" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
+        <a href="/venue/" class="group relative min-h-[25rem] overflow-hidden rounded-[1.6rem] border border-white/10 md:min-h-[29rem] lg:min-h-[32rem]">
           <ResponsiveImage {...media.venueAtmosphere} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">01 · The venue</p><h3 class="display mt-3 text-4xl">Host at Koa’s</h3><p class="mt-3 text-sm leading-6 text-white/68">A private Mountain View property for weddings, celebrations and gatherings.</p></div>
@@ -112,7 +112,7 @@ const schema = {
       <div class="mt-14 grid gap-4 lg:grid-cols-3">
         {celebrations.map((item, index) => (
           <a href={item.href} class="group overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
-            <div class="relative h-72 overflow-hidden"><ResponsiveImage {...item.image} width={900} height={650} sizes="(min-width:1024px) 33vw, 100vw" class="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" /><span class="absolute left-5 top-5 rounded-full bg-[rgba(251,248,241,.9)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">0{index+1}</span></div>
+            <div class="relative h-56 overflow-hidden sm:h-64 lg:h-72"><ResponsiveImage {...item.image} width={900} height={650} sizes="(min-width:1024px) 33vw, 100vw" class="h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" /><span class="absolute left-5 top-5 rounded-full bg-[rgba(251,248,241,.9)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">0{index+1}</span></div>
             <div class="p-7"><h3 class="display text-4xl">{item.title}</h3><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/64">{item.copy}</p><span class="link-arrow mt-6">Explore →</span></div>
           </a>
         ))}
@@ -132,8 +132,8 @@ const schema = {
         </div>
         <div class="mt-8 flex flex-wrap gap-5"><a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a><a href="/mobile-bar/faq/" class="link-arrow">Read the FAQ →</a></div>
       </div>
-      <div class="relative min-h-[42rem]">
-        <div class="absolute right-0 top-0 h-[35rem] w-[78%] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.bartenderDetail} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
+      <div class="relative h-[30rem] sm:h-[36rem] lg:h-[42rem]">
+        <div class="absolute right-0 top-0 h-[25rem] w-[82%] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[35rem] lg:w-[78%] lg:rounded-[2rem]"><ResponsiveImage {...media.bartenderDetail} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
         <div class="absolute bottom-0 left-0 w-[58%] rounded-[1.4rem] bg-[var(--koa-forest)] p-7 text-white shadow-2xl"><p class="eyebrow text-[var(--koa-amber-light)]">Across Hawaiʻi Island</p><p class="display mt-3 text-3xl">Good drinks bring great people together.</p></div>
       </div>
     </div>
@@ -149,7 +149,7 @@ const schema = {
   <section id="gallery" class="py-24 lg:py-32">
     <div class="container-shell">
       <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">The lookbook</p><h2 class="display mt-4 text-5xl sm:text-6xl">A sense of place.</h2></div><a href="/gallery/" class="link-arrow text-[var(--koa-forest)]">Open the full gallery →</a></div>
-      <div class="mt-10 grid auto-rows-[17rem] gap-3 md:grid-cols-12">
+      <div class="mt-10 grid auto-rows-[13rem] gap-3 sm:auto-rows-[15rem] md:auto-rows-[17rem] md:grid-cols-12">
         {homepageLookbook.map((image,index)=><a href="/gallery/" class:list={['group relative overflow-hidden rounded-[1.3rem]', index===0 ? 'md:col-span-7 md:row-span-2' : index===1 ? 'md:col-span-5' : index===2 ? 'md:col-span-5' : 'md:col-span-6']}><ResponsiveImage {...image} width={1200} height={900} sizes="(min-width:1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" /></a>)}
       </div>
     </div>
