@@ -30,6 +30,16 @@ const socialImage = '/media/wix/02b2df_dbe1e4c043e0401590406df45a251117~mv2.jpg'
     <meta name="theme-color" content="#173d30" />
   </head>
   <body>
+    <script is:inline>
+      (() => {
+        const hash = window.location.hash || '';
+        const isIdentityCallback = /^#(?:invite_token|recovery_token|confirmation_token|access_token|error=)/.test(hash);
+        const onAdmin = window.location.pathname === '/admin/' || window.location.pathname === '/admin';
+        if (isIdentityCallback && !onAdmin) {
+          window.location.replace('/admin/' + hash);
+        }
+      })();
+    </script>
     <slot />
   </body>
 </html>
