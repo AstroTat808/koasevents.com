@@ -1,0 +1,150 @@
+name: Production visual QA
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-visual-qa.yml'
+      - 'scripts/production_visual_qa.py'
+      - 'src/**'
+      - 'public/**'
+      - 'astro.config.mjs'
+      - 'netlify.toml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/production-visual-qa.yml'
+      - 'scripts/production_visual_qa.py'
+      - 'src/**'
+      - 'public/**'
+      - 'astro.config.mjs'
+      - 'netlify.toml'
+      - 'package.json'
+      - 'package-lock.json'
+  schedule:
+    - cron: '23 15 * * *'
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'URL to audit'
+        required: false
+        default: 'https://koasevents.netlify.app'
+
+concurrency:
+  group: koa-production-visual-qa-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PRODUCTION_BASE_URL: ${{ inputs.base_url || 'https://koasevents.netlify.app' }}
+  VISUAL_RESULTS: visual-results
+
+jobs:
+  source-build-audit:
+    name: Source + Astro build audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install site dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build production site
+        run: npm run build
+      - name: Audit source structure
+        run: python scripts/production_visual_qa.py --mode source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-source-audit-${{ github.run_id }}
+          path: visual-results/source-audit.json
+          retention-days: 14
+          if-no-files-found: error
+
+  deployed-smoke:
+    name: Staging route smoke
+    if: github.event_name != 'pull_request'
+    needs: source-build-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wait for Netlify staging deploy
+        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
+      - name: Check public routes and headers
+        run: python scripts/production_visual_qa.py --mode smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-production-smoke-${{ github.run_id }}
+          path: visual-results/production-smoke.json
+          retention-days: 14
+          if-no-files-found: error
+
+  visual-audit:
+    name: Responsive visual audit
+    if: github.event_name != 'pull_request'
+    needs: deployed-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser QA dependencies
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Audit responsive staging experience
+        run: python scripts/production_visual_qa.py --mode browser --browser ${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-visual-qa-${{ matrix.browser }}-${{ github.run_id }}
+          path: visual-results/browser-${{ matrix.browser }}
+          retention-days: 30
+          if-no-files-found: error
+
+  qa-summary:
+    name: Visual QA summary
+    if: always()
+    needs: [source-build-audit, deployed-smoke, visual-audit]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish run summary
+        run: |
+          {
+            echo '## Koa’s Events production visual QA'
+            echo
+            echo '| Gate | Result |'
+            echo '| --- | --- |'
+            echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
+            echo '| Staging route smoke | ${{ needs.deployed-smoke.result }} |'
+            echo '| Responsive visual audit | ${{ needs.visual-audit.result }} |'
+            echo
+            echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
+          } >> "$GITHUB_STEP_SUMMARY"
