@@ -27,6 +27,10 @@ export interface CatalogItem {
   featured?: boolean;
   badges?: CatalogBadge[];
   includedWith?: string[];
+  availableQuantity?: string;
+  colors?: string[];
+  dimensions?: string;
+  options?: string[];
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -118,7 +122,8 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Hibiscus', 'Signature'],
-    specs: [{ label: 'Size', value: '60-inch round' }, { label: 'Signature includes', value: '10 tables' }],
+    dimensions: '60-inch round',
+    specs: [{ label: 'Signature includes', value: '10 tables' }],
     keywords: ['table', 'round', 'reception'],
   },
   {
@@ -130,7 +135,8 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
-    specs: [{ label: 'Size', value: '6-foot rectangle' }, { label: 'Signature includes', value: '2 tables' }],
+    dimensions: '6-foot rectangle',
+    specs: [{ label: 'Signature includes', value: '2 tables' }],
     keywords: ['table', 'banquet', 'rectangle'],
   },
   {
@@ -142,7 +148,8 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: 'Custom quote',
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
-    specs: [{ label: 'Size', value: '36-inch cocktail table' }, { label: 'Signature includes', value: '10 tables' }],
+    dimensions: '36-inch cocktail table',
+    specs: [{ label: 'Signature includes', value: '10 tables' }],
     keywords: ['cocktail', 'high top', 'table'],
   },
 
@@ -424,6 +431,7 @@ export const catalogItems: CatalogItem[] = [
       { kind: 'popular', label: 'Popular' },
       { kind: 'deal', label: 'Add-On Savings' },
     ],
+    options: ['Mirrored booth', 'LED backdrop'],
     specs: [{ label: 'Style', value: 'Mirrored booth + LED backdrop' }],
     keywords: ['photo booth', 'mirror', 'led'],
   },
