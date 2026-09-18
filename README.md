@@ -1,2 +1,2 @@
 # koasevents.com
-Koa's Events Webiste
+Koa's Events Website
