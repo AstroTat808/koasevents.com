@@ -4,14 +4,14 @@ import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
 import ResponsiveImage from '../components/ResponsiveImage.astro';
 import { businessRules } from '../data/businessRules';
-import { media } from '../data/media';
+import { media, koaMarketingMedia } from '../data/media';
 
-const homepageLookbook = [media.homeHero, media.koaMobileBar, media.koaHospitality, media.koaMobileBarDetail, media.eveningReception];
+const homepageLookbook = [koaMarketingMedia.pavilionSunsetWide, koaMarketingMedia.ceremonySetupTropical, koaMarketingMedia.receptionRustBlue, koaMarketingMedia.audioGuestbook, koaMarketingMedia.mirrorPhotoBooth];
 
 const celebrations = [
-  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.homeHero },
-  { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: media.koaHospitality },
-  { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: media.venueWide },
+  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: koaMarketingMedia.ceremonyLiveSunset },
+  { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: koaMarketingMedia.tropicalDinnerTable },
+  { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: koaMarketingMedia.pavilionDaywide },
 ];
 
 const schema = {
@@ -36,7 +36,7 @@ const schema = {
 <script type="application/ld+json" set:html={JSON.stringify(schema)} />
 <main>
   <section class="relative min-h-[90svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[96svh]">
-    <ResponsiveImage {...media.hero} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
+    <ResponsiveImage {...koaMarketingMedia.pavilionSunsetWide} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
     <div class="hero-shade absolute inset-0"></div>
     <Header />
     <div class="container-shell relative z-10 flex min-h-[90svh] items-end pb-14 pt-32 md:min-h-[96svh] md:pt-40 lg:pb-24">
@@ -55,15 +55,15 @@ const schema = {
     </div>
   </section>
 
-  <section class="bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The flagship experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A wedding weekend designed around what you want to feel—not what you need to rent.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">The Koa’s Signature Wedding Experience brings together the private property, ceremony and reception foundation, Mobile Bar, guest-facing details and coordination support.</p><p class="mt-4 text-xs font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">Starting at $20,000</p><a href="/signature-wedding/" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Explore Signature Wedding</a></div><div class="relative h-[24rem] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[36rem] lg:rounded-[2rem]"><ResponsiveImage {...media.plumeria} width={1200} height={1100} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/></div></div></section>
+  <section class="bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">The flagship experience</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A wedding weekend designed around what you want to feel—not what you need to rent.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">The Koa’s Signature Wedding Experience brings together the private property, ceremony and reception foundation, Mobile Bar, guest-facing details and coordination support.</p><p class="mt-4 text-xs font-black uppercase tracking-[.14em] text-[var(--koa-forest)]">Starting at $20,000</p><a href="/signature-wedding/" class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Explore Signature Wedding</a></div><div class="relative h-[24rem] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[36rem] lg:rounded-[2rem]"><ResponsiveImage {...koaMarketingMedia.pavilionStairsRomantic} width={1200} height={1100} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/></div></div></section>
 <section class="relative overflow-hidden py-24 lg:py-36">
     <div class="container-shell grid gap-14 lg:grid-cols-[.92fr_1.08fr] lg:items-center lg:gap-24">
       <div class="relative h-[29rem] sm:h-[34rem] lg:h-[38rem]">
         <div class="absolute left-0 top-0 h-[24rem] w-[74%] overflow-hidden rounded-[1.5rem] sm:h-[28rem] lg:h-[32rem] lg:w-[72%] lg:rounded-[1.8rem]">
-          <ResponsiveImage {...media.venueWide} width={1100} height={1350} sizes="(min-width:1024px) 38vw, 75vw" class="h-full w-full object-cover" />
+          <ResponsiveImage {...koaMarketingMedia.pavilionDayLush} width={1100} height={1350} sizes="(min-width:1024px) 38vw, 75vw" class="h-full w-full object-cover" />
         </div>
         <div class="absolute bottom-0 right-0 h-[17rem] w-[54%] overflow-hidden rounded-[1.25rem] border-[7px] border-[var(--koa-ivory)] shadow-2xl sm:h-[21rem] lg:h-[24rem] lg:w-[52%] lg:border-[10px]">
-          <ResponsiveImage {...media.hospitality} width={700} height={900} sizes="(min-width:1024px) 24vw, 50vw" class="h-full w-full object-cover" />
+          <ResponsiveImage {...koaMarketingMedia.tropicalDinnerTable} width={700} height={900} sizes="(min-width:1024px) 24vw, 50vw" class="h-full w-full object-cover" />
         </div>
         <div class="absolute bottom-10 left-8 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.65rem] font-black uppercase tracking-[.16em] text-white shadow-xl">Gather beautifully.</div>
       </div>
@@ -90,9 +90,9 @@ const schema = {
         <a href="/gallery/" class="link-arrow mt-8 text-[var(--koa-forest)]">See styled inspiration →</a>
       </div>
       <div class="grid gap-3 sm:grid-cols-2">
-        <div class="relative min-h-[25rem] overflow-hidden rounded-[1.6rem] sm:row-span-2 sm:min-h-[34rem]"><ResponsiveImage {...media.homeHero} width={1000} height={1200} sizes="(min-width:1024px) 34vw, 100vw" class="absolute inset-0 h-full w-full object-cover"/></div>
-        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...media.koaHospitality} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
-        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...media.koaMobileBarDetail} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+        <div class="relative min-h-[25rem] overflow-hidden rounded-[1.6rem] sm:row-span-2 sm:min-h-[34rem]"><ResponsiveImage {...koaMarketingMedia.ceremonySetupTropical} width={1000} height={1200} sizes="(min-width:1024px) 34vw, 100vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...koaMarketingMedia.receptionRustBlue} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
+        <div class="relative min-h-[16rem] overflow-hidden rounded-[1.4rem]"><ResponsiveImage {...koaMarketingMedia.sweetheartRustBlue} width={700} height={520} sizes="(min-width:1024px) 22vw, 50vw" class="absolute inset-0 h-full w-full object-cover"/></div>
       </div>
     </div>
     <div class="container-shell mt-8"><p class="max-w-4xl text-[.7rem] leading-5 text-[var(--koa-ink)]/48">Styling shown varies by event and may include client- or vendor-provided décor, florals, furnishings and table settings, as well as optional Koa’s rentals. Package pages define what is included with each booking.</p></div>
@@ -106,17 +106,17 @@ const schema = {
       </div>
       <div class="mt-14 grid gap-4 lg:grid-cols-3">
         <a href="/venue/" class="group relative min-h-[25rem] overflow-hidden rounded-[1.6rem] border border-white/10 md:min-h-[29rem] lg:min-h-[32rem]">
-          <ResponsiveImage {...media.venueAtmosphere} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <ResponsiveImage {...koaMarketingMedia.pavilionWelcomeFront} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">01 · The venue</p><h3 class="display mt-3 text-4xl">Host at Koa’s</h3><p class="mt-3 text-sm leading-6 text-white/68">A private Mountain View property for weddings, celebrations and gatherings.</p></div>
         </a>
         <a href="/mobile-bar/" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
-          <ResponsiveImage {...media.mobileBar} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <ResponsiveImage {...koaMarketingMedia.mobileBarHero} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">02 · Mobile Bar</p><h3 class="display mt-3 text-4xl">Bring Koa’s to you</h3><p class="mt-3 text-sm leading-6 text-white/68">Professional dry-bar service across Hawaiʻi Island.</p></div>
         </a>
         <a href="/inquire/?service=both" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
-          <ResponsiveImage {...media.eveningReception} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <ResponsiveImage {...koaMarketingMedia.pavilionSunsetEvent} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">03 · Combined</p><h3 class="display mt-3 text-4xl">Keep it connected</h3><p class="mt-3 text-sm leading-6 text-white/68">One inquiry, one shared plan, fewer loose ends.</p></div>
         </a>
@@ -151,7 +151,7 @@ const schema = {
         <div class="mt-8 flex flex-wrap gap-5"><a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a><a href="/mobile-bar/faq/" class="link-arrow">Read the FAQ →</a></div>
       </div>
       <div class="relative h-[30rem] sm:h-[36rem] lg:h-[42rem]">
-        <div class="absolute right-0 top-0 h-[25rem] w-[82%] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[35rem] lg:w-[78%] lg:rounded-[2rem]"><ResponsiveImage {...media.bartenderDetail} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
+        <div class="absolute right-0 top-0 h-[25rem] w-[82%] overflow-hidden rounded-[1.6rem] sm:h-[30rem] lg:h-[35rem] lg:w-[78%] lg:rounded-[2rem]"><ResponsiveImage {...koaMarketingMedia.mobileBarDetail} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
         <div class="absolute bottom-0 left-0 w-[58%] rounded-[1.4rem] bg-[var(--koa-forest)] p-7 text-white shadow-2xl"><p class="eyebrow text-[var(--koa-amber-light)]">Across Hawaiʻi Island</p><p class="display mt-3 text-3xl">Good drinks bring great people together.</p></div>
       </div>
     </div>
