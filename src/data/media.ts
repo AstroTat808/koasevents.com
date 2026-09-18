@@ -19,11 +19,11 @@ const koa = (name: string, alt: string, width?: number, height?: number): MediaA
 
 export const media = {
   homeHero: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events open-air pavilion glowing at twilight on Hawaiʻi Island"
   ),
   koaVenueTwilight: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion prepared for an evening celebration"
   ),
   koaMobileBar: koa(
@@ -40,11 +40,11 @@ export const media = {
   ),
 
   hero: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events open-air pavilion glowing at twilight"
   ),
   venueWide: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion and tropical grounds at twilight"
   ),
   hospitality: koa(
@@ -56,7 +56,7 @@ export const media = {
     "Koa's Mobile Bar trailer styled for an event"
   ),
   plumeria: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion transformed for an evening wedding"
   ),
   hibiscus: editorial(
@@ -81,7 +81,7 @@ export const media = {
     'Outdoor garden wedding ceremony beneath a large tree'
   ),
   gardenWeddingMoment: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion transformed for a wedding celebration"
   ),
   weddingPortrait: editorial(
@@ -93,11 +93,11 @@ export const media = {
     'Styled tropical table setting at Koa’s'
   ),
   botanicalReception: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion glowing during an evening event"
   ),
   venueAtmosphere: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion and grounds at twilight"
   ),
   tableSettings: koa(
@@ -109,7 +109,7 @@ export const media = {
     "Koa's Mobile Bar styled with tropical florals and warm wood"
   ),
   eveningReception: koa(
-    'twilight-tropical-pavilion-wedding-venue.webp',
+    'pavilion-sunset-wide.webp',
     "Koa's Events pavilion illuminated for an evening celebration"
   ),
   privateEventDetail: koa(
@@ -173,7 +173,7 @@ export const koaMarketingMedia = {
   pavilionReceptionWide: koaMarketing('pavilion-reception-wide.webp', 'Wide reception setup inside the open-air Koa’s pavilion'),
   pavilionWelcomeFront: koaMarketing('pavilion-welcome-front.webp', 'Front entrance of the Koa’s pavilion at golden hour'),
   pavilionSunsetWide: koaMarketing('pavilion-sunset-wide.webp', 'Koa’s pavilion glowing at sunset across the lawn'),
-  pavilionDaywide: koaMarketing('pavilion-daywide.webp', 'Koa’s open-air pavilion and lawn in bright daytime'),
+  pavilionDaywide: koaMarketing('pavilion-day-lush.webp', 'Koa’s open-air pavilion and lawn in bright daytime'),
   pavilionReceptionEvening: koaMarketing('pavilion-reception-evening.webp', 'Reception tables beneath warm pavilion lights'),
   tropicalDinnerTable: koaMarketing('tropical-dinner-table.webp', 'Tropical dinner table with candles and colorful island florals'),
   pavilionStairsRomantic: koaMarketing('pavilion-stairs-romantic.webp', 'Romantic floral entrance up the pavilion stairs'),
@@ -219,60 +219,72 @@ export const koaMarketingMedia = {
 } satisfies Record<string, MediaAsset>;
 
 export const koaMarketingGallery = [
+  // Featured venue image. The gallery page removes this from the Venue grid
+  // because it is already displayed as the large featured image.
   { ...koaMarketingMedia.pavilionSunsetWide, category: 'Venue' },
-  { ...koaMarketingMedia.ceremonyLiveSunset, category: 'Ceremony' },
-  { ...koaMarketingMedia.receptionRustBlue, category: 'Reception' },
-  { ...koaMarketingMedia.mobileBarHero, category: 'Mobile Bar' },
+
+  // Venue — strongest transformation and property views first.
   { ...koaMarketingMedia.pavilionWelcomeFront, category: 'Venue' },
   { ...koaMarketingMedia.pavilionDayLush, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionReceptionWide, category: 'Reception' },
-  { ...koaMarketingMedia.pavilionStairsRomantic, category: 'Reception' },
-  { ...koaMarketingMedia.pavilionFairyLights, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionNightSide, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionSunsetEvent, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionColorLighting, category: 'Venue' },
-  { ...koaMarketingMedia.ceremonySetupTropical, category: 'Ceremony' },
-  { ...koaMarketingMedia.pavilionCeremonyWhite, category: 'Ceremony' },
-  { ...koaMarketingMedia.hexArchStyled, category: 'Ceremony' },
-  { ...koaMarketingMedia.pavilionReceptionEvening, category: 'Reception' },
-  { ...koaMarketingMedia.tropicalDinnerTable, category: 'Reception' },
-  { ...koaMarketingMedia.sweetheartRustBlue, category: 'Reception' },
-  { ...koaMarketingMedia.champagneFeature, category: 'Enhancements' },
-  { ...koaMarketingMedia.audioGuestbook, category: 'Enhancements' },
-  { ...koaMarketingMedia.mirrorPhotoBooth, category: 'Enhancements' },
-  { ...koaMarketingMedia.mobileBarDetail, category: 'Mobile Bar' },
-  { ...koaMarketingMedia.tropicalBrunch, category: 'Hospitality' },
-  { ...koaMarketingMedia.cottageStayCollage, category: 'Stay' },
-
-  // September 2026 gallery additions. Exact duplicate files are intentionally omitted.
-  { ...koaMarketingMedia.ceremonyGardenAisleSunlit, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyGardenAisleWide, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyLiveCenteredWide, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyLiveGuestView, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyLiveVertical, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyLiveWide, category: 'Ceremony' },
-  { ...koaMarketingMedia.ceremonyVowsCloseup, category: 'Ceremony' },
-  { ...koaMarketingMedia.firstDancePavilion, category: 'Reception' },
-  { ...koaMarketingMedia.pavilionReceptionDaylightAlt, category: 'Reception' },
   { ...koaMarketingMedia.pavilionTwilightFrontAlt, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionExteriorCollectionCollage, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionExteriorNightCollage, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionExteriorTwilightCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionColorLighting, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionFairyLights, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionSunsetEvent, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionNightSide, category: 'Venue' },
   { ...koaMarketingMedia.pavilionNightExperienceCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorTwilightCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorNightCollage, category: 'Venue' },
   { ...koaMarketingMedia.pavilionNightLightingCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorCollectionCollage, category: 'Venue' },
   { ...koaMarketingMedia.pavilionVenueShowcaseCollage, category: 'Venue' },
 
-  // Enhanced cottage, hospitality and Mobile Bar gallery additions.
-  { ...koaMarketingMedia.bridalSuiteWeddingReady, category: 'Stay' },
-  { ...koaMarketingMedia.bridalLoungeWeddingReady, category: 'Stay' },
-  { ...koaMarketingMedia.guestBathroomStyled, category: 'Stay' },
-  { ...koaMarketingMedia.cottageKitchenetteStyled, category: 'Stay' },
-  { ...koaMarketingMedia.cottageLoftSuite, category: 'Stay' },
-  { ...koaMarketingMedia.cottagePorchDining, category: 'Hospitality' },
-  { ...koaMarketingMedia.cottageExteriorEvents, category: 'Stay' },
+  // Ceremony — people and live wedding moments lead the section.
+  { ...koaMarketingMedia.ceremonyVowsCloseup, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveCenteredWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveSunset, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyGardenAisleSunlit, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonySetupTropical, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveGuestView, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyGardenAisleWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveVertical, category: 'Ceremony' },
+  { ...koaMarketingMedia.pavilionCeremonyWhite, category: 'Ceremony' },
+  { ...koaMarketingMedia.hexArchStyled, category: 'Ceremony' },
+
+  // Reception — motion and atmosphere before detail shots.
+  { ...koaMarketingMedia.firstDancePavilion, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionReceptionEvening, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionReceptionWide, category: 'Reception' },
+  { ...koaMarketingMedia.receptionRustBlue, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionStairsRomantic, category: 'Reception' },
+  { ...koaMarketingMedia.tropicalDinnerTable, category: 'Reception' },
+  { ...koaMarketingMedia.sweetheartRustBlue, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionReceptionDaylightAlt, category: 'Reception' },
+
+  // Mobile Bar — newest human-centered marketing imagery first.
   { ...koaMarketingMedia.mobileBarGuestService, category: 'Mobile Bar' },
   { ...koaMarketingMedia.signatureCocktailPour, category: 'Mobile Bar' },
   { ...koaMarketingMedia.mobileBarCouplePortrait, category: 'Mobile Bar' },
+  { ...koaMarketingMedia.mobileBarHero, category: 'Mobile Bar' },
+  { ...koaMarketingMedia.mobileBarDetail, category: 'Mobile Bar' },
+
+  // Enhancements.
+  { ...koaMarketingMedia.champagneFeature, category: 'Enhancements' },
+  { ...koaMarketingMedia.mirrorPhotoBooth, category: 'Enhancements' },
+  { ...koaMarketingMedia.audioGuestbook, category: 'Enhancements' },
+
+  // Hospitality — the new intimate dining setup leads.
+  { ...koaMarketingMedia.cottagePorchDining, category: 'Hospitality' },
+  { ...koaMarketingMedia.tropicalBrunch, category: 'Hospitality' },
+
+  // Stay — strongest new cottage images first.
+  { ...koaMarketingMedia.bridalSuiteWeddingReady, category: 'Stay' },
+  { ...koaMarketingMedia.bridalLoungeWeddingReady, category: 'Stay' },
+  { ...koaMarketingMedia.cottageExteriorEvents, category: 'Stay' },
+  { ...koaMarketingMedia.cottageLoftSuite, category: 'Stay' },
+  { ...koaMarketingMedia.cottageKitchenetteStyled, category: 'Stay' },
+  { ...koaMarketingMedia.guestBathroomStyled, category: 'Stay' },
+  { ...koaMarketingMedia.cottageStayCollage, category: 'Stay' },
 ];
 
 const galleryIds = [

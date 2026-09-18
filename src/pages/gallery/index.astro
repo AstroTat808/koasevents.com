@@ -54,10 +54,10 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
                 <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-3xl sm:text-4xl">{group.images.length} views</h3></div>
               </div>
               <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {group.images.map((image) => {
+                {group.images.map((image, categoryIndex) => {
                   const globalIndex = koaMarketingGallery.indexOf(image);
                   return (
-                    <button type="button" class:list={['gallery-trigger group relative overflow-hidden rounded-[1.2rem] bg-white/5', globalIndex % 5 === 0 ? 'min-h-[24rem] sm:col-span-2 lg:col-span-2' : 'min-h-[18rem]']} data-gallery-index={globalIndex} data-gallery-src={image.src}>
+                    <button type="button" class:list={['gallery-trigger group relative overflow-hidden rounded-[1.2rem] bg-white/5', categoryIndex === 0 ? 'min-h-[24rem] sm:col-span-2 lg:col-span-2' : 'min-h-[18rem]']} data-gallery-index={globalIndex} data-gallery-src={image.src}>
                       <ResponsiveImage {...image} width={1200} height={900} sizes="(min-width:1024px) 38vw, (min-width:640px) 50vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
                       <span class="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"></span>
                       <span class="absolute bottom-4 left-4 max-w-[80%] text-left text-xs font-semibold leading-5 text-white/90">{image.alt}</span>
