@@ -104,8 +104,8 @@ DOM=r"""() => {
  const unlabeled=[...document.querySelectorAll('input:not([type=hidden]),select,textarea')].filter(e=>vis(e)&&!(e.labels?.length||e.getAttribute('aria-label')||e.getAttribute('aria-labelledby')||e.title)).map(label);
  const tiny=controls.filter(e=>{if(e.closest('footer'))return false;const r=e.getBoundingClientRect();const buttonLike=['BUTTON','SUMMARY','INPUT','SELECT','TEXTAREA'].includes(e.tagName)||['flex','inline-flex','grid','inline-grid'].includes(getComputedStyle(e).display);return buttonLike&&(r.width<40||r.height<40)&&r.width>0&&r.height>0}).slice(0,25).map(e=>({label:label(e),...rect(e)}));
  const clipped=textEls.filter(e=>{const s=getComputedStyle(e);return(e.scrollWidth>e.clientWidth+2&&['hidden','clip'].includes(s.overflowX))||(e.scrollHeight>e.clientHeight+2&&['hidden','clip'].includes(s.overflowY))}).slice(0,25).map(e=>({label:label(e),...rect(e)}));
- const wrapped=controls.filter(e=>{if(e.closest('footer'))return false;const s=getComputedStyle(e),fs=parseFloat(s.fontSize)||16;return ['A','BUTTON','SUMMARY'].includes(e.tagName)&&e.getBoundingClientRect().height>fs*3.8&&(e.textContent||'').trim().length>3}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
- const small=[...document.querySelectorAll('p,li,a,label,span')].filter(e=>vis(e)&&!e.closest('footer')&&!e.classList.contains('eyebrow')&&(e.textContent||'').trim()&&parseFloat(getComputedStyle(e).fontSize)<10).slice(0,25).map(e=>({label:label(e),fontSize:getComputedStyle(e).fontSize,...rect(e)}));
+ const wrapped=controls.filter(e=>{if(e.closest('footer')||e.closest('[data-catalog-item]'))return false;const s=getComputedStyle(e),r=e.getBoundingClientRect(),fs=parseFloat(s.fontSize)||16;const text=(e.textContent||'').trim();return ['A','BUTTON','SUMMARY'].includes(e.tagName)&&r.height>fs*3.8&&r.height<140&&text.length>3&&text.length<90}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
+ const small=[...document.querySelectorAll('main p,main li,main label')].filter(e=>vis(e)&&!e.classList.contains('eyebrow')&&(e.textContent||'').trim().length>45&&parseFloat(getComputedStyle(e).fontSize)<11).slice(0,25).map(e=>({label:label(e),fontSize:getComputedStyle(e).fontSize,...rect(e)}));
  const wide=[...document.querySelectorAll('p,li')].filter(e=>{if(!vis(e)||(e.textContent||'').trim().length<140)return false;const s=getComputedStyle(e),fs=parseFloat(s.fontSize)||16;return e.getBoundingClientRect().width/fs>48}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
  const offscreen=controls.filter(e=>{if(inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right<-2||r.left>innerWidth+2}).slice(0,20).map(e=>({label:label(e),...rect(e)}));
  const overflowing=[...document.querySelectorAll('body *')].filter(e=>{if(!vis(e)||inIntentionalScroller(e))return false;const r=e.getBoundingClientRect();return r.right>innerWidth+2||r.left<-2}).slice(0,25).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
@@ -116,7 +116,16 @@ DOM=r"""() => {
  const images=[...document.images].filter(vis).map(i=>({src:i.currentSrc||i.src,alt:i.alt||'',...rect(i)}));
  const imageCounts={}; images.forEach(i=>imageCounts[i.src]=(imageCounts[i.src]||0)+1);
  const repeatedImages=Object.entries(imageCounts).filter(([src,n])=>n>1&&!src.includes('/brand/')).map(([src,count])=>({src,count}));
- const ctas=controls.filter(e=>['A','BUTTON'].includes(e.tagName)&&e.closest('main')&&(e.textContent||'').trim().length>1).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
+ const ctas=controls.filter(e=>{
+   if(!['A','BUTTON'].includes(e.tagName)||!e.closest('main')) return false;
+   if(e.closest('[data-catalog-item]')) return false;
+   const text=(e.textContent||'').trim();
+   const cls=(e.className||'').toString();
+   const rect=e.getBoundingClientRect();
+   const isAction=e.tagName==='BUTTON'||/rounded-full|link-arrow|site-nav-cta/.test(cls);
+   const isCardLike=rect.height>140||text.length>90;
+   return text.length>1&&isAction&&!isCardLike;
+ }).map(e=>({label:label(e),tag:e.tagName,...rect(e)}));
  const formControls=[...document.querySelectorAll('form input:not([type=hidden]),form select,form textarea')].filter(vis).length;
  return{
   title:document.title,h1s,horizontalOverflow:document.documentElement.scrollWidth>document.documentElement.clientWidth+2,
