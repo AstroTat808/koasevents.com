@@ -274,6 +274,47 @@ def main():
          "alt=\"Romantic outdoor wedding moment in a lush garden\""),
     ])
 
+    # Final expert-QA polish: unique page imagery, tighter mobile headlines and calmer long-form typography.
+    patch('src/pages/index.astro', [
+        ("const homepageLookbook = [media.weddingPortrait, media.receptionTable, media.bartenderDetail, media.eveningReception, media.privateEventDetail];",
+         "const homepageLookbook = [media.tableSettings, media.rusticTableDetail, media.tropicalDining, media.tropicalBedroom, media.tropicalRoomView];"),
+        ("image: media.plumeria },", "image: media.weddingPortrait },"),
+        ("<ResponsiveImage {...media.venueWide} width={900} height={1200}", "<ResponsiveImage {...media.venueAtmosphere} width={900} height={1200}"),
+        ("<ResponsiveImage {...media.plumeria} width={900} height={1200}", "<ResponsiveImage {...media.eveningReception} width={900} height={1200}"),
+        ("<ResponsiveImage {...media.mobileBar} width={1100} height={1400}", "<ResponsiveImage {...media.bartenderDetail} width={1100} height={1400}"),
+    ])
+
+    patch('src/pages/weddings/index.astro', [
+        ("<ResponsiveImage {...media.plumeria} width={1200} height={1100}", "<ResponsiveImage {...media.botanicalReception} width={1200} height={1100}"),
+        ("'/inquire/?service=both',media.plumeria]", "'/inquire/?service=both',media.eveningReception]"),
+    ])
+
+    patch('src/pages/signature-wedding/index.astro', [
+        ("image:media.gardenia, details:", "image:media.weddingPortrait, details:"),
+        ("image:media.plumeria, details:", "image:media.receptionTable, details:"),
+        ("A private rainforest wedding venue on Hawaiʻi Island.", "A private rainforest wedding on Hawaiʻi Island."),
+    ])
+
+    patch('src/pages/private-events/index.astro', [
+        ("<ResponsiveImage {...media.privateEventDetail} width={1200} height={1000}", "<ResponsiveImage {...media.tableSettings} width={1200} height={1000}"),
+    ])
+
+    patch('src/pages/corporate-events/index.astro', [
+        ("Professional enough for the agenda. Memorable enough to matter.", "Built for the agenda. Memorable beyond it."),
+    ])
+
+    patch('src/pages/catalog/index.astro', [
+        ("Build the event without flipping through a PDF.", "Build your event without the PDF."),
+    ])
+
+    patch('src/pages/mobile-bar/index.astro', [
+        ("A bar that looks as considered as the rest of the event.", "A bar as considered as the rest of your event."),
+    ])
+
+    patch('src/pages/stay/index.astro', [
+        ("Stay close to the celebration—or simply stay awhile.", "Stay close. Stay awhile."),
+    ])
+
     # Make the gallery's role explicit: this is where visitors see real Koa's photography.
     patch('src/pages/gallery/index.astro', [
         ("Explore Koa’s Events through an editorial gallery of the Mountain View venue, celebrations and event details on Hawaiʻi Island.",
@@ -362,6 +403,19 @@ def main():
 '''
         css_path.write_text(css, encoding='utf-8')
         print('patched src/styles/global.css')
+
+    css = css_path.read_text(encoding='utf-8')
+    readability_marker = '/* Long-form readability refinement */'
+    if readability_marker not in css:
+        css += r'''
+
+/* Long-form readability refinement */
+main p.text-sm {
+  font-size: .9375rem;
+}
+'''
+        css_path.write_text(css, encoding='utf-8')
+        print('improved long-form body-copy scale')
 
     # Guardrail: Wix imagery may appear only on the Gallery route.
     offenders = []
