@@ -40,6 +40,7 @@ const requestedPackage = Astro.url.searchParams.get('package') || '';
           data-inquiry-form
         >
           <input type="hidden" name="form-name" value="koa-event-inquiry" />
+          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Event Inquiry (%{submissionId})" />
           <p class="hidden">
             <label>Don’t fill this out if you’re human: <input name="bot-field" /></label>
           </p>
