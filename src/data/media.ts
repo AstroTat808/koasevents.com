@@ -188,6 +188,22 @@ export const koaMarketingMedia = {
   receptionRustBlue: koaMarketing('reception-rust-blue.webp', 'Reception tables styled in rust, navy and tropical florals inside the pavilion'),
   sweetheartRustBlue: koaMarketing('sweetheart-table-rust-blue.webp', 'Sweetheart table with navy and rust draping, candles and tropical florals'),
   cottageStayCollage: koaMarketing('cottage-stay-collage.webp', 'Staged Koa’s cottage bedroom and kitchen with teal accents'),
+  ceremonyGardenAisleSunlit: koaMarketing('ceremony-garden-aisle-sunlit.webp', 'Sunlit ceremony aisle on the Koa’s lawn with tropical floral accents'),
+  ceremonyGardenAisleWide: koaMarketing('ceremony-garden-aisle-wide.webp', 'Wide view down a tropical ceremony aisle on the Koa’s lawn'),
+  ceremonyLiveCenteredWide: koaMarketing('ceremony-live-centered-wide.webp', 'Centered wide view of a live wedding ceremony on the Koa’s lawn'),
+  ceremonyLiveGuestView: koaMarketing('ceremony-live-guest-view.webp', 'Wedding ceremony at Koa’s photographed from the guest seating'),
+  ceremonyLiveVertical: koaMarketing('ceremony-live-vertical.webp', 'Vertical view of a live Koa’s wedding ceremony at sunset'),
+  ceremonyLiveWide: koaMarketing('ceremony-live-wide.webp', 'Wide live wedding ceremony on the Koa’s lawn with tropical forest backdrop'),
+  ceremonyVowsCloseup: koaMarketing('ceremony-vows-closeup.webp', 'Couple exchanging vows during a Koa’s lawn ceremony'),
+  firstDancePavilion: koaMarketing('first-dance-pavilion.webp', 'Newlyweds sharing their first dance inside the Koa’s pavilion'),
+  pavilionExteriorCollectionCollage: koaMarketing('pavilion-exterior-collection-collage.webp', 'Collection of exterior views showing the Koa’s pavilion and tropical grounds'),
+  pavilionExteriorNightCollage: koaMarketing('pavilion-exterior-night-collage.webp', 'Nighttime exterior collage of the Koa’s pavilion and illuminated grounds'),
+  pavilionExteriorTwilightCollage: koaMarketing('pavilion-exterior-twilight-collage.webp', 'Twilight exterior collage showing the pavilion across the tropical property'),
+  pavilionNightExperienceCollage: koaMarketing('pavilion-night-experience-collage.webp', 'Evening event collage showing the Koa’s pavilion after dark'),
+  pavilionNightLightingCollage: koaMarketing('pavilion-night-lighting-collage.webp', 'Night lighting collage showing multiple pavilion lighting looks'),
+  pavilionReceptionDaylightAlt: koaMarketing('pavilion-reception-daylight-alt.webp', 'Daylight reception setup inside the open-air Koa’s pavilion'),
+  pavilionTwilightFrontAlt: koaMarketing('pavilion-twilight-front-alt.webp', 'Twilight front view of the Koa’s pavilion and landscaped entrance'),
+  pavilionVenueShowcaseCollage: koaMarketing('pavilion-venue-showcase-collage.webp', 'Koa’s venue showcase collage featuring the pavilion and tropical grounds'),
 } satisfies Record<string, MediaAsset>;
 
 export const koaMarketingGallery = [
@@ -202,7 +218,6 @@ export const koaMarketingGallery = [
   { ...koaMarketingMedia.pavilionFairyLights, category: 'Venue' },
   { ...koaMarketingMedia.pavilionNightSide, category: 'Venue' },
   { ...koaMarketingMedia.pavilionSunsetEvent, category: 'Venue' },
-  { ...koaMarketingMedia.pavilionDaywide, category: 'Venue' },
   { ...koaMarketingMedia.pavilionColorLighting, category: 'Venue' },
   { ...koaMarketingMedia.ceremonySetupTropical, category: 'Ceremony' },
   { ...koaMarketingMedia.pavilionCeremonyWhite, category: 'Ceremony' },
@@ -216,6 +231,24 @@ export const koaMarketingGallery = [
   { ...koaMarketingMedia.mobileBarDetail, category: 'Mobile Bar' },
   { ...koaMarketingMedia.tropicalBrunch, category: 'Hospitality' },
   { ...koaMarketingMedia.cottageStayCollage, category: 'Stay' },
+
+  // September 2026 gallery additions. Exact duplicate files are intentionally omitted.
+  { ...koaMarketingMedia.ceremonyGardenAisleSunlit, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyGardenAisleWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveCenteredWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveGuestView, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveVertical, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyLiveWide, category: 'Ceremony' },
+  { ...koaMarketingMedia.ceremonyVowsCloseup, category: 'Ceremony' },
+  { ...koaMarketingMedia.firstDancePavilion, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionReceptionDaylightAlt, category: 'Reception' },
+  { ...koaMarketingMedia.pavilionTwilightFrontAlt, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorCollectionCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorNightCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionExteriorTwilightCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionNightExperienceCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionNightLightingCollage, category: 'Venue' },
+  { ...koaMarketingMedia.pavilionVenueShowcaseCollage, category: 'Venue' },
 ];
 
 const galleryIds = [
