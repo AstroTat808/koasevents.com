@@ -110,22 +110,22 @@ const badgeClass = {
 
         <div class="mt-12 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {catalogBundles.map((bundle) => (
-            <article class="flex min-h-[21rem] flex-col rounded-[1.4rem] border border-white/12 bg-white/[.05] p-6">
+            <article class="card-lift flex min-h-[21rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-ink)] shadow-[0_18px_50px_rgba(5,24,18,.18)]">
               <div class="flex flex-wrap items-center gap-2">
-                <span class="eyebrow text-[var(--koa-amber-light)]">{bundle.eyebrow}</span>
-                {bundle.badge && <span class="rounded-full bg-white/10 px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
+                <span class="eyebrow text-[var(--koa-clay)]">{bundle.eyebrow}</span>
+                {bundle.badge && <span class="rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
               </div>
               <h3 class="display mt-6 text-4xl">{bundle.name}</h3>
-              <p class="mt-4 text-sm leading-6 text-white/62">{bundle.description}</p>
+              <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">{bundle.description}</p>
               <div class="mt-5 flex flex-wrap gap-2">
                 {bundle.itemIds.map((id) => {
                   const item = catalogItems.find((entry) => entry.id === id);
-                  return item ? <span class="rounded-full border border-white/12 px-3 py-2 text-[.62rem] font-bold text-white/70">{item.name}</span> : null;
+                  return item ? <span class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.62rem] font-bold text-[var(--koa-forest)]">{item.name}</span> : null;
                 })}
               </div>
               <div class="mt-auto flex items-end justify-between gap-5 pt-7">
-                <p class="text-xs font-black uppercase tracking-[.13em] text-[var(--koa-amber-light)]">Up to {bundle.savingsPercent}% bundle savings</p>
-                <button type="button" data-add-bundle={bundle.id} class="text-xs font-black uppercase tracking-[.12em] text-white">Add bundle +</button>
+                <p class="text-xs font-black uppercase tracking-[.13em] text-[var(--koa-clay)]">Up to {bundle.savingsPercent}% bundle savings</p>
+                <button type="button" data-add-bundle={bundle.id} class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:-translate-y-0.5">Add bundle +</button>
               </div>
             </article>
           ))}
