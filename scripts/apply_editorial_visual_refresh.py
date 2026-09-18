@@ -267,6 +267,13 @@ def main():
         ("<ResponsiveImage {...galleryMedia[10]}", "<ResponsiveImage {...media.privateEventDetail}"),
     ])
 
+    patch('src/pages/venue/packages/index.astro', [
+        ("const hero='/media/wix/02b2df_e52c9276c32541ee81d7a9f9e37ed332~mv2.jpg';",
+         "const hero='/media/editorial/garden-wedding-moment.jpg';"),
+        ("alt=\"Wedding package setting at Koa's Events\"",
+         "alt=\"Romantic outdoor wedding moment in a lush garden\""),
+    ])
+
     # Make the gallery's role explicit: this is where visitors see real Koa's photography.
     patch('src/pages/gallery/index.astro', [
         ("Explore Koa’s Events through an editorial gallery of the Mountain View venue, celebrations and event details on Hawaiʻi Island.",
