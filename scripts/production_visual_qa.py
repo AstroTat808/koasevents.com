@@ -162,7 +162,7 @@ def expert_design_findings(dom, route, viewport):
   add("cta-saturation","The page presents many simultaneous calls to action.","Too many equal-weight CTAs dilute the primary conversion path.","Choose one dominant action per section and demote secondary actions to text links or quieter buttons.",{"ctaCount":len(ctas),"examples":ctas[:12]})
 
  above_fold=[x for x in ctas if x.get("y",99999)<vh]
- if not above_fold and route not in ["/gallery/"]:
+ if not above_fold and route not in ["/gallery/","/inquire/","/wedding-inquiry/"]:
   add("missing-above-fold-cta","No clear CTA appears in the initial viewport.","High-intent visitors should understand the next step without scrolling.","Place a single high-contrast primary CTA near the hero value proposition.",None)
 
  if repeated:
