@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+---
+<BaseLayout
+  title="Mahalo | Koa’s Events"
+  description="Your Koa’s Events inquiry has been received."
+  canonical="https://www.koasevents.com/thank-you/"
+>
+  <Header overlay={false} />
+  <main>
+    <section class="py-24 lg:py-36">
+      <div class="container-shell max-w-4xl text-center">
+        <p class="eyebrow text-[var(--koa-clay)]">Mahalo</p>
+        <h1 class="display mt-5 text-6xl leading-[.95] sm:text-7xl">Your event details are on their way to Koa’s.</h1>
+        <p class="mx-auto mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">We’ll review the date, guest count and service details you shared and follow up with the right next step.</p>
+        <div class="mt-9 flex flex-wrap justify-center gap-3">
+          <a href="/" class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Back home</a>
+          <a href="/venue/" class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em]">Explore venue</a>
+          <a href="/mobile-bar/" class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em]">Explore Mobile Bar</a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>

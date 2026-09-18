@@ -3,17 +3,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 
-const requestedService = Astro.url.searchParams.get('service');
-const requestedPackage = Astro.url.searchParams.get('package');
-
-const serviceLabel =
-  requestedService === 'venue'
-    ? 'Venue'
-    : requestedService === 'mobile-bar'
-      ? 'Mobile Bar'
-      : requestedService === 'both'
-        ? 'Venue + Mobile Bar'
-        : 'Your event';
+const requestedService = Astro.url.searchParams.get('service') || '';
+const requestedPackage = Astro.url.searchParams.get('package') || '';
 ---
 <BaseLayout
   title="Check Availability | Koa’s Events"
@@ -22,25 +13,204 @@ const serviceLabel =
 >
   <Header overlay={false} />
   <main>
-    <section class="py-20 lg:py-28">
-      <div class="container-shell grid gap-14 lg:grid-cols-[.9fr_1.1fr] lg:gap-24">
-        <div>
+    <section class="py-16 lg:py-24">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.78fr_1.22fr] lg:gap-20">
+        <aside>
           <p class="eyebrow text-[var(--koa-clay)]">Check availability</p>
-          <h1 class="display mt-5 text-6xl leading-[.95] sm:text-7xl">Tell us what you’re gathering for.</h1>
-          <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">The redesigned conditional inquiry form is the next conversion build. This route is already in place so every new page has one consistent destination.</p>
-        </div>
-        <div class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white sm:p-10">
-          <p class="eyebrow text-white/48">Selected path</p>
-          <p class="display mt-4 text-4xl">{serviceLabel}</p>
-          {requestedPackage && <p class="mt-2 text-sm text-white/62">Package interest: {requestedPackage}</p>}
-          <div class="mt-8 border-t border-white/16 pt-7">
-            <p class="text-sm leading-6 text-white/66">Until the new form is connected, send the date, event type, guest count and location (for Mobile Bar) and we’ll continue from there.</p>
-            <a class="display mt-6 block break-all text-3xl hover:underline" href="mailto:aloha@koasevents.com">aloha@koasevents.com</a>
-            <a class="mt-3 block text-lg text-white/80 hover:text-white" href="tel:+18448085627">844-808-KOAS</a>
+          <h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Tell us what you’re gathering for.</h1>
+          <p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">Start with the essentials. The form changes based on whether you need the venue, Mobile Bar, or both, so you only answer questions that matter to your event.</p>
+
+          <div class="mt-10 rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-6">
+            <p class="eyebrow text-[var(--koa-clay)]">What happens next</p>
+            <ol class="mt-5 grid gap-4 text-sm leading-6 text-[var(--koa-ink)]/68">
+              <li><strong class="text-[var(--koa-ink)]">1.</strong> We review your date, guest count, location and service needs.</li>
+              <li><strong class="text-[var(--koa-ink)]">2.</strong> We follow up with availability and the right package or custom path.</li>
+              <li><strong class="text-[var(--koa-ink)]">3.</strong> Venue clients can move toward a tour; Mobile Bar clients move toward a tailored quote.</li>
+            </ol>
           </div>
-        </div>
+        </aside>
+
+        <form
+          name="koa-event-inquiry"
+          method="POST"
+          action="/thank-you/"
+          data-netlify="true"
+          netlify-honeypot="bot-field"
+          class="rounded-[1.8rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-9"
+          data-inquiry-form
+        >
+          <input type="hidden" name="form-name" value="koa-event-inquiry" />
+          <p class="hidden">
+            <label>Don’t fill this out if you’re human: <input name="bot-field" /></label>
+          </p>
+
+          <div class="grid gap-6">
+            <fieldset>
+              <legend class="eyebrow text-[var(--koa-clay)]">What are you booking?</legend>
+              <div class="mt-4 grid gap-3 sm:grid-cols-3">
+                <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
+                  <input class="mr-2" type="radio" name="service" value="venue" checked={requestedService === 'venue'} required />
+                  <span class="text-sm font-bold">Venue</span>
+                </label>
+                <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
+                  <input class="mr-2" type="radio" name="service" value="mobile-bar" checked={requestedService === 'mobile-bar'} required />
+                  <span class="text-sm font-bold">Mobile Bar</span>
+                </label>
+                <label class="cursor-pointer rounded-2xl border border-[var(--koa-line)] p-4 has-[:checked]:border-[var(--koa-forest)] has-[:checked]:bg-[var(--koa-sand)]">
+                  <input class="mr-2" type="radio" name="service" value="both" checked={requestedService === 'both'} required />
+                  <span class="text-sm font-bold">Both</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">First name
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="firstName" autocomplete="given-name" required />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Last name
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="lastName" autocomplete="family-name" required />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Email
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="email" name="email" autocomplete="email" required />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Phone
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="tel" name="phone" autocomplete="tel" />
+              </label>
+            </div>
+
+            <div class="grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Event date
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="date" name="eventDate" required />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Guest count
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" name="guestCount" required />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Event type
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="eventType" required>
+                  <option value="">Choose one</option>
+                  <option>Wedding</option>
+                  <option>Birthday</option>
+                  <option>Baby shower</option>
+                  <option>Graduation</option>
+                  <option>Corporate event</option>
+                  <option>Retreat</option>
+                  <option>Celebration of life</option>
+                  <option>Other private event</option>
+                </select>
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Budget range
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="budget">
+                  <option value="">Choose one</option>
+                  <option>Under $1,500</option>
+                  <option>$1,500–$3,000</option>
+                  <option>$3,000–$8,000</option>
+                  <option>$8,000–$15,000</option>
+                  <option>$15,000–$25,000</option>
+                  <option>$25,000+</option>
+                </select>
+              </label>
+            </div>
+
+            <div data-mobile-fields class="hidden grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Event location / venue
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="eventLocation" placeholder="Venue name, town, or address" />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Bar package interest
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="mobileBarPackage">
+                  <option value="">Not sure yet</option>
+                  <option value="oahu" selected={requestedPackage === 'oahu'}>Oahu</option>
+                  <option value="maui" selected={requestedPackage === 'maui'}>Maui</option>
+                  <option value="big-island" selected={requestedPackage === 'big-island'}>Big Island</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Preferred bar style
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="barStyle">
+                  <option value="">Not sure yet</option>
+                  <option>Beer + wine</option>
+                  <option>Signature cocktails</option>
+                  <option>Full mixed bar</option>
+                  <option>Zero-proof / non-alcoholic</option>
+                </select>
+              </label>
+            </div>
+
+            <div data-venue-fields class="hidden grid gap-5 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Venue package interest
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="venuePackage">
+                  <option value="">Not sure yet</option>
+                  <option value="gardenia" selected={requestedPackage === 'gardenia'}>Gardenia</option>
+                  <option value="orchid" selected={requestedPackage === 'orchid'}>Orchid</option>
+                  <option value="hibiscus" selected={requestedPackage === 'hibiscus'}>Hibiscus</option>
+                  <option value="plumeria" selected={requestedPackage === 'plumeria'}>Plumeria</option>
+                  <option value="custom">Custom</option>
+                </select>
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Would you like a venue tour?
+                <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="venueTour">
+                  <option value="">Choose one</option>
+                  <option>Yes</option>
+                  <option>Maybe / tell me more</option>
+                  <option>Not yet</option>
+                </select>
+              </label>
+            </div>
+
+            <label class="grid gap-2 text-sm font-semibold">What matters most for this event?
+              <textarea class="min-h-32 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="priorities" placeholder="Tell us about the experience you want, must-haves, timing, or questions."></textarea>
+            </label>
+
+            <label class="grid gap-2 text-sm font-semibold">How did you hear about Koa’s?
+              <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="source">
+                <option value="">Choose one</option>
+                <option>Google</option>
+                <option>Instagram</option>
+                <option>Facebook</option>
+                <option>Wedding planner / vendor</option>
+                <option>Venue referral</option>
+                <option>Friend / family referral</option>
+                <option>Past Koa’s event</option>
+                <option>Other</option>
+              </select>
+            </label>
+
+            <button class="mt-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white transition hover:bg-[var(--koa-ink)]" type="submit">
+              Send event details
+            </button>
+
+            <p class="text-center text-xs leading-5 text-[var(--koa-ink)]/45">Submitting this form is an inquiry, not a reservation. Your date is not secured until the applicable agreement and deposit are completed.</p>
+          </div>
+        </form>
       </div>
     </section>
   </main>
   <Footer />
+
+  <script is:inline define:vars={{ requestedService }}>
+    const form = document.querySelector('[data-inquiry-form]');
+    const venueFields = document.querySelector('[data-venue-fields]');
+    const mobileFields = document.querySelector('[data-mobile-fields]');
+
+    function updateConditionalFields() {
+      const selected = form?.querySelector('input[name="service"]:checked')?.value || requestedService;
+      const venueOn = selected === 'venue' || selected === 'both';
+      const mobileOn = selected === 'mobile-bar' || selected === 'both';
+
+      venueFields?.classList.toggle('hidden', !venueOn);
+      mobileFields?.classList.toggle('hidden', !mobileOn);
+
+      venueFields?.querySelectorAll('input,select,textarea').forEach((field) => {
+        field.disabled = !venueOn;
+      });
+      mobileFields?.querySelectorAll('input,select,textarea').forEach((field) => {
+        field.disabled = !mobileOn;
+      });
+    }
+
+    form?.querySelectorAll('input[name="service"]').forEach((input) => {
+      input.addEventListener('change', updateConditionalFields);
+    });
+
+    updateConditionalFields();
+  </script>
 </BaseLayout>
