@@ -3,7 +3,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { galleryMedia, koaMarketingGallery } from '../../../data/media';
 const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:item.src, alt:item.alt }));
 ---
-<BaseLayout title="Gallery Admin | Koa’s Events" description="Manage Koa’s Events gallery." canonical="https://www.koasevents.com/admin/gallery/">
+<BaseLayout noindex title="Gallery Admin | Koa’s Events" description="Manage Koa’s Events gallery." canonical="https://www.koasevents.com/admin/gallery/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Admin</p><h1 class="display mt-3 text-5xl">Gallery photos</h1></div><a href="/admin/" class="link-arrow">Admin home →</a></div>
