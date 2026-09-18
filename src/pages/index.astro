@@ -46,7 +46,7 @@ const schema = {
   <script type="application/ld+json" set:html={JSON.stringify(schema)} />
   <main>
     <section class="relative min-h-[94svh] overflow-hidden bg-[var(--koa-ink)] text-white">
-      <img src={hero} alt="Koa's Events venue in Mountain View, Hawaiʻi" class="absolute inset-0 h-full w-full object-cover opacity-70" fetchpriority="high" />
+      <img src={hero} alt="Koa's Events venue in Mountain View, Hawaiʻi" class="absolute inset-0 h-full w-full object-cover opacity-90" fetchpriority="high" />
       <div class="hero-shade absolute inset-0"></div>
       <Header />
       <div class="container-shell relative z-10 flex min-h-[94svh] items-end pb-16 pt-40 lg:pb-20">
@@ -60,9 +60,9 @@ const schema = {
           </div>
         </div>
       </div>
-      <div class="absolute bottom-0 right-0 z-10 hidden border-l border-t border-white/20 bg-[rgba(16,43,35,.64)] px-8 py-6 backdrop-blur md:block">
-        <p class="eyebrow text-white/50">Mountain View, Hawaiʻi</p>
-        <p class="mt-2 max-w-xs text-sm leading-6 text-white/80">Four tropical acres · 1,500 sq. ft. pavilion · Up to {businessRules.venue.maximumOccupancy.value} guests.</p>
+      <div class="hero-detail-card absolute bottom-6 right-6 z-10 hidden max-w-sm rounded-[1.2rem] px-7 py-6 md:block">
+        <p class="eyebrow text-[var(--koa-clay)]">Mountain View, Hawaiʻi</p>
+        <p class="mt-2 max-w-xs text-sm leading-6 text-[var(--koa-ink)]/68">Four tropical acres · 1,500 sq. ft. pavilion · Up to {businessRules.venue.maximumOccupancy.value} guests.</p>
       </div>
     </section>
 

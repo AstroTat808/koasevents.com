@@ -11,44 +11,50 @@ const nav = [
   { label: 'Gallery', href: '/#gallery' },
 ];
 
-const shell = overlay
-  ? 'absolute inset-x-0 top-0 z-50 border-b border-white/20 text-white'
-  : 'relative z-50 border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-ink)]';
-const navColor = overlay ? 'text-white/82 hover:text-white' : 'text-[var(--koa-ink)]/68 hover:text-[var(--koa-ink)]';
-const button = overlay
-  ? 'border-white/60 text-white hover:bg-white hover:text-[var(--koa-ink)]'
-  : 'border-[var(--koa-forest)] text-[var(--koa-forest)] hover:bg-[var(--koa-forest)] hover:text-white';
+const position = overlay
+  ? 'absolute inset-x-0 top-0 z-50'
+  : 'relative z-50 bg-[var(--koa-ivory)] pb-4';
 ---
-<header class={shell}>
-  <div class="container-shell flex min-h-24 items-center justify-between gap-4 py-4">
-    <a href="/" class="flex min-w-0 items-center gap-3" aria-label="Koa's Events home">
-      <img src="/brand/koa-mark.png" width="52" height="52" alt="" class="size-12 rounded-full object-contain" />
-      <span class="min-w-0 leading-none">
-        <span class="display block truncate text-xl tracking-[0.01em] sm:text-2xl">Koa’s Events</span>
-        <span class:list={['mt-1.5 hidden text-[0.56rem] font-bold uppercase tracking-[0.18em] sm:block', overlay ? 'text-white/60' : 'text-[var(--koa-ink)]/48']}>Hawaiʻi Island · Venue + Mobile Bar</span>
-      </span>
-    </a>
+<header class:list={['site-header', position]}>
+  <div class="container-shell pt-4 sm:pt-5">
+    <div class="site-nav-shell">
+      <a href="/" class="site-brand" aria-label="Koa's Events home">
+        <span class="brand-medallion">
+          <img src="/brand/koa-mark.png" width="52" height="52" alt="" />
+        </span>
+        <span class="min-w-0">
+          <span class="site-brand-name block truncate">Koa’s Events</span>
+          <span class="site-brand-meta">Hawaiʻi Island · Venue + Mobile Bar</span>
+        </span>
+      </a>
 
-    <nav class="hidden items-center gap-5 xl:flex" aria-label="Primary navigation">
-      {nav.map((item) => <a class:list={['text-[0.69rem] font-bold tracking-[0.08em] transition', navColor]} href={item.href}>{item.label}</a>)}
-    </nav>
+      <nav class="hidden items-center gap-5 xl:flex" aria-label="Primary navigation">
+        {nav.map((item) => <a class="site-nav-link" href={item.href}>{item.label}</a>)}
+      </nav>
 
-    <div class="flex items-center gap-2">
-      <a href="/inquire/" class:list={['hidden rounded-full border px-5 py-3 text-[0.68rem] font-black uppercase tracking-[0.12em] transition sm:inline-flex', button]}>Check availability</a>
-      <details class="group relative xl:hidden">
-        <summary class:list={['cursor-pointer list-none rounded-full border px-4 py-3 text-[0.68rem] font-black uppercase tracking-[0.12em]', overlay ? 'border-white/60' : 'border-[var(--koa-line)]']}>Menu</summary>
-        <div class="fixed inset-x-3 top-24 z-[70] max-h-[calc(100svh-7rem)] overflow-auto rounded-[1.6rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-[var(--koa-ink)] shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-72">
-          <div class="mb-3 flex items-center gap-3 border-b border-[var(--koa-line)] pb-4">
-            <img src="/brand/koa-mark.png" width="44" height="44" alt="" class="size-11 rounded-full object-contain" />
-            <div><p class="display text-2xl">Koa’s Events</p><p class="text-[0.58rem] font-bold uppercase tracking-[.16em] text-[var(--koa-ink)]/45">Gather beautifully.</p></div>
+      <div class="flex items-center gap-2">
+        <a href="/inquire/" class="site-nav-cta hidden sm:inline-flex">Check availability</a>
+        <details class="group relative xl:hidden">
+          <summary class="site-menu-trigger">
+            <span class="site-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span>
+            <span>Menu</span>
+          </summary>
+          <div class="site-menu-panel fixed inset-x-3 top-[6.35rem] z-[70] max-h-[calc(100svh-7rem)] overflow-auto rounded-[1.35rem] p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-80">
+            <div class="mb-3 flex items-center gap-3 border-b border-[var(--koa-line)] pb-4">
+              <span class="brand-medallion !h-12 !w-12"><img src="/brand/koa-mark.png" width="42" height="42" alt="" /></span>
+              <div>
+                <p class="display text-2xl text-[var(--koa-forest)]">Koa’s Events</p>
+                <p class="mt-1 text-[0.58rem] font-bold uppercase tracking-[.17em] text-[var(--koa-clay)]">Gather beautifully.</p>
+              </div>
+            </div>
+            {nav.map((item) => <a class="block rounded-xl px-4 py-3 text-base font-semibold text-[var(--koa-ink)]/78 hover:bg-[var(--koa-sand)] hover:text-[var(--koa-forest)]" href={item.href}>{item.label}</a>)}
+            <div class="mt-3 grid gap-2 border-t border-[var(--koa-line)] pt-4">
+              <a class="site-nav-cta w-full" href="/inquire/">Check availability</a>
+              <a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="tel:+18448085627">844-808-KOAS</a>
+            </div>
           </div>
-          {nav.map((item) => <a class="block rounded-xl px-4 py-3 text-base font-semibold hover:bg-[var(--koa-sand)]" href={item.href}>{item.label}</a>)}
-          <div class="mt-3 grid gap-2 border-t border-[var(--koa-line)] pt-4">
-            <a class="rounded-xl bg-[var(--koa-forest)] px-4 py-3 text-center text-sm font-bold text-white" href="/inquire/">Check availability</a>
-            <a class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold" href="tel:+18448085627">844-808-KOAS</a>
-          </div>
-        </div>
-      </details>
+        </details>
+      </div>
     </div>
   </div>
 </header>
