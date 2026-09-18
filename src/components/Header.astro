@@ -1,0 +1,31 @@
+---
+const nav = [
+  { label: 'Venue', href: '#venue' },
+  { label: 'Mobile Bar', href: '#mobile-bar' },
+  { label: 'Weddings', href: '#celebrations' },
+  { label: 'Private Events', href: '#celebrations' },
+  { label: 'Corporate', href: '#celebrations' },
+  { label: 'Gallery', href: '#gallery' },
+];
+---
+<header class="absolute inset-x-0 top-0 z-50 border-b border-white/20 text-white">
+  <div class="container-shell flex h-24 items-center justify-between gap-6">
+    <a href="/" class="group flex items-center gap-3" aria-label="Koa's Events home">
+      <span class="grid size-10 place-items-center rounded-full border border-white/50 text-[0.68rem] font-black tracking-[0.16em] transition group-hover:bg-white group-hover:text-[var(--koa-ink)]">KE</span>
+      <span class="leading-none">
+        <span class="block font-semibold tracking-[0.14em]">KOA’S EVENTS</span>
+        <span class="mt-1 block text-[0.62rem] tracking-[0.22em] text-white/70">HAWAIʻI ISLAND</span>
+      </span>
+    </a>
+
+    <nav class="hidden items-center gap-6 xl:flex" aria-label="Primary navigation">
+      {nav.map((item) => (
+        <a class="text-xs font-bold tracking-[0.08em] text-white/85 transition hover:text-white" href={item.href}>{item.label}</a>
+      ))}
+    </nav>
+
+    <a href="#start-planning" class="rounded-full border border-white/60 px-5 py-3 text-xs font-black uppercase tracking-[0.12em] transition hover:bg-white hover:text-[var(--koa-ink)]">
+      Check availability
+    </a>
+  </div>
+</header>

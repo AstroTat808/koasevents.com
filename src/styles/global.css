@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+:root {
+  --koa-ink: #17231f;
+  --koa-forest: #1f4a3d;
+  --koa-moss: #60705d;
+  --koa-sand: #eee8dd;
+  --koa-ivory: #fbf8f1;
+  --koa-amber: #b77a45;
+  --koa-clay: #8f5b48;
+  --koa-line: rgba(23, 35, 31, 0.16);
+  --shadow-soft: 0 24px 70px rgba(23, 35, 31, 0.12);
+  --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  --font-sans: Inter, "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--koa-ivory);
+}
+
+body {
+  margin: 0;
+  color: var(--koa-ink);
+  background: var(--koa-ivory);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--koa-forest);
+  color: white;
+}
+
+.display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.035em;
+}
+
+.eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.container-shell {
+  width: min(100% - 2rem, 80rem);
+  margin-inline: auto;
+}
+
+.link-arrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  transition: gap 180ms ease;
+}
+
+.link-arrow:hover { gap: 0.9rem; }
+
+.koa-grain {
+  background-image:
+    radial-gradient(circle at 15% 30%, rgba(255,255,255,.45) 0 1px, transparent 1.5px),
+    radial-gradient(circle at 70% 20%, rgba(23,35,31,.08) 0 1px, transparent 1.5px);
+  background-size: 24px 24px, 31px 31px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
