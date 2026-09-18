@@ -6,10 +6,10 @@ import ResponsiveImage from '../components/ResponsiveImage.astro';
 import { businessRules } from '../data/businessRules';
 import { media } from '../data/media';
 
-const homepageLookbook = [media.weddingPortrait, media.receptionTable, media.bartenderDetail, media.eveningReception, media.privateEventDetail];
+const homepageLookbook = [media.tableSettings, media.rusticTableDetail, media.tropicalDining, media.tropicalBedroom, media.tropicalRoomView];
 
 const celebrations = [
-  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.plumeria },
+  { title: 'Weddings', copy: 'A private Hawaiʻi Island setting with room to make the day feel personal.', href: '/weddings/', image: media.weddingPortrait },
   { title: 'Private Events', copy: 'Milestones, showers, reunions and gatherings with a more intimate sense of place.', href: '/private-events/', image: media.gardenia },
   { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: media.orchid },
 ];
@@ -88,7 +88,7 @@ const schema = {
       </div>
       <div class="mt-14 grid gap-4 lg:grid-cols-3">
         <a href="/venue/" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
-          <ResponsiveImage {...media.venueWide} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <ResponsiveImage {...media.venueAtmosphere} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">01 · The venue</p><h3 class="display mt-3 text-4xl">Host at Koa’s</h3><p class="mt-3 text-sm leading-6 text-white/68">A private Mountain View property for weddings, celebrations and gatherings.</p></div>
         </a>
@@ -98,7 +98,7 @@ const schema = {
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">02 · Mobile Bar</p><h3 class="display mt-3 text-4xl">Bring Koa’s to you</h3><p class="mt-3 text-sm leading-6 text-white/68">Professional dry-bar service across Hawaiʻi Island.</p></div>
         </a>
         <a href="/inquire/?service=both" class="group relative min-h-[32rem] overflow-hidden rounded-[1.6rem] border border-white/10">
-          <ResponsiveImage {...media.plumeria} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
+          <ResponsiveImage {...media.eveningReception} width={900} height={1200} sizes="(min-width:1024px) 33vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
           <div class="absolute inset-0 bg-gradient-to-t from-[rgba(6,23,18,.92)] via-[rgba(6,23,18,.12)] to-transparent"></div>
           <div class="absolute inset-x-0 bottom-0 p-7"><p class="eyebrow text-[var(--koa-amber-light)]">03 · Combined</p><h3 class="display mt-3 text-4xl">Keep it connected</h3><p class="mt-3 text-sm leading-6 text-white/68">One inquiry, one shared plan, fewer loose ends.</p></div>
         </a>
@@ -133,7 +133,7 @@ const schema = {
         <div class="mt-8 flex flex-wrap gap-5"><a href="/mobile-bar/" class="link-arrow">Explore Mobile Bar →</a><a href="/mobile-bar/faq/" class="link-arrow">Read the FAQ →</a></div>
       </div>
       <div class="relative min-h-[42rem]">
-        <div class="absolute right-0 top-0 h-[35rem] w-[78%] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.mobileBar} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
+        <div class="absolute right-0 top-0 h-[35rem] w-[78%] overflow-hidden rounded-[2rem]"><ResponsiveImage {...media.bartenderDetail} width={1100} height={1400} sizes="(min-width:1024px) 48vw, 85vw" class="h-full w-full object-cover" /></div>
         <div class="absolute bottom-0 left-0 w-[58%] rounded-[1.4rem] bg-[var(--koa-forest)] p-7 text-white shadow-2xl"><p class="eyebrow text-[var(--koa-amber-light)]">Across Hawaiʻi Island</p><p class="display mt-3 text-3xl">Good drinks bring great people together.</p></div>
       </div>
     </div>

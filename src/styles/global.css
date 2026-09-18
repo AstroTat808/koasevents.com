@@ -405,3 +405,9 @@ form textarea {
     line-height: 1.35;
   }
 }
+
+
+/* Long-form readability refinement */
+main p.text-sm {
+  font-size: .9375rem;
+}
