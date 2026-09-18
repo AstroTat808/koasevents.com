@@ -1,0 +1,155 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import { businessRules } from '../../data/businessRules';
+
+const hero = 'https://static.wixstatic.com/media/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg/v1/fill/w_1400,h_934,al_c,q_88/02b2df_9f60cf7d8a484f3ebca38106e3ebc6e8~mv2.jpg';
+
+const packages = businessRules.mobileBar.packages;
+
+const framework = [
+  ['Service', businessRules.mobileBar.baseFramework.serviceDuration.value],
+  ['Guests', businessRules.mobileBar.baseFramework.guestCapacity.value],
+  ['Staffing', businessRules.mobileBar.baseFramework.staffing.value],
+  ['Travel', businessRules.mobileBar.baseFramework.travel.value],
+  ['Ice', businessRules.mobileBar.baseFramework.ice.value],
+  ['Mixers', businessRules.mobileBar.baseFramework.mixers.value],
+];
+
+const steps = [
+  { number: '01', title: 'Choose your service style', text: 'Start with beer and wine, add signature drinks, or build toward a fuller mixed-cocktail menu.' },
+  { number: '02', title: 'We help plan quantities', text: 'Because Koa’s operates as a dry bar, you purchase the alcohol. We help translate the guest count and menu into a practical shopping plan.' },
+  { number: '03', title: 'We bring the service', text: 'Koa’s handles the bar setup, service flow, tools, ice, mixers, garnishes and hospitality details included in your selected service.' },
+];
+
+const addOns = ['Champagne toast','Champagne tower wall','Upgraded tossware','Custom vinyl logo','Personalized stirrers','Drink accessories','Soda station','Juice / punch station','Coffee bar','Bar décor','Glassware','Acrylic bar menu'];
+
+const schema = {
+  '@context': 'https://schema.org',
+  '@type': 'LocalBusiness',
+  name: "Koa's Mobile Bar",
+  url: 'https://www.koasevents.com/mobile-bar/',
+  telephone: businessRules.contact.phone,
+  email: businessRules.contact.email,
+  areaServed: { '@type': 'AdministrativeArea', name: 'Hawaiʻi Island' },
+};
+---
+<BaseLayout
+  title="Koa’s Mobile Bar | Big Island Wedding & Event Bartending"
+  description="Bring Koa’s Mobile Bar to your Hawaiʻi Island wedding, private event or corporate gathering. Dry-bar packages, bartending, setup and planning support."
+  canonical="https://www.koasevents.com/mobile-bar/"
+>
+  <script type="application/ld+json" set:html={JSON.stringify(schema)} />
+  <main>
+    <section class="relative min-h-[82svh] overflow-hidden bg-[var(--koa-ink)] text-white">
+      <img src={hero} alt="Koa's Mobile Bar at an event on Hawaiʻi Island" class="absolute inset-0 h-full w-full object-cover opacity-68" fetchpriority="high" />
+      <div class="hero-shade absolute inset-0"></div>
+      <Header />
+      <div class="container-shell relative z-10 flex min-h-[82svh] items-end pb-16 pt-40 lg:pb-20">
+        <div class="max-w-4xl">
+          <p class="eyebrow text-white/62">Koa’s Mobile Bar · Hawaiʻi Island</p>
+          <h1 class="display mt-5 max-w-4xl text-6xl leading-[.92] sm:text-7xl lg:text-[6.6rem]">A polished bar experience, wherever you gather.</h1>
+          <p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Professional dry-bar service for weddings, private celebrations and corporate events across the Big Island—with planning support built into the experience.</p>
+          <div class="mt-9 flex flex-wrap gap-3">
+            <a href="/inquire/?service=mobile-bar" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[0.12em] text-[var(--koa-ink)] transition hover:bg-[var(--koa-sand)]">Get a bar quote</a>
+            <a href="#packages" class="rounded-full border border-white/55 px-6 py-3.5 text-xs font-black uppercase tracking-[0.12em] transition hover:bg-white/10">Compare packages</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="border-b border-[var(--koa-line)] bg-[var(--koa-sand)] py-5">
+      <div class="container-shell flex flex-wrap items-center justify-between gap-x-8 gap-y-3 text-[0.69rem] font-black uppercase tracking-[0.15em] text-[var(--koa-ink)]/64">
+        <span>Dry bar for hire</span><span>Big Island service</span><span>Weddings</span><span>Private events</span><span>Corporate events</span>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.76fr_1.24fr] lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">How the dry-bar model works</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">You provide the alcohol. We make the bar work.</h2>
+        </div>
+        <div class="grid border-t border-[var(--koa-line)]">
+          {steps.map((step) => (
+            <div class="grid gap-4 border-b border-[var(--koa-line)] py-7 sm:grid-cols-[3rem_1fr]">
+              <span class="eyebrow text-[var(--koa-clay)]">{step.number}</span>
+              <div>
+                <h3 class="display text-3xl">{step.title}</h3>
+                <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/68">{step.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
+      <div class="container-shell">
+        <div class="grid gap-8 lg:grid-cols-[.9fr_1.1fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-white/48">Current published packages</p>
+            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Start simple. Add only what makes the experience better.</h2>
+          </div>
+          <p class="max-w-xl text-sm leading-6 text-white/62 lg:justify-self-end">Package pricing below reflects the service levels currently published by Koa’s. Your final quote also accounts for event location, staffing, guest count, service time and selected add-ons.</p>
+        </div>
+
+        <div class="mt-14 grid gap-5 lg:grid-cols-3">
+          {packages.map((item, index) => (
+            <article class="flex min-h-[27rem] flex-col rounded-[1.6rem] border border-white/16 bg-white/[.055] p-7">
+              <span class="eyebrow text-[var(--koa-amber-light)]">0{index + 1}</span>
+              <h3 class="display mt-9 text-4xl">{item.name}</h3>
+              <p class="mt-2 text-xs font-black uppercase tracking-[.13em] text-white/55">Starting at {'$' + item.price.toLocaleString()}</p>
+              <ul class="mt-7 grid gap-3 text-sm leading-6 text-white/72">
+                {item.includes.map((included) => <li class="flex gap-3"><span class="text-[var(--koa-amber-light)]">—</span><span>{included}</span></li>)}
+              </ul>
+              <a href={'/inquire/?service=mobile-bar&package=' + item.name.toLowerCase().replace(' ', '-')} class="link-arrow mt-auto pt-8 text-white">Ask about {item.name} <span aria-hidden="true">→</span></a>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.76fr_1.24fr] lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Service framework</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Know the operating details before you fall in love with the setup.</h2>
+          <p class="mt-6 max-w-md text-sm leading-6 text-[var(--koa-ink)]/60">The pricing framework shown here comes from Koa’s current public Mobile Bar page. The gratuity language is intentionally excluded while two existing Koa’s sources are being reconciled.</p>
+        </div>
+        <div class="grid border-t border-[var(--koa-line)]">
+          {framework.map(([label, value]) => (
+            <div class="grid gap-2 border-b border-[var(--koa-line)] py-5 sm:grid-cols-[8rem_1fr]">
+              <span class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">{label}</span>
+              <span class="text-sm leading-6 text-[var(--koa-ink)]/68">{value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.76fr_1.24fr] lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Make it yours</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Add the pieces your event actually needs.</h2>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {addOns.map((item) => <div class="rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-5 py-4 text-sm font-semibold">{item}</div>)}
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-ink)] py-20 text-white">
+      <div class="container-shell flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+        <div class="max-w-3xl">
+          <p class="eyebrow text-white/45">Start with date, location and guest count</p>
+          <h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">We’ll build the bar plan from there.</h2>
+        </div>
+        <a href="/inquire/?service=mobile-bar" class="shrink-0 rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Get a quote</a>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>
