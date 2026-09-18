@@ -31,9 +31,9 @@ const schema = {
   <div class="grid gap-10 lg:grid-cols-[.78fr_1.22fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-amber-light)]">Move through the property</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">A blank canvas should still make the whole event easier.</h2></div><p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">Arrival, getting ready, ceremony, reception, bar service, weather planning and the end of the night all shape how the property feels. Styling shown throughout the site illustrates what is possible; florals, décor and rentals vary by event and by package.</p></div>
   <div class="mt-14 grid gap-4 lg:grid-cols-3">
     {[
-      ['Arrival + gathering','A private Mountain View setting that gives guests a clear sense of arrival and hosts room to shape the flow.',koaMarketingMedia.pavilionDaywide],
-      ['Open-air celebration','The pavilion provides a covered center for dining, dancing, entertainment and weather-aware planning.',koaMarketingMedia.pavilionReceptionWide],
-      ['After dark','Lighting, music and hospitality shift the property into a warmer evening atmosphere without losing the island setting.',koaMarketingMedia.pavilionFairyLights]
+      ['Arrival + gathering','A private Mountain View setting that gives guests a clear sense of arrival and hosts room to shape the flow.',koaMarketingMedia.pavilionTwilightFrontAlt],
+      ['Open-air celebration','The pavilion provides a covered center for dining, dancing, entertainment and weather-aware planning.',koaMarketingMedia.pavilionReceptionDaylightAlt],
+      ['After dark','Lighting, music and hospitality shift the property into a warmer evening atmosphere without losing the island setting.',koaMarketingMedia.pavilionNightExperienceCollage]
     ].map(([title,copy,image],i)=><article class="overflow-hidden rounded-[1.5rem] border border-white/12 bg-white/[.045]"><div class="relative h-56 sm:h-64 lg:h-72"><ResponsiveImage {...image} width={900} height={650} sizes="(min-width:1024px) 33vw, 100vw" class="h-full w-full object-cover" /></div><div class="p-7"><p class="eyebrow text-[var(--koa-amber-light)]">0{i+1}</p><h3 class="display mt-3 text-3xl">{title}</h3><p class="mt-3 text-sm leading-6 text-white/64">{copy}</p></div></article>)}
   </div>
 </div></section>
