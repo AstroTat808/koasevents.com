@@ -74,6 +74,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                     <input name="finalGuestCount" type="number" min="0" max="1000" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
                   </label>
                 </div>
+                <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <label class="grid gap-2 text-sm font-semibold">Venue / area
+                    <input name="venueArea" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Koa’s Events" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Setup start
+                    <input name="setupStart" type="time" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Guest arrival
+                    <input name="guestArrival" type="time" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Event start
+                    <input name="eventStart" type="time" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Event end
+                    <input name="eventEnd" type="time" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Teardown complete
+                    <input name="teardownEnd" type="time" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                </div>
                 <label class="grid gap-2 text-sm font-semibold">Operations notes
                   <textarea name="notes" rows="8" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Parking, access, rentals, VIP details, special handling, open decisions…"></textarea>
                 </label>
@@ -230,6 +250,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelector('[data-meta]').textContent=[entry.record.customer?.eventDate?dateLabel(entry.record.customer.eventDate):'',packageLabel(entry.record.packageId),entry.record.id].filter(Boolean).join(' · ');
       overviewForm.elements.status.value=entry.ops.status||'planning';
       overviewForm.elements.finalGuestCount.value=String(entry.ops.finalGuestCount||0);
+      overviewForm.elements.venueArea.value=entry.ops.venueArea||'Koa’s Events';
+      overviewForm.elements.setupStart.value=entry.ops.setupStart||'';
+      overviewForm.elements.guestArrival.value=entry.ops.guestArrival||'';
+      overviewForm.elements.eventStart.value=entry.ops.eventStart||'';
+      overviewForm.elements.eventEnd.value=entry.ops.eventEnd||'';
+      overviewForm.elements.teardownEnd.value=entry.ops.teardownEnd||'';
       overviewForm.elements.notes.value=entry.ops.notes||'';
       renderVendors();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
     }
@@ -338,7 +364,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     document.querySelectorAll('[data-tab]').forEach((button)=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
-    overviewForm?.addEventListener('submit',async(e)=>{e.preventDefault();saveMessage.textContent='Saving…';try{await saveSection('save-overview',{status:overviewForm.elements.status.value,finalGuestCount:Number(overviewForm.elements.finalGuestCount.value||0),notes:overviewForm.elements.notes.value});saveMessage.textContent='Saved.';}catch(err){saveMessage.textContent=err.message||'Unable to save.';}});
+    overviewForm?.addEventListener('submit',async(e)=>{e.preventDefault();saveMessage.textContent='Saving…';try{await saveSection('save-overview',{status:overviewForm.elements.status.value,finalGuestCount:Number(overviewForm.elements.finalGuestCount.value||0),venueArea:overviewForm.elements.venueArea.value,setupStart:overviewForm.elements.setupStart.value,guestArrival:overviewForm.elements.guestArrival.value,eventStart:overviewForm.elements.eventStart.value,eventEnd:overviewForm.elements.eventEnd.value,teardownEnd:overviewForm.elements.teardownEnd.value,notes:overviewForm.elements.notes.value});saveMessage.textContent='Saved.';}catch(err){saveMessage.textContent=err.message||'Unable to save.';}});
     document.querySelector('[data-add-vendor]')?.addEventListener('click',()=>{if(vendorsEl.querySelector('p'))vendorsEl.innerHTML='';vendorsEl.appendChild(vendorRow());});
     document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{await saveSection('save-vendors',{vendors:collectVendors()});selected.ops.vendors=collectVendors();renderVendors();renderSummary();});
     document.querySelector('[data-save-questionnaire]')?.addEventListener('click',async()=>{await saveSection('save-questionnaire',{questionnaire:collectQuestionnaire()});renderQuestionnaire();});
