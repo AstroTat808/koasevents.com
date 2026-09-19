@@ -305,6 +305,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[2fr_.55fr_.8fr_auto] lg:items-end';
       row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Description<input data-line-description class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Qty<input data-line-quantity type="number" min="1" step="1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Unit price<input data-line-price type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><button type="button" data-remove-line class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
       row.dataset.lineId=line.id||'line-'+Date.now();
+      row.dataset.custom=String(Boolean(line.custom));
       row.querySelector('[data-line-description]').value=line.description||'';
       row.querySelector('[data-line-quantity]').value=String(line.quantity||1);
       row.querySelector('[data-line-price]').value=String(line.unitPrice||0);
@@ -324,7 +325,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function proposalLines() {
-      return [...lineItems.children].map((row)=>({id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice:Number(row.querySelector('[data-line-price]').value||0),custom:false}));
+      return [...lineItems.children].map((row)=>{
+        const unitPrice=Number(row.querySelector('[data-line-price]').value||0);
+        return {id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice,custom:row.dataset.custom==='true' && unitPrice<=0};
+      });
     }
     function proposalPayments() {
       return [...paymentItems.children].map((row)=>({label:row.querySelector('[data-payment-label]').value,dueDate:row.querySelector('[data-payment-date]').value,amount:Number(row.querySelector('[data-payment-amount]').value||0)}));
@@ -393,7 +397,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       event.preventDefault();const data=new FormData(convertForm);convertMessage.textContent='Creating…';
       try{
         const result=await api({action:'convert',quoteId:data.get('quoteId'),kind:data.get('kind'),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}});
-        convertMessage.textContent='Created '+result.record.id+'.'; setTimeout(()=>convertDialog.close(),500); await load(String(searchInput?.value||'').trim());
+        convertMessage.textContent=(result.reused?'Existing record opened: ':'Created ')+result.record.id+'.'; setTimeout(()=>convertDialog.close(),500); await load(String(searchInput?.value||'').trim());
         if(result.record.kind==='proposal') openProposal(result.record);
       }catch(error){convertMessage.textContent=error.message||'Unable to create record.';}
     });
