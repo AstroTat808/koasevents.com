@@ -49,12 +49,12 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
 
         <div class="mt-12 space-y-14 sm:mt-16 sm:space-y-16">
           {grouped.map((group) => (
-            <section>
+            <section data-gallery-section={group.category}>
               <div class="mb-5 flex items-end justify-between gap-4 border-b border-white/12 pb-4 sm:mb-6">
                 <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-[2.1rem] leading-none sm:text-4xl">{group.images.length} photos</h3></div>
                 <span class="pb-1 text-[.62rem] font-bold uppercase tracking-[.14em] text-white/38 sm:hidden">Swipe →</span>
               </div>
-              <div class="-mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
+              <div data-gallery-category-grid={group.category} class="-mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
                 {group.images.map((image, categoryIndex) => {
                   const globalIndex = koaMarketingGallery.indexOf(image);
                   const editorialClass =
@@ -66,7 +66,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
                     categoryIndex % 6 === 5 ? 'lg:col-span-4 lg:row-span-2' :
                     'lg:col-span-4 lg:row-span-2';
                   return (
-                    <button type="button" class:list={['gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-white/5 shadow-[0_16px_36px_rgba(0,0,0,.2)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[18rem] sm:rounded-[1.2rem] sm:shadow-none', editorialClass]} data-gallery-index={globalIndex} data-gallery-src={image.src}>
+                    <button type="button" class:list={['gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-white/5 shadow-[0_16px_36px_rgba(0,0,0,.2)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[18rem] sm:rounded-[1.2rem] sm:shadow-none', editorialClass]} data-gallery-index={globalIndex} data-gallery-src={image.src} data-gallery-category={group.category}>
                       <ResponsiveImage {...image} width={1200} height={900} sizes="(min-width:1024px) 38vw, (min-width:640px) 50vw, 100vw" class="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]" />
                       <span class="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"></span>
                       <span class="absolute bottom-4 left-4 max-w-[calc(100%-2rem)] text-left text-[.72rem] font-semibold leading-5 text-white/92 sm:max-w-[80%] sm:text-xs">{image.alt}</span>
@@ -173,25 +173,44 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
 
     fetch('/api/gallery')
       .then((response) => response.json())
-      .then(({ uploads = [], hiddenCurated = [] }) => {
+      .then(({ uploads = [], hiddenCurated = [], curatedEdits = {} }) => {
         const hidden = new Set(hiddenCurated);
-        document.querySelectorAll('[data-gallery-src]').forEach((button) => {
-          if (hidden.has(button.dataset.gallerySrc)) button.classList.add('hidden');
-        });
 
-        const managedSection = document.querySelector('[data-managed-gallery]');
-        const managedGrid = document.querySelector('[data-managed-gallery-grid]');
-        if (!uploads.length || !managedGrid) return;
-        managedSection?.classList.remove('hidden');
+        document.querySelectorAll('[data-gallery-src]').forEach((button) => {
+          const src = button.dataset.gallerySrc;
+          if (!src) return;
+
+          if (hidden.has(src)) {
+            button.classList.add('hidden');
+            return;
+          }
+
+          const edit = curatedEdits[src] || {};
+          const img = button.querySelector('img');
+          if (img) {
+            const x = Number.isFinite(Number(edit.focalX)) ? Number(edit.focalX) : 50;
+            const y = Number.isFinite(Number(edit.focalY)) ? Number(edit.focalY) : 50;
+            img.style.objectPosition = x + '% ' + y + '%';
+          }
+
+          const targetCategory = edit.category || button.dataset.galleryCategory;
+          const targetGrid = targetCategory ? document.querySelector('[data-gallery-category-grid="' + CSS.escape(targetCategory) + '"]') : null;
+          if (targetGrid && button.parentElement !== targetGrid) targetGrid.append(button);
+        });
 
         uploads.forEach((item) => {
           const index = lightboxImages.length;
           lightboxImages.push({ src: item.src, alt: item.alt });
 
+          const targetGrid = document.querySelector('[data-gallery-category-grid="' + CSS.escape(item.category || 'Venue') + '"]');
+          if (!targetGrid) return;
+
           const button = document.createElement('button');
           button.type = 'button';
           button.dataset.galleryIndex = String(index);
-          button.className = 'gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-[var(--koa-sand)] shadow-[0_16px_36px_rgba(0,0,0,.12)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[20rem] sm:rounded-[1.2rem] sm:shadow-none';
+          button.dataset.gallerySrc = item.src;
+          button.dataset.galleryCategory = item.category || 'Venue';
+          button.className = 'gallery-trigger group relative aspect-[4/5] w-[82vw] max-w-[22rem] shrink-0 snap-start overflow-hidden rounded-[1.35rem] bg-white/5 shadow-[0_16px_36px_rgba(0,0,0,.2)] sm:aspect-auto sm:w-auto sm:max-w-none sm:shrink sm:min-h-[18rem] sm:rounded-[1.2rem] sm:shadow-none lg:col-span-4 lg:row-span-2';
 
           const img = document.createElement('img');
           img.src = item.src;
@@ -199,6 +218,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
           img.loading = 'lazy';
           img.decoding = 'async';
           img.className = 'absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-[1.025]';
+          img.style.objectPosition = (item.focalX ?? 50) + '% ' + (item.focalY ?? 50) + '%';
 
           const shade = document.createElement('span');
           shade.className = 'absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent';
@@ -209,7 +229,15 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
 
           button.append(img, shade, label);
           button.addEventListener('click', () => show(index));
-          managedGrid.append(button);
+          targetGrid.append(button);
+        });
+
+        document.querySelectorAll('[data-gallery-section]').forEach((section) => {
+          const grid = section.querySelector('[data-gallery-category-grid]');
+          const count = grid ? [...grid.children].filter((child) => !child.classList.contains('hidden')).length : 0;
+          const heading = section.querySelector('h3');
+          if (heading) heading.textContent = count + (count === 1 ? ' photo' : ' photos');
+          section.classList.toggle('hidden', count === 0);
         });
       })
       .catch(() => {});
