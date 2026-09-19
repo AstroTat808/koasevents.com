@@ -45,6 +45,18 @@ KNOWN_POSTS = [
     "https://sibel122.wixsite.com/koas-events/post/i-m-engaged-now-what",
 ]
 
+FEATURED_OVERRIDES = {
+    "big-island-rainforest-wedding-venue-guide-how-to-plan-an-intimate-celebration-in-mountain-view-haw": "/media/koa/ceremony-live-wide.webp",
+    "koa-s-mobile-bar-frequently-asked-questions": "/media/koa/mobile-bar-guest-service.webp",
+    "the-comprehensive-a-z-wedding-glossary-for-brides-koa-s-events-edition": "/media/koa/pavilion-reception-wide.webp",
+    "5-biggest-bachelorette-party-mistakes-and-how-to-avoid-them": "/media/koa/tropical-brunch.webp",
+    "real-brides-share-their-wedding-bachelorette-pain-points-and-how-koa-s-events-can-help-you-avoid": "/media/koa/bridal-suite-wedding-ready.webp",
+    "micro-weddings-vs-traditional-weddings-choosing-the-perfect-style-for-your-special-day-at-koa-s-ev": "/media/koa/ceremony-vows-closeup.webp",
+    "how-to-have-a-beautiful-5-000-wedding-at-koa-s-events": "/media/koa/pavilion-reception-daylight-alt.webp",
+    "the-art-of-aloha-infusing-hawaiian-culture-into-modern-wedding": "/media/koa/ceremony-setup-tropical.webp",
+    "i-m-engaged-now-what": "/media/koa/pavilion-stairs-romantic.webp",
+}
+
 FALLBACK_DATES = {
     "big-island-rainforest-wedding-venue-guide-how-to-plan-an-intimate-celebration-in-mountain-view-haw": "2026-02-04T12:00:00Z",
     "koa-s-mobile-bar-frequently-asked-questions": "2026-02-03T12:00:00Z",
@@ -469,10 +481,12 @@ def parse_post(url: str) -> dict:
         shutil.rmtree(folder)
 
     cache: dict[str, str] = {}
-    feature_url = extract_feature_url(ld, soup)
-    if not feature_url:
-        raise RuntimeError("missing featured image URL")
-    featured_image = download_image(feature_url, slug, "featured", cache)
+    featured_image = FEATURED_OVERRIDES.get(slug, "")
+    if not featured_image:
+        feature_url = extract_feature_url(ld, soup)
+        if not feature_url:
+            raise RuntimeError("missing featured image URL")
+        featured_image = download_image(feature_url, slug, "featured", cache)
 
     node = choose_content_node(soup)
     body_html, body, inline_images = sanitize_and_localize(node, slug, original_title, cache)
@@ -591,7 +605,7 @@ def verify(posts: list[dict]):
 
     failures = []
     for post in posts:
-        if not post["featuredImage"].startswith("/media/blog/"):
+        if not post["featuredImage"].startswith("/media/"):
             failures.append(f"{post['slug']}: featured image is not local")
         local_feature = Path("public") / post["featuredImage"].lstrip("/")
         if not local_feature.exists():
