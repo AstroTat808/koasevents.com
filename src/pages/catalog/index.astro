@@ -38,6 +38,7 @@ const catalogClientData = catalogItems.map((item) => ({
   bundleEligible: Boolean(item.bundleEligible),
   includedWith: item.includedWith || [],
   priceLabel: item.priceLabel,
+  priceType: item.priceType,
   quantityMode: item.quantityMode || null,
   quantityLabel: item.quantityLabel || item.name,
   estimatedUnitPrice: item.estimatedUnitPrice || null,
@@ -55,9 +56,12 @@ const packageRuleById = {
 const packagePlanningData = Object.fromEntries(
   Object.entries(packageRuleById).map(([id, pkg]) => [id, pkg ? {
     name: pkg.publicName,
+    price: pkg.price,
+    access: pkg.access,
     includedInventory: pkg.includedInventory,
     includedFurnitureCoverage: pkg.includedFurnitureCoverage,
     baseConfiguration: pkg.baseConfiguration,
+    includes: [...pkg.includes],
     planningInventory: pkg.planningInventory || null,
   } : null])
 );
