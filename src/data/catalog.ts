@@ -72,7 +72,7 @@ export const catalogItems: CatalogItem[] = [
     name: 'Hibiscus Wedding Collection',
     description: 'Weekend wedding collection with furniture included for 10 guests; added rentals can expand the configuration up to the 100-person venue maximum.',
     priceType: 'starting',
-    priceLabel: 'Starting at $8,000',
+    priceLabel: 'Starting at $15,000',
     keywords: ['weekend', 'cottage', 'wedding'],
   },
   {
@@ -81,7 +81,7 @@ export const catalogItems: CatalogItem[] = [
     name: 'Orchid Wedding Collection',
     description: 'One-day venue collection with furniture included for 10 guests; added rentals can expand the configuration up to the 100-person venue maximum.',
     priceType: 'starting',
-    priceLabel: 'Starting at $3,000',
+    priceLabel: 'Starting at $10,000',
     keywords: ['one day', 'venue', 'wedding'],
   },
   {
@@ -90,7 +90,7 @@ export const catalogItems: CatalogItem[] = [
     name: 'Gardenia Wedding Collection',
     description: 'Three-hour Sunday–Thursday intimate wedding collection with furniture included for 10 guests; larger weekday celebrations require a custom quote.',
     priceType: 'starting',
-    priceLabel: 'Starting at $1,500',
+    priceLabel: 'Starting at $5,000',
     keywords: ['weekday', 'elopement', 'intimate'],
   },
 
