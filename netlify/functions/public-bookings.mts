@@ -119,6 +119,29 @@ function ensureBooking(record: any) {
 function publicBooking(record: any) {
   const booking = ensureBooking(record);
   const proposal = record.proposal || {};
+  const invoices = Array.isArray(record?.accounting?.quickbooks?.invoices)
+    ? record.accounting.quickbooks.invoices
+    : [];
+
+  const payments = (booking.payments || []).map((item: any) => {
+    const invoice = invoices.find((row: any) => row.paymentId === item.id);
+    const balance = invoice?.invoiceId
+      ? Number(invoice.balance ?? invoice.amount ?? item.amount ?? 0)
+      : Number(item.amount || 0);
+    return {
+      id: item.id,
+      label: item.label,
+      dueDate: item.dueDate,
+      amount: Number(item.amount || 0),
+      status: !invoice?.invoiceId ? 'not_invoiced' : balance <= 0 ? 'paid' : 'open',
+      invoiceId: invoice?.invoiceId || '',
+      docNumber: invoice?.docNumber || '',
+      balance,
+      emailStatus: invoice?.emailStatus || '',
+      lastSyncedAt: invoice?.lastSyncedAt || '',
+    };
+  });
+
   return {
     id: record.id,
     status: booking.status,
@@ -136,17 +159,8 @@ function publicBooking(record: any) {
       signature: booking.contract?.signature || null,
       koaSignature: booking.contract?.koaSignature || null,
     },
-    payments: (booking.payments || []).map((item: any) => ({
-      id: item.id,
-      label: item.label,
-      dueDate: item.dueDate,
-      amount: Number(item.amount || 0),
-      status: item.status || 'pending',
-      paidAt: item.paidAt || '',
-      reference: item.reference || '',
-      paymentUrl: item.paymentUrl || '',
-    })),
-    onlinePaymentConfigured: Boolean((booking.payments || []).some((item: any) => item.paymentUrl)),
+    payments,
+    accountingProvider: 'QuickBooks Online',
   };
 }
 
