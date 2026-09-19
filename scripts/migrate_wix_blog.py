@@ -325,10 +325,32 @@ def download_image(remote_url: str, slug: str, label: str, cache: dict[str, str]
     if remote_url in cache:
         return cache[remote_url]
 
-    response = get(remote_url)
+    candidates = [remote_url]
+    if "static.wixstatic.com" in remote_url and "/v1/" in remote_url:
+        # Wix occasionally emits an invalid zero-dimension transform URL
+        # (for example /v1/fit/w_0,h_0,...). The original media object before
+        # /v1/ remains fetchable and is the highest-quality source.
+        original_media = remote_url.split("/v1/", 1)[0]
+        if original_media not in candidates:
+            candidates.append(original_media)
+
+    response = None
+    last_error = None
+    resolved_url = remote_url
+    for candidate in candidates:
+        try:
+            response = get(candidate)
+            resolved_url = candidate
+            break
+        except Exception as exc:
+            last_error = exc
+
+    if response is None:
+        raise RuntimeError(f"failed to download image {remote_url}: {last_error}")
+
     folder = IMAGE_ROOT / slug
     folder.mkdir(parents=True, exist_ok=True)
-    ext = extension_for(response, remote_url)
+    ext = extension_for(response, resolved_url)
     digest = hashlib.sha1(remote_url.encode("utf-8")).hexdigest()[:10]
     safe_label = re.sub(r"[^a-z0-9-]+", "-", label.lower()).strip("-") or "image"
     path = folder / f"{safe_label}-{digest}{ext}"
