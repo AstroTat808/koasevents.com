@@ -57,6 +57,7 @@ const catalogClientData = catalogItems.map((item) => ({
   priceLabel: item.priceLabel,
   quantityMode: item.quantityMode || null,
   quantityLabel: item.quantityLabel || item.name,
+  specs: item.specs || [],
 }));
 const bundleClientData = catalogBundles;
 const tierClientData = bundleSavingsTiers;
@@ -196,6 +197,10 @@ const badgeClass = {
                     ))}
                   </div>
                 )}
+                <div data-package-inclusion class="mt-5 hidden rounded-xl border border-[var(--koa-forest)]/20 bg-[var(--koa-sand)] px-4 py-3">
+                  <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Included in your package</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/62" data-package-inclusion-detail></p>
+                </div>
                 <h3 class:list={['display text-3xl leading-[1.03]', item.badges?.length ? 'mt-5' : 'mt-7']}>{item.name}</h3>
                 <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/62">{item.description}</p>
                 {item.note && <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/42">{item.note}</p>}
@@ -300,13 +305,14 @@ const badgeClass = {
 
         <div class="mt-12 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           {catalogBundles.map((bundle) => (
-            <article class="flex min-h-[21rem] flex-col rounded-[1.4rem] border border-white/12 bg-white/[.05] p-6">
+            <article data-bundle-card={bundle.id} class="flex min-h-[21rem] flex-col rounded-[1.4rem] border border-white/12 bg-white/[.05] p-6">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="eyebrow text-[var(--koa-amber-light)]">{bundle.eyebrow}</span>
                 {bundle.badge && <span class="rounded-full bg-white/10 px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
               </div>
               <h3 class="display mt-6 text-4xl">{bundle.name}</h3>
               <p class="mt-4 text-sm leading-6 text-white/62">{bundle.description}</p>
+              <p class="mt-4 hidden rounded-lg border border-white/10 bg-white/[.05] px-3 py-2 text-xs leading-5 text-white/62" data-bundle-package-status></p>
               <div class="mt-5 flex flex-wrap gap-2">
                 {bundle.itemIds.map((id) => {
                   const item = catalogItems.find((entry) => entry.id === id);
@@ -373,6 +379,7 @@ const badgeClass = {
     const filterButtons = [...document.querySelectorAll('[data-catalog-filters] [data-category]')];
     const cards = [...document.querySelectorAll('[data-catalog-item]')];
     const bundleButtons = [...document.querySelectorAll('[data-add-bundle]')];
+    const bundleCards = [...document.querySelectorAll('[data-bundle-card]')];
     const search = document.querySelector('[data-catalog-search]');
     const count = document.querySelector('[data-catalog-count]');
     const empty = document.querySelector('[data-catalog-empty]');
@@ -448,10 +455,8 @@ const badgeClass = {
           ? 'À la carte'
           : (packageItem?.name || 'Choose a package or à la carte above.');
       }
-      cards.forEach((card) => {
-        const cardId = card.dataset.id;
-        if (cardId) setItemButtonState(cardId, selected.has(cardId));
-      });
+      refreshPackageInclusions();
+      refreshBundleAvailability();
       syncQuote();
     }
 
@@ -504,6 +509,84 @@ const badgeClass = {
         item.includedWith.includes(name) ||
         item.includedWith.includes(name + ' Wedding Experience')
       );
+    }
+
+    function selectedPackageDisplayName() {
+      if (!startingPoint || startingPoint === 'ala-carte') return '';
+      const item = itemById.get(startingPoint);
+      return item?.name || '';
+    }
+
+    function knownIncludedQuantity(item) {
+      if (!item || startingPoint !== 'signature-wedding') return '';
+      const spec = (item.specs || []).find((entry) =>
+        String(entry.label || '').toLowerCase().includes('signature includes')
+      );
+      return spec?.value || '';
+    }
+
+    function refreshPackageInclusions() {
+      cards.forEach((card) => {
+        const id = card.dataset.id;
+        const item = id ? itemById.get(id) : null;
+        const panel = card.querySelector('[data-package-inclusion]');
+        const detail = card.querySelector('[data-package-inclusion-detail]');
+        const included = item ? isIncludedBySelectedPackage(item) : false;
+
+        panel?.classList.toggle('hidden', !included);
+        if (included && detail) {
+          const quantity = knownIncludedQuantity(item);
+          const pkg = selectedPackageDisplayName();
+          detail.textContent = quantity
+            ? quantity + ' included with ' + pkg + '. Add more only if your event needs additional inventory.'
+            : 'Included with ' + pkg + '. Add more only if your event needs additional inventory.';
+        }
+
+        if (id) setItemButtonState(id, selected.has(id));
+      });
+    }
+
+    function refreshBundleAvailability() {
+      bundleCards.forEach((card) => {
+        const bundle = bundleClientData.find((entry) => entry.id === card.dataset.bundleCard);
+        if (!bundle) return;
+
+        const includedIds = bundle.itemIds.filter((id) => {
+          const item = itemById.get(id);
+          return item ? isIncludedBySelectedPackage(item) : false;
+        });
+        const paidIds = bundle.itemIds.filter((id) => !includedIds.includes(id));
+        const status = card.querySelector('[data-bundle-package-status]');
+        const button = card.querySelector('[data-add-bundle]');
+
+        if (!status || !button) return;
+
+        if (!startingPoint || startingPoint === 'ala-carte' || includedIds.length === 0) {
+          status.classList.add('hidden');
+          button.disabled = false;
+          button.textContent = 'Add bundle +';
+          button.classList.remove('opacity-45');
+          return;
+        }
+
+        status.classList.remove('hidden');
+
+        if (paidIds.length === 0) {
+          status.textContent = 'Everything in this bundle is already included with your selected package.';
+          button.disabled = true;
+          button.textContent = 'Already included';
+          button.classList.add('opacity-45');
+        } else {
+          const includedNames = includedIds
+            .map((id) => itemById.get(id)?.name)
+            .filter(Boolean)
+            .join(', ');
+          status.textContent = includedNames + ' already included. Adding this bundle will add only the remaining paid items.';
+          button.disabled = false;
+          button.textContent = 'Add remaining items +';
+          button.classList.remove('opacity-45');
+        }
+      });
     }
 
     function calculateSavings() {
@@ -728,6 +811,8 @@ const badgeClass = {
 
     if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
     applyFilters();
+    refreshPackageInclusions();
+    refreshBundleAvailability();
     syncSuggestedQuantities();
   </script>
 </BaseLayout>
