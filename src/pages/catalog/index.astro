@@ -96,7 +96,7 @@ const badgeClass = {
           <div class="mt-6 grid gap-5">
             <div class="grid grid-cols-[2.4rem_1fr] gap-4">
               <span class="display text-3xl text-[var(--koa-amber-light)]">01</span>
-              <div><p class="text-lg font-bold leading-6">Choose your starting point</p><p class="mt-1 text-sm leading-6 text-white/58">Select the wedding package—or choose à la carte—once at the top.</p></div>
+              <div><p class="text-lg font-bold leading-6">Choose your starting point</p><p class="mt-1 text-sm leading-6 text-white/58">Choose the wedding collection that best fits your event.</p></div>
             </div>
             <div class="grid grid-cols-[2.4rem_1fr] gap-4 border-t border-white/10 pt-5">
               <span class="display text-3xl text-[var(--koa-amber-light)]">02</span>
@@ -157,13 +157,6 @@ const badgeClass = {
               )}
             </button>
           ))}
-          <button type="button" data-starting-point="ala-carte" aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
-            <span data-selected-indicator class="absolute right-5 top-5 hidden rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em] text-white">Selected</span>
-            <span class="eyebrow pr-20 text-[var(--koa-clay)]">Build from scratch</span>
-            <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">À la carte</span>
-            <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Custom quote</span>
-            <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">Skip a wedding collection and build the event from bundles and individual rentals below.</span>
-          </button>
         </div>
 
         <div class="mt-4 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
@@ -341,7 +334,7 @@ const badgeClass = {
             <p class="mt-3 text-sm leading-6 text-white/58">Your starting point stays separate from the rentals and enhancements you add below.</p>
             <div class="mt-6 rounded-xl border border-white/12 bg-white/[.04] p-4" data-quote-starting-point>
               <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Starting point</p>
-              <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a package or à la carte above.</p>
+              <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a wedding collection above.</p>
               <p class="mt-2 hidden text-xs font-bold text-white/72" data-quote-base-price></p>
               <div class="mt-4 hidden border-t border-white/10 pt-4" data-quote-package-includes>
                 <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-white/42">Included in the package</p>
@@ -588,7 +581,7 @@ const badgeClass = {
     }
 
     function trackPackageView(packageId) {
-      if (!packageId || packageId === 'ala-carte') return;
+      if (!packageId) return;
       fetch('/api/crm/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -615,7 +608,7 @@ const badgeClass = {
 
     function renderSelectedPackageDetails() {
       const plan = selectedPackagePlan();
-      const hasPackage = Boolean(plan && startingPoint !== 'ala-carte');
+      const hasPackage = Boolean(plan);
 
       selectedPackageDetails?.classList.toggle('hidden', !hasPackage);
       quotePackageIncludes?.classList.toggle('hidden', !hasPackage);
@@ -686,7 +679,7 @@ const badgeClass = {
     }
 
     function autoRequiredItemIds() {
-      if (!selectedPackagePlan() || startingPoint === 'ala-carte') return [];
+      if (!selectedPackagePlan()) return [];
       const ids = ['ceremony-chair', 'reception-chair'];
       if (startingPoint === 'gardenia' || startingPoint === 'hibiscus' || startingPoint === 'signature-wedding') {
         ids.push('round-table');
@@ -779,14 +772,10 @@ const badgeClass = {
 
       startingSummary?.classList.remove('hidden');
       if (startingSummaryText) {
-        startingSummaryText.textContent = id === 'ala-carte'
-          ? 'À la carte selected. Build with bundles and individual rentals below.'
-          : (packageItem?.name || id) + ' selected. Included items are recognized automatically, and guest-count furniture add-ons are preselected when your entered attendance exceeds the package allowance.';
+        startingSummaryText.textContent = (packageItem?.name || id) + ' selected. Included items are recognized automatically, and guest-count furniture add-ons are preselected when your entered attendance exceeds the package allowance.';
       }
       if (quoteStartingPointLabel) {
-        quoteStartingPointLabel.textContent = id === 'ala-carte'
-          ? 'À la carte'
-          : (packageItem?.name || 'Choose a package or à la carte above.');
+        quoteStartingPointLabel.textContent = packageItem?.name || 'Choose a wedding collection above.';
       }
       renderSelectedPackageDetails();
       refreshPackageInclusions();
@@ -795,9 +784,7 @@ const badgeClass = {
       syncSuggestedQuantities();
 
       window.setTimeout(() => {
-        const target = id === 'ala-carte'
-          ? document.querySelector('[data-catalog-filters]')
-          : selectedPackageDetails;
+        const target = selectedPackageDetails;
         target?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
@@ -880,7 +867,7 @@ const badgeClass = {
     }
 
     function selectedPackageDisplayName() {
-      if (!startingPoint || startingPoint === 'ala-carte') return '';
+      if (!startingPoint) return '';
       return itemById.get(startingPoint)?.name || '';
     }
 
@@ -888,7 +875,7 @@ const badgeClass = {
       const plan = selectedPackagePlan();
       const guests = guestCount();
 
-      if (!plan || startingPoint === 'ala-carte') {
+      if (!plan) {
         guestAdjustment?.classList.add('hidden');
         return;
       }
@@ -1022,7 +1009,7 @@ const badgeClass = {
         const savingsLabel = card.querySelector('[data-bundle-savings-label]');
         if (!status || !button || !savingsLabel) return;
 
-        if (!startingPoint || startingPoint === 'ala-carte' || includedIds.length === 0) {
+        if (!startingPoint || includedIds.length === 0) {
           status.classList.add('hidden');
           savingsLabel.textContent = 'Up to ' + bundle.savingsPercent + '% bundle savings';
           button.disabled = false;
@@ -1181,9 +1168,6 @@ const badgeClass = {
 
     function packageCustomQuoteNotes(entries = [...selected.entries()]) {
       const notes = [];
-      if (startingPoint === 'ala-carte') {
-        notes.push('À la carte events are finalized as a custom quote.');
-      }
       if (startingPoint === 'gardenia' && guestCount() > 10) {
         notes.push('Gardenia celebrations above 10 guests require a custom package quote; the furniture estimate is a planning aid, not the full larger-event price.');
       }
@@ -1292,7 +1276,7 @@ const badgeClass = {
 
       if (continueInquiry) {
         const params = new URLSearchParams();
-        if (startingPoint && startingPoint !== 'ala-carte') {
+        if (startingPoint) {
           params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
         }
         params.set('guests', String(guestCount()));
@@ -1396,7 +1380,7 @@ const badgeClass = {
     async function saveCurrentQuote() {
       if (!startingPoint) {
         if (saveQuoteError) {
-          saveQuoteError.textContent = 'Choose a wedding package or À la carte before saving.';
+          saveQuoteError.textContent = 'Choose a wedding collection before saving.';
           saveQuoteError.classList.remove('hidden');
         }
         document.querySelector('#start-building')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
