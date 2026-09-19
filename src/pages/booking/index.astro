@@ -1,0 +1,201 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+---
+<BaseLayout noindex title="Koa’s Events Booking Agreement" description="Review and sign your Koa’s Events booking agreement." canonical="https://www.koasevents.com/booking/">
+  <Header overlay={false} />
+  <main class="min-h-[70vh] bg-[var(--koa-sand)] py-12 lg:py-20">
+    <div class="container-shell max-w-5xl">
+      <div data-loading class="rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <h1 class="display mt-4 text-5xl">Loading your booking agreement…</h1>
+      </div>
+
+      <div data-error class="hidden rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Booking</p>
+        <h1 class="display mt-4 text-5xl">This booking link is not available.</h1>
+        <p data-error-copy class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62"></p>
+      </div>
+
+      <article data-booking class="hidden overflow-hidden rounded-[1.8rem] bg-white shadow-[var(--shadow-soft)]">
+        <header class="bg-[var(--koa-forest)] p-7 text-white sm:p-10">
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Accepted proposal → booking</p>
+              <h1 class="display mt-4 text-5xl sm:text-6xl">Complete your booking.</h1>
+              <p data-client-name class="mt-4 text-base text-white/72"></p>
+            </div>
+            <div class="rounded-2xl border border-white/14 bg-white/[.06] px-5 py-4">
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Booking status</p>
+              <p data-status class="mt-2 text-sm font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]"></p>
+              <p data-event-date class="mt-2 text-xs text-white/55"></p>
+            </div>
+          </div>
+        </header>
+
+        <div class="grid gap-8 p-7 sm:p-10">
+          <section class="grid gap-4 sm:grid-cols-3">
+            <div class="rounded-2xl bg-[var(--koa-sand)] p-5">
+              <p class="eyebrow text-[var(--koa-clay)]">Proposal</p>
+              <p data-proposal-id class="mt-3 font-mono text-sm font-bold text-[var(--koa-forest)]"></p>
+            </div>
+            <div class="rounded-2xl bg-[var(--koa-sand)] p-5">
+              <p class="eyebrow text-[var(--koa-clay)]">Final proposal total</p>
+              <p data-total class="display mt-2 text-3xl text-[var(--koa-forest)]"></p>
+            </div>
+            <div class="rounded-2xl bg-[var(--koa-sand)] p-5">
+              <p class="eyebrow text-[var(--koa-clay)]">Agreement</p>
+              <p data-contract-status class="mt-3 text-sm font-bold text-[var(--koa-forest)]"></p>
+            </div>
+          </section>
+
+          <section>
+            <p class="eyebrow text-[var(--koa-clay)]">Booking agreement</p>
+            <h2 data-contract-title class="display mt-3 text-4xl"></h2>
+            <div data-contract-sections class="mt-6 grid gap-4"></div>
+          </section>
+
+          <section data-sign-section class="rounded-[1.4rem] border border-[var(--koa-forest)]/20 bg-[var(--koa-ivory)] p-6">
+            <p class="eyebrow text-[var(--koa-clay)]">Electronic signature</p>
+            <h2 class="display mt-3 text-4xl">Sign your agreement.</h2>
+            <p class="mt-4 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/62">Your typed name, acknowledgement, and timestamp are recorded with the booking record.</p>
+            <form data-sign-form class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label class="grid gap-2 text-sm font-semibold">Type your full legal name
+                <input name="name" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
+              </label>
+              <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign agreement</button>
+              <label class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/65 sm:col-span-2">
+                <input name="acknowledged" type="checkbox" required class="mt-1" />
+                <span>I reviewed this agreement, agree to its terms, and consent to sign electronically.</span>
+              </label>
+              <p data-sign-message class="text-sm text-[var(--koa-ink)]/58 sm:col-span-2"></p>
+            </form>
+          </section>
+
+          <section data-signed-section class="hidden rounded-[1.4rem] bg-[var(--koa-forest)] p-6 text-white">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Agreement signed</p>
+            <h2 class="display mt-3 text-4xl">Signature recorded.</h2>
+            <p data-signature-copy class="mt-3 text-sm leading-6 text-white/70"></p>
+          </section>
+
+          <section>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p>
+                <h2 class="display mt-3 text-4xl">Booking payments</h2>
+              </div>
+              <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/48">Your event becomes booked when the signed agreement and reservation deposit are complete. Later milestones remain visible here.</p>
+            </div>
+            <div data-payments class="mt-6 grid gap-3"></div>
+            <div data-payment-note class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm leading-6 text-[var(--koa-ink)]/62"></div>
+          </section>
+
+          <section data-booked class="hidden rounded-[1.4rem] bg-[var(--koa-ink)] p-6 text-white">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Booked</p>
+            <h2 class="display mt-3 text-4xl">Your event is reserved.</h2>
+            <p class="mt-3 text-sm leading-6 text-white/70">Koa’s has the signed agreement and reservation deposit on file. Continue using this page to review the remaining payment milestones.</p>
+          </section>
+        </div>
+      </article>
+    </div>
+  </main>
+  <Footer />
+
+  <script>
+    const loading=document.querySelector('[data-loading]');
+    const error=document.querySelector('[data-error]');
+    const errorCopy=document.querySelector('[data-error-copy]');
+    const bookingEl=document.querySelector('[data-booking]');
+    const signSection=document.querySelector('[data-sign-section]');
+    const signedSection=document.querySelector('[data-signed-section]');
+    const bookedSection=document.querySelector('[data-booked]');
+    const signForm=document.querySelector('[data-sign-form]');
+    const signMessage=document.querySelector('[data-sign-message]');
+    const token=new URLSearchParams(window.location.search).get('token')||'';
+
+    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function dateLabel(value){if(!value)return 'Date to be confirmed'; return new Intl.DateTimeFormat('en-US',{dateStyle:'long'}).format(new Date(value.length===10?value+'T12:00:00':value));}
+    function text(selector,value){const el=document.querySelector(selector);if(el)el.textContent=value;}
+
+    function render(data){
+      loading?.classList.add('hidden'); bookingEl?.classList.remove('hidden');
+      text('[data-client-name]',data.customerName?'Prepared for '+data.customerName:'Your booking agreement');
+      text('[data-status]',String(data.status||'booking').replaceAll('_',' '));
+      text('[data-event-date]',data.eventDate?'Event: '+dateLabel(data.eventDate):'Event date TBD');
+      text('[data-proposal-id]',data.proposalId||'');
+      text('[data-total]',money(data.proposalTotal));
+      text('[data-contract-title]',data.contract?.title||'Koa’s Events Venue & Services Agreement');
+      text('[data-contract-status]',data.contract?.status==='signed'?'Signed':'Awaiting signature');
+
+      const sections=document.querySelector('[data-contract-sections]'); sections.innerHTML='';
+      (data.contract?.sections||[]).forEach((section)=>{
+        const box=document.createElement('div'); box.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const h=document.createElement('h3'); h.className='font-bold text-[var(--koa-forest)]'; h.textContent=section.heading;
+        const p=document.createElement('p'); p.className='mt-2 text-sm leading-6 text-[var(--koa-ink)]/65'; p.textContent=section.body;
+        box.append(h,p); sections.appendChild(box);
+      });
+
+      const signed=data.contract?.status==='signed';
+      signSection?.classList.toggle('hidden',signed);
+      signedSection?.classList.toggle('hidden',!signed);
+      if(signed){
+        const sig=data.contract.signature||{};
+        text('[data-signature-copy]',(sig.name?'Signed by '+sig.name:'Signed')+(sig.signedAt?' on '+new Date(sig.signedAt).toLocaleString():'')+'.');
+      }
+
+      const payments=document.querySelector('[data-payments]'); payments.innerHTML='';
+      let hasOnlineLink=false;
+      (data.payments||[]).forEach((item)=>{
+        const row=document.createElement('div');
+        row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center';
+        const left=document.createElement('div');
+        const title=document.createElement('strong'); title.textContent=item.label;
+        const meta=document.createElement('p'); meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';
+        meta.textContent=(item.dueDate?'Due '+dateLabel(item.dueDate):'Due date confirmed by Koa’s')+' · '+money(item.amount);
+        left.append(title,meta);
+        if(item.status==='paid'){
+          const paid=document.createElement('p'); paid.className='mt-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-forest)]';
+          paid.textContent='Paid'+(item.paidAt?' · '+dateLabel(item.paidAt):'');
+          left.appendChild(paid);
+        }
+
+        const right=document.createElement('div');
+        if(item.status==='paid'){
+          const badge=document.createElement('span'); badge.className='rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]'; badge.textContent='Complete'; right.appendChild(badge);
+        } else if(item.paymentUrl){
+          hasOnlineLink=true;
+          const link=document.createElement('a'); link.href=item.paymentUrl; link.target='_blank'; link.rel='noreferrer'; link.className='inline-flex rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white'; link.textContent='Pay online'; right.appendChild(link);
+        } else {
+          const badge=document.createElement('span'); badge.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]'; badge.textContent='Payment link pending'; right.appendChild(badge);
+        }
+        row.append(left,right); payments.appendChild(row);
+      });
+
+      const note=document.querySelector('[data-payment-note]');
+      if(note) note.textContent=hasOnlineLink
+        ? 'Use the secure payment button shown for any milestone with online payment enabled. Payment status is updated by Koa’s in the booking record.'
+        : 'Online payment is not yet enabled for this booking. Koa’s will provide payment instructions or activate the secure payment link for the applicable milestone.';
+
+      bookedSection?.classList.toggle('hidden',data.status!=='booked');
+    }
+
+    async function load(){
+      if(!token){loading?.classList.add('hidden');error?.classList.remove('hidden');if(errorCopy)errorCopy.textContent='The booking link is missing its secure token.';return;}
+      const response=await fetch('/api/bookings/'+encodeURIComponent(token),{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok){loading?.classList.add('hidden');error?.classList.remove('hidden');if(errorCopy)errorCopy.textContent=data.error||'This booking could not be loaded.';return;}
+      render(data.booking);
+    }
+
+    signForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault(); const data=new FormData(signForm); if(signMessage)signMessage.textContent='Recording signature…';
+      const response=await fetch('/api/bookings/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sign',name:data.get('name'),acknowledged:data.get('acknowledged')==='on'})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){if(signMessage)signMessage.textContent=result.error||'Signature could not be recorded.';return;}
+      render(result.booking);
+    });
+
+    load();
+  </script>
+</BaseLayout>
