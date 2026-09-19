@@ -57,7 +57,7 @@ def source_mode():
  remote=[];placeholders=[];inline=[];media_refs=set();legacy_marketing_pages=[]
  for path in files:
   text=path.read_text(encoding="utf-8",errors="ignore")
-  media_refs.update(ref for ref in re.findall(r"""['"](/media/[^'")?#]+)['"]""",text) if not ref.endswith("/"))
+  media_refs.update(ref.rstrip("\\") for ref in re.findall(r"""['"](/media/[^'")?#]+)['"]""",text) if not ref.rstrip("\\").endswith("/"))
   if path.name=="media.ts":
    for name in re.findall(r"""koaMarketing\(['"]([^'"]+)['"]""",text): media_refs.add("/media/koa/"+name)
    for name in re.findall(r"""koa\(\s*['"]([^'"]+)['"]""",text): media_refs.add("/media/koa/"+name)
