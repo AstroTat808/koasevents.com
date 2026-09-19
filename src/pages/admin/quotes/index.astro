@@ -463,7 +463,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('p','mt-3 text-xs leading-5 text-white/68',reminder.detail)
         );
         const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
-        if(plan.run) actions.append(actionButton(plan.label,'rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',plan.run));
+        if(record.bookingSummary && (reminder.type==='payment' || reminder.type==='contract')) {
+          actions.append(actionButton('Manage booking','rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',()=>openBooking(record)));
+        } else if(plan.run) {
+          actions.append(actionButton(plan.label,'rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',plan.run));
+        }
         addQuickLinks(actions,record,'rounded-full border border-white/15 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white/78');
         card.appendChild(actions);
         workQueue.appendChild(card);
