@@ -18,6 +18,31 @@ async function records(context: Context) {
 
 function publicRecord(record: any) {
   const proposal = record?.proposal || {};
+  const quoteState = record?.quote?.state || {};
+  const originalLines = [];
+
+  if (Number(quoteState.basePackagePrice || 0) > 0) {
+    originalLines.push({
+      id: 'collection',
+      description: 'Wedding collection',
+      quantity: 1,
+      amount: Number(quoteState.basePackagePrice || 0),
+      custom: false,
+      source: 'package',
+    });
+  }
+
+  (quoteState.selected || []).forEach((item: any) => {
+    originalLines.push({
+      id: String(item?.id || ''),
+      description: String(item?.name || ''),
+      quantity: Number(item?.quantity || 1),
+      amount: Number(item?.estimatedLineTotal || 0),
+      custom: Number(item?.estimatedLineTotal || 0) <= 0,
+      source: item?.auto ? 'suggested' : 'customer',
+    });
+  });
+
   return {
     id: record.id,
     status: proposal.status || record.status,
@@ -37,6 +62,17 @@ function publicRecord(record: any) {
     notesToClient: proposal.notesToClient || '',
     acceptedAt: proposal.acceptance?.acceptedAt || '',
     acceptedName: proposal.acceptance?.name || '',
+    originalQuote: record?.quote ? {
+      guestCount: Number(quoteState.guestCount || 0),
+      estimatedFurnitureTotal: Number(quoteState.estimatedFurnitureTotal || 0),
+      publishedAddOnTotal: Number(quoteState.publishedAddOnTotal || 0),
+      basePackagePrice: Number(quoteState.basePackagePrice || 0),
+      estimatedKnownSavings: Number(quoteState.estimatedKnownSavings || 0),
+      estimatedSavingsPercent: Number(quoteState.estimatedSavingsPercent || 0),
+      customQuoteCount: Number(quoteState.customQuoteCount || 0),
+      estimatedStartingTotal: Number(quoteState.estimatedStartingTotal || 0),
+      lines: originalLines,
+    } : null,
   };
 }
 
