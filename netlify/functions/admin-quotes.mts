@@ -117,6 +117,20 @@ function normalizePackage(value: unknown) {
   return raw;
 }
 
+const PACKAGE_PRICES: Record<string, number> = {
+  gardenia: 5000,
+  orchid: 10000,
+  hibiscus: 15000,
+  'signature-wedding': 20000,
+};
+
+const PACKAGE_NAMES: Record<string, string> = {
+  gardenia: 'Gardenia Wedding Collection',
+  orchid: 'Orchid Wedding Collection',
+  hibiscus: 'Hibiscus Wedding Collection',
+  'signature-wedding': 'Koa’s Signature Wedding Experience',
+};
+
 async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
   const store = salesStoreFor(context);
   const raw = ((await store.get('records/index', { type: 'json' })) || []) as SalesRecord[];
@@ -179,14 +193,15 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
   }, ...current].slice(0, 10000));
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '') {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '') {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
-  const base = finite(state.basePackagePrice);
+  const normalizedPackage = normalizePackage(state.startingPoint || packageId);
+  const base = finite(state.basePackagePrice || PACKAGE_PRICES[normalizedPackage] || 0);
   if (base > 0) {
     lines.push({
       id: 'collection',
-      description: 'Wedding collection',
+      description: PACKAGE_NAMES[normalizedPackage] || 'Wedding collection',
       quantity: 1,
       unitPrice: base,
       amount: base,
@@ -267,7 +282,7 @@ function sanitizeSchedule(input: unknown): PaymentItem[] {
 }
 
 function updateProposal(record: SalesRecord, payload: any) {
-  const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '');
+  const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '', record.packageId || '');
   const lineItems = sanitizeLines(payload.lineItems);
   const subtotal = Math.round(lineItems.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
   const discountAmount = Math.min(subtotal, finite(payload.discountAmount));
@@ -423,7 +438,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40)) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId) : undefined,
     };
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: kind, packageId, quoteId, recordId: record.id });
@@ -449,7 +464,7 @@ export default async (req: Request, context: Context) => {
       source: source.id,
       customer: { ...source.customer },
       quote: quote || undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '') : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId) : undefined,
     };
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: kind, packageId, quoteId: source.quoteId || '', recordId: record.id, sourceRecordId: source.id });
