@@ -38,6 +38,7 @@ const catalogClientData = catalogItems.map((item) => ({
   bundleEligible: Boolean(item.bundleEligible),
   includedWith: item.includedWith || [],
   priceLabel: item.priceLabel,
+  priceType: item.priceType,
   quantityMode: item.quantityMode || null,
   quantityLabel: item.quantityLabel || item.name,
   estimatedUnitPrice: item.estimatedUnitPrice || null,
@@ -55,9 +56,12 @@ const packageRuleById = {
 const packagePlanningData = Object.fromEntries(
   Object.entries(packageRuleById).map(([id, pkg]) => [id, pkg ? {
     name: pkg.publicName,
+    price: pkg.price,
+    access: pkg.access,
     includedInventory: pkg.includedInventory,
     includedFurnitureCoverage: pkg.includedFurnitureCoverage,
     baseConfiguration: pkg.baseConfiguration,
+    includes: [...pkg.includes],
     planningInventory: pkg.planningInventory || null,
   } : null])
 );
@@ -153,6 +157,31 @@ const badgeClass = {
         <div class="mt-4 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
           <p class="eyebrow text-[var(--koa-amber-light)]">Your starting point</p>
           <p class="mt-2 text-sm" data-starting-summary-text></p>
+        </div>
+
+        <div class="mt-4 hidden rounded-[1.2rem] border border-[var(--koa-forest)]/20 bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6" data-selected-package-details>
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div class="max-w-2xl">
+              <p class="eyebrow text-[var(--koa-clay)]">Included in your selected package</p>
+              <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]" data-selected-package-name></h3>
+              <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/64" data-selected-package-access></p>
+            </div>
+            <div class="rounded-xl bg-[var(--koa-sand)] px-5 py-4 lg:min-w-48">
+              <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Base package</p>
+              <p class="display mt-1 text-3xl text-[var(--koa-forest)]" data-selected-package-price></p>
+            </div>
+          </div>
+          <div class="mt-6 grid gap-5 lg:grid-cols-[.9fr_1.1fr]">
+            <div class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+              <p class="text-[.62rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Furniture + inventory included</p>
+              <p class="mt-2 text-sm font-semibold leading-6 text-[var(--koa-forest)]" data-selected-package-inventory></p>
+              <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/52" data-selected-package-configuration></p>
+            </div>
+            <div>
+              <p class="text-[.62rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Package inclusions</p>
+              <ul class="mt-3 grid gap-2 text-sm leading-6 text-[var(--koa-ink)]/72 sm:grid-cols-2" data-selected-package-includes></ul>
+            </div>
+          </div>
         </div>
 
         <div class="mt-4 hidden rounded-[1.2rem] border border-[var(--koa-clay)]/30 bg-white p-5 shadow-[var(--shadow-soft)]" data-guest-adjustment>
@@ -301,6 +330,11 @@ const badgeClass = {
             <div class="mt-6 rounded-xl border border-white/12 bg-white/[.04] p-4" data-quote-starting-point>
               <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Starting point</p>
               <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a package or à la carte above.</p>
+              <p class="mt-2 hidden text-xs font-bold text-white/72" data-quote-base-price></p>
+              <div class="mt-4 hidden border-t border-white/10 pt-4" data-quote-package-includes>
+                <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-white/42">Included in the package</p>
+                <ul class="mt-2 grid gap-1.5 text-xs leading-5 text-white/62" data-quote-package-includes-list></ul>
+              </div>
             </div>
             <div class="mt-6">
               <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Add-ons</p>
@@ -311,12 +345,40 @@ const badgeClass = {
             <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-furniture-estimate>
               <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated guest-count furniture</p>
               <p class="display mt-2 text-3xl" data-furniture-estimate-total>$0</p>
-              <p class="mt-2 text-xs leading-5 text-white/58">Planning estimate for automatically required chairs and 60-inch round tables only. Final style, availability, setup and proposal pricing are confirmed by Koa’s.</p>
+              <p class="mt-2 text-xs leading-5 text-white/58">Planning estimate for the automatic chair and 60-inch round-table quantities currently included in your quote.</p>
+            </div>
+            <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/40 bg-[var(--koa-amber)]/12 p-4" data-starting-total-panel>
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated starting total</p>
+              <p class="display mt-2 text-4xl" data-starting-total>$0</p>
+              <div class="mt-3 grid gap-1.5 text-xs leading-5 text-white/62">
+                <p data-starting-total-base></p>
+                <p data-starting-total-furniture></p>
+              </div>
+              <p class="mt-3 text-xs leading-5 text-white/48" data-starting-total-note>Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.</p>
+            </div>
+            <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-custom-quote-panel>
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Requires custom quote</p>
+              <div class="mt-3 grid gap-2 text-xs leading-5 text-white/62" data-custom-quote-list></div>
             </div>
             <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
               <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
               <p class="display mt-2 text-3xl" data-savings-headline></p>
               <p class="mt-2 text-xs leading-5 text-white/58" data-savings-detail></p>
+            </div>
+            <div class="mt-6 border-t border-white/10 pt-5">
+              <button type="button" data-save-quote class="inline-flex w-full justify-center rounded-full border border-[var(--koa-amber)]/55 bg-[var(--koa-amber)]/10 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:bg-[var(--koa-amber)]/20">Save + get recovery link</button>
+              <div class="mt-4 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-saved-quote-panel>
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">Saved quote ID</p>
+                    <p class="mt-1 font-mono text-sm font-bold text-white" data-saved-quote-id></p>
+                  </div>
+                  <button type="button" data-copy-quote-link class="rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Copy link</button>
+                </div>
+                <input readonly data-saved-quote-link class="mt-3 w-full rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/62" aria-label="Saved quote recovery link" />
+                <p class="mt-2 text-xs leading-5 text-white/45">This saved version can be reopened on another device. Saving again creates a new version and recovery link.</p>
+              </div>
+              <p class="mt-3 hidden text-xs leading-5 text-red-200" data-save-quote-error></p>
             </div>
             <a href="#quote-request" data-quote-jump class="mt-6 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
             <a href="/wedding-inquiry/" data-continue-inquiry class="mt-3 inline-flex w-full justify-center rounded-full border border-white/20 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Continue to wedding inquiry</a>
@@ -390,7 +452,13 @@ const badgeClass = {
           <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
           <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
           <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
+          <input type="hidden" name="basePackagePrice" value="" data-base-package-price-input />
+          <input type="hidden" name="estimatedStartingTotal" value="" data-starting-total-input />
+          <input type="hidden" name="selectedPackageIncludes" value="" data-package-includes-input />
+          <input type="hidden" name="customQuoteItems" value="" data-custom-quote-items-input />
           <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
+          <input type="hidden" name="savedQuoteId" value="" data-saved-quote-id-input />
+          <input type="hidden" name="savedQuoteRecoveryUrl" value="" data-saved-quote-url-input />
           <p class="hidden"><label>Don’t fill this out: <input name="bot-field" /></label></p>
           <div class="grid gap-5 sm:grid-cols-2">
             <label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required /></label>
@@ -433,11 +501,33 @@ const badgeClass = {
     const savingsDetail = document.querySelector('[data-savings-detail]');
     const furnitureEstimate = document.querySelector('[data-furniture-estimate]');
     const furnitureEstimateTotal = document.querySelector('[data-furniture-estimate-total]');
+    const startingTotalPanel = document.querySelector('[data-starting-total-panel]');
+    const startingTotal = document.querySelector('[data-starting-total]');
+    const startingTotalBase = document.querySelector('[data-starting-total-base]');
+    const startingTotalFurniture = document.querySelector('[data-starting-total-furniture]');
+    const startingTotalNote = document.querySelector('[data-starting-total-note]');
+    const customQuotePanel = document.querySelector('[data-custom-quote-panel]');
+    const customQuoteList = document.querySelector('[data-custom-quote-list]');
+    const quoteBasePrice = document.querySelector('[data-quote-base-price]');
+    const quotePackageIncludes = document.querySelector('[data-quote-package-includes]');
+    const quotePackageIncludesList = document.querySelector('[data-quote-package-includes-list]');
     const autoRentalBreakdownInput = document.querySelector('[data-auto-rental-breakdown]');
     const manualAddOnsInput = document.querySelector('[data-manual-add-ons]');
     const estimatedFurnitureTotalInput = document.querySelector('[data-estimated-furniture-total]');
+    const basePackagePriceInput = document.querySelector('[data-base-package-price-input]');
+    const startingTotalInput = document.querySelector('[data-starting-total-input]');
+    const packageIncludesInput = document.querySelector('[data-package-includes-input]');
+    const customQuoteItemsInput = document.querySelector('[data-custom-quote-items-input]');
     const catalogSelectionStateInput = document.querySelector('[data-catalog-selection-state]');
+    const savedQuoteIdInput = document.querySelector('[data-saved-quote-id-input]');
+    const savedQuoteUrlInput = document.querySelector('[data-saved-quote-url-input]');
     const continueInquiry = document.querySelector('[data-continue-inquiry]');
+    const saveQuoteButton = document.querySelector('[data-save-quote]');
+    const savedQuotePanel = document.querySelector('[data-saved-quote-panel]');
+    const savedQuoteId = document.querySelector('[data-saved-quote-id]');
+    const savedQuoteLink = document.querySelector('[data-saved-quote-link]');
+    const copyQuoteLink = document.querySelector('[data-copy-quote-link]');
+    const saveQuoteError = document.querySelector('[data-save-quote-error]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
     const guestInput = document.querySelector('[data-builder-guests]');
     const quoteGuestInput = document.querySelector('[data-quote-guests]');
@@ -449,13 +539,24 @@ const badgeClass = {
     const guestAdjustmentCount = document.querySelector('[data-guest-adjustment-count]');
     const guestAdjustmentCopy = document.querySelector('[data-guest-adjustment-copy]');
     const guestAdjustmentItems = document.querySelector('[data-guest-adjustment-items]');
+    const selectedPackageDetails = document.querySelector('[data-selected-package-details]');
+    const selectedPackageName = document.querySelector('[data-selected-package-name]');
+    const selectedPackageAccess = document.querySelector('[data-selected-package-access]');
+    const selectedPackagePrice = document.querySelector('[data-selected-package-price]');
+    const selectedPackageInventory = document.querySelector('[data-selected-package-inventory]');
+    const selectedPackageConfiguration = document.querySelector('[data-selected-package-configuration]');
+    const selectedPackageIncludes = document.querySelector('[data-selected-package-includes]');
     const mobileCatalogToggle = document.querySelector('[data-mobile-catalog-toggle]');
 
     let activeCategory = 'all';
     let startingPoint = '';
     let mobileCatalogExpanded = false;
+    let activeSavedQuoteId = '';
+    let savedStateFingerprint = '';
     const selected = new Map();
     const autoSelected = new Set();
+    const dismissedAuto = new Set();
+    const autoOverrides = new Map();
 
     function guestCount() {
       return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
@@ -463,6 +564,58 @@ const badgeClass = {
 
     function selectedPackagePlan() {
       return startingPoint ? packagePlanningData[startingPoint] || null : null;
+    }
+
+    function packageBasePrice() {
+      return Number(selectedPackagePlan()?.price || 0);
+    }
+
+    function renderSelectedPackageDetails() {
+      const plan = selectedPackagePlan();
+      const hasPackage = Boolean(plan && startingPoint !== 'ala-carte');
+
+      selectedPackageDetails?.classList.toggle('hidden', !hasPackage);
+      quotePackageIncludes?.classList.toggle('hidden', !hasPackage);
+      quoteBasePrice?.classList.toggle('hidden', !hasPackage);
+
+      if (!hasPackage || !plan) {
+        if (selectedPackageIncludes) selectedPackageIncludes.innerHTML = '';
+        if (quotePackageIncludesList) quotePackageIncludesList.innerHTML = '';
+        return;
+      }
+
+      if (selectedPackageName) selectedPackageName.textContent = plan.name;
+      if (selectedPackageAccess) selectedPackageAccess.textContent = plan.access;
+      if (selectedPackagePrice) selectedPackagePrice.textContent = currency(plan.price);
+      if (selectedPackageInventory) selectedPackageInventory.textContent = plan.includedInventory;
+      if (selectedPackageConfiguration) selectedPackageConfiguration.textContent = plan.baseConfiguration;
+      if (quoteBasePrice) quoteBasePrice.textContent = 'Base package: ' + currency(plan.price);
+
+      const inclusions = ['Furniture / inventory: ' + plan.includedInventory, ...(plan.includes || [])];
+
+      if (selectedPackageIncludes) {
+        selectedPackageIncludes.innerHTML = '';
+        inclusions.forEach((entry) => {
+          const li = document.createElement('li');
+          li.className = 'flex gap-2';
+          const mark = document.createElement('span');
+          mark.className = 'font-black text-[var(--koa-clay)]';
+          mark.textContent = '✓';
+          const copy = document.createElement('span');
+          copy.textContent = entry;
+          li.append(mark, copy);
+          selectedPackageIncludes.appendChild(li);
+        });
+      }
+
+      if (quotePackageIncludesList) {
+        quotePackageIncludesList.innerHTML = '';
+        inclusions.forEach((entry) => {
+          const li = document.createElement('li');
+          li.textContent = '✓ ' + entry;
+          quotePackageIncludesList.appendChild(li);
+        });
+      }
     }
 
     function includedQuantityForItem(item) {
@@ -512,13 +665,28 @@ const badgeClass = {
       requiredIds.forEach((id) => {
         const item = itemById.get(id);
         if (!item) return;
-        const quantity = suggestedQuantity(item);
+
+        if (dismissedAuto.has(id)) {
+          autoSelected.delete(id);
+          if (selected.get(id)?.auto) selected.delete(id);
+          setItemButtonState(id, false);
+          return;
+        }
+
+        const suggested = suggestedQuantity(item);
+        const hasOverride = autoOverrides.has(id);
+        const quantity = hasOverride ? Math.max(0, Number(autoOverrides.get(id) || 0)) : suggested;
 
         if (quantity > 0) {
-          selected.set(id, { name: item.name, quantity, auto: true });
+          selected.set(id, {
+            name: item.name,
+            quantity,
+            auto: true,
+            overridden: hasOverride && quantity !== suggested,
+          });
           autoSelected.add(id);
           setItemButtonState(id, true);
-        } else if (autoSelected.has(id)) {
+        } else if (autoSelected.has(id) || selected.get(id)?.auto) {
           autoSelected.delete(id);
           selected.delete(id);
           setItemButtonState(id, false);
@@ -531,10 +699,11 @@ const badgeClass = {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
         const input = card.querySelector('[data-item-quantity]');
-        if (!item || !input || item.quantityMode === 'manual') return;
-        input.value = String(suggestedQuantity(item));
+        if (!id || !item || !input || item.quantityMode === 'manual') return;
+        const suggested = suggestedQuantity(item);
+        input.value = String(autoOverrides.has(id) ? autoOverrides.get(id) : suggested);
         if (selected.has(id) && !autoSelected.has(id)) {
-          selected.set(id, { name: item.name, quantity: Math.max(1, Number(input.value) || 1) });
+          selected.set(id, { name: item.name, quantity: Math.max(1, Number(input.value) || 1), auto: false });
         }
       });
       if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
@@ -542,13 +711,18 @@ const badgeClass = {
       syncQuote();
     }
 
-    function chooseStartingPoint(id) {
+    function chooseStartingPoint(id, preserveOverrides = false) {
+      const changedPackage = startingPoint && startingPoint !== id;
       startingPoint = id;
       [...autoSelected].forEach((autoId) => {
         selected.delete(autoId);
         setItemButtonState(autoId, false);
       });
       autoSelected.clear();
+      if (changedPackage && !preserveOverrides) {
+        dismissedAuto.clear();
+        autoOverrides.clear();
+      }
       if (startingPointInput) startingPointInput.value = id;
       startingButtons.forEach((button) => {
         const on = button.dataset.startingPoint === id;
@@ -571,6 +745,7 @@ const badgeClass = {
           ? 'À la carte'
           : (packageItem?.name || 'Choose a package or à la carte above.');
       }
+      renderSelectedPackageDetails();
       refreshPackageInclusions();
       refreshBundleAvailability();
       renderGuestAdjustment();
@@ -704,11 +879,11 @@ const badgeClass = {
           const extraChairs = Math.max(0, guests - Number(inventory.includedChairCount ?? 0));
           guestAdjustmentCopy.textContent = base + (
             extraChairs > 0
-              ? 'For ' + guests + ' guests, ' + extraChairs + ' additional ceremony chairs and ' + extraChairs + ' additional reception chairs are preselected below. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
+              ? 'For ' + guests + ' guests, we suggest ' + extraChairs + ' additional ceremony chairs and ' + extraChairs + ' additional reception chairs. You can adjust or remove those suggestions and your choice will be preserved. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
               : 'Your entered guest count is within the included chair quantity. Table capacity still depends on which 2 table styles you select.'
           );
         } else if (additions.length) {
-          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional chair and table quantities below are automatically preselected in your quote.';
+          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so we suggest additional chair and table quantities below. You can adjust or remove any suggestion and the builder will preserve your choice.';
         } else {
           guestAdjustmentCopy.textContent = base + 'Your entered guest count fits within the published included furniture quantities using the 8-guests-per-round planning default.';
         }
@@ -923,15 +1098,25 @@ const badgeClass = {
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
     }
 
-    function autoRentalReason(id, quantity) {
+    function autoRentalReason(id, quantity, overridden = autoOverrides.has(id)) {
       const item = itemById.get(id);
       const included = includedQuantityForItem(item);
       const recommended = recommendedTotalForItem(item);
+      const suggested = suggestedQuantity(item);
       const packageName = selectedPackageDisplayName() || 'your selected package';
+
       if (id === 'round-table') {
-        return packageName + ' includes ' + included + ' 60-inch round table' + (included === 1 ? '' : 's') + '. At ' + guestCount() + ' guests, the planning default is ' + recommended + ' total rounds at 8 guests per table, so ' + quantity + ' additional table' + (quantity === 1 ? '' : 's') + ' are preselected.';
+        const base = packageName + ' includes ' + included + ' 60-inch round table' + (included === 1 ? '' : 's') + '. At ' + guestCount() + ' guests, the planning default is ' + recommended + ' total rounds at 8 guests per table.';
+        return overridden
+          ? base + ' The suggested add-on quantity is ' + suggested + ', and you changed it to ' + quantity + '.'
+          : base + ' That creates a suggested add-on quantity of ' + quantity + '.';
       }
-      return packageName + ' includes ' + included + ' ' + (id === 'ceremony-chair' ? 'ceremony' : 'reception') + ' chair' + (included === 1 ? '' : 's') + '. Your guest count is ' + guestCount() + ', so ' + quantity + ' additional chair' + (quantity === 1 ? '' : 's') + ' are preselected.';
+
+      const chairType = id === 'ceremony-chair' ? 'ceremony' : 'reception';
+      const base = packageName + ' includes ' + included + ' ' + chairType + ' chair' + (included === 1 ? '' : 's') + '. Your guest count is ' + guestCount() + '.';
+      return overridden
+        ? base + ' The suggested add-on quantity is ' + suggested + ', and you changed it to ' + quantity + '.'
+        : base + ' That creates a suggested add-on quantity of ' + quantity + '.';
     }
 
     function estimatedLineTotal(id, entry) {
@@ -940,42 +1125,145 @@ const badgeClass = {
       return entry.auto && unit ? unit * Number(entry.quantity || 0) : 0;
     }
 
-    function persistSelectionState() {
+    function packageCustomQuoteNotes(entries = [...selected.entries()]) {
+      const notes = [];
+      if (startingPoint === 'ala-carte') {
+        notes.push('À la carte events are finalized as a custom quote.');
+      }
+      if (startingPoint === 'gardenia' && guestCount() > 10) {
+        notes.push('Gardenia celebrations above 10 guests require a custom package quote; the furniture estimate is a planning aid, not the full larger-event price.');
+      }
+      if (startingPoint === 'orchid' && guestCount() > 10) {
+        notes.push('Orchid includes 2 tables of your choice. Any additional table quantity depends on the table styles selected and is confirmed in the custom quote.');
+      }
+
+      entries.forEach(([id, entry]) => {
+        if (entry.auto) return;
+        const item = itemById.get(id);
+        if (item?.priceType === 'quote' && !Number(item.estimatedUnitPrice || 0)) {
+          notes.push(entry.name + (entry.quantity && entry.quantity !== 1 ? ' × ' + entry.quantity : '') + ' — custom quote');
+        }
+      });
+
+      return [...new Set(notes)];
+    }
+
+    function buildQuoteState() {
       const selectedState = [...selected.entries()].map(([id, entry]) => ({
         id,
         ...entry,
-        reason: entry.auto ? autoRentalReason(id, entry.quantity) : '',
+        reason: entry.auto ? autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) : '',
         estimatedLineTotal: estimatedLineTotal(id, entry),
       }));
       const estimatedFurnitureTotal = selectedState.reduce((sum, entry) => sum + Number(entry.estimatedLineTotal || 0), 0);
-      const state = {
-        version: 1,
+      const plan = selectedPackagePlan();
+      const basePackagePrice = packageBasePrice();
+      return {
+        version: 2,
         startingPoint,
         guestCount: guestCount(),
         selected: selectedState,
         estimatedFurnitureTotal,
+        basePackagePrice,
+        estimatedStartingTotal: basePackagePrice + estimatedFurnitureTotal,
+        packageIncludes: plan ? [...(plan.includes || [])] : [],
+        packageIncludedInventory: plan?.includedInventory || '',
+        autoDismissed: [...dismissedAuto],
+        autoOverrides: Object.fromEntries(autoOverrides),
         updatedAt: new Date().toISOString(),
       };
+    }
+
+    function quoteFingerprint(state) {
+      if (!state) return '';
+      const copy = {
+        version: state.version,
+        startingPoint: state.startingPoint,
+        guestCount: state.guestCount,
+        selected: state.selected,
+        estimatedFurnitureTotal: state.estimatedFurnitureTotal,
+        basePackagePrice: state.basePackagePrice,
+        estimatedStartingTotal: state.estimatedStartingTotal,
+        packageIncludes: state.packageIncludes,
+        packageIncludedInventory: state.packageIncludedInventory,
+        autoDismissed: state.autoDismissed,
+        autoOverrides: state.autoOverrides,
+      };
+      return JSON.stringify(copy);
+    }
+
+    function showSavedQuote(id, recoveryUrl) {
+      if (!id || !recoveryUrl) return;
+      savedQuotePanel?.classList.remove('hidden');
+      if (savedQuoteId) savedQuoteId.textContent = id;
+      if (savedQuoteLink) savedQuoteLink.value = recoveryUrl;
+    }
+
+    function persistSelectionState() {
+      const state = buildQuoteState();
+      const fingerprint = quoteFingerprint(state);
+      const savedCurrent = Boolean(activeSavedQuoteId && savedStateFingerprint && fingerprint === savedStateFingerprint);
+
       try {
         localStorage.setItem('koaQuoteStateV1', JSON.stringify(state));
       } catch {}
+
       if (catalogSelectionStateInput) catalogSelectionStateInput.value = JSON.stringify(state);
+      if (savedQuoteIdInput) savedQuoteIdInput.value = savedCurrent ? activeSavedQuoteId : '';
+      if (savedQuoteUrlInput) savedQuoteUrlInput.value = savedCurrent ? window.location.origin + '/catalog/?quote=' + activeSavedQuoteId : '';
+
+      if (saveQuoteButton) {
+        saveQuoteButton.textContent = savedCurrent
+          ? 'Saved ✓ · save another version'
+          : activeSavedQuoteId
+            ? 'Save current changes + get new link'
+            : 'Save + get recovery link';
+      }
+
       if (continueInquiry) {
         const params = new URLSearchParams();
         if (startingPoint && startingPoint !== 'ala-carte') {
           params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
         }
         params.set('guests', String(guestCount()));
+        if (savedCurrent) params.set('quote', activeSavedQuoteId);
         continueInquiry.href = '/wedding-inquiry/?' + params.toString();
       }
     }
 
-    function restoreSelectionState() {
+    async function restoreSelectionState() {
       const params = new URLSearchParams(window.location.search);
+      const requestedQuoteId = (params.get('quote') || '').trim().toUpperCase();
       let saved = null;
+      let remoteQuote = null;
+
       try {
         saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null');
       } catch {}
+
+      if (requestedQuoteId) {
+        try {
+          const response = await fetch('/api/quotes/' + encodeURIComponent(requestedQuoteId), {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (response.ok) {
+            remoteQuote = await response.json();
+            saved = remoteQuote.state || null;
+          } else {
+            const payload = await response.json().catch(() => ({}));
+            if (saveQuoteError) {
+              saveQuoteError.textContent = payload.error || 'That saved quote could not be restored.';
+              saveQuoteError.classList.remove('hidden');
+            }
+          }
+        } catch {
+          if (saveQuoteError) {
+            saveQuoteError.textContent = 'That saved quote could not be restored right now.';
+            saveQuoteError.classList.remove('hidden');
+          }
+        }
+      }
 
       const requestedPackage = params.get('package');
       const requestedGuests = Number(params.get('guests') || 0);
@@ -983,24 +1271,101 @@ const badgeClass = {
         ? 'signature-wedding'
         : requestedPackage;
 
-      if (requestedGuests > 0 && guestInput) guestInput.value = String(Math.min(100, Math.max(1, requestedGuests)));
-      else if (saved?.guestCount && guestInput) guestInput.value = String(Math.min(100, Math.max(1, Number(saved.guestCount))));
+      dismissedAuto.clear();
+      autoOverrides.clear();
+      (saved?.autoDismissed || []).forEach((id) => dismissedAuto.add(id));
+      Object.entries(saved?.autoOverrides || {}).forEach(([id, quantity]) => autoOverrides.set(id, Math.max(0, Number(quantity || 0))));
+      (saved?.selected || []).forEach((entry) => {
+        if (entry.auto && entry.overridden && !autoOverrides.has(entry.id)) {
+          autoOverrides.set(entry.id, Math.max(0, Number(entry.quantity || 0)));
+        }
+      });
 
-      const start = normalizedPackage || saved?.startingPoint || '';
+      const useSavedAsPrimary = Boolean(remoteQuote);
+      const guests = useSavedAsPrimary
+        ? Number(saved?.guestCount || 0)
+        : (requestedGuests > 0 ? requestedGuests : Number(saved?.guestCount || 0));
+      if (guests > 0 && guestInput) guestInput.value = String(Math.min(100, Math.max(1, guests)));
+
+      const start = useSavedAsPrimary
+        ? (saved?.startingPoint || '')
+        : (normalizedPackage || saved?.startingPoint || '');
+
       if (start && [...startingButtons].some((button) => button.dataset.startingPoint === start)) {
-        chooseStartingPoint(start);
+        chooseStartingPoint(start, true);
       }
 
       if (saved?.selected?.length) {
         saved.selected.forEach((entry) => {
           const item = itemById.get(entry.id);
           if (!item || entry.auto) return;
-          selected.set(entry.id, { name: item.name, quantity: Math.max(1, Number(entry.quantity || 1)), auto: false });
+          selected.set(entry.id, {
+            name: item.name,
+            quantity: Math.max(1, Number(entry.quantity || 1)),
+            auto: false,
+          });
           const card = cardFor(entry.id);
           const quantityInput = card?.querySelector('[data-item-quantity]');
           if (quantityInput) quantityInput.value = String(Math.max(1, Number(entry.quantity || 1)));
           setItemButtonState(entry.id, true);
         });
+      }
+
+      syncSuggestedQuantities();
+
+      if (remoteQuote?.id) {
+        activeSavedQuoteId = String(remoteQuote.id);
+        savedStateFingerprint = quoteFingerprint(buildQuoteState());
+        const absoluteUrl = window.location.origin + '/catalog/?quote=' + activeSavedQuoteId;
+        showSavedQuote(activeSavedQuoteId, absoluteUrl);
+        if (saveQuoteError) saveQuoteError.classList.add('hidden');
+        persistSelectionState();
+      }
+    }
+
+    async function saveCurrentQuote() {
+      if (!startingPoint) {
+        if (saveQuoteError) {
+          saveQuoteError.textContent = 'Choose a wedding package or À la carte before saving.';
+          saveQuoteError.classList.remove('hidden');
+        }
+        document.querySelector('#start-building')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      if (saveQuoteError) saveQuoteError.classList.add('hidden');
+      const originalText = saveQuoteButton?.textContent || 'Save + get recovery link';
+      if (saveQuoteButton) {
+        saveQuoteButton.disabled = true;
+        saveQuoteButton.textContent = 'Saving…';
+      }
+
+      try {
+        const state = buildQuoteState();
+        const response = await fetch('/api/quotes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Koa-Quote-Save': '1',
+          },
+          body: JSON.stringify({ state }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.id) throw new Error(payload.error || 'Unable to save quote.');
+
+        activeSavedQuoteId = String(payload.id);
+        savedStateFingerprint = quoteFingerprint(state);
+        const absoluteUrl = new URL(payload.recoveryUrl, window.location.origin).toString();
+        showSavedQuote(activeSavedQuoteId, absoluteUrl);
+        persistSelectionState();
+      } catch (error) {
+        if (saveQuoteError) {
+          saveQuoteError.textContent = error?.message || 'Unable to save the quote right now.';
+          saveQuoteError.classList.remove('hidden');
+        }
+        if (saveQuoteButton) saveQuoteButton.textContent = originalText;
+      } finally {
+        if (saveQuoteButton) saveQuoteButton.disabled = false;
       }
     }
 
@@ -1017,23 +1382,24 @@ const badgeClass = {
         const row = document.createElement('div');
         row.dataset.selectedRow = 'true';
         row.className =
-          'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
+          'flex items-start justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
 
         const label = document.createElement('span');
-        label.className = 'min-w-0';
+        label.className = 'min-w-0 flex-1';
         const title = document.createElement('span');
-        title.className = 'block';
+        title.className = 'block font-semibold';
         title.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
         label.appendChild(title);
+
         if (entry.auto) {
           const auto = document.createElement('span');
           auto.className = 'mt-1 block text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
-          auto.textContent = 'Guest-count add-on';
+          auto.textContent = entry.overridden ? 'Guest-count add-on · adjusted by you' : 'Guest-count add-on · suggested';
           label.appendChild(auto);
 
           const reason = document.createElement('span');
           reason.className = 'mt-2 block text-xs leading-5 text-white/55';
-          reason.textContent = autoRentalReason(id, entry.quantity);
+          reason.textContent = autoRentalReason(id, entry.quantity, Boolean(entry.overridden));
           label.appendChild(reason);
 
           const estimate = estimatedLineTotal(id, entry);
@@ -1043,22 +1409,93 @@ const badgeClass = {
             price.textContent = currency(estimate) + ' estimated (' + currency(itemById.get(id)?.estimatedUnitPrice) + ' × ' + entry.quantity + ')';
             label.appendChild(price);
           }
+        } else {
+          const item = itemById.get(id);
+          if (item?.priceLabel) {
+            const price = document.createElement('span');
+            price.className = 'mt-1 block text-xs text-white/48';
+            price.textContent = item.priceLabel;
+            label.appendChild(price);
+          }
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'grid shrink-0 justify-items-end gap-2';
+
+        if (entry.auto) {
+          const quantityWrap = document.createElement('label');
+          quantityWrap.className = 'grid gap-1 text-[.52rem] font-black uppercase tracking-[.09em] text-white/38';
+          quantityWrap.textContent = 'Qty';
+          const quantityInput = document.createElement('input');
+          quantityInput.type = 'number';
+          quantityInput.min = '0';
+          quantityInput.max = '500';
+          quantityInput.value = String(entry.quantity);
+          quantityInput.className = 'w-16 rounded-lg border border-white/15 bg-white/[.06] px-2 py-1.5 text-center text-sm font-bold text-white outline-none focus:border-[var(--koa-amber)]';
+          quantityInput.setAttribute('aria-label', 'Quantity for ' + entry.name);
+          quantityInput.addEventListener('change', () => {
+            const quantity = Math.max(0, Math.min(500, Number(quantityInput.value || 0)));
+            const cardInput = cardFor(id)?.querySelector('[data-item-quantity]');
+
+            if (quantity <= 0) {
+              dismissedAuto.add(id);
+              autoOverrides.delete(id);
+              selected.delete(id);
+              autoSelected.delete(id);
+              if (cardInput) cardInput.value = String(suggestedQuantity(itemById.get(id)));
+              setItemButtonState(id, false);
+            } else {
+              dismissedAuto.delete(id);
+              autoOverrides.set(id, quantity);
+              const item = itemById.get(id);
+              selected.set(id, {
+                name: item?.name || entry.name,
+                quantity,
+                auto: true,
+                overridden: quantity !== suggestedQuantity(item),
+              });
+              autoSelected.add(id);
+              if (cardInput) cardInput.value = String(quantity);
+              setItemButtonState(id, true);
+            }
+            syncQuote();
+          });
+          quantityWrap.appendChild(quantityInput);
+          actions.appendChild(quantityWrap);
+
+          if (entry.overridden) {
+            const reset = document.createElement('button');
+            reset.type = 'button';
+            reset.className = 'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)] hover:text-white';
+            reset.textContent = 'Use suggested';
+            reset.addEventListener('click', () => {
+              dismissedAuto.delete(id);
+              autoOverrides.delete(id);
+              syncSuggestedQuantities();
+            });
+            actions.appendChild(reset);
+          }
         }
 
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.className = 'text-white/45 hover:text-white';
-        remove.setAttribute('aria-label', 'Remove ' + entry.name);
+        remove.className = 'min-h-8 min-w-8 rounded-full border border-white/10 text-white/45 hover:text-white';
+        remove.setAttribute('aria-label', (entry.auto ? 'Remove suggested ' : 'Remove ') + entry.name);
         remove.textContent = '×';
 
         remove.addEventListener('click', () => {
+          if (entry.auto) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+          }
           selected.delete(id);
           autoSelected.delete(id);
           setItemButtonState(id, false);
           syncQuote();
         });
 
-        row.append(label, remove);
+        actions.appendChild(remove);
+        row.append(label, actions);
         quoteList?.appendChild(row);
       });
 
@@ -1068,21 +1505,51 @@ const badgeClass = {
       const manualEntries = entries.filter(([, entry]) => !entry.auto);
       const autoBreakdown = autoEntries.map(([id, entry]) => {
         const estimate = estimatedLineTotal(id, entry);
-        return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
+        return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
       }).join(' | ');
       const manualBreakdown = manualEntries.map(([, entry]) => entry.quantity + ' × ' + entry.name).join(' | ');
       const furnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
+      const basePrice = packageBasePrice();
+      const estimatedTotal = basePrice + furnitureTotal;
+      const customNotes = packageCustomQuoteNotes(entries);
+      const plan = selectedPackagePlan();
 
       if (selectedInput) selectedInput.value = joined;
       if (autoRentalBreakdownInput) autoRentalBreakdownInput.value = autoBreakdown;
       if (manualAddOnsInput) manualAddOnsInput.value = manualBreakdown;
       if (estimatedFurnitureTotalInput) estimatedFurnitureTotalInput.value = furnitureTotal ? currency(furnitureTotal) + ' planning estimate' : '$0';
+      if (basePackagePriceInput) basePackagePriceInput.value = basePrice ? currency(basePrice) : '';
+      if (startingTotalInput) startingTotalInput.value = basePrice ? currency(estimatedTotal) + ' planning estimate' : '';
+      if (packageIncludesInput) packageIncludesInput.value = plan ? ['Furniture / inventory: ' + plan.includedInventory, ...(plan.includes || [])].join(' | ') : '';
+      if (customQuoteItemsInput) customQuoteItemsInput.value = customNotes.join(' | ');
+
       if (selectedPreview) {
         selectedPreview.textContent =
           joined || 'Choose rentals or enhancements above and they’ll appear here.';
       }
+
       furnitureEstimate?.classList.toggle('hidden', furnitureTotal <= 0);
       if (furnitureEstimateTotal) furnitureEstimateTotal.textContent = currency(furnitureTotal);
+
+      startingTotalPanel?.classList.toggle('hidden', basePrice <= 0);
+      if (startingTotal) startingTotal.textContent = currency(estimatedTotal);
+      if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Base package: ' + currency(basePrice) : '';
+      if (startingTotalFurniture) startingTotalFurniture.textContent = 'Estimated guest-count furniture: ' + currency(furnitureTotal);
+      if (startingTotalNote) {
+        startingTotalNote.textContent = startingPoint === 'gardenia' && guestCount() > 10
+          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Custom-priced and manually selected add-ons are not included here.'
+          : 'Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.';
+      }
+
+      customQuotePanel?.classList.toggle('hidden', customNotes.length === 0);
+      if (customQuoteList) {
+        customQuoteList.innerHTML = '';
+        customNotes.forEach((note) => {
+          const row = document.createElement('p');
+          row.textContent = '• ' + note;
+          customQuoteList.appendChild(row);
+        });
+      }
 
       renderSavings();
       persistSelectionState();
@@ -1120,13 +1587,31 @@ const badgeClass = {
         if (!id || !item) return;
 
         if (selected.has(id)) {
+          if (selected.get(id)?.auto) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+          }
           selected.delete(id);
           autoSelected.delete(id);
           setItemButtonState(id, false);
         } else {
           const quantityInput = card.querySelector('[data-item-quantity]');
           const quantity = quantityInput ? Math.max(1, Number(quantityInput.value || 1)) : 1;
-          selected.set(id, { name: item.name, quantity, auto: false });
+          const autoRequired = autoRequiredItemIds().includes(id) && suggestedQuantity(item) > 0;
+
+          if (autoRequired) {
+            dismissedAuto.delete(id);
+            autoOverrides.set(id, quantity);
+            selected.set(id, {
+              name: item.name,
+              quantity,
+              auto: true,
+              overridden: quantity !== suggestedQuantity(item),
+            });
+            autoSelected.add(id);
+          } else {
+            selected.set(id, { name: item.name, quantity, auto: false });
+          }
           setItemButtonState(id, true);
         }
 
@@ -1183,19 +1668,67 @@ const badgeClass = {
       card.querySelector('[data-item-quantity]')?.addEventListener('input', (event) => {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
-        if (!id || !item || !selected.has(id)) return;
-        autoSelected.delete(id);
-        selected.set(id, { name: item.name, quantity: Math.max(1, Number(event.target.value || 1)), auto: false });
+        if (!id || !item) return;
+
+        const rawQuantity = Math.max(0, Math.min(500, Number(event.target.value || 0)));
+        const autoRequired = autoRequiredItemIds().includes(id);
+
+        if (autoRequired && (selected.get(id)?.auto || dismissedAuto.has(id))) {
+          if (rawQuantity <= 0) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+            selected.delete(id);
+            autoSelected.delete(id);
+            setItemButtonState(id, false);
+          } else {
+            dismissedAuto.delete(id);
+            autoOverrides.set(id, rawQuantity);
+            selected.set(id, {
+              name: item.name,
+              quantity: rawQuantity,
+              auto: true,
+              overridden: rawQuantity !== suggestedQuantity(item),
+            });
+            autoSelected.add(id);
+            setItemButtonState(id, true);
+          }
+          syncQuote();
+          return;
+        }
+
+        if (!selected.has(id)) return;
+        selected.set(id, { name: item.name, quantity: Math.max(1, rawQuantity || 1), auto: false });
         syncQuote();
       });
     });
 
-    restoreSelectionState();
-    if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
-    applyFilters();
-    refreshPackageInclusions();
-    refreshBundleAvailability();
-    renderGuestAdjustment();
-    syncSuggestedQuantities();
+    saveQuoteButton?.addEventListener('click', saveCurrentQuote);
+
+    copyQuoteLink?.addEventListener('click', async () => {
+      const value = savedQuoteLink?.value || '';
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        const original = copyQuoteLink.textContent;
+        copyQuoteLink.textContent = 'Copied ✓';
+        window.setTimeout(() => { copyQuoteLink.textContent = original; }, 1200);
+      } catch {
+        savedQuoteLink?.focus();
+        savedQuoteLink?.select();
+      }
+    });
+
+    async function initializeBuilder() {
+      await restoreSelectionState();
+      if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
+      applyFilters();
+      renderSelectedPackageDetails();
+      refreshPackageInclusions();
+      refreshBundleAvailability();
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
+    }
+
+    initializeBuilder();
   </script>
 </BaseLayout>
