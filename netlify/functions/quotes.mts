@@ -52,7 +52,7 @@ function storeFor(context: Context) {
 }
 
 function quoteId() {
-  const bytes = new Uint8Array(12);
+  const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (value) => ID_ALPHABET[value % ID_ALPHABET.length]).join('');
 }
@@ -135,7 +135,7 @@ export default async (req: Request, context: Context) => {
   const id = cleanText(context.params.id, 20).toUpperCase();
 
   if (req.method === 'GET' && id) {
-    if (!/^[2-9A-HJ-NP-Z]{12}$/.test(id)) {
+    if (!/^[2-9A-HJ-NP-Z]{16}$/.test(id)) {
       return Response.json({ error: 'Invalid quote ID.' }, { status: 400 });
     }
     const saved = await store.get('quotes/' + id, { type: 'json' }) as SavedQuote | null;
@@ -153,6 +153,15 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === 'POST' && !id) {
+    const origin = req.headers.get('origin');
+    const requestOrigin = new URL(req.url).origin;
+    if (origin && origin !== requestOrigin) {
+      return Response.json({ error: 'Cross-site quote saves are not allowed.' }, { status: 403 });
+    }
+    if (req.headers.get('x-koa-quote-save') !== '1') {
+      return Response.json({ error: 'Missing quote-save request header.' }, { status: 400 });
+    }
+
     const rawBody = await req.text();
     if (rawBody.length > 60_000) {
       return Response.json({ error: 'Quote data is too large.' }, { status: 413 });
