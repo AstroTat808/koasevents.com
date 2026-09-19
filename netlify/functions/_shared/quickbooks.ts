@@ -150,6 +150,22 @@ export async function disconnectQuickBooks(context: Context) {
   await integrationStore(context).delete('quickbooks/connection');
 }
 
+export async function getQuickBooksSettings(context: Context) {
+  return (await integrationStore(context).get('quickbooks/settings', { type: 'json' }) as any) || {
+    serviceItemId: '',
+    serviceItemName: '',
+  };
+}
+
+export async function saveQuickBooksSettings(context: Context, settings: { serviceItemId?: string; serviceItemName?: string }) {
+  const clean = {
+    serviceItemId: String(settings.serviceItemId || '').trim().slice(0, 80),
+    serviceItemName: String(settings.serviceItemName || '').trim().slice(0, 240),
+  };
+  await integrationStore(context).setJSON('quickbooks/settings', clean);
+  return clean;
+}
+
 export async function createOAuthState(context: Context, requestUrl: string) {
   const c = config();
   if (!c.clientId || !c.clientSecret || !c.encryptionKey) {
