@@ -1,8 +1,8 @@
 name: Gallery Export
 on:
-  push:
+  pull_request:
     branches:
-      - gallery-export-2026-09-18
+      - main
 
 permissions:
   contents: read
