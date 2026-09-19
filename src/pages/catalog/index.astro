@@ -1225,7 +1225,10 @@ const badgeClass = {
       const subject = encodeURIComponent('Koa’s Events quote ' + id);
       const body = encodeURIComponent('Here is the Koa’s Events quote we saved:\n\n' + recoveryUrl + '\n\nQuote ID: ' + id);
       if (shareQuoteEmail) shareQuoteEmail.href = 'mailto:?subject=' + subject + '&body=' + body;
-      if (shareQuoteText) shareQuoteText.href = 'sms:?&body=' + body;
+      if (shareQuoteText) {
+        const appleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        shareQuoteText.href = (appleMobile ? 'sms:&body=' : 'sms:?body=') + body;
+      }
       if (shareQuoteNative) shareQuoteNative.classList.toggle('hidden', !navigator.share);
     }
 
@@ -1441,10 +1444,13 @@ const badgeClass = {
           }
         } else {
           const item = itemById.get(id);
+          const publishedTotal = publishedManualLineTotal(id, entry);
           if (item?.priceLabel) {
             const price = document.createElement('span');
             price.className = 'mt-1 block text-xs text-white/48';
-            price.textContent = item.priceLabel;
+            price.textContent = publishedTotal
+              ? currency(publishedTotal) + ' included in estimate · ' + item.priceLabel
+              : item.priceLabel;
             label.appendChild(price);
           }
         }
