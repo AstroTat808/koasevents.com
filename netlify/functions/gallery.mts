@@ -28,7 +28,9 @@ type CuratedEdit = {
 type GalleryState = {
   uploads: GalleryItem[];
   hiddenCurated: string[];
+  hiddenUploads: string[];
   curatedEdits: Record<string, CuratedEdit>;
+  categoryOrder: Record<string, string[]>;
 };
 
 function storeFor(context: Context) {
@@ -53,14 +55,29 @@ function normalizeCuratedCategory(value: unknown, fallback: CuratedCategory = 'V
   return curatedCategories.includes(category as CuratedCategory) ? (category as CuratedCategory) : fallback;
 }
 
+function cleanOrder(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => String(item || '')).filter((item) => item.startsWith('curated:') || item.startsWith('upload:')))].slice(0, 500);
+}
+
 async function readState(context: Context): Promise<GalleryState> {
   const store = storeFor(context);
   const saved = (await store.get('gallery/index', { type: 'json' })) as Partial<GalleryState> | null;
   return {
     uploads: Array.isArray(saved?.uploads) ? saved.uploads : [],
     hiddenCurated: Array.isArray(saved?.hiddenCurated) ? saved.hiddenCurated : [],
+    hiddenUploads: Array.isArray(saved?.hiddenUploads) ? saved.hiddenUploads : [],
     curatedEdits: saved?.curatedEdits && typeof saved.curatedEdits === 'object' ? saved.curatedEdits : {},
+    categoryOrder: saved?.categoryOrder && typeof saved.categoryOrder === 'object' ? saved.categoryOrder : {},
   };
+}
+
+function curatedKey(src: string) {
+  return 'curated:' + src;
+}
+
+function uploadKey(id: string) {
+  return 'upload:' + id;
 }
 
 export default async (req: Request, context: Context) => {
@@ -89,10 +106,14 @@ export default async (req: Request, context: Context) => {
         category: normalizeGalleryCategory(item.category),
         focalX: clampFocal(item.focalX),
         focalY: clampFocal(item.focalY),
+        hidden: state.hiddenUploads.includes(item.id),
+        key: uploadKey(item.id),
         src: '/api/gallery/image/' + item.id,
       })),
       hiddenCurated: state.hiddenCurated,
+      hiddenUploads: state.hiddenUploads,
       curatedEdits: state.curatedEdits,
+      categoryOrder: state.categoryOrder,
     });
   }
 
@@ -129,7 +150,7 @@ export default async (req: Request, context: Context) => {
       await store.set('images/' + id, await file.arrayBuffer());
       const next: GalleryState = { ...state, uploads: [item, ...state.uploads] };
       await store.setJSON('gallery/index', next);
-      return Response.json({ ok: true, item: { ...item, src: '/api/gallery/image/' + id } });
+      return Response.json({ ok: true, item: { ...item, key: uploadKey(id), src: '/api/gallery/image/' + id } });
     }
 
     const payload = await req.json();
@@ -142,6 +163,15 @@ export default async (req: Request, context: Context) => {
       const next: GalleryState = { ...state, hiddenCurated: [...hiddenCurated] };
       await store.setJSON('gallery/index', next);
       return Response.json({ ok: true, hiddenCurated: next.hiddenCurated });
+    }
+
+    if (payload.action === 'upload-visibility') {
+      const id = String(payload.id || '');
+      const hiddenUploads = new Set(state.hiddenUploads);
+      Boolean(payload.hidden) ? hiddenUploads.add(id) : hiddenUploads.delete(id);
+      const next: GalleryState = { ...state, hiddenUploads: [...hiddenUploads] };
+      await store.setJSON('gallery/index', next);
+      return Response.json({ ok: true, hiddenUploads: next.hiddenUploads });
     }
 
     if (payload.action === 'update-upload') {
@@ -184,6 +214,66 @@ export default async (req: Request, context: Context) => {
       return Response.json({ ok: true, edit: nextEdit });
     }
 
+    if (payload.action === 'reorder') {
+      const category = normalizeCuratedCategory(payload.category);
+      const categoryOrder = { ...state.categoryOrder, [category]: cleanOrder(payload.keys) };
+      const next: GalleryState = { ...state, categoryOrder };
+      await store.setJSON('gallery/index', next);
+      return Response.json({ ok: true, category, order: categoryOrder[category] });
+    }
+
+    if (payload.action === 'bulk-update') {
+      const selected = Array.isArray(payload.items) ? payload.items.slice(0, 250) : [];
+      const operation = String(payload.operation || '');
+      const uploadIds = new Set(selected.filter((item) => item?.kind === 'upload').map((item) => String(item.id || '')).filter(Boolean));
+      const curatedSrcs = new Set(selected.filter((item) => item?.kind === 'curated').map((item) => String(item.src || '')).filter((src) => src.startsWith('/')));
+
+      let uploads = [...state.uploads];
+      let hiddenCurated = new Set(state.hiddenCurated);
+      let hiddenUploads = new Set(state.hiddenUploads);
+      let curatedEdits = { ...state.curatedEdits };
+      let categoryOrder = { ...state.categoryOrder };
+
+      if (operation === 'set-category') {
+        const category = normalizeGalleryCategory(payload.category);
+        uploads = uploads.map((item) => uploadIds.has(item.id) ? { ...item, category } : item);
+        curatedSrcs.forEach((src) => {
+          const existing = curatedEdits[src] || {};
+          curatedEdits[src] = { ...existing, category, updatedAt: new Date().toISOString() };
+        });
+      } else if (operation === 'hide') {
+        uploadIds.forEach((id) => hiddenUploads.add(id));
+        curatedSrcs.forEach((src) => hiddenCurated.add(src));
+      } else if (operation === 'show') {
+        uploadIds.forEach((id) => hiddenUploads.delete(id));
+        curatedSrcs.forEach((src) => hiddenCurated.delete(src));
+      } else if (operation === 'delete') {
+        await Promise.all([...uploadIds].map((id) => store.delete('images/' + id)));
+        uploads = uploads.filter((item) => !uploadIds.has(item.id));
+        uploadIds.forEach((id) => hiddenUploads.delete(id));
+        curatedSrcs.forEach((src) => hiddenCurated.add(src));
+        categoryOrder = Object.fromEntries(
+          Object.entries(categoryOrder).map(([category, keys]) => [
+            category,
+            cleanOrder(keys).filter((key) => !uploadIds.has(key.replace(/^upload:/, ''))),
+          ]),
+        );
+      } else {
+        return Response.json({ error: 'Unknown bulk operation.' }, { status: 400 });
+      }
+
+      const next: GalleryState = {
+        ...state,
+        uploads,
+        hiddenCurated: [...hiddenCurated],
+        hiddenUploads: [...hiddenUploads],
+        curatedEdits,
+        categoryOrder,
+      };
+      await store.setJSON('gallery/index', next);
+      return Response.json({ ok: true });
+    }
+
     if (payload.action === 'reset-curated') {
       const src = String(payload.src || '');
       const curatedEdits = { ...state.curatedEdits };
@@ -196,7 +286,18 @@ export default async (req: Request, context: Context) => {
     if (payload.action === 'delete-upload') {
       const id = String(payload.id || '');
       await store.delete('images/' + id);
-      const next: GalleryState = { ...state, uploads: state.uploads.filter((item) => item.id !== id) };
+      const categoryOrder = Object.fromEntries(
+        Object.entries(state.categoryOrder).map(([category, keys]) => [
+          category,
+          cleanOrder(keys).filter((key) => key !== uploadKey(id)),
+        ]),
+      );
+      const next: GalleryState = {
+        ...state,
+        uploads: state.uploads.filter((item) => item.id !== id),
+        hiddenUploads: state.hiddenUploads.filter((item) => item !== id),
+        categoryOrder,
+      };
       await store.setJSON('gallery/index', next);
       return Response.json({ ok: true });
     }
