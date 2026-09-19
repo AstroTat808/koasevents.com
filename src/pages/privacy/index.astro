@@ -1,0 +1,89 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+
+const updated = 'September 19, 2026';
+---
+<BaseLayout
+  title="Privacy Policy | Koa’s Events"
+  description="Privacy Policy for Koa’s Events, including website inquiries, event planning portals and QuickBooks Online integration."
+  canonical="https://koasevents.com/privacy/"
+>
+  <Header overlay={false} />
+  <main class="bg-[var(--koa-ivory)] py-16 sm:py-20 lg:py-24">
+    <article class="container-shell max-w-4xl">
+      <p class="eyebrow text-[var(--koa-clay)]">Legal</p>
+      <h1 class="display mt-4 text-5xl sm:text-6xl">Privacy Policy</h1>
+      <p class="mt-4 text-sm text-[var(--koa-ink)]/50">Last updated {updated}</p>
+
+      <div class="mt-10 grid gap-10 text-sm leading-7 text-[var(--koa-ink)]/70">
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">1. Scope</h2>
+          <p class="mt-3">This Privacy Policy describes how Koa’s Events LLC (“Koa’s,” “we,” “us,” or “our”) handles personal information when you use koasevents.com, submit an inquiry, request or save a quote, receive a proposal, use a booking or planning portal, communicate with us, or otherwise interact with Koa’s Events.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">2. Information we collect</h2>
+          <p class="mt-3">Depending on how you interact with Koa’s, we may collect your name, email address, phone number, event date, event type, guest count, budget, service interests, preferred contact method, quote selections, proposal and contract information, planning questionnaire responses, vendor contacts, event timelines, final guest count, and files you choose to upload such as insurance certificates, floor plans, vendor documents, images, spreadsheets, or planning documents.</p>
+          <p class="mt-3">For administrators and staff, we may also process authentication information, account roles, CRM notes, activity records, operational assignments, and records needed to manage events.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">3. How we use information</h2>
+          <p class="mt-3">We use personal information to respond to inquiries; prepare quotes, proposals, estimates, contracts, invoices, and event plans; communicate about services; administer bookings; coordinate vendors and event logistics; operate client portals; maintain internal sales and event records; provide customer support; protect the security of our systems; comply with legal obligations; and improve Koa’s services and website experience.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">4. QuickBooks Online</h2>
+          <p class="mt-3">Koa’s uses QuickBooks Online as its accounting system for estimates, invoices, and payment status. When appropriate, information from a Koa’s CRM record may be transmitted to QuickBooks Online to create or update a customer, estimate, or invoice. Koa’s may also retrieve accounting-document identifiers, document numbers, email status, invoice totals, balances, due dates, and payment status from QuickBooks Online so that our CRM reflects the current accounting status.</p>
+          <p class="mt-3">The Koa’s website does not collect or store your payment-card number for QuickBooks payments. Payment instructions and payment processing are handled through the QuickBooks workflow. Access to the Koa’s QuickBooks company is authorized by Koa’s administrators through Intuit’s OAuth process. Authorization credentials and tokens are handled server-side and are not exposed through client-facing pages.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">5. Service providers and disclosures</h2>
+          <p class="mt-3">We may share information with service providers that help us host, operate, secure, communicate through, or administer the website and our business systems. This includes providers such as Netlify for website infrastructure and Intuit/QuickBooks Online for accounting workflows. We may also share information with vendors or service providers when necessary to coordinate an event or fulfill a client request.</p>
+          <p class="mt-3">We may disclose information when required by law, legal process, or a valid governmental request; when reasonably necessary to protect Koa’s, our clients, guests, property, or others; or in connection with a business reorganization or transfer.</p>
+          <p class="mt-3"><strong>Koa’s does not sell personal information to advertisers.</strong></p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">6. Client planning and document uploads</h2>
+          <p class="mt-3">Booked clients may receive secure links to booking or planning portals. Information and files submitted through those portals become part of the event record and may be viewed by authorized Koa’s staff. Client-uploaded files may include information about vendors or other individuals; you should provide only information you are authorized to share.</p>
+          <p class="mt-3">Internal Koa’s operational documents, staff notes, approvals, and assignments are maintained separately from client-facing portal content.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">7. Retention</h2>
+          <p class="mt-3">We retain information for as long as reasonably necessary to manage inquiries, proposals, bookings, events, accounting records, contractual obligations, dispute resolution, security, and legal or tax requirements. Retention periods may differ depending on the type of record and our obligations.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">8. Security</h2>
+          <p class="mt-3">We use reasonable administrative, technical, and organizational safeguards designed to protect information. Access to administrative systems is restricted, client portals use private booking tokens, and sensitive integration credentials are handled server-side. No method of storage or transmission can be guaranteed to be completely secure.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">9. Your choices and requests</h2>
+          <p class="mt-3">You may ask us to update or correct contact or event-planning information associated with your relationship with Koa’s. You may also ask questions about how we handle your information. Some records may need to be retained for accounting, contractual, operational, security, or legal reasons.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">10. Children</h2>
+          <p class="mt-3">The Koa’s website, inquiry forms, booking tools, and planning portals are intended for adults arranging or administering events and are not directed to children under 13.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">11. Changes to this policy</h2>
+          <p class="mt-3">We may update this Privacy Policy as our services, systems, or legal obligations change. The “Last updated” date above identifies the current version.</p>
+        </section>
+
+        <section>
+          <h2 class="display text-3xl text-[var(--koa-forest)]">12. Contact</h2>
+          <p class="mt-3">Koa’s Events LLC<br />Mountain View, Hawaiʻi<br /><a class="underline" href="mailto:aloha@koasevents.com">aloha@koasevents.com</a><br /><a class="underline" href="tel:+18448085627">844-808-KOAS</a></p>
+        </section>
+      </div>
+    </article>
+  </main>
+  <Footer />
+</BaseLayout>
