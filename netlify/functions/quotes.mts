@@ -17,6 +17,7 @@ type QuoteState = {
   guestCount: number;
   selected: SelectedQuoteItem[];
   estimatedFurnitureTotal: number;
+  publishedAddOnTotal?: number;
   basePackagePrice?: number;
   estimatedStartingTotal?: number;
   packageIncludes?: string[];
@@ -120,6 +121,7 @@ function cleanState(input: unknown): QuoteState | null {
     guestCount,
     selected,
     estimatedFurnitureTotal: Math.max(0, finiteNumber(raw.estimatedFurnitureTotal, 0)),
+    publishedAddOnTotal: Math.max(0, finiteNumber(raw.publishedAddOnTotal, 0)),
     basePackagePrice: Math.max(0, finiteNumber(raw.basePackagePrice, 0)),
     estimatedStartingTotal: Math.max(0, finiteNumber(raw.estimatedStartingTotal, 0)),
     packageIncludes,
