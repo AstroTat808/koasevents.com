@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { catalogCategories, catalogItems, catalogPricingNote, catalogBundles, bundleSavingsTiers } from '../../data/catalog';
+import { businessRules } from '../../data/businessRules';
 
 const browseCategoryOrder = ['all', 'furniture', 'decor', 'tabletop', 'production', 'bar', 'services'] as const;
 const browseCatalogCategories = browseCategoryOrder
@@ -42,6 +43,20 @@ const catalogClientData = catalogItems.map((item) => ({
 }));
 const bundleClientData = catalogBundles;
 const tierClientData = bundleSavingsTiers;
+const packageRuleById = {
+  gardenia: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Gardenia'),
+  orchid: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Orchid'),
+  hibiscus: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Hibiscus'),
+  'signature-wedding': businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Plumeria'),
+};
+const packagePlanningData = Object.fromEntries(
+  Object.entries(packageRuleById).map(([id, pkg]) => [id, pkg ? {
+    name: pkg.name === 'Plumeria' ? 'Koa’s Signature Wedding Experience' : pkg.name + ' Wedding Collection',
+    includedInventory: pkg.includedInventory,
+    baseConfiguration: pkg.baseConfiguration,
+    planningInventory: pkg.planningInventory || null,
+  } : null])
+);
 
 const badgeClass = {
   flagship: 'bg-[var(--koa-amber-light)] text-[var(--koa-ink)]',
@@ -112,6 +127,11 @@ const badgeClass = {
               <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">{item.name.replace(' Wedding Collection','').replace('Koa’s Signature Wedding Experience','Signature')}</span>
               <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
               <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
+              {packageRuleById[item.id] && (
+                <span class="mt-5 block border-t border-[var(--koa-line)] pt-4 text-xs leading-5 text-[var(--koa-ink)]/55">
+                  <strong class="text-[var(--koa-forest)]">Included furniture:</strong> {packageRuleById[item.id]?.includedInventory}
+                </span>
+              )}
             </button>
           ))}
           <button type="button" data-starting-point="ala-carte" aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
@@ -126,6 +146,18 @@ const badgeClass = {
         <div class="mt-4 hidden rounded-[1.2rem] bg-[var(--koa-forest)] p-5 text-white" data-starting-summary>
           <p class="eyebrow text-[var(--koa-amber-light)]">Your starting point</p>
           <p class="mt-2 text-sm" data-starting-summary-text></p>
+        </div>
+
+        <div class="mt-4 hidden rounded-[1.2rem] border border-[var(--koa-clay)]/30 bg-white p-5 shadow-[var(--shadow-soft)]" data-guest-adjustment>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Guest-count check</p>
+              <h3 class="display mt-2 text-3xl">What your package covers—and what you may need to add.</h3>
+            </div>
+            <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-forest)]" data-guest-adjustment-count></span>
+          </div>
+          <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68" data-guest-adjustment-copy></p>
+          <div class="mt-5 hidden grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-guest-adjustment-items></div>
         </div>
       </div>
     </section>
@@ -160,7 +192,7 @@ const badgeClass = {
           </div>
 
           <div class="grid gap-4 md:grid-cols-2" data-catalog-grid>
-            {browseCatalogItems.map((item) => (
+            {browseCatalogItems.map((item, index) => (
               <article
                 data-catalog-item
                 data-id={item.id}
@@ -168,7 +200,8 @@ const badgeClass = {
                 data-bundle-eligible={item.bundleEligible ? 'true' : 'false'}
                 data-included-with={(item.includedWith || []).join('|')}
                 data-search={[item.name, item.description, ...(item.keywords || [])].join(' ').toLowerCase()}
-                class="card-lift flex min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6"
+                data-mobile-extra={index >= 8 ? 'true' : 'false'}
+                class:list={['card-lift min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6', index >= 8 ? 'hidden md:flex' : 'flex']}
               >
                 <div class="flex items-start justify-between gap-4">
                   <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{browseCatalogCategories.find((category) => category.id === item.category)?.label}</span>
@@ -243,6 +276,9 @@ const badgeClass = {
               </article>
             ))}
           </div>
+          <button type="button" data-mobile-catalog-toggle class="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)] md:hidden">
+            Show all rentals + enhancements
+          </button>
 
           <div data-catalog-empty class="hidden rounded-[1.4rem] border border-dashed border-[var(--koa-line)] bg-[var(--koa-sand)] p-10 text-center">
             <p class="display text-3xl">No matching catalog items.</p>
@@ -359,7 +395,7 @@ const badgeClass = {
   </main>
   <Footer />
 
-  <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData }}>
+  <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData, packagePlanningData }}>
     const filterButtons = [...document.querySelectorAll('[data-catalog-filters] [data-category]')];
     const cards = [...document.querySelectorAll('[data-catalog-item]')];
     const bundleButtons = [...document.querySelectorAll('[data-add-bundle]')];
@@ -385,20 +421,47 @@ const badgeClass = {
     const startingSummary = document.querySelector('[data-starting-summary]');
     const startingSummaryText = document.querySelector('[data-starting-summary-text]');
     const startingPointInput = document.querySelector('[data-starting-point-input]');
+    const guestAdjustment = document.querySelector('[data-guest-adjustment]');
+    const guestAdjustmentCount = document.querySelector('[data-guest-adjustment-count]');
+    const guestAdjustmentCopy = document.querySelector('[data-guest-adjustment-copy]');
+    const guestAdjustmentItems = document.querySelector('[data-guest-adjustment-items]');
+    const mobileCatalogToggle = document.querySelector('[data-mobile-catalog-toggle]');
 
     let activeCategory = 'all';
     let startingPoint = '';
+    let mobileCatalogExpanded = false;
     const selected = new Map();
 
     function guestCount() {
       return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
     }
 
-    function suggestedQuantity(item) {
+    function selectedPackagePlan() {
+      return startingPoint ? packagePlanningData[startingPoint] || null : null;
+    }
+
+    function includedQuantityForItem(item) {
+      const plan = selectedPackagePlan()?.planningInventory;
+      if (!plan || !item) return 0;
+      if (item.id === 'ceremony-chair') return Number(plan.includedCeremonyChairs ?? plan.includedChairCount ?? 0);
+      if (item.id === 'reception-chair') return Number(plan.includedReceptionChairs ?? plan.includedChairCount ?? 0);
+      if (item.id === 'round-table') return Number(plan.includedRoundTables ?? 0);
+      if (item.id === 'rectangle-table') return Number(plan.includedRectangleTables ?? 0);
+      if (item.id === 'cocktail-table') return Number(plan.includedCocktailTables ?? 0);
+      return 0;
+    }
+
+    function recommendedTotalForItem(item) {
       const guests = guestCount();
       if (item?.quantityMode === 'guest-count') return guests;
       if (item?.quantityMode === 'round-tables') return Math.ceil(guests / 8);
       return 1;
+    }
+
+    function suggestedQuantity(item) {
+      const recommendedTotal = recommendedTotalForItem(item);
+      const included = isIncludedBySelectedPackage(item) ? includedQuantityForItem(item) : 0;
+      return Math.max(1, recommendedTotal - included);
     }
 
     function syncSuggestedQuantities() {
@@ -442,6 +505,8 @@ const badgeClass = {
       }
       refreshPackageInclusions();
       refreshBundleAvailability();
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
       syncQuote();
 
       window.setTimeout(() => {
@@ -472,12 +537,26 @@ const badgeClass = {
       cards.forEach((card) => {
         const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
         const searchMatch = !term || (card.dataset.search || '').includes(term);
-        const show = categoryMatch && searchMatch;
+        const isMobileExtra = card.dataset.mobileExtra === 'true';
+        const revealForMobile = mobileCatalogExpanded || activeCategory !== 'all' || Boolean(term) || !isMobileExtra;
+        const show = categoryMatch && searchMatch && revealForMobile;
         card.classList.toggle('hidden', !show);
+        card.classList.toggle('md:flex', isMobileExtra);
         if (show) visible += 1;
       });
 
-      if (count) count.textContent = visible + (visible === 1 ? ' item' : ' items');
+      if (count) {
+        const totalMatching = cards.filter((card) => {
+          const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
+          const searchMatch = !term || (card.dataset.search || '').includes(term);
+          return categoryMatch && searchMatch;
+        }).length;
+        count.textContent = visible + ' shown · ' + totalMatching + ' total';
+      }
+      if (mobileCatalogToggle) {
+        const shouldShowToggle = activeCategory === 'all' && !term && !mobileCatalogExpanded && cards.some((card) => card.dataset.mobileExtra === 'true');
+        mobileCatalogToggle.classList.toggle('hidden', !shouldShowToggle);
+      }
       empty?.classList.toggle('hidden', visible !== 0);
     }
 
@@ -508,12 +587,100 @@ const badgeClass = {
       return itemById.get(startingPoint)?.name || '';
     }
 
+    function renderGuestAdjustment() {
+      const plan = selectedPackagePlan();
+      const guests = guestCount();
+
+      if (!plan || startingPoint === 'ala-carte') {
+        guestAdjustment?.classList.add('hidden');
+        return;
+      }
+
+      guestAdjustment?.classList.remove('hidden');
+      if (guestAdjustmentCount) guestAdjustmentCount.textContent = guests + (guests === 1 ? ' guest' : ' guests');
+
+      const inventory = plan.planningInventory || {};
+      const additions = [];
+      const generalChairCount = Number(inventory.includedChairCount ?? 0);
+      const ceremonyChairCount = Number(inventory.includedCeremonyChairs ?? 0);
+      const receptionChairCount = Number(inventory.includedReceptionChairs ?? 0);
+      const roundTables = Number(inventory.includedRoundTables ?? 0);
+
+      if (ceremonyChairCount || receptionChairCount) {
+        const extraCeremony = Math.max(0, guests - ceremonyChairCount);
+        const extraReception = Math.max(0, guests - receptionChairCount);
+        if (extraCeremony > 0) additions.push({ label: 'Additional ceremony chairs', value: extraCeremony });
+        if (extraReception > 0) additions.push({ label: 'Additional reception chairs', value: extraReception });
+      } else if (generalChairCount) {
+        const extraChairs = Math.max(0, guests - generalChairCount);
+        if (extraChairs > 0) additions.push({ label: 'Additional chairs', value: extraChairs });
+      }
+
+      if (roundTables) {
+        const recommendedTables = Math.ceil(guests / 8);
+        const extraTables = Math.max(0, recommendedTables - roundTables);
+        if (extraTables > 0) additions.push({ label: 'Additional 60-inch rounds', value: extraTables });
+      }
+
+      if (guestAdjustmentCopy) {
+        const base = plan.name + ' includes ' + plan.includedInventory + '. ';
+        if (startingPoint === 'orchid') {
+          const extraChairs = Math.max(0, guests - Number(inventory.includedChairCount ?? 0));
+          guestAdjustmentCopy.textContent = base + (
+            extraChairs > 0
+              ? 'For ' + guests + ' guests, plan on ' + extraChairs + ' additional chairs. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
+              : 'Your entered guest count is within the included chair quantity. Table capacity still depends on which 2 table styles you select.'
+          );
+        } else if (additions.length) {
+          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional quantities below should be planned into the quote.';
+        } else {
+          guestAdjustmentCopy.textContent = base + 'Your entered guest count fits within the published included furniture quantities using the 8-guests-per-round planning default.';
+        }
+      }
+
+      if (guestAdjustmentItems) {
+        guestAdjustmentItems.innerHTML = '';
+        guestAdjustmentItems.classList.toggle('hidden', additions.length === 0);
+        additions.forEach((entry) => {
+          const box = document.createElement('div');
+          box.className = 'rounded-xl bg-[var(--koa-sand)] p-4';
+          const label = document.createElement('p');
+          label.className = 'text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]';
+          label.textContent = entry.label;
+          const value = document.createElement('p');
+          value.className = 'display mt-1 text-3xl text-[var(--koa-forest)]';
+          value.textContent = String(entry.value);
+          box.append(label, value);
+          guestAdjustmentItems.appendChild(box);
+        });
+      }
+    }
+
     function knownIncludedQuantity(item) {
-      if (!item || startingPoint !== 'signature-wedding') return '';
-      const spec = (item.specs || []).find((entry) =>
-        String(entry.label || '').toLowerCase().includes('signature includes')
-      );
-      return spec?.value || '';
+      if (!item) return '';
+      const plan = selectedPackagePlan()?.planningInventory;
+      if (!plan) return '';
+      if (item.id === 'ceremony-chair') {
+        const qty = Number(plan.includedCeremonyChairs ?? plan.includedChairCount ?? 0);
+        return qty ? qty + ' chair' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'reception-chair') {
+        const qty = Number(plan.includedReceptionChairs ?? plan.includedChairCount ?? 0);
+        return qty ? qty + ' chair' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'round-table') {
+        const qty = Number(plan.includedRoundTables ?? 0);
+        return qty ? qty + ' 60-inch round table' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'rectangle-table') {
+        const qty = Number(plan.includedRectangleTables ?? 0);
+        return qty ? qty + ' six-foot rectangle table' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'cocktail-table') {
+        const qty = Number(plan.includedCocktailTables ?? 0);
+        return qty ? qty + ' cocktail table' + (qty === 1 ? '' : 's') : '';
+      }
+      return '';
     }
 
     function refreshPackageInclusions() {
@@ -732,6 +899,11 @@ const badgeClass = {
 
     search?.addEventListener('input', applyFilters);
 
+    mobileCatalogToggle?.addEventListener('click', () => {
+      mobileCatalogExpanded = true;
+      applyFilters();
+    });
+
     cards.forEach((card) => {
       const button = card.querySelector('[data-add-to-quote]');
       button?.addEventListener('click', () => {
@@ -789,9 +961,13 @@ const badgeClass = {
     });
 
     startingButtons.forEach((button) => button.addEventListener('click', () => chooseStartingPoint(button.dataset.startingPoint || '')));
-    guestInput?.addEventListener('input', syncSuggestedQuantities);
+    guestInput?.addEventListener('input', () => {
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
+    });
     quoteGuestInput?.addEventListener('input', () => {
       if (guestInput) guestInput.value = quoteGuestInput.value;
+      renderGuestAdjustment();
       syncSuggestedQuantities();
     });
     cards.forEach((card) => {
@@ -808,6 +984,7 @@ const badgeClass = {
     applyFilters();
     refreshPackageInclusions();
     refreshBundleAvailability();
+    renderGuestAdjustment();
     syncSuggestedQuantities();
   </script>
 </BaseLayout>
