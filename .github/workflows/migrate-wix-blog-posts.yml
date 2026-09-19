@@ -31,5 +31,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/data/wixBlogPosts.ts public/media/blog
-          git commit -m "Migrate Wix blog posts and featured images"
-          git push
+          git commit -m "Migrate Wix blog posts and all article images"
+          git pull --rebase origin main
+          git push origin main
