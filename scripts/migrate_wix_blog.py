@@ -669,7 +669,7 @@ def verify(posts: list[dict]):
         media_source = media_file.read_text(encoding="utf-8")
         media_lookup = {
             match.group(1): "/media/koa/" + match.group(2)
-            for match in re.finditer(r"([A-Za-z0-9_]+): koaMarketing\\('([^']+)'", media_source)
+            for match in re.finditer(r"([A-Za-z0-9_]+): koaMarketing\('([^']+)'", media_source)
         }
         homepage_keys = set(re.findall(r"koaMarketingMedia\\.([A-Za-z0-9_]+)", homepage_source))
         homepage_images = {media_lookup[key] for key in homepage_keys if key in media_lookup}
