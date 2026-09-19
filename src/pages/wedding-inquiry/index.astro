@@ -51,56 +51,30 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
     return id || '';
   }
 
-  function describeState(state) {
-    const auto = (state?.selected || []).filter((entry) => entry.auto);
-    const manual = (state?.selected || []).filter((entry) => !entry.auto);
-    const autoText = auto.length
-      ? auto.map((entry) => entry.quantity + ' × ' + entry.name).join(', ')
-      : 'No automatic furniture add-ons';
-    const manualText = manual.length
-      ? manual.map((entry) => entry.quantity + ' × ' + entry.name).join(', ')
-      : 'No manual add-ons';
-    return { autoText, manualText, all: [...auto, ...manual] };
-  }
-
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
 
   if (saved) {
-    const queryPackage = normalizedInquiryPackage(requestedPackage);
-    const savedPackage = normalizedInquiryPackage(saved.startingPoint);
-    const packageValue = queryPackage || savedPackage;
+    const packageValue = normalizedInquiryPackage(requestedPackage) || normalizedInquiryPackage(saved.startingPoint);
     if (packageField && packageValue) packageField.value = packageValue;
     if (guestField && !requestedGuests && saved.guestCount) guestField.value = String(saved.guestCount);
 
-    const details = describeState(saved);
-    const allText = details.all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
-    const autoDetailed = details.all.filter((entry) => entry.auto).map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: 
-    const manualDetailed = details.all.filter((entry) => !entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const auto = (saved.selected || []).filter((entry) => entry.auto);
+    const manual = (saved.selected || []).filter((entry) => !entry.auto);
+    const all = [...auto, ...manual];
+    const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: USD ' + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
+    const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
 
     if (selectedItemsInput) selectedItemsInput.value = allText;
-    if (autoBreakdownInput) autoBreakdownInput.value = autoDetailed;
-    if (manualAddOnsInput) manualAddOnsInput.value = manualDetailed;
+    if (autoBreakdownInput) autoBreakdownInput.value = autoText;
+    if (manualAddOnsInput) manualAddOnsInput.value = manualText;
     if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
     if (stateInput) stateInput.value = JSON.stringify(saved);
 
     carriedPlan?.classList.remove('hidden');
     if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
-    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoDetailed || 'none') + ' Manual add-ons: ' + details.manualText + '. These selections will be submitted with this inquiry.';
-  }
-</script>
-</BaseLayout> + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
-    const manualDetailed = details.all.filter((entry) => !entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
-
-    if (selectedItemsInput) selectedItemsInput.value = allText;
-    if (autoBreakdownInput) autoBreakdownInput.value = autoDetailed;
-    if (manualAddOnsInput) manualAddOnsInput.value = manualDetailed;
-    if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
-    if (stateInput) stateInput.value = JSON.stringify(saved);
-
-    carriedPlan?.classList.remove('hidden');
-    if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
-    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + details.autoText + '. Manual add-ons: ' + details.manualText + '. These selections will be submitted with this inquiry.';
+    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + ' Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
   }
 </script>
 </BaseLayout>
