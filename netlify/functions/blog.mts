@@ -44,11 +44,7 @@ async function readPosts(context: Context): Promise<BlogPost[]> {
     return seeded;
   }
 
-  // Keep committed legacy posts recoverable even if a blob record is accidentally
-  // removed. Stored/admin-edited versions take precedence for matching slugs.
-  const bySlug = new Map(legacySeed().map((post) => [post.slug, post]));
-  for (const post of stored) bySlug.set(post.slug, post);
-  return [...bySlug.values()];
+  return stored;
 }
 
 export default async (req: Request, context: Context) => {
