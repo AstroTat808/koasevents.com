@@ -3,6 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { wixBlogPosts } from '../../data/wixBlogPosts';
+import { koaMarketingGallery } from '../../data/media';
 
 export function getStaticPaths() {
   return wixBlogPosts
@@ -49,6 +50,36 @@ const primaryCtaLabel =
   post.category === 'Budget Weddings' ? 'Explore venue packages' :
   post.category === 'Hawaiʻi Weddings' ? 'Explore weddings at Koa’s' :
   'Start planning your event';
+
+const galleryCategoryMap: Record<string, string[]> = {
+  'Hawaiʻi Weddings': ['Ceremony', 'Reception', 'Venue'],
+  'Mobile Bar': ['Mobile Bar', 'Reception', 'Enhancements'],
+  'Wedding Planning': ['Ceremony', 'Reception', 'Venue'],
+  'Bachelorette Parties': ['Hospitality', 'Stay', 'Enhancements', 'Mobile Bar'],
+  'Budget Weddings': ['Reception', 'Ceremony', 'Venue'],
+};
+
+const usedArticleImages = new Set([
+  post.featuredImage,
+  ...(post.images || []).map((image) => image.src),
+]);
+
+const relatedGalleryCategories = galleryCategoryMap[post.category] || ['Venue', 'Ceremony', 'Reception'];
+const relatedGallery = relatedGalleryCategories
+  .flatMap((category) => koaMarketingGallery.filter((image) => image.category === category))
+  .filter((image, index, list) =>
+    !usedArticleImages.has(image.src) &&
+    list.findIndex((candidate) => candidate.src === image.src) === index
+  )
+  .slice(0, 6);
+
+const lightboxSeed = [
+  { src: post.featuredImage, alt: post.title },
+  ...(post.images || [])
+    .filter((image) => image.src !== post.featuredImage)
+    .map((image) => ({ src: image.src, alt: image.alt })),
+  ...relatedGallery.map((image) => ({ src: image.src, alt: image.alt })),
+].filter((image, index, list) => list.findIndex((candidate) => candidate.src === image.src) === index);
 
 const articleSchema = {
   '@context': 'https://schema.org',
@@ -118,7 +149,13 @@ const breadcrumbSchema = {
       </header>
 
       <div class="container-shell py-10 lg:py-16">
-        <div class="mx-auto max-w-5xl overflow-hidden rounded-[2rem] bg-[var(--koa-sand)]">
+        <button
+          type="button"
+          data-blog-lightbox-src={post.featuredImage}
+          data-blog-lightbox-alt={post.title}
+          class="group mx-auto block w-full max-w-5xl cursor-zoom-in overflow-hidden rounded-[2rem] bg-[var(--koa-sand)] text-left"
+          aria-label="Open featured image"
+        >
           <img
             src={post.featuredImage}
             alt={post.title}
@@ -126,9 +163,9 @@ const breadcrumbSchema = {
             height="900"
             fetchpriority="high"
             decoding="async"
-            class="aspect-[16/9] w-full object-cover"
+            class="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.01]"
           />
-        </div>
+        </button>
       </div>
 
       <div class="container-shell pb-20 lg:pb-28">
@@ -172,6 +209,47 @@ const breadcrumbSchema = {
           </aside>
         </div>
 
+        {relatedGallery.length > 0 && (
+          <section class="mx-auto mt-20 max-w-6xl" aria-labelledby="related-gallery">
+            <div class="flex flex-wrap items-end justify-between gap-5">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">From the Koa’s gallery</p>
+                <h2 id="related-gallery" class="display mt-4 text-4xl sm:text-5xl">Related gallery</h2>
+                <p class="mt-4 max-w-2xl text-sm leading-7 text-[var(--koa-ink)]/58">More real Koa’s spaces, details, and event moments connected to this article.</p>
+              </div>
+              <a href="/gallery/" class="link-arrow">Explore the full gallery →</a>
+            </div>
+            <div class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {relatedGallery.map((image, index) => (
+                <button
+                  type="button"
+                  data-blog-lightbox-src={image.src}
+                  data-blog-lightbox-alt={image.alt}
+                  class:list={[
+                    'group relative overflow-hidden rounded-[1.3rem] bg-[var(--koa-sand)] text-left',
+                    index === 0 ? 'sm:col-span-2 lg:col-span-2' : '',
+                  ]}
+                  aria-label={`Open gallery image: ${image.alt}`}
+                >
+                  <img
+                    src={image.src}
+                    alt={image.alt}
+                    loading="lazy"
+                    decoding="async"
+                    class:list={[
+                      'w-full object-cover transition duration-500 group-hover:scale-[1.02]',
+                      index === 0 ? 'aspect-[16/9]' : 'aspect-[4/3]',
+                    ]}
+                  />
+                  <span class="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent"></span>
+                  <span class="absolute bottom-4 left-4 max-w-[80%] text-left text-xs font-semibold leading-5 text-white/92">{image.alt}</span>
+                  <span class="absolute bottom-4 right-4 grid size-9 place-items-center rounded-full border border-white/30 bg-black/20 text-lg text-white backdrop-blur">+</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {related.length > 0 && (
           <section class="mx-auto mt-20 max-w-6xl" aria-labelledby="related-posts">
             <p class="eyebrow text-[var(--koa-clay)]">Keep reading</p>
@@ -193,6 +271,84 @@ const breadcrumbSchema = {
     </article>
   </main>
   <Footer />
+
+  <dialog id="blog-lightbox" class="m-auto h-[92svh] w-[94vw] max-w-7xl overflow-hidden rounded-[1.3rem] border border-white/15 bg-[rgba(6,23,18,.96)] p-0 text-white backdrop:bg-black/80">
+    <div class="relative flex h-full items-center justify-center p-4 sm:p-8">
+      <button type="button" data-blog-lightbox-close class="absolute right-4 top-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Close image">×</button>
+      <button type="button" data-blog-lightbox-prev class="absolute left-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Previous image">←</button>
+      <figure class="flex max-h-full max-w-full flex-col items-center gap-4">
+        <img data-blog-lightbox-image src="" alt="" class="max-h-[78svh] max-w-full rounded-lg object-contain" />
+        <figcaption data-blog-lightbox-caption class="max-w-3xl text-center text-sm leading-6 text-white/72"></figcaption>
+      </figure>
+      <button type="button" data-blog-lightbox-next class="absolute right-4 z-20 grid size-11 place-items-center rounded-full border border-white/25 bg-black/25 text-xl backdrop-blur" aria-label="Next image">→</button>
+    </div>
+  </dialog>
+
+  <script is:inline define:vars={{ lightboxSeed }}>
+    (() => {
+      const dialog = document.getElementById('blog-lightbox');
+      const image = dialog?.querySelector('[data-blog-lightbox-image]');
+      const caption = dialog?.querySelector('[data-blog-lightbox-caption]');
+      if (!dialog || !(image instanceof HTMLImageElement)) return;
+
+      const items = Array.isArray(lightboxSeed) ? [...lightboxSeed] : [];
+      let current = 0;
+
+      function register(src, alt = '') {
+        if (!src) return -1;
+        const existing = items.findIndex((item) => item.src === src);
+        if (existing >= 0) return existing;
+        items.push({ src, alt });
+        return items.length - 1;
+      }
+
+      function show(index) {
+        if (!items.length) return;
+        current = (index + items.length) % items.length;
+        image.src = items[current].src;
+        image.alt = items[current].alt || '';
+        if (caption) caption.textContent = items[current].alt || '';
+        if (!dialog.open) dialog.showModal();
+      }
+
+      document.querySelectorAll('[data-blog-lightbox-src]').forEach((trigger) => {
+        const src = trigger.getAttribute('data-blog-lightbox-src') || '';
+        const alt = trigger.getAttribute('data-blog-lightbox-alt') || '';
+        const index = register(src, alt);
+        trigger.addEventListener('click', () => show(index));
+      });
+
+      document.querySelectorAll('.blog-prose img').forEach((articleImage) => {
+        if (!(articleImage instanceof HTMLImageElement)) return;
+        const index = register(articleImage.getAttribute('src') || articleImage.src, articleImage.alt || '');
+        articleImage.classList.add('blog-lightbox-image');
+        articleImage.setAttribute('role', 'button');
+        articleImage.setAttribute('tabindex', '0');
+        articleImage.setAttribute('aria-label', articleImage.alt ? 'Open image: ' + articleImage.alt : 'Open article image');
+        articleImage.addEventListener('click', () => show(index));
+        articleImage.addEventListener('keydown', (event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            show(index);
+          }
+        });
+      });
+
+      dialog.querySelector('[data-blog-lightbox-close]')?.addEventListener('click', () => dialog.close());
+      dialog.querySelector('[data-blog-lightbox-prev]')?.addEventListener('click', () => show(current - 1));
+      dialog.querySelector('[data-blog-lightbox-next]')?.addEventListener('click', () => show(current + 1));
+      dialog.addEventListener('click', (event) => {
+        if (event.target === dialog) dialog.close();
+      });
+      document.addEventListener('keydown', (event) => {
+        if (!dialog.open) return;
+        if (event.key === 'ArrowLeft') show(current - 1);
+        if (event.key === 'ArrowRight') show(current + 1);
+        if (event.key === 'Escape') dialog.close();
+      });
+    })();
+  </script>
+
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
   <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 </BaseLayout>
@@ -230,6 +386,18 @@ const breadcrumbSchema = {
     max-height: 46rem;
     object-fit: cover;
     width: 100%;
+  }
+  .blog-prose :global(img.blog-lightbox-image) {
+    cursor: zoom-in;
+    transition: transform .35s ease, opacity .35s ease;
+  }
+  .blog-prose :global(img.blog-lightbox-image:hover) {
+    opacity: .96;
+    transform: scale(1.005);
+  }
+  .blog-prose :global(img.blog-lightbox-image:focus-visible) {
+    outline: 3px solid var(--koa-clay);
+    outline-offset: 4px;
   }
   .blog-prose :global(blockquote) {
     border-left: 3px solid var(--koa-clay);
