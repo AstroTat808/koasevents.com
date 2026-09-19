@@ -193,6 +193,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
       <div class="mt-6 flex flex-wrap gap-2">
         <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
+        <a data-planning-client-link target="_blank" rel="noreferrer" class="hidden rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Open client planning portal</a>
         <button type="button" data-qbo-sync-status class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sync QuickBooks</button>
         <a data-event-ops-link href="/admin/events/" class="hidden rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open Event Ops</a>
         <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">QBO setup</a>
@@ -251,6 +252,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const bookingPayments = document.querySelector('[data-booking-payments]');
     const bookingMessage = document.querySelector('[data-booking-message]');
     const bookingClientLink = document.querySelector('[data-booking-client-link]');
+    const planningClientLink = document.querySelector('[data-planning-client-link]');
     const countersignPanel = document.querySelector('[data-countersign-panel]');
     const countersignCopy = document.querySelector('[data-countersign-copy]');
     const countersignFormWrap = document.querySelector('[data-countersign-form-wrap]');
@@ -600,6 +602,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-booking-paid]',money(summary.paid||0));
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
       if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
+      if(planningClientLink) {
+        planningClientLink.href=record.proposal?.publicToken?'/planning/?token='+encodeURIComponent(record.proposal.publicToken):'#';
+        planningClientLink.classList.toggle('hidden',record.stage!=='booked'||!record.proposal?.publicToken);
+      }
       if(eventOpsLink) {
         eventOpsLink.href='/admin/events/?record='+encodeURIComponent(record.id);
         eventOpsLink.classList.toggle('hidden',record.stage!=='booked');
