@@ -7,17 +7,17 @@ const curated = [
   ...galleryMedia.map((item) => ({ src: item.src, alt: item.alt, category: 'Legacy Archive' })),
 ];
 const categories = ['Venue','Ceremony','Reception','Mobile Bar','Enhancements','Hospitality','Stay'];
-const curatedCategories = [...categories, 'Legacy Archive'];
+const allCategories = [...categories, 'Legacy Archive'];
 ---
 <BaseLayout noindex title="Gallery Admin | Koa’s Events" description="Manage Koa’s Events gallery." canonical="https://www.koasevents.com/admin/gallery/">
-  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10 sm:py-12">
     <div class="container-shell">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin</p>
-          <h1 class="display mt-3 text-5xl">Gallery photos</h1>
-          <p class="mt-4 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">
-            Move photos between gallery categories and drag the focal point directly on each image to control how it is centered when cropped.
+          <h1 class="display mt-3 text-5xl">Gallery workspace</h1>
+          <p class="mt-4 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">
+            Drag cards by their handle to change public order, edit crop framing with mobile and desktop previews, and select multiple photos for bulk category, visibility, or removal actions.
           </p>
         </div>
         <a href="/admin/" class="link-arrow">Admin home →</a>
@@ -28,7 +28,7 @@ const curatedCategories = [...categories, 'Legacy Archive'];
       </div>
 
       <div data-admin-ui class="hidden">
-        <form data-upload-form class="grid gap-4 rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)] md:grid-cols-2">
+        <form data-upload-form class="grid gap-4 rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] md:grid-cols-2 sm:p-7">
           <label class="grid gap-2 text-sm font-semibold md:col-span-2">
             Photo
             <input name="file" type="file" accept="image/*" required class="rounded-xl border border-[var(--koa-line)] p-3" />
@@ -49,47 +49,90 @@ const curatedCategories = [...categories, 'Legacy Archive'];
           <p data-upload-message class="text-sm text-[var(--koa-ink)]/58 md:col-span-2"></p>
         </form>
 
-        <section class="mt-10">
-          <div class="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h2 class="display text-4xl">Uploaded photos</h2>
-              <p class="mt-2 text-sm text-[var(--koa-ink)]/58">Change category or drag the image to reposition its focal point.</p>
-            </div>
+        <section class="sticky top-3 z-30 mt-7 hidden rounded-[1.3rem] border border-[var(--koa-line)] bg-white/95 p-4 shadow-[var(--shadow-soft)] backdrop-blur" data-bulk-bar>
+          <div class="flex flex-wrap items-center gap-3">
+            <strong class="mr-auto text-sm" data-selected-count>0 photos selected</strong>
+            <select data-bulk-category class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-semibold">
+              {categories.map((category) => <option>{category}</option>)}
+            </select>
+            <button type="button" data-bulk-move class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.68rem] font-black uppercase tracking-[.1em] text-white">Move</button>
+            <button type="button" data-bulk-hide class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-[.68rem] font-black uppercase tracking-[.1em]">Hide</button>
+            <button type="button" data-bulk-show class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-[.68rem] font-black uppercase tracking-[.1em]">Show</button>
+            <button type="button" data-bulk-delete class="rounded-full border border-red-200 px-4 py-2.5 text-[.68rem] font-black uppercase tracking-[.1em] text-red-700">Remove</button>
+            <button type="button" data-clear-selection class="px-2 py-2 text-[.68rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Clear</button>
           </div>
-          <div data-uploaded-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
         </section>
 
-        <section class="mt-14">
-          <h2 class="display text-4xl">Built-in gallery photos</h2>
-          <p class="mt-3 max-w-2xl text-sm text-[var(--koa-ink)]/58">
-            Reassign a built-in photo to another category, drag to set its crop center, or hide it without deleting the source asset.
-          </p>
-          <div data-curated-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
-        </section>
+        <section class="mt-10 space-y-10" data-category-boards></section>
       </div>
     </div>
   </main>
 
+  <dialog data-crop-dialog class="m-auto w-[94vw] max-w-5xl overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-0 backdrop:bg-black/60">
+    <div class="border-b border-[var(--koa-line)] p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Crop editor</p>
+          <h2 class="display mt-2 text-3xl" data-crop-title>Reposition photo</h2>
+          <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Drag inside the preview. Nothing changes publicly until you press Save crop.</p>
+        </div>
+        <button type="button" data-crop-close class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--koa-line)] text-xl">×</button>
+      </div>
+    </div>
+
+    <div class="p-5 sm:p-6">
+      <div class="mb-5 flex flex-wrap gap-2">
+        <button type="button" data-preview-mode="desktop" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white">Desktop</button>
+        <button type="button" data-preview-mode="mobile" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.1em]">Mobile</button>
+      </div>
+
+      <div class="mx-auto overflow-hidden rounded-[1.3rem] bg-[var(--koa-ink)]/5 transition-all" data-preview-shell style="max-width:760px">
+        <div class="relative h-[430px] cursor-grab touch-none overflow-hidden active:cursor-grabbing" data-crop-frame>
+          <img data-crop-image src="" alt="" draggable="false" class="pointer-events-none h-full w-full select-none object-cover" />
+          <div data-crop-crosshair class="pointer-events-none absolute size-8 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/25 shadow-[0_2px_10px_rgba(0,0,0,.4)]"></div>
+          <span class="pointer-events-none absolute left-3 top-3 rounded-full bg-black/65 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.12em] text-white">Drag focal point</span>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap items-center gap-3">
+        <p class="mr-auto text-sm font-semibold text-[var(--koa-ink)]/55" data-crop-position>50% × 50%</p>
+        <button type="button" data-crop-reset class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Center</button>
+        <button type="button" data-crop-cancel class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Cancel</button>
+        <button type="button" data-crop-save class="rounded-full bg-[var(--koa-forest)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white">Save crop</button>
+      </div>
+    </div>
+  </dialog>
+
   <script id="curated-data" type="application/json" set:html={JSON.stringify(curated)}></script>
   <script id="categories-data" type="application/json" set:html={JSON.stringify(categories)}></script>
-  <script id="curated-categories-data" type="application/json" set:html={JSON.stringify(curatedCategories)}></script>
+  <script id="all-categories-data" type="application/json" set:html={JSON.stringify(allCategories)}></script>
 
   <script>
     import { getUser } from '@netlify/identity';
 
     const curated = JSON.parse(document.getElementById('curated-data')?.textContent || '[]');
     const categories = JSON.parse(document.getElementById('categories-data')?.textContent || '[]');
-    const curatedCategories = JSON.parse(document.getElementById('curated-categories-data')?.textContent || '[]');
+    const allCategories = JSON.parse(document.getElementById('all-categories-data')?.textContent || '[]');
 
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
     const uploadForm = document.querySelector('[data-upload-form]');
     const uploadMessage = document.querySelector('[data-upload-message]');
-    const uploadedGrid = document.querySelector('[data-uploaded-grid]');
-    const curatedGrid = document.querySelector('[data-curated-grid]');
+    const boards = document.querySelector('[data-category-boards]');
+    const bulkBar = document.querySelector('[data-bulk-bar]');
+    const selectedCount = document.querySelector('[data-selected-count]');
+    const cropDialog = document.querySelector('[data-crop-dialog]');
+    const cropFrame = document.querySelector('[data-crop-frame]');
+    const cropImage = document.querySelector('[data-crop-image]');
+    const cropCrosshair = document.querySelector('[data-crop-crosshair]');
+    const cropPosition = document.querySelector('[data-crop-position]');
+    const cropTitle = document.querySelector('[data-crop-title]');
+    const previewShell = document.querySelector('[data-preview-shell]');
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
 
-    let state = { uploads: [], hiddenCurated: [], curatedEdits: {} };
+    let state = { uploads: [], hiddenCurated: [], hiddenUploads: [], curatedEdits: {}, categoryOrder: {} };
+    let selected = new Set();
+    let cropSession = null;
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
@@ -106,189 +149,286 @@ const curatedCategories = [...categories, 'Legacy Archive'];
       canvas.height = Math.round(bitmap.height * scale);
       canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
-      return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
+      return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type:'image/webp' });
     }
 
     async function post(payload) {
       const response = await fetch('/api/gallery', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!response.ok) throw new Error('Gallery update failed');
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || 'Gallery update failed');
+      }
       return response.json();
     }
 
-    function makeSelect(options, value) {
-      const select = document.createElement('select');
-      select.className = 'w-full rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-semibold';
-      options.forEach((option) => {
-        const el = document.createElement('option');
-        el.value = option;
-        el.textContent = option;
-        el.selected = option === value;
-        select.append(el);
-      });
-      return select;
+    function itemKey(item) {
+      return item.kind === 'upload' ? 'upload:' + item.id : 'curated:' + item.src;
     }
 
-    function visualEditorCard({ src, alt, category, focalX = 50, focalY = 50, muted = false, kind, id, originalCategory }) {
-      const article = document.createElement('article');
-      article.className = 'overflow-hidden rounded-[1.2rem] border border-[var(--koa-line)] bg-white shadow-sm';
+    function allItems() {
+      const uploaded = state.uploads.map((item) => ({
+        ...item,
+        kind:'upload',
+        hidden: state.hiddenUploads.includes(item.id),
+      }));
+      const builtIn = curated.map((item) => {
+        const edit = state.curatedEdits?.[item.src] || {};
+        return {
+          ...item,
+          kind:'curated',
+          category: edit.category || item.category || 'Venue',
+          focalX: edit.focalX ?? 50,
+          focalY: edit.focalY ?? 50,
+          hidden: state.hiddenCurated.includes(item.src),
+        };
+      });
+      return [...builtIn, ...uploaded];
+    }
 
-      const frame = document.createElement('div');
-      frame.className = 'group relative h-64 cursor-grab touch-none overflow-hidden bg-[var(--koa-sand)] active:cursor-grabbing';
+    function orderedItems(category) {
+      const items = allItems().filter((item) => item.category === category);
+      const byKey = new Map(items.map((item) => [itemKey(item), item]));
+      const saved = Array.isArray(state.categoryOrder?.[category]) ? state.categoryOrder[category] : [];
+      const ordered = saved.map((key) => byKey.get(key)).filter(Boolean);
+      const included = new Set(ordered.map(itemKey));
+      return [...ordered, ...items.filter((item) => !included.has(itemKey(item)))];
+    }
+
+    function updateBulkBar() {
+      const count = selected.size;
+      bulkBar?.classList.toggle('hidden', count === 0);
+      if (selectedCount) selectedCount.textContent = count + (count === 1 ? ' photo selected' : ' photos selected');
+    }
+
+    function selectPayload() {
+      const lookup = new Map(allItems().map((item) => [itemKey(item), item]));
+      return [...selected].map((key) => lookup.get(key)).filter(Boolean).map((item) =>
+        item.kind === 'upload'
+          ? { kind:'upload', id:item.id }
+          : { kind:'curated', src:item.src }
+      );
+    }
+
+    function openCrop(item) {
+      cropSession = {
+        item,
+        x: Number(item.focalX ?? 50),
+        y: Number(item.focalY ?? 50),
+        initialX: Number(item.focalX ?? 50),
+        initialY: Number(item.focalY ?? 50),
+      };
+      cropTitle.textContent = item.alt || 'Reposition photo';
+      cropImage.src = item.src;
+      cropImage.alt = item.alt || '';
+      setCropPoint(cropSession.x, cropSession.y);
+      setPreviewMode('desktop');
+      cropDialog?.showModal();
+    }
+
+    function setCropPoint(x, y) {
+      if (!cropSession) return;
+      cropSession.x = Math.max(0, Math.min(100, x));
+      cropSession.y = Math.max(0, Math.min(100, y));
+      cropImage.style.objectPosition = cropSession.x + '% ' + cropSession.y + '%';
+      cropCrosshair.style.left = cropSession.x + '%';
+      cropCrosshair.style.top = cropSession.y + '%';
+      cropPosition.textContent = Math.round(cropSession.x) + '% × ' + Math.round(cropSession.y) + '%';
+    }
+
+    function setPreviewMode(mode) {
+      const mobile = mode === 'mobile';
+      previewShell.style.maxWidth = mobile ? '390px' : '760px';
+      cropFrame.style.height = mobile ? '520px' : '430px';
+      document.querySelectorAll('[data-preview-mode]').forEach((button) => {
+        const active = button.dataset.previewMode === mode;
+        button.className = active
+          ? 'rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white'
+          : 'rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.1em]';
+      });
+    }
+
+    function makeCard(item) {
+      const key = itemKey(item);
+      const article = document.createElement('article');
+      article.dataset.galleryKey = key;
+      article.draggable = true;
+      article.className = 'group overflow-hidden rounded-[1.2rem] border border-[var(--koa-line)] bg-white shadow-sm transition ' + (item.hidden ? 'opacity-55' : '');
+
+      const imageWrap = document.createElement('div');
+      imageWrap.className = 'relative h-48 overflow-hidden bg-[var(--koa-sand)]';
 
       const img = document.createElement('img');
-      img.src = src;
-      img.alt = alt;
+      img.src = item.src;
+      img.alt = item.alt;
       img.draggable = false;
-      img.className = 'pointer-events-none h-full w-full select-none object-cover transition-opacity ' + (muted ? 'opacity-30' : '');
-      img.style.objectPosition = `${focalX}% ${focalY}%`;
+      img.className = 'h-full w-full object-cover';
+      img.style.objectPosition = (item.focalX ?? 50) + '% ' + (item.focalY ?? 50) + '%';
 
-      const crosshair = document.createElement('div');
-      crosshair.className = 'pointer-events-none absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/25 shadow-[0_1px_8px_rgba(0,0,0,.35)]';
-      crosshair.style.left = focalX + '%';
-      crosshair.style.top = focalY + '%';
+      const dragHandle = document.createElement('button');
+      dragHandle.type = 'button';
+      dragHandle.className = 'absolute left-3 top-3 cursor-grab rounded-full bg-black/65 px-3 py-2 text-[.62rem] font-black uppercase tracking-[.1em] text-white active:cursor-grabbing';
+      dragHandle.textContent = '↕ Order';
+      dragHandle.title = 'Drag this card to reorder';
 
-      const hint = document.createElement('div');
-      hint.className = 'pointer-events-none absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.12em] text-white backdrop-blur';
-      hint.textContent = 'Drag to center';
+      const checkboxLabel = document.createElement('label');
+      checkboxLabel.className = 'absolute right-3 top-3 grid size-9 cursor-pointer place-items-center rounded-full bg-white/95 shadow';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selected.has(key);
+      checkbox.className = 'size-4 accent-[var(--koa-forest)]';
+      checkbox.addEventListener('change', () => {
+        checkbox.checked ? selected.add(key) : selected.delete(key);
+        updateBulkBar();
+      });
+      checkboxLabel.append(checkbox);
 
-      frame.append(img, crosshair, hint);
+      if (item.hidden) {
+        const hiddenBadge = document.createElement('span');
+        hiddenBadge.className = 'absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.1em] text-white';
+        hiddenBadge.textContent = 'Hidden';
+        imageWrap.append(hiddenBadge);
+      }
+
+      imageWrap.prepend(img);
+      imageWrap.append(dragHandle, checkboxLabel);
 
       const body = document.createElement('div');
-      body.className = 'space-y-4 p-4';
+      body.className = 'space-y-3 p-4';
 
-      const p = document.createElement('p');
-      p.className = 'line-clamp-2 min-h-10 text-xs leading-5 text-[var(--koa-ink)]/58';
-      p.textContent = alt;
+      const alt = document.createElement('p');
+      alt.className = 'line-clamp-2 min-h-10 text-xs leading-5 text-[var(--koa-ink)]/58';
+      alt.textContent = item.alt;
 
-      const label = document.createElement('label');
-      label.className = 'grid gap-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/60';
-      label.textContent = 'Category';
-      const select = makeSelect(kind === 'curated' ? curatedCategories : categories, category);
-      label.append(select);
-
-      const position = document.createElement('p');
-      position.className = 'text-[.68rem] font-semibold text-[var(--koa-ink)]/45';
-      position.textContent = `Focal point: ${Math.round(focalX)}% × ${Math.round(focalY)}%`;
-
-      const status = document.createElement('p');
-      status.className = 'min-h-5 text-xs font-semibold text-[var(--koa-clay)]';
+      const select = document.createElement('select');
+      select.className = 'w-full rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-semibold';
+      (item.kind === 'curated' ? allCategories : categories).forEach((category) => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        option.selected = category === item.category;
+        select.append(option);
+      });
+      select.addEventListener('change', async () => {
+        if (item.kind === 'upload') {
+          await post({ action:'update-upload', id:item.id, category:select.value, focalX:item.focalX ?? 50, focalY:item.focalY ?? 50 });
+        } else {
+          await post({ action:'update-curated', src:item.src, category:select.value, focalX:item.focalX ?? 50, focalY:item.focalY ?? 50 });
+        }
+        await load();
+      });
 
       const actions = document.createElement('div');
-      actions.className = 'flex flex-wrap gap-3';
+      actions.className = 'flex flex-wrap gap-x-4 gap-y-2';
 
-      const secondary = document.createElement('button');
-      secondary.type = 'button';
-      secondary.className = 'text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]';
+      const crop = document.createElement('button');
+      crop.type = 'button';
+      crop.className = 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]';
+      crop.textContent = 'Edit crop';
+      crop.addEventListener('click', () => openCrop(item));
 
-      if (kind === 'upload') {
-        secondary.textContent = 'Remove';
-        secondary.addEventListener('click', async () => {
-          if (!confirm('Remove this uploaded gallery photo?')) return;
-          await post({ action: 'delete-upload', id });
-          await load();
-        });
-      } else {
-        secondary.textContent = muted ? 'Restore' : 'Hide';
-        secondary.addEventListener('click', async () => {
-          await post({ action: 'visibility', src, hidden: !muted });
-          await load();
-        });
-
-        const reset = document.createElement('button');
-        reset.type = 'button';
-        reset.className = 'text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]/45';
-        reset.textContent = 'Reset';
-        reset.addEventListener('click', async () => {
-          await post({ action: 'reset-curated', src });
-          await load();
-        });
-        actions.append(reset);
-      }
-
-      actions.prepend(secondary);
-      body.append(p, label, position, status, actions);
-      article.append(frame, body);
-
-      let x = Number(focalX) || 50;
-      let y = Number(focalY) || 50;
-      let saveTimer;
-
-      const save = async () => {
-        status.textContent = 'Saving…';
-        const payload = kind === 'upload'
-          ? { action: 'update-upload', id, category: select.value, focalX: x, focalY: y }
-          : { action: 'update-curated', src, category: select.value, focalX: x, focalY: y };
-        try {
-          await post(payload);
-          status.textContent = 'Saved';
-          setTimeout(() => { if (status.textContent === 'Saved') status.textContent = ''; }, 1200);
-        } catch {
-          status.textContent = 'Save failed';
+      const visibility = document.createElement('button');
+      visibility.type = 'button';
+      visibility.className = 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/55';
+      visibility.textContent = item.hidden ? 'Show' : 'Hide';
+      visibility.addEventListener('click', async () => {
+        if (item.kind === 'upload') {
+          await post({ action:'upload-visibility', id:item.id, hidden:!item.hidden });
+        } else {
+          await post({ action:'visibility', src:item.src, hidden:!item.hidden });
         }
-      };
-
-      const queueSave = () => {
-        clearTimeout(saveTimer);
-        saveTimer = setTimeout(save, 250);
-      };
-
-      function setPoint(clientX, clientY) {
-        const rect = frame.getBoundingClientRect();
-        x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-        y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
-        img.style.objectPosition = `${x}% ${y}%`;
-        crosshair.style.left = x + '%';
-        crosshair.style.top = y + '%';
-        position.textContent = `Focal point: ${Math.round(x)}% × ${Math.round(y)}%`;
-      }
-
-      frame.addEventListener('pointerdown', (event) => {
-        frame.setPointerCapture(event.pointerId);
-        setPoint(event.clientX, event.clientY);
+        await load();
       });
-      frame.addEventListener('pointermove', (event) => {
-        if (!frame.hasPointerCapture(event.pointerId)) return;
-        setPoint(event.clientX, event.clientY);
+
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'text-xs font-black uppercase tracking-[.1em] text-red-700';
+      remove.textContent = item.kind === 'upload' ? 'Delete' : 'Remove';
+      remove.addEventListener('click', async () => {
+        if (!confirm(item.kind === 'upload' ? 'Delete this uploaded photo?' : 'Remove this built-in photo from the public gallery?')) return;
+        if (item.kind === 'upload') await post({ action:'delete-upload', id:item.id });
+        else await post({ action:'visibility', src:item.src, hidden:true });
+        selected.delete(key);
+        await load();
       });
-      frame.addEventListener('pointerup', (event) => {
-        if (frame.hasPointerCapture(event.pointerId)) frame.releasePointerCapture(event.pointerId);
-        queueSave();
+
+      actions.append(crop, visibility, remove);
+      body.append(alt, select, actions);
+      article.append(imageWrap, body);
+
+      let allowDrag = false;
+      dragHandle.addEventListener('pointerdown', () => { allowDrag = true; });
+      dragHandle.addEventListener('pointerup', () => { setTimeout(() => { allowDrag = false; }, 0); });
+      article.addEventListener('dragstart', (event) => {
+        if (!allowDrag) {
+          event.preventDefault();
+          return;
+        }
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', key);
+        article.classList.add('opacity-40');
       });
-      frame.addEventListener('pointercancel', queueSave);
-      select.addEventListener('change', save);
+      article.addEventListener('dragend', () => {
+        allowDrag = false;
+        article.classList.remove('opacity-40');
+      });
 
       return article;
     }
 
-    function render() {
-      uploadedGrid.innerHTML = '';
-      state.uploads.forEach((item) => {
-        uploadedGrid.append(visualEditorCard({
-          ...item,
-          kind: 'upload',
-          focalX: item.focalX ?? 50,
-          focalY: item.focalY ?? 50,
-        }));
-      });
+    function renderBoards() {
+      boards.innerHTML = '';
+      allCategories.forEach((category) => {
+        const items = orderedItems(category);
+        const section = document.createElement('section');
+        section.className = 'rounded-[1.5rem] border border-[var(--koa-line)] bg-white/55 p-4 sm:p-5';
 
-      curatedGrid.innerHTML = '';
-      curated.forEach((item) => {
-        const edit = state.curatedEdits?.[item.src] || {};
-        const hidden = state.hiddenCurated.includes(item.src);
-        curatedGrid.append(visualEditorCard({
-          ...item,
-          kind: 'curated',
-          category: edit.category || item.category || 'Venue',
-          originalCategory: item.category,
-          focalX: edit.focalX ?? 50,
-          focalY: edit.focalY ?? 50,
-          muted: hidden,
-        }));
+        const header = document.createElement('div');
+        header.className = 'mb-4 flex flex-wrap items-end justify-between gap-3';
+        const copy = document.createElement('div');
+        copy.innerHTML = '<p class="eyebrow text-[var(--koa-clay)]">' + category + '</p><h2 class="display mt-2 text-3xl">' + items.length + (items.length === 1 ? ' photo' : ' photos') + '</h2>';
+        const note = document.createElement('p');
+        note.className = 'text-xs font-semibold text-[var(--koa-ink)]/45';
+        note.textContent = category === 'Legacy Archive' ? 'Archive items can be moved into a public category.' : 'Drag by ↕ Order to control public sequence.';
+        header.append(copy, note);
+
+        const grid = document.createElement('div');
+        grid.dataset.adminCategory = category;
+        grid.className = 'grid min-h-24 gap-4 rounded-[1rem] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
+
+        items.forEach((item) => grid.append(makeCard(item)));
+
+        grid.addEventListener('dragover', (event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+          const draggingKey = event.dataTransfer.getData('text/plain');
+          const dragging = grid.querySelector('[data-gallery-key="' + CSS.escape(draggingKey) + '"]');
+          if (!dragging) return;
+          const target = event.target.closest('[data-gallery-key]');
+          if (!target || target === dragging || target.parentElement !== grid) return;
+          const rect = target.getBoundingClientRect();
+          const before = event.clientY < rect.top + rect.height / 2;
+          grid.insertBefore(dragging, before ? target : target.nextSibling);
+        });
+
+        grid.addEventListener('drop', async (event) => {
+          event.preventDefault();
+          const keys = [...grid.querySelectorAll('[data-gallery-key]')].map((el) => el.dataset.galleryKey);
+          await post({ action:'reorder', category, keys });
+          state.categoryOrder[category] = keys;
+        });
+
+        section.append(header, grid);
+        boards.append(section);
       });
+    }
+
+    function render() {
+      renderBoards();
+      updateBulkBar();
     }
 
     async function load() {
@@ -300,7 +440,18 @@ const curatedCategories = [...categories, 'Legacy Archive'];
       ui?.classList.remove('hidden');
       const response = await fetch('/api/gallery');
       state = await response.json();
+      const validKeys = new Set(allItems().map(itemKey));
+      selected = new Set([...selected].filter((key) => validKeys.has(key)));
       render();
+    }
+
+    async function bulk(operation, category) {
+      const items = selectPayload();
+      if (!items.length) return;
+      if (operation === 'delete' && !confirm('Remove the selected photos? Uploaded files will be deleted; built-in photos will be hidden from the public gallery.')) return;
+      await post({ action:'bulk-update', operation, category, items });
+      selected.clear();
+      await load();
     }
 
     uploadForm?.addEventListener('submit', async (event) => {
@@ -308,19 +459,60 @@ const curatedCategories = [...categories, 'Legacy Archive'];
       const data = new FormData(uploadForm);
       const raw = data.get('file');
       if (!(raw instanceof File)) return;
-
       if (uploadMessage) uploadMessage.textContent = 'Optimizing image…';
       const file = await optimizedFile(raw);
       data.set('file', file);
-
       if (uploadMessage) uploadMessage.textContent = 'Uploading…';
-      const response = await fetch('/api/gallery', { method: 'POST', body: data });
+      const response = await fetch('/api/gallery', { method:'POST', body:data });
       if (uploadMessage) uploadMessage.textContent = response.ok ? 'Uploaded.' : 'Upload failed.';
       if (response.ok) {
         uploadForm.reset();
         await load();
       }
     });
+
+    document.querySelector('[data-bulk-move]')?.addEventListener('click', () => bulk('set-category', document.querySelector('[data-bulk-category]')?.value));
+    document.querySelector('[data-bulk-hide]')?.addEventListener('click', () => bulk('hide'));
+    document.querySelector('[data-bulk-show]')?.addEventListener('click', () => bulk('show'));
+    document.querySelector('[data-bulk-delete]')?.addEventListener('click', () => bulk('delete'));
+    document.querySelector('[data-clear-selection]')?.addEventListener('click', () => {
+      selected.clear();
+      render();
+    });
+
+    document.querySelectorAll('[data-preview-mode]').forEach((button) => button.addEventListener('click', () => setPreviewMode(button.dataset.previewMode)));
+    document.querySelector('[data-crop-close]')?.addEventListener('click', () => cropDialog?.close());
+    document.querySelector('[data-crop-cancel]')?.addEventListener('click', () => cropDialog?.close());
+    document.querySelector('[data-crop-reset]')?.addEventListener('click', () => setCropPoint(50, 50));
+    document.querySelector('[data-crop-save]')?.addEventListener('click', async () => {
+      if (!cropSession) return;
+      const item = cropSession.item;
+      if (item.kind === 'upload') {
+        await post({ action:'update-upload', id:item.id, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
+      } else {
+        await post({ action:'update-curated', src:item.src, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
+      }
+      cropDialog?.close();
+      cropSession = null;
+      await load();
+    });
+
+    cropFrame?.addEventListener('pointerdown', (event) => {
+      if (!cropSession) return;
+      cropFrame.setPointerCapture(event.pointerId);
+      const rect = cropFrame.getBoundingClientRect();
+      setCropPoint(((event.clientX - rect.left) / rect.width) * 100, ((event.clientY - rect.top) / rect.height) * 100);
+    });
+    cropFrame?.addEventListener('pointermove', (event) => {
+      if (!cropSession || !cropFrame.hasPointerCapture(event.pointerId)) return;
+      const rect = cropFrame.getBoundingClientRect();
+      setCropPoint(((event.clientX - rect.left) / rect.width) * 100, ((event.clientY - rect.top) / rect.height) * 100);
+    });
+    cropFrame?.addEventListener('pointerup', (event) => {
+      if (cropFrame.hasPointerCapture(event.pointerId)) cropFrame.releasePointerCapture(event.pointerId);
+    });
+
+    cropDialog?.addEventListener('close', () => { cropSession = null; });
 
     load();
   </script>
