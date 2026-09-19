@@ -20,6 +20,9 @@ type QuoteState = {
   publishedAddOnTotal?: number;
   basePackagePrice?: number;
   estimatedStartingTotal?: number;
+  estimatedSavingsPercent?: number;
+  estimatedKnownSavings?: number;
+  customQuoteCount?: number;
   packageIncludes?: string[];
   packageIncludedInventory?: string;
   autoDismissed?: string[];
@@ -146,6 +149,9 @@ function cleanState(input: unknown): QuoteState | null {
     publishedAddOnTotal: Math.max(0, finiteNumber(raw.publishedAddOnTotal, 0)),
     basePackagePrice: Math.max(0, finiteNumber(raw.basePackagePrice, 0)),
     estimatedStartingTotal: Math.max(0, finiteNumber(raw.estimatedStartingTotal, 0)),
+    estimatedSavingsPercent: Math.max(0, Math.min(100, finiteNumber(raw.estimatedSavingsPercent, 0))),
+    estimatedKnownSavings: Math.max(0, finiteNumber(raw.estimatedKnownSavings, 0)),
+    customQuoteCount: Math.max(0, Math.min(100, Math.round(finiteNumber(raw.customQuoteCount, 0)))),
     packageIncludes,
     packageIncludedInventory: cleanText(raw.packageIncludedInventory, 800),
     autoDismissed: dismissed,
