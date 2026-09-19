@@ -497,11 +497,29 @@ const badgeClass = {
     const savingsDetail = document.querySelector('[data-savings-detail]');
     const furnitureEstimate = document.querySelector('[data-furniture-estimate]');
     const furnitureEstimateTotal = document.querySelector('[data-furniture-estimate-total]');
+    const startingTotalPanel = document.querySelector('[data-starting-total-panel]');
+    const startingTotal = document.querySelector('[data-starting-total]');
+    const startingTotalBase = document.querySelector('[data-starting-total-base]');
+    const startingTotalFurniture = document.querySelector('[data-starting-total-furniture]');
+    const startingTotalNote = document.querySelector('[data-starting-total-note]');
+    const customQuotePanel = document.querySelector('[data-custom-quote-panel]');
+    const customQuoteList = document.querySelector('[data-custom-quote-list]');
+    const quoteBasePrice = document.querySelector('[data-quote-base-price]');
+    const quotePackageIncludes = document.querySelector('[data-quote-package-includes]');
+    const quotePackageIncludesList = document.querySelector('[data-quote-package-includes-list]');
     const autoRentalBreakdownInput = document.querySelector('[data-auto-rental-breakdown]');
     const manualAddOnsInput = document.querySelector('[data-manual-add-ons]');
     const estimatedFurnitureTotalInput = document.querySelector('[data-estimated-furniture-total]');
     const catalogSelectionStateInput = document.querySelector('[data-catalog-selection-state]');
+    const savedQuoteIdInput = document.querySelector('[data-saved-quote-id-input]');
+    const savedQuoteUrlInput = document.querySelector('[data-saved-quote-url-input]');
     const continueInquiry = document.querySelector('[data-continue-inquiry]');
+    const saveQuoteButton = document.querySelector('[data-save-quote]');
+    const savedQuotePanel = document.querySelector('[data-saved-quote-panel]');
+    const savedQuoteId = document.querySelector('[data-saved-quote-id]');
+    const savedQuoteLink = document.querySelector('[data-saved-quote-link]');
+    const copyQuoteLink = document.querySelector('[data-copy-quote-link]');
+    const saveQuoteError = document.querySelector('[data-save-quote-error]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
     const guestInput = document.querySelector('[data-builder-guests]');
     const quoteGuestInput = document.querySelector('[data-quote-guests]');
@@ -513,13 +531,24 @@ const badgeClass = {
     const guestAdjustmentCount = document.querySelector('[data-guest-adjustment-count]');
     const guestAdjustmentCopy = document.querySelector('[data-guest-adjustment-copy]');
     const guestAdjustmentItems = document.querySelector('[data-guest-adjustment-items]');
+    const selectedPackageDetails = document.querySelector('[data-selected-package-details]');
+    const selectedPackageName = document.querySelector('[data-selected-package-name]');
+    const selectedPackageAccess = document.querySelector('[data-selected-package-access]');
+    const selectedPackagePrice = document.querySelector('[data-selected-package-price]');
+    const selectedPackageInventory = document.querySelector('[data-selected-package-inventory]');
+    const selectedPackageConfiguration = document.querySelector('[data-selected-package-configuration]');
+    const selectedPackageIncludes = document.querySelector('[data-selected-package-includes]');
     const mobileCatalogToggle = document.querySelector('[data-mobile-catalog-toggle]');
 
     let activeCategory = 'all';
     let startingPoint = '';
     let mobileCatalogExpanded = false;
+    let activeSavedQuoteId = '';
+    let savedStateFingerprint = '';
     const selected = new Map();
     const autoSelected = new Set();
+    const dismissedAuto = new Set();
+    const autoOverrides = new Map();
 
     function guestCount() {
       return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
@@ -527,6 +556,58 @@ const badgeClass = {
 
     function selectedPackagePlan() {
       return startingPoint ? packagePlanningData[startingPoint] || null : null;
+    }
+
+    function packageBasePrice() {
+      return Number(selectedPackagePlan()?.price || 0);
+    }
+
+    function renderSelectedPackageDetails() {
+      const plan = selectedPackagePlan();
+      const hasPackage = Boolean(plan && startingPoint !== 'ala-carte');
+
+      selectedPackageDetails?.classList.toggle('hidden', !hasPackage);
+      quotePackageIncludes?.classList.toggle('hidden', !hasPackage);
+      quoteBasePrice?.classList.toggle('hidden', !hasPackage);
+
+      if (!hasPackage || !plan) {
+        if (selectedPackageIncludes) selectedPackageIncludes.innerHTML = '';
+        if (quotePackageIncludesList) quotePackageIncludesList.innerHTML = '';
+        return;
+      }
+
+      if (selectedPackageName) selectedPackageName.textContent = plan.name;
+      if (selectedPackageAccess) selectedPackageAccess.textContent = plan.access;
+      if (selectedPackagePrice) selectedPackagePrice.textContent = currency(plan.price);
+      if (selectedPackageInventory) selectedPackageInventory.textContent = plan.includedInventory;
+      if (selectedPackageConfiguration) selectedPackageConfiguration.textContent = plan.baseConfiguration;
+      if (quoteBasePrice) quoteBasePrice.textContent = 'Base package: ' + currency(plan.price);
+
+      const inclusions = ['Furniture / inventory: ' + plan.includedInventory, ...(plan.includes || [])];
+
+      if (selectedPackageIncludes) {
+        selectedPackageIncludes.innerHTML = '';
+        inclusions.forEach((entry) => {
+          const li = document.createElement('li');
+          li.className = 'flex gap-2';
+          const mark = document.createElement('span');
+          mark.className = 'font-black text-[var(--koa-clay)]';
+          mark.textContent = '✓';
+          const copy = document.createElement('span');
+          copy.textContent = entry;
+          li.append(mark, copy);
+          selectedPackageIncludes.appendChild(li);
+        });
+      }
+
+      if (quotePackageIncludesList) {
+        quotePackageIncludesList.innerHTML = '';
+        inclusions.forEach((entry) => {
+          const li = document.createElement('li');
+          li.textContent = '✓ ' + entry;
+          quotePackageIncludesList.appendChild(li);
+        });
+      }
     }
 
     function includedQuantityForItem(item) {
@@ -576,13 +657,28 @@ const badgeClass = {
       requiredIds.forEach((id) => {
         const item = itemById.get(id);
         if (!item) return;
-        const quantity = suggestedQuantity(item);
+
+        if (dismissedAuto.has(id)) {
+          autoSelected.delete(id);
+          if (selected.get(id)?.auto) selected.delete(id);
+          setItemButtonState(id, false);
+          return;
+        }
+
+        const suggested = suggestedQuantity(item);
+        const hasOverride = autoOverrides.has(id);
+        const quantity = hasOverride ? Math.max(0, Number(autoOverrides.get(id) || 0)) : suggested;
 
         if (quantity > 0) {
-          selected.set(id, { name: item.name, quantity, auto: true });
+          selected.set(id, {
+            name: item.name,
+            quantity,
+            auto: true,
+            overridden: hasOverride && quantity !== suggested,
+          });
           autoSelected.add(id);
           setItemButtonState(id, true);
-        } else if (autoSelected.has(id)) {
+        } else if (autoSelected.has(id) || selected.get(id)?.auto) {
           autoSelected.delete(id);
           selected.delete(id);
           setItemButtonState(id, false);
@@ -595,10 +691,11 @@ const badgeClass = {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
         const input = card.querySelector('[data-item-quantity]');
-        if (!item || !input || item.quantityMode === 'manual') return;
-        input.value = String(suggestedQuantity(item));
+        if (!id || !item || !input || item.quantityMode === 'manual') return;
+        const suggested = suggestedQuantity(item);
+        input.value = String(autoOverrides.has(id) ? autoOverrides.get(id) : suggested);
         if (selected.has(id) && !autoSelected.has(id)) {
-          selected.set(id, { name: item.name, quantity: Math.max(1, Number(input.value) || 1) });
+          selected.set(id, { name: item.name, quantity: Math.max(1, Number(input.value) || 1), auto: false });
         }
       });
       if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
@@ -606,13 +703,18 @@ const badgeClass = {
       syncQuote();
     }
 
-    function chooseStartingPoint(id) {
+    function chooseStartingPoint(id, preserveOverrides = false) {
+      const changedPackage = startingPoint && startingPoint !== id;
       startingPoint = id;
       [...autoSelected].forEach((autoId) => {
         selected.delete(autoId);
         setItemButtonState(autoId, false);
       });
       autoSelected.clear();
+      if (changedPackage && !preserveOverrides) {
+        dismissedAuto.clear();
+        autoOverrides.clear();
+      }
       if (startingPointInput) startingPointInput.value = id;
       startingButtons.forEach((button) => {
         const on = button.dataset.startingPoint === id;
@@ -635,6 +737,7 @@ const badgeClass = {
           ? 'À la carte'
           : (packageItem?.name || 'Choose a package or à la carte above.');
       }
+      renderSelectedPackageDetails();
       refreshPackageInclusions();
       refreshBundleAvailability();
       renderGuestAdjustment();
