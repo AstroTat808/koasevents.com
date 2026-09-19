@@ -411,3 +411,45 @@ form textarea {
 main p.text-sm {
   font-size: .9375rem;
 }
+
+
+/* Quote builder scroll + selection refinement */
+.koa-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 117, 63, 0.62) rgba(20, 58, 45, 0.08);
+}
+
+.koa-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.koa-scrollbar::-webkit-scrollbar-track {
+  background: rgba(20, 58, 45, 0.06);
+  border-radius: 999px;
+}
+
+.koa-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(184, 117, 63, 0.78), rgba(197, 163, 109, 0.58));
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.koa-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(147, 80, 45, 0.9), rgba(184, 117, 63, 0.72));
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.quote-item-selected {
+  border-color: rgba(184, 117, 63, 0.52) !important;
+  box-shadow: 0 14px 38px rgba(10, 33, 26, 0.1), inset 0 0 0 1px rgba(184, 117, 63, 0.08);
+}
+
+@media (min-width: 1280px) {
+  .koa-scrollbar {
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
