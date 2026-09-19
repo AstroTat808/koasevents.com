@@ -98,7 +98,8 @@ import Footer from '../../components/Footer.astro';
           <section data-booked class="hidden rounded-[1.4rem] bg-[var(--koa-ink)] p-6 text-white">
             <p class="eyebrow text-[var(--koa-amber-light)]">Booked</p>
             <h2 class="display mt-3 text-4xl">Your event is reserved.</h2>
-            <p class="mt-3 text-sm leading-6 text-white/70">Koa’s has the signed agreement and reservation deposit on file. Continue using this page to review the remaining payment milestones.</p>
+            <p class="mt-3 text-sm leading-6 text-white/70">Koa’s has the signed agreement and reservation deposit on file. Continue using this page to review QuickBooks payment milestones, and use your Planning Portal for guest count, vendors, questionnaire answers, insurance and floor plans.</p>
+            <a data-planning-link class="mt-5 inline-flex rounded-full bg-white px-5 py-3 text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Open planning portal</a>
           </section>
         </div>
       </article>
@@ -180,6 +181,8 @@ import Footer from '../../components/Footer.astro';
       if(note) note.textContent='Koa’s issues estimates, invoices and payment requests through QuickBooks Online. Use the payment instructions in the QuickBooks invoice email you receive; the Koa’s website does not collect payment information.';
 
       bookedSection?.classList.toggle('hidden',data.status!=='booked');
+      const planningLink=document.querySelector('[data-planning-link]');
+      if(planningLink) planningLink.href='/planning/?token='+encodeURIComponent(token);
     }
 
     async function load(){
