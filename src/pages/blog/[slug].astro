@@ -65,13 +65,21 @@ const usedArticleImages = new Set([
 ]);
 
 const relatedGalleryCategories = galleryCategoryMap[post.category] || ['Venue', 'Ceremony', 'Reception'];
-const relatedGallery = relatedGalleryCategories
-  .flatMap((category) => koaMarketingGallery.filter((image) => image.category === category))
-  .filter((image, index, list) =>
-    !usedArticleImages.has(image.src) &&
-    list.findIndex((candidate) => candidate.src === image.src) === index
-  )
-  .slice(0, 6);
+const relatedGalleryBuckets = relatedGalleryCategories.map((category) =>
+  koaMarketingGallery.filter((image) => image.category === category && !usedArticleImages.has(image.src))
+);
+const relatedGallery = [];
+for (let row = 0; relatedGallery.length < 6; row += 1) {
+  let added = false;
+  for (const bucket of relatedGalleryBuckets) {
+    const image = bucket[row];
+    if (!image || relatedGallery.some((candidate) => candidate.src === image.src)) continue;
+    relatedGallery.push(image);
+    added = true;
+    if (relatedGallery.length === 6) break;
+  }
+  if (!added) break;
+}
 
 const lightboxSeed = [
   { src: post.featuredImage, alt: post.title },
