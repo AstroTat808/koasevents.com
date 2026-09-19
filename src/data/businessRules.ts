@@ -70,7 +70,6 @@ export const businessRules = {
       baseConfiguration: 'Designed around an intimate 10-guest base configuration; larger weekday celebrations require a custom quote.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
       planningInventory: {
-        publishedGuestFramework: 10,
         includedChairCount: 10,
         includedRoundTables: 2,
         tableDescription: '2 60-inch round tables',
@@ -95,7 +94,6 @@ export const businessRules = {
       baseConfiguration: 'One-day venue package; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
       includedInventory: '2 tables of your choice and chairs for 10 guests',
       planningInventory: {
-        publishedGuestFramework: 50,
         includedChairCount: 10,
         includedFlexibleTables: 2,
         tableDescription: '2 tables of your choice',
@@ -118,7 +116,6 @@ export const businessRules = {
       baseConfiguration: 'Weekend experience; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
       planningInventory: {
-        publishedGuestFramework: 50,
         includedChairCount: 10,
         includedRoundTables: 2,
         tableDescription: '2 60-inch round tables',
@@ -143,7 +140,6 @@ export const businessRules = {
       baseConfiguration: 'Premium full-service package with included seating/rental inventory for 50; added inventory can be quoted for larger events up to the venue maximum.',
       includedInventory: '50 ceremony chairs, 50 reception chairs, 10 round tables, 2 six-foot rectangle tables, and 10 cocktail tables',
       planningInventory: {
-        publishedGuestFramework: 50,
         includedCeremonyChairs: 50,
         includedReceptionChairs: 50,
         includedRoundTables: 10,
