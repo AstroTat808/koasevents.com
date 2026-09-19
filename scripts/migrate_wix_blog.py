@@ -95,6 +95,45 @@ INLINE_OVERRIDES = {
     },
 }
 
+EXTRA_INLINE_INSERTS = {
+    "real-brides-share-their-wedding-bachelorette-pain-points-and-how-koa-s-events-can-help-you-avoid": [
+        {
+            "anchor": "7 Real Pain Points from Brides & Bachelorette Hosts",
+            "src": "/media/koa/bridal-suite-wedding-ready.webp",
+            "alt": "Wedding-ready bridal suite at Koa’s, designed as a calm place to gather before the celebration",
+        },
+        {
+            "anchor": "How Koa’s Events Solves Every One of These Issues",
+            "src": "/media/koa/cottage-porch-dining.webp",
+            "alt": "Covered cottage porch at Koa’s arranged for an intimate group meal and relaxed celebration",
+        },
+    ],
+    "the-comprehensive-a-z-wedding-glossary-for-brides-koa-s-events-edition": [
+        {
+            "anchor": "What is a full bar vs beer and wine only?",
+            "src": "/media/koa/mobile-bar-detail.webp",
+            "alt": "Koa’s Mobile Bar service window illustrating a professionally equipped event bar",
+        },
+        {
+            "anchor": "Ceremony-Only Rental",
+            "src": "/media/koa/ceremony-garden-aisle-wide.webp",
+            "alt": "Wide tropical ceremony aisle at Koa’s illustrating ceremony layout and rental planning",
+        },
+    ],
+    "impact-of-tariffs-on-your-wedding-what-every-couple-should-know": [
+        {
+            "anchor": "2. Decor and Rentals",
+            "src": "/media/koa/hex-arch-styled.webp",
+            "alt": "Styled wooden ceremony arch at Koa’s showing how rentals and florals shape a wedding design",
+        },
+        {
+            "anchor": "3. Catering and Alcohol",
+            "src": "/media/koa/champagne-feature.webp",
+            "alt": "Champagne and floral reception feature at Koa’s illustrating beverage and event-detail choices",
+        },
+    ],
+}
+
 FALLBACK_DATES = {
     "big-island-rainforest-wedding-venue-guide-how-to-plan-an-intimate-celebration-in-mountain-view-haw": "2026-02-04T12:00:00Z",
     "koa-s-mobile-bar-frequently-asked-questions": "2026-02-03T12:00:00Z",
@@ -481,6 +520,48 @@ def sanitize_and_localize(node: Tag | None, slug: str, title: str, cache: dict[s
     return body_html, body_text, images
 
 
+def insert_extra_images(body_html: str, slug: str, images: list[dict]) -> tuple[str, list[dict]]:
+    inserts = EXTRA_INLINE_INSERTS.get(slug, [])
+    if not inserts or not body_html:
+        return body_html, images
+
+    soup = BeautifulSoup(body_html, "html.parser")
+    existing = {image["src"] for image in images}
+
+    for item in inserts:
+        anchor = clean_text(item["anchor"]).casefold()
+        target = None
+        for tag in soup.find_all(["h2", "h3", "h4", "p"]):
+            text = clean_text(tag.get_text(" ", strip=True)).casefold()
+            if anchor and anchor in text:
+                target = tag
+                break
+        if target is None:
+            print(f"warning: image insertion anchor not found for {slug}: {item['anchor']}", file=sys.stderr)
+            continue
+
+        figure = soup.new_tag("figure")
+        image = soup.new_tag("img")
+        image["src"] = item["src"]
+        image["alt"] = item["alt"]
+        image["loading"] = "lazy"
+        image["decoding"] = "async"
+        figure.append(image)
+
+        # Insert after the semantic block's nearest content wrapper so it does not
+        # land inside a Wix-generated span or heading.
+        placement = target
+        while placement.parent and placement.parent.name == "div" and len(placement.parent.contents) == 1:
+            placement = placement.parent
+        placement.insert_after(figure)
+
+        if item["src"] not in existing:
+            images.append({"src": item["src"], "alt": item["alt"]})
+            existing.add(item["src"])
+
+    return str(soup), images
+
+
 def extract_author(ld: dict, fallback: str) -> str:
     author = ld.get("author") or ""
     if isinstance(author, dict):
@@ -532,6 +613,7 @@ def parse_post(url: str) -> dict:
 
     node = choose_content_node(soup)
     body_html, body, inline_images = sanitize_and_localize(node, slug, original_title, cache)
+    body_html, inline_images = insert_extra_images(body_html, slug, inline_images)
 
     # If a Wix page exposes only plain serialized article text, preserve it rather than
     # dropping the post. The page template will turn paragraphs into readable blocks.
