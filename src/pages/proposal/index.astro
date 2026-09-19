@@ -46,9 +46,34 @@ import Footer from '../../components/Footer.astro';
             </div>
           </section>
 
+          <section data-quote-comparison class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 sm:p-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">From builder to proposal</p>
+                <h2 class="display mt-2 text-4xl">What changed from your original quote?</h2>
+              </div>
+              <p class="max-w-sm text-xs leading-5 text-[var(--koa-ink)]/48">The quote builder was a planning estimate. This proposal reflects Koa’s finalized scope and pricing for your event.</p>
+            </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl bg-white p-4">
+                <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Original builder estimate</p>
+                <p data-original-total class="display mt-2 text-3xl text-[var(--koa-forest)]"></p>
+              </div>
+              <div class="rounded-xl bg-[var(--koa-forest)] p-4 text-white">
+                <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">Final proposal</p>
+                <p data-final-comparison-total class="display mt-2 text-3xl"></p>
+              </div>
+              <div class="rounded-xl border border-[var(--koa-line)] bg-white p-4">
+                <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Difference</p>
+                <p data-total-difference class="display mt-2 text-3xl text-[var(--koa-forest)]"></p>
+              </div>
+            </div>
+            <div class="mt-5 grid gap-2" data-comparison-changes></div>
+          </section>
+
           <section>
             <p class="eyebrow text-[var(--koa-clay)]">Pricing</p>
-            <h2 class="display mt-3 text-4xl">Your proposed scope</h2>
+            <h2 class="display mt-3 text-4xl">Your finalized scope</h2>
             <div class="mt-6 overflow-x-auto">
               <table class="w-full min-w-[620px] border-collapse text-sm">
                 <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Item</th><th class="py-3 pr-4">Qty</th><th class="py-3 pr-4">Unit</th><th class="py-3 text-right">Amount</th></tr></thead>
@@ -138,6 +163,94 @@ import Footer from '../../components/Footer.astro';
       if (el) el.textContent = value;
     }
 
+    function signedMoney(value) {
+      const amount = Number(value || 0);
+      if (Math.abs(amount) < 0.005) return '$0.00';
+      return (amount > 0 ? '+' : '−') + money(Math.abs(amount));
+    }
+
+    function renderQuoteComparison(data) {
+      const wrap = document.querySelector('[data-quote-comparison]');
+      const changes = document.querySelector('[data-comparison-changes]');
+      const original = data.originalQuote;
+      if (!original || !Number(original.estimatedStartingTotal || 0)) {
+        wrap?.classList.add('hidden');
+        return;
+      }
+
+      wrap?.classList.remove('hidden');
+      const originalTotal = Number(original.estimatedStartingTotal || 0);
+      const finalTotal = Number(data.total || 0);
+      text('[data-original-total]', money(originalTotal));
+      text('[data-final-comparison-total]', money(finalTotal));
+      text('[data-total-difference]', signedMoney(finalTotal - originalTotal));
+
+      if (!changes) return;
+      changes.innerHTML = '';
+      const originalMap = new Map((original.lines || []).map((line) => [String(line.id || ''), line]));
+      const finalMap = new Map((data.lineItems || []).map((line) => [String(line.id || ''), line]));
+      const notes = [];
+
+      originalMap.forEach((line, id) => {
+        const finalized = finalMap.get(id);
+        const label = finalized?.description || line.description || 'Item';
+        if (!finalized) {
+          notes.push(label + ' was removed from the finalized scope.');
+          return;
+        }
+
+        const originalAmount = Number(line.amount || 0);
+        const finalAmount = Number(finalized.amount || 0);
+        const originalQty = Number(line.quantity || 1);
+        const finalQty = Number(finalized.quantity || 1);
+
+        if (line.custom && finalAmount > 0) {
+          notes.push(label + ' required custom pricing and was finalized at ' + money(finalAmount) + '.');
+        } else if (originalAmount > 0 && Math.abs(finalAmount - originalAmount) >= 0.01) {
+          notes.push(label + ' changed from ' + money(originalAmount) + ' in the builder to ' + money(finalAmount) + ' in the finalized proposal.');
+        }
+
+        if (originalQty !== finalQty) {
+          notes.push(label + ' quantity changed from ' + originalQty + ' to ' + finalQty + '.');
+        }
+      });
+
+      finalMap.forEach((line, id) => {
+        if (originalMap.has(id)) return;
+        notes.push((line.description || 'An item') + ' was added to the finalized proposal' + (Number(line.amount || 0) > 0 ? ' at ' + money(line.amount) : '') + '.');
+      });
+
+      const originalSavings = Number(original.estimatedKnownSavings || 0);
+      const finalDiscount = Number(data.discountAmount || 0);
+      if (Math.abs(finalDiscount - originalSavings) >= 0.01) {
+        notes.push('The finalized discount is ' + money(finalDiscount) + (originalSavings > 0 ? ', compared with ' + money(originalSavings) + ' estimated in the builder.' : '.'));
+      }
+      if (Number(data.taxAmount || 0) > 0) {
+        notes.push('Final pricing includes ' + money(data.taxAmount) + ' in tax.');
+      }
+
+      const remainingTbd = (data.lineItems || []).filter((line) => line.custom && !Number(line.amount || 0)).length;
+      if (remainingTbd > 0) {
+        notes.push(remainingTbd + (remainingTbd === 1 ? ' custom-priced item remains TBD in this proposal.' : ' custom-priced items remain TBD in this proposal.'));
+      }
+
+      if (!notes.length) {
+        notes.push('The finalized known-price scope matches the builder estimate.');
+      }
+
+      notes.forEach((note) => {
+        const row = document.createElement('div');
+        row.className = 'flex gap-3 rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm leading-6 text-[var(--koa-ink)]/68';
+        const mark = document.createElement('span');
+        mark.className = 'mt-0.5 font-black text-[var(--koa-clay)]';
+        mark.textContent = '→';
+        const copy = document.createElement('span');
+        copy.textContent = note;
+        row.append(mark, copy);
+        changes.appendChild(row);
+      });
+    }
+
     function render(data) {
       proposal = data;
       loading?.classList.add('hidden');
@@ -187,6 +300,7 @@ import Footer from '../../components/Footer.astro';
       text('[data-tax]', money(data.taxAmount));
       text('[data-total]', money(data.total));
       text('[data-deposit]', 'Deposit amount: ' + money(data.depositAmount));
+      renderQuoteComparison(data);
 
       const notesWrap = document.querySelector('[data-client-notes-wrap]');
       notesWrap?.classList.toggle('hidden', !data.notesToClient);
