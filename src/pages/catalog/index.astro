@@ -40,6 +40,8 @@ const catalogClientData = catalogItems.map((item) => ({
   priceLabel: item.priceLabel,
   quantityMode: item.quantityMode || null,
   quantityLabel: item.quantityLabel || item.name,
+  estimatedUnitPrice: item.estimatedUnitPrice || null,
+  estimatedUnitLabel: item.estimatedUnitLabel || '',
   specs: item.specs || [],
 }));
 const bundleClientData = catalogBundles;
@@ -306,12 +308,18 @@ const badgeClass = {
                 <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No add-ons selected yet.</p>
               </div>
             </div>
+            <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-furniture-estimate>
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated guest-count furniture</p>
+              <p class="display mt-2 text-3xl" data-furniture-estimate-total>$0</p>
+              <p class="mt-2 text-xs leading-5 text-white/58">Planning estimate for automatically required chairs and 60-inch round tables only. Final style, availability, setup and proposal pricing are confirmed by Koa’s.</p>
+            </div>
             <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
               <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
               <p class="display mt-2 text-3xl" data-savings-headline></p>
               <p class="mt-2 text-xs leading-5 text-white/58" data-savings-detail></p>
             </div>
             <a href="#quote-request" data-quote-jump class="mt-6 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
+            <a href="/wedding-inquiry/" data-continue-inquiry class="mt-3 inline-flex w-full justify-center rounded-full border border-white/20 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Continue to wedding inquiry</a>
           </div>
           <p class="mt-5 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58 xl:max-w-none">{catalogPricingNote}</p>
         </aside>
@@ -379,6 +387,10 @@ const badgeClass = {
           <input type="hidden" name="estimatedBundleSavings" value="" data-estimated-savings />
           <input type="hidden" name="matchedCatalogBundle" value="" data-matched-bundle />
           <input type="hidden" name="startingPoint" value="" data-starting-point-input />
+          <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
+          <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
+          <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
+          <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
           <p class="hidden"><label>Don’t fill this out: <input name="bot-field" /></label></p>
           <div class="grid gap-5 sm:grid-cols-2">
             <label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required /></label>
@@ -419,6 +431,13 @@ const badgeClass = {
     const savingsPanel = document.querySelector('[data-savings-panel]');
     const savingsHeadline = document.querySelector('[data-savings-headline]');
     const savingsDetail = document.querySelector('[data-savings-detail]');
+    const furnitureEstimate = document.querySelector('[data-furniture-estimate]');
+    const furnitureEstimateTotal = document.querySelector('[data-furniture-estimate-total]');
+    const autoRentalBreakdownInput = document.querySelector('[data-auto-rental-breakdown]');
+    const manualAddOnsInput = document.querySelector('[data-manual-add-ons]');
+    const estimatedFurnitureTotalInput = document.querySelector('[data-estimated-furniture-total]');
+    const catalogSelectionStateInput = document.querySelector('[data-catalog-selection-state]');
+    const continueInquiry = document.querySelector('[data-continue-inquiry]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
     const guestInput = document.querySelector('[data-builder-guests]');
     const quoteGuestInput = document.querySelector('[data-quote-guests]');
@@ -708,6 +727,15 @@ const badgeClass = {
           value.className = 'display mt-1 text-3xl text-[var(--koa-forest)]';
           value.textContent = String(entry.value);
           box.append(label, value);
+          const itemId = entry.label.includes('60-inch') ? 'round-table' : entry.label.includes('ceremony') ? 'ceremony-chair' : 'reception-chair';
+          const item = itemById.get(itemId);
+          const estimated = Number(item?.estimatedUnitPrice || 0) * Number(entry.value || 0);
+          if (estimated > 0) {
+            const price = document.createElement('p');
+            price.className = 'mt-2 text-xs font-bold text-[var(--koa-forest)]/70';
+            price.textContent = currency(estimated) + ' estimated';
+            box.appendChild(price);
+          }
           guestAdjustmentItems.appendChild(box);
         });
       }
@@ -891,6 +919,83 @@ const badgeClass = {
       }
     }
 
+    function currency(value) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
+    }
+
+    function autoRentalReason(id, quantity) {
+      const item = itemById.get(id);
+      const included = includedQuantityForItem(item);
+      const recommended = recommendedTotalForItem(item);
+      const packageName = selectedPackageDisplayName() || 'your selected package';
+      if (id === 'round-table') {
+        return packageName + ' includes ' + included + ' 60-inch round table' + (included === 1 ? '' : 's') + '. At ' + guestCount() + ' guests, the planning default is ' + recommended + ' total rounds at 8 guests per table, so ' + quantity + ' additional table' + (quantity === 1 ? '' : 's') + ' are preselected.';
+      }
+      return packageName + ' includes ' + included + ' ' + (id === 'ceremony-chair' ? 'ceremony' : 'reception') + ' chair' + (included === 1 ? '' : 's') + '. Your guest count is ' + guestCount() + ', so ' + quantity + ' additional chair' + (quantity === 1 ? '' : 's') + ' are preselected.';
+    }
+
+    function estimatedLineTotal(id, entry) {
+      const item = itemById.get(id);
+      const unit = Number(item?.estimatedUnitPrice || 0);
+      return entry.auto && unit ? unit * Number(entry.quantity || 0) : 0;
+    }
+
+    function persistSelectionState() {
+      const state = {
+        version: 1,
+        startingPoint,
+        guestCount: guestCount(),
+        selected: [...selected.entries()].map(([id, entry]) => ({ id, ...entry })),
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem('koaQuoteStateV1', JSON.stringify(state));
+      } catch {}
+      if (catalogSelectionStateInput) catalogSelectionStateInput.value = JSON.stringify(state);
+      if (continueInquiry) {
+        const params = new URLSearchParams();
+        if (startingPoint && startingPoint !== 'ala-carte') {
+          params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
+        }
+        params.set('guests', String(guestCount()));
+        continueInquiry.href = '/wedding-inquiry/?' + params.toString();
+      }
+    }
+
+    function restoreSelectionState() {
+      const params = new URLSearchParams(window.location.search);
+      let saved = null;
+      try {
+        saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null');
+      } catch {}
+
+      const requestedPackage = params.get('package');
+      const requestedGuests = Number(params.get('guests') || 0);
+      const normalizedPackage = requestedPackage === 'signature' || requestedPackage === 'plumeria'
+        ? 'signature-wedding'
+        : requestedPackage;
+
+      if (requestedGuests > 0 && guestInput) guestInput.value = String(Math.min(100, Math.max(1, requestedGuests)));
+      else if (saved?.guestCount && guestInput) guestInput.value = String(Math.min(100, Math.max(1, Number(saved.guestCount))));
+
+      const start = normalizedPackage || saved?.startingPoint || '';
+      if (start && [...startingButtons].some((button) => button.dataset.startingPoint === start)) {
+        chooseStartingPoint(start);
+      }
+
+      if (saved?.selected?.length) {
+        saved.selected.forEach((entry) => {
+          const item = itemById.get(entry.id);
+          if (!item || entry.auto) return;
+          selected.set(entry.id, { name: item.name, quantity: Math.max(1, Number(entry.quantity || 1)), auto: false });
+          const card = cardFor(entry.id);
+          const quantityInput = card?.querySelector('[data-item-quantity]');
+          if (quantityInput) quantityInput.value = String(Math.max(1, Number(entry.quantity || 1)));
+          setItemButtonState(entry.id, true);
+        });
+      }
+    }
+
     function syncQuote() {
       const entries = [...selected.entries()];
 
@@ -907,12 +1012,29 @@ const badgeClass = {
           'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
 
         const label = document.createElement('span');
-        label.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
+        label.className = 'min-w-0';
+        const title = document.createElement('span');
+        title.className = 'block';
+        title.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
+        label.appendChild(title);
         if (entry.auto) {
           const auto = document.createElement('span');
-          auto.className = 'ml-2 text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
+          auto.className = 'mt-1 block text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
           auto.textContent = 'Guest-count add-on';
           label.appendChild(auto);
+
+          const reason = document.createElement('span');
+          reason.className = 'mt-2 block text-xs leading-5 text-white/55';
+          reason.textContent = autoRentalReason(id, entry.quantity);
+          label.appendChild(reason);
+
+          const estimate = estimatedLineTotal(id, entry);
+          if (estimate > 0) {
+            const price = document.createElement('span');
+            price.className = 'mt-2 block text-xs font-bold text-white/80';
+            price.textContent = currency(estimate) + ' estimated (' + currency(itemById.get(id)?.estimatedUnitPrice) + ' × ' + entry.quantity + ')';
+            label.appendChild(price);
+          }
         }
 
         const remove = document.createElement('button');
@@ -934,14 +1056,28 @@ const badgeClass = {
 
       const names = entries.map(([, entry]) => entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name);
       const joined = names.join(' | ');
+      const autoEntries = entries.filter(([, entry]) => entry.auto);
+      const manualEntries = entries.filter(([, entry]) => !entry.auto);
+      const autoBreakdown = autoEntries.map(([id, entry]) => {
+        const estimate = estimatedLineTotal(id, entry);
+        return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
+      }).join(' | ');
+      const manualBreakdown = manualEntries.map(([, entry]) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const furnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
 
       if (selectedInput) selectedInput.value = joined;
+      if (autoRentalBreakdownInput) autoRentalBreakdownInput.value = autoBreakdown;
+      if (manualAddOnsInput) manualAddOnsInput.value = manualBreakdown;
+      if (estimatedFurnitureTotalInput) estimatedFurnitureTotalInput.value = furnitureTotal ? currency(furnitureTotal) + ' planning estimate' : '$0';
       if (selectedPreview) {
         selectedPreview.textContent =
           joined || 'Choose rentals or enhancements above and they’ll appear here.';
       }
+      furnitureEstimate?.classList.toggle('hidden', furnitureTotal <= 0);
+      if (furnitureEstimateTotal) furnitureEstimateTotal.textContent = currency(furnitureTotal);
 
       renderSavings();
+      persistSelectionState();
     }
 
     filterButtons.forEach((button) => {
@@ -1046,6 +1182,7 @@ const badgeClass = {
       });
     });
 
+    restoreSelectionState();
     if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
     applyFilters();
     refreshPackageInclusions();
