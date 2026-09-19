@@ -129,7 +129,7 @@ const badgeClass = {
         </div>
 
         <div class="mt-10 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-5" data-starting-points>
-          {catalogItems.filter((item) => item.category === 'packages').map((item) => (
+          {catalogItems.filter((item) => item.category === 'packages' && item.id !== 'a-la-carte' && !/a[-\s]?la[-\s]?carte/i.test(item.name)).map((item) => (
             <button
               type="button"
               data-starting-point={item.id}
@@ -221,9 +221,9 @@ const badgeClass = {
       </div>
     </section>
 
-    <section class="py-16 lg:py-24">
-      <div class="container-shell grid gap-10 xl:grid-cols-[1fr_22rem] xl:items-start">
-        <div>
+    <section class="py-16 lg:py-24 xl:py-8">
+      <div class="container-shell grid gap-10 xl:h-[calc(100vh-7rem)] xl:grid-cols-[1fr_22rem] xl:items-stretch xl:overflow-hidden">
+        <div class="xl:min-h-0 xl:overflow-y-auto xl:pr-3">
           <div class="mb-7 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Rentals + enhancements</p>
@@ -327,7 +327,7 @@ const badgeClass = {
           </div>
         </div>
 
-        <aside class="xl:sticky xl:top-28">
+        <aside class="xl:min-h-0 xl:overflow-y-auto xl:pr-2">
           <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
             <p class="eyebrow text-[var(--koa-amber-light)]">Your quote</p>
             <h2 class="display mt-4 text-3xl">One base. Then the extras.</h2>
