@@ -249,11 +249,11 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
         Object.entries(categoryOrder).forEach(([category, keys]) => {
           const grid = targetGridFor(category);
           if (!grid || !Array.isArray(keys)) return;
-          const byKey = new Map([...grid.querySelectorAll('[data-gallery-key]')].map((button) => [button.dataset.galleryKey, button]));
-          keys.forEach((key) => {
-            const button = byKey.get(key);
-            if (button) grid.append(button);
-          });
+          const allButtons = [...grid.querySelectorAll('[data-gallery-key]')];
+          const byKey = new Map(allButtons.map((button) => [button.dataset.galleryKey, button]));
+          const ordered = keys.map((key) => byKey.get(key)).filter(Boolean);
+          const included = new Set(ordered);
+          [...ordered, ...allButtons.filter((button) => !included.has(button))].forEach((button) => grid.append(button));
         });
 
         document.querySelectorAll('[data-gallery-section]').forEach((section) => {
