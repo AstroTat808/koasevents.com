@@ -101,9 +101,15 @@ export default async(req:Request,context:Context)=>{
     const venueArea=clean(ops.venueArea,180)||'Koa’s Events';
 
     if(inRange(eventDate,start,end)){
+      const scheduleDetail=[
+        ops.setupStart ? 'Setup '+ops.setupStart : '',
+        ops.guestArrival ? 'Guests '+ops.guestArrival : '',
+        ops.eventStart ? 'Event '+ops.eventStart+(ops.eventEnd?'–'+ops.eventEnd:'') : '',
+        ops.teardownEnd ? 'Teardown '+ops.teardownEnd : '',
+      ].filter(Boolean).join(' · ');
       items.push({
         id:'event-'+record.id,date:eventDate,time:ops.setupStart||ops.eventStart||'',endTime:ops.teardownEnd||ops.eventEnd||'',
-        type:'event',title:customerName,detail:'Booked event · '+venueArea,status:ops.status||'planning',
+        type:'event',title:customerName,detail:'Booked event · '+venueArea+(scheduleDetail?' · '+scheduleDetail:' · Schedule window incomplete'),status:ops.status||'planning',
         recordId:record.id,customerName,owner:'',venueArea,
       });
 
