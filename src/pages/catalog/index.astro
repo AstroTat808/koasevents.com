@@ -538,11 +538,17 @@ const badgeClass = {
         const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
         const searchMatch = !term || (card.dataset.search || '').includes(term);
         const isMobileExtra = card.dataset.mobileExtra === 'true';
+        const matches = categoryMatch && searchMatch;
         const revealForMobile = mobileCatalogExpanded || activeCategory !== 'all' || Boolean(term) || !isMobileExtra;
-        const show = categoryMatch && searchMatch && revealForMobile;
-        card.classList.toggle('hidden', !show);
-        card.classList.toggle('md:flex', isMobileExtra);
-        if (show) visible += 1;
+        const showOnMobile = matches && revealForMobile;
+
+        if (isMobileExtra) {
+          card.classList.toggle('md:flex', matches);
+          card.classList.toggle('hidden', !showOnMobile);
+        } else {
+          card.classList.toggle('hidden', !matches);
+        }
+        if (showOnMobile) visible += 1;
       });
 
       if (count) {
@@ -551,7 +557,10 @@ const badgeClass = {
           const searchMatch = !term || (card.dataset.search || '').includes(term);
           return categoryMatch && searchMatch;
         }).length;
-        count.textContent = visible + ' shown · ' + totalMatching + ' total';
+        const mobileCollapsed = window.matchMedia('(max-width: 767px)').matches && !mobileCatalogExpanded && activeCategory === 'all' && !term;
+        count.textContent = mobileCollapsed
+          ? visible + ' shown · ' + totalMatching + ' total'
+          : totalMatching + (totalMatching === 1 ? ' item' : ' items');
       }
       if (mobileCatalogToggle) {
         const shouldShowToggle = activeCategory === 'all' && !term && !mobileCatalogExpanded && cards.some((card) => card.dataset.mobileExtra === 'true');
