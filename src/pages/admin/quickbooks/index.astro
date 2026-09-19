@@ -1,0 +1,138 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s QuickBooks Setup" description="Connect Koa’s Events CRM to QuickBooks Online." canonical="https://www.koasevents.com/admin/quickbooks/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell max-w-5xl">
+      <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Accounting</p>
+          <h1 class="display mt-3 text-5xl">QuickBooks Online</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks is Koa’s financial system of record for estimates, invoices and payments. The CRM stores only QuickBooks IDs, document numbers, balances and sync timestamps.</p>
+        </div>
+        <a href="/admin/" class="link-arrow">Admin home →</a>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+
+      <div data-app class="hidden grid gap-6">
+        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Connection</p>
+              <h2 data-company class="display mt-3 text-4xl">Not connected</h2>
+              <p data-status class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button data-connect type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Connect QuickBooks</button>
+              <button data-disconnect type="button" class="hidden rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Disconnect</button>
+            </div>
+          </div>
+          <div data-config-warning class="mt-6 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/20 p-5">
+            <p class="font-semibold text-[var(--koa-ink)]">Intuit app credentials are not configured on Netlify yet.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/60">Add the server-side environment variables below, then return here and connect Koa’s QuickBooks company. The client secret and token-encryption key are never entered into the browser.</p>
+            <div class="mt-4 grid gap-2 font-mono text-xs text-[var(--koa-forest)]">
+              <code>INTUIT_CLIENT_ID</code>
+              <code>INTUIT_CLIENT_SECRET</code>
+              <code>QBO_TOKEN_ENCRYPTION_KEY</code>
+              <code>QBO_ENVIRONMENT=production</code>
+            </div>
+            <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/50">Registered Intuit redirect URI: <code data-redirect-uri></code></p>
+          </div>
+        </section>
+
+        <section data-item-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Accounting mapping</p><h2 class="display mt-3 text-4xl">Default Koa’s service item</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the QuickBooks Service or Non-Inventory item used on synchronized Koa’s estimate and invoice lines. Revenue account treatment stays controlled by that QuickBooks item.</p></div>
+            <button data-refresh-items type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Refresh items</button>
+          </div>
+          <form data-item-form class="mt-6 grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+            <label class="grid gap-2 text-sm font-semibold">QuickBooks item
+              <select name="item" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="">Loading QuickBooks items…</option></select>
+            </label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save mapping</button>
+          </form>
+          <p data-item-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Workflow</p>
+          <h2 class="display mt-3 text-4xl">What the integration does</h2>
+          <div class="mt-6 grid gap-3 md:grid-cols-2">
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><strong>Proposal → QuickBooks Estimate</strong><p class="mt-2 text-sm leading-6 text-white/60">Create or update the estimate from the CRM, then email it using QuickBooks.</p></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><strong>Accepted proposal → invoices</strong><p class="mt-2 text-sm leading-6 text-white/60">Create the deposit, second, or final invoice individually when Koa’s is ready to issue that milestone.</p></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><strong>Payments remain in QuickBooks</strong><p class="mt-2 text-sm leading-6 text-white/60">Clients pay through the QuickBooks workflow Koa’s already uses. The website never processes or records a card payment.</p></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><strong>CRM syncs balances</strong><p class="mt-2 text-sm leading-6 text-white/60">The CRM pulls invoice balance and email status from QuickBooks; the deposit reaching zero balance can complete the booking handoff.</p></article>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+    const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const app=document.querySelector('[data-app]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const connect=document.querySelector('[data-connect]');
+    const disconnect=document.querySelector('[data-disconnect]');
+    const company=document.querySelector('[data-company]');
+    const status=document.querySelector('[data-status]');
+    const warning=document.querySelector('[data-config-warning]');
+    const itemSection=document.querySelector('[data-item-section]');
+    const itemForm=document.querySelector('[data-item-form]');
+    const itemMessage=document.querySelector('[data-item-message]');
+    const refreshItems=document.querySelector('[data-refresh-items]');
+    let state=null;
+    let items=[];
+
+    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin'));}
+    async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'QuickBooks request failed.');return data;}
+
+    async function loadItems(){
+      if(!state?.connection?.connected)return;
+      itemMessage.textContent='Loading QuickBooks items…';
+      try{
+        const data=await api({action:'list-items'});items=data.items||[];
+        const select=itemForm.elements.item;select.innerHTML='<option value="">Choose an item…</option>';
+        items.forEach((item)=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name+' · '+item.type;select.appendChild(option);});
+        if(state.settings?.serviceItemId)select.value=state.settings.serviceItemId;
+        itemMessage.textContent=items.length?items.length+' eligible QuickBooks items loaded.':'No active Service or Non-Inventory items found.';
+      }catch(err){itemMessage.textContent=err.message||'Unable to load items.';}
+    }
+
+    function render(){
+      const configured=Boolean(state?.configuration?.configured);
+      const connected=Boolean(state?.connection?.connected);
+      warning.classList.toggle('hidden',configured);
+      warning.querySelector('[data-redirect-uri]').textContent=window.location.origin+'/api/admin/quickbooks/callback';
+      connect.classList.toggle('hidden',!configured||connected);
+      disconnect.classList.toggle('hidden',!connected);
+      itemSection.classList.toggle('hidden',!connected);
+      company.textContent=connected?(state.connection.companyName||'QuickBooks company connected'):'Not connected';
+      status.textContent=!configured
+        ? 'Server credentials are required before OAuth can begin.'
+        : connected
+          ? 'Connected to realm '+state.connection.realmId+(state.connection.connectedAt?' · connected '+new Date(state.connection.connectedAt).toLocaleString():'')
+          : 'Ready to connect Koa’s QuickBooks Online company.';
+      if(connected)loadItems();
+    }
+
+    async function load(){
+      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      app.classList.remove('hidden');
+      const res=await fetch('/api/admin/quickbooks',{cache:'no-store'});
+      if(!res.ok)return;state=await res.json();render();
+      const params=new URLSearchParams(location.search);
+      if(params.get('connected')==='1')status.textContent='QuickBooks connection completed.';
+      if(params.get('qbo')==='error')status.textContent='QuickBooks connection did not complete. Check the Intuit app redirect URI and credentials.';
+    }
+
+    connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
+    disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
+    refreshItems?.addEventListener('click',loadItems);
+    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemForm.elements.item.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
+
+    load();
+  </script>
+</BaseLayout>
