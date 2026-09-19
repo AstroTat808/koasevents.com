@@ -164,9 +164,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <button type="button" data-close-booking class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
       </div>
       <div class="mt-6 grid gap-4 sm:grid-cols-3">
-        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Agreement</p><p data-booking-contract class="mt-2 text-sm font-bold text-[var(--koa-forest)]"></p></div>
+        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Client agreement</p><p data-booking-contract class="mt-2 text-sm font-bold text-[var(--koa-forest)]"></p></div>
         <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Paid</p><p data-booking-paid class="display mt-2 text-3xl text-[var(--koa-forest)]"></p></div>
         <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Outstanding</p><p data-booking-outstanding class="display mt-2 text-3xl text-[var(--koa-forest)]"></p></div>
+      </div>
+      <div data-countersign-panel class="mt-4 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/15 p-4">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s signature</p>
+        <p data-countersign-copy class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62"></p>
+        <div data-countersign-form-wrap class="mt-4 flex flex-col gap-2 sm:flex-row">
+          <input data-countersign-name class="min-h-11 flex-1 rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm" placeholder="Koa’s authorized signer name" />
+          <button type="button" data-countersign class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Countersign agreement</button>
+        </div>
       </div>
       <div class="mt-6 flex flex-wrap gap-2">
         <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
@@ -222,6 +230,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const bookingPayments = document.querySelector('[data-booking-payments]');
     const bookingMessage = document.querySelector('[data-booking-message]');
     const bookingClientLink = document.querySelector('[data-booking-client-link]');
+    const countersignPanel = document.querySelector('[data-countersign-panel]');
+    const countersignCopy = document.querySelector('[data-countersign-copy]');
+    const countersignFormWrap = document.querySelector('[data-countersign-form-wrap]');
+    const countersignName = document.querySelector('[data-countersign-name]');
+    const countersignButton = document.querySelector('[data-countersign]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], conversions: {}, records: [] };
@@ -345,7 +358,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const labels={
         quote_saved:'Quote saved', inquiry:'Inquiry received', lead:'Lead created', proposal:'Proposal created',
         proposal_sent:'Proposal sent', proposal_viewed:'Proposal viewed', proposal_accepted:'Proposal accepted',
-        proposal_declined:'Proposal declined', contract_signed:'Contract signed', payment_received:'Payment received',
+        proposal_declined:'Proposal declined', contract_generated:'Contract generated', contract_viewed:'Contract viewed',
+        contract_signed:'Client signed contract', contract_countersigned:'Koa’s countersigned contract', payment_received:'Payment received',
         payment_link_configured:'Payment link configured', booked:'Event booked', call:'Call', email:'Email',
         meeting:'Meeting', note:'Note'
       };
@@ -388,7 +402,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           activityList.appendChild(row);
         });
       }
-      activityDialog?.showModal();
+      if(activityDialog && !activityDialog.open) activityDialog.showModal();
     }
 
     function renderRecordCard(record) {
@@ -520,6 +534,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
       if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
       if(bookingMessage) bookingMessage.textContent='';
+
+      const clientSigned = summary.contractStatus === 'signed';
+      const koaSigned = Boolean(summary.koaSignedAt);
+      countersignPanel?.classList.toggle('hidden', !clientSigned);
+      countersignFormWrap?.classList.toggle('hidden', !clientSigned || koaSigned);
+      if(countersignCopy) {
+        countersignCopy.textContent = !clientSigned
+          ? 'The client must sign before Koa’s can countersign.'
+          : koaSigned
+            ? 'Countersigned by ' + (summary.koaSigner || 'Koa’s Events') + (summary.koaSignedAt ? ' on ' + dateTime(summary.koaSignedAt) : '') + '.'
+            : 'The client signature is complete. Add Koa’s authorized countersignature to fully execute the agreement.';
+      }
+      if(countersignName && !koaSigned) countersignName.value='';
+
       if(bookingPayments) {
         bookingPayments.innerHTML='';
         (summary.payments||[]).forEach((payment)=>{
@@ -549,7 +577,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           bookingPayments.appendChild(row);
         });
       }
-      bookingDialog?.showModal();
+      if(bookingDialog && !bookingDialog.open) bookingDialog.showModal();
     }
 
     function textContent(selector,value){const el=document.querySelector(selector);if(el)el.textContent=value;}
@@ -718,6 +746,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelectorAll('[data-close-activity]').forEach((button)=>button.addEventListener('click',()=>activityDialog?.close()));
     document.querySelectorAll('[data-close-booking]').forEach((button)=>button.addEventListener('click',()=>bookingDialog?.close()));
+
+    countersignButton?.addEventListener('click',async()=>{
+      if(!bookingRecord)return;
+      const name=String(countersignName?.value||'').trim();
+      if(name.length<2){if(bookingMessage)bookingMessage.textContent='Enter the authorized Koa’s signer name.';return;}
+      if(bookingMessage)bookingMessage.textContent='Recording Koa’s countersignature…';
+      try{
+        await api({action:'countersign-contract',recordId:bookingRecord.id,name});
+        await load(String(searchInput?.value||'').trim());
+        const refreshed=(payload.records||[]).find((entry)=>entry.id===bookingRecord.id);
+        if(refreshed)openBooking(refreshed);
+      }catch(error){if(bookingMessage)bookingMessage.textContent=error.message||'Unable to countersign the agreement.';}
+    });
 
     activityForm?.addEventListener('submit',async(event)=>{
       event.preventDefault(); const data=new FormData(activityForm); if(activityMessage)activityMessage.textContent='Saving…';
