@@ -43,6 +43,7 @@ const catalogClientData = catalogItems.map((item) => ({
   quantityLabel: item.quantityLabel || item.name,
   estimatedUnitPrice: item.estimatedUnitPrice || null,
   estimatedUnitLabel: item.estimatedUnitLabel || '',
+  publishedUnitPrice: item.publishedUnitPrice || null,
   specs: item.specs || [],
 }));
 const bundleClientData = catalogBundles;
@@ -376,6 +377,11 @@ const badgeClass = {
                   <button type="button" data-copy-quote-link class="rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Copy link</button>
                 </div>
                 <input readonly data-saved-quote-link class="mt-3 w-full rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/62" aria-label="Saved quote recovery link" />
+                <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                  <a data-share-quote-email href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Email quote</a>
+                  <a data-share-quote-text href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Text quote</a>
+                  <button type="button" data-share-quote-native class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Share…</button>
+                </div>
                 <p class="mt-2 text-xs leading-5 text-white/45">This saved version can be reopened on another device. Saving again creates a new version and recovery link.</p>
               </div>
               <p class="mt-3 hidden text-xs leading-5 text-red-200" data-save-quote-error></p>
@@ -527,6 +533,9 @@ const badgeClass = {
     const savedQuoteId = document.querySelector('[data-saved-quote-id]');
     const savedQuoteLink = document.querySelector('[data-saved-quote-link]');
     const copyQuoteLink = document.querySelector('[data-copy-quote-link]');
+    const shareQuoteEmail = document.querySelector('[data-share-quote-email]');
+    const shareQuoteText = document.querySelector('[data-share-quote-text]');
+    const shareQuoteNative = document.querySelector('[data-share-quote-native]');
     const saveQuoteError = document.querySelector('[data-save-quote-error]');
     const itemById = new Map(catalogClientData.map((item) => [item.id, item]));
     const guestInput = document.querySelector('[data-builder-guests]');
@@ -1125,6 +1134,14 @@ const badgeClass = {
       return entry.auto && unit ? unit * Number(entry.quantity || 0) : 0;
     }
 
+    function publishedManualLineTotal(id, entry) {
+      if (entry.auto) return 0;
+      const item = itemById.get(id);
+      const unit = Number(item?.publishedUnitPrice || 0);
+      if (!unit || !['fixed', 'per-item'].includes(item?.priceType)) return 0;
+      return unit * Math.max(1, Number(entry.quantity || 1));
+    }
+
     function packageCustomQuoteNotes(entries = [...selected.entries()]) {
       const notes = [];
       if (startingPoint === 'ala-carte') {
@@ -1153,9 +1170,14 @@ const badgeClass = {
         id,
         ...entry,
         reason: entry.auto ? autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) : '',
-        estimatedLineTotal: estimatedLineTotal(id, entry),
+        estimatedLineTotal: estimatedLineTotal(id, entry) || publishedManualLineTotal(id, entry),
       }));
-      const estimatedFurnitureTotal = selectedState.reduce((sum, entry) => sum + Number(entry.estimatedLineTotal || 0), 0);
+      const estimatedFurnitureTotal = [...selected.entries()]
+        .filter(([, entry]) => entry.auto)
+        .reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
+      const publishedAddOnTotal = [...selected.entries()]
+        .filter(([, entry]) => !entry.auto)
+        .reduce((sum, [id, entry]) => sum + publishedManualLineTotal(id, entry), 0);
       const plan = selectedPackagePlan();
       const basePackagePrice = packageBasePrice();
       return {
@@ -1165,7 +1187,8 @@ const badgeClass = {
         selected: selectedState,
         estimatedFurnitureTotal,
         basePackagePrice,
-        estimatedStartingTotal: basePackagePrice + estimatedFurnitureTotal,
+        publishedAddOnTotal,
+        estimatedStartingTotal: basePackagePrice + estimatedFurnitureTotal + publishedAddOnTotal,
         packageIncludes: plan ? [...(plan.includes || [])] : [],
         packageIncludedInventory: plan?.includedInventory || '',
         autoDismissed: [...dismissedAuto],
@@ -1183,6 +1206,7 @@ const badgeClass = {
         selected: state.selected,
         estimatedFurnitureTotal: state.estimatedFurnitureTotal,
         basePackagePrice: state.basePackagePrice,
+        publishedAddOnTotal: state.publishedAddOnTotal,
         estimatedStartingTotal: state.estimatedStartingTotal,
         packageIncludes: state.packageIncludes,
         packageIncludedInventory: state.packageIncludedInventory,
@@ -1197,6 +1221,15 @@ const badgeClass = {
       savedQuotePanel?.classList.remove('hidden');
       if (savedQuoteId) savedQuoteId.textContent = id;
       if (savedQuoteLink) savedQuoteLink.value = recoveryUrl;
+
+      const subject = encodeURIComponent('Koa’s Events quote ' + id);
+      const body = encodeURIComponent('Here is the Koa’s Events quote we saved:\n\n' + recoveryUrl + '\n\nQuote ID: ' + id);
+      if (shareQuoteEmail) shareQuoteEmail.href = 'mailto:?subject=' + subject + '&body=' + body;
+      if (shareQuoteText) {
+        const appleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        shareQuoteText.href = (appleMobile ? 'sms:&body=' : 'sms:?body=') + body;
+      }
+      if (shareQuoteNative) shareQuoteNative.classList.toggle('hidden', !navigator.share);
     }
 
     function persistSelectionState() {
@@ -1411,10 +1444,13 @@ const badgeClass = {
           }
         } else {
           const item = itemById.get(id);
+          const publishedTotal = publishedManualLineTotal(id, entry);
           if (item?.priceLabel) {
             const price = document.createElement('span');
             price.className = 'mt-1 block text-xs text-white/48';
-            price.textContent = item.priceLabel;
+            price.textContent = publishedTotal
+              ? currency(publishedTotal) + ' included in estimate · ' + item.priceLabel
+              : item.priceLabel;
             label.appendChild(price);
           }
         }
@@ -1509,8 +1545,9 @@ const badgeClass = {
       }).join(' | ');
       const manualBreakdown = manualEntries.map(([, entry]) => entry.quantity + ' × ' + entry.name).join(' | ');
       const furnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
+      const publishedAddOnTotal = manualEntries.reduce((sum, [id, entry]) => sum + publishedManualLineTotal(id, entry), 0);
       const basePrice = packageBasePrice();
-      const estimatedTotal = basePrice + furnitureTotal;
+      const estimatedTotal = basePrice + furnitureTotal + publishedAddOnTotal;
       const customNotes = packageCustomQuoteNotes(entries);
       const plan = selectedPackagePlan();
 
@@ -1534,11 +1571,15 @@ const badgeClass = {
       startingTotalPanel?.classList.toggle('hidden', basePrice <= 0);
       if (startingTotal) startingTotal.textContent = currency(estimatedTotal);
       if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Base package: ' + currency(basePrice) : '';
-      if (startingTotalFurniture) startingTotalFurniture.textContent = 'Estimated guest-count furniture: ' + currency(furnitureTotal);
+      if (startingTotalFurniture) {
+        startingTotalFurniture.textContent =
+          'Estimated guest-count furniture: ' + currency(furnitureTotal) +
+          (publishedAddOnTotal > 0 ? ' · Published-price add-ons: ' + currency(publishedAddOnTotal) : '');
+      }
       if (startingTotalNote) {
         startingTotalNote.textContent = startingPoint === 'gardenia' && guestCount() > 10
-          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Custom-priced and manually selected add-ons are not included here.'
-          : 'Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.';
+          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Published fixed/per-item add-ons are included; truly custom-priced items remain separate.'
+          : 'Package base plus estimated automatic guest-count furniture and any selected add-ons with published fixed/per-item prices. Truly custom-priced items remain separate.';
       }
 
       customQuotePanel?.classList.toggle('hidden', customNotes.length === 0);
@@ -1716,6 +1757,17 @@ const badgeClass = {
         savedQuoteLink?.focus();
         savedQuoteLink?.select();
       }
+    });
+
+    shareQuoteNative?.addEventListener('click', async () => {
+      const url = savedQuoteLink?.value || '';
+      const id = savedQuoteId?.textContent || '';
+      if (!url || !navigator.share) return;
+      await navigator.share({
+        title: 'Koa’s Events quote ' + id,
+        text: 'Here is the Koa’s Events quote we saved.',
+        url,
+      });
     });
 
     async function initializeBuilder() {

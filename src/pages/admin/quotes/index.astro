@@ -1,0 +1,377 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Quote Admin | Koa’s Events" description="Manage saved Koa’s Events quotes, leads and proposals." canonical="https://www.koasevents.com/admin/quotes/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin</p>
+          <h1 class="display mt-3 text-5xl">Quotes + proposals</h1>
+          <p class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Search saved customer configurations, see what people are building, and turn a quote snapshot into an internal lead or proposal draft.</p>
+        </div>
+        <a href="/admin/" class="link-arrow">Admin home →</a>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">
+        Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.
+      </div>
+
+      <div data-admin-ui class="hidden grid gap-8">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Saved quotes</p>
+            <p data-stat-quotes class="display mt-3 text-4xl">0</p>
+          </article>
+          <article class="rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Avg. guests</p>
+            <p data-stat-guests class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p>
+          </article>
+          <article class="rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Estimated pipeline</p>
+            <p data-stat-value class="display mt-3 text-4xl text-[var(--koa-forest)]">$0</p>
+          </article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Converted records</p>
+            <p data-stat-records class="display mt-3 text-4xl">0</p>
+          </article>
+        </section>
+
+        <section class="grid gap-6 lg:grid-cols-2">
+          <article class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Package interest</p>
+            <h2 class="display mt-3 text-3xl">What people are starting with</h2>
+            <div data-package-stats class="mt-5 grid gap-3"></div>
+          </article>
+          <article class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Add-on interest</p>
+            <h2 class="display mt-3 text-3xl">Most-selected enhancements</h2>
+            <div data-addon-stats class="mt-5 grid gap-3"></div>
+          </article>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Saved quote search</p>
+              <h2 class="display mt-3 text-3xl">Find a quote by ID, package or add-on</h2>
+            </div>
+            <form data-search-form class="flex w-full max-w-xl gap-2">
+              <input data-search-input type="search" placeholder="Quote ID, Signature, photo booth…" class="min-w-0 flex-1 rounded-full border border-[var(--koa-line)] px-5 py-3 text-sm" />
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.12em] text-white">Search</button>
+            </form>
+          </div>
+          <p data-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
+          <div data-quote-list class="mt-6 grid gap-4"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Lead + proposal records</p>
+          <h2 class="display mt-3 text-3xl">Converted quote records</h2>
+          <div data-record-list class="mt-6 grid gap-4"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <dialog data-convert-dialog class="w-[min(94vw,760px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-convert-form class="p-7 sm:p-8">
+      <input type="hidden" name="quoteId" />
+      <input type="hidden" name="kind" />
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Convert saved quote</p>
+          <h2 data-convert-title class="display mt-3 text-4xl">Create lead</h2>
+          <p data-convert-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
+        </div>
+        <button type="button" data-close-dialog class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+      </div>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <label class="grid gap-2 text-sm font-semibold">Client / couple name<input name="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Phone<input name="phone" type="tel" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Event date<input name="eventDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Internal notes<textarea name="notes" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+      </div>
+      <div class="mt-6 flex flex-wrap gap-3">
+        <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Create record</button>
+        <button type="button" data-close-dialog class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Cancel</button>
+      </div>
+      <p data-convert-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
+    </form>
+  </dialog>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+
+    const ui = document.querySelector('[data-admin-ui]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const quoteList = document.querySelector('[data-quote-list]');
+    const recordList = document.querySelector('[data-record-list]');
+    const packageStats = document.querySelector('[data-package-stats]');
+    const addOnStats = document.querySelector('[data-addon-stats]');
+    const message = document.querySelector('[data-message]');
+    const searchForm = document.querySelector('[data-search-form]');
+    const searchInput = document.querySelector('[data-search-input]');
+    const dialog = document.querySelector('[data-convert-dialog]');
+    const convertForm = document.querySelector('[data-convert-form]');
+    const convertTitle = document.querySelector('[data-convert-title]');
+    const convertSummary = document.querySelector('[data-convert-summary]');
+    const convertMessage = document.querySelector('[data-convert-message]');
+
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    let payload = { quotes: [], analytics: {}, conversions: {}, records: [] };
+
+    const packageNames = {
+      'signature-wedding': 'Signature Wedding Experience',
+      hibiscus: 'Hibiscus',
+      orchid: 'Orchid',
+      gardenia: 'Gardenia',
+      'ala-carte': 'À la carte',
+      unspecified: 'Unspecified',
+    };
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+    }
+
+    function money(value) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value || 0));
+    }
+
+    function dateTime(value) {
+      if (!value) return '';
+      return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+    }
+
+    function text(tag, className, content) {
+      const el = document.createElement(tag);
+      if (className) el.className = className;
+      el.textContent = content;
+      return el;
+    }
+
+    function renderStats() {
+      const analytics = payload.analytics || {};
+      document.querySelector('[data-stat-quotes]').textContent = String(analytics.quoteCount || 0);
+      document.querySelector('[data-stat-guests]').textContent = String(analytics.averageGuestCount || 0);
+      document.querySelector('[data-stat-value]').textContent = money(analytics.estimatedPipelineValue || 0);
+      document.querySelector('[data-stat-records]').textContent = String((payload.records || []).length);
+
+      packageStats.innerHTML = '';
+      (analytics.packages || []).forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between rounded-xl bg-[var(--koa-sand)] px-4 py-3';
+        row.append(
+          text('span', 'text-sm font-semibold', packageNames[entry.id] || entry.id),
+          text('span', 'display text-2xl text-[var(--koa-forest)]', String(entry.count))
+        );
+        packageStats.appendChild(row);
+      });
+      if (!(analytics.packages || []).length) packageStats.appendChild(text('p', 'text-sm text-[var(--koa-ink)]/48', 'No saved quote data yet.'));
+
+      addOnStats.innerHTML = '';
+      (analytics.addOns || []).slice(0, 8).forEach((entry) => {
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between rounded-xl bg-[var(--koa-sand)] px-4 py-3';
+        row.append(
+          text('span', 'text-sm font-semibold', entry.name),
+          text('span', 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', entry.count + ' quote' + (entry.count === 1 ? '' : 's'))
+        );
+        addOnStats.appendChild(row);
+      });
+      if (!(analytics.addOns || []).length) addOnStats.appendChild(text('p', 'text-sm text-[var(--koa-ink)]/48', 'No saved add-on selections yet.'));
+    }
+
+    function openConvert(quote, kind) {
+      convertForm.reset();
+      convertForm.elements.quoteId.value = quote.id;
+      convertForm.elements.kind.value = kind;
+      convertTitle.textContent = kind === 'proposal' ? 'Create proposal draft' : 'Create lead';
+      convertSummary.textContent =
+        'Quote ' + quote.id + ' · ' +
+        (packageNames[quote.state?.startingPoint] || quote.state?.startingPoint || 'No package') + ' · ' +
+        (quote.state?.guestCount || 0) + ' guests · ' +
+        money(quote.state?.estimatedStartingTotal || 0) + ' estimated starting total';
+      convertMessage.textContent = '';
+      dialog.showModal();
+    }
+
+    function proposalPrint(record) {
+      const q = record.quote || {};
+      const s = q.state || {};
+      const addOns = (s.selected || []).map((item) => {
+        const total = Number(item.estimatedLineTotal || 0);
+        return '<tr><td>' + escapeHtml(item.name) + '</td><td>' + Number(item.quantity || 0) + '</td><td>' + (total ? money(total) : 'Custom quote') + '</td></tr>';
+      }).join('');
+      const inclusions = (s.packageIncludes || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join('');
+      const w = window.open('', '_blank');
+      if (!w) return;
+      w.opener = null;
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.id)}</title><style>
+      body{font-family:Arial,sans-serif;color:#193b30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #193b30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:26px;font-weight:700;margin-top:24px}.muted{color:#666}@media print{button{display:none}}</style></head><body>
+      <header><p>Koa’s Events · Proposal Draft</p><h1>${escapeHtml(record.id)}</h1><p class="muted">Created ${escapeHtml(dateTime(record.createdAt))} from saved quote ${escapeHtml(record.quoteId)}</p></header>
+      <section class="meta"><div class="box"><strong>Client</strong><br>${escapeHtml(record.customer?.name || 'TBD')}<br>${escapeHtml(record.customer?.email || '')}<br>${escapeHtml(record.customer?.phone || '')}</div><div class="box"><strong>Event</strong><br>${escapeHtml(record.customer?.eventDate || 'Date TBD')}<br>${escapeHtml(String(s.guestCount || 0))} guests<br>${escapeHtml(packageNames[s.startingPoint] || s.startingPoint || 'Custom')}</div></section>
+      <h2>Package inclusions</h2><p>${escapeHtml(s.packageIncludedInventory || '')}</p><ul>${inclusions}</ul>
+      <h2>Selected add-ons</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Published / planning amount</th></tr></thead><tbody>${addOns || '<tr><td colspan="3">No add-ons selected.</td></tr>'}</tbody></table>
+      <p class="total">Estimated starting total: ${money(s.estimatedStartingTotal || 0)}</p>
+      <p class="muted">Draft only. Final availability, custom-priced items, taxes, service fees, staffing, logistics and contractual terms must be confirmed by Koa’s Events.</p>
+      <p><strong>Internal notes:</strong> ${escapeHtml(record.customer?.notes || '')}</p>
+      <button onclick="window.print()">Print / Save PDF</button>
+      </body></html>`);
+      w.document.close();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    }
+
+    function renderQuotes() {
+      quoteList.innerHTML = '';
+      const quotes = payload.quotes || [];
+      if (!quotes.length) {
+        quoteList.appendChild(text('p', 'rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/58', 'No matching saved quotes.'));
+        return;
+      }
+
+      quotes.forEach((quote) => {
+        const article = document.createElement('article');
+        article.className = 'rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 sm:p-6';
+        const top = document.createElement('div');
+        top.className = 'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between';
+        const left = document.createElement('div');
+        left.append(
+          text('p', 'font-mono text-xs font-bold tracking-[.06em] text-[var(--koa-clay)]', quote.id),
+          text('h3', 'display mt-2 text-3xl', packageNames[quote.state?.startingPoint] || quote.state?.startingPoint || 'No package selected'),
+          text('p', 'mt-2 text-sm text-[var(--koa-ink)]/58', (quote.state?.guestCount || 0) + ' guests · saved ' + dateTime(quote.createdAt))
+        );
+        const value = text('p', 'display text-3xl text-[var(--koa-forest)]', money(quote.state?.estimatedStartingTotal || 0));
+        top.append(left, value);
+
+        const addOns = (quote.state?.selected || []).filter((item) => !item.auto).map((item) => item.name + (item.quantity > 1 ? ' × ' + item.quantity : ''));
+        const copy = text('p', 'mt-4 text-sm leading-6 text-[var(--koa-ink)]/62', addOns.length ? 'Add-ons: ' + addOns.join(' · ') : 'No manually selected add-ons.');
+        const conversions = payload.conversions?.[quote.id] || [];
+        const converted = conversions.length ? text('p', 'mt-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', 'Converted: ' + conversions.map((item) => item.id).join(' · ')) : null;
+
+        const actions = document.createElement('div');
+        actions.className = 'mt-5 flex flex-wrap gap-3';
+        const open = document.createElement('a');
+        open.href = '/catalog/?quote=' + encodeURIComponent(quote.id);
+        open.target = '_blank';
+        open.rel = 'noreferrer';
+        open.className = 'rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]';
+        open.textContent = 'Open quote';
+        const lead = document.createElement('button');
+        lead.className = 'rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white';
+        lead.textContent = 'Convert to lead';
+        lead.addEventListener('click', () => openConvert(quote, 'lead'));
+        const proposal = document.createElement('button');
+        proposal.className = 'rounded-full bg-[var(--koa-ink)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white';
+        proposal.textContent = 'Create proposal';
+        proposal.addEventListener('click', () => openConvert(quote, 'proposal'));
+        actions.append(open, lead, proposal);
+        article.append(top, copy);
+        if (converted) article.appendChild(converted);
+        article.appendChild(actions);
+        quoteList.appendChild(article);
+      });
+    }
+
+    function renderRecords() {
+      recordList.innerHTML = '';
+      const records = payload.records || [];
+      if (!records.length) {
+        recordList.appendChild(text('p', 'rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/58', 'No quote conversions yet.'));
+        return;
+      }
+      records.forEach((record) => {
+        const article = document.createElement('article');
+        article.className = 'rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const row = document.createElement('div');
+        row.className = 'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+        const left = document.createElement('div');
+        left.append(
+          text('p', 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', record.kind + ' · ' + record.status),
+          text('h3', 'display mt-2 text-2xl', record.id),
+          text('p', 'mt-2 text-sm text-[var(--koa-ink)]/58', (record.customer?.name || 'Client TBD') + ' · quote ' + record.quoteId)
+        );
+        row.appendChild(left);
+        if (record.kind === 'proposal') {
+          const print = document.createElement('button');
+          print.className = 'rounded-full border border-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]';
+          print.textContent = 'Print proposal';
+          print.addEventListener('click', () => proposalPrint(record));
+          row.appendChild(print);
+        }
+        article.appendChild(row);
+        recordList.appendChild(article);
+      });
+    }
+
+    async function load(query = '') {
+      const user = await getUser();
+      if (!hasAdminAccess(user)) {
+        unauthorized?.classList.remove('hidden');
+        return;
+      }
+      ui?.classList.remove('hidden');
+      if (message) message.textContent = 'Loading…';
+      const response = await fetch('/api/admin/quotes' + (query ? '?q=' + encodeURIComponent(query) : ''), { cache: 'no-store' });
+      if (response.status === 401) {
+        ui?.classList.add('hidden');
+        unauthorized?.classList.remove('hidden');
+        return;
+      }
+      if (!response.ok) {
+        if (message) message.textContent = 'Unable to load quote data.';
+        return;
+      }
+      payload = await response.json();
+      if (message) message.textContent = (payload.quotes || []).length + ' saved quote' + ((payload.quotes || []).length === 1 ? '' : 's') + ' shown.';
+      renderStats();
+      renderQuotes();
+      renderRecords();
+    }
+
+    searchForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      load(String(searchInput?.value || '').trim());
+    });
+
+    document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => dialog.close()));
+
+    convertForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(convertForm);
+      convertMessage.textContent = 'Creating…';
+      const response = await fetch('/api/admin/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'convert',
+          quoteId: data.get('quoteId'),
+          kind: data.get('kind'),
+          customer: {
+            name: data.get('name'),
+            email: data.get('email'),
+            phone: data.get('phone'),
+            eventDate: data.get('eventDate'),
+            notes: data.get('notes'),
+          },
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        convertMessage.textContent = result.error || 'Unable to create the record.';
+        return;
+      }
+      convertMessage.textContent = 'Created ' + result.record.id + '.';
+      window.setTimeout(() => dialog.close(), 700);
+      await load(String(searchInput?.value || '').trim());
+    });
+
+    load();
+  </script>
+</BaseLayout>

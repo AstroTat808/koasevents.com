@@ -36,6 +36,7 @@ export interface CatalogItem {
   quantityLabel?: string;
   estimatedUnitPrice?: number;
   estimatedUnitLabel?: string;
+  publishedUnitPrice?: number;
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -180,6 +181,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'per-item',
     priceLabel: '$1.50 / piece',
     note: 'Current published add-on price.',
+    publishedUnitPrice: 1.5,
     badges: [{ kind: 'included', label: 'Included With Signature' }],
     includedWith: ['Signature'],
     bundleEligible: true,
@@ -335,6 +337,9 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'fixed',
     priceLabel: '$200 / additional hour',
     note: 'Current published price.',
+    publishedUnitPrice: 200,
+    quantityMode: 'manual',
+    quantityLabel: 'Additional service hours',
     keywords: ['extra hour', 'service time'],
   },
   {
