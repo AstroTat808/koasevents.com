@@ -107,6 +107,7 @@ const categories = [...new Set(posts.map((post) => post.category))].sort();
             <a
               href={`/blog/${post.slug}/`}
               data-blog-card
+              data-blog-list-card
               data-category={post.category}
               data-search={`${post.title} ${post.excerpt} ${post.category} ${post.tags.join(' ')}`.toLowerCase()}
               class="group overflow-hidden rounded-[1.45rem] border border-[var(--koa-line)] bg-white"
@@ -137,6 +138,7 @@ const categories = [...new Set(posts.map((post) => post.category))].sort();
   <script>
     const search = document.querySelector('[data-blog-search]');
     const cards = Array.from(document.querySelectorAll('[data-blog-card]'));
+    const listCards = Array.from(document.querySelectorAll('[data-blog-list-card]'));
     const filters = Array.from(document.querySelectorAll('[data-category]')).filter((el) => el.matches('button'));
     const empty = document.querySelector('[data-blog-empty]');
     const resultCount = document.querySelector('[data-result-count]');
@@ -144,8 +146,6 @@ const categories = [...new Set(posts.map((post) => post.category))].sort();
 
     function applyFilters() {
       const query = String(search?.value || '').trim().toLowerCase();
-      let visible = 0;
-
       cards.forEach((card) => {
         const category = card.getAttribute('data-category') || '';
         const searchable = card.getAttribute('data-search') || '';
@@ -153,9 +153,9 @@ const categories = [...new Set(posts.map((post) => post.category))].sort();
         const matchesQuery = !query || searchable.includes(query);
         const show = matchesCategory && matchesQuery;
         card.classList.toggle('hidden', !show);
-        if (show) visible += 1;
       });
 
+      const visible = listCards.filter((card) => !card.classList.contains('hidden')).length;
       empty?.classList.toggle('hidden', visible !== 0);
       if (resultCount) resultCount.textContent = visible + (visible === 1 ? ' article' : ' articles');
     }
