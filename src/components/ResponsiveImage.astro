@@ -9,6 +9,7 @@ interface Props {
   priority?: boolean;
   fit?: 'cover' | 'contain' | 'fill';
   position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
+  focalIgnore?: boolean;
   quality?: number;
 }
 
@@ -20,6 +21,7 @@ const {
   class: className = '',
   sizes = '100vw',
   priority = false,
+  focalIgnore = false,
 } = Astro.props;
 ---
 <img
@@ -32,4 +34,6 @@ const {
   loading={priority ? 'eager' : 'lazy'}
   fetchpriority={priority ? 'high' : 'auto'}
   decoding="async"
+  data-koa-focal-src={src}
+  data-koa-focal-ignore={focalIgnore ? '' : undefined}
 />
