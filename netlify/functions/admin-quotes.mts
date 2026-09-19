@@ -22,6 +22,9 @@ type SavedQuote = {
     publishedAddOnTotal?: number;
     basePackagePrice?: number;
     estimatedStartingTotal?: number;
+    estimatedSavingsPercent?: number;
+    estimatedKnownSavings?: number;
+    customQuoteCount?: number;
     packageIncludes?: string[];
     packageIncludedInventory?: string;
   };
@@ -223,8 +226,10 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   });
 
   const subtotal = lines.reduce((sum, line) => sum + finite(line.amount), 0);
-  const depositAmount = Math.round(subtotal * 0.10 * 100) / 100;
-  const remaining = Math.max(0, subtotal - depositAmount);
+  const discountAmount = Math.min(subtotal, finite(state.estimatedKnownSavings || 0));
+  const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+  const depositAmount = Math.round(total * 0.10 * 100) / 100;
+  const remaining = Math.max(0, total - depositAmount);
   const secondAmount = Math.round((remaining / 2) * 100) / 100;
   const finalAmount = Math.round((remaining - secondAmount) * 100) / 100;
   const schedule: PaymentItem[] = [
@@ -239,10 +244,10 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     expirationDate: offsetDate(new Date().toISOString().slice(0, 10), 14),
     lineItems: lines,
     subtotal,
-    discountAmount: 0,
+    discountAmount,
     taxRate: 0,
     taxAmount: 0,
-    total: subtotal,
+    total,
     depositAmount,
     paymentSchedule: schedule,
     notesToClient: '',
@@ -419,6 +424,15 @@ export default async (req: Request, context: Context) => {
     const quote = await getQuote(context, quoteId);
     if (!quote) return Response.json({ error: 'Quote not found.' }, { status: 404 });
 
+    const existing = records.find((entry) =>
+      entry.quoteId === quoteId &&
+      entry.kind === kind &&
+      entry.stage !== 'lost'
+    );
+    if (existing) {
+      return Response.json({ ok: true, record: existing, reused: true }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
     const now = new Date().toISOString();
     const packageId = normalizePackage(quote.state?.startingPoint);
     const record: SalesRecord = {
@@ -449,6 +463,17 @@ export default async (req: Request, context: Context) => {
     const source = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
     const kind = payload.kind === 'proposal' ? 'proposal' : payload.kind === 'lead' ? 'lead' : '';
     if (!source || !kind) return Response.json({ error: 'Record or promotion type not found.' }, { status: 404 });
+
+    const existing = records.find((entry) =>
+      entry.kind === kind &&
+      entry.stage !== 'lost' &&
+      (
+        (source.quoteId && entry.quoteId === source.quoteId) ||
+        entry.source === source.id
+      )
+    );
+    if (existing) return Response.json({ ok: true, record: existing, reused: true });
+
     const quote = source.quote || await getQuote(context, source.quoteId || '');
     const now = new Date().toISOString();
     const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage);
