@@ -573,6 +573,29 @@ const badgeClass = {
     let mobileCatalogExpanded = false;
     let activeSavedQuoteId = '';
     let savedStateFingerprint = '';
+
+    function funnelSessionId() {
+      try {
+        let id = sessionStorage.getItem('koaFunnelSession');
+        if (!id) {
+          id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+          sessionStorage.setItem('koaFunnelSession', id);
+        }
+        return id;
+      } catch {
+        return '';
+      }
+    }
+
+    function trackPackageView(packageId) {
+      if (!packageId || packageId === 'ala-carte') return;
+      fetch('/api/crm/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'package_view', packageId, sessionId: funnelSessionId() }),
+        keepalive: true,
+      }).catch(() => {});
+    }
     const selected = new Map();
     const autoSelected = new Set();
     const dismissedAuto = new Set();
@@ -772,7 +795,10 @@ const badgeClass = {
       syncSuggestedQuantities();
 
       window.setTimeout(() => {
-        document.querySelector('[data-catalog-filters]')?.scrollIntoView({
+        const target = id === 'ala-carte'
+          ? document.querySelector('[data-catalog-filters]')
+          : selectedPackageDetails;
+        target?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -1706,7 +1732,11 @@ const badgeClass = {
       });
     });
 
-    startingButtons.forEach((button) => button.addEventListener('click', () => chooseStartingPoint(button.dataset.startingPoint || '')));
+    startingButtons.forEach((button) => button.addEventListener('click', () => {
+      const id = button.dataset.startingPoint || '';
+      chooseStartingPoint(id);
+      trackPackageView(id);
+    }));
     guestInput?.addEventListener('input', () => {
       renderGuestAdjustment();
       syncSuggestedQuantities();
