@@ -1,74 +1,57 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Quote Admin | Koa’s Events" description="Manage saved Koa’s Events quotes, leads and proposals." canonical="https://www.koasevents.com/admin/quotes/">
+<BaseLayout noindex title="Koa’s Sales CRM" description="Manage Koa’s Events inquiries, quotes, leads, proposals and bookings." canonical="https://www.koasevents.com/admin/quotes/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin</p>
-          <h1 class="display mt-3 text-5xl">Quotes + proposals</h1>
-          <p class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Search saved customer configurations, see what people are building, and turn a quote snapshot into an internal lead or proposal draft.</p>
+          <h1 class="display mt-3 text-5xl">Sales CRM</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Website inquiries, saved quotes, leads, proposals and booked events in one pipeline—with proposal pricing, acceptance and package conversion analytics.</p>
         </div>
         <a href="/admin/" class="link-arrow">Admin home →</a>
       </div>
 
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">
-        Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.
-      </div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
 
       <div data-admin-ui class="hidden grid gap-8">
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white">
-            <p class="eyebrow text-[var(--koa-amber-light)]">Saved quotes</p>
-            <p data-stat-quotes class="display mt-3 text-4xl">0</p>
-          </article>
-          <article class="rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-clay)]">Avg. guests</p>
-            <p data-stat-guests class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p>
-          </article>
-          <article class="rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-clay)]">Estimated pipeline</p>
-            <p data-stat-value class="display mt-3 text-4xl text-[var(--koa-forest)]">$0</p>
-          </article>
-          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white">
-            <p class="eyebrow text-[var(--koa-amber-light)]">Converted records</p>
-            <p data-stat-records class="display mt-3 text-4xl">0</p>
-          </article>
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Inquiries</p><p data-stat-inquiries class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Leads</p><p data-stat-leads class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Proposals</p><p data-stat-proposals class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Booked</p><p data-stat-booked class="display mt-3 text-4xl">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Saved quote value</p><p data-stat-value class="display mt-3 text-4xl">$0</p></article>
         </section>
 
-        <section class="grid gap-6 lg:grid-cols-2">
-          <article class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-clay)]">Package interest</p>
-            <h2 class="display mt-3 text-3xl">What people are starting with</h2>
-            <div data-package-stats class="mt-5 grid gap-3"></div>
-          </article>
-          <article class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-clay)]">Add-on interest</p>
-            <h2 class="display mt-3 text-3xl">Most-selected enhancements</h2>
-            <div data-addon-stats class="mt-5 grid gap-3"></div>
-          </article>
-        </section>
-
-        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p class="eyebrow text-[var(--koa-clay)]">Saved quote search</p>
-              <h2 class="display mt-3 text-3xl">Find a quote by ID, package or add-on</h2>
-            </div>
+            <div><p class="eyebrow text-[var(--koa-clay)]">Package funnel</p><h2 class="display mt-3 text-4xl">From interest to booked event</h2><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/56">Views are unique browser sessions that selected a package. Later stages count saved quotes and CRM records.</p></div>
+            <p class="text-xs leading-5 text-[var(--koa-ink)]/45">Conversion rates are directional funnel indicators, not cross-device identity matching.</p>
+          </div>
+          <div class="mt-6 overflow-x-auto">
+            <table class="w-full min-w-[900px] border-collapse text-sm">
+              <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Collection</th><th class="py-3 pr-4">Viewed</th><th class="py-3 pr-4">Saved</th><th class="py-3 pr-4">Leads</th><th class="py-3 pr-4">Proposals</th><th class="py-3 pr-4">Booked</th><th class="py-3">Rates</th></tr></thead>
+              <tbody data-funnel></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Pipeline</p><h2 class="display mt-3 text-4xl">Inquiries → leads → proposals → booked</h2></div>
             <form data-search-form class="flex w-full max-w-xl gap-2">
-              <input data-search-input type="search" placeholder="Quote ID, Signature, photo booth…" class="min-w-0 flex-1 rounded-full border border-[var(--koa-line)] px-5 py-3 text-sm" />
+              <input data-search-input type="search" placeholder="Name, email, quote ID, record ID…" class="min-w-0 flex-1 rounded-full border border-[var(--koa-line)] px-5 py-3 text-sm" />
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.12em] text-white">Search</button>
             </form>
           </div>
           <p data-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
-          <div data-quote-list class="mt-6 grid gap-4"></div>
+          <div data-pipeline class="mt-6 grid gap-5 xl:grid-cols-4"></div>
         </section>
 
-        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-          <p class="eyebrow text-[var(--koa-clay)]">Lead + proposal records</p>
-          <h2 class="display mt-3 text-3xl">Converted quote records</h2>
-          <div data-record-list class="mt-6 grid gap-4"></div>
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Saved configurations</p><h2 class="display mt-3 text-4xl">Quote builder snapshots</h2></div>
+          <div data-quote-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
         </section>
       </div>
     </div>
@@ -79,12 +62,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       <input type="hidden" name="quoteId" />
       <input type="hidden" name="kind" />
       <div class="flex items-start justify-between gap-4">
-        <div>
-          <p class="eyebrow text-[var(--koa-clay)]">Convert saved quote</p>
-          <h2 data-convert-title class="display mt-3 text-4xl">Create lead</h2>
-          <p data-convert-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
-        </div>
-        <button type="button" data-close-dialog class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+        <div><p class="eyebrow text-[var(--koa-clay)]">Convert saved quote</p><h2 data-convert-title class="display mt-3 text-4xl">Create lead</h2><p data-convert-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p></div>
+        <button type="button" data-close-convert class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
       </div>
       <div class="mt-6 grid gap-4 sm:grid-cols-2">
         <label class="grid gap-2 text-sm font-semibold">Client / couple name<input name="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
@@ -93,11 +72,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <label class="grid gap-2 text-sm font-semibold">Event date<input name="eventDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Internal notes<textarea name="notes" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
       </div>
-      <div class="mt-6 flex flex-wrap gap-3">
-        <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Create record</button>
-        <button type="button" data-close-dialog class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Cancel</button>
-      </div>
+      <div class="mt-6 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Create record</button><button type="button" data-close-convert class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Cancel</button></div>
       <p data-convert-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
+    </form>
+  </dialog>
+
+  <dialog data-proposal-dialog class="w-[min(96vw,1100px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-proposal-form class="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+      <input type="hidden" name="recordId" />
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Proposal editor</p><h2 data-proposal-title class="display mt-3 text-4xl">Proposal</h2><p data-proposal-link-wrap class="mt-3 hidden text-sm"><a data-proposal-link target="_blank" rel="noreferrer" class="link-arrow">Open client proposal →</a></p></div>
+        <button type="button" data-close-proposal class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+      </div>
+
+      <div class="mt-7 grid gap-5 lg:grid-cols-3">
+        <label class="grid gap-2 text-sm font-semibold">Status<select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="draft">Draft</option><option value="sent">Sent</option><option value="viewed">Viewed</option><option value="accepted">Accepted</option><option value="declined">Declined</option><option value="expired">Expired</option><option value="booked">Booked</option></select></label>
+        <label class="grid gap-2 text-sm font-semibold">Valid through<input name="expirationDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Event date<input name="eventDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Client / couple<input name="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Phone<input name="phone" type="tel" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+      </div>
+
+      <div class="mt-8">
+        <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Editable pricing</p><h3 class="display mt-2 text-3xl">Proposal line items</h3></div><button type="button" data-add-line class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add line +</button></div>
+        <div data-line-items class="mt-4 grid gap-3"></div>
+      </div>
+
+      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <label class="grid gap-2 text-sm font-semibold">Discount amount<input name="discountAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Tax rate %<input name="taxRate" type="number" min="0" max="100" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="depositAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Calculated total</p><p data-editor-total class="display mt-2 text-3xl text-[var(--koa-forest)]">$0</p></div>
+      </div>
+
+      <div class="mt-8">
+        <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p><h3 class="display mt-2 text-3xl">Milestones</h3></div><button type="button" data-add-payment class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add payment +</button></div>
+        <div data-payment-items class="mt-4 grid gap-3"></div>
+      </div>
+
+      <div class="mt-8 grid gap-5 lg:grid-cols-2">
+        <label class="grid gap-2 text-sm font-semibold">Client-facing notes<textarea name="notesToClient" rows="5" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+        <label class="grid gap-2 text-sm font-semibold">Internal notes<textarea name="notes" rows="5" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+      </div>
+
+      <div data-acceptance-info class="mt-6 hidden rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/65"></div>
+      <div class="mt-7 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save proposal</button><button type="button" data-print-proposal class="rounded-full bg-[var(--koa-ink)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Print / PDF</button><button type="button" data-close-proposal class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
+      <p data-proposal-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
     </form>
   </dialog>
 
@@ -106,21 +127,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
+    const pipeline = document.querySelector('[data-pipeline]');
     const quoteList = document.querySelector('[data-quote-list]');
-    const recordList = document.querySelector('[data-record-list]');
-    const packageStats = document.querySelector('[data-package-stats]');
-    const addOnStats = document.querySelector('[data-addon-stats]');
+    const funnelBody = document.querySelector('[data-funnel]');
     const message = document.querySelector('[data-message]');
     const searchForm = document.querySelector('[data-search-form]');
     const searchInput = document.querySelector('[data-search-input]');
-    const dialog = document.querySelector('[data-convert-dialog]');
+
+    const convertDialog = document.querySelector('[data-convert-dialog]');
     const convertForm = document.querySelector('[data-convert-form]');
     const convertTitle = document.querySelector('[data-convert-title]');
     const convertSummary = document.querySelector('[data-convert-summary]');
     const convertMessage = document.querySelector('[data-convert-message]');
 
+    const proposalDialog = document.querySelector('[data-proposal-dialog]');
+    const proposalForm = document.querySelector('[data-proposal-form]');
+    const proposalTitle = document.querySelector('[data-proposal-title]');
+    const proposalMessage = document.querySelector('[data-proposal-message]');
+    const lineItems = document.querySelector('[data-line-items]');
+    const paymentItems = document.querySelector('[data-payment-items]');
+    const editorTotal = document.querySelector('[data-editor-total]');
+    const proposalLink = document.querySelector('[data-proposal-link]');
+    const proposalLinkWrap = document.querySelector('[data-proposal-link-wrap]');
+    const acceptanceInfo = document.querySelector('[data-acceptance-info]');
+
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    let payload = { quotes: [], analytics: {}, conversions: {}, records: [] };
+    let payload = { quotes: [], analytics: {}, funnel: [], conversions: {}, records: [] };
+    let editingRecord = null;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -130,248 +163,250 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       'ala-carte': 'À la carte',
       unspecified: 'Unspecified',
     };
+    const stageLabels = { inquiry: 'Inquiries', lead: 'Leads', proposal: 'Proposals', booked: 'Booked' };
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
       const roles = user?.app_metadata?.roles || [];
       return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
     }
-
-    function money(value) {
-      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value || 0));
-    }
-
-    function dateTime(value) {
-      if (!value) return '';
-      return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-    }
-
-    function text(tag, className, content) {
-      const el = document.createElement(tag);
-      if (className) el.className = className;
-      el.textContent = content;
-      return el;
-    }
+    function money(value) { return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0)); }
+    function dateTime(value) { return value ? new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : ''; }
+    function text(tag,className,content) { const el=document.createElement(tag); if(className)el.className=className; el.textContent=content; return el; }
+    function packageLabel(id) { return packageNames[id] || id || 'Custom / not selected'; }
+    function percent(value) { return value == null ? '—' : Math.round(value*100) + '%'; }
 
     function renderStats() {
-      const analytics = payload.analytics || {};
-      document.querySelector('[data-stat-quotes]').textContent = String(analytics.quoteCount || 0);
-      document.querySelector('[data-stat-guests]').textContent = String(analytics.averageGuestCount || 0);
-      document.querySelector('[data-stat-value]').textContent = money(analytics.estimatedPipelineValue || 0);
-      document.querySelector('[data-stat-records]').textContent = String((payload.records || []).length);
+      const records = payload.records || [];
+      document.querySelector('[data-stat-inquiries]').textContent = String(records.filter((r)=>r.stage==='inquiry').length);
+      document.querySelector('[data-stat-leads]').textContent = String(records.filter((r)=>r.stage==='lead').length);
+      document.querySelector('[data-stat-proposals]').textContent = String(records.filter((r)=>r.stage==='proposal').length);
+      document.querySelector('[data-stat-booked]').textContent = String(records.filter((r)=>r.stage==='booked').length);
+      document.querySelector('[data-stat-value]').textContent = money(payload.analytics?.estimatedPipelineValue || 0);
+    }
 
-      packageStats.innerHTML = '';
-      (analytics.packages || []).forEach((entry) => {
-        const row = document.createElement('div');
-        row.className = 'flex items-center justify-between rounded-xl bg-[var(--koa-sand)] px-4 py-3';
-        row.append(
-          text('span', 'text-sm font-semibold', packageNames[entry.id] || entry.id),
-          text('span', 'display text-2xl text-[var(--koa-forest)]', String(entry.count))
-        );
-        packageStats.appendChild(row);
+    function renderFunnel() {
+      funnelBody.innerHTML='';
+      (payload.funnel || []).forEach((row)=>{
+        const tr=document.createElement('tr'); tr.className='border-b border-[var(--koa-line)]';
+        const values=[
+          packageLabel(row.packageId),
+          row.views,
+          row.saves,
+          row.leads,
+          row.proposals,
+          row.booked,
+          'view→save '+percent(row.viewToSave)+' · save→lead '+percent(row.saveToLead)+' · lead→proposal '+percent(row.leadToProposal)+' · proposal→booked '+percent(row.proposalToBooked)
+        ];
+        values.forEach((value,index)=>{const td=document.createElement('td');td.className='py-4 pr-4 '+(index===0?'font-semibold':'');td.textContent=String(value);tr.appendChild(td);});
+        funnelBody.appendChild(tr);
       });
-      if (!(analytics.packages || []).length) packageStats.appendChild(text('p', 'text-sm text-[var(--koa-ink)]/48', 'No saved quote data yet.'));
+    }
 
-      addOnStats.innerHTML = '';
-      (analytics.addOns || []).slice(0, 8).forEach((entry) => {
-        const row = document.createElement('div');
-        row.className = 'flex items-center justify-between rounded-xl bg-[var(--koa-sand)] px-4 py-3';
-        row.append(
-          text('span', 'text-sm font-semibold', entry.name),
-          text('span', 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', entry.count + ' quote' + (entry.count === 1 ? '' : 's'))
-        );
-        addOnStats.appendChild(row);
+    function recordPackage(record) {
+      return record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage || '';
+    }
+
+    function actionButton(label, className, handler) {
+      const button=document.createElement('button'); button.type='button'; button.className=className; button.textContent=label; button.addEventListener('click',handler); return button;
+    }
+
+    async function api(body) {
+      const response=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(result.error || 'Request failed.');
+      return result;
+    }
+
+    async function promote(record, kind) {
+      await api({action:'promote',recordId:record.id,kind});
+      await load(String(searchInput?.value||'').trim());
+    }
+
+    async function markBooked(record) {
+      if(!confirm('Mark '+record.id+' as booked?')) return;
+      await api({action:'mark-booked',recordId:record.id});
+      await load(String(searchInput?.value||'').trim());
+    }
+
+    function renderRecordCard(record) {
+      const article=document.createElement('article');
+      article.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-4 shadow-sm';
+      article.append(
+        text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',record.kind+' · '+record.status),
+        text('h3','mt-2 font-mono text-xs font-bold text-[var(--koa-forest)]',record.id),
+        text('p','mt-2 text-sm font-semibold',record.customer?.name || 'Client name TBD'),
+        text('p','mt-1 text-xs leading-5 text-[var(--koa-ink)]/50',[record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · '))
+      );
+      if(record.customer?.email) article.appendChild(text('p','mt-2 break-all text-xs text-[var(--koa-ink)]/55',record.customer.email));
+      if(record.customer?.phone) article.appendChild(text('p','mt-1 text-xs text-[var(--koa-ink)]/50',record.customer.phone));
+      if(record.inquiry) {
+        const inquiryMeta = [record.inquiry.service, record.inquiry.eventType, record.inquiry.guestCount ? record.inquiry.guestCount + ' guests' : '', record.inquiry.budget].filter(Boolean).join(' · ');
+        if(inquiryMeta) article.appendChild(text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',inquiryMeta));
+      }
+      if(record.quoteId) article.appendChild(text('p','mt-2 font-mono text-[.65rem] text-[var(--koa-ink)]/45','Quote '+record.quoteId));
+
+      const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
+      const small='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+      const primary='rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+      if(record.stage==='inquiry') {
+        actions.append(actionButton('Make lead',primary,()=>promote(record,'lead')),actionButton('Create proposal',small,()=>promote(record,'proposal')));
+      } else if(record.stage==='lead') {
+        actions.append(actionButton('Create proposal',primary,()=>promote(record,'proposal')));
+      }
+      if(record.kind==='proposal') {
+        actions.append(actionButton('Edit proposal',primary,()=>openProposal(record)));
+        if(record.proposal?.status!=='draft' && record.proposal?.publicToken) {
+          const link=document.createElement('a'); link.className=small; link.target='_blank'; link.rel='noreferrer'; link.href='/proposal/?token='+encodeURIComponent(record.proposal.publicToken); link.textContent='Client link'; actions.appendChild(link);
+        }
+      }
+      if(record.stage!=='booked') actions.append(actionButton('Mark booked',small,()=>markBooked(record)));
+      article.appendChild(actions);
+      return article;
+    }
+
+    function renderPipeline() {
+      pipeline.innerHTML='';
+      ['inquiry','lead','proposal','booked'].forEach((stage)=>{
+        const column=document.createElement('section'); column.className='rounded-[1.3rem] bg-[var(--koa-ivory)] p-4';
+        const rows=(payload.records||[]).filter((r)=>r.stage===stage);
+        const head=document.createElement('div'); head.className='mb-4 flex items-center justify-between';
+        head.append(text('h3','display text-2xl',stageLabels[stage]),text('span','rounded-full bg-[var(--koa-sand)] px-3 py-1.5 text-xs font-bold text-[var(--koa-forest)]',String(rows.length)));
+        column.appendChild(head);
+        const list=document.createElement('div'); list.className='grid gap-3';
+        rows.slice(0,50).forEach((record)=>list.appendChild(renderRecordCard(record)));
+        if(!rows.length) list.appendChild(text('p','text-sm text-[var(--koa-ink)]/42','Nothing here yet.'));
+        column.appendChild(list); pipeline.appendChild(column);
       });
-      if (!(analytics.addOns || []).length) addOnStats.appendChild(text('p', 'text-sm text-[var(--koa-ink)]/48', 'No saved add-on selections yet.'));
     }
 
-    function openConvert(quote, kind) {
-      convertForm.reset();
-      convertForm.elements.quoteId.value = quote.id;
-      convertForm.elements.kind.value = kind;
-      convertTitle.textContent = kind === 'proposal' ? 'Create proposal draft' : 'Create lead';
-      convertSummary.textContent =
-        'Quote ' + quote.id + ' · ' +
-        (packageNames[quote.state?.startingPoint] || quote.state?.startingPoint || 'No package') + ' · ' +
-        (quote.state?.guestCount || 0) + ' guests · ' +
-        money(quote.state?.estimatedStartingTotal || 0) + ' estimated starting total';
-      convertMessage.textContent = '';
-      dialog.showModal();
-    }
-
-    function proposalPrint(record) {
-      const q = record.quote || {};
-      const s = q.state || {};
-      const addOns = (s.selected || []).map((item) => {
-        const total = Number(item.estimatedLineTotal || 0);
-        return '<tr><td>' + escapeHtml(item.name) + '</td><td>' + Number(item.quantity || 0) + '</td><td>' + (total ? money(total) : 'Custom quote') + '</td></tr>';
-      }).join('');
-      const inclusions = (s.packageIncludes || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join('');
-      const w = window.open('', '_blank');
-      if (!w) return;
-      w.opener = null;
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.id)}</title><style>
-      body{font-family:Arial,sans-serif;color:#193b30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #193b30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:26px;font-weight:700;margin-top:24px}.muted{color:#666}@media print{button{display:none}}</style></head><body>
-      <header><p>Koa’s Events · Proposal Draft</p><h1>${escapeHtml(record.id)}</h1><p class="muted">Created ${escapeHtml(dateTime(record.createdAt))} from saved quote ${escapeHtml(record.quoteId)}</p></header>
-      <section class="meta"><div class="box"><strong>Client</strong><br>${escapeHtml(record.customer?.name || 'TBD')}<br>${escapeHtml(record.customer?.email || '')}<br>${escapeHtml(record.customer?.phone || '')}</div><div class="box"><strong>Event</strong><br>${escapeHtml(record.customer?.eventDate || 'Date TBD')}<br>${escapeHtml(String(s.guestCount || 0))} guests<br>${escapeHtml(packageNames[s.startingPoint] || s.startingPoint || 'Custom')}</div></section>
-      <h2>Package inclusions</h2><p>${escapeHtml(s.packageIncludedInventory || '')}</p><ul>${inclusions}</ul>
-      <h2>Selected add-ons</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Published / planning amount</th></tr></thead><tbody>${addOns || '<tr><td colspan="3">No add-ons selected.</td></tr>'}</tbody></table>
-      <p class="total">Estimated starting total: ${money(s.estimatedStartingTotal || 0)}</p>
-      <p class="muted">Draft only. Final availability, custom-priced items, taxes, service fees, staffing, logistics and contractual terms must be confirmed by Koa’s Events.</p>
-      <p><strong>Internal notes:</strong> ${escapeHtml(record.customer?.notes || '')}</p>
-      <button onclick="window.print()">Print / Save PDF</button>
-      </body></html>`);
-      w.document.close();
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    function openConvert(quote,kind) {
+      convertForm.reset(); convertForm.elements.quoteId.value=quote.id; convertForm.elements.kind.value=kind;
+      convertTitle.textContent=kind==='proposal'?'Create proposal draft':'Create lead';
+      convertSummary.textContent='Quote '+quote.id+' · '+packageLabel(quote.state?.startingPoint)+' · '+(quote.state?.guestCount||0)+' guests · '+money(quote.state?.estimatedStartingTotal||0);
+      convertMessage.textContent=''; convertDialog.showModal();
     }
 
     function renderQuotes() {
-      quoteList.innerHTML = '';
-      const quotes = payload.quotes || [];
-      if (!quotes.length) {
-        quoteList.appendChild(text('p', 'rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/58', 'No matching saved quotes.'));
-        return;
-      }
-
-      quotes.forEach((quote) => {
-        const article = document.createElement('article');
-        article.className = 'rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5 sm:p-6';
-        const top = document.createElement('div');
-        top.className = 'flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between';
-        const left = document.createElement('div');
-        left.append(
-          text('p', 'font-mono text-xs font-bold tracking-[.06em] text-[var(--koa-clay)]', quote.id),
-          text('h3', 'display mt-2 text-3xl', packageNames[quote.state?.startingPoint] || quote.state?.startingPoint || 'No package selected'),
-          text('p', 'mt-2 text-sm text-[var(--koa-ink)]/58', (quote.state?.guestCount || 0) + ' guests · saved ' + dateTime(quote.createdAt))
-        );
-        const value = text('p', 'display text-3xl text-[var(--koa-forest)]', money(quote.state?.estimatedStartingTotal || 0));
-        top.append(left, value);
-
-        const addOns = (quote.state?.selected || []).filter((item) => !item.auto).map((item) => item.name + (item.quantity > 1 ? ' × ' + item.quantity : ''));
-        const copy = text('p', 'mt-4 text-sm leading-6 text-[var(--koa-ink)]/62', addOns.length ? 'Add-ons: ' + addOns.join(' · ') : 'No manually selected add-ons.');
-        const conversions = payload.conversions?.[quote.id] || [];
-        const converted = conversions.length ? text('p', 'mt-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', 'Converted: ' + conversions.map((item) => item.id).join(' · ')) : null;
-
-        const actions = document.createElement('div');
-        actions.className = 'mt-5 flex flex-wrap gap-3';
-        const open = document.createElement('a');
-        open.href = '/catalog/?quote=' + encodeURIComponent(quote.id);
-        open.target = '_blank';
-        open.rel = 'noreferrer';
-        open.className = 'rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]';
-        open.textContent = 'Open quote';
-        const lead = document.createElement('button');
-        lead.className = 'rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white';
-        lead.textContent = 'Convert to lead';
-        lead.addEventListener('click', () => openConvert(quote, 'lead'));
-        const proposal = document.createElement('button');
-        proposal.className = 'rounded-full bg-[var(--koa-ink)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white';
-        proposal.textContent = 'Create proposal';
-        proposal.addEventListener('click', () => openConvert(quote, 'proposal'));
-        actions.append(open, lead, proposal);
-        article.append(top, copy);
-        if (converted) article.appendChild(converted);
-        article.appendChild(actions);
-        quoteList.appendChild(article);
+      quoteList.innerHTML='';
+      const quotes=payload.quotes||[];
+      if(!quotes.length){quoteList.appendChild(text('p','text-sm text-[var(--koa-ink)]/48','No matching saved quotes.'));return;}
+      quotes.slice(0,100).forEach((quote)=>{
+        const article=document.createElement('article'); article.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        article.append(text('p','font-mono text-xs font-bold text-[var(--koa-clay)]',quote.id),text('h3','display mt-2 text-3xl',packageLabel(quote.state?.startingPoint)),text('p','mt-2 text-sm text-[var(--koa-ink)]/55',(quote.state?.guestCount||0)+' guests · '+money(quote.state?.estimatedStartingTotal||0)));
+        const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
+        const open=document.createElement('a'); open.href='/catalog/?quote='+encodeURIComponent(quote.id); open.target='_blank'; open.rel='noreferrer'; open.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]'; open.textContent='Open';
+        actions.append(open,actionButton('Lead','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',()=>openConvert(quote,'lead')),actionButton('Proposal','rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',()=>openConvert(quote,'proposal')));
+        article.appendChild(actions); quoteList.appendChild(article);
       });
     }
 
-    function renderRecords() {
-      recordList.innerHTML = '';
-      const records = payload.records || [];
-      if (!records.length) {
-        recordList.appendChild(text('p', 'rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/58', 'No quote conversions yet.'));
-        return;
-      }
-      records.forEach((record) => {
-        const article = document.createElement('article');
-        article.className = 'rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
-        const row = document.createElement('div');
-        row.className = 'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
-        const left = document.createElement('div');
-        left.append(
-          text('p', 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]', record.kind + ' · ' + record.status),
-          text('h3', 'display mt-2 text-2xl', record.id),
-          text('p', 'mt-2 text-sm text-[var(--koa-ink)]/58', (record.customer?.name || 'Client TBD') + ' · quote ' + record.quoteId)
-        );
-        row.appendChild(left);
-        if (record.kind === 'proposal') {
-          const print = document.createElement('button');
-          print.className = 'rounded-full border border-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]';
-          print.textContent = 'Print proposal';
-          print.addEventListener('click', () => proposalPrint(record));
-          row.appendChild(print);
-        }
-        article.appendChild(row);
-        recordList.appendChild(article);
-      });
+    function addLine(line={id:'',description:'',quantity:1,unitPrice:0,custom:false}) {
+      const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[2fr_.55fr_.8fr_auto] lg:items-end';
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Description<input data-line-description class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Qty<input data-line-quantity type="number" min="1" step="1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Unit price<input data-line-price type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><button type="button" data-remove-line class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
+      row.dataset.lineId=line.id||'line-'+Date.now();
+      row.querySelector('[data-line-description]').value=line.description||'';
+      row.querySelector('[data-line-quantity]').value=String(line.quantity||1);
+      row.querySelector('[data-line-price]').value=String(line.unitPrice||0);
+      row.querySelector('[data-remove-line]').addEventListener('click',()=>{row.remove();recalcEditor();});
+      row.querySelectorAll('input').forEach((input)=>input.addEventListener('input',recalcEditor));
+      lineItems.appendChild(row);
     }
 
-    async function load(query = '') {
-      const user = await getUser();
-      if (!hasAdminAccess(user)) {
-        unauthorized?.classList.remove('hidden');
-        return;
-      }
-      ui?.classList.remove('hidden');
-      if (message) message.textContent = 'Loading…';
-      const response = await fetch('/api/admin/quotes' + (query ? '?q=' + encodeURIComponent(query) : ''), { cache: 'no-store' });
-      if (response.status === 401) {
-        ui?.classList.add('hidden');
-        unauthorized?.classList.remove('hidden');
-        return;
-      }
-      if (!response.ok) {
-        if (message) message.textContent = 'Unable to load quote data.';
-        return;
-      }
-      payload = await response.json();
-      if (message) message.textContent = (payload.quotes || []).length + ' saved quote' + ((payload.quotes || []).length === 1 ? '' : 's') + ' shown.';
-      renderStats();
-      renderQuotes();
-      renderRecords();
+    function addPayment(item={label:'Payment',dueDate:'',amount:0}) {
+      const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[1.5fr_1fr_1fr_auto] lg:items-end';
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Label<input data-payment-label class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Due date<input data-payment-date type="date" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Amount<input data-payment-amount type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><button type="button" data-remove-payment class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
+      row.querySelector('[data-payment-label]').value=item.label||'Payment';
+      row.querySelector('[data-payment-date]').value=item.dueDate||'';
+      row.querySelector('[data-payment-amount]').value=String(item.amount||0);
+      row.querySelector('[data-remove-payment]').addEventListener('click',()=>row.remove());
+      paymentItems.appendChild(row);
     }
 
-    searchForm?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      load(String(searchInput?.value || '').trim());
+    function proposalLines() {
+      return [...lineItems.children].map((row)=>({id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice:Number(row.querySelector('[data-line-price]').value||0),custom:false}));
+    }
+    function proposalPayments() {
+      return [...paymentItems.children].map((row)=>({label:row.querySelector('[data-payment-label]').value,dueDate:row.querySelector('[data-payment-date]').value,amount:Number(row.querySelector('[data-payment-amount]').value||0)}));
+    }
+    function recalcEditor() {
+      const subtotal=proposalLines().reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
+      const discount=Number(proposalForm.elements.discountAmount.value||0);
+      const taxRate=Number(proposalForm.elements.taxRate.value||0);
+      const taxable=Math.max(0,subtotal-discount);
+      editorTotal.textContent=money(taxable+(taxable*taxRate/100));
+    }
+
+    function openProposal(record) {
+      editingRecord=record; proposalForm.reset(); lineItems.innerHTML=''; paymentItems.innerHTML='';
+      proposalForm.elements.recordId.value=record.id;
+      proposalForm.elements.status.value=record.proposal?.status||'draft';
+      proposalForm.elements.expirationDate.value=record.proposal?.expirationDate||'';
+      proposalForm.elements.eventDate.value=record.customer?.eventDate||'';
+      proposalForm.elements.name.value=record.customer?.name||'';
+      proposalForm.elements.email.value=record.customer?.email||'';
+      proposalForm.elements.phone.value=record.customer?.phone||'';
+      proposalForm.elements.notes.value=record.customer?.notes||'';
+      proposalForm.elements.discountAmount.value=String(record.proposal?.discountAmount||0);
+      proposalForm.elements.taxRate.value=String(record.proposal?.taxRate||0);
+      proposalForm.elements.depositAmount.value=String(record.proposal?.depositAmount||0);
+      proposalForm.elements.notesToClient.value=record.proposal?.notesToClient||'';
+      (record.proposal?.lineItems||[]).forEach(addLine); if(!(record.proposal?.lineItems||[]).length)addLine();
+      (record.proposal?.paymentSchedule||[]).forEach(addPayment); if(!(record.proposal?.paymentSchedule||[]).length)addPayment();
+      proposalTitle.textContent=record.id+' · '+packageLabel(recordPackage(record));
+      const canOpen=record.proposal?.publicToken && record.proposal?.status!=='draft';
+      proposalLinkWrap.classList.toggle('hidden',!canOpen);
+      if(canOpen) proposalLink.href='/proposal/?token='+encodeURIComponent(record.proposal.publicToken);
+      const accepted=record.proposal?.acceptance;
+      acceptanceInfo.classList.toggle('hidden',!accepted);
+      if(accepted) acceptanceInfo.textContent='Accepted by '+accepted.name+' on '+dateTime(accepted.acceptedAt)+'.';
+      proposalMessage.textContent=''; recalcEditor(); proposalDialog.showModal();
+    }
+
+    function printProposal(record) {
+      const p=record.proposal||{}; const lines=(p.lineItems||[]).map((line)=>'<tr><td>'+escapeHtml(line.description)+'</td><td>'+Number(line.quantity||1)+'</td><td>'+money(line.unitPrice)+'</td><td>'+money(line.amount)+'</td></tr>').join('');
+      const payments=(p.paymentSchedule||[]).map((item)=>'<li>'+escapeHtml(item.label)+' — '+(item.dueDate?escapeHtml(item.dueDate):'Date TBD')+' — '+money(item.amount)+'</li>').join('');
+      const w=window.open('','_blank'); if(!w)return; w.opener=null;
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(record.id)+'</title><style>body{font-family:Arial,sans-serif;color:#173D30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #173D30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:28px;font-weight:700}.muted{color:#666}@media print{button{display:none}}</style></head><body><header><p>Koa’s Events · Proposal</p><h1>'+escapeHtml(record.id)+'</h1><p class="muted">Status: '+escapeHtml(p.status||record.status)+'</p></header><section class="meta"><div class="box"><strong>Client</strong><br>'+escapeHtml(record.customer?.name||'TBD')+'<br>'+escapeHtml(record.customer?.email||'')+'<br>'+escapeHtml(record.customer?.phone||'')+'</div><div class="box"><strong>Event</strong><br>'+escapeHtml(record.customer?.eventDate||'Date TBD')+'<br>'+escapeHtml(packageLabel(recordPackage(record)))+'</div></section><h2>Pricing</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead><tbody>'+lines+'</tbody></table><p>Subtotal: '+money(p.subtotal)+'</p><p>Discount: -'+money(p.discountAmount)+'</p><p>Tax ('+Number(p.taxRate||0)+'%): '+money(p.taxAmount)+'</p><p class="total">Total: '+money(p.total)+'</p><p>Deposit: '+money(p.depositAmount)+'</p><h2>Payment schedule</h2><ul>'+payments+'</ul><h2>Notes</h2><p>'+escapeHtml(p.notesToClient||'')+'</p><button onclick="window.print()">Print / Save PDF</button></body></html>');
+      w.document.close();
+    }
+    function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
+
+    async function load(query='') {
+      const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
+      const response=await fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'});
+      if(response.status===401){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+      if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
+      payload=await response.json(); if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
+      renderStats();renderFunnel();renderPipeline();renderQuotes();
+    }
+
+    searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
+    document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
+    document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
+    document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
+    document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
+    proposalForm?.querySelectorAll('[name="discountAmount"],[name="taxRate"]').forEach((input)=>input.addEventListener('input',recalcEditor));
+
+    convertForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();const data=new FormData(convertForm);convertMessage.textContent='Creating…';
+      try{
+        const result=await api({action:'convert',quoteId:data.get('quoteId'),kind:data.get('kind'),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}});
+        convertMessage.textContent='Created '+result.record.id+'.'; setTimeout(()=>convertDialog.close(),500); await load(String(searchInput?.value||'').trim());
+        if(result.record.kind==='proposal') openProposal(result.record);
+      }catch(error){convertMessage.textContent=error.message||'Unable to create record.';}
     });
 
-    document.querySelectorAll('[data-close-dialog]').forEach((button) => button.addEventListener('click', () => dialog.close()));
-
-    convertForm?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const data = new FormData(convertForm);
-      convertMessage.textContent = 'Creating…';
-      const response = await fetch('/api/admin/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'convert',
-          quoteId: data.get('quoteId'),
-          kind: data.get('kind'),
-          customer: {
-            name: data.get('name'),
-            email: data.get('email'),
-            phone: data.get('phone'),
-            eventDate: data.get('eventDate'),
-            notes: data.get('notes'),
-          },
-        }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        convertMessage.textContent = result.error || 'Unable to create the record.';
-        return;
-      }
-      convertMessage.textContent = 'Created ' + result.record.id + '.';
-      window.setTimeout(() => dialog.close(), 700);
-      await load(String(searchInput?.value || '').trim());
+    proposalForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();proposalMessage.textContent='Saving…';const data=new FormData(proposalForm);
+      try{
+        const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:Number(data.get('taxRate')||0),depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
+        editingRecord=result.record;proposalMessage.textContent='Saved.';await load(String(searchInput?.value||'').trim());openProposal(result.record);
+      }catch(error){proposalMessage.textContent=error.message||'Unable to save proposal.';}
     });
 
+    document.querySelector('[data-print-proposal]')?.addEventListener('click',()=>{if(editingRecord)printProposal(editingRecord);});
     load();
   </script>
 </BaseLayout>

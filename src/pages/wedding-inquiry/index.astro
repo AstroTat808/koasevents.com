@@ -28,7 +28,7 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
 <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">First name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="firstName" required autocomplete="given-name"/></label><label class="grid gap-2 text-sm font-semibold">Last name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="lastName" required autocomplete="family-name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Phone<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="tel" name="phone" required autocomplete="tel"/></label></div>
 <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Wedding date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="weddingDate" required/></label><label class="grid gap-2 text-sm font-semibold">Alternate date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="alternateDate"/></label><label class="grid gap-2 text-sm font-semibold">Estimated guest count<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required/></label><label class="grid gap-2 text-sm font-semibold">Wedding budget<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="budget" required><option value="">Choose one</option><option>Under $10,000</option><option>$10,000–$19,999</option><option>$20,000–$29,999</option><option>$30,000–$49,999</option><option>$50,000+</option></select></label></div>
 <label class="grid gap-2 text-sm font-semibold">Where are you planning from?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="planningFrom" required><option value="">Choose one</option><option>Hawaiʻi Island resident</option><option>Elsewhere in Hawaiʻi</option><option>Destination wedding — U.S. mainland</option><option>Destination wedding — international</option></select></label>
-<label class="grid gap-2 text-sm font-semibold">Which starting point interests you?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="packageInterest"><option value="">Not sure yet</option><option value="signature" selected={requestedPackage==='signature'}>Koa’s Signature Wedding Experience — from $20,000</option><option value="hibiscus" selected={requestedPackage==='hibiscus'}>Hibiscus — from $8,000</option><option value="orchid" selected={requestedPackage==='orchid'}>Orchid — from $3,000</option><option value="gardenia" selected={requestedPackage==='gardenia'}>Gardenia — from $1,500</option></select></label>
+<label class="grid gap-2 text-sm font-semibold">Which starting point interests you?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="packageInterest"><option value="">Not sure yet</option><option value="signature" selected={requestedPackage==='signature'}>Koa’s Signature Wedding Experience — from $20,000</option><option value="hibiscus" selected={requestedPackage==='hibiscus'}>Hibiscus — from $15,000</option><option value="orchid" selected={requestedPackage==='orchid'}>Orchid — from $10,000</option><option value="gardenia" selected={requestedPackage==='gardenia'}>Gardenia — from $5,000</option></select></label>
 <label class="grid gap-2 text-sm font-semibold">Tell us what you envision for your wedding<textarea class="min-h-40 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="vision" placeholder="What do you want the weekend to feel like? What matters most to you?" required></textarea></label>
 <button class="rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Submit + continue to discovery call</button>
 <p class="text-center text-sm leading-6 text-[var(--koa-ink)]/56">Submitting an inquiry does not reserve a date. Your date is secured only after the applicable agreement and deposit are completed.</p>
@@ -53,6 +53,48 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
 
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
+
+  form?.addEventListener('submit', async (event) => {
+    if (form.dataset.crmCaptured === '1') return;
+    event.preventDefault();
+    const data = new FormData(form);
+    const packageValue = String(data.get('packageInterest') || '');
+    const packageId = packageValue === 'signature' ? 'signature-wedding' : packageValue;
+    const quoteId = new URLSearchParams(window.location.search).get('quote') || '';
+    try {
+      await fetch('/api/crm/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
+        body: JSON.stringify({
+          formName: 'koa-wedding-inquiry',
+          quoteId,
+          packageId,
+          customer: {
+            name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
+            email: data.get('email'),
+            phone: data.get('phone'),
+            eventDate: data.get('weddingDate'),
+            notes: data.get('vision'),
+          },
+          inquiry: {
+            service: 'venue',
+            eventType: 'Wedding',
+            guestCount: data.get('guestCount'),
+            budget: data.get('budget'),
+            venuePackage: packageId,
+            priorities: data.get('vision'),
+            selectedCatalogItems: data.get('selectedCatalogItems'),
+            automaticRentalBreakdown: data.get('automaticRentalBreakdown'),
+            manualAddOns: data.get('manualAddOns'),
+            catalogSelectionState: data.get('catalogSelectionState'),
+          },
+        }),
+        keepalive: true,
+      });
+    } catch {}
+    form.dataset.crmCaptured = '1';
+    form.submit();
+  });
 
   if (saved) {
     const packageValue = normalizedInquiryPackage(requestedPackage) || normalizedInquiryPackage(saved.startingPoint);

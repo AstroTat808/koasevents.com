@@ -100,7 +100,7 @@ const badgeClass = {
             </div>
             <div class="grid grid-cols-[2.4rem_1fr] gap-4 border-t border-white/10 pt-5">
               <span class="display text-3xl text-[var(--koa-amber-light)]">02</span>
-              <div><p class="text-lg font-bold leading-6">Add only what you need</p><p class="mt-1 text-sm leading-6 text-white/58">Browse rentals, décor, production, bar enhancements and services without repurchasing the base package.</p></div>
+              <div><p class="text-lg font-bold leading-6">Add only what you need</p><p class="mt-1 text-sm leading-6 text-white/58">Browse rentals, décor, production, bar enhancements and services without duplicating what your selected collection already includes.</p></div>
             </div>
             <div class="grid grid-cols-[2.4rem_1fr] gap-4 border-t border-white/10 pt-5">
               <span class="display text-3xl text-[var(--koa-amber-light)]">03</span>
@@ -130,17 +130,28 @@ const badgeClass = {
 
         <div class="mt-10 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-5" data-starting-points>
           {catalogItems.filter((item) => item.category === 'packages').map((item) => (
-            <button type="button" data-starting-point={item.id} aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
-              <span data-selected-indicator class="absolute right-5 top-5 hidden rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em] text-white">Selected</span>
-              <span class="eyebrow pr-20 text-[var(--koa-clay)]">Base wedding package</span>
+            <button
+              type="button"
+              data-starting-point={item.id}
+              aria-pressed="false"
+              class:list={[
+                'relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border p-6 text-left align-top transition hover:-translate-y-1',
+                item.featured
+                  ? 'border-[var(--koa-amber)] bg-[var(--koa-forest)] text-white shadow-[0_22px_55px_rgba(23,61,48,.24)] ring-2 ring-[var(--koa-amber)]/35 hover:border-[var(--koa-amber-light)]'
+                  : 'border-[var(--koa-line)] bg-white hover:border-[var(--koa-forest)]'
+              ]}
+            >
+              {item.featured && <span class="mb-4 rounded-full bg-[var(--koa-amber-light)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em] text-[var(--koa-ink)]">Flagship · most complete</span>}
+              <span data-selected-indicator class:list={['absolute right-5 top-5 hidden rounded-full px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.11em]', item.featured ? 'bg-white text-[var(--koa-forest)]' : 'bg-[var(--koa-forest)] text-white']}>Selected</span>
+              <span class:list={['eyebrow pr-20', item.featured ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-clay)]']}>{item.featured ? 'Signature experience' : 'Wedding collection'}</span>
               <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">{item.name.replace(' Wedding Collection','').replace('Koa’s Signature Wedding Experience','Signature')}</span>
-              <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
-              <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
+              <span class:list={['mt-3 block text-xs font-black uppercase tracking-[.12em]', item.featured ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-forest)]']}>{item.priceLabel}</span>
+              <span class:list={['mt-4 block text-sm leading-6', item.featured ? 'text-white/72' : 'text-[var(--koa-ink)]/58']}>{item.description}</span>
               {packageRuleById[item.id] && (
                 <>
-                  <PackageCapacityComparison furnitureCoverage={packageRuleById[item.id]?.includedFurnitureCoverage || 'See package details'} compact />
-                  <span class="mt-4 block text-xs leading-5 text-[var(--koa-ink)]/55">
-                    <strong class="text-[var(--koa-forest)]">Included furniture / inventory:</strong> {packageRuleById[item.id]?.includedInventory}
+                  <PackageCapacityComparison furnitureCoverage={packageRuleById[item.id]?.includedFurnitureCoverage || 'See package details'} compact dark={Boolean(item.featured)} />
+                  <span class:list={['mt-4 block text-xs leading-5', item.featured ? 'text-white/68' : 'text-[var(--koa-ink)]/55']}>
+                    <strong class={item.featured ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-forest)]'}>Included furniture / inventory:</strong> {packageRuleById[item.id]?.includedInventory}
                   </span>
                 </>
               )}
@@ -151,7 +162,7 @@ const badgeClass = {
             <span class="eyebrow pr-20 text-[var(--koa-clay)]">Build from scratch</span>
             <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">À la carte</span>
             <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Custom quote</span>
-            <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">Skip a base wedding package and build the event from the bundles and individual rental catalog below.</span>
+            <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">Skip a wedding collection and build the event from bundles and individual rentals below.</span>
           </button>
         </div>
 
@@ -168,7 +179,7 @@ const badgeClass = {
               <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/64" data-selected-package-access></p>
             </div>
             <div class="rounded-xl bg-[var(--koa-sand)] px-5 py-4 lg:min-w-48">
-              <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Base package</p>
+              <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">Collection starting price</p>
               <p class="display mt-1 text-3xl text-[var(--koa-forest)]" data-selected-package-price></p>
             </div>
           </div>
@@ -562,6 +573,29 @@ const badgeClass = {
     let mobileCatalogExpanded = false;
     let activeSavedQuoteId = '';
     let savedStateFingerprint = '';
+
+    function funnelSessionId() {
+      try {
+        let id = sessionStorage.getItem('koaFunnelSession');
+        if (!id) {
+          id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '-' + Math.random().toString(36).slice(2);
+          sessionStorage.setItem('koaFunnelSession', id);
+        }
+        return id;
+      } catch {
+        return '';
+      }
+    }
+
+    function trackPackageView(packageId) {
+      if (!packageId || packageId === 'ala-carte') return;
+      fetch('/api/crm/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'package_view', packageId, sessionId: funnelSessionId() }),
+        keepalive: true,
+      }).catch(() => {});
+    }
     const selected = new Map();
     const autoSelected = new Set();
     const dismissedAuto = new Set();
@@ -598,7 +632,7 @@ const badgeClass = {
       if (selectedPackagePrice) selectedPackagePrice.textContent = currency(plan.price);
       if (selectedPackageInventory) selectedPackageInventory.textContent = plan.includedInventory;
       if (selectedPackageConfiguration) selectedPackageConfiguration.textContent = plan.baseConfiguration;
-      if (quoteBasePrice) quoteBasePrice.textContent = 'Base package: ' + currency(plan.price);
+      if (quoteBasePrice) quoteBasePrice.textContent = 'Collection price: ' + currency(plan.price);
 
       const inclusions = ['Furniture / inventory: ' + plan.includedInventory, ...(plan.includes || [])];
 
@@ -761,7 +795,10 @@ const badgeClass = {
       syncSuggestedQuantities();
 
       window.setTimeout(() => {
-        document.querySelector('[data-catalog-filters]')?.scrollIntoView({
+        const target = id === 'ala-carte'
+          ? document.querySelector('[data-catalog-filters]')
+          : selectedPackageDetails;
+        target?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -1570,7 +1607,7 @@ const badgeClass = {
 
       startingTotalPanel?.classList.toggle('hidden', basePrice <= 0);
       if (startingTotal) startingTotal.textContent = currency(estimatedTotal);
-      if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Base package: ' + currency(basePrice) : '';
+      if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Collection price: ' + currency(basePrice) : '';
       if (startingTotalFurniture) {
         startingTotalFurniture.textContent =
           'Estimated guest-count furniture: ' + currency(furnitureTotal) +
@@ -1695,7 +1732,11 @@ const badgeClass = {
       });
     });
 
-    startingButtons.forEach((button) => button.addEventListener('click', () => chooseStartingPoint(button.dataset.startingPoint || '')));
+    startingButtons.forEach((button) => button.addEventListener('click', () => {
+      const id = button.dataset.startingPoint || '';
+      chooseStartingPoint(id);
+      trackPackageView(id);
+    }));
     guestInput?.addEventListener('input', () => {
       renderGuestAdjustment();
       syncSuggestedQuantities();

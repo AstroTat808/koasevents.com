@@ -1,0 +1,248 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+---
+<BaseLayout noindex title="Koa’s Events Proposal" description="Review your Koa’s Events proposal." canonical="https://www.koasevents.com/proposal/">
+  <Header overlay={false} />
+  <main class="min-h-[70vh] bg-[var(--koa-sand)] py-12 lg:py-20">
+    <div class="container-shell max-w-5xl">
+      <div data-loading class="rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <h1 class="display mt-4 text-5xl">Loading your proposal…</h1>
+      </div>
+
+      <div data-error class="hidden rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Proposal</p>
+        <h1 class="display mt-4 text-5xl">This proposal is not available.</h1>
+        <p data-error-copy class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62"></p>
+      </div>
+
+      <article data-proposal class="hidden overflow-hidden rounded-[1.8rem] bg-white shadow-[var(--shadow-soft)]">
+        <header class="bg-[var(--koa-forest)] p-7 text-white sm:p-10">
+          <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Events proposal</p>
+              <h1 data-proposal-id class="display mt-4 text-5xl sm:text-6xl"></h1>
+              <p data-client-name class="mt-4 text-base text-white/72"></p>
+            </div>
+            <div class="rounded-2xl border border-white/14 bg-white/[.06] px-5 py-4">
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Proposal status</p>
+              <p data-status class="mt-2 text-sm font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]"></p>
+              <p data-expiration class="mt-2 text-xs text-white/55"></p>
+            </div>
+          </div>
+        </header>
+
+        <div class="grid gap-8 p-7 sm:p-10">
+          <section class="grid gap-4 sm:grid-cols-2">
+            <div class="rounded-2xl bg-[var(--koa-sand)] p-5">
+              <p class="eyebrow text-[var(--koa-clay)]">Event</p>
+              <p data-event-details class="mt-3 text-sm font-semibold leading-6 text-[var(--koa-forest)]"></p>
+            </div>
+            <div class="rounded-2xl bg-[var(--koa-sand)] p-5">
+              <p class="eyebrow text-[var(--koa-clay)]">Quote reference</p>
+              <p data-quote-id class="mt-3 font-mono text-sm font-bold text-[var(--koa-forest)]"></p>
+            </div>
+          </section>
+
+          <section>
+            <p class="eyebrow text-[var(--koa-clay)]">Pricing</p>
+            <h2 class="display mt-3 text-4xl">Your proposed scope</h2>
+            <div class="mt-6 overflow-x-auto">
+              <table class="w-full min-w-[620px] border-collapse text-sm">
+                <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Item</th><th class="py-3 pr-4">Qty</th><th class="py-3 pr-4">Unit</th><th class="py-3 text-right">Amount</th></tr></thead>
+                <tbody data-lines></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="grid gap-6 lg:grid-cols-[1fr_22rem]">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p>
+              <div data-payments class="mt-4 grid gap-3"></div>
+              <div data-client-notes-wrap class="mt-6 hidden rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+                <p class="eyebrow text-[var(--koa-clay)]">Notes</p>
+                <p data-client-notes class="mt-3 whitespace-pre-line text-sm leading-6 text-[var(--koa-ink)]/65"></p>
+              </div>
+            </div>
+            <aside class="rounded-[1.4rem] bg-[var(--koa-ink)] p-6 text-white">
+              <div class="grid gap-2 text-sm">
+                <div class="flex justify-between gap-4"><span class="text-white/52">Subtotal</span><strong data-subtotal></strong></div>
+                <div class="flex justify-between gap-4"><span class="text-white/52">Discount</span><strong data-discount></strong></div>
+                <div class="flex justify-between gap-4"><span data-tax-label class="text-white/52">Tax</span><strong data-tax></strong></div>
+              </div>
+              <div class="mt-5 border-t border-white/12 pt-5">
+                <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Proposal total</p>
+                <p data-total class="display mt-2 text-4xl"></p>
+                <p data-deposit class="mt-3 text-xs leading-5 text-white/60"></p>
+              </div>
+            </aside>
+          </section>
+
+          <section data-acceptance-section class="rounded-[1.4rem] border border-[var(--koa-forest)]/20 bg-[var(--koa-sand)] p-6">
+            <p class="eyebrow text-[var(--koa-clay)]">Client acceptance</p>
+            <h2 class="display mt-3 text-4xl">Ready to approve this proposal?</h2>
+            <p class="mt-4 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/62">Acceptance records your approval of this proposal version. Reservation, payment and event terms remain subject to the applicable Koa’s Events agreement.</p>
+            <form data-accept-form class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label class="grid gap-2 text-sm font-semibold">Type your full name
+                <input name="name" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
+              </label>
+              <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Accept proposal</button>
+              <label class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/65 sm:col-span-2">
+                <input name="acknowledged" type="checkbox" required class="mt-1" />
+                <span>I confirm that I reviewed this proposal and approve the scope and pricing shown above.</span>
+              </label>
+              <p data-accept-message class="text-sm text-[var(--koa-ink)]/58 sm:col-span-2"></p>
+            </form>
+            <button data-decline type="button" class="mt-4 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Decline proposal</button>
+          </section>
+
+          <section data-accepted class="hidden rounded-[1.4rem] bg-[var(--koa-forest)] p-6 text-white">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Accepted</p>
+            <h2 class="display mt-3 text-4xl">Proposal approved.</h2>
+            <p data-accepted-copy class="mt-3 text-sm leading-6 text-white/70"></p>
+          </section>
+        </div>
+      </article>
+    </div>
+  </main>
+  <Footer />
+
+  <script>
+    const loading = document.querySelector('[data-loading]');
+    const error = document.querySelector('[data-error]');
+    const errorCopy = document.querySelector('[data-error-copy]');
+    const proposalEl = document.querySelector('[data-proposal]');
+    const acceptance = document.querySelector('[data-acceptance-section]');
+    const accepted = document.querySelector('[data-accepted]');
+    const acceptForm = document.querySelector('[data-accept-form]');
+    const acceptMessage = document.querySelector('[data-accept-message]');
+
+    const token = new URLSearchParams(window.location.search).get('token') || '';
+    let proposal = null;
+
+    function money(value) {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(Number(value || 0));
+    }
+    function dateLabel(value) {
+      if (!value) return 'No expiration date';
+      return new Intl.DateTimeFormat('en-US', { dateStyle: 'long' }).format(new Date(value + 'T12:00:00'));
+    }
+    function text(selector, value) {
+      const el = document.querySelector(selector);
+      if (el) el.textContent = value;
+    }
+
+    function render(data) {
+      proposal = data;
+      loading?.classList.add('hidden');
+      proposalEl?.classList.remove('hidden');
+
+      text('[data-proposal-id]', data.id);
+      text('[data-client-name]', data.customerName ? 'Prepared for ' + data.customerName : 'Prepared for your event');
+      text('[data-status]', String(data.status || 'proposal').replaceAll('-', ' '));
+      text('[data-expiration]', data.expirationDate ? 'Valid through ' + dateLabel(data.expirationDate) : '');
+      text('[data-event-details]', [data.eventDate ? dateLabel(data.eventDate) : 'Event date TBD', data.packageId ? data.packageId.replace('signature-wedding','Signature Wedding Experience').replace(/^./, (m) => m.toUpperCase()) : 'Custom event'].join(' · '));
+      text('[data-quote-id]', data.quoteId || 'Custom proposal');
+
+      const tbody = document.querySelector('[data-lines]');
+      tbody.innerHTML = '';
+      (data.lineItems || []).forEach((line) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-[var(--koa-line)]';
+        const cells = [
+          line.description,
+          String(line.quantity || 1),
+          line.custom && !line.unitPrice ? 'Custom / included in total when finalized' : money(line.unitPrice),
+          line.custom && !line.amount ? 'TBD' : money(line.amount),
+        ];
+        cells.forEach((value, index) => {
+          const td = document.createElement('td');
+          td.className = 'py-4 pr-4 ' + (index === 3 ? 'text-right font-semibold' : '');
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      const payments = document.querySelector('[data-payments]');
+      payments.innerHTML = '';
+      (data.paymentSchedule || []).forEach((item) => {
+        const row = document.createElement('div');
+        row.className = 'grid gap-1 rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 sm:grid-cols-[1fr_auto_auto] sm:items-center sm:gap-5';
+        const name = document.createElement('strong'); name.textContent = item.label;
+        const due = document.createElement('span'); due.className='text-xs text-[var(--koa-ink)]/50'; due.textContent = item.dueDate ? 'Due ' + dateLabel(item.dueDate) : 'Due date confirmed by Koa’s';
+        const amount = document.createElement('span'); amount.className='font-semibold text-[var(--koa-forest)]'; amount.textContent = money(item.amount);
+        row.append(name,due,amount); payments.appendChild(row);
+      });
+
+      text('[data-subtotal]', money(data.subtotal));
+      text('[data-discount]', data.discountAmount ? '−' + money(data.discountAmount) : money(0));
+      text('[data-tax-label]', 'Tax (' + Number(data.taxRate || 0).toFixed(2).replace(/\.00$/,'') + '%)');
+      text('[data-tax]', money(data.taxAmount));
+      text('[data-total]', money(data.total));
+      text('[data-deposit]', 'Deposit amount: ' + money(data.depositAmount));
+
+      const notesWrap = document.querySelector('[data-client-notes-wrap]');
+      notesWrap?.classList.toggle('hidden', !data.notesToClient);
+      text('[data-client-notes]', data.notesToClient || '');
+
+      const isAccepted = ['accepted','booked'].includes(data.status);
+      const closed = isAccepted || ['declined','expired'].includes(data.status);
+      acceptance?.classList.toggle('hidden', closed);
+      accepted?.classList.toggle('hidden', !isAccepted);
+      if (isAccepted) {
+        text('[data-accepted-copy]', (data.acceptedName ? 'Accepted by ' + data.acceptedName : 'Accepted') + (data.acceptedAt ? ' on ' + new Date(data.acceptedAt).toLocaleString() : '') + '.');
+      }
+    }
+
+    async function load() {
+      if (!token) {
+        loading?.classList.add('hidden');
+        error?.classList.remove('hidden');
+        if (errorCopy) errorCopy.textContent = 'The proposal link is missing its secure token.';
+        return;
+      }
+      const response = await fetch('/api/proposals/' + encodeURIComponent(token), { cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        loading?.classList.add('hidden');
+        error?.classList.remove('hidden');
+        if (errorCopy) errorCopy.textContent = data.error || 'This proposal could not be loaded.';
+        return;
+      }
+      render(data.proposal);
+    }
+
+    acceptForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(acceptForm);
+      if (acceptMessage) acceptMessage.textContent = 'Recording acceptance…';
+      const response = await fetch('/api/proposals/' + encodeURIComponent(token), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'accept', name: data.get('name'), acknowledged: data.get('acknowledged') === 'on' }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (acceptMessage) acceptMessage.textContent = result.error || 'Acceptance could not be recorded.';
+        return;
+      }
+      render(result.proposal);
+    });
+
+    document.querySelector('[data-decline]')?.addEventListener('click', async () => {
+      if (!confirm('Decline this proposal?')) return;
+      const response = await fetch('/api/proposals/' + encodeURIComponent(token), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'decline' }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (response.ok) render(result.proposal);
+    });
+
+    load();
+  </script>
+</BaseLayout>
