@@ -615,12 +615,30 @@ export default async (req: Request, context: Context) => {
       return acc;
     }, {});
 
+    const enrichedRecords = filteredRecords.slice(0, 500).map((record) => ({
+      ...record,
+      timeline: timelineForRecord(record, records, events),
+      reminders: remindersForRecord(record),
+      bookingSummary: bookingSummary(record),
+    }));
+
+    const reminders = enrichedRecords
+      .flatMap((record: any) => (record.reminders || []).map((reminder: any) => ({
+        ...reminder,
+        recordId: record.id,
+        customerName: record.customer?.name || 'Client name TBD',
+        eventDate: record.customer?.eventDate || '',
+        stage: record.stage,
+      })))
+      .sort((a: any, b: any) => a.priority - b.priority || String(a.due).localeCompare(String(b.due)));
+
     return Response.json({
       quotes: filteredQuotes.slice(0, 300),
       analytics: quoteAnalytics(allQuotes),
       funnel: funnelAnalytics(events, records),
       conversions,
-      records: filteredRecords.slice(0, 500),
+      reminders,
+      records: enrichedRecords,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
