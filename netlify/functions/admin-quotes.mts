@@ -742,6 +742,150 @@ export default async (req: Request, context: Context) => {
     return Response.json({ ok: true, record });
   }
 
+  if (payload.action === 'log-activity') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    const allowed = new Set(['call', 'email', 'note', 'meeting']);
+    const type = cleanText(payload.type, 30);
+    if (!record || !allowed.has(type)) return Response.json({ error: 'Record or activity type not found.' }, { status: 400 });
+
+    const detail = cleanText(payload.detail, 2000);
+    await appendEvent(context, {
+      type,
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail,
+    });
+    record.updatedAt = new Date().toISOString();
+    records = await saveRecord(context, record, records);
+    return Response.json({ ok: true, record });
+  }
+
+  if (payload.action === 'countersign-contract') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
+    if (!record || !record.proposal || !['accepted', 'booked'].includes(record.proposal.status)) {
+      return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
+    }
+
+    const booking = ensureBooking(record);
+    if (!booking || booking.contract.status !== 'signed') {
+      return Response.json({ error: 'Client signature must be recorded before Koa’s countersigns.' }, { status: 400 });
+    }
+
+    const name = cleanText(payload.name, 180);
+    if (name.length < 2) return Response.json({ error: 'Enter the Koa’s signer name.' }, { status: 400 });
+
+    const now = new Date().toISOString();
+    booking.contract.koaSignature = { name, signedAt: now };
+    booking.updatedAt = now;
+
+    const deposit = booking.payments.find((item) => /deposit/i.test(item.label)) || booking.payments[0];
+    if (deposit?.status === 'paid') {
+      booking.status = 'booked';
+      record.stage = 'booked';
+      record.status = 'booked';
+      record.proposal.status = 'booked';
+    }
+
+    record.updatedAt = now;
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'contract_countersigned',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: 'Agreement countersigned for Koa’s Events by ' + name,
+    });
+    if (record.stage === 'booked') {
+      await appendEvent(context, {
+        type: 'booked',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Agreement fully executed and reservation deposit received.',
+      });
+    }
+
+    return Response.json({ ok: true, record });
+  }
+
+  if (payload.action === 'record-payment') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
+    if (!record || !record.proposal || !['accepted', 'booked'].includes(record.proposal.status)) {
+      return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
+    }
+
+    const booking = ensureBooking(record);
+    if (!booking) return Response.json({ error: 'Booking could not be initialized.' }, { status: 400 });
+    const payment = booking.payments.find((item) => item.id === cleanText(payload.paymentId, 80));
+    if (!payment) return Response.json({ error: 'Payment milestone not found.' }, { status: 404 });
+
+    const status = payload.status === 'paid' ? 'paid' : 'pending';
+    payment.status = status;
+    payment.reference = cleanText(payload.reference, 240);
+    payment.paymentUrl = cleanText(payload.paymentUrl, 1200);
+    payment.paidAt = status === 'paid' ? (cleanText(payload.paidAt, 40) || new Date().toISOString()) : '';
+    booking.updatedAt = new Date().toISOString();
+
+    if (status === 'paid') {
+      await appendEvent(context, {
+        type: 'payment_received',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: payment.label + ' received',
+        amount: payment.amount,
+        reference: payment.reference,
+      });
+    }
+
+    const deposit = booking.payments.find((item) => /deposit/i.test(item.label)) || booking.payments[0];
+    if (booking.contract.status === 'signed' && booking.contract.koaSignature && deposit?.status === 'paid') {
+      booking.status = 'booked';
+      record.stage = 'booked';
+      record.status = 'booked';
+      record.proposal.status = 'booked';
+      await appendEvent(context, {
+        type: 'booked',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Agreement fully executed and reservation deposit received.',
+      });
+    } else if (booking.contract.status === 'signed') {
+      booking.status = 'deposit_pending';
+    }
+
+    record.updatedAt = booking.updatedAt;
+    records = await saveRecord(context, record, records);
+    return Response.json({ ok: true, record });
+  }
+
+  if (payload.action === 'configure-payment-link') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
+    if (!record || !record.proposal || !['accepted', 'booked'].includes(record.proposal.status)) {
+      return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
+    }
+
+    const booking = ensureBooking(record);
+    const payment = booking?.payments.find((item) => item.id === cleanText(payload.paymentId, 80));
+    if (!booking || !payment) return Response.json({ error: 'Payment milestone not found.' }, { status: 404 });
+
+    payment.paymentUrl = cleanText(payload.paymentUrl, 1200);
+    booking.updatedAt = new Date().toISOString();
+    record.updatedAt = booking.updatedAt;
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'payment_link_configured',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: payment.label + ' payment link configured.',
+    });
+
+    return Response.json({ ok: true, record });
+  }
+
   if (payload.action === 'mark-booked') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
     if (!record) return Response.json({ error: 'Record not found.' }, { status: 404 });
