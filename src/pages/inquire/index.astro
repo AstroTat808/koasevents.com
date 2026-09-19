@@ -5,6 +5,7 @@ import Footer from '../../components/Footer.astro';
 
 const requestedService = Astro.url.searchParams.get('service') || '';
 const requestedPackage = Astro.url.searchParams.get('package') || '';
+const requestedGuests = Astro.url.searchParams.get('guests') || '';
 ---
 <BaseLayout
   title="Check Big Island Event Venue Availability | Koa’s Events"
@@ -41,11 +42,22 @@ const requestedPackage = Astro.url.searchParams.get('package') || '';
         >
           <input type="hidden" name="form-name" value="koa-event-inquiry" />
           <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Event Inquiry (%{submissionId})" />
+          <input type="hidden" name="selectedCatalogItems" value="" data-selected-catalog-items />
+          <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
+          <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
+          <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
+          <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
           <p class="hidden">
             <label>Don’t fill this out if you’re human: <input name="bot-field" /></label>
           </p>
 
           <div class="grid gap-6">
+            <div class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5" data-carried-plan>
+              <p class="eyebrow text-[var(--koa-clay)]">Carried from your quote builder</p>
+              <p class="mt-2 text-sm font-bold text-[var(--koa-forest)]" data-carried-plan-title></p>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62" data-carried-plan-copy></p>
+              <a href="/catalog/#start-building" class="link-arrow mt-4">Edit package or rentals →</a>
+            </div>
             <fieldset>
               <legend class="eyebrow text-[var(--koa-clay)]">What are you booking?</legend>
               <div class="mt-4 grid gap-3 sm:grid-cols-3">
@@ -84,7 +96,7 @@ const requestedPackage = Astro.url.searchParams.get('package') || '';
                 <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="date" name="eventDate" required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Guest count
-                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" name="guestCount" required />
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Event type
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="eventType" required>
@@ -186,10 +198,18 @@ const requestedPackage = Astro.url.searchParams.get('package') || '';
   </main>
   <Footer />
 
-  <script is:inline define:vars={{ requestedService }}>
+  <script is:inline define:vars={{ requestedService, requestedPackage, requestedGuests }}>
     const form = document.querySelector('[data-inquiry-form]');
     const venueFields = document.querySelector('[data-venue-fields]');
     const mobileFields = document.querySelector('[data-mobile-fields]');
+    const carriedPlan = document.querySelector('[data-carried-plan]');
+    const carriedPlanTitle = document.querySelector('[data-carried-plan-title]');
+    const carriedPlanCopy = document.querySelector('[data-carried-plan-copy]');
+    const selectedItemsInput = form?.querySelector('[data-selected-catalog-items]');
+    const autoBreakdownInput = form?.querySelector('[data-auto-rental-breakdown]');
+    const manualAddOnsInput = form?.querySelector('[data-manual-add-ons]');
+    const estimateInput = form?.querySelector('[data-estimated-furniture-total]');
+    const stateInput = form?.querySelector('[data-catalog-selection-state]');
 
     function updateConditionalFields() {
       const selected = form?.querySelector('input[name="service"]:checked')?.value || requestedService;
@@ -210,6 +230,38 @@ const requestedPackage = Astro.url.searchParams.get('package') || '';
     form?.querySelectorAll('input[name="service"]').forEach((input) => {
       input.addEventListener('change', updateConditionalFields);
     });
+
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
+
+    if (saved) {
+      const packageMap = { 'signature-wedding': 'plumeria' };
+      const savedPackage = packageMap[saved.startingPoint] || saved.startingPoint || '';
+      const guestField = form?.querySelector('[name="guestCount"]');
+      const venuePackage = form?.querySelector('[name="venuePackage"]');
+      const venueRadio = form?.querySelector('input[name="service"][value="venue"]');
+
+      if (guestField && !requestedGuests && saved.guestCount) guestField.value = String(saved.guestCount);
+      if (venuePackage && !requestedPackage && savedPackage && savedPackage !== 'ala-carte') venuePackage.value = savedPackage;
+      if (!requestedService && savedPackage && savedPackage !== 'ala-carte' && venueRadio) venueRadio.checked = true;
+
+      const auto = (saved.selected || []).filter((entry) => entry.auto);
+      const manual = (saved.selected || []).filter((entry) => !entry.auto);
+      const all = [...auto, ...manual];
+      const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+
+      if (selectedItemsInput) selectedItemsInput.value = allText;
+      if (autoBreakdownInput) autoBreakdownInput.value = autoText;
+      if (manualAddOnsInput) manualAddOnsInput.value = manualText;
+      if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
+      if (stateInput) stateInput.value = JSON.stringify(saved);
+
+      carriedPlan?.classList.remove('hidden');
+      if (carriedPlanTitle) carriedPlanTitle.textContent = (savedPackage && savedPackage !== 'ala-carte' ? savedPackage : 'Saved event plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
+      if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + '. Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
+    }
 
     updateConditionalFields();
   </script>
