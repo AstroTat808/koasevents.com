@@ -1,0 +1,120 @@
+name: Gallery Export
+on:
+  push:
+    branches:
+      - gallery-export-2026-09-18
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build gallery export
+        shell: python
+        run: |
+          import json, os, re, shutil, urllib.request, zipfile
+          from pathlib import Path
+
+          root = Path.cwd()
+          out = root / "gallery-export"
+          out.mkdir(exist_ok=True)
+
+          media_text = (root / "src/data/media.ts").read_text(encoding="utf-8")
+
+          # Map koaMarketingMedia property -> filename.
+          mapping = dict(re.findall(r"^\s{2}(\w+): koaMarketing\('([^']+)'", media_text, flags=re.M))
+
+          # Extract curated gallery property/category pairs in declared order.
+          gallery_block = media_text.split("export const koaMarketingGallery = [",1)[1].split("];",1)[0]
+          curated = re.findall(r"koaMarketingMedia\.(\w+), category: '([^']+)'", gallery_block)
+
+          # Extract legacy Wix archive ids.
+          ids_block = media_text.split("const galleryIds = [",1)[1].split("];",1)[0]
+          legacy_ids = re.findall(r"'([^']+\.(?:jpg|jpeg|png|webp))'", ids_block, flags=re.I)
+
+          # Query live state for hidden curated assets and managed uploads.
+          try:
+              with urllib.request.urlopen("https://www.koasevents.com/api/gallery", timeout=30) as r:
+                  state = json.load(r)
+          except Exception:
+              state = {"uploads": [], "hiddenCurated": []}
+
+          hidden = set(state.get("hiddenCurated", []))
+
+          def safe_name(s):
+              s = re.sub(r"[^A-Za-z0-9._ -]+", "-", s).strip()
+              return s or "image"
+
+          manifest = []
+          category_counts = {}
+
+          # Current curated gallery.
+          for prop, category in curated:
+              filename = mapping.get(prop)
+              if not filename:
+                  continue
+              src = f"/media/koa/{filename}"
+              if src in hidden:
+                  continue
+              src_path = root / "public" / src.lstrip("/")
+              if not src_path.exists():
+                  continue
+              folder = out / safe_name(category)
+              folder.mkdir(parents=True, exist_ok=True)
+              category_counts[category] = category_counts.get(category, 0) + 1
+              dest_name = f"{category_counts[category]:02d}_{filename}"
+              shutil.copy2(src_path, folder / dest_name)
+              manifest.append({"section": category, "source": src, "file": f"{category}/{dest_name}"})
+
+          # Legacy archive.
+          legacy_folder = out / "Legacy Archive"
+          legacy_folder.mkdir(exist_ok=True)
+          for i, filename in enumerate(legacy_ids, 1):
+              src_path = root / "public/media/wix" / filename
+              if src_path.exists():
+                  dest_name = f"{i:02d}_{filename}"
+                  shutil.copy2(src_path, legacy_folder / dest_name)
+                  manifest.append({"section": "Legacy Archive", "source": f"/media/wix/{filename}", "file": f"Legacy Archive/{dest_name}"})
+
+          # Live admin uploads.
+          uploads = state.get("uploads", [])
+          if uploads:
+              upload_folder = out / "Recently Added"
+              upload_folder.mkdir(exist_ok=True)
+              for i, item in enumerate(uploads, 1):
+                  src = item.get("src","")
+                  if not src:
+                      continue
+                  url = "https://www.koasevents.com" + src
+                  ctype = item.get("contentType","image/jpeg")
+                  ext = { "image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif" }.get(ctype, ".img")
+                  label = safe_name(item.get("alt") or item.get("id") or f"upload-{i}")
+                  dest_name = f"{i:02d}_{label[:80]}{ext}"
+                  try:
+                      urllib.request.urlretrieve(url, upload_folder / dest_name)
+                      manifest.append({"section": "Recently Added", "source": src, "file": f"Recently Added/{dest_name}", "category": item.get("category","")})
+                  except Exception:
+                      pass
+
+          (out / "manifest.json").write_text(json.dumps({
+              "generated_from": "https://www.koasevents.com/gallery/",
+              "hidden_curated_excluded": sorted(hidden),
+              "live_upload_count_reported": len(uploads),
+              "files": manifest
+          }, indent=2), encoding="utf-8")
+
+          with zipfile.ZipFile(root / "Koa_Events_Gallery_Photos.zip", "w", zipfile.ZIP_DEFLATED) as z:
+              for p in out.rglob("*"):
+                  if p.is_file():
+                      z.write(p, p.relative_to(out.parent))
+
+          print(f"Packaged {len(manifest)} images")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Koa_Events_Gallery_Photos
+          path: Koa_Events_Gallery_Photos.zip
+          if-no-files-found: error
+          retention-days: 7
