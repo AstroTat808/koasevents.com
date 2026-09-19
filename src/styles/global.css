@@ -453,3 +453,24 @@ main p.text-sm {
     scrollbar-gutter: stable;
   }
 }
+
+
+/* Quote builder item-state system */
+.quote-item-included {
+  border-color: rgba(20, 58, 45, .24) !important;
+  background: linear-gradient(180deg, rgba(239, 229, 210, .72), rgba(255,255,255,.96)) !important;
+  box-shadow: inset 4px 0 0 rgba(20,58,45,.78);
+}
+
+.quote-item-suggested {
+  border-color: rgba(197, 163, 109, .64) !important;
+  background: linear-gradient(180deg, rgba(244, 224, 181, .28), rgba(255,255,255,.98)) !important;
+  box-shadow: 0 14px 38px rgba(10,33,26,.08), inset 4px 0 0 rgba(197,163,109,.95);
+}
+
+.quote-item-customer,
+.quote-item-selected {
+  border-color: rgba(147, 80, 45, .46) !important;
+  background: linear-gradient(180deg, rgba(184,117,63,.08), rgba(255,255,255,.98)) !important;
+  box-shadow: 0 14px 38px rgba(10,33,26,.10), inset 4px 0 0 rgba(147,80,45,.82);
+}
