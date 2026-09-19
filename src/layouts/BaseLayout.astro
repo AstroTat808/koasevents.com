@@ -8,6 +8,7 @@ interface Props {
   noindex?: boolean;
   socialImage?: string;
   socialImageAlt?: string;
+  ogType?: 'website' | 'article';
 }
 
 const {
@@ -17,6 +18,7 @@ const {
   noindex = false,
   socialImage = '/media/koa/pavilion-sunset-wide.webp',
   socialImageAlt = "Koa's Events pavilion and tropical grounds on Hawaiʻi Island",
+  ogType = 'website',
 } = Astro.props;
 
 const siteUrl = Astro.site ?? new URL('https://www.koasevents.com');
@@ -90,7 +92,7 @@ const seoSchema = {
     <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
     <link rel="icon" type="image/png" href="/brand/koa-mark.png" />
 
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content={ogType} />
     <meta property="og:site_name" content="Koa's Events" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
