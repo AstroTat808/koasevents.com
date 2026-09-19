@@ -207,8 +207,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         return '<tr><td>' + escapeHtml(item.name) + '</td><td>' + Number(item.quantity || 0) + '</td><td>' + (total ? money(total) : 'Custom quote') + '</td></tr>';
       }).join('');
       const inclusions = (s.packageIncludes || []).map((item) => '<li>' + escapeHtml(item) + '</li>').join('');
-      const w = window.open('', '_blank', 'noopener,noreferrer');
+      const w = window.open('', '_blank');
       if (!w) return;
+      w.opener = null;
       w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(record.id)}</title><style>
       body{font-family:Arial,sans-serif;color:#193b30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #193b30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:26px;font-weight:700;margin-top:24px}.muted{color:#666}@media print{button{display:none}}</style></head><body>
       <header><p>Koa’s Events · Proposal Draft</p><h1>${escapeHtml(record.id)}</h1><p class="muted">Created ${escapeHtml(dateTime(record.createdAt))} from saved quote ${escapeHtml(record.quoteId)}</p></header>
