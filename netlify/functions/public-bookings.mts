@@ -36,40 +36,50 @@ async function appendEvent(store: any, event: Record<string, unknown>) {
 function contractSections(record: any) {
   const proposal = record?.proposal || {};
   const customer = record?.customer || {};
-  const packageName = record?.packageId === 'signature-wedding'
-    ? 'Koa’s Signature Wedding Experience'
-    : record?.packageId
-      ? record.packageId.charAt(0).toUpperCase() + record.packageId.slice(1) + ' Wedding Collection'
-      : 'Koa’s Events services';
+  const packageName = (
+    record?.packageId === 'signature-wedding'
+      ? 'Koa’s Signature Wedding Experience'
+      : record?.packageId
+        ? record.packageId.charAt(0).toUpperCase() + record.packageId.slice(1) + ' Wedding Collection'
+        : 'Koa’s Events services'
+  );
 
   return [
     {
-      heading: '1. Parties and event',
-      body: 'This agreement is between Koa’s Events LLC (“Koa’s”) and ' + (customer.name || 'the Client') + ' for the event scheduled for ' + (customer.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and this agreement together define the booked scope.'
+      heading: '1. Event Details',
+      body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3334 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (customer.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (customer.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.'
     },
     {
-      heading: '2. Services and pricing',
-      body: 'Koa’s will provide the ' + packageName + ' and the finalized items listed in proposal ' + record.id + '. The finalized proposal total is $' + Number(proposal.total || 0).toFixed(2) + '. Any later additions, substitutions, quantity changes, overtime, damage, or approved change orders may alter the final amount.'
+      heading: '2. Premises Use & Access',
+      body: 'Lessee is granted exclusive access to the property for the scheduled event. Koa’s Events reserves the right to define accessible areas if only a portion of the venue is being rented. Unauthorized access to non-designated areas is prohibited.'
     },
     {
-      heading: '3. Reservation deposit and payment schedule',
-      body: 'A 10% non-refundable reservation deposit is required. Under Koa’s current payment policy, the deposit is due within 14 days of signing, the second payment is due 90 days before the event, and the final payment is due 60 days before the event. A $150 late fee may apply per occurrence; two missed payments may result in cancellation.'
+      heading: '3. Payment Terms',
+      body: 'The finalized proposal total is $' + Number(proposal.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized proposal scope. A 10% non-refundable deposit is required to reserve the event date. The first payment is due within 14 days of signing, the second payment is due 90 days before the event, and the final payment is due 60 days before the event. A $150 late fee applies per occurrence; two missed payments may result in event cancellation with no refund.'
     },
     {
-      heading: '4. Cancellation and date changes',
-      body: 'Cancellation within 15 calendar days of signing receives a full refund. After that period, payments are non-refundable. One date change may be requested at least eight months before the original event date, subject to availability and the applicable $500 single-day or $1,000 weekend change fee.'
+      heading: '4. Security / Damage Deposit',
+      body: 'The separate security or damage deposit required for the event is due 30 days before the event. Failure to pay authorizes cancellation by Koa’s. The deposit will be refunded within 14 days after the event, less deductions for damage, excessive cleanup, or breach.'
     },
     {
-      heading: '5. Damage deposit and insurance',
-      body: 'The current damage-deposit policy is $500 for a one-day event and $1,000 for a weekend event, due 30 days before the event and refundable within 14 days after the event less applicable deductions. Event insurance is due 60 days before the event, and vendor proof of insurance is due 30 days before the event.'
+      heading: '5. Cancellation & Change of Date',
+      body: 'Lessee may cancel within 15 calendar days of signing for a full refund. After that, all payments are non-refundable. Lessee may request one change to the event date by submitting a written request at least eight months before the originally scheduled date, subject to availability. A non-refundable change fee of $500 for single-day rentals or $1,000 for weekend rentals applies. Prior payments transfer to the approved new date; no additional date changes are permitted after the new date is confirmed.'
     },
     {
-      heading: '6. Alcohol, music, access and event rules',
-      body: 'Alcohol service must use pre-approved bartenders; self-service is not permitted and shots are not served after 8:00 PM. Music must end by 10:00 PM. Setup begins no earlier than 12:00 PM unless Koa’s approves otherwise. Client and vendors are responsible for following venue rules and the finalized event plan.'
+      heading: '6. Conduct, Safety, and Clean-Up',
+      body: 'Lessee is responsible for guest behavior. Excess-mess cleanup, including vomit or spills, is charged at $50 per hour or per occurrence. All personal items and decor must be removed after the event. Children under 16 must be supervised by an adult. Smoking is allowed only in designated areas.'
     },
     {
-      heading: '7. Electronic signature',
-      body: 'By signing electronically, the Client confirms that they reviewed the accepted proposal and this agreement, intend to sign electronically, and agree that the electronic signature and timestamp constitute their signature for this booking.'
+      heading: '7. Vendors, Insurance, and Alcohol',
+      body: 'Vendors must carry insurance naming Koa’s as additional insured, with proof due 30 days before the event. Event insurance is required, with the certificate due 60 days before the event. Only pre-approved bartenders are allowed. Self-serve bars and shots after 8:00 PM are prohibited; violation may result in event termination.'
+    },
+    {
+      heading: '8. Intellectual Property & Media Use',
+      body: 'Koa’s reserves all rights to its brand, decor, and imagery. Lessee may not use photos or likenesses of the venue for commercial purposes without written consent. By default, Koa’s may use photos from the event for promotional purposes unless the client opts out in writing.'
+    },
+    {
+      heading: '9. Legal Terms & Electronic Signature',
+      body: 'This Agreement is governed by Hawaii state law. Disputes are to be resolved through mediation, followed by binding arbitration in Hilo, Hawaii if necessary. Neither party is liable for events outside its control (Force Majeure). By signing electronically, Lessee confirms review of the accepted proposal and this Agreement, intends to sign electronically, and agrees that the recorded name, acknowledgement, and timestamp constitute Lessee’s signature.'
     }
   ];
 }
