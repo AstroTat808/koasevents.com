@@ -82,6 +82,7 @@ export default async (req: Request, context: Context) => {
       type: file.type,
       size: file.size,
       uploadedAt: new Date().toISOString(),
+      uploadedBy: 'admin',
     };
 
     await filesStore.set('documents/' + recordId + '/' + docId, await file.arrayBuffer());
