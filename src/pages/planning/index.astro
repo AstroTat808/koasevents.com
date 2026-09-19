@@ -1,0 +1,201 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Event Planning Portal" description="Complete planning details and upload event documents for your booked Koa’s Events celebration." canonical="https://www.koasevents.com/planning/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10">
+    <div class="container-shell max-w-6xl">
+      <section data-loading class="rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <h1 class="display mt-3 text-5xl">Loading your planning portal…</h1>
+      </section>
+
+      <section data-error class="hidden rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Planning portal</p>
+        <h1 class="display mt-3 text-5xl">This planning link is unavailable.</h1>
+        <p data-error-copy class="mt-4 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58"></p>
+      </section>
+
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)] sm:p-9">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Your Koa’s planning portal</p>
+          <h1 data-title class="display mt-3 text-5xl"></h1>
+          <p data-meta class="mt-3 text-sm text-white/65"></p>
+          <p class="mt-5 max-w-3xl text-sm leading-6 text-white/65">Use this portal to keep Koa’s updated with your final guest count, vendor information, planning questionnaire, insurance certificate and floor plan. Koa’s internal staffing, approvals and event-day operations are managed separately.</p>
+        </header>
+
+        <section class="grid gap-4 md:grid-cols-4">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Guest count</p><p data-summary-guests class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><p data-summary-vendors class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Questions answered</p><p data-summary-questions class="display mt-2 text-4xl text-[var(--koa-forest)]">0%</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Uploads</p><p data-summary-docs class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Final guest count</p>
+              <h2 class="display mt-2 text-4xl">Keep the headcount current</h2>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/56">Update this whenever your count changes. Koa’s will treat the most recent saved number as your current planning count until it is finalized with the team.</p>
+            </div>
+            <form data-guests-form class="flex flex-wrap items-end gap-3">
+              <label class="grid gap-2 text-sm font-semibold">Guests<input name="finalGuestCount" type="number" min="0" max="1000" class="w-36 rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save count</button>
+            </form>
+          </div>
+          <p data-guests-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h2 class="display mt-2 text-4xl">Share your vendor team</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/56">Add your planner, caterer, photographer, DJ, florist, rental company and other vendors. Koa’s controls insurance approval internally.</p></div>
+            <button type="button" data-add-vendor class="rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add vendor</button>
+          </div>
+          <div data-vendors class="mt-6 grid gap-3"></div>
+          <div class="mt-5 flex flex-wrap items-center gap-3"><button data-save-vendors class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button><span data-vendors-message class="text-xs text-[var(--koa-ink)]/50"></span></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Planning questionnaire</p><h2 class="display mt-2 text-4xl">Tell us what we need to plan around</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">You can save partial answers and return later. Items Koa’s has confirmed will remain marked confirmed.</p></div>
+          <div data-questionnaire class="mt-6 grid gap-3"></div>
+          <div class="mt-5 flex flex-wrap items-center gap-3"><button data-save-questionnaire class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save answers</button><span data-questionnaire-message class="text-xs text-[var(--koa-ink)]/50"></span></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Documents</p><h2 class="display mt-2 text-4xl">Insurance, floor plan + planning files</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/56">Upload PDF, JPG, PNG, WEBP, DOCX or XLSX files up to 20 MB. Files you upload here are visible to Koa’s Event Ops staff.</p></div>
+          </div>
+          <form data-upload-form class="mt-6 grid gap-3 rounded-xl bg-[var(--koa-sand)] p-4 lg:grid-cols-[1fr_11rem_1fr_auto] lg:items-end">
+            <label class="grid gap-2 text-xs font-semibold">File<input name="file" type="file" required class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2" /></label>
+            <label class="grid gap-2 text-xs font-semibold">Category<select name="category" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="insurance">Insurance</option><option value="floor_plan">Floor plan</option><option value="vendor">Vendor</option><option value="questionnaire">Questionnaire</option></select></label>
+            <label class="grid gap-2 text-xs font-semibold">Label<input name="label" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2" placeholder="Event insurance certificate, final floor plan…" /></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Upload</button>
+          </form>
+          <p data-upload-message class="mt-3 text-xs text-[var(--koa-ink)]/52"></p>
+          <div data-documents class="mt-5 grid gap-3"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Booking + payments</p>
+          <h2 class="display mt-2 text-4xl">Your contract and QuickBooks invoices stay in your booking page.</h2>
+          <a data-booking-link class="mt-5 inline-flex rounded-full bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Open booking page</a>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <style>
+    .field{min-height:2.7rem;width:100%;border:1px solid var(--koa-line);border-radius:.65rem;background:white;padding:.65rem .75rem;font-size:.82rem}
+  </style>
+
+  <script>
+    const token=new URLSearchParams(window.location.search).get('token')||'';
+    const loading=document.querySelector('[data-loading]');
+    const error=document.querySelector('[data-error]');
+    const errorCopy=document.querySelector('[data-error-copy]');
+    const app=document.querySelector('[data-app]');
+    const guestsForm=document.querySelector('[data-guests-form]');
+    const vendorsEl=document.querySelector('[data-vendors]');
+    const questionnaireEl=document.querySelector('[data-questionnaire]');
+    const documentsEl=document.querySelector('[data-documents]');
+    const uploadForm=document.querySelector('[data-upload-form]');
+    let data=null;
+
+    function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
+    function dateLabel(value){return value?new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value)):'';}
+    function packageLabel(id){return id==='signature-wedding'?'Signature Wedding Experience':id?String(id).replaceAll('-',' ').replace(/\b\w/g,(m)=>m.toUpperCase()):'Koa’s Events';}
+    function uid(prefix='ROW'){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);}
+    function formatBytes(bytes){const n=Number(bytes||0);if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB';}
+    async function api(body){
+      const res=await fetch('/api/planning/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const result=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(result.error||'Unable to save planning information.');
+      return result;
+    }
+
+    function renderSummary(){
+      const planning=data?.planning||{};
+      document.querySelector('[data-summary-guests]').textContent=String(planning.finalGuestCount||0);
+      document.querySelector('[data-summary-vendors]').textContent=String((planning.vendors||[]).length);
+      const questions=planning.questionnaire||[];
+      const answered=questions.filter((q)=>q.answer||q.status==='confirmed').length;
+      document.querySelector('[data-summary-questions]').textContent=(questions.length?Math.round(answered/questions.length*100):0)+'%';
+      document.querySelector('[data-summary-docs]').textContent=String((planning.documents||[]).length);
+    }
+
+    function vendorRow(v={}){
+      const row=document.createElement('div');row.dataset.id=v.id||uid('V');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 xl:grid-cols-[1.15fr_1fr_.8fr_1.1fr_.8fr_.8fr_auto]';
+      row.innerHTML='<input data-company class="field" placeholder="Company"><input data-contact class="field" placeholder="Contact"><input data-role class="field" placeholder="Role"><input data-email type="email" class="field" placeholder="Email"><input data-phone class="field" placeholder="Phone"><input data-arrival type="time" class="field"><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field xl:col-span-6" placeholder="Vendor notes, load-in needs, special instructions…"></textarea><div data-insurance class="self-center text-xs text-[var(--koa-ink)]/50"></div>';
+      row.querySelector('[data-company]').value=v.company||'';row.querySelector('[data-contact]').value=v.contact||'';row.querySelector('[data-role]').value=v.role||'';row.querySelector('[data-email]').value=v.email||'';row.querySelector('[data-phone]').value=v.phone||'';row.querySelector('[data-arrival]').value=v.arrivalTime||'';row.querySelector('[data-notes]').value=v.notes||'';
+      row.querySelector('[data-insurance]').textContent='Insurance: '+String(v.insuranceStatus||'not requested').replaceAll('_',' ');
+      row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+    }
+    function renderVendors(){
+      vendorsEl.innerHTML='';
+      (data?.planning?.vendors||[]).forEach((v)=>vendorsEl.appendChild(vendorRow(v)));
+      if(!(data?.planning?.vendors||[]).length)vendorsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No vendors added yet.'));
+    }
+    function collectVendors(){return [...vendorsEl.children].filter((row)=>row.dataset?.id).map((row)=>({id:row.dataset.id,company:row.querySelector('[data-company]').value,contact:row.querySelector('[data-contact]').value,role:row.querySelector('[data-role]').value,email:row.querySelector('[data-email]').value,phone:row.querySelector('[data-phone]').value,arrivalTime:row.querySelector('[data-arrival]').value,notes:row.querySelector('[data-notes]').value}));}
+
+    function renderQuestionnaire(){
+      questionnaireEl.innerHTML='';
+      (data?.planning?.questionnaire||[]).forEach((q)=>{
+        const row=document.createElement('article');row.dataset.id=q.id;row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        row.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',q.category||'planning'),text('h3','mt-2 text-sm font-semibold',q.question));
+        const answer=document.createElement('textarea');answer.rows=3;answer.className='field mt-3';answer.dataset.answer='';answer.value=q.answer||'';if(q.status==='confirmed')answer.disabled=true;
+        row.appendChild(answer);
+        if(q.status==='confirmed')row.appendChild(text('p','mt-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-forest)]','Confirmed by Koa’s'));
+        questionnaireEl.appendChild(row);
+      });
+    }
+    function collectQuestionnaire(){return [...questionnaireEl.children].map((row)=>({id:row.dataset.id,answer:row.querySelector('[data-answer]').value}));}
+
+    function renderDocuments(){
+      documentsEl.innerHTML='';
+      (data?.planning?.documents||[]).forEach((doc)=>{
+        const row=document.createElement('article');row.className='flex flex-col gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 sm:flex-row sm:items-center sm:justify-between';
+        const left=document.createElement('div');left.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',String(doc.category||'document').replaceAll('_',' ')),text('h3','mt-1 text-sm font-semibold',doc.label||doc.name),text('p','mt-1 text-xs text-[var(--koa-ink)]/45',doc.name+' · '+formatBytes(doc.size)+' · '+dateLabel(doc.uploadedAt)));
+        const actions=document.createElement('div');actions.className='flex gap-2';
+        const open=document.createElement('button');open.type='button';open.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';open.textContent='Open';open.addEventListener('click',()=>openDocument(doc));
+        const remove=document.createElement('button');remove.type='button';remove.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';remove.textContent='Remove';remove.addEventListener('click',()=>deleteDocument(doc));
+        actions.append(open,remove);row.append(left,actions);documentsEl.appendChild(row);
+      });
+      if(!(data?.planning?.documents||[]).length)documentsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No files uploaded yet.'));
+    }
+    async function openDocument(doc){
+      const res=await fetch('/api/planning/documents/'+encodeURIComponent(token)+'/'+encodeURIComponent(doc.id));
+      if(!res.ok)return;
+      const blob=await res.blob();const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener,noreferrer');setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }
+    async function deleteDocument(doc){
+      const message=document.querySelector('[data-upload-message]');message.textContent='Removing…';
+      const res=await fetch('/api/planning/documents/'+encodeURIComponent(token)+'/'+encodeURIComponent(doc.id),{method:'DELETE'});
+      const result=await res.json().catch(()=>({}));if(!res.ok){message.textContent=result.error||'Unable to remove file.';return;}
+      data.planning.documents=result.documents||[];message.textContent='Removed.';renderDocuments();renderSummary();
+    }
+
+    function render(){
+      document.querySelector('[data-title]').textContent=data.record.customerName||'Your event';
+      document.querySelector('[data-meta]').textContent=[dateLabel(data.record.eventDate),packageLabel(data.record.packageId)].filter(Boolean).join(' · ');
+      guestsForm.elements.finalGuestCount.value=String(data.planning.finalGuestCount||0);
+      document.querySelector('[data-booking-link]').href='/booking/?token='+encodeURIComponent(token);
+      renderVendors();renderQuestionnaire();renderDocuments();renderSummary();
+    }
+
+    async function load(){
+      if(!token){loading.classList.add('hidden');error.classList.remove('hidden');errorCopy.textContent='This planning link is missing its secure booking token.';return;}
+      const res=await fetch('/api/planning/'+encodeURIComponent(token),{cache:'no-store'});
+      const result=await res.json().catch(()=>({}));
+      loading.classList.add('hidden');
+      if(!res.ok){error.classList.remove('hidden');errorCopy.textContent=result.error||'The planning portal could not be loaded.';return;}
+      data=result;app.classList.remove('hidden');render();
+    }
+
+    document.querySelector('[data-add-vendor]')?.addEventListener('click',()=>{if(vendorsEl.querySelector('p'))vendorsEl.innerHTML='';vendorsEl.appendChild(vendorRow());});
+    guestsForm?.addEventListener('submit',async(e)=>{e.preventDefault();const msg=document.querySelector('[data-guests-message]');msg.textContent='Saving…';try{const result=await api({action:'save-guest-count',finalGuestCount:Number(guestsForm.elements.finalGuestCount.value||0)});data=result;msg.textContent='Guest count saved.';renderSummary();}catch(err){msg.textContent=err.message||'Unable to save.';}});
+    document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{const msg=document.querySelector('[data-vendors-message]');msg.textContent='Saving…';try{const result=await api({action:'save-vendors',vendors:collectVendors()});data=result;msg.textContent='Vendors saved.';renderVendors();renderSummary();}catch(err){msg.textContent=err.message||'Unable to save.';}});
+    document.querySelector('[data-save-questionnaire]')?.addEventListener('click',async()=>{const msg=document.querySelector('[data-questionnaire-message]');msg.textContent='Saving…';try{const result=await api({action:'save-questionnaire',questionnaire:collectQuestionnaire()});data=result;msg.textContent='Answers saved.';renderQuestionnaire();renderSummary();}catch(err){msg.textContent=err.message||'Unable to save.';}});
+    uploadForm?.addEventListener('submit',async(e)=>{e.preventDefault();const msg=document.querySelector('[data-upload-message]');msg.textContent='Uploading…';const form=new FormData(uploadForm);const res=await fetch('/api/planning/documents/'+encodeURIComponent(token),{method:'POST',body:form});const result=await res.json().catch(()=>({}));if(!res.ok){msg.textContent=result.error||'Upload failed.';return;}data.planning.documents=result.documents||[];uploadForm.reset();msg.textContent='Uploaded.';renderDocuments();renderSummary();});
+
+    load();
+  </script>
+</BaseLayout>
