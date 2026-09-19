@@ -323,6 +323,11 @@ function daysUntil(value?: string) {
   return Math.ceil((due - Date.now()) / 86400000);
 }
 
+function quickBooksInvoiceMap(record: SalesRecord) {
+  const rows = (record as any)?.accounting?.quickbooks?.invoices;
+  return Array.isArray(rows) ? rows : [];
+}
+
 function remindersForRecord(record: SalesRecord) {
   const reminders: Array<{id:string;priority:number;type:string;title:string;detail:string;due:string}> = [];
   const ageHours = hoursSince(record.updatedAt || record.createdAt);
@@ -343,41 +348,50 @@ function remindersForRecord(record: SalesRecord) {
   if (record.kind === 'proposal' && proposalStatus === 'viewed' && ageHours >= 48) {
     reminders.push({ id:record.id+'-viewed', priority:3, type:'proposal', title:'Viewed proposal needs follow-up', detail:'Client viewed the proposal more than 2 days ago.', due:'now' });
   }
+
   if (record.kind === 'proposal' && proposalStatus === 'accepted') {
     const booking = record.booking;
     if (!booking?.contract || booking.contract.status !== 'signed') {
       reminders.push({ id:record.id+'-contract', priority:1, type:'contract', title:'Client signature pending', detail:'Proposal is accepted; send or follow up on the booking agreement.', due:'now' });
     } else if (!booking.contract.koaSignature) {
       reminders.push({ id:record.id+'-countersign', priority:1, type:'contract', title:'Koa countersignature pending', detail:'Client signed the agreement. Koa’s must countersign before the agreement is fully executed.', due:'now' });
-    } else {
-      const deposit = booking.payments.find((item) => /deposit/i.test(item.label)) || booking.payments[0];
-      if (deposit && deposit.status !== 'paid') {
-        const days = daysUntil(deposit.dueDate);
-        reminders.push({
-          id:record.id+'-deposit',
-          priority:days != null && days < 0 ? 0 : 1,
-          type:'payment',
-          title:days != null && days < 0 ? 'Deposit overdue' : 'Reservation deposit unpaid',
-          detail:days == null ? 'Deposit is pending.' : days < 0 ? 'Deposit is '+Math.abs(days)+' day(s) overdue.' : 'Deposit is due in '+days+' day(s).',
-          due:deposit.dueDate || 'now'
-        });
-      }
     }
   }
 
-  (record.booking?.payments || []).forEach((payment) => {
-    if (payment.status === 'paid' || /deposit/i.test(payment.label)) return;
-    const days = daysUntil(payment.dueDate);
-    if (days == null || days > 14) return;
-    reminders.push({
-      id:record.id+'-'+payment.id,
-      priority:days < 0 ? 0 : 7,
-      type:'payment',
-      title:days < 0 ? payment.label+' overdue' : payment.label+' due soon',
-      detail:days < 0 ? Math.abs(days)+' day(s) overdue · $'+Number(payment.amount||0).toFixed(2) : 'Due in '+days+' day(s) · $'+Number(payment.amount||0).toFixed(2),
-      due:payment.dueDate || 'now'
+  if (record.kind === 'proposal' && ['accepted','booked'].includes(proposalStatus)) {
+    const schedule = record.booking?.payments?.length
+      ? record.booking.payments
+      : (record.proposal?.paymentSchedule || []).map((item:any,index:number)=>({ id:'pay-'+(index+1), ...item }));
+    const invoices = quickBooksInvoiceMap(record);
+
+    schedule.forEach((payment:any,index:number) => {
+      const invoice = invoices.find((row:any) => row.paymentId === payment.id);
+      const isDeposit = /deposit/i.test(payment.label || '') || index === 0;
+      const days = daysUntil(payment.dueDate);
+
+      if (!invoice?.invoiceId) {
+        if (isDeposit && proposalStatus === 'accepted' && record.booking?.contract?.status === 'signed' && record.booking?.contract?.koaSignature) {
+          reminders.push({ id:record.id+'-'+payment.id+'-invoice', priority:1, type:'payment', title:'Create QuickBooks deposit invoice', detail:'The agreement is fully signed; issue the reservation-deposit invoice in QuickBooks.', due:payment.dueDate || 'now' });
+        } else if (days != null && days <= 14) {
+          reminders.push({ id:record.id+'-'+payment.id+'-invoice', priority:days < 0 ? 0 : 7, type:'payment', title:days < 0 ? 'QuickBooks invoice overdue to issue' : 'Create QuickBooks invoice', detail:payment.label+' is '+(days < 0 ? Math.abs(days)+' day(s) past its due date.' : 'due in '+days+' day(s).'), due:payment.dueDate || 'now' });
+        }
+        return;
+      }
+
+      const balance = Number(invoice.balance ?? invoice.amount ?? payment.amount ?? 0);
+      if (balance <= 0) return;
+      if (isDeposit || (days != null && days <= 14)) {
+        reminders.push({
+          id:record.id+'-'+payment.id+'-balance',
+          priority:days != null && days < 0 ? 0 : isDeposit ? 1 : 7,
+          type:'payment',
+          title:days != null && days < 0 ? payment.label+' overdue in QuickBooks' : payment.label+' unpaid in QuickBooks',
+          detail:'QuickBooks invoice '+(invoice.docNumber || invoice.invoiceId)+' has '+Number(balance).toFixed(2)+' remaining.'+(days != null ? ' Due '+payment.dueDate+'.' : ''),
+          due:payment.dueDate || 'now',
+        });
+      }
     });
-  });
+  }
 
   return reminders.sort((a,b) => a.priority-b.priority);
 }
@@ -385,17 +399,33 @@ function remindersForRecord(record: SalesRecord) {
 function bookingSummary(record: SalesRecord) {
   if (!record.proposal || !['accepted','booked'].includes(record.proposal.status)) return null;
   const booking = record.booking;
-  const payments: BookingPayment[] = booking?.payments || record.proposal.paymentSchedule.map((item,index) => ({
-    id:'pay-'+(index+1),
-    label:item.label,
-    dueDate:item.dueDate,
-    amount:item.amount,
-    status:'pending',
-    paidAt:'',
-    reference:'',
-    paymentUrl:''
-  }));
-  const paid = payments.filter((item) => item.status === 'paid').reduce((sum,item) => sum+Number(item.amount||0),0);
+  const invoices = quickBooksInvoiceMap(record);
+  const schedule = booking?.payments?.length
+    ? booking.payments
+    : record.proposal.paymentSchedule.map((item,index) => ({ id:'pay-'+(index+1), ...item }));
+
+  const payments = schedule.map((item:any,index:number) => {
+    const invoice = invoices.find((row:any) => row.paymentId === item.id);
+    const balance = invoice?.invoiceId ? Number(invoice.balance ?? invoice.amount ?? item.amount ?? 0) : Number(item.amount || 0);
+    return {
+      id: item.id || 'pay-'+(index+1),
+      label: item.label,
+      dueDate: item.dueDate,
+      amount: Number(item.amount || 0),
+      status: !invoice?.invoiceId ? 'not_invoiced' : balance <= 0 ? 'paid' : 'open',
+      invoiceId: invoice?.invoiceId || '',
+      docNumber: invoice?.docNumber || '',
+      balance,
+      emailStatus: invoice?.emailStatus || '',
+      lastSyncedAt: invoice?.lastSyncedAt || '',
+    };
+  });
+
+  const paid = payments.reduce((sum:number,item:any) => {
+    if (!item.invoiceId) return sum;
+    return sum + Math.max(0, Number(item.amount || 0) - Number(item.balance || 0));
+  }, 0);
+
   return {
     status: booking?.status || 'contract_pending',
     contractStatus: booking?.contract?.status || 'pending',
@@ -406,6 +436,7 @@ function bookingSummary(record: SalesRecord) {
     paid,
     outstanding: Math.max(0, Number(record.proposal.total || 0)-paid),
     bookingUrl: record.proposal.publicToken ? '/booking/?token='+record.proposal.publicToken : '',
+    quickbooks: (record as any)?.accounting?.quickbooks || null,
   };
 }
 
@@ -805,83 +836,6 @@ export default async (req: Request, context: Context) => {
         detail: 'Agreement fully executed and reservation deposit received.',
       });
     }
-
-    return Response.json({ ok: true, record });
-  }
-
-  if (payload.action === 'record-payment') {
-    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
-    if (!record || !record.proposal || !['accepted', 'booked'].includes(record.proposal.status)) {
-      return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
-    }
-
-    const booking = ensureBooking(record);
-    if (!booking) return Response.json({ error: 'Booking could not be initialized.' }, { status: 400 });
-    const payment = booking.payments.find((item) => item.id === cleanText(payload.paymentId, 80));
-    if (!payment) return Response.json({ error: 'Payment milestone not found.' }, { status: 404 });
-
-    const status = payload.status === 'paid' ? 'paid' : 'pending';
-    payment.status = status;
-    payment.reference = cleanText(payload.reference, 240);
-    payment.paymentUrl = cleanText(payload.paymentUrl, 1200);
-    payment.paidAt = status === 'paid' ? (cleanText(payload.paidAt, 40) || new Date().toISOString()) : '';
-    booking.updatedAt = new Date().toISOString();
-
-    if (status === 'paid') {
-      await appendEvent(context, {
-        type: 'payment_received',
-        recordId: record.id,
-        quoteId: record.quoteId || '',
-        packageId: record.packageId || '',
-        detail: payment.label + ' received',
-        amount: payment.amount,
-        reference: payment.reference,
-      });
-    }
-
-    const deposit = booking.payments.find((item) => /deposit/i.test(item.label)) || booking.payments[0];
-    if (booking.contract.status === 'signed' && booking.contract.koaSignature && deposit?.status === 'paid') {
-      booking.status = 'booked';
-      record.stage = 'booked';
-      record.status = 'booked';
-      record.proposal.status = 'booked';
-      await appendEvent(context, {
-        type: 'booked',
-        recordId: record.id,
-        quoteId: record.quoteId || '',
-        packageId: record.packageId || '',
-        detail: 'Agreement fully executed and reservation deposit received.',
-      });
-    } else if (booking.contract.status === 'signed') {
-      booking.status = 'deposit_pending';
-    }
-
-    record.updatedAt = booking.updatedAt;
-    records = await saveRecord(context, record, records);
-    return Response.json({ ok: true, record });
-  }
-
-  if (payload.action === 'configure-payment-link') {
-    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
-    if (!record || !record.proposal || !['accepted', 'booked'].includes(record.proposal.status)) {
-      return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
-    }
-
-    const booking = ensureBooking(record);
-    const payment = booking?.payments.find((item) => item.id === cleanText(payload.paymentId, 80));
-    if (!booking || !payment) return Response.json({ error: 'Payment milestone not found.' }, { status: 404 });
-
-    payment.paymentUrl = cleanText(payload.paymentUrl, 1200);
-    booking.updatedAt = new Date().toISOString();
-    record.updatedAt = booking.updatedAt;
-    records = await saveRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'payment_link_configured',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      packageId: record.packageId || '',
-      detail: payment.label + ' payment link configured.',
-    });
 
     return Response.json({ ok: true, record });
   }
