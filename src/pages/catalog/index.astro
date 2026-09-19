@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { catalogCategories, catalogItems, catalogPricingNote, catalogBundles, bundleSavingsTiers } from '../../data/catalog';
 import { businessRules } from '../../data/businessRules';
+import PackageCapacityComparison from '../../components/PackageCapacityComparison.astro';
 
 const browseCategoryOrder = ['all', 'furniture', 'decor', 'tabletop', 'production', 'bar', 'services'] as const;
 const browseCatalogCategories = browseCategoryOrder
@@ -51,8 +52,9 @@ const packageRuleById = {
 };
 const packagePlanningData = Object.fromEntries(
   Object.entries(packageRuleById).map(([id, pkg]) => [id, pkg ? {
-    name: pkg.name === 'Plumeria' ? 'Koa’s Signature Wedding Experience' : pkg.name + ' Wedding Collection',
+    name: pkg.publicName,
     includedInventory: pkg.includedInventory,
+    includedFurnitureCoverage: pkg.includedFurnitureCoverage,
     baseConfiguration: pkg.baseConfiguration,
     planningInventory: pkg.planningInventory || null,
   } : null])
@@ -128,9 +130,12 @@ const badgeClass = {
               <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
               <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
               {packageRuleById[item.id] && (
-                <span class="mt-5 block border-t border-[var(--koa-line)] pt-4 text-xs leading-5 text-[var(--koa-ink)]/55">
-                  <strong class="text-[var(--koa-forest)]">Included furniture:</strong> {packageRuleById[item.id]?.includedInventory}
-                </span>
+                <>
+                  <PackageCapacityComparison furnitureCoverage={packageRuleById[item.id]?.includedFurnitureCoverage || 'See package details'} compact />
+                  <span class="mt-4 block text-xs leading-5 text-[var(--koa-ink)]/55">
+                    <strong class="text-[var(--koa-forest)]">Included furniture / inventory:</strong> {packageRuleById[item.id]?.includedInventory}
+                  </span>
+                </>
               )}
             </button>
           ))}
@@ -431,6 +436,7 @@ const badgeClass = {
     let startingPoint = '';
     let mobileCatalogExpanded = false;
     const selected = new Map();
+    const autoSelected = new Set();
 
     function guestCount() {
       return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
@@ -461,7 +467,44 @@ const badgeClass = {
     function suggestedQuantity(item) {
       const recommendedTotal = recommendedTotalForItem(item);
       const included = isIncludedBySelectedPackage(item) ? includedQuantityForItem(item) : 0;
-      return Math.max(1, recommendedTotal - included);
+      return Math.max(0, recommendedTotal - included);
+    }
+
+    function autoRequiredItemIds() {
+      if (!selectedPackagePlan() || startingPoint === 'ala-carte') return [];
+      const ids = ['ceremony-chair', 'reception-chair'];
+      if (startingPoint === 'gardenia' || startingPoint === 'hibiscus' || startingPoint === 'signature-wedding') {
+        ids.push('round-table');
+      }
+      return ids;
+    }
+
+    function syncAutoRequiredRentals() {
+      const requiredIds = new Set(autoRequiredItemIds());
+
+      [...autoSelected].forEach((id) => {
+        if (!requiredIds.has(id)) {
+          autoSelected.delete(id);
+          selected.delete(id);
+          setItemButtonState(id, false);
+        }
+      });
+
+      requiredIds.forEach((id) => {
+        const item = itemById.get(id);
+        if (!item) return;
+        const quantity = suggestedQuantity(item);
+
+        if (quantity > 0) {
+          selected.set(id, { name: item.name, quantity, auto: true });
+          autoSelected.add(id);
+          setItemButtonState(id, true);
+        } else if (autoSelected.has(id)) {
+          autoSelected.delete(id);
+          selected.delete(id);
+          setItemButtonState(id, false);
+        }
+      });
     }
 
     function syncSuggestedQuantities() {
@@ -471,16 +514,22 @@ const badgeClass = {
         const input = card.querySelector('[data-item-quantity]');
         if (!item || !input || item.quantityMode === 'manual') return;
         input.value = String(suggestedQuantity(item));
-        if (selected.has(id)) {
-          selected.set(id, { name: item.name, quantity: Number(input.value) || 1 });
+        if (selected.has(id) && !autoSelected.has(id)) {
+          selected.set(id, { name: item.name, quantity: Math.max(1, Number(input.value) || 1) });
         }
       });
       if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
+      syncAutoRequiredRentals();
       syncQuote();
     }
 
     function chooseStartingPoint(id) {
       startingPoint = id;
+      [...autoSelected].forEach((autoId) => {
+        selected.delete(autoId);
+        setItemButtonState(autoId, false);
+      });
+      autoSelected.clear();
       if (startingPointInput) startingPointInput.value = id;
       startingButtons.forEach((button) => {
         const on = button.dataset.startingPoint === id;
@@ -496,7 +545,7 @@ const badgeClass = {
       if (startingSummaryText) {
         startingSummaryText.textContent = id === 'ala-carte'
           ? 'À la carte selected. Build with bundles and individual rentals below.'
-          : (packageItem?.name || id) + ' selected. Included items will be recognized before bundle savings are calculated.';
+          : (packageItem?.name || id) + ' selected. Included items are recognized automatically, and guest-count furniture add-ons are preselected when your entered attendance exceeds the package allowance.';
       }
       if (quoteStartingPointLabel) {
         quoteStartingPointLabel.textContent = id === 'ala-carte'
@@ -507,7 +556,6 @@ const badgeClass = {
       refreshBundleAvailability();
       renderGuestAdjustment();
       syncSuggestedQuantities();
-      syncQuote();
 
       window.setTimeout(() => {
         document.querySelector('[data-catalog-filters]')?.scrollIntoView({
@@ -637,11 +685,11 @@ const badgeClass = {
           const extraChairs = Math.max(0, guests - Number(inventory.includedChairCount ?? 0));
           guestAdjustmentCopy.textContent = base + (
             extraChairs > 0
-              ? 'For ' + guests + ' guests, plan on ' + extraChairs + ' additional chairs. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
+              ? 'For ' + guests + ' guests, ' + extraChairs + ' additional ceremony chairs and ' + extraChairs + ' additional reception chairs are preselected below. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
               : 'Your entered guest count is within the included chair quantity. Table capacity still depends on which 2 table styles you select.'
           );
         } else if (additions.length) {
-          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional quantities below should be planned into the quote.';
+          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional chair and table quantities below are automatically preselected in your quote.';
         } else {
           guestAdjustmentCopy.textContent = base + 'Your entered guest count fits within the published included furniture quantities using the 8-guests-per-round planning default.';
         }
@@ -860,6 +908,12 @@ const badgeClass = {
 
         const label = document.createElement('span');
         label.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
+        if (entry.auto) {
+          const auto = document.createElement('span');
+          auto.className = 'ml-2 text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
+          auto.textContent = 'Guest-count add-on';
+          label.appendChild(auto);
+        }
 
         const remove = document.createElement('button');
         remove.type = 'button';
@@ -869,6 +923,7 @@ const badgeClass = {
 
         remove.addEventListener('click', () => {
           selected.delete(id);
+          autoSelected.delete(id);
           setItemButtonState(id, false);
           syncQuote();
         });
@@ -922,11 +977,12 @@ const badgeClass = {
 
         if (selected.has(id)) {
           selected.delete(id);
+          autoSelected.delete(id);
           setItemButtonState(id, false);
         } else {
           const quantityInput = card.querySelector('[data-item-quantity]');
           const quantity = quantityInput ? Math.max(1, Number(quantityInput.value || 1)) : 1;
-          selected.set(id, { name: item.name, quantity });
+          selected.set(id, { name: item.name, quantity, auto: false });
           setItemButtonState(id, true);
         }
 
@@ -944,7 +1000,7 @@ const badgeClass = {
         bundle.itemIds.forEach((id) => {
           const item = itemById.get(id);
           if (!item || isIncludedBySelectedPackage(item)) return;
-          selected.set(id, { name: item.name, quantity: suggestedQuantity(item) });
+          selected.set(id, { name: item.name, quantity: Math.max(1, suggestedQuantity(item)), auto: false });
           const card = cardFor(id);
           const quantityInput = card?.querySelector('[data-item-quantity]');
           if (quantityInput && item.quantityMode !== 'manual') quantityInput.value = String(suggestedQuantity(item));
@@ -984,7 +1040,8 @@ const badgeClass = {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
         if (!id || !item || !selected.has(id)) return;
-        selected.set(id, { name: item.name, quantity: Math.max(1, Number(event.target.value || 1)) });
+        autoSelected.delete(id);
+        selected.set(id, { name: item.name, quantity: Math.max(1, Number(event.target.value || 1)), auto: false });
         syncQuote();
       });
     });
