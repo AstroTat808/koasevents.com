@@ -16,6 +16,18 @@ async function records(context: Context) {
   return { store, list: ((await store.get('records/index', { type: 'json' })) || []) as any[] };
 }
 
+async function appendEvent(store: any, event: Record<string, unknown>) {
+  const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  const id = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+  await store.setJSON('analytics/events/index', [{
+    id: 'EVT-' + id,
+    createdAt: new Date().toISOString(),
+    ...event,
+  }, ...current].slice(0, 10000));
+}
+
 function publicRecord(record: any) {
   const proposal = record?.proposal || {};
   const quoteState = record?.quote?.state || {};
@@ -104,6 +116,13 @@ export default async (req: Request, context: Context) => {
       const next = list.map((entry: any) => entry.id === record.id ? record : entry);
       await store.setJSON('records/' + record.id, record);
       await store.setJSON('records/index', next);
+      await appendEvent(store, {
+        type: 'proposal_viewed',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Client viewed the proposal.',
+      });
     }
     return Response.json({ proposal: publicRecord(record) }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -124,10 +143,24 @@ export default async (req: Request, context: Context) => {
       proposal.status = 'accepted';
       proposal.acceptance = { name, acceptedAt: now };
       record.status = 'accepted';
+      await appendEvent(store, {
+        type: 'proposal_accepted',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Proposal accepted by ' + name,
+      });
     } else {
       proposal.status = 'declined';
       proposal.declinedAt = now;
       record.status = 'declined';
+      await appendEvent(store, {
+        type: 'proposal_declined',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Client declined the proposal.',
+      });
     }
     record.updatedAt = now;
     const next = list.map((entry: any) => entry.id === record.id ? record : entry);
