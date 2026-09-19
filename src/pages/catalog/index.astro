@@ -128,7 +128,7 @@ const badgeClass = {
           </div>
         </div>
 
-        <div class="mt-10 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-5" data-starting-points>
+        <div class="mt-10 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4" data-starting-points>
           {catalogItems.filter((item) => item.category === 'packages' && item.id !== 'a-la-carte' && !/a[-\s]?la[-\s]?carte/i.test(item.name)).map((item) => (
             <button
               type="button"
@@ -222,8 +222,8 @@ const badgeClass = {
     </section>
 
     <section class="py-16 lg:py-24 xl:py-8">
-      <div class="container-shell grid gap-10 xl:h-[calc(100vh-7rem)] xl:grid-cols-[1fr_22rem] xl:items-stretch xl:overflow-hidden">
-        <div class="xl:min-h-0 xl:overflow-y-auto xl:pr-3">
+      <div class="container-shell grid gap-10 xl:h-[calc(100dvh-7rem)] xl:grid-cols-[1fr_22rem] xl:items-stretch xl:overflow-hidden">
+        <div class="koa-scrollbar xl:min-h-0 xl:overflow-y-auto xl:pr-3">
           <div class="mb-7 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Rentals + enhancements</p>
@@ -313,7 +313,7 @@ const badgeClass = {
                     <input data-item-quantity type="number" min="0" value="1" class="min-h-11 w-28 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-sm text-[var(--koa-ink)]" />
                   </label>
                 )}
-                <button type="button" data-add-to-quote class="mt-auto pt-7 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
+                <button type="button" data-add-to-quote aria-pressed="false" class="mt-auto pt-7 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
               </article>
             ))}
           </div>
@@ -327,73 +327,91 @@ const badgeClass = {
           </div>
         </div>
 
-        <aside class="xl:min-h-0 xl:overflow-y-auto xl:pr-2">
-          <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-amber-light)]">Your quote</p>
-            <h2 class="display mt-4 text-3xl">One base. Then the extras.</h2>
-            <p class="mt-3 text-sm leading-6 text-white/58">Your starting point stays separate from the rentals and enhancements you add below.</p>
-            <div class="mt-6 rounded-xl border border-white/12 bg-white/[.04] p-4" data-quote-starting-point>
-              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Starting point</p>
-              <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a wedding collection above.</p>
-              <p class="mt-2 hidden text-xs font-bold text-white/72" data-quote-base-price></p>
-              <div class="mt-4 hidden border-t border-white/10 pt-4" data-quote-package-includes>
-                <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-white/42">Included in the package</p>
-                <ul class="mt-2 grid gap-1.5 text-xs leading-5 text-white/62" data-quote-package-includes-list></ul>
+        <aside class="xl:min-h-0">
+          <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-[1.5rem] bg-[var(--koa-ink)] text-white shadow-[var(--shadow-soft)]">
+            <div class="koa-scrollbar min-h-0 flex-1 overflow-y-auto p-6" data-quote-scroll>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="eyebrow text-[var(--koa-amber-light)]">Your quote</p>
+                  <h2 class="display mt-4 text-3xl">One base. Then the extras.</h2>
+                </div>
+                <span class="shrink-0 rounded-full border border-white/12 bg-white/[.06] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.1em] text-white/65" data-quote-selected-count aria-live="polite">0 items</span>
               </div>
-            </div>
-            <div class="mt-6">
-              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Add-ons</p>
-              <div class="mt-3 grid gap-2" data-quote-list>
-                <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No add-ons selected yet.</p>
+              <p class="mt-3 text-sm leading-6 text-white/58">Your starting point stays separate from the rentals and enhancements you add below.</p>
+              <div class="mt-6 rounded-xl border border-white/12 bg-white/[.04] p-4" data-quote-starting-point>
+                <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Starting point</p>
+                <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a wedding collection above.</p>
+                <p class="mt-2 hidden text-xs font-bold text-white/72" data-quote-base-price></p>
+                <div class="mt-4 hidden border-t border-white/10 pt-4" data-quote-package-includes>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-white/42">Included in the package</p>
+                  <ul class="mt-2 grid gap-1.5 text-xs leading-5 text-white/62" data-quote-package-includes-list></ul>
+                </div>
               </div>
-            </div>
-            <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-furniture-estimate>
-              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated guest-count furniture</p>
-              <p class="display mt-2 text-3xl" data-furniture-estimate-total>$0</p>
-              <p class="mt-2 text-xs leading-5 text-white/58">Planning estimate for the automatic chair and 60-inch round-table quantities currently included in your quote.</p>
-            </div>
-            <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/40 bg-[var(--koa-amber)]/12 p-4" data-starting-total-panel>
-              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated starting total</p>
-              <p class="display mt-2 text-4xl" data-starting-total>$0</p>
-              <div class="mt-3 grid gap-1.5 text-xs leading-5 text-white/62">
-                <p data-starting-total-base></p>
-                <p data-starting-total-furniture></p>
-              </div>
-              <p class="mt-3 text-xs leading-5 text-white/48" data-starting-total-note>Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.</p>
-            </div>
-            <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-custom-quote-panel>
-              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Requires custom quote</p>
-              <div class="mt-3 grid gap-2 text-xs leading-5 text-white/62" data-custom-quote-list></div>
-            </div>
-            <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
-              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
-              <p class="display mt-2 text-3xl" data-savings-headline></p>
-              <p class="mt-2 text-xs leading-5 text-white/58" data-savings-detail></p>
-            </div>
-            <div class="mt-6 border-t border-white/10 pt-5">
-              <button type="button" data-save-quote class="inline-flex w-full justify-center rounded-full border border-[var(--koa-amber)]/55 bg-[var(--koa-amber)]/10 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:bg-[var(--koa-amber)]/20">Save + get recovery link</button>
-              <div class="mt-4 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-saved-quote-panel>
+              <div class="mt-6">
                 <div class="flex items-center justify-between gap-3">
-                  <div>
-                    <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">Saved quote ID</p>
-                    <p class="mt-1 font-mono text-sm font-bold text-white" data-saved-quote-id></p>
-                  </div>
-                  <button type="button" data-copy-quote-link class="rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Copy link</button>
+                  <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Add-ons</p>
+                  <button type="button" data-clear-optional-addons class="hidden text-[.55rem] font-black uppercase tracking-[.09em] text-white/45 transition hover:text-white">Clear optional</button>
                 </div>
-                <input readonly data-saved-quote-link class="mt-3 w-full rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/62" aria-label="Saved quote recovery link" />
-                <div class="mt-4 grid gap-2 sm:grid-cols-3">
-                  <a data-share-quote-email href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Email quote</a>
-                  <a data-share-quote-text href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Text quote</a>
-                  <button type="button" data-share-quote-native class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Share…</button>
+                <div class="mt-3 grid gap-2" data-quote-list>
+                  <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No add-ons selected yet.</p>
                 </div>
-                <p class="mt-2 text-xs leading-5 text-white/45">This saved version can be reopened on another device. Saving again creates a new version and recovery link.</p>
               </div>
-              <p class="mt-3 hidden text-xs leading-5 text-red-200" data-save-quote-error></p>
+              <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-furniture-estimate>
+                <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated guest-count furniture</p>
+                <p class="display mt-2 text-3xl" data-furniture-estimate-total>$0</p>
+                <p class="mt-2 text-xs leading-5 text-white/58">Planning estimate for the automatic chair and 60-inch round-table quantities currently included in your quote.</p>
+              </div>
+              <div class="mt-5 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-custom-quote-panel>
+                <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Requires custom quote</p>
+                <div class="mt-3 grid gap-2 text-xs leading-5 text-white/62" data-custom-quote-list></div>
+              </div>
+              <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
+                <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
+                <p class="display mt-2 text-3xl" data-savings-headline></p>
+                <p class="mt-2 text-xs leading-5 text-white/58" data-savings-detail></p>
+              </div>
+              <div class="mt-6 border-t border-white/10 pt-5">
+                <button type="button" data-save-quote class="inline-flex w-full justify-center rounded-full border border-[var(--koa-amber)]/55 bg-[var(--koa-amber)]/10 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:bg-[var(--koa-amber)]/20">Save + get recovery link</button>
+                <div class="mt-4 hidden rounded-xl border border-white/12 bg-white/[.04] p-4" data-saved-quote-panel>
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-[.55rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">Saved quote ID</p>
+                      <p class="mt-1 font-mono text-sm font-bold text-white" data-saved-quote-id></p>
+                    </div>
+                    <button type="button" data-copy-quote-link class="rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Copy link</button>
+                  </div>
+                  <input readonly data-saved-quote-link class="mt-3 w-full rounded-lg border border-white/10 bg-black/10 px-3 py-2 text-xs text-white/62" aria-label="Saved quote recovery link" />
+                  <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                    <a data-share-quote-email href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Email quote</a>
+                    <a data-share-quote-text href="#" class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Text quote</a>
+                    <button type="button" data-share-quote-native class="inline-flex min-h-10 items-center justify-center rounded-full border border-white/15 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-white">Share…</button>
+                  </div>
+                  <p class="mt-2 text-xs leading-5 text-white/45">This saved version can be reopened on another device. Saving again creates a new version and recovery link.</p>
+                </div>
+                <p class="mt-3 hidden text-xs leading-5 text-red-200" data-save-quote-error></p>
+              </div>
+              <a href="/wedding-inquiry/" data-continue-inquiry class="mt-3 inline-flex w-full justify-center rounded-full border border-white/20 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Continue to wedding inquiry</a>
+              <p class="mt-5 text-xs leading-5 text-white/45">{catalogPricingNote}</p>
             </div>
-            <a href="#quote-request" data-quote-jump class="mt-6 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
-            <a href="/wedding-inquiry/" data-continue-inquiry class="mt-3 inline-flex w-full justify-center rounded-full border border-white/20 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Continue to wedding inquiry</a>
+
+            <div class="shrink-0 border-t border-white/10 bg-[rgba(10,33,26,.98)] p-4 shadow-[0_-18px_42px_rgba(0,0,0,.18)]">
+              <div class="hidden rounded-xl border border-[var(--koa-amber)]/40 bg-[var(--koa-amber)]/12 p-4" data-starting-total-panel>
+                <div class="flex items-end justify-between gap-4">
+                  <div>
+                    <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated starting total</p>
+                    <p class="display mt-1 text-4xl" data-starting-total aria-live="polite">$0</p>
+                  </div>
+                  <p class="text-right text-[.52rem] font-black uppercase tracking-[.09em] text-white/40">Always visible</p>
+                </div>
+                <div class="mt-2 grid gap-1 text-[.7rem] leading-5 text-white/58">
+                  <p data-starting-total-base></p>
+                  <p data-starting-total-furniture></p>
+                </div>
+                <p class="mt-2 text-[.68rem] leading-5 text-white/42" data-starting-total-note>Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.</p>
+              </div>
+              <a href="#quote-request" data-quote-jump class="mt-3 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
+            </div>
           </div>
-          <p class="mt-5 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58 xl:max-w-none">{catalogPricingNote}</p>
         </aside>
       </div>
     </section>
@@ -499,6 +517,9 @@ const badgeClass = {
     const count = document.querySelector('[data-catalog-count]');
     const empty = document.querySelector('[data-catalog-empty]');
     const quoteList = document.querySelector('[data-quote-list]');
+    const quoteScroll = document.querySelector('[data-quote-scroll]');
+    const quoteSelectedCount = document.querySelector('[data-quote-selected-count]');
+    const clearOptionalAddOns = document.querySelector('[data-clear-optional-addons]');
     const quoteEmpty = document.querySelector('[data-quote-empty]');
     const quoteStartingPointLabel = document.querySelector('[data-quote-starting-point-label]');
     const selectedInput = document.querySelector('[data-selected-items]');
@@ -797,12 +818,15 @@ const badgeClass = {
     }
 
     function setItemButtonState(id, isSelected) {
-      const button = cardFor(id)?.querySelector('[data-add-to-quote]');
+      const card = cardFor(id);
+      const button = card?.querySelector('[data-add-to-quote]');
       if (!button) return;
       const item = itemById.get(id);
       const included = item ? isIncludedBySelectedPackage(item) : false;
       button.textContent = isSelected ? 'Added ✓' : included ? 'Add extra +' : 'Add to quote +';
+      button.setAttribute('aria-pressed', String(isSelected));
       button.classList.toggle('text-[var(--koa-clay)]', isSelected);
+      card?.classList.toggle('quote-item-selected', isSelected);
     }
 
     function applyFilters() {
@@ -1425,6 +1449,12 @@ const badgeClass = {
 
     function syncQuote() {
       const entries = [...selected.entries()];
+      const optionalEntries = entries.filter(([, entry]) => !entry.auto);
+
+      if (quoteSelectedCount) {
+        quoteSelectedCount.textContent = entries.length + (entries.length === 1 ? ' item' : ' items');
+      }
+      clearOptionalAddOns?.classList.toggle('hidden', optionalEntries.length === 0);
 
       quoteList
         ?.querySelectorAll('[data-selected-row]')
@@ -1709,9 +1739,9 @@ const badgeClass = {
           button.disabled = false;
         }, 1400);
 
-        quoteList?.scrollIntoView({
+        quoteScroll?.scrollTo({
+          top: quoteScroll.scrollHeight,
           behavior: 'smooth',
-          block: 'center',
         });
       });
     });
@@ -1766,6 +1796,15 @@ const badgeClass = {
         selected.set(id, { name: item.name, quantity: Math.max(1, rawQuantity || 1), auto: false });
         syncQuote();
       });
+    });
+
+    clearOptionalAddOns?.addEventListener('click', () => {
+      [...selected.entries()].forEach(([id, entry]) => {
+        if (entry.auto) return;
+        selected.delete(id);
+        setItemButtonState(id, false);
+      });
+      syncQuote();
     });
 
     saveQuoteButton?.addEventListener('click', saveCurrentQuote);
