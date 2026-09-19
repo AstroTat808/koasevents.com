@@ -145,3 +145,86 @@ jobs:
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  gallery-export:
+    name: Gallery ZIP export
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build gallery ZIP
+        shell: python
+        run: |
+          import json, re, shutil, urllib.request, zipfile
+          from pathlib import Path
+          root = Path.cwd()
+          out = root / "gallery-export"
+          out.mkdir(exist_ok=True)
+          media_text = (root / "src/data/media.ts").read_text(encoding="utf-8")
+          mapping = dict(re.findall(r"^\\s{2}(\\w+): koaMarketing\\('([^']+)'", media_text, flags=re.M))
+          gallery_block = media_text.split("export const koaMarketingGallery = [",1)[1].split("];",1)[0]
+          curated = re.findall(r"koaMarketingMedia\\.(\\w+), category: '([^']+)'", gallery_block)
+          ids_block = media_text.split("const galleryIds = [",1)[1].split("];",1)[0]
+          legacy_ids = re.findall(r"'([^']+\\.(?:jpg|jpeg|png|webp))'", ids_block, flags=re.I)
+          try:
+              with urllib.request.urlopen("https://www.koasevents.com/api/gallery", timeout=30) as r:
+                  state = json.load(r)
+          except Exception:
+              state = {"uploads": [], "hiddenCurated": []}
+          hidden = set(state.get("hiddenCurated", []))
+          manifest = []
+          counts = {}
+          def safe(s):
+              return re.sub(r"[^A-Za-z0-9._ -]+", "-", s).strip() or "image"
+          for prop, category in curated:
+              filename = mapping.get(prop)
+              if not filename:
+                  continue
+              src = f"/media/koa/{filename}"
+              if src in hidden:
+                  continue
+              p = root / "public" / src.lstrip("/")
+              if not p.exists():
+                  continue
+              d = out / safe(category)
+              d.mkdir(parents=True, exist_ok=True)
+              counts[category] = counts.get(category,0)+1
+              dest = f"{counts[category]:02d}_{filename}"
+              shutil.copy2(p, d/dest)
+              manifest.append({"section":category,"source":src,"file":f"{category}/{dest}"})
+          legacy = out / "Legacy Archive"
+          legacy.mkdir(exist_ok=True)
+          for i, filename in enumerate(legacy_ids,1):
+              p = root / "public/media/wix" / filename
+              if p.exists():
+                  dest = f"{i:02d}_{filename}"
+                  shutil.copy2(p, legacy/dest)
+                  manifest.append({"section":"Legacy Archive","source":f"/media/wix/{filename}","file":f"Legacy Archive/{dest}"})
+          uploads = state.get("uploads", [])
+          if uploads:
+              d = out / "Recently Added"
+              d.mkdir(exist_ok=True)
+              for i,item in enumerate(uploads,1):
+                  src = item.get("src","")
+                  if not src: continue
+                  ext = {"image/jpeg":".jpg","image/png":".png","image/webp":".webp","image/gif":".gif"}.get(item.get("contentType",""),".img")
+                  dest = f"{i:02d}_{safe(item.get('alt') or item.get('id') or 'upload')[:80]}{ext}"
+                  try:
+                      urllib.request.urlretrieve("https://www.koasevents.com"+src, d/dest)
+                      manifest.append({"section":"Recently Added","source":src,"file":f"Recently Added/{dest}","category":item.get("category","")})
+                  except Exception:
+                      pass
+          (out/"manifest.json").write_text(json.dumps({"generated_from":"https://www.koasevents.com/gallery/","hidden_curated_excluded":sorted(hidden),"live_upload_count_reported":len(uploads),"files":manifest},indent=2),encoding="utf-8")
+          with zipfile.ZipFile(root/"Koa_Events_Gallery_Photos.zip","w",zipfile.ZIP_DEFLATED) as z:
+              for p in out.rglob("*"):
+                  if p.is_file():
+                      z.write(p,p.relative_to(out.parent))
+          print(f"Packaged {len(manifest)} images")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Koa_Events_Gallery_Photos
+          path: Koa_Events_Gallery_Photos.zip
+          retention-days: 7
+          if-no-files-found: error
