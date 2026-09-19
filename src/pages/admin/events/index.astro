@@ -1,0 +1,358 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Event Ops" description="Manage booked-event production, documents, vendors, timelines and event-day tasks." canonical="https://www.koasevents.com/admin/events/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Operations</p>
+          <h1 class="display mt-3 text-5xl">Event Ops</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Turn booked events into production plans: documents, vendors, questionnaires, layouts, run-of-show, readiness, final guest count and event-day assignments.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <a href="/admin/quotes/" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sales CRM</a>
+          <a href="/admin/" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Admin home</a>
+        </div>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+
+      <div data-app class="hidden grid gap-6 xl:grid-cols-[340px_1fr]">
+        <aside class="rounded-[1.5rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)] xl:sticky xl:top-5 xl:self-start">
+          <div class="flex items-end justify-between gap-3">
+            <div><p class="eyebrow text-[var(--koa-amber-light)]">Booked events</p><h2 class="display mt-2 text-3xl">Production queue</h2></div>
+            <span data-event-count class="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/70">0</span>
+          </div>
+          <form data-search-form class="mt-5">
+            <input data-search type="search" placeholder="Search client or date…" class="w-full rounded-full border border-white/10 bg-white/[.08] px-4 py-3 text-sm text-white placeholder:text-white/38" />
+          </form>
+          <div data-event-list class="mt-5 grid max-h-[70vh] gap-2 overflow-y-auto pr-1"></div>
+        </aside>
+
+        <section data-empty class="rounded-[1.5rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Event production</p>
+          <h2 class="display mt-3 text-4xl">Choose a booked event.</h2>
+          <p class="mt-4 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Each booked event gets its own operational workspace, separate from QuickBooks and the sales record.</p>
+        </section>
+
+        <section data-detail class="hidden grid gap-6">
+          <header class="rounded-[1.6rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+            <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-amber-light)]">Booked event</p>
+                <h2 data-title class="display mt-3 text-5xl"></h2>
+                <p data-meta class="mt-3 text-sm text-white/65"></p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <span data-readiness class="rounded-full border border-white/15 bg-white/[.07] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em]"></span>
+                <a data-crm-link class="rounded-full bg-white px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]" href="/admin/quotes/">Open CRM</a>
+              </div>
+            </div>
+          </header>
+
+          <nav data-tabs class="flex gap-2 overflow-x-auto rounded-[1.2rem] bg-white p-2 shadow-[var(--shadow-soft)]">
+            <button data-tab="overview" class="tab-button">Overview</button>
+            <button data-tab="documents" class="tab-button">Documents</button>
+            <button data-tab="vendors" class="tab-button">Vendors</button>
+            <button data-tab="questionnaire" class="tab-button">Questionnaire</button>
+            <button data-tab="timeline" class="tab-button">Run of show</button>
+            <button data-tab="checklist" class="tab-button">Checklist</button>
+            <button data-tab="tasks" class="tab-button">Event day</button>
+          </nav>
+
+          <div data-panel="overview" class="panel rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="grid gap-5 lg:grid-cols-3">
+              <form data-overview-form class="grid gap-4 lg:col-span-2">
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <label class="grid gap-2 text-sm font-semibold">Planning status
+                    <select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3">
+                      <option value="planning">Planning</option><option value="ready">Ready</option><option value="event_day">Event day</option><option value="complete">Complete</option>
+                    </select>
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Final guest count
+                    <input name="finalGuestCount" type="number" min="0" max="1000" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                  </label>
+                </div>
+                <label class="grid gap-2 text-sm font-semibold">Operations notes
+                  <textarea name="notes" rows="8" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Parking, access, rentals, VIP details, special handling, open decisions…"></textarea>
+                </label>
+                <div class="flex flex-wrap gap-3">
+                  <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save overview</button>
+                  <span data-save-message class="self-center text-xs text-[var(--koa-ink)]/50"></span>
+                </div>
+              </form>
+
+              <div class="grid gap-3">
+                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Guest count</p><p data-summary-guests class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article>
+                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Checklist</p><p data-summary-checklist class="display mt-2 text-3xl text-[var(--koa-forest)]">0%</p></article>
+                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Vendor insurance</p><p data-summary-insurance class="display mt-2 text-3xl text-[var(--koa-forest)]">0/0</p></article>
+                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Documents</p><p data-summary-documents class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article>
+              </div>
+            </div>
+          </div>
+
+          <div data-panel="documents" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Files</p><h3 class="display mt-2 text-4xl">Insurance, floor plans + event documents</h3></div>
+              <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/45">PDF, JPG, PNG, WEBP, DOCX and XLSX; up to 20 MB each.</p>
+            </div>
+            <form data-upload-form class="mt-6 grid gap-3 rounded-xl bg-[var(--koa-sand)] p-4 lg:grid-cols-[1fr_11rem_1fr_auto] lg:items-end">
+              <label class="grid gap-2 text-xs font-semibold">File<input name="file" type="file" required class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2" /></label>
+              <label class="grid gap-2 text-xs font-semibold">Category<select name="category" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="insurance">Insurance</option><option value="floor_plan">Floor plan</option><option value="vendor">Vendor</option><option value="questionnaire">Questionnaire</option><option value="other">Other</option></select></label>
+              <label class="grid gap-2 text-xs font-semibold">Label<input name="label" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2" placeholder="Certificate of insurance, final floor plan…" /></label>
+              <button class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Upload</button>
+            </form>
+            <p data-upload-message class="mt-3 text-xs text-[var(--koa-ink)]/52"></p>
+            <div data-documents class="mt-5 grid gap-3"></div>
+          </div>
+
+          <div data-panel="vendors" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h3 class="display mt-2 text-4xl">Vendor contacts + insurance</h3></div><button type="button" data-add-vendor class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add vendor</button></div>
+            <div data-vendors class="mt-6 grid gap-3"></div>
+            <button data-save-vendors class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button>
+          </div>
+
+          <div data-panel="questionnaire" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Planning questionnaire</p><h3 class="display mt-2 text-4xl">Open decisions + client answers</h3></div>
+            <div data-questionnaire class="mt-6 grid gap-3"></div>
+            <button data-save-questionnaire class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save questionnaire</button>
+          </div>
+
+          <div data-panel="timeline" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Run of show</p><h3 class="display mt-2 text-4xl">Production timeline</h3></div><button type="button" data-add-timeline class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add timeline item</button></div>
+            <div data-timeline class="mt-6 grid gap-3"></div>
+            <button data-save-timeline class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save run of show</button>
+          </div>
+
+          <div data-panel="checklist" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Readiness</p><h3 class="display mt-2 text-4xl">Before, during + after checklist</h3></div>
+            <div data-checklist class="mt-6 grid gap-5"></div>
+            <button data-save-checklist class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save checklist</button>
+          </div>
+
+          <div data-panel="tasks" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Event day</p><h3 class="display mt-2 text-4xl">Assignments + live task board</h3></div><button type="button" data-add-task class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add task</button></div>
+            <div data-tasks class="mt-6 grid gap-3"></div>
+            <button data-save-tasks class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save event-day board</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <style>
+    .tab-button{white-space:nowrap;border-radius:9999px;padding:.7rem 1rem;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--koa-forest)}
+    .tab-button.is-active{background:var(--koa-forest);color:white}
+  </style>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+
+    const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const app=document.querySelector('[data-app]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const empty=document.querySelector('[data-empty]');
+    const detail=document.querySelector('[data-detail]');
+    const eventList=document.querySelector('[data-event-list]');
+    const eventCount=document.querySelector('[data-event-count]');
+    const searchForm=document.querySelector('[data-search-form]');
+    const search=document.querySelector('[data-search]');
+    const overviewForm=document.querySelector('[data-overview-form]');
+    const saveMessage=document.querySelector('[data-save-message]');
+    const uploadForm=document.querySelector('[data-upload-form]');
+    const uploadMessage=document.querySelector('[data-upload-message]');
+    const documentsEl=document.querySelector('[data-documents]');
+    const vendorsEl=document.querySelector('[data-vendors]');
+    const questionnaireEl=document.querySelector('[data-questionnaire]');
+    const timelineEl=document.querySelector('[data-timeline]');
+    const checklistEl=document.querySelector('[data-checklist]');
+    const tasksEl=document.querySelector('[data-tasks]');
+
+    let payload={events:[]};
+    let selected=null;
+    let activeTab='overview';
+
+    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin'));}
+    function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
+    function dateLabel(value){if(!value)return 'Date TBD';return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value));}
+    function packageLabel(id){return id==='signature-wedding'?'Signature Wedding Experience':id?String(id).replaceAll('-',' ').replace(/\b\w/g,(m)=>m.toUpperCase()):'Custom';}
+    function uid(prefix='ROW'){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);}
+    function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+
+    async function api(body){
+      const res=await fetch('/api/admin/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||'Unable to save event operations.');
+      return data;
+    }
+
+    function showTab(name){
+      activeTab=name;
+      document.querySelectorAll('[data-tab]').forEach((button)=>button.classList.toggle('is-active',button.dataset.tab===name));
+      document.querySelectorAll('[data-panel]').forEach((panel)=>panel.classList.toggle('hidden',panel.dataset.panel!==name));
+    }
+
+    function completion(){
+      if(!selected)return 0;
+      const rows=selected.ops.checklist||[];
+      if(!rows.length)return 0;
+      return Math.round(rows.filter((row)=>row.status==='complete'||row.status==='not_applicable').length/rows.length*100);
+    }
+
+    function renderSummary(){
+      if(!selected)return;
+      document.querySelector('[data-summary-guests]').textContent=String(selected.ops.finalGuestCount||0);
+      document.querySelector('[data-summary-checklist]').textContent=completion()+'%';
+      const vendors=selected.ops.vendors||[];
+      document.querySelector('[data-summary-insurance]').textContent=vendors.filter((v)=>v.insuranceStatus==='approved').length+'/'+vendors.length;
+      document.querySelector('[data-summary-documents]').textContent=String((selected.ops.documents||[]).length);
+      document.querySelector('[data-readiness]').textContent=(selected.ops.status||'planning').replaceAll('_',' ')+' · '+completion()+'% checklist';
+    }
+
+    function renderEventList(){
+      eventList.innerHTML='';
+      const events=payload.events||[];
+      eventCount.textContent=String(events.length);
+      events.forEach((entry)=>{
+        const button=document.createElement('button');button.type='button';
+        button.className='rounded-xl border px-4 py-3 text-left '+(selected?.record?.id===entry.record.id?'border-[var(--koa-amber-light)] bg-white/[.12]':'border-white/10 bg-white/[.05]');
+        button.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]',entry.ops.status||'planning'),text('strong','mt-1 block text-sm text-white',entry.record.customer?.name||entry.record.id),text('p','mt-1 text-xs text-white/48',[dateLabel(entry.record.customer?.eventDate),packageLabel(entry.record.packageId)].filter(Boolean).join(' · ')));
+        button.addEventListener('click',()=>selectEvent(entry));
+        eventList.appendChild(button);
+      });
+      if(!events.length)eventList.appendChild(text('p','text-sm text-white/50','No booked events match this search.'));
+    }
+
+    function selectEvent(entry){
+      selected=entry; empty.classList.add('hidden'); detail.classList.remove('hidden');
+      document.querySelector('[data-title]').textContent=entry.record.customer?.name||entry.record.id;
+      document.querySelector('[data-meta]').textContent=[entry.record.customer?.eventDate?dateLabel(entry.record.customer.eventDate):'',packageLabel(entry.record.packageId),entry.record.id].filter(Boolean).join(' · ');
+      overviewForm.elements.status.value=entry.ops.status||'planning';
+      overviewForm.elements.finalGuestCount.value=String(entry.ops.finalGuestCount||0);
+      overviewForm.elements.notes.value=entry.ops.notes||'';
+      renderVendors();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
+    }
+
+    function vendorRow(v={}){
+      const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 xl:grid-cols-[1.15fr_1fr_.8fr_1.1fr_.8fr_.8fr_1fr_auto]';
+      row.dataset.id=v.id||uid('V');
+      row.innerHTML='<input data-company class="field" placeholder="Company"><input data-contact class="field" placeholder="Contact"><input data-role class="field" placeholder="Role"><input data-email type="email" class="field" placeholder="Email"><input data-phone class="field" placeholder="Phone"><input data-arrival type="time" class="field"><select data-insurance class="field"><option value="not_requested">Insurance not requested</option><option value="requested">Requested</option><option value="received">Received</option><option value="approved">Approved</option></select><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field xl:col-span-7" placeholder="Vendor notes"></textarea>';
+      row.querySelector('[data-company]').value=v.company||'';row.querySelector('[data-contact]').value=v.contact||'';row.querySelector('[data-role]').value=v.role||'';row.querySelector('[data-email]').value=v.email||'';row.querySelector('[data-phone]').value=v.phone||'';row.querySelector('[data-arrival]').value=v.arrivalTime||'';row.querySelector('[data-insurance]').value=v.insuranceStatus||'not_requested';row.querySelector('[data-notes]').value=v.notes||'';
+      row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+    }
+    function renderVendors(){vendorsEl.innerHTML='';(selected?.ops.vendors||[]).forEach((v)=>vendorsEl.appendChild(vendorRow(v)));if(!(selected?.ops.vendors||[]).length)vendorsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No vendors added yet.'));}
+    function collectVendors(){return [...vendorsEl.children].filter((row)=>row.dataset?.id).map((row)=>({id:row.dataset.id,company:row.querySelector('[data-company]').value,contact:row.querySelector('[data-contact]').value,role:row.querySelector('[data-role]').value,email:row.querySelector('[data-email]').value,phone:row.querySelector('[data-phone]').value,arrivalTime:row.querySelector('[data-arrival]').value,insuranceStatus:row.querySelector('[data-insurance]').value,notes:row.querySelector('[data-notes]').value}));}
+
+    function renderQuestionnaire(){
+      questionnaireEl.innerHTML='';
+      (selected?.ops.questionnaire||[]).forEach((q)=>{
+        const row=document.createElement('article');row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';row.dataset.id=q.id;row.dataset.category=q.category||'general';
+        row.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',q.category||'general'),text('h4','mt-2 text-sm font-semibold',q.question));
+        const grid=document.createElement('div');grid.className='mt-3 grid gap-3 sm:grid-cols-[1fr_10rem]';
+        const answer=document.createElement('textarea');answer.rows=3;answer.className='field';answer.dataset.answer='';answer.value=q.answer||'';
+        const status=document.createElement('select');status.className='field';status.dataset.status='';status.innerHTML='<option value="open">Open</option><option value="answered">Answered</option><option value="confirmed">Confirmed</option>';status.value=q.status||'open';
+        grid.append(answer,status);row.appendChild(grid);questionnaireEl.appendChild(row);
+      });
+    }
+    function collectQuestionnaire(){return [...questionnaireEl.children].map((row)=>({id:row.dataset.id,category:row.dataset.category,question:row.querySelector('h4').textContent,answer:row.querySelector('[data-answer]').value,status:row.querySelector('[data-status]').value}));}
+
+    function timelineRow(v={}){
+      const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[8rem_1.3fr_1fr_1fr_auto]';row.dataset.id=v.id||uid('R');
+      row.innerHTML='<input data-time type="time" class="field"><input data-label class="field" placeholder="Moment / activity"><input data-owner class="field" placeholder="Owner"><input data-location class="field" placeholder="Location"><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Cue, dependency, notes…"></textarea>';
+      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-label]').value=v.label||'';row.querySelector('[data-owner]').value=v.owner||'';row.querySelector('[data-location]').value=v.location||'';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+    }
+    function renderTimeline(){timelineEl.innerHTML='';(selected?.ops.timeline||[]).forEach((v)=>timelineEl.appendChild(timelineRow(v)));if(!(selected?.ops.timeline||[]).length)timelineEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No run-of-show items yet.'));}
+    function collectTimeline(){return [...timelineEl.children].filter((r)=>r.dataset?.id).map((r)=>({id:r.dataset.id,time:r.querySelector('[data-time]').value,label:r.querySelector('[data-label]').value,owner:r.querySelector('[data-owner]').value,location:r.querySelector('[data-location]').value,notes:r.querySelector('[data-notes]').value}));}
+
+    function renderChecklist(){
+      checklistEl.innerHTML='';
+      const labels={before:'Before event',event_day:'Event day',after:'After event'};
+      ['before','event_day','after'].forEach((phase)=>{
+        const wrap=document.createElement('section');wrap.appendChild(text('h4','display text-2xl text-[var(--koa-forest)]',labels[phase]));
+        const list=document.createElement('div');list.className='mt-3 grid gap-2';
+        (selected?.ops.checklist||[]).filter((item)=>item.phase===phase).forEach((item)=>{
+          const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[1fr_10rem_10rem_11rem] lg:items-center';row.dataset.id=item.id;row.dataset.phase=item.phase;row.dataset.text=item.text;
+          row.append(text('p','text-sm font-semibold',item.text));
+          const due=document.createElement('input');due.type='date';due.className='field';due.dataset.due='';due.value=item.dueDate||'';
+          const owner=document.createElement('input');owner.className='field';owner.dataset.owner='';owner.placeholder='Owner';owner.value=item.owner||'';
+          const status=document.createElement('select');status.className='field';status.dataset.status='';status.innerHTML='<option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="not_applicable">N/A</option>';status.value=item.status||'not_started';
+          row.append(due,owner,status);list.appendChild(row);
+        });
+        wrap.appendChild(list);checklistEl.appendChild(wrap);
+      });
+    }
+    function collectChecklist(){return [...checklistEl.querySelectorAll('[data-id]')].map((r)=>({id:r.dataset.id,text:r.dataset.text,dueDate:r.querySelector('[data-due]').value,owner:r.querySelector('[data-owner]').value,status:r.querySelector('[data-status]').value,phase:r.dataset.phase}));}
+
+    function taskRow(v={}){
+      const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[8rem_1.3fr_1fr_11rem_auto]';row.dataset.id=v.id||uid('T');
+      row.innerHTML='<input data-time type="time" class="field"><input data-task class="field" placeholder="Task"><input data-owner class="field" placeholder="Owner"><select data-status class="field"><option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="blocked">Blocked</option></select><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Notes"></textarea>';
+      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-task]').value=v.task||'';row.querySelector('[data-owner]').value=v.owner||'';row.querySelector('[data-status]').value=v.status||'not_started';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+    }
+    function renderTasks(){tasksEl.innerHTML='';(selected?.ops.tasks||[]).forEach((v)=>tasksEl.appendChild(taskRow(v)));}
+    function collectTasks(){return [...tasksEl.children].filter((r)=>r.dataset?.id).map((r)=>({id:r.dataset.id,time:r.querySelector('[data-time]').value,task:r.querySelector('[data-task]').value,owner:r.querySelector('[data-owner]').value,status:r.querySelector('[data-status]').value,notes:r.querySelector('[data-notes]').value}));}
+
+    function formatBytes(bytes){const n=Number(bytes||0);if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB';}
+    function renderDocuments(){
+      documentsEl.innerHTML='';
+      (selected?.ops.documents||[]).forEach((doc)=>{
+        const row=document.createElement('article');row.className='flex flex-col gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 sm:flex-row sm:items-center sm:justify-between';
+        const left=document.createElement('div');left.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',String(doc.category||'other').replaceAll('_',' ')),text('h4','mt-1 text-sm font-semibold',doc.label||doc.name),text('p','mt-1 text-xs text-[var(--koa-ink)]/45',doc.name+' · '+formatBytes(doc.size)+' · '+dateLabel(doc.uploadedAt)));
+        const actions=document.createElement('div');actions.className='flex gap-2';
+        const open=document.createElement('button');open.type='button';open.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';open.textContent='Open';open.addEventListener('click',()=>openDocument(doc));
+        const del=document.createElement('button');del.type='button';del.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';del.textContent='Remove';del.addEventListener('click',()=>deleteDocument(doc));
+        actions.append(open,del);row.append(left,actions);documentsEl.appendChild(row);
+      });
+      if(!(selected?.ops.documents||[]).length)documentsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No event documents uploaded yet.'));
+    }
+
+    async function openDocument(doc){
+      const res=await fetch('/api/admin/events/documents/'+encodeURIComponent(selected.record.id)+'/'+encodeURIComponent(doc.id));
+      if(!res.ok){if(uploadMessage)uploadMessage.textContent='Unable to open document.';return;}
+      const blob=await res.blob();const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener,noreferrer');window.setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }
+    async function deleteDocument(doc){
+      const res=await fetch('/api/admin/events/documents/'+encodeURIComponent(selected.record.id)+'/'+encodeURIComponent(doc.id),{method:'DELETE'});
+      const data=await res.json().catch(()=>({}));if(!res.ok){if(uploadMessage)uploadMessage.textContent=data.error||'Unable to remove document.';return;}
+      selected.ops.documents=data.documents||[];renderDocuments();renderSummary();
+    }
+
+    async function saveSection(action,data){
+      const result=await api({action,recordId:selected.record.id,...data});selected.ops=result.ops;renderSummary();return result;
+    }
+
+    async function load(q=''){
+      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      app.classList.remove('hidden');
+      const res=await fetch('/api/admin/events'+(q?'?q='+encodeURIComponent(q):''),{cache:'no-store'});
+      if(!res.ok)return;
+      payload=await res.json();
+      if(selected){const refreshed=(payload.events||[]).find((e)=>e.record.id===selected.record.id);if(refreshed)selected=refreshed;else selected=null;}
+      renderEventList();
+      if(!selected&&payload.events?.length)selectEvent(payload.events[0]);
+    }
+
+    document.querySelectorAll('[data-tab]').forEach((button)=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
+    overviewForm?.addEventListener('submit',async(e)=>{e.preventDefault();saveMessage.textContent='Saving…';try{await saveSection('save-overview',{status:overviewForm.elements.status.value,finalGuestCount:Number(overviewForm.elements.finalGuestCount.value||0),notes:overviewForm.elements.notes.value});saveMessage.textContent='Saved.';}catch(err){saveMessage.textContent=err.message||'Unable to save.';}});
+    document.querySelector('[data-add-vendor]')?.addEventListener('click',()=>{if(vendorsEl.querySelector('p'))vendorsEl.innerHTML='';vendorsEl.appendChild(vendorRow());});
+    document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{await saveSection('save-vendors',{vendors:collectVendors()});selected.ops.vendors=collectVendors();renderVendors();renderSummary();});
+    document.querySelector('[data-save-questionnaire]')?.addEventListener('click',async()=>{await saveSection('save-questionnaire',{questionnaire:collectQuestionnaire()});renderQuestionnaire();});
+    document.querySelector('[data-add-timeline]')?.addEventListener('click',()=>{if(timelineEl.querySelector('p'))timelineEl.innerHTML='';timelineEl.appendChild(timelineRow());});
+    document.querySelector('[data-save-timeline]')?.addEventListener('click',async()=>{await saveSection('save-timeline',{timeline:collectTimeline()});renderTimeline();});
+    document.querySelector('[data-save-checklist]')?.addEventListener('click',async()=>{await saveSection('save-checklist',{checklist:collectChecklist()});renderChecklist();renderSummary();});
+    document.querySelector('[data-add-task]')?.addEventListener('click',()=>tasksEl.appendChild(taskRow()));
+    document.querySelector('[data-save-tasks]')?.addEventListener('click',async()=>{await saveSection('save-tasks',{tasks:collectTasks()});renderTasks();});
+
+    uploadForm?.addEventListener('submit',async(e)=>{
+      e.preventDefault();if(!selected)return;uploadMessage.textContent='Uploading…';const form=new FormData(uploadForm);
+      const res=await fetch('/api/admin/events/documents/'+encodeURIComponent(selected.record.id),{method:'POST',body:form});
+      const data=await res.json().catch(()=>({}));if(!res.ok){uploadMessage.textContent=data.error||'Upload failed.';return;}
+      selected.ops.documents=data.documents||[];uploadMessage.textContent='Uploaded.';uploadForm.reset();renderDocuments();renderSummary();
+    });
+
+    searchForm?.addEventListener('submit',(e)=>{e.preventDefault();load(String(search.value||'').trim());});
+
+    const style=document.createElement('style');style.textContent='.field{min-height:2.7rem;border:1px solid var(--koa-line);border-radius:.65rem;background:white;padding:.65rem .75rem;font-size:.82rem;width:100%}';document.head.appendChild(style);
+    showTab('overview');load();
+  </script>
+</BaseLayout>
