@@ -108,6 +108,7 @@ function ensureBooking(record: any) {
         status: 'pending',
         sections: contractSections(record),
         signature: null,
+        koaSignature: null,
       },
       payments: schedule,
     };
@@ -133,6 +134,7 @@ function publicBooking(record: any) {
       status: booking.contract?.status || 'pending',
       sections: booking.contract?.sections || [],
       signature: booking.contract?.signature || null,
+      koaSignature: booking.contract?.koaSignature || null,
     },
     payments: (booking.payments || []).map((item: any) => ({
       id: item.id,
@@ -162,9 +164,29 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: 'This booking becomes available after proposal acceptance.' }, { status: 403 });
   }
 
+  const hadBooking = Boolean(record.booking);
   const booking = ensureBooking(record);
 
   if (req.method === 'GET') {
+    if (!hadBooking) {
+      await appendEvent(store, {
+        type: 'contract_generated',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Booking agreement generated from the accepted proposal.',
+      });
+    }
+    if (!booking.contract.viewedAt) {
+      booking.contract.viewedAt = new Date().toISOString();
+      await appendEvent(store, {
+        type: 'contract_viewed',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        packageId: record.packageId || '',
+        detail: 'Client opened the booking agreement.',
+      });
+    }
     const next = list.map((entry: any) => entry.id === record.id ? record : entry);
     await store.setJSON('records/' + record.id, record);
     await store.setJSON('records/index', next);
