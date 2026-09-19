@@ -54,8 +54,18 @@ import Footer from '../../components/Footer.astro';
         grid?.classList.remove('hidden');
         posts.forEach((post) => {
           const article = document.createElement('article');
-          article.className = 'rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]';
-          article.append(
+          article.className = 'overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white shadow-[var(--shadow-soft)]';
+          if (post.featuredImage) {
+            const image = document.createElement('img');
+            image.src = post.featuredImage;
+            image.alt = post.title;
+            image.loading = 'lazy';
+            image.className = 'aspect-[16/9] w-full object-cover';
+            article.append(image);
+          }
+          const content = document.createElement('div');
+          content.className = 'p-7';
+          content.append(
             textEl('p', new Date(post.publishedAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), 'eyebrow text-[var(--koa-clay)]'),
             textEl('h2', post.title, 'display mt-4 text-4xl leading-[1.02]'),
             textEl('p', post.excerpt || '', 'mt-4 text-sm leading-6 text-[var(--koa-ink)]/62')
@@ -69,7 +79,8 @@ import Footer from '../../components/Footer.astro';
           body.className = 'mt-5 grid gap-4 text-sm leading-7 text-[var(--koa-ink)]/68';
           String(post.body || '').split(/\n\s*\n/).filter(Boolean).forEach((paragraph) => body.append(textEl('p', paragraph)));
           details.append(summary, body);
-          article.append(details);
+          content.append(details);
+          article.append(content);
           grid?.append(article);
         });
       })
