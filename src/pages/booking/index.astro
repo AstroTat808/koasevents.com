@@ -74,9 +74,13 @@ import Footer from '../../components/Footer.astro';
           </section>
 
           <section data-signed-section class="hidden rounded-[1.4rem] bg-[var(--koa-forest)] p-6 text-white">
-            <p class="eyebrow text-[var(--koa-amber-light)]">Agreement signed</p>
-            <h2 class="display mt-3 text-4xl">Signature recorded.</h2>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Agreement signatures</p>
+            <h2 class="display mt-3 text-4xl">Your signature is recorded.</h2>
             <p data-signature-copy class="mt-3 text-sm leading-6 text-white/70"></p>
+            <div class="mt-4 rounded-xl border border-white/12 bg-white/[.06] p-4">
+              <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">Koa’s countersignature</p>
+              <p data-koa-signature-copy class="mt-2 text-sm leading-6 text-white/68"></p>
+            </div>
           </section>
 
           <section>
@@ -141,7 +145,11 @@ import Footer from '../../components/Footer.astro';
       signedSection?.classList.toggle('hidden',!signed);
       if(signed){
         const sig=data.contract.signature||{};
+        const koaSig=data.contract.koaSignature||{};
         text('[data-signature-copy]',(sig.name?'Signed by '+sig.name:'Signed')+(sig.signedAt?' on '+new Date(sig.signedAt).toLocaleString():'')+'.');
+        text('[data-koa-signature-copy]',koaSig.name
+          ? 'Countersigned by '+koaSig.name+(koaSig.signedAt?' on '+new Date(koaSig.signedAt).toLocaleString():'')+'.'
+          : 'Awaiting Koa’s authorized countersignature.');
       }
 
       const payments=document.querySelector('[data-payments]'); payments.innerHTML='';
