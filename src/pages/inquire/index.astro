@@ -263,6 +263,51 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
       if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + '. Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
     }
 
+    form?.addEventListener('submit', async (event) => {
+      if (form.dataset.crmCaptured === '1') return;
+      event.preventDefault();
+      const data = new FormData(form);
+      const rawPackage = String(data.get('venuePackage') || '');
+      const packageId = rawPackage === 'plumeria' ? 'signature-wedding' : rawPackage;
+      const quoteId = new URLSearchParams(window.location.search).get('quote') || '';
+      try {
+        await fetch('/api/crm/inquiries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
+          body: JSON.stringify({
+            formName: 'koa-event-inquiry',
+            quoteId,
+            packageId,
+            customer: {
+              name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
+              email: data.get('email'),
+              phone: data.get('phone'),
+              eventDate: data.get('eventDate'),
+              notes: data.get('priorities'),
+            },
+            inquiry: {
+              service: data.get('service'),
+              eventType: data.get('eventType'),
+              guestCount: data.get('guestCount'),
+              budget: data.get('budget'),
+              venuePackage: packageId,
+              mobileBarPackage: data.get('mobileBarPackage'),
+              eventLocation: data.get('eventLocation'),
+              priorities: data.get('priorities'),
+              source: data.get('source'),
+              selectedCatalogItems: data.get('selectedCatalogItems'),
+              automaticRentalBreakdown: data.get('automaticRentalBreakdown'),
+              manualAddOns: data.get('manualAddOns'),
+              catalogSelectionState: data.get('catalogSelectionState'),
+            },
+          }),
+          keepalive: true,
+        });
+      } catch {}
+      form.dataset.crmCaptured = '1';
+      form.submit();
+    });
+
     updateConditionalFields();
   </script>
 </BaseLayout>
