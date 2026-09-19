@@ -308,12 +308,17 @@ const badgeClass = {
                 )}
 
                 {item.quantityMode && (
-                  <label class="mt-6 grid gap-2 border-t border-[var(--koa-line)] pt-4 text-xs font-semibold text-[var(--koa-ink)]/72">
-                    Quantity
-                    <input data-item-quantity type="number" min="0" value="1" class="min-h-11 w-28 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-sm text-[var(--koa-ink)]" />
-                  </label>
+                  <div class="mt-6 border-t border-[var(--koa-line)] pt-4">
+                    <p class="text-xs font-semibold text-[var(--koa-ink)]/72">Quantity</p>
+                    <div class="mt-2 flex items-center gap-2">
+                      <button type="button" data-quantity-decrease class="grid min-h-11 min-w-11 place-items-center rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] text-lg font-bold text-[var(--koa-forest)]" aria-label={"Decrease " + item.name + " quantity"}>−</button>
+                      <input data-item-quantity type="number" min="0" value="1" class="min-h-11 w-20 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-center text-sm font-bold text-[var(--koa-ink)]" />
+                      <button type="button" data-quantity-increase class="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--koa-forest)] text-lg font-bold text-white" aria-label={"Increase " + item.name + " quantity"}>+</button>
+                    </div>
+                    <p class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/48">Once added, use − / + to update the quote instantly.</p>
+                  </div>
                 )}
-                <button type="button" data-add-to-quote aria-pressed="false" class="mt-auto pt-7 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
+                <button type="button" data-add-to-quote aria-pressed="false" class="mt-auto pt-6 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
               </article>
             ))}
           </div>
@@ -390,7 +395,6 @@ const badgeClass = {
                 </div>
                 <p class="mt-3 hidden text-xs leading-5 text-red-200" data-save-quote-error></p>
               </div>
-              <a href="/wedding-inquiry/" data-continue-inquiry class="mt-3 inline-flex w-full justify-center rounded-full border border-white/20 px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Continue to wedding inquiry</a>
               <p class="mt-5 text-xs leading-5 text-white/45">{catalogPricingNote}</p>
             </div>
 
@@ -398,18 +402,21 @@ const badgeClass = {
               <div class="hidden rounded-xl border border-[var(--koa-amber)]/40 bg-[var(--koa-amber)]/12 p-4" data-starting-total-panel>
                 <div class="flex items-end justify-between gap-4">
                   <div>
-                    <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated starting total</p>
+                    <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Estimated known-price total</p>
                     <p class="display mt-1 text-4xl" data-starting-total aria-live="polite">$0</p>
                   </div>
-                  <p class="text-right text-[.52rem] font-black uppercase tracking-[.09em] text-white/40">Always visible</p>
+                  <p class="text-right text-[.52rem] font-black uppercase tracking-[.09em] text-white/40">Custom items pending</p>
                 </div>
-                <div class="mt-2 grid gap-1 text-[.7rem] leading-5 text-white/58">
-                  <p data-starting-total-base></p>
-                  <p data-starting-total-furniture></p>
+                <div class="mt-3 grid gap-1.5 border-t border-white/10 pt-3 text-[.7rem] leading-5">
+                  <div class="flex items-center justify-between gap-4"><span class="text-white/52">Package</span><strong data-starting-total-base class="text-white/82">$0</strong></div>
+                  <div class="flex items-center justify-between gap-4"><span class="text-white/52">Estimated furniture</span><strong data-starting-total-furniture class="text-white/82">$0</strong></div>
+                  <div class="flex items-center justify-between gap-4"><span class="text-white/52">Known-price add-ons</span><strong data-starting-total-known-addons class="text-white/82">$0</strong></div>
+                  <div class="flex items-center justify-between gap-4"><span class="text-white/52">Bundle savings</span><strong data-starting-total-savings class="text-[var(--koa-amber-light)]">—</strong></div>
+                  <div class="flex items-center justify-between gap-4"><span class="text-white/52">Still needs custom pricing</span><strong data-starting-total-custom-count class="text-white/82">0 pending</strong></div>
                 </div>
-                <p class="mt-2 text-[.68rem] leading-5 text-white/42" data-starting-total-note>Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.</p>
+                <p class="mt-2 text-[.68rem] leading-5 text-white/42" data-starting-total-note>Known-price total excludes items that require custom pricing. Eligible savings on custom-priced add-ons are confirmed in the proposal.</p>
               </div>
-              <a href="#quote-request" data-quote-jump class="mt-3 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
+              <button type="button" data-continue-with-quote class="mt-3 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Continue to wedding inquiry</button>
             </div>
           </div>
         </aside>
@@ -462,49 +469,6 @@ const badgeClass = {
     </section>
 
 
-    <section id="quote-request" class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-28">
-      <div class="container-shell grid gap-12 lg:grid-cols-[.72fr_1.28fr] lg:gap-24">
-        <div>
-          <p class="eyebrow text-[var(--koa-clay)]">Custom quote</p>
-          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Turn your shortlist into a real event proposal.</h2>
-          <p class="mt-6 text-base leading-7 text-[var(--koa-ink)]/64">This request is intentionally short. Once we know the event date, guest count and the items you’re considering, we can confirm the quantities and combinations that make sense.</p>
-        </div>
-
-        <form name="koa-catalog-quote-request" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]">
-          <input type="hidden" name="form-name" value="koa-catalog-quote-request" />
-          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Catalog Quote (%{submissionId})" />
-          <input type="hidden" name="selectedCatalogItems" value="" data-selected-items />
-          <input type="hidden" name="estimatedBundleSavings" value="" data-estimated-savings />
-          <input type="hidden" name="matchedCatalogBundle" value="" data-matched-bundle />
-          <input type="hidden" name="startingPoint" value="" data-starting-point-input />
-          <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
-          <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
-          <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
-          <input type="hidden" name="basePackagePrice" value="" data-base-package-price-input />
-          <input type="hidden" name="estimatedStartingTotal" value="" data-starting-total-input />
-          <input type="hidden" name="selectedPackageIncludes" value="" data-package-includes-input />
-          <input type="hidden" name="customQuoteItems" value="" data-custom-quote-items-input />
-          <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
-          <input type="hidden" name="savedQuoteId" value="" data-saved-quote-id-input />
-          <input type="hidden" name="savedQuoteRecoveryUrl" value="" data-saved-quote-url-input />
-          <p class="hidden"><label>Don’t fill this out: <input name="bot-field" /></label></p>
-          <div class="grid gap-5 sm:grid-cols-2">
-            <label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required /></label>
-            <label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required /></label>
-            <label class="grid gap-2 text-sm font-semibold">Event date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="eventDate" required /></label>
-            <label class="grid gap-2 text-sm font-semibold">Estimated guests<input data-quote-guests class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" required /></label>
-            <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Event type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="eventType" required><option value="">Choose one</option><option>Wedding</option><option>Private event</option><option>Corporate event</option><option>Mobile Bar only</option><option>Other</option></select></label>
-            <div class="sm:col-span-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
-              <p class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Selected add-ons</p>
-              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58" data-selected-preview>Choose rentals or enhancements above and they’ll appear here.</p>
-              <p class="mt-3 hidden text-xs font-bold leading-5 text-[var(--koa-clay)]" data-selected-savings></p>
-            </div>
-            <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Notes or quantities<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes" placeholder="Tell us quantities, colors, setup ideas or anything else that helps us quote accurately."></textarea></label>
-            <button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Request custom quote</button>
-          </div>
-        </form>
-      </div>
-    </section>
   </main>
   <Footer />
 
@@ -536,6 +500,9 @@ const badgeClass = {
     const startingTotal = document.querySelector('[data-starting-total]');
     const startingTotalBase = document.querySelector('[data-starting-total-base]');
     const startingTotalFurniture = document.querySelector('[data-starting-total-furniture]');
+    const startingTotalKnownAddOns = document.querySelector('[data-starting-total-known-addons]');
+    const startingTotalSavings = document.querySelector('[data-starting-total-savings]');
+    const startingTotalCustomCount = document.querySelector('[data-starting-total-custom-count]');
     const startingTotalNote = document.querySelector('[data-starting-total-note]');
     const customQuotePanel = document.querySelector('[data-custom-quote-panel]');
     const customQuoteList = document.querySelector('[data-custom-quote-list]');
@@ -552,7 +519,7 @@ const badgeClass = {
     const catalogSelectionStateInput = document.querySelector('[data-catalog-selection-state]');
     const savedQuoteIdInput = document.querySelector('[data-saved-quote-id-input]');
     const savedQuoteUrlInput = document.querySelector('[data-saved-quote-url-input]');
-    const continueInquiry = document.querySelector('[data-continue-inquiry]');
+    const continueWithQuoteButton = document.querySelector('[data-continue-with-quote]');
     const saveQuoteButton = document.querySelector('[data-save-quote]');
     const savedQuotePanel = document.querySelector('[data-saved-quote-panel]');
     const savedQuoteId = document.querySelector('[data-saved-quote-id]');
@@ -1210,6 +1177,34 @@ const badgeClass = {
       return [...new Set(notes)];
     }
 
+    function quoteBreakdown(entries = [...selected.entries()]) {
+      const autoEntries = entries.filter(([, entry]) => entry.auto);
+      const manualEntries = entries.filter(([, entry]) => !entry.auto);
+      const estimatedFurnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
+      const publishedAddOnTotal = manualEntries.reduce((sum, [id, entry]) => sum + publishedManualLineTotal(id, entry), 0);
+      const savings = calculateSavings();
+      const knownEligibleAddOnTotal = manualEntries.reduce((sum, [id, entry]) => {
+        const item = itemById.get(id);
+        return item?.bundleEligible ? sum + publishedManualLineTotal(id, entry) : sum;
+      }, 0);
+      const estimatedKnownSavings = savings.percent > 0
+        ? Math.round(knownEligibleAddOnTotal * savings.percent) / 100
+        : 0;
+      const customNotes = packageCustomQuoteNotes(entries);
+      const basePackagePrice = packageBasePrice();
+      return {
+        autoEntries,
+        manualEntries,
+        estimatedFurnitureTotal,
+        publishedAddOnTotal,
+        savings,
+        estimatedKnownSavings,
+        customNotes,
+        basePackagePrice,
+        estimatedStartingTotal: Math.max(0, basePackagePrice + estimatedFurnitureTotal + publishedAddOnTotal - estimatedKnownSavings),
+      };
+    }
+
     function buildQuoteState() {
       const selectedState = [...selected.entries()].map(([id, entry]) => ({
         id,
@@ -1217,23 +1212,20 @@ const badgeClass = {
         reason: entry.auto ? autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) : '',
         estimatedLineTotal: estimatedLineTotal(id, entry) || publishedManualLineTotal(id, entry),
       }));
-      const estimatedFurnitureTotal = [...selected.entries()]
-        .filter(([, entry]) => entry.auto)
-        .reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
-      const publishedAddOnTotal = [...selected.entries()]
-        .filter(([, entry]) => !entry.auto)
-        .reduce((sum, [id, entry]) => sum + publishedManualLineTotal(id, entry), 0);
+      const breakdown = quoteBreakdown();
       const plan = selectedPackagePlan();
-      const basePackagePrice = packageBasePrice();
       return {
-        version: 2,
+        version: 3,
         startingPoint,
         guestCount: guestCount(),
         selected: selectedState,
-        estimatedFurnitureTotal,
-        basePackagePrice,
-        publishedAddOnTotal,
-        estimatedStartingTotal: basePackagePrice + estimatedFurnitureTotal + publishedAddOnTotal,
+        estimatedFurnitureTotal: breakdown.estimatedFurnitureTotal,
+        basePackagePrice: breakdown.basePackagePrice,
+        publishedAddOnTotal: breakdown.publishedAddOnTotal,
+        estimatedSavingsPercent: breakdown.savings.percent,
+        estimatedKnownSavings: breakdown.estimatedKnownSavings,
+        customQuoteCount: breakdown.customNotes.length,
+        estimatedStartingTotal: breakdown.estimatedStartingTotal,
         packageIncludes: plan ? [...(plan.includes || [])] : [],
         packageIncludedInventory: plan?.includedInventory || '',
         autoDismissed: [...dismissedAuto],
@@ -1252,6 +1244,9 @@ const badgeClass = {
         estimatedFurnitureTotal: state.estimatedFurnitureTotal,
         basePackagePrice: state.basePackagePrice,
         publishedAddOnTotal: state.publishedAddOnTotal,
+        estimatedSavingsPercent: state.estimatedSavingsPercent,
+        estimatedKnownSavings: state.estimatedKnownSavings,
+        customQuoteCount: state.customQuoteCount,
         estimatedStartingTotal: state.estimatedStartingTotal,
         packageIncludes: state.packageIncludes,
         packageIncludedInventory: state.packageIncludedInventory,
@@ -1298,15 +1293,6 @@ const badgeClass = {
             : 'Save + get recovery link';
       }
 
-      if (continueInquiry) {
-        const params = new URLSearchParams();
-        if (startingPoint) {
-          params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
-        }
-        params.set('guests', String(guestCount()));
-        if (savedCurrent) params.set('quote', activeSavedQuoteId);
-        continueInquiry.href = '/wedding-inquiry/?' + params.toString();
-      }
     }
 
     async function restoreSelectionState() {
@@ -1436,14 +1422,55 @@ const badgeClass = {
         const absoluteUrl = new URL(payload.recoveryUrl, window.location.origin).toString();
         showSavedQuote(activeSavedQuoteId, absoluteUrl);
         persistSelectionState();
+        return activeSavedQuoteId;
       } catch (error) {
         if (saveQuoteError) {
           saveQuoteError.textContent = error?.message || 'Unable to save the quote right now.';
           saveQuoteError.classList.remove('hidden');
         }
         if (saveQuoteButton) saveQuoteButton.textContent = originalText;
+        return '';
       } finally {
         if (saveQuoteButton) saveQuoteButton.disabled = false;
+      }
+    }
+
+    function inquiryUrl(quoteId = '') {
+      const params = new URLSearchParams();
+      if (startingPoint) params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
+      params.set('guests', String(guestCount()));
+      if (quoteId) params.set('quote', quoteId);
+      return '/wedding-inquiry/?' + params.toString();
+    }
+
+    async function continueToInquiry() {
+      if (!startingPoint) {
+        if (saveQuoteError) {
+          saveQuoteError.textContent = 'Choose a wedding collection before continuing.';
+          saveQuoteError.classList.remove('hidden');
+        }
+        document.querySelector('#start-building')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      const state = buildQuoteState();
+      const fingerprint = quoteFingerprint(state);
+      const savedCurrent = Boolean(activeSavedQuoteId && savedStateFingerprint && fingerprint === savedStateFingerprint);
+      const originalText = continueWithQuoteButton?.textContent || 'Continue to wedding inquiry';
+      if (continueWithQuoteButton) {
+        continueWithQuoteButton.disabled = true;
+        continueWithQuoteButton.textContent = savedCurrent ? 'Opening inquiry…' : 'Saving quote…';
+      }
+
+      let quoteId = savedCurrent ? activeSavedQuoteId : '';
+      if (!quoteId) quoteId = await saveCurrentQuote();
+      window.location.href = inquiryUrl(quoteId);
+
+      if (continueWithQuoteButton) {
+        window.setTimeout(() => {
+          continueWithQuoteButton.disabled = false;
+          continueWithQuoteButton.textContent = originalText;
+        }, 1200);
       }
     }
 
@@ -1588,18 +1615,19 @@ const badgeClass = {
 
       const names = entries.map(([, entry]) => entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name);
       const joined = names.join(' | ');
-      const autoEntries = entries.filter(([, entry]) => entry.auto);
-      const manualEntries = entries.filter(([, entry]) => !entry.auto);
+      const breakdown = quoteBreakdown(entries);
+      const autoEntries = breakdown.autoEntries;
+      const manualEntries = breakdown.manualEntries;
       const autoBreakdown = autoEntries.map(([id, entry]) => {
         const estimate = estimatedLineTotal(id, entry);
         return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
       }).join(' | ');
       const manualBreakdown = manualEntries.map(([, entry]) => entry.quantity + ' × ' + entry.name).join(' | ');
-      const furnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
-      const publishedAddOnTotal = manualEntries.reduce((sum, [id, entry]) => sum + publishedManualLineTotal(id, entry), 0);
-      const basePrice = packageBasePrice();
-      const estimatedTotal = basePrice + furnitureTotal + publishedAddOnTotal;
-      const customNotes = packageCustomQuoteNotes(entries);
+      const furnitureTotal = breakdown.estimatedFurnitureTotal;
+      const publishedAddOnTotal = breakdown.publishedAddOnTotal;
+      const basePrice = breakdown.basePackagePrice;
+      const estimatedTotal = breakdown.estimatedStartingTotal;
+      const customNotes = breakdown.customNotes;
       const plan = selectedPackagePlan();
 
       if (selectedInput) selectedInput.value = joined;
@@ -1621,16 +1649,23 @@ const badgeClass = {
 
       startingTotalPanel?.classList.toggle('hidden', basePrice <= 0);
       if (startingTotal) startingTotal.textContent = currency(estimatedTotal);
-      if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Collection price: ' + currency(basePrice) : '';
-      if (startingTotalFurniture) {
-        startingTotalFurniture.textContent =
-          'Estimated guest-count furniture: ' + currency(furnitureTotal) +
-          (publishedAddOnTotal > 0 ? ' · Published-price add-ons: ' + currency(publishedAddOnTotal) : '');
+      if (startingTotalBase) startingTotalBase.textContent = currency(basePrice);
+      if (startingTotalFurniture) startingTotalFurniture.textContent = currency(furnitureTotal);
+      if (startingTotalKnownAddOns) startingTotalKnownAddOns.textContent = currency(publishedAddOnTotal);
+      if (startingTotalSavings) {
+        startingTotalSavings.textContent = breakdown.savings.percent > 0
+          ? (breakdown.estimatedKnownSavings > 0
+              ? '−' + currency(breakdown.estimatedKnownSavings) + ' · up to ' + breakdown.savings.percent + '%'
+              : 'Up to ' + breakdown.savings.percent + '% on eligible add-ons')
+          : '—';
+      }
+      if (startingTotalCustomCount) {
+        startingTotalCustomCount.textContent = customNotes.length + (customNotes.length === 1 ? ' pending' : ' pending');
       }
       if (startingTotalNote) {
         startingTotalNote.textContent = startingPoint === 'gardenia' && guestCount() > 10
-          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Published fixed/per-item add-ons are included; truly custom-priced items remain separate.'
-          : 'Package base plus estimated automatic guest-count furniture and any selected add-ons with published fixed/per-item prices. Truly custom-priced items remain separate.';
+          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Known-price savings are estimated; custom-priced items and their final savings remain pending.'
+          : 'Known-price total includes the package, estimated guest-count furniture, published-price add-ons and estimated savings on known-price eligible add-ons. Custom-priced items remain pending.';
       }
 
       customQuotePanel?.classList.toggle('hidden', customNotes.length === 0);
@@ -1761,7 +1796,59 @@ const badgeClass = {
       syncSuggestedQuantities();
     });
     cards.forEach((card) => {
-      card.querySelector('[data-item-quantity]')?.addEventListener('input', (event) => {
+      const quantityInput = card.querySelector('[data-item-quantity]');
+      const decrease = card.querySelector('[data-quantity-decrease]');
+      const increase = card.querySelector('[data-quantity-increase]');
+      const id = card.dataset.id;
+      const item = id ? itemById.get(id) : null;
+
+      decrease?.addEventListener('click', () => {
+        if (!id || !item || !quantityInput) return;
+        const current = Math.max(0, Number(quantityInput.value || 0));
+        const next = Math.max(0, current - 1);
+        quantityInput.value = String(next);
+        if (!selected.has(id)) return;
+
+        if (next <= 0) {
+          if (selected.get(id)?.auto) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+          }
+          selected.delete(id);
+          autoSelected.delete(id);
+          setItemButtonState(id, false);
+        } else if (selected.get(id)?.auto) {
+          dismissedAuto.delete(id);
+          autoOverrides.set(id, next);
+          selected.set(id, { name: item.name, quantity: next, auto: true, overridden: next !== suggestedQuantity(item) });
+          autoSelected.add(id);
+        } else {
+          selected.set(id, { name: item.name, quantity: next, auto: false });
+        }
+        syncQuote();
+      });
+
+      increase?.addEventListener('click', () => {
+        if (!id || !item || !quantityInput) return;
+        const current = Math.max(0, Number(quantityInput.value || 0));
+        const alreadySelected = selected.has(id);
+        const next = alreadySelected ? Math.min(500, current + 1) : Math.max(1, current);
+        quantityInput.value = String(next);
+        const autoRequired = autoRequiredItemIds().includes(id) && suggestedQuantity(item) > 0;
+
+        if (autoRequired) {
+          dismissedAuto.delete(id);
+          autoOverrides.set(id, next);
+          selected.set(id, { name: item.name, quantity: next, auto: true, overridden: next !== suggestedQuantity(item) });
+          autoSelected.add(id);
+        } else {
+          selected.set(id, { name: item.name, quantity: next, auto: false });
+        }
+        setItemButtonState(id, true);
+        syncQuote();
+      });
+
+      quantityInput?.addEventListener('input', (event) => {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
         if (!id || !item) return;
@@ -1807,6 +1894,7 @@ const badgeClass = {
       syncQuote();
     });
 
+    continueWithQuoteButton?.addEventListener('click', continueToInquiry);
     saveQuoteButton?.addEventListener('click', saveCurrentQuote);
 
     copyQuoteLink?.addEventListener('click', async () => {
