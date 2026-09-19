@@ -249,7 +249,24 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
       const manual = (saved.selected || []).filter((entry) => !entry.auto);
       const all = [...auto, ...manual];
       const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
-      const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: 
+      const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+
+      if (selectedItemsInput) selectedItemsInput.value = allText;
+      if (autoBreakdownInput) autoBreakdownInput.value = autoText;
+      if (manualAddOnsInput) manualAddOnsInput.value = manualText;
+      if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
+      if (stateInput) stateInput.value = JSON.stringify(saved);
+
+      carriedPlan?.classList.remove('hidden');
+      if (carriedPlanTitle) carriedPlanTitle.textContent = (savedPackage && savedPackage !== 'ala-carte' ? savedPackage : 'Saved event plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
+      if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + '. Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
+    }
+
+    updateConditionalFields();
+  </script>
+</BaseLayout>
+ + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
       const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
 
       if (selectedItemsInput) selectedItemsInput.value = allText;
