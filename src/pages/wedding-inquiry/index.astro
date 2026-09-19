@@ -17,13 +17,14 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
           <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
           <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
           <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
+          <input type="hidden" name="savedQuoteId" value="" data-saved-quote-id />
           <p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
 <div class="grid gap-6">
 <div class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5" data-carried-plan>
   <p class="eyebrow text-[var(--koa-clay)]">Carried from your quote builder</p>
   <p class="mt-2 text-sm font-bold text-[var(--koa-forest)]" data-carried-plan-title></p>
   <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62" data-carried-plan-copy></p>
-  <a href="/catalog/#start-building" class="link-arrow mt-4">Edit package or rentals →</a>
+  <a href="/catalog/#start-building" data-edit-plan class="link-arrow mt-4">Edit package or rentals →</a>
 </div>
 <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">First name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="firstName" required autocomplete="given-name"/></label><label class="grid gap-2 text-sm font-semibold">Last name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="lastName" required autocomplete="family-name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Phone<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="tel" name="phone" required autocomplete="tel"/></label></div>
 <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Wedding date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="weddingDate" required/></label><label class="grid gap-2 text-sm font-semibold">Alternate date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="alternateDate"/></label><label class="grid gap-2 text-sm font-semibold">Estimated guest count<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required/></label><label class="grid gap-2 text-sm font-semibold">Wedding budget<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="budget" required><option value="">Choose one</option><option>Under $10,000</option><option>$10,000–$19,999</option><option>$20,000–$29,999</option><option>$30,000–$49,999</option><option>$50,000+</option></select></label></div>
@@ -45,6 +46,9 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
   const manualAddOnsInput = form?.querySelector('[data-manual-add-ons]');
   const estimateInput = form?.querySelector('[data-estimated-furniture-total]');
   const stateInput = form?.querySelector('[data-catalog-selection-state]');
+  const savedQuoteIdInput = form?.querySelector('[data-saved-quote-id]');
+  const editPlanLink = document.querySelector('[data-edit-plan]');
+  const quoteId = (new URLSearchParams(window.location.search).get('quote') || '').trim().toUpperCase();
 
   function normalizedInquiryPackage(id) {
     if (id === 'signature-wedding' || id === 'plumeria') return 'signature';
@@ -60,7 +64,16 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
     const data = new FormData(form);
     const packageValue = String(data.get('packageInterest') || '');
     const packageId = packageValue === 'signature' ? 'signature-wedding' : packageValue;
-    const quoteId = new URLSearchParams(window.location.search).get('quote') || '';
+    try {
+      sessionStorage.setItem('koaWeddingContact', JSON.stringify({
+        name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
+        email: String(data.get('email') || ''),
+        phone: String(data.get('phone') || ''),
+        weddingDate: String(data.get('weddingDate') || ''),
+        guestCount: String(data.get('guestCount') || ''),
+        packageInterest: String(data.get('packageInterest') || ''),
+      }));
+    } catch {}
     try {
       await fetch('/api/crm/inquiries', {
         method: 'POST',
@@ -96,13 +109,19 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
     form.submit();
   });
 
-  if (saved) {
-    const packageValue = normalizedInquiryPackage(requestedPackage) || normalizedInquiryPackage(saved.startingPoint);
-    if (packageField && packageValue) packageField.value = packageValue;
-    if (guestField && !requestedGuests && saved.guestCount) guestField.value = String(saved.guestCount);
+  function money(value) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Number(value || 0));
+  }
 
-    const auto = (saved.selected || []).filter((entry) => entry.auto);
-    const manual = (saved.selected || []).filter((entry) => !entry.auto);
+  function applySavedPlan(state) {
+    if (!state) return;
+    saved = state;
+    const packageValue = normalizedInquiryPackage(requestedPackage) || normalizedInquiryPackage(state.startingPoint);
+    if (packageField && packageValue) packageField.value = packageValue;
+    if (guestField && !requestedGuests && state.guestCount) guestField.value = String(state.guestCount);
+
+    const auto = (state.selected || []).filter((entry) => entry.auto);
+    const manual = (state.selected || []).filter((entry) => !entry.auto);
     const all = [...auto, ...manual];
     const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
     const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: USD ' + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
@@ -111,12 +130,42 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
     if (selectedItemsInput) selectedItemsInput.value = allText;
     if (autoBreakdownInput) autoBreakdownInput.value = autoText;
     if (manualAddOnsInput) manualAddOnsInput.value = manualText;
-    if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
-    if (stateInput) stateInput.value = JSON.stringify(saved);
+    if (estimateInput) estimateInput.value = state.estimatedFurnitureTotal || '';
+    if (stateInput) stateInput.value = JSON.stringify(state);
+    if (savedQuoteIdInput) savedQuoteIdInput.value = quoteId;
+    if (editPlanLink && quoteId) editPlanLink.href = '/catalog/?quote=' + encodeURIComponent(quoteId);
 
     carriedPlan?.classList.remove('hidden');
-    if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
-    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoText || 'none') + ' Manual add-ons: ' + (manualText || 'none') + '. These selections will be submitted with this inquiry.';
+    if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || state.guestCount) + ' guests';
+    if (carriedPlanCopy) {
+      const knownTotal = Number(state.estimatedStartingTotal || 0);
+      const customCount = Number(state.customQuoteCount || 0);
+      const addOnCount = manual.length;
+      carriedPlanCopy.textContent =
+        (quoteId ? 'Saved quote ' + quoteId + '. ' : '') +
+        (knownTotal ? 'Known-price estimate ' + money(knownTotal) + '. ' : '') +
+        addOnCount + (addOnCount === 1 ? ' selected add-on. ' : ' selected add-ons. ') +
+        (customCount ? customCount + (customCount === 1 ? ' item still needs custom pricing.' : ' items still need custom pricing.') : 'No selected items are waiting on custom pricing.');
+    }
   }
+
+  async function restoreSavedPlan() {
+    if (quoteId) {
+      try {
+        const response = await fetch('/api/quotes/' + encodeURIComponent(quoteId), { cache: 'no-store', headers: { Accept: 'application/json' } });
+        if (response.ok) {
+          const payload = await response.json();
+          if (payload?.state) {
+            try { localStorage.setItem('koaQuoteStateV1', JSON.stringify(payload.state)); } catch {}
+            applySavedPlan(payload.state);
+            return;
+          }
+        }
+      } catch {}
+    }
+    if (saved) applySavedPlan(saved);
+  }
+
+  restoreSavedPlan();
 </script>
 </BaseLayout>
