@@ -63,11 +63,13 @@ export const businessRules = {
   venueWeddingPackages: [
     {
       name: 'Gardenia',
+      publicName: 'Gardenia Wedding Collection',
+      includedFurnitureCoverage: '10 guests',
       position: 'Intimate Weekday',
       price: 1500,
       status: 'published-current' as RuleStatus,
       access: '3 hours, Sunday–Thursday',
-      baseConfiguration: 'Designed around an intimate 10-guest base configuration; larger weekday celebrations require a custom quote.',
+      baseConfiguration: 'Three-hour Sunday–Thursday intimate wedding collection with furniture included for 10 guests; larger weekday celebrations require a custom quote.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
       planningInventory: {
         includedChairCount: 10,
@@ -87,11 +89,13 @@ export const businessRules = {
     },
     {
       name: 'Orchid',
+      publicName: 'Orchid Wedding Collection',
+      includedFurnitureCoverage: '10 guests',
       position: 'One-Day Venue',
       price: 3000,
       status: 'published-current' as RuleStatus,
       access: '12:00 PM–10:00 PM',
-      baseConfiguration: 'One-day venue package; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
+      baseConfiguration: 'One-day venue collection with furniture included for 10 guests; added rentals can expand the configuration up to the venue maximum.',
       includedInventory: '2 tables of your choice and chairs for 10 guests',
       planningInventory: {
         includedChairCount: 10,
@@ -109,11 +113,13 @@ export const businessRules = {
     },
     {
       name: 'Hibiscus',
+      publicName: 'Hibiscus Wedding Collection',
+      includedFurnitureCoverage: '10 guests',
       position: 'Weekend Experience',
       price: 8000,
       status: 'published-current' as RuleStatus,
       access: 'Weekend cottage access: Friday 3:00 PM–Sunday 11:00 AM',
-      baseConfiguration: 'Weekend experience; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
+      baseConfiguration: 'Weekend wedding collection with furniture included for 10 guests; added rentals can expand the configuration up to the venue maximum.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
       planningInventory: {
         includedChairCount: 10,
@@ -133,11 +139,13 @@ export const businessRules = {
     },
     {
       name: 'Plumeria',
+      publicName: 'Koa’s Signature Wedding Experience',
+      includedFurnitureCoverage: '50 ceremony + 50 reception guests',
       position: 'Full-Service Celebration',
       price: 20000,
       status: 'published-current' as RuleStatus,
       access: 'Weekend cottage access: Friday 3:00 PM–Sunday 11:00 AM',
-      baseConfiguration: 'Premium full-service package with included seating/rental inventory for 50; added inventory can be quoted for larger events up to the venue maximum.',
+      baseConfiguration: 'Premium full-service weekend collection with ceremony and reception seating for 50 guests plus the listed table inventory; added rentals can expand the configuration up to the venue maximum.',
       includedInventory: '50 ceremony chairs, 50 reception chairs, 10 round tables, 2 six-foot rectangle tables, and 10 cocktail tables',
       planningInventory: {
         includedCeremonyChairs: 50,
