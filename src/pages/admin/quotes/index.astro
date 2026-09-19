@@ -424,7 +424,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         contract_signed:'Client signed contract', contract_countersigned:'Koa’s countersigned contract',
         quickbooks_estimate_synced:'QBO estimate synced', quickbooks_estimate_sent:'QBO estimate emailed',
         quickbooks_invoice_created:'QBO invoice created', quickbooks_invoice_sent:'QBO invoice emailed',
-        quickbooks_status_synced:'QBO status synced', booked:'Event booked', call:'Call', email:'Email',
+        quickbooks_status_synced:'QBO status synced', client_planning_updated:'Client planning updated',
+        client_document_uploaded:'Client planning document uploaded', client_document_removed:'Client planning document removed',
+        event_ops_updated:'Event Ops updated', booked:'Event booked', call:'Call', email:'Email',
         meeting:'Meeting', note:'Note'
       };
       return labels[type]||String(type||'Activity').replaceAll('_',' ');
