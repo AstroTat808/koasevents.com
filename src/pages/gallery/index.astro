@@ -54,7 +54,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
                 <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-[2.1rem] leading-none sm:text-4xl">{group.images.length} photos</h3></div>
                 <span class="pb-1 text-[.62rem] font-bold uppercase tracking-[.14em] text-white/38 sm:hidden">Swipe →</span>
               </div>
-              <div class="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
+              <div class="-mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:auto-rows-[14rem] sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-12 lg:auto-rows-[11rem]">
                 {group.images.map((image, categoryIndex) => {
                   const globalIndex = koaMarketingGallery.indexOf(image);
                   const editorialClass =
@@ -87,7 +87,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
           <div><p class="eyebrow text-[var(--koa-clay)]">Recently added</p><h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">More ways Koa’s has been transformed.</h2></div>
           <p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/58 lg:justify-self-end">New gallery photographs added by the Koa’s team appear here automatically.</p>
         </div>
-        <div data-managed-gallery-grid class="mt-10 -mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-12 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3"></div>
+        <div data-managed-gallery-grid class="mt-10 -mx-2 flex snap-x snap-mandatory gap-4 overflow-x-auto px-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:mt-12 sm:grid sm:grid-cols-2 sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3"></div>
       </div>
     </section>
 
