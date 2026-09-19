@@ -328,8 +328,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!res.ok)return;
       payload=await res.json();
       if(selected){const refreshed=(payload.events||[]).find((e)=>e.record.id===selected.record.id);if(refreshed)selected=refreshed;else selected=null;}
+      if(!selected){
+        const requested=new URLSearchParams(window.location.search).get('record')||'';
+        if(requested)selected=(payload.events||[]).find((e)=>e.record.id===requested)||null;
+      }
       renderEventList();
-      if(!selected&&payload.events?.length)selectEvent(payload.events[0]);
+      if(selected)selectEvent(selected);
+      else if(payload.events?.length)selectEvent(payload.events[0]);
     }
 
     document.querySelectorAll('[data-tab]').forEach((button)=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
