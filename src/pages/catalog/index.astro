@@ -1098,15 +1098,25 @@ const badgeClass = {
       return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value || 0);
     }
 
-    function autoRentalReason(id, quantity) {
+    function autoRentalReason(id, quantity, overridden = autoOverrides.has(id)) {
       const item = itemById.get(id);
       const included = includedQuantityForItem(item);
       const recommended = recommendedTotalForItem(item);
+      const suggested = suggestedQuantity(item);
       const packageName = selectedPackageDisplayName() || 'your selected package';
+
       if (id === 'round-table') {
-        return packageName + ' includes ' + included + ' 60-inch round table' + (included === 1 ? '' : 's') + '. At ' + guestCount() + ' guests, the planning default is ' + recommended + ' total rounds at 8 guests per table, so ' + quantity + ' additional table' + (quantity === 1 ? '' : 's') + ' are preselected.';
+        const base = packageName + ' includes ' + included + ' 60-inch round table' + (included === 1 ? '' : 's') + '. At ' + guestCount() + ' guests, the planning default is ' + recommended + ' total rounds at 8 guests per table.';
+        return overridden
+          ? base + ' The suggested add-on quantity is ' + suggested + ', and you changed it to ' + quantity + '.'
+          : base + ' That creates a suggested add-on quantity of ' + quantity + '.';
       }
-      return packageName + ' includes ' + included + ' ' + (id === 'ceremony-chair' ? 'ceremony' : 'reception') + ' chair' + (included === 1 ? '' : 's') + '. Your guest count is ' + guestCount() + ', so ' + quantity + ' additional chair' + (quantity === 1 ? '' : 's') + ' are preselected.';
+
+      const chairType = id === 'ceremony-chair' ? 'ceremony' : 'reception';
+      const base = packageName + ' includes ' + included + ' ' + chairType + ' chair' + (included === 1 ? '' : 's') + '. Your guest count is ' + guestCount() + '.';
+      return overridden
+        ? base + ' The suggested add-on quantity is ' + suggested + ', and you changed it to ' + quantity + '.'
+        : base + ' That creates a suggested add-on quantity of ' + quantity + '.';
     }
 
     function estimatedLineTotal(id, entry) {
@@ -1115,42 +1125,145 @@ const badgeClass = {
       return entry.auto && unit ? unit * Number(entry.quantity || 0) : 0;
     }
 
-    function persistSelectionState() {
+    function packageCustomQuoteNotes(entries = [...selected.entries()]) {
+      const notes = [];
+      if (startingPoint === 'ala-carte') {
+        notes.push('À la carte events are finalized as a custom quote.');
+      }
+      if (startingPoint === 'gardenia' && guestCount() > 10) {
+        notes.push('Gardenia celebrations above 10 guests require a custom package quote; the furniture estimate is a planning aid, not the full larger-event price.');
+      }
+      if (startingPoint === 'orchid' && guestCount() > 10) {
+        notes.push('Orchid includes 2 tables of your choice. Any additional table quantity depends on the table styles selected and is confirmed in the custom quote.');
+      }
+
+      entries.forEach(([id, entry]) => {
+        if (entry.auto) return;
+        const item = itemById.get(id);
+        if (item?.priceType === 'quote' && !Number(item.estimatedUnitPrice || 0)) {
+          notes.push(entry.name + (entry.quantity && entry.quantity !== 1 ? ' × ' + entry.quantity : '') + ' — custom quote');
+        }
+      });
+
+      return [...new Set(notes)];
+    }
+
+    function buildQuoteState() {
       const selectedState = [...selected.entries()].map(([id, entry]) => ({
         id,
         ...entry,
-        reason: entry.auto ? autoRentalReason(id, entry.quantity) : '',
+        reason: entry.auto ? autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) : '',
         estimatedLineTotal: estimatedLineTotal(id, entry),
       }));
       const estimatedFurnitureTotal = selectedState.reduce((sum, entry) => sum + Number(entry.estimatedLineTotal || 0), 0);
-      const state = {
-        version: 1,
+      const plan = selectedPackagePlan();
+      const basePackagePrice = packageBasePrice();
+      return {
+        version: 2,
         startingPoint,
         guestCount: guestCount(),
         selected: selectedState,
         estimatedFurnitureTotal,
+        basePackagePrice,
+        estimatedStartingTotal: basePackagePrice + estimatedFurnitureTotal,
+        packageIncludes: plan ? [...(plan.includes || [])] : [],
+        packageIncludedInventory: plan?.includedInventory || '',
+        autoDismissed: [...dismissedAuto],
+        autoOverrides: Object.fromEntries(autoOverrides),
         updatedAt: new Date().toISOString(),
       };
+    }
+
+    function quoteFingerprint(state) {
+      if (!state) return '';
+      const copy = {
+        version: state.version,
+        startingPoint: state.startingPoint,
+        guestCount: state.guestCount,
+        selected: state.selected,
+        estimatedFurnitureTotal: state.estimatedFurnitureTotal,
+        basePackagePrice: state.basePackagePrice,
+        estimatedStartingTotal: state.estimatedStartingTotal,
+        packageIncludes: state.packageIncludes,
+        packageIncludedInventory: state.packageIncludedInventory,
+        autoDismissed: state.autoDismissed,
+        autoOverrides: state.autoOverrides,
+      };
+      return JSON.stringify(copy);
+    }
+
+    function showSavedQuote(id, recoveryUrl) {
+      if (!id || !recoveryUrl) return;
+      savedQuotePanel?.classList.remove('hidden');
+      if (savedQuoteId) savedQuoteId.textContent = id;
+      if (savedQuoteLink) savedQuoteLink.value = recoveryUrl;
+    }
+
+    function persistSelectionState() {
+      const state = buildQuoteState();
+      const fingerprint = quoteFingerprint(state);
+      const savedCurrent = Boolean(activeSavedQuoteId && savedStateFingerprint && fingerprint === savedStateFingerprint);
+
       try {
         localStorage.setItem('koaQuoteStateV1', JSON.stringify(state));
       } catch {}
+
       if (catalogSelectionStateInput) catalogSelectionStateInput.value = JSON.stringify(state);
+      if (savedQuoteIdInput) savedQuoteIdInput.value = savedCurrent ? activeSavedQuoteId : '';
+      if (savedQuoteUrlInput) savedQuoteUrlInput.value = savedCurrent ? window.location.origin + '/catalog/?quote=' + activeSavedQuoteId : '';
+
+      if (saveQuoteButton) {
+        saveQuoteButton.textContent = savedCurrent
+          ? 'Saved ✓ · save another version'
+          : activeSavedQuoteId
+            ? 'Save current changes + get new link'
+            : 'Save + get recovery link';
+      }
+
       if (continueInquiry) {
         const params = new URLSearchParams();
         if (startingPoint && startingPoint !== 'ala-carte') {
           params.set('package', startingPoint === 'signature-wedding' ? 'signature' : startingPoint);
         }
         params.set('guests', String(guestCount()));
+        if (savedCurrent) params.set('quote', activeSavedQuoteId);
         continueInquiry.href = '/wedding-inquiry/?' + params.toString();
       }
     }
 
-    function restoreSelectionState() {
+    async function restoreSelectionState() {
       const params = new URLSearchParams(window.location.search);
+      const requestedQuoteId = (params.get('quote') || '').trim().toUpperCase();
       let saved = null;
+      let remoteQuote = null;
+
       try {
         saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null');
       } catch {}
+
+      if (requestedQuoteId) {
+        try {
+          const response = await fetch('/api/quotes/' + encodeURIComponent(requestedQuoteId), {
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          });
+          if (response.ok) {
+            remoteQuote = await response.json();
+            saved = remoteQuote.state || null;
+          } else {
+            const payload = await response.json().catch(() => ({}));
+            if (saveQuoteError) {
+              saveQuoteError.textContent = payload.error || 'That saved quote could not be restored.';
+              saveQuoteError.classList.remove('hidden');
+            }
+          }
+        } catch {
+          if (saveQuoteError) {
+            saveQuoteError.textContent = 'That saved quote could not be restored right now.';
+            saveQuoteError.classList.remove('hidden');
+          }
+        }
+      }
 
       const requestedPackage = params.get('package');
       const requestedGuests = Number(params.get('guests') || 0);
@@ -1158,24 +1271,101 @@ const badgeClass = {
         ? 'signature-wedding'
         : requestedPackage;
 
-      if (requestedGuests > 0 && guestInput) guestInput.value = String(Math.min(100, Math.max(1, requestedGuests)));
-      else if (saved?.guestCount && guestInput) guestInput.value = String(Math.min(100, Math.max(1, Number(saved.guestCount))));
+      dismissedAuto.clear();
+      autoOverrides.clear();
+      (saved?.autoDismissed || []).forEach((id) => dismissedAuto.add(id));
+      Object.entries(saved?.autoOverrides || {}).forEach(([id, quantity]) => autoOverrides.set(id, Math.max(0, Number(quantity || 0))));
+      (saved?.selected || []).forEach((entry) => {
+        if (entry.auto && entry.overridden && !autoOverrides.has(entry.id)) {
+          autoOverrides.set(entry.id, Math.max(0, Number(entry.quantity || 0)));
+        }
+      });
 
-      const start = normalizedPackage || saved?.startingPoint || '';
+      const useSavedAsPrimary = Boolean(remoteQuote);
+      const guests = useSavedAsPrimary
+        ? Number(saved?.guestCount || 0)
+        : (requestedGuests > 0 ? requestedGuests : Number(saved?.guestCount || 0));
+      if (guests > 0 && guestInput) guestInput.value = String(Math.min(100, Math.max(1, guests)));
+
+      const start = useSavedAsPrimary
+        ? (saved?.startingPoint || '')
+        : (normalizedPackage || saved?.startingPoint || '');
+
       if (start && [...startingButtons].some((button) => button.dataset.startingPoint === start)) {
-        chooseStartingPoint(start);
+        chooseStartingPoint(start, true);
       }
 
       if (saved?.selected?.length) {
         saved.selected.forEach((entry) => {
           const item = itemById.get(entry.id);
           if (!item || entry.auto) return;
-          selected.set(entry.id, { name: item.name, quantity: Math.max(1, Number(entry.quantity || 1)), auto: false });
+          selected.set(entry.id, {
+            name: item.name,
+            quantity: Math.max(1, Number(entry.quantity || 1)),
+            auto: false,
+          });
           const card = cardFor(entry.id);
           const quantityInput = card?.querySelector('[data-item-quantity]');
           if (quantityInput) quantityInput.value = String(Math.max(1, Number(entry.quantity || 1)));
           setItemButtonState(entry.id, true);
         });
+      }
+
+      syncSuggestedQuantities();
+
+      if (remoteQuote?.id) {
+        activeSavedQuoteId = String(remoteQuote.id);
+        savedStateFingerprint = quoteFingerprint(buildQuoteState());
+        const absoluteUrl = window.location.origin + '/catalog/?quote=' + activeSavedQuoteId;
+        showSavedQuote(activeSavedQuoteId, absoluteUrl);
+        if (saveQuoteError) saveQuoteError.classList.add('hidden');
+        persistSelectionState();
+      }
+    }
+
+    async function saveCurrentQuote() {
+      if (!startingPoint) {
+        if (saveQuoteError) {
+          saveQuoteError.textContent = 'Choose a wedding package or À la carte before saving.';
+          saveQuoteError.classList.remove('hidden');
+        }
+        document.querySelector('#start-building')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      if (saveQuoteError) saveQuoteError.classList.add('hidden');
+      const originalText = saveQuoteButton?.textContent || 'Save + get recovery link';
+      if (saveQuoteButton) {
+        saveQuoteButton.disabled = true;
+        saveQuoteButton.textContent = 'Saving…';
+      }
+
+      try {
+        const state = buildQuoteState();
+        const response = await fetch('/api/quotes', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Koa-Quote-Save': '1',
+          },
+          body: JSON.stringify({ state }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.id) throw new Error(payload.error || 'Unable to save quote.');
+
+        activeSavedQuoteId = String(payload.id);
+        savedStateFingerprint = quoteFingerprint(state);
+        const absoluteUrl = new URL(payload.recoveryUrl, window.location.origin).toString();
+        showSavedQuote(activeSavedQuoteId, absoluteUrl);
+        persistSelectionState();
+      } catch (error) {
+        if (saveQuoteError) {
+          saveQuoteError.textContent = error?.message || 'Unable to save the quote right now.';
+          saveQuoteError.classList.remove('hidden');
+        }
+        if (saveQuoteButton) saveQuoteButton.textContent = originalText;
+      } finally {
+        if (saveQuoteButton) saveQuoteButton.disabled = false;
       }
     }
 
