@@ -2,29 +2,132 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+import { wixBlogPosts } from '../../data/wixBlogPosts';
+
+const posts = wixBlogPosts
+  .filter((post) => post.status === 'published')
+  .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+
+const featuredPosts = posts.filter((post) => post.featured).slice(0, 3);
+const categories = [...new Set(posts.map((post) => post.category))].sort();
 ---
 <BaseLayout
   title="Koa’s Events Blog | Hawaiʻi Island Weddings & Gatherings"
-  description="Planning ideas, venue guidance and event inspiration from Koa’s Events on Hawaiʻi Island."
+  description="Wedding planning guidance, Hawaiʻi Island venue ideas, mobile bar advice, budget tips, and event inspiration from Koa’s Events."
   canonical="https://www.koasevents.com/blog/"
 >
   <Header overlay={false} />
   <main>
     <section class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-28">
-      <div class="container-shell max-w-4xl">
+      <div class="container-shell max-w-5xl">
         <p class="eyebrow text-[var(--koa-clay)]">Journal</p>
         <h1 class="display mt-5 text-6xl leading-[.93] sm:text-7xl">Planning notes from Koa’s.</h1>
-        <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/66">Venue ideas, rental guidance, wedding planning details and real-world ways to make a celebration feel like your own.</p>
+        <p class="mt-7 max-w-3xl text-base leading-7 text-[var(--koa-ink)]/66">Practical guidance for weddings, private celebrations, mobile bar service, budgets, guest experience, and planning events on Hawaiʻi Island.</p>
+
+        <div class="mt-9 grid gap-4 md:grid-cols-[1fr_auto]">
+          <label class="relative block">
+            <span class="sr-only">Search the Koa’s Events blog</span>
+            <input
+              data-blog-search
+              type="search"
+              placeholder="Search articles, topics, or planning questions"
+              class="w-full rounded-full border border-[var(--koa-line)] bg-white px-5 py-4 pr-12 text-sm outline-none transition focus:border-[var(--koa-forest)]"
+            />
+          </label>
+          <a href="/inquire/" class="inline-flex items-center justify-center rounded-full bg-[var(--koa-forest)] px-7 py-4 text-xs font-black uppercase tracking-[.12em] text-white">Plan with Koa’s</a>
+        </div>
+
+        <div class="mt-5 flex flex-wrap gap-2" aria-label="Blog categories">
+          <button data-category="all" class="blog-filter is-active rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-xs font-black uppercase tracking-[.1em]">All</button>
+          {categories.map((category) => (
+            <button data-category={category} class="blog-filter rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-xs font-black uppercase tracking-[.1em]">{category}</button>
+          ))}
+        </div>
       </div>
     </section>
 
-    <section class="py-20 lg:py-28">
+    {featuredPosts.length > 0 && (
+      <section class="py-16 lg:py-20">
+        <div class="container-shell">
+          <div class="mb-8 flex items-end justify-between gap-5">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Featured</p>
+              <h2 class="display mt-3 text-4xl sm:text-5xl">Start here</h2>
+            </div>
+          </div>
+
+          <div class="grid gap-5 lg:grid-cols-3">
+            {featuredPosts.map((post, index) => (
+              <a
+                href={`/blog/${post.slug}/`}
+                data-blog-card
+                data-category={post.category}
+                data-search={`${post.title} ${post.excerpt} ${post.category} ${post.tags.join(' ')}`.toLowerCase()}
+                class:list={[
+                  "group overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white shadow-[var(--shadow-soft)]",
+                  index === 0 && "lg:col-span-2",
+                ]}
+              >
+                <img
+                  src={post.featuredImage}
+                  alt={post.title}
+                  loading={index === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                  class:list={[
+                    "w-full object-cover transition duration-500 group-hover:scale-[1.015]",
+                    index === 0 ? "aspect-[16/9]" : "aspect-[4/3]",
+                  ]}
+                />
+                <div class="p-7">
+                  <div class="flex flex-wrap items-center gap-3 text-xs text-[var(--koa-ink)]/48">
+                    <span class="eyebrow text-[var(--koa-clay)]">{post.category}</span>
+                    <span>{new Date(post.publishedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })}</span>
+                  </div>
+                  <h3 class:list={["display mt-4 leading-[1.02]", index === 0 ? "text-4xl sm:text-5xl" : "text-3xl"]}>{post.title}</h3>
+                  <p class="mt-4 line-clamp-3 text-sm leading-6 text-[var(--koa-ink)]/62">{post.excerpt}</p>
+                  <span class="mt-6 inline-block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Read article →</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    )}
+
+    <section class="border-t border-[var(--koa-line)] py-16 lg:py-24">
       <div class="container-shell">
-        <div data-blog-loading class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-8 text-sm text-[var(--koa-ink)]/58">Loading journal entries…</div>
-        <div data-blog-grid class="hidden grid gap-5 lg:grid-cols-2"></div>
+        <div class="mb-8">
+          <p class="eyebrow text-[var(--koa-clay)]">All articles</p>
+          <h2 class="display mt-3 text-4xl sm:text-5xl">Browse the journal</h2>
+          <p data-result-count class="mt-3 text-sm text-[var(--koa-ink)]/55">{posts.length} articles</p>
+        </div>
+
+        <div data-blog-grid class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {posts.map((post) => (
+            <a
+              href={`/blog/${post.slug}/`}
+              data-blog-card
+              data-category={post.category}
+              data-search={`${post.title} ${post.excerpt} ${post.category} ${post.tags.join(' ')}`.toLowerCase()}
+              class="group overflow-hidden rounded-[1.45rem] border border-[var(--koa-line)] bg-white"
+            >
+              <img src={post.featuredImage} alt={post.title} loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.015]" />
+              <div class="p-6">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="eyebrow text-[var(--koa-clay)]">{post.category}</span>
+                  <span class="text-xs text-[var(--koa-ink)]/45">{new Date(post.publishedAt).toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric' })}</span>
+                </div>
+                <h3 class="display mt-4 text-3xl leading-[1.03]">{post.title}</h3>
+                <p class="mt-4 line-clamp-3 text-sm leading-6 text-[var(--koa-ink)]/62">{post.excerpt}</p>
+                <span class="mt-6 inline-block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Read article →</span>
+              </div>
+            </a>
+          ))}
+        </div>
+
         <div data-blog-empty class="hidden rounded-[1.4rem] bg-[var(--koa-sand)] p-10 text-center">
-          <h2 class="display text-4xl">The journal is getting ready.</h2>
-          <p class="mt-4 text-sm text-[var(--koa-ink)]/58">New planning notes and event inspiration will appear here.</p>
+          <h2 class="display text-4xl">No articles match that search.</h2>
+          <p class="mt-4 text-sm text-[var(--koa-ink)]/58">Try another keyword or choose a different category.</p>
         </div>
       </div>
     </section>
@@ -32,60 +135,53 @@ import Footer from '../../components/Footer.astro';
   <Footer />
 
   <script>
-    const loading = document.querySelector('[data-blog-loading]');
-    const grid = document.querySelector('[data-blog-grid]');
+    const search = document.querySelector('[data-blog-search]');
+    const cards = Array.from(document.querySelectorAll('[data-blog-card]'));
+    const filters = Array.from(document.querySelectorAll('[data-category]')).filter((el) => el.matches('button'));
     const empty = document.querySelector('[data-blog-empty]');
+    const resultCount = document.querySelector('[data-result-count]');
+    let activeCategory = 'all';
 
-    function textEl(tag, value, className = '') {
-      const el = document.createElement(tag);
-      el.textContent = value;
-      el.className = className;
-      return el;
+    function applyFilters() {
+      const query = String(search?.value || '').trim().toLowerCase();
+      let visible = 0;
+
+      cards.forEach((card) => {
+        const category = card.getAttribute('data-category') || '';
+        const searchable = card.getAttribute('data-search') || '';
+        const matchesCategory = activeCategory === 'all' || category === activeCategory;
+        const matchesQuery = !query || searchable.includes(query);
+        const show = matchesCategory && matchesQuery;
+        card.classList.toggle('hidden', !show);
+        if (show) visible += 1;
+      });
+
+      empty?.classList.toggle('hidden', visible !== 0);
+      if (resultCount) resultCount.textContent = visible + (visible === 1 ? ' article' : ' articles');
     }
 
-    fetch('/api/blog')
-      .then((response) => response.json())
-      .then(({ posts = [] }) => {
-        loading?.classList.add('hidden');
-        if (!posts.length) {
-          empty?.classList.remove('hidden');
-          return;
-        }
-        grid?.classList.remove('hidden');
-        posts.forEach((post) => {
-          const article = document.createElement('article');
-          article.className = 'overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white shadow-[var(--shadow-soft)]';
-          if (post.featuredImage) {
-            const image = document.createElement('img');
-            image.src = post.featuredImage;
-            image.alt = post.title;
-            image.loading = 'lazy';
-            image.className = 'aspect-[16/9] w-full object-cover';
-            article.append(image);
-          }
-          const content = document.createElement('div');
-          content.className = 'p-7';
-          content.append(
-            textEl('p', new Date(post.publishedAt).toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), 'eyebrow text-[var(--koa-clay)]'),
-            textEl('h2', post.title, 'display mt-4 text-4xl leading-[1.02]'),
-            textEl('p', post.excerpt || '', 'mt-4 text-sm leading-6 text-[var(--koa-ink)]/62')
-          );
-          const details = document.createElement('details');
-          details.className = 'mt-6 border-t border-[var(--koa-line)] pt-5';
-          const summary = document.createElement('summary');
-          summary.className = 'cursor-pointer text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]';
-          summary.textContent = 'Read article';
-          const body = document.createElement('div');
-          body.className = 'mt-5 grid gap-4 text-sm leading-7 text-[var(--koa-ink)]/68';
-          String(post.body || '').split(/\n\s*\n/).filter(Boolean).forEach((paragraph) => body.append(textEl('p', paragraph)));
-          details.append(summary, body);
-          content.append(details);
-          article.append(content);
-          grid?.append(article);
-        });
-      })
-      .catch(() => {
-        if (loading) loading.textContent = 'Journal entries are temporarily unavailable.';
+    search?.addEventListener('input', applyFilters);
+
+    filters.forEach((filter) => {
+      filter.addEventListener('click', () => {
+        activeCategory = filter.getAttribute('data-category') || 'all';
+        filters.forEach((item) => item.classList.toggle('is-active', item === filter));
+        applyFilters();
       });
+    });
+
+    const initialQuery = new URLSearchParams(window.location.search).get('q');
+    if (initialQuery && search instanceof HTMLInputElement) {
+      search.value = initialQuery;
+      applyFilters();
+    }
   </script>
 </BaseLayout>
+
+<style>
+  .blog-filter.is-active {
+    background: var(--koa-forest);
+    border-color: var(--koa-forest);
+    color: white;
+  }
+</style>
