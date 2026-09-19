@@ -224,12 +224,19 @@ const badgeClass = {
     <section class="py-16 lg:py-24 xl:py-8">
       <div class="container-shell grid gap-10 xl:h-[calc(100dvh-7rem)] xl:grid-cols-[1fr_22rem] xl:items-stretch xl:overflow-hidden">
         <div class="koa-scrollbar xl:min-h-0 xl:overflow-y-auto xl:pr-3">
-          <div class="mb-7 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p class="eyebrow text-[var(--koa-clay)]">Rentals + enhancements</p>
-              <h2 class="display mt-3 text-4xl sm:text-5xl">Start with the things most events need.</h2>
+          <div class="mb-7 flex flex-col gap-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Rentals + enhancements</p>
+                <h2 class="display mt-3 text-4xl sm:text-5xl">Start with the things most events need.</h2>
+              </div>
+              <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{browseCatalogItems.length} items</p>
             </div>
-            <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{browseCatalogItems.length} items</p>
+            <div class="flex flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.1em]" aria-label="Quote item status legend">
+              <span class="inline-flex items-center gap-2 rounded-full border border-[var(--koa-forest)]/20 bg-[var(--koa-sand)] px-3 py-2 text-[var(--koa-forest)]"><span class="h-2 w-2 rounded-full bg-[var(--koa-forest)]"></span>Included with package</span>
+              <span class="inline-flex items-center gap-2 rounded-full border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/18 px-3 py-2 text-[var(--koa-clay)]"><span class="h-2 w-2 rounded-full bg-[var(--koa-amber)]"></span>Suggested for guest count</span>
+              <span class="inline-flex items-center gap-2 rounded-full border border-[var(--koa-clay)]/30 bg-white px-3 py-2 text-[var(--koa-clay)]"><span class="h-2 w-2 rounded-full bg-[var(--koa-clay)]"></span>You added</span>
+            </div>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2" data-catalog-grid>
@@ -248,6 +255,7 @@ const badgeClass = {
                   <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{browseCatalogCategories.find((category) => category.id === item.category)?.label}</span>
                   <span class="text-right text-[.66rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">{item.priceLabel}</span>
                 </div>
+                <span data-item-state class="mt-4 hidden w-fit rounded-full px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em]"></span>
                 {item.badges?.length && (
                   <div class="mt-5 flex flex-wrap gap-2">
                     {item.badges.map((badge) => (
@@ -787,13 +795,38 @@ const badgeClass = {
     function setItemButtonState(id, isSelected) {
       const card = cardFor(id);
       const button = card?.querySelector('[data-add-to-quote]');
-      if (!button) return;
+      if (!card || !button) return;
       const item = itemById.get(id);
       const included = item ? isIncludedBySelectedPackage(item) : false;
+      const entry = selected.get(id);
+      const stateBadge = card.querySelector('[data-item-state]');
+      const state = entry?.auto ? 'suggested' : isSelected ? 'customer' : included ? 'included' : 'default';
+
       button.textContent = isSelected ? 'Added ✓' : included ? 'Add extra +' : 'Add to quote +';
       button.setAttribute('aria-pressed', String(isSelected));
       button.classList.toggle('text-[var(--koa-clay)]', isSelected);
-      card?.classList.toggle('quote-item-selected', isSelected);
+
+      card.classList.remove('quote-item-selected','quote-item-included','quote-item-suggested','quote-item-customer');
+      if (state === 'included') card.classList.add('quote-item-included');
+      if (state === 'suggested') card.classList.add('quote-item-suggested');
+      if (state === 'customer') card.classList.add('quote-item-customer');
+
+      if (stateBadge) {
+        stateBadge.className = 'mt-4 w-fit rounded-full px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em]';
+        if (state === 'included') {
+          stateBadge.textContent = 'Included with package';
+          stateBadge.classList.add('bg-[var(--koa-forest)]','text-white');
+        } else if (state === 'suggested') {
+          stateBadge.textContent = entry?.overridden ? 'Suggested · adjusted by you' : 'Suggested for guest count';
+          stateBadge.classList.add('bg-[var(--koa-amber-light)]','text-[var(--koa-ink)]');
+        } else if (state === 'customer') {
+          stateBadge.textContent = included ? 'You added extra inventory' : 'You added';
+          stateBadge.classList.add('bg-[var(--koa-clay)]','text-white');
+        } else {
+          stateBadge.textContent = '';
+          stateBadge.classList.add('hidden');
+        }
+      }
     }
 
     function applyFilters() {
@@ -1493,7 +1526,10 @@ const badgeClass = {
         const row = document.createElement('div');
         row.dataset.selectedRow = 'true';
         row.className =
-          'flex items-start justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
+          'flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm ' +
+          (entry.auto
+            ? 'border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10'
+            : 'border-[var(--koa-clay)]/35 bg-[var(--koa-clay)]/10');
 
         const label = document.createElement('span');
         label.className = 'min-w-0 flex-1';
@@ -1504,8 +1540,8 @@ const badgeClass = {
 
         if (entry.auto) {
           const auto = document.createElement('span');
-          auto.className = 'mt-1 block text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
-          auto.textContent = entry.overridden ? 'Guest-count add-on · adjusted by you' : 'Guest-count add-on · suggested';
+          auto.className = 'mt-1 inline-flex rounded-full bg-[var(--koa-amber-light)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]';
+          auto.textContent = entry.overridden ? 'Suggested · adjusted by you' : 'Suggested for guest count';
           label.appendChild(auto);
 
           const reason = document.createElement('span');
@@ -1521,6 +1557,10 @@ const badgeClass = {
             label.appendChild(price);
           }
         } else {
+          const chosen = document.createElement('span');
+          chosen.className = 'mt-1 inline-flex rounded-full bg-[var(--koa-clay)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.1em] text-white';
+          chosen.textContent = isIncludedBySelectedPackage(itemById.get(id)) ? 'You added extra inventory' : 'You added';
+          label.appendChild(chosen);
           const item = itemById.get(id);
           const publishedTotal = publishedManualLineTotal(id, entry);
           if (item?.priceLabel) {
