@@ -941,11 +941,19 @@ const badgeClass = {
     }
 
     function persistSelectionState() {
+      const selectedState = [...selected.entries()].map(([id, entry]) => ({
+        id,
+        ...entry,
+        reason: entry.auto ? autoRentalReason(id, entry.quantity) : '',
+        estimatedLineTotal: estimatedLineTotal(id, entry),
+      }));
+      const estimatedFurnitureTotal = selectedState.reduce((sum, entry) => sum + Number(entry.estimatedLineTotal || 0), 0);
       const state = {
         version: 1,
         startingPoint,
         guestCount: guestCount(),
-        selected: [...selected.entries()].map(([id, entry]) => ({ id, ...entry })),
+        selected: selectedState,
+        estimatedFurnitureTotal,
         updatedAt: new Date().toISOString(),
       };
       try {
