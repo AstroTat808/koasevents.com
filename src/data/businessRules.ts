@@ -69,6 +69,11 @@ export const businessRules = {
       access: '3 hours, Sunday–Thursday',
       baseConfiguration: 'Designed around an intimate 10-guest base configuration; larger weekday celebrations require a custom quote.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
+      planningInventory: {
+        includedChairCount: 10,
+        includedRoundTables: 2,
+        tableDescription: '2 60-inch round tables',
+      },
       includes: [
         '1,500 sq. ft. party pavilion',
         'Simple bridal bouquet',
@@ -88,6 +93,11 @@ export const businessRules = {
       access: '12:00 PM–10:00 PM',
       baseConfiguration: 'One-day venue package; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
       includedInventory: '2 tables of your choice and chairs for 10 guests',
+      planningInventory: {
+        includedChairCount: 10,
+        includedFlexibleTables: 2,
+        tableDescription: '2 tables of your choice',
+      },
       includes: [
         'Simple bridal bouquet',
         'Premium champagne for toasting',
@@ -105,6 +115,11 @@ export const businessRules = {
       access: 'Weekend cottage access: Friday 3:00 PM–Sunday 11:00 AM',
       baseConfiguration: 'Weekend experience; furniture included for 10 guests, with added rentals available for larger events up to the venue maximum.',
       includedInventory: '2 60-inch round tables and chairs for 10 guests',
+      planningInventory: {
+        includedChairCount: 10,
+        includedRoundTables: 2,
+        tableDescription: '2 60-inch round tables',
+      },
       includes: [
         'Bridal and Groom Suite Cottage',
         'Simple bridal bouquet',
@@ -124,6 +139,14 @@ export const businessRules = {
       access: 'Weekend cottage access: Friday 3:00 PM–Sunday 11:00 AM',
       baseConfiguration: 'Premium full-service package with included seating/rental inventory for 50; added inventory can be quoted for larger events up to the venue maximum.',
       includedInventory: '50 ceremony chairs, 50 reception chairs, 10 round tables, 2 six-foot rectangle tables, and 10 cocktail tables',
+      planningInventory: {
+        includedCeremonyChairs: 50,
+        includedReceptionChairs: 50,
+        includedRoundTables: 10,
+        includedRectangleTables: 2,
+        includedCocktailTables: 10,
+        tableDescription: '10 60-inch round tables, 2 six-foot rectangle tables, and 10 cocktail tables',
+      },
       includes: [
         'Bridal and Groom Suite Cottage',
         'Koa’s Mobile Bar service under the dry-bar model',

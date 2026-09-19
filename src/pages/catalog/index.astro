@@ -3,8 +3,34 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { catalogCategories, catalogItems, catalogPricingNote, catalogBundles, bundleSavingsTiers } from '../../data/catalog';
+import { businessRules } from '../../data/businessRules';
 
-const featured = catalogItems.filter((item) => item.featured);
+const browseCategoryOrder = ['all', 'furniture', 'decor', 'tabletop', 'production', 'bar', 'services'] as const;
+const browseCatalogCategories = browseCategoryOrder
+  .map((id) => catalogCategories.find((category) => category.id === id))
+  .filter((category): category is NonNullable<typeof category> => Boolean(category));
+
+const browsePriority = [
+  'ceremony-chair', 'reception-chair', 'round-table', 'cocktail-table',
+  'table-settings', 'lighting', 'arch-barrels', 'audio', 'dance-floor',
+  'microphones', 'photo-booth', 'vintage-phone', 'glassware', 'linens',
+  'dishes-place-settings', 'centerpieces', 'florals', 'lawn-games',
+  'champagne-toast', 'big-island-bar', 'maui-bar', 'oahu-bar',
+] as const;
+const browsePriorityMap = new Map(browsePriority.map((id, index) => [id, index]));
+
+const browseCatalogItems = catalogItems
+  .filter((item) => item.category !== 'packages')
+  .sort((a, b) => {
+    const aPriority = browsePriorityMap.get(a.id as (typeof browsePriority)[number]) ?? 999;
+    const bPriority = browsePriorityMap.get(b.id as (typeof browsePriority)[number]) ?? 999;
+    if (aPriority !== bPriority) return aPriority - bPriority;
+    const aCategory = browseCategoryOrder.indexOf(a.category as (typeof browseCategoryOrder)[number]);
+    const bCategory = browseCategoryOrder.indexOf(b.category as (typeof browseCategoryOrder)[number]);
+    if (aCategory !== bCategory) return aCategory - bCategory;
+    return a.name.localeCompare(b.name);
+  });
+
 const catalogClientData = catalogItems.map((item) => ({
   id: item.id,
   name: item.name,
@@ -13,9 +39,24 @@ const catalogClientData = catalogItems.map((item) => ({
   priceLabel: item.priceLabel,
   quantityMode: item.quantityMode || null,
   quantityLabel: item.quantityLabel || item.name,
+  specs: item.specs || [],
 }));
 const bundleClientData = catalogBundles;
 const tierClientData = bundleSavingsTiers;
+const packageRuleById = {
+  gardenia: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Gardenia'),
+  orchid: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Orchid'),
+  hibiscus: businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Hibiscus'),
+  'signature-wedding': businessRules.venueWeddingPackages.find((pkg) => pkg.name === 'Plumeria'),
+};
+const packagePlanningData = Object.fromEntries(
+  Object.entries(packageRuleById).map(([id, pkg]) => [id, pkg ? {
+    name: pkg.name === 'Plumeria' ? 'Koa’s Signature Wedding Experience' : pkg.name + ' Wedding Collection',
+    includedInventory: pkg.includedInventory,
+    baseConfiguration: pkg.baseConfiguration,
+    planningInventory: pkg.planningInventory || null,
+  } : null])
+);
 
 const badgeClass = {
   flagship: 'bg-[var(--koa-amber-light)] text-[var(--koa-ink)]',
@@ -38,27 +79,31 @@ const badgeClass = {
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Rental + enhancement catalog</p>
           <h1 class="display mt-5 text-6xl leading-[.93] sm:text-7xl">Build your event without the PDF.</h1>
-          <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">Search Koa’s packages, furniture, tabletop pieces, décor, production, Mobile Bar options and services. Add anything you’re considering to a quote request and we’ll price the final scope around your date, quantities and event plan.</p>
+          <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">Choose your wedding starting point, then browse furniture, tabletop pieces, décor, production, Mobile Bar options and services. Add the extras you’re considering to a quote request and we’ll price the final scope around your date, quantities and event plan.</p>
+          <a href="#start-building" class="mt-7 inline-flex min-h-11 items-center rounded-full bg-[var(--koa-forest)] px-6 py-3 text-xs font-black uppercase tracking-[.12em] text-white">Start building your quote ↓</a>
         </div>
-        <div class="grid gap-3 sm:grid-cols-2">
-          {featured.map((item) => (
-            <a href={item.id === 'signature-wedding' ? '/signature-wedding/' : '/mobile-bar/'} class="rounded-[1.4rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
-              <div class="flex flex-wrap gap-2">
-                {(item.badges || [{ kind: 'featured', label: 'Featured' }]).map((badge) => (
-                  <span class:list={['rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.11em]', badgeClass[badge.kind]]}>{badge.label}</span>
-                ))}
-              </div>
-              <h2 class="display mt-5 text-4xl">{item.name}</h2>
-              <p class="mt-3 text-sm leading-6 text-white/62">{item.description}</p>
-              <p class="mt-6 text-xs font-black uppercase tracking-[.13em]">{item.priceLabel}</p>
-            </a>
-          ))}
+        <div class="rounded-[1.6rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)] sm:p-9">
+          <p class="eyebrow text-[var(--koa-amber-light)]">How this page works</p>
+          <div class="mt-6 grid gap-5">
+            <div class="grid grid-cols-[2.4rem_1fr] gap-4">
+              <span class="display text-3xl text-[var(--koa-amber-light)]">01</span>
+              <div><p class="text-lg font-bold leading-6">Choose your starting point</p><p class="mt-1 text-sm leading-6 text-white/58">Select the wedding package—or choose à la carte—once at the top.</p></div>
+            </div>
+            <div class="grid grid-cols-[2.4rem_1fr] gap-4 border-t border-white/10 pt-5">
+              <span class="display text-3xl text-[var(--koa-amber-light)]">02</span>
+              <div><p class="text-lg font-bold leading-6">Add only what you need</p><p class="mt-1 text-sm leading-6 text-white/58">Browse rentals, décor, production, bar enhancements and services without repurchasing the base package.</p></div>
+            </div>
+            <div class="grid grid-cols-[2.4rem_1fr] gap-4 border-t border-white/10 pt-5">
+              <span class="display text-3xl text-[var(--koa-amber-light)]">03</span>
+              <div><p class="text-lg font-bold leading-6">Request the final quote</p><p class="mt-1 text-sm leading-6 text-white/58">We confirm availability, included items, quantities and any eligible bundle savings.</p></div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
 
-    <section class="koa-grain bg-[var(--koa-sand)] pb-8 pt-16 lg:pb-10 lg:pt-20">
+    <section id="start-building" class="koa-grain scroll-mt-24 bg-[var(--koa-sand)] pb-8 pt-16 lg:pb-10 lg:pt-20">
       <div class="container-shell">
         <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
           <div>
@@ -70,7 +115,7 @@ const badgeClass = {
               Total guest count
               <input data-builder-guests type="number" min="1" max="100" value="50" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-lg" />
             </label>
-            <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/52">We use this to suggest quantities for guest-based rentals. For 60-inch rounds, the comfortable planning default is 8 guests per table; 10 is the maximum and leaves much less room.</p>
+            <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58">We use this to suggest quantities for guest-based rentals. For 60-inch rounds, the comfortable planning default is 8 guests per table; 10 is the maximum and leaves much less room.</p>
           </div>
         </div>
 
@@ -82,6 +127,11 @@ const badgeClass = {
               <span class="display mt-3 flex min-h-[3.25rem] items-start text-3xl">{item.name.replace(' Wedding Collection','').replace('Koa’s Signature Wedding Experience','Signature')}</span>
               <span class="mt-3 block text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{item.priceLabel}</span>
               <span class="mt-4 block text-sm leading-6 text-[var(--koa-ink)]/58">{item.description}</span>
+              {packageRuleById[item.id] && (
+                <span class="mt-5 block border-t border-[var(--koa-line)] pt-4 text-xs leading-5 text-[var(--koa-ink)]/55">
+                  <strong class="text-[var(--koa-forest)]">Included furniture:</strong> {packageRuleById[item.id]?.includedInventory}
+                </span>
+              )}
             </button>
           ))}
           <button type="button" data-starting-point="ala-carte" aria-pressed="false" class="relative flex h-full flex-col items-start justify-start rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 text-left align-top transition hover:-translate-y-1 hover:border-[var(--koa-forest)]">
@@ -97,49 +147,17 @@ const badgeClass = {
           <p class="eyebrow text-[var(--koa-amber-light)]">Your starting point</p>
           <p class="mt-2 text-sm" data-starting-summary-text></p>
         </div>
-      </div>
-    </section>
 
-    <section id="bundle-savings" data-bundle-section class="scroll-mt-24 bg-[var(--koa-forest)] pb-20 pt-10 text-white lg:pb-24 lg:pt-12">
-      <div class="container-shell">
-        <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
-          <div>
-            <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
-            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Curated combinations that work better together.</h2>
-          </div>
-          <p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">Bundle savings apply to eligible paid add-ons. Items already included in the Signature Wedding Experience are treated as included value—not discounted again.</p>
-        </div>
-
-        <div class="mt-12 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-          {catalogBundles.map((bundle) => (
-            <article class="card-lift flex min-h-[21rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-ink)] shadow-[0_18px_50px_rgba(5,24,18,.18)]">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="eyebrow text-[var(--koa-clay)]">{bundle.eyebrow}</span>
-                {bundle.badge && <span class="rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
-              </div>
-              <h3 class="display mt-6 text-4xl">{bundle.name}</h3>
-              <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">{bundle.description}</p>
-              <div class="mt-5 flex flex-wrap gap-2">
-                {bundle.itemIds.map((id) => {
-                  const item = catalogItems.find((entry) => entry.id === id);
-                  return item ? <span class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.62rem] font-bold text-[var(--koa-forest)]">{item.name}</span> : null;
-                })}
-              </div>
-              <div class="mt-auto flex items-end justify-between gap-5 pt-7">
-                <p class="text-xs font-black uppercase tracking-[.13em] text-[var(--koa-clay)]">Up to {bundle.savingsPercent}% bundle savings</p>
-                <button type="button" data-add-bundle={bundle.id} class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.12em] text-white transition hover:-translate-y-0.5">Add bundle +</button>
-              </div>
-            </article>
-          ))}
-        </div>
-
-        <div class="mt-8 grid gap-px overflow-hidden rounded-[1.2rem] bg-white/10 sm:grid-cols-3">
-          {bundleSavingsTiers.map((tier) => (
-            <div class="bg-[var(--koa-forest)] p-5">
-              <p class="eyebrow text-white/38">{tier.minimumItems}+ eligible add-ons</p>
-              <p class="display mt-2 text-3xl">{tier.savingsPercent}% savings</p>
+        <div class="mt-4 hidden rounded-[1.2rem] border border-[var(--koa-clay)]/30 bg-white p-5 shadow-[var(--shadow-soft)]" data-guest-adjustment>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Guest-count check</p>
+              <h3 class="display mt-2 text-3xl">What your package covers—and what you may need to add.</h3>
             </div>
-          ))}
+            <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-forest)]" data-guest-adjustment-count></span>
+          </div>
+          <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/68" data-guest-adjustment-copy></p>
+          <div class="mt-5 hidden grid gap-3 sm:grid-cols-2 lg:grid-cols-3" data-guest-adjustment-items></div>
         </div>
       </div>
     </section>
@@ -147,11 +165,11 @@ const badgeClass = {
     <section class="sticky top-0 z-30 border-y border-[var(--koa-line)] bg-[rgba(251,248,241,.94)] py-4 backdrop-blur">
       <div class="container-shell flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0" data-catalog-filters>
-          {catalogCategories.map((category, index) => (
+          {browseCatalogCategories.map((category, index) => (
             <button
               type="button"
               data-category={category.id}
-              class:list={['whitespace-nowrap rounded-full border px-4 py-2.5 text-[.68rem] font-black uppercase tracking-[.11em] transition', index === 0 ? 'border-[var(--koa-forest)] bg-[var(--koa-forest)] text-white' : 'border-[var(--koa-line)] bg-white text-[var(--koa-forest)] hover:border-[var(--koa-forest)]']}
+              class:list={['min-h-11 whitespace-nowrap rounded-full border px-4 py-3 text-[.68rem] font-black uppercase tracking-[.11em] transition', index === 0 ? 'border-[var(--koa-forest)] bg-[var(--koa-forest)] text-white' : 'border-[var(--koa-line)] bg-white text-[var(--koa-forest)] hover:border-[var(--koa-forest)]']}
             >{category.label}</button>
           ))}
         </div>
@@ -167,14 +185,14 @@ const badgeClass = {
         <div>
           <div class="mb-7 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
-              <p class="eyebrow text-[var(--koa-clay)]">Browse the collection</p>
-              <h2 class="display mt-3 text-4xl sm:text-5xl">Pricing you can actually scan.</h2>
+              <p class="eyebrow text-[var(--koa-clay)]">Rentals + enhancements</p>
+              <h2 class="display mt-3 text-4xl sm:text-5xl">Start with the things most events need.</h2>
             </div>
-            <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{catalogItems.length} items</p>
+            <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{browseCatalogItems.length} items</p>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2" data-catalog-grid>
-            {catalogItems.map((item) => (
+            {browseCatalogItems.map((item, index) => (
               <article
                 data-catalog-item
                 data-id={item.id}
@@ -182,10 +200,11 @@ const badgeClass = {
                 data-bundle-eligible={item.bundleEligible ? 'true' : 'false'}
                 data-included-with={(item.includedWith || []).join('|')}
                 data-search={[item.name, item.description, ...(item.keywords || [])].join(' ').toLowerCase()}
-                class="card-lift flex min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6"
+                data-mobile-extra={index >= 8 ? 'true' : 'false'}
+                class:list={['card-lift min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6', index >= 8 ? 'hidden md:flex' : 'flex']}
               >
                 <div class="flex items-start justify-between gap-4">
-                  <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{catalogCategories.find((category) => category.id === item.category)?.label}</span>
+                  <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{browseCatalogCategories.find((category) => category.id === item.category)?.label}</span>
                   <span class="text-right text-[.66rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">{item.priceLabel}</span>
                 </div>
                 {item.badges?.length && (
@@ -195,6 +214,10 @@ const badgeClass = {
                     ))}
                   </div>
                 )}
+                <div data-package-inclusion class="mt-5 hidden rounded-xl border border-[var(--koa-forest)]/20 bg-[var(--koa-sand)] px-4 py-3">
+                  <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Included in your package</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/62" data-package-inclusion-detail></p>
+                </div>
                 <h3 class:list={['display text-3xl leading-[1.03]', item.badges?.length ? 'mt-5' : 'mt-7']}>{item.name}</h3>
                 <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/62">{item.description}</p>
                 {item.note && <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/42">{item.note}</p>}
@@ -246,13 +269,16 @@ const badgeClass = {
                 {item.quantityMode && (
                   <label class="mt-6 grid gap-2 border-t border-[var(--koa-line)] pt-4 text-xs font-semibold text-[var(--koa-ink)]/72">
                     Quantity
-                    <input data-item-quantity type="number" min="0" value="1" class="w-28 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2 text-sm text-[var(--koa-ink)]" />
+                    <input data-item-quantity type="number" min="0" value="1" class="min-h-11 w-28 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-sm text-[var(--koa-ink)]" />
                   </label>
                 )}
                 <button type="button" data-add-to-quote class="mt-auto pt-7 text-left link-arrow text-[var(--koa-forest)]">Add to quote +</button>
               </article>
             ))}
           </div>
+          <button type="button" data-mobile-catalog-toggle class="mt-6 inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)] md:hidden">
+            Show all rentals + enhancements
+          </button>
 
           <div data-catalog-empty class="hidden rounded-[1.4rem] border border-dashed border-[var(--koa-line)] bg-[var(--koa-sand)] p-10 text-center">
             <p class="display text-3xl">No matching catalog items.</p>
@@ -262,11 +288,18 @@ const badgeClass = {
 
         <aside class="xl:sticky xl:top-28">
           <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-amber-light)]">Your quote list</p>
-            <h2 class="display mt-4 text-3xl">Save what you like.</h2>
-            <p class="mt-3 text-sm leading-6 text-white/58">Choose the pieces you’re considering. We’ll confirm availability, quantity and final pricing rather than making you decode a flipbook.</p>
-            <div class="mt-6 grid gap-2" data-quote-list>
-              <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No items selected yet.</p>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Your quote</p>
+            <h2 class="display mt-4 text-3xl">One base. Then the extras.</h2>
+            <p class="mt-3 text-sm leading-6 text-white/58">Your starting point stays separate from the rentals and enhancements you add below.</p>
+            <div class="mt-6 rounded-xl border border-white/12 bg-white/[.04] p-4" data-quote-starting-point>
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Starting point</p>
+              <p class="mt-2 text-sm font-semibold text-white" data-quote-starting-point-label>Choose a package or à la carte above.</p>
+            </div>
+            <div class="mt-6">
+              <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-white/45">Add-ons</p>
+              <div class="mt-3 grid gap-2" data-quote-list>
+                <p class="rounded-xl border border-white/10 p-4 text-sm text-white/42" data-quote-empty>No add-ons selected yet.</p>
+              </div>
             </div>
             <div class="mt-5 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber)]/10 p-4" data-savings-panel>
               <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
@@ -275,10 +308,56 @@ const badgeClass = {
             </div>
             <a href="#quote-request" data-quote-jump class="mt-6 inline-flex w-full justify-center rounded-full bg-white px-5 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request this quote</a>
           </div>
-          <p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/58">{catalogPricingNote}</p>
+          <p class="mt-5 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58 xl:max-w-none">{catalogPricingNote}</p>
         </aside>
       </div>
     </section>
+
+    <section id="bundle-savings" data-bundle-section class="scroll-mt-24 bg-[var(--koa-forest)] pb-20 pt-10 text-white lg:pb-24 lg:pt-12">
+      <div class="container-shell">
+        <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Bundle Savings</p>
+            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Curated combinations that work better together.</h2>
+          </div>
+          <p class="max-w-xl text-sm leading-7 text-white/62 lg:justify-self-end">Once you know which add-ons fit your event, these combinations can simplify the shortlist. Bundle savings apply only to eligible paid add-ons; anything already included in your selected package is not charged or discounted again.</p>
+        </div>
+
+        <div class="mt-12 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          {catalogBundles.map((bundle) => (
+            <article data-bundle-card={bundle.id} class="card-lift flex min-h-[21rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-ink)] shadow-[0_18px_50px_rgba(5,24,18,.18)]">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="eyebrow text-[var(--koa-clay)]">{bundle.eyebrow}</span>
+                {bundle.badge && <span class="rounded-full bg-[var(--koa-forest)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em] text-white">{bundle.badge}</span>}
+              </div>
+              <h3 class="display mt-6 text-4xl">{bundle.name}</h3>
+              <p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/66">{bundle.description}</p>
+              <p class="mt-4 hidden rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/62" data-bundle-package-status></p>
+              <div class="mt-5 flex flex-wrap gap-2">
+                {bundle.itemIds.map((id) => {
+                  const item = catalogItems.find((entry) => entry.id === id);
+                  return item ? <span class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.62rem] font-bold text-[var(--koa-forest)]">{item.name}</span> : null;
+                })}
+              </div>
+              <div class="mt-auto flex flex-col gap-4 pt-7 sm:flex-row sm:items-end sm:justify-between sm:gap-5">
+                <p data-bundle-savings-label class="text-xs font-black uppercase tracking-[.13em] text-[var(--koa-clay)]">Up to {bundle.savingsPercent}% bundle savings</p>
+                <button type="button" data-add-bundle={bundle.id} class="min-h-11 w-full rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-black uppercase tracking-[.12em] text-white transition hover:-translate-y-0.5 sm:w-auto">Add bundle +</button>
+              </div>
+            </article>
+          ))}
+        </div>
+
+        <div class="mt-8 grid gap-px overflow-hidden rounded-[1.2rem] bg-white/10 sm:grid-cols-3">
+          {bundleSavingsTiers.map((tier) => (
+            <div class="bg-[var(--koa-forest)] p-5">
+              <p class="eyebrow text-white/38">{tier.minimumItems}+ eligible add-ons</p>
+              <p class="display mt-2 text-3xl">{tier.savingsPercent}% savings</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
 
     <section id="quote-request" class="koa-grain bg-[var(--koa-sand)] py-20 lg:py-28">
       <div class="container-shell grid gap-12 lg:grid-cols-[.72fr_1.28fr] lg:gap-24">
@@ -303,8 +382,8 @@ const badgeClass = {
             <label class="grid gap-2 text-sm font-semibold">Estimated guests<input data-quote-guests class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" required /></label>
             <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Event type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="eventType" required><option value="">Choose one</option><option>Wedding</option><option>Private event</option><option>Corporate event</option><option>Mobile Bar only</option><option>Other</option></select></label>
             <div class="sm:col-span-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
-              <p class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Selected items</p>
-              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58" data-selected-preview>Choose items above and they’ll appear here.</p>
+              <p class="text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Selected add-ons</p>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58" data-selected-preview>Choose rentals or enhancements above and they’ll appear here.</p>
               <p class="mt-3 hidden text-xs font-bold leading-5 text-[var(--koa-clay)]" data-selected-savings></p>
             </div>
             <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Notes or quantities<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes" placeholder="Tell us quantities, colors, setup ideas or anything else that helps us quote accurately."></textarea></label>
@@ -316,15 +395,17 @@ const badgeClass = {
   </main>
   <Footer />
 
-  <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData }}>
+  <script is:inline define:vars={{ catalogClientData, bundleClientData, tierClientData, packagePlanningData }}>
     const filterButtons = [...document.querySelectorAll('[data-catalog-filters] [data-category]')];
     const cards = [...document.querySelectorAll('[data-catalog-item]')];
     const bundleButtons = [...document.querySelectorAll('[data-add-bundle]')];
+    const bundleCards = [...document.querySelectorAll('[data-bundle-card]')];
     const search = document.querySelector('[data-catalog-search]');
     const count = document.querySelector('[data-catalog-count]');
     const empty = document.querySelector('[data-catalog-empty]');
     const quoteList = document.querySelector('[data-quote-list]');
     const quoteEmpty = document.querySelector('[data-quote-empty]');
+    const quoteStartingPointLabel = document.querySelector('[data-quote-starting-point-label]');
     const selectedInput = document.querySelector('[data-selected-items]');
     const selectedPreview = document.querySelector('[data-selected-preview]');
     const selectedSavings = document.querySelector('[data-selected-savings]');
@@ -340,21 +421,47 @@ const badgeClass = {
     const startingSummary = document.querySelector('[data-starting-summary]');
     const startingSummaryText = document.querySelector('[data-starting-summary-text]');
     const startingPointInput = document.querySelector('[data-starting-point-input]');
-    const bundleSection = document.querySelector('[data-bundle-section]');
+    const guestAdjustment = document.querySelector('[data-guest-adjustment]');
+    const guestAdjustmentCount = document.querySelector('[data-guest-adjustment-count]');
+    const guestAdjustmentCopy = document.querySelector('[data-guest-adjustment-copy]');
+    const guestAdjustmentItems = document.querySelector('[data-guest-adjustment-items]');
+    const mobileCatalogToggle = document.querySelector('[data-mobile-catalog-toggle]');
 
     let activeCategory = 'all';
     let startingPoint = '';
+    let mobileCatalogExpanded = false;
     const selected = new Map();
 
     function guestCount() {
       return Math.max(1, Math.min(100, Number(guestInput?.value || quoteGuestInput?.value || 1)));
     }
 
-    function suggestedQuantity(item) {
+    function selectedPackagePlan() {
+      return startingPoint ? packagePlanningData[startingPoint] || null : null;
+    }
+
+    function includedQuantityForItem(item) {
+      const plan = selectedPackagePlan()?.planningInventory;
+      if (!plan || !item) return 0;
+      if (item.id === 'ceremony-chair') return Number(plan.includedCeremonyChairs ?? plan.includedChairCount ?? 0);
+      if (item.id === 'reception-chair') return Number(plan.includedReceptionChairs ?? plan.includedChairCount ?? 0);
+      if (item.id === 'round-table') return Number(plan.includedRoundTables ?? 0);
+      if (item.id === 'rectangle-table') return Number(plan.includedRectangleTables ?? 0);
+      if (item.id === 'cocktail-table') return Number(plan.includedCocktailTables ?? 0);
+      return 0;
+    }
+
+    function recommendedTotalForItem(item) {
       const guests = guestCount();
       if (item?.quantityMode === 'guest-count') return guests;
       if (item?.quantityMode === 'round-tables') return Math.ceil(guests / 8);
       return 1;
+    }
+
+    function suggestedQuantity(item) {
+      const recommendedTotal = recommendedTotalForItem(item);
+      const included = isIncludedBySelectedPackage(item) ? includedQuantityForItem(item) : 0;
+      return Math.max(1, recommendedTotal - included);
     }
 
     function syncSuggestedQuantities() {
@@ -384,12 +491,6 @@ const badgeClass = {
       });
 
       const packageItem = itemById.get(id);
-      if (id !== 'ala-carte' && packageItem) {
-        selected.set(id, { name: packageItem.name, quantity: 1 });
-        ['signature-wedding','hibiscus','orchid','gardenia'].filter((pkg) => pkg !== id).forEach((pkg) => selected.delete(pkg));
-      } else {
-        ['signature-wedding','hibiscus','orchid','gardenia'].forEach((pkg) => selected.delete(pkg));
-      }
 
       startingSummary?.classList.remove('hidden');
       if (startingSummaryText) {
@@ -397,10 +498,19 @@ const badgeClass = {
           ? 'À la carte selected. Build with bundles and individual rentals below.'
           : (packageItem?.name || id) + ' selected. Included items will be recognized before bundle savings are calculated.';
       }
+      if (quoteStartingPointLabel) {
+        quoteStartingPointLabel.textContent = id === 'ala-carte'
+          ? 'À la carte'
+          : (packageItem?.name || 'Choose a package or à la carte above.');
+      }
+      refreshPackageInclusions();
+      refreshBundleAvailability();
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
       syncQuote();
 
       window.setTimeout(() => {
-        bundleSection?.scrollIntoView({
+        document.querySelector('[data-catalog-filters]')?.scrollIntoView({
           behavior: 'smooth',
           block: 'start',
         });
@@ -414,7 +524,9 @@ const badgeClass = {
     function setItemButtonState(id, isSelected) {
       const button = cardFor(id)?.querySelector('[data-add-to-quote]');
       if (!button) return;
-      button.textContent = isSelected ? 'Added ✓' : 'Add to quote +';
+      const item = itemById.get(id);
+      const included = item ? isIncludedBySelectedPackage(item) : false;
+      button.textContent = isSelected ? 'Added ✓' : included ? 'Add extra +' : 'Add to quote +';
       button.classList.toggle('text-[var(--koa-clay)]', isSelected);
     }
 
@@ -425,19 +537,42 @@ const badgeClass = {
       cards.forEach((card) => {
         const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
         const searchMatch = !term || (card.dataset.search || '').includes(term);
-        const show = categoryMatch && searchMatch;
-        card.classList.toggle('hidden', !show);
-        if (show) visible += 1;
+        const isMobileExtra = card.dataset.mobileExtra === 'true';
+        const matches = categoryMatch && searchMatch;
+        const revealForMobile = mobileCatalogExpanded || activeCategory !== 'all' || Boolean(term) || !isMobileExtra;
+        const showOnMobile = matches && revealForMobile;
+
+        if (isMobileExtra) {
+          card.classList.toggle('md:flex', matches);
+          card.classList.toggle('hidden', !showOnMobile);
+        } else {
+          card.classList.toggle('hidden', !matches);
+        }
+        if (showOnMobile) visible += 1;
       });
 
-      if (count) count.textContent = visible + (visible === 1 ? ' item' : ' items');
+      if (count) {
+        const totalMatching = cards.filter((card) => {
+          const categoryMatch = activeCategory === 'all' || card.dataset.category === activeCategory;
+          const searchMatch = !term || (card.dataset.search || '').includes(term);
+          return categoryMatch && searchMatch;
+        }).length;
+        const mobileCollapsed = window.matchMedia('(max-width: 767px)').matches && !mobileCatalogExpanded && activeCategory === 'all' && !term;
+        count.textContent = mobileCollapsed
+          ? visible + ' shown · ' + totalMatching + ' total'
+          : totalMatching + (totalMatching === 1 ? ' item' : ' items');
+      }
+      if (mobileCatalogToggle) {
+        const shouldShowToggle = activeCategory === 'all' && !term && !mobileCatalogExpanded && cards.some((card) => card.dataset.mobileExtra === 'true');
+        mobileCatalogToggle.classList.toggle('hidden', !shouldShowToggle);
+      }
       empty?.classList.toggle('hidden', visible !== 0);
     }
 
     function selectedPackageIds() {
-      return [...selected.keys()].filter((id) =>
-        ['signature-wedding', 'hibiscus', 'orchid', 'gardenia'].includes(id)
-      );
+      return ['signature-wedding', 'hibiscus', 'orchid', 'gardenia'].includes(startingPoint)
+        ? [startingPoint]
+        : [];
     }
 
     function isIncludedBySelectedPackage(item) {
@@ -454,6 +589,175 @@ const badgeClass = {
         item.includedWith.includes(name) ||
         item.includedWith.includes(name + ' Wedding Experience')
       );
+    }
+
+    function selectedPackageDisplayName() {
+      if (!startingPoint || startingPoint === 'ala-carte') return '';
+      return itemById.get(startingPoint)?.name || '';
+    }
+
+    function renderGuestAdjustment() {
+      const plan = selectedPackagePlan();
+      const guests = guestCount();
+
+      if (!plan || startingPoint === 'ala-carte') {
+        guestAdjustment?.classList.add('hidden');
+        return;
+      }
+
+      guestAdjustment?.classList.remove('hidden');
+      if (guestAdjustmentCount) guestAdjustmentCount.textContent = guests + (guests === 1 ? ' guest' : ' guests');
+
+      const inventory = plan.planningInventory || {};
+      const additions = [];
+      const generalChairCount = Number(inventory.includedChairCount ?? 0);
+      const ceremonyChairCount = Number(inventory.includedCeremonyChairs ?? 0);
+      const receptionChairCount = Number(inventory.includedReceptionChairs ?? 0);
+      const roundTables = Number(inventory.includedRoundTables ?? 0);
+
+      if (ceremonyChairCount || receptionChairCount) {
+        const extraCeremony = Math.max(0, guests - ceremonyChairCount);
+        const extraReception = Math.max(0, guests - receptionChairCount);
+        if (extraCeremony > 0) additions.push({ label: 'Additional ceremony chairs', value: extraCeremony });
+        if (extraReception > 0) additions.push({ label: 'Additional reception chairs', value: extraReception });
+      } else if (generalChairCount) {
+        const extraChairs = Math.max(0, guests - generalChairCount);
+        if (extraChairs > 0) additions.push({ label: 'Additional chairs', value: extraChairs });
+      }
+
+      if (roundTables) {
+        const recommendedTables = Math.ceil(guests / 8);
+        const extraTables = Math.max(0, recommendedTables - roundTables);
+        if (extraTables > 0) additions.push({ label: 'Additional 60-inch rounds', value: extraTables });
+      }
+
+      if (guestAdjustmentCopy) {
+        const base = plan.name + ' includes ' + plan.includedInventory + '. ';
+        if (startingPoint === 'orchid') {
+          const extraChairs = Math.max(0, guests - Number(inventory.includedChairCount ?? 0));
+          guestAdjustmentCopy.textContent = base + (
+            extraChairs > 0
+              ? 'For ' + guests + ' guests, plan on ' + extraChairs + ' additional chairs. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
+              : 'Your entered guest count is within the included chair quantity. Table capacity still depends on which 2 table styles you select.'
+          );
+        } else if (additions.length) {
+          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional quantities below should be planned into the quote.';
+        } else {
+          guestAdjustmentCopy.textContent = base + 'Your entered guest count fits within the published included furniture quantities using the 8-guests-per-round planning default.';
+        }
+      }
+
+      if (guestAdjustmentItems) {
+        guestAdjustmentItems.innerHTML = '';
+        guestAdjustmentItems.classList.toggle('hidden', additions.length === 0);
+        additions.forEach((entry) => {
+          const box = document.createElement('div');
+          box.className = 'rounded-xl bg-[var(--koa-sand)] p-4';
+          const label = document.createElement('p');
+          label.className = 'text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]';
+          label.textContent = entry.label;
+          const value = document.createElement('p');
+          value.className = 'display mt-1 text-3xl text-[var(--koa-forest)]';
+          value.textContent = String(entry.value);
+          box.append(label, value);
+          guestAdjustmentItems.appendChild(box);
+        });
+      }
+    }
+
+    function knownIncludedQuantity(item) {
+      if (!item) return '';
+      const plan = selectedPackagePlan()?.planningInventory;
+      if (!plan) return '';
+      if (item.id === 'ceremony-chair') {
+        const qty = Number(plan.includedCeremonyChairs ?? plan.includedChairCount ?? 0);
+        return qty ? qty + ' chair' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'reception-chair') {
+        const qty = Number(plan.includedReceptionChairs ?? plan.includedChairCount ?? 0);
+        return qty ? qty + ' chair' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'round-table') {
+        const qty = Number(plan.includedRoundTables ?? 0);
+        return qty ? qty + ' 60-inch round table' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'rectangle-table') {
+        const qty = Number(plan.includedRectangleTables ?? 0);
+        return qty ? qty + ' six-foot rectangle table' + (qty === 1 ? '' : 's') : '';
+      }
+      if (item.id === 'cocktail-table') {
+        const qty = Number(plan.includedCocktailTables ?? 0);
+        return qty ? qty + ' cocktail table' + (qty === 1 ? '' : 's') : '';
+      }
+      return '';
+    }
+
+    function refreshPackageInclusions() {
+      cards.forEach((card) => {
+        const id = card.dataset.id;
+        const item = id ? itemById.get(id) : null;
+        const panel = card.querySelector('[data-package-inclusion]');
+        const detail = card.querySelector('[data-package-inclusion-detail]');
+        const included = item ? isIncludedBySelectedPackage(item) : false;
+        panel?.classList.toggle('hidden', !included);
+        if (included && detail) {
+          const quantity = knownIncludedQuantity(item);
+          const pkg = selectedPackageDisplayName();
+          detail.textContent = quantity
+            ? quantity + ' included with ' + pkg + '. Add more only if your event needs additional inventory.'
+            : 'Included with ' + pkg + '. Add more only if your event needs additional inventory.';
+        }
+        if (id) setItemButtonState(id, selected.has(id));
+      });
+    }
+
+    function refreshBundleAvailability() {
+      bundleCards.forEach((card) => {
+        const bundle = bundleClientData.find((entry) => entry.id === card.dataset.bundleCard);
+        if (!bundle) return;
+        const includedIds = bundle.itemIds.filter((id) => {
+          const item = itemById.get(id);
+          return item ? isIncludedBySelectedPackage(item) : false;
+        });
+        const paidIds = bundle.itemIds.filter((id) => !includedIds.includes(id));
+        const status = card.querySelector('[data-bundle-package-status]');
+        const button = card.querySelector('[data-add-bundle]');
+        const savingsLabel = card.querySelector('[data-bundle-savings-label]');
+        if (!status || !button || !savingsLabel) return;
+
+        if (!startingPoint || startingPoint === 'ala-carte' || includedIds.length === 0) {
+          status.classList.add('hidden');
+          savingsLabel.textContent = 'Up to ' + bundle.savingsPercent + '% bundle savings';
+          button.disabled = false;
+          button.textContent = 'Add bundle +';
+          button.classList.remove('opacity-45');
+          return;
+        }
+
+        status.classList.remove('hidden');
+        if (paidIds.length === 0) {
+          status.textContent = 'Everything in this bundle is already included with your selected package.';
+          savingsLabel.textContent = 'Already included with your package';
+          button.disabled = true;
+          button.textContent = 'Already included';
+          button.classList.add('opacity-45');
+          return;
+        }
+
+        const includedNames = includedIds.map((id) => itemById.get(id)?.name).filter(Boolean).join(', ');
+        button.disabled = false;
+        button.classList.remove('opacity-45');
+
+        if (paidIds.length === 1) {
+          status.textContent = includedNames + ' already included. Only one paid item remains, so it will be quoted individually rather than presented as a bundle discount.';
+          savingsLabel.textContent = 'Remaining item quoted individually';
+          button.textContent = 'Add remaining item +';
+        } else {
+          status.textContent = includedNames + ' already included. Adding this bundle will add only the remaining paid items.';
+          savingsLabel.textContent = 'Up to ' + bundle.savingsPercent + '% savings on remaining eligible items';
+          button.textContent = 'Add remaining items +';
+        }
+      });
     }
 
     function calculateSavings() {
@@ -579,7 +883,7 @@ const badgeClass = {
       if (selectedInput) selectedInput.value = joined;
       if (selectedPreview) {
         selectedPreview.textContent =
-          joined || 'Choose items above and they’ll appear here.';
+          joined || 'Choose rentals or enhancements above and they’ll appear here.';
       }
 
       renderSavings();
@@ -603,6 +907,11 @@ const badgeClass = {
     });
 
     search?.addEventListener('input', applyFilters);
+
+    mobileCatalogToggle?.addEventListener('click', () => {
+      mobileCatalogExpanded = true;
+      applyFilters();
+    });
 
     cards.forEach((card) => {
       const button = card.querySelector('[data-add-to-quote]');
@@ -634,7 +943,7 @@ const badgeClass = {
 
         bundle.itemIds.forEach((id) => {
           const item = itemById.get(id);
-          if (!item) return;
+          if (!item || isIncludedBySelectedPackage(item)) return;
           selected.set(id, { name: item.name, quantity: suggestedQuantity(item) });
           const card = cardFor(id);
           const quantityInput = card?.querySelector('[data-item-quantity]');
@@ -661,9 +970,13 @@ const badgeClass = {
     });
 
     startingButtons.forEach((button) => button.addEventListener('click', () => chooseStartingPoint(button.dataset.startingPoint || '')));
-    guestInput?.addEventListener('input', syncSuggestedQuantities);
+    guestInput?.addEventListener('input', () => {
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
+    });
     quoteGuestInput?.addEventListener('input', () => {
       if (guestInput) guestInput.value = quoteGuestInput.value;
+      renderGuestAdjustment();
       syncSuggestedQuantities();
     });
     cards.forEach((card) => {
@@ -678,6 +991,9 @@ const badgeClass = {
 
     if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
     applyFilters();
+    refreshPackageInclusions();
+    refreshBundleAvailability();
+    renderGuestAdjustment();
     syncSuggestedQuantities();
   </script>
 </BaseLayout>
