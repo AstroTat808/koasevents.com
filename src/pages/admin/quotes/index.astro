@@ -132,6 +132,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <label class="grid gap-2 text-sm font-semibold">Internal notes<textarea name="notes" rows="5" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
       </div>
 
+      <section data-qbo-proposal class="mt-6 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">QuickBooks Online</p>
+            <p data-qbo-proposal-status class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Checking QuickBooks…</p>
+            <p class="mt-1 text-xs text-[var(--koa-ink)]/42">Save proposal changes before synchronizing the QuickBooks estimate.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" data-qbo-sync-estimate class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Sync QBO estimate</button>
+            <button type="button" data-qbo-send-estimate class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Email from QBO</button>
+            <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">QBO setup</a>
+          </div>
+        </div>
+      </section>
+
       <div data-acceptance-info class="mt-6 hidden rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/65"></div>
       <div class="mt-7 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save proposal</button><button type="button" data-copy-client-link class="hidden rounded-full bg-[var(--koa-clay)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Copy client link</button><button type="button" data-print-proposal class="rounded-full bg-[var(--koa-ink)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Print / PDF</button><button type="button" data-close-proposal class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
       <p data-proposal-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
@@ -178,6 +193,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
       <div class="mt-6 flex flex-wrap gap-2">
         <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
+        <button type="button" data-qbo-sync-status class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sync QuickBooks</button>
+        <a data-event-ops-link href="/admin/events/" class="hidden rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open Event Ops</a>
+        <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">QBO setup</a>
       </div>
       <div data-booking-payments class="mt-6 grid gap-3"></div>
       <p data-booking-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
@@ -216,6 +234,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const proposalLinkWrap = document.querySelector('[data-proposal-link-wrap]');
     const acceptanceInfo = document.querySelector('[data-acceptance-info]');
     const copyClientLink = document.querySelector('[data-copy-client-link]');
+    const qboProposalStatus = document.querySelector('[data-qbo-proposal-status]');
+    const qboSyncEstimateButton = document.querySelector('[data-qbo-sync-estimate]');
+    const qboSendEstimateButton = document.querySelector('[data-qbo-send-estimate]');
 
     const activityDialog = document.querySelector('[data-activity-dialog]');
     const activityForm = document.querySelector('[data-activity-form]');
@@ -235,12 +256,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const countersignFormWrap = document.querySelector('[data-countersign-form-wrap]');
     const countersignName = document.querySelector('[data-countersign-name]');
     const countersignButton = document.querySelector('[data-countersign]');
+    const qboSyncStatusButton = document.querySelector('[data-qbo-sync-status]');
+    const eventOpsLink = document.querySelector('[data-event-ops-link]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], conversions: {}, records: [] };
     let editingRecord = null;
     let activityRecord = null;
     let bookingRecord = null;
+    let qboState = null;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -305,6 +329,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return result;
     }
 
+    async function qboApi(body) {
+      const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(result.error || 'QuickBooks request failed.');
+      return result;
+    }
+
+    function quickBooksReady() {
+      return Boolean(qboState?.connection?.connected && qboState?.settings?.serviceItemId);
+    }
+
+    function renderQboProposal(record) {
+      const qb=record?.accounting?.quickbooks||{};
+      const connected=Boolean(qboState?.connection?.connected);
+      const mapped=Boolean(qboState?.settings?.serviceItemId);
+      if(qboProposalStatus) {
+        qboProposalStatus.textContent=!connected
+          ? 'QuickBooks is not connected. Complete QBO Setup before creating estimates.'
+          : !mapped
+            ? 'QuickBooks is connected, but the default Koa’s service item has not been mapped.'
+            : qb.estimateId
+              ? 'QuickBooks estimate '+(qb.estimateDocNumber?'#'+qb.estimateDocNumber:qb.estimateId)+' · '+money(qb.estimateTotal||record.proposal?.total||0)+(qb.estimateEmailStatus?' · '+qb.estimateEmailStatus:'')
+              : 'Ready to create the QuickBooks estimate from this proposal.';
+      }
+      if(qboSyncEstimateButton) qboSyncEstimateButton.disabled=!connected||!mapped;
+      if(qboSendEstimateButton) qboSendEstimateButton.disabled=!connected||!mapped||!qb.estimateId;
+      qboSyncEstimateButton?.classList.toggle('opacity-40',!connected||!mapped);
+      qboSendEstimateButton?.classList.toggle('opacity-40',!connected||!mapped||!qb.estimateId);
+    }
+
+    async function runQuickBooks(action, record, extra={}) {
+      const result=await qboApi({action,recordId:record.id,...extra});
+      await load(String(searchInput?.value||'').trim());
+      return (payload.records||[]).find((entry)=>entry.id===record.id) || result.record || record;
+    }
+
     async function promote(record, kind, openCreated=false) {
       const result=await api({action:'promote',recordId:record.id,kind});
       await load(String(searchInput?.value||'').trim());
@@ -325,7 +385,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(record.stage==='lead') return {label:'Build proposal',reason:'Qualified lead is ready for pricing and scope.',priority:4,run:()=>promote(record,'proposal',true)};
       if(record.kind==='proposal' && proposalStatus==='accepted') {
         const summary=record.bookingSummary;
-        if(summary?.contractStatus==='signed') return {label:'Manage deposit',reason:'Agreement is signed. Record or collect the reservation deposit.',priority:1,run:()=>openBooking(record)};
+        if(summary?.contractStatus==='signed') return {label:'Manage deposit',reason:'Agreement is signed. Issue or sync the QuickBooks reservation-deposit invoice.',priority:1,run:()=>openBooking(record)};
         return {label:'Open booking',reason:'Proposal accepted. Send the booking agreement and collect signature + deposit.',priority:1,run:()=>openBooking(record)};
       }
       if(record.kind==='proposal' && proposalStatus==='viewed') return {label:'Review + follow up',reason:'Client has viewed the proposal.',priority:3,run:()=>openProposal(record)};
@@ -359,8 +419,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         quote_saved:'Quote saved', inquiry:'Inquiry received', lead:'Lead created', proposal:'Proposal created',
         proposal_sent:'Proposal sent', proposal_viewed:'Proposal viewed', proposal_accepted:'Proposal accepted',
         proposal_declined:'Proposal declined', contract_generated:'Contract generated', contract_viewed:'Contract viewed',
-        contract_signed:'Client signed contract', contract_countersigned:'Koa’s countersigned contract', payment_received:'Payment received',
-        payment_link_configured:'Payment link configured', booked:'Event booked', call:'Call', email:'Email',
+        contract_signed:'Client signed contract', contract_countersigned:'Koa’s countersigned contract',
+        quickbooks_estimate_synced:'QBO estimate synced', quickbooks_estimate_sent:'QBO estimate emailed',
+        quickbooks_invoice_created:'QBO invoice created', quickbooks_invoice_sent:'QBO invoice emailed',
+        quickbooks_status_synced:'QBO status synced', booked:'Event booked', call:'Call', email:'Email',
         meeting:'Meeting', note:'Note'
       };
       return labels[type]||String(type||'Activity').replaceAll('_',' ');
@@ -521,6 +583,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const primary='rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
         const small='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
         actions.append(actionButton('Manage booking',primary,()=>openBooking(record)));
+        const ops=document.createElement('a');ops.href='/admin/events/?record='+encodeURIComponent(record.id);ops.className=small;ops.textContent='Event Ops';actions.appendChild(ops);
         addQuickLinks(actions,record,small);
         card.appendChild(actions);
         bookedDashboard.appendChild(card);
@@ -537,7 +600,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-booking-paid]',money(summary.paid||0));
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
       if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
-      if(bookingMessage) bookingMessage.textContent='';
+      if(eventOpsLink) {
+        eventOpsLink.href='/admin/events/?record='+encodeURIComponent(record.id);
+        eventOpsLink.classList.toggle('hidden',record.stage!=='booked');
+      }
+      if(qboSyncStatusButton) {
+        qboSyncStatusButton.disabled=!qboState?.connection?.connected;
+        qboSyncStatusButton.classList.toggle('opacity-40',!qboState?.connection?.connected);
+      }
+      if(bookingMessage) bookingMessage.textContent=!qboState?.connection?.connected
+        ? 'QuickBooks is not connected. Use QBO Setup before issuing invoices.'
+        : 'Invoice balances shown here come from the last QuickBooks synchronization.';
 
       const clientSigned = summary.contractStatus === 'signed';
       const koaSigned = Boolean(summary.koaSignedAt);
@@ -557,27 +630,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         (summary.payments||[]).forEach((payment)=>{
           const row=document.createElement('article'); row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
           const top=document.createElement('div'); top.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
-          const left=document.createElement('div'); left.append(text('strong','text-sm text-[var(--koa-forest)]',payment.label),text('p','mt-1 text-xs text-[var(--koa-ink)]/48',(payment.dueDate?'Due '+payment.dueDate:'Due date TBD')+' · '+money(payment.amount)));
-          const badge=text('span','w-fit rounded-full '+(payment.status==='paid'?'bg-[var(--koa-sand)] text-[var(--koa-forest)]':'border border-[var(--koa-line)] text-[var(--koa-clay)]')+' px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em]',payment.status==='paid'?'Paid':'Pending');
+          const left=document.createElement('div');
+          left.append(
+            text('strong','text-sm text-[var(--koa-forest)]',payment.label),
+            text('p','mt-1 text-xs text-[var(--koa-ink)]/48',(payment.dueDate?'Due '+payment.dueDate:'Due date TBD')+' · '+money(payment.amount))
+          );
+          if(payment.invoiceId) {
+            left.appendChild(text('p','mt-2 text-xs text-[var(--koa-ink)]/55','QuickBooks invoice '+(payment.docNumber?'#'+payment.docNumber:payment.invoiceId)+' · '+(payment.status==='paid'?'Paid':money(payment.balance)+' remaining')+(payment.emailStatus?' · '+payment.emailStatus:'')));
+          } else {
+            left.appendChild(text('p','mt-2 text-xs text-[var(--koa-ink)]/45','No QuickBooks invoice issued yet.'));
+          }
+
+          const badge=text('span','w-fit rounded-full '+(payment.status==='paid'?'bg-[var(--koa-sand)] text-[var(--koa-forest)]':'border border-[var(--koa-line)] text-[var(--koa-clay)]')+' px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em]',payment.status==='paid'?'Paid':payment.status==='open'?'Open in QBO':'Not invoiced');
           top.append(left,badge); row.appendChild(top);
 
-          const controls=document.createElement('div'); controls.className='mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end';
-          const refLabel=document.createElement('label'); refLabel.className='grid gap-1 text-xs font-semibold'; refLabel.textContent='Reference';
-          const ref=document.createElement('input'); ref.className='rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2'; ref.value=payment.reference||''; ref.placeholder='Check, invoice, receipt…'; refLabel.appendChild(ref);
-          const urlLabel=document.createElement('label'); urlLabel.className='grid gap-1 text-xs font-semibold'; urlLabel.textContent='Payment URL';
-          const url=document.createElement('input'); url.className='rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2'; url.value=payment.paymentUrl||''; url.placeholder='Secure payment link'; urlLabel.appendChild(url);
-          const saveLink=actionButton('Save link','rounded-full border border-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=>{
-            if(bookingMessage)bookingMessage.textContent='Saving payment link…';
-            await api({action:'configure-payment-link',recordId:record.id,paymentId:payment.id,paymentUrl:url.value});
-            await load(String(searchInput?.value||'').trim()); bookingMessage.textContent='Payment link saved.';
-          });
-          const paid=actionButton(payment.status==='paid'?'Mark pending':'Mark paid','rounded-full bg-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white',async()=>{
-            if(bookingMessage)bookingMessage.textContent='Updating payment…';
-            await api({action:'record-payment',recordId:record.id,paymentId:payment.id,status:payment.status==='paid'?'pending':'paid',reference:ref.value,paymentUrl:url.value});
-            await load(String(searchInput?.value||'').trim());
-            const refreshed=(payload.records||[]).find((entry)=>entry.id===record.id); if(refreshed)openBooking(refreshed);
-          });
-          controls.append(refLabel,urlLabel,saveLink,paid); row.appendChild(controls);
+          const controls=document.createElement('div'); controls.className='mt-4 flex flex-wrap gap-2';
+          if(!quickBooksReady()) {
+            const setup=document.createElement('a');setup.href='/admin/quickbooks/';setup.className='rounded-full border border-[var(--koa-line)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';setup.textContent='Complete QBO setup';controls.appendChild(setup);
+          } else if(!payment.invoiceId) {
+            controls.append(actionButton('Create QBO invoice','rounded-full bg-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+              if(bookingMessage)bookingMessage.textContent='Creating QuickBooks invoice…';
+              try{const refreshed=await runQuickBooks('create-invoice',record,{paymentId:payment.id});openBooking(refreshed);}catch(error){if(bookingMessage)bookingMessage.textContent=error.message||'Unable to create QuickBooks invoice.';}
+            }));
+          } else {
+            controls.append(actionButton('Email invoice from QBO','rounded-full bg-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+              if(bookingMessage)bookingMessage.textContent='Sending QuickBooks invoice…';
+              try{const refreshed=await runQuickBooks('send-invoice',record,{paymentId:payment.id});openBooking(refreshed);}catch(error){if(bookingMessage)bookingMessage.textContent=error.message||'Unable to send QuickBooks invoice.';}
+            }));
+          }
+          row.appendChild(controls);
           bookingPayments.appendChild(row);
         });
       }
@@ -702,6 +783,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const accepted=record.proposal?.acceptance;
       acceptanceInfo.classList.toggle('hidden',!accepted);
       if(accepted) acceptanceInfo.textContent='Accepted by '+accepted.name+' on '+dateTime(accepted.acceptedAt)+'.';
+      renderQboProposal(record);
       proposalMessage.textContent=''; recalcEditor(); proposalDialog.showModal();
     }
 
@@ -717,10 +799,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     async function load(query='') {
       const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
-      const response=await fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'});
+      const [response,qboResponse]=await Promise.all([
+        fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'}),
+        fetch('/api/admin/quickbooks',{cache:'no-store'})
+      ]);
       if(response.status===401){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
-      payload=await response.json(); if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
+      payload=await response.json();
+      qboState=qboResponse.ok?await qboResponse.json():null;
+      if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
       renderStats();renderWorkQueue();renderFunnel();renderPipeline();renderBookedDashboard();renderQuotes();
     }
 
@@ -750,6 +837,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelectorAll('[data-close-activity]').forEach((button)=>button.addEventListener('click',()=>activityDialog?.close()));
     document.querySelectorAll('[data-close-booking]').forEach((button)=>button.addEventListener('click',()=>bookingDialog?.close()));
+
+    qboSyncEstimateButton?.addEventListener('click',async()=>{
+      if(!editingRecord||!quickBooksReady())return;
+      if(proposalMessage)proposalMessage.textContent='Synchronizing QuickBooks estimate…';
+      try{const refreshed=await runQuickBooks('sync-estimate',editingRecord);editingRecord=refreshed;openProposal(refreshed);}catch(error){if(proposalMessage)proposalMessage.textContent=error.message||'Unable to sync QuickBooks estimate.';}
+    });
+
+    qboSendEstimateButton?.addEventListener('click',async()=>{
+      if(!editingRecord||!quickBooksReady())return;
+      if(proposalMessage)proposalMessage.textContent='Emailing estimate from QuickBooks…';
+      try{const refreshed=await runQuickBooks('send-estimate',editingRecord);editingRecord=refreshed;openProposal(refreshed);}catch(error){if(proposalMessage)proposalMessage.textContent=error.message||'Unable to email QuickBooks estimate.';}
+    });
+
+    qboSyncStatusButton?.addEventListener('click',async()=>{
+      if(!bookingRecord||!qboState?.connection?.connected)return;
+      if(bookingMessage)bookingMessage.textContent='Synchronizing QuickBooks balances…';
+      try{const refreshed=await runQuickBooks('sync-status',bookingRecord);bookingRecord=refreshed;openBooking(refreshed);}catch(error){if(bookingMessage)bookingMessage.textContent=error.message||'Unable to sync QuickBooks.';}
+    });
 
     countersignButton?.addEventListener('click',async()=>{
       if(!bookingRecord)return;
