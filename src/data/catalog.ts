@@ -34,6 +34,8 @@ export interface CatalogItem {
   bundleEligible?: boolean;
   quantityMode?: 'guest-count' | 'round-tables' | 'manual';
   quantityLabel?: string;
+  estimatedUnitPrice?: number;
+  estimatedUnitLabel?: string;
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -97,8 +99,10 @@ export const catalogItems: CatalogItem[] = [
     name: 'Ceremony Chairs',
     description: 'Additional ceremony seating beyond the quantity included in your selected package.',
     priceType: 'quote',
-    priceLabel: 'Custom quote',
-    note: 'Quantity and event configuration determine final pricing.',
+    priceLabel: 'Est. $5 / chair',
+    note: 'Planning estimate based on the current standard chair rate; final chair style, availability and event configuration are confirmed in the proposal.',
+    estimatedUnitPrice: 5,
+    estimatedUnitLabel: 'chair',
     badges: [{ kind: 'popular', label: 'Popular' }, { kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     specs: [{ label: 'Signature includes', value: '50 ceremony chairs' }],
@@ -112,7 +116,10 @@ export const catalogItems: CatalogItem[] = [
     name: 'Reception Chairs',
     description: 'Reception seating added to match your final guest count and floor plan.',
     priceType: 'quote',
-    priceLabel: 'Custom quote',
+    priceLabel: 'Est. $5 / chair',
+    note: 'Planning estimate based on the current standard chair rate; final chair style, availability and event configuration are confirmed in the proposal.',
+    estimatedUnitPrice: 5,
+    estimatedUnitLabel: 'chair',
     badges: [{ kind: 'popular', label: 'Popular' }, { kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Orchid', 'Hibiscus', 'Signature'],
     specs: [{ label: 'Signature includes', value: '50 reception chairs' }],
@@ -126,7 +133,10 @@ export const catalogItems: CatalogItem[] = [
     name: '60-inch Round Tables',
     description: 'Classic reception tables used throughout Koa’s wedding and private-event layouts.',
     priceType: 'quote',
-    priceLabel: 'Custom quote',
+    priceLabel: 'Est. $30 / table',
+    note: 'Planning estimate based on the current 60-inch round table rate; final availability and setup requirements are confirmed in the proposal.',
+    estimatedUnitPrice: 30,
+    estimatedUnitLabel: '60-inch round table',
     badges: [{ kind: 'included', label: 'Included With Select Packages' }],
     includedWith: ['Gardenia', 'Hibiscus', 'Signature'],
     dimensions: '60-inch round',
