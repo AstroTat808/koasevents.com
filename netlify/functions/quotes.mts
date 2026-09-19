@@ -52,6 +52,28 @@ function storeFor(context: Context) {
     : getDeployStore({ name: 'koa-quotes' });
 }
 
+function salesStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-sales', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-sales' });
+}
+
+async function appendQuoteSavedEvent(context: Context, saved: SavedQuote) {
+  const store = salesStoreFor(context);
+  const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  const eventId = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+  const event = {
+    id: 'EVT-' + eventId,
+    type: 'quote_saved',
+    packageId: saved.state.startingPoint,
+    quoteId: saved.id,
+    createdAt: saved.createdAt,
+  };
+  await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
+}
+
 function quoteId() {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -204,6 +226,7 @@ export default async (req: Request, context: Context) => {
     };
 
     await store.setJSON('quotes/' + newId, saved);
+    await appendQuoteSavedEvent(context, saved);
 
     return Response.json({
       ok: true,
