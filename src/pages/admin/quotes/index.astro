@@ -58,6 +58,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Booked events</p><h2 class="display mt-3 text-4xl">Contracts, payments + upcoming events</h2></div>
+            <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/45">A record enters Booked automatically when the agreement is signed and the reservation deposit is recorded.</p>
+          </div>
+          <div data-booked-dashboard class="mt-6 grid gap-4 lg:grid-cols-2"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div><p class="eyebrow text-[var(--koa-clay)]">Saved configurations</p><h2 class="display mt-3 text-4xl">Quote builder snapshots</h2></div>
           <div data-quote-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
         </section>
@@ -130,6 +138,44 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </form>
   </dialog>
 
+  <dialog data-activity-dialog class="w-[min(94vw,820px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <div class="max-h-[88vh] overflow-y-auto p-7 sm:p-8">
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Client activity</p><h2 data-activity-title class="display mt-3 text-4xl">Timeline</h2><p data-activity-meta class="mt-2 text-sm text-[var(--koa-ink)]/55"></p></div>
+        <button type="button" data-close-activity class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+      </div>
+      <form data-activity-form class="mt-6 rounded-xl bg-[var(--koa-sand)] p-4">
+        <input type="hidden" name="recordId" />
+        <div class="grid gap-3 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
+          <label class="grid gap-2 text-xs font-semibold">Activity type<select name="type" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2.5"><option value="note">Note</option><option value="call">Call</option><option value="email">Email</option><option value="meeting">Meeting</option></select></label>
+          <label class="grid gap-2 text-xs font-semibold">Details<input name="detail" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2.5" placeholder="What happened?" required /></label>
+          <button class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add activity</button>
+        </div>
+        <p data-activity-message class="mt-3 text-xs text-[var(--koa-ink)]/55"></p>
+      </form>
+      <div data-activity-list class="mt-6 grid gap-3"></div>
+    </div>
+  </dialog>
+
+  <dialog data-booking-dialog class="w-[min(96vw,900px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <div class="max-h-[90vh] overflow-y-auto p-7 sm:p-8">
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Booking management</p><h2 data-booking-title class="display mt-3 text-4xl">Booked event</h2><p data-booking-meta class="mt-2 text-sm text-[var(--koa-ink)]/55"></p></div>
+        <button type="button" data-close-booking class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+      </div>
+      <div class="mt-6 grid gap-4 sm:grid-cols-3">
+        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Agreement</p><p data-booking-contract class="mt-2 text-sm font-bold text-[var(--koa-forest)]"></p></div>
+        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Paid</p><p data-booking-paid class="display mt-2 text-3xl text-[var(--koa-forest)]"></p></div>
+        <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Outstanding</p><p data-booking-outstanding class="display mt-2 text-3xl text-[var(--koa-forest)]"></p></div>
+      </div>
+      <div class="mt-6 flex flex-wrap gap-2">
+        <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
+      </div>
+      <div data-booking-payments class="mt-6 grid gap-3"></div>
+      <p data-booking-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
+    </div>
+  </dialog>
+
   <script>
     import { getUser } from '@netlify/identity';
 
@@ -139,6 +185,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const workQueue = document.querySelector('[data-work-queue]');
     const workCount = document.querySelector('[data-work-count]');
     const quoteList = document.querySelector('[data-quote-list]');
+    const bookedDashboard = document.querySelector('[data-booked-dashboard]');
     const funnelBody = document.querySelector('[data-funnel]');
     const message = document.querySelector('[data-message]');
     const searchForm = document.querySelector('[data-search-form]');
@@ -162,9 +209,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const acceptanceInfo = document.querySelector('[data-acceptance-info]');
     const copyClientLink = document.querySelector('[data-copy-client-link]');
 
+    const activityDialog = document.querySelector('[data-activity-dialog]');
+    const activityForm = document.querySelector('[data-activity-form]');
+    const activityList = document.querySelector('[data-activity-list]');
+    const activityTitle = document.querySelector('[data-activity-title]');
+    const activityMeta = document.querySelector('[data-activity-meta]');
+    const activityMessage = document.querySelector('[data-activity-message]');
+
+    const bookingDialog = document.querySelector('[data-booking-dialog]');
+    const bookingTitle = document.querySelector('[data-booking-title]');
+    const bookingMeta = document.querySelector('[data-booking-meta]');
+    const bookingPayments = document.querySelector('[data-booking-payments]');
+    const bookingMessage = document.querySelector('[data-booking-message]');
+    const bookingClientLink = document.querySelector('[data-booking-client-link]');
+
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], conversions: {}, records: [] };
     let editingRecord = null;
+    let activityRecord = null;
+    let bookingRecord = null;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -247,7 +310,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(record.stage==='booked') return {label:'Booked',reason:'Event is booked.',priority:99,run:null};
       if(record.stage==='inquiry') return {label:'Qualify lead',reason:'Review the inquiry and advance qualified clients.',priority:2,run:()=>promote(record,'lead')};
       if(record.stage==='lead') return {label:'Build proposal',reason:'Qualified lead is ready for pricing and scope.',priority:4,run:()=>promote(record,'proposal',true)};
-      if(record.kind==='proposal' && proposalStatus==='accepted') return {label:'Mark booked',reason:'Client accepted the proposal. Complete the booking handoff.',priority:1,run:()=>markBooked(record)};
+      if(record.kind==='proposal' && proposalStatus==='accepted') {
+        const summary=record.bookingSummary;
+        if(summary?.contractStatus==='signed') return {label:'Manage deposit',reason:'Agreement is signed. Record or collect the reservation deposit.',priority:1,run:()=>openBooking(record)};
+        return {label:'Open booking',reason:'Proposal accepted. Send the booking agreement and collect signature + deposit.',priority:1,run:()=>openBooking(record)};
+      }
       if(record.kind==='proposal' && proposalStatus==='viewed') return {label:'Review + follow up',reason:'Client has viewed the proposal.',priority:3,run:()=>openProposal(record)};
       if(record.kind==='proposal' && proposalStatus==='draft') return {label:'Finalize proposal',reason:'Draft needs final pricing before sharing.',priority:5,run:()=>openProposal(record)};
       if(record.kind==='proposal' && proposalStatus==='sent') return {label:'Open proposal',reason:'Proposal was sent and is awaiting client action.',priority:6,run:()=>openProposal(record)};
@@ -264,16 +331,64 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return days+'d since update';
     }
 
+    async function logActivity(record,type,detail='') {
+      return await api({action:'log-activity',recordId:record.id,type,detail});
+    }
+
+    async function logAndOpen(record,type,href) {
+      try { await logActivity(record,type,type==='email'?'Email initiated from CRM.':'Call initiated from CRM.'); } catch {}
+      window.location.href=href;
+      window.setTimeout(()=>load(String(searchInput?.value||'').trim()),600);
+    }
+
+    function activityLabel(type) {
+      const labels={
+        quote_saved:'Quote saved', inquiry:'Inquiry received', lead:'Lead created', proposal:'Proposal created',
+        proposal_sent:'Proposal sent', proposal_viewed:'Proposal viewed', proposal_accepted:'Proposal accepted',
+        proposal_declined:'Proposal declined', contract_signed:'Contract signed', payment_received:'Payment received',
+        payment_link_configured:'Payment link configured', booked:'Event booked', call:'Call', email:'Email',
+        meeting:'Meeting', note:'Note'
+      };
+      return labels[type]||String(type||'Activity').replaceAll('_',' ');
+    }
+
     function addQuickLinks(container,record,className) {
       if(record.customer?.email) {
-        const email=document.createElement('a'); email.className=className; email.href='mailto:'+encodeURIComponent(record.customer.email); email.textContent='Email'; container.appendChild(email);
+        const email=actionButton('Email',className,()=>logAndOpen(record,'email','mailto:'+encodeURIComponent(record.customer.email)));
+        container.appendChild(email);
       }
       if(record.customer?.phone) {
-        const phone=document.createElement('a'); phone.className=className; phone.href='tel:'+String(record.customer.phone).replace(/[^+\d]/g,''); phone.textContent='Call'; container.appendChild(phone);
+        const phone=actionButton('Call',className,()=>logAndOpen(record,'call','tel:'+String(record.customer.phone).replace(/[^+\d]/g,'')));
+        container.appendChild(phone);
       }
+      const activity=actionButton('Activity',className,()=>openActivity(record));
+      container.appendChild(activity);
       if(record.quoteId) {
         const quote=document.createElement('a'); quote.className=className; quote.href='/catalog/?quote='+encodeURIComponent(record.quoteId); quote.target='_blank'; quote.rel='noreferrer'; quote.textContent='Quote'; container.appendChild(quote);
       }
+    }
+
+    function openActivity(record) {
+      activityRecord=record;
+      if(activityTitle) activityTitle.textContent=record.customer?.name||record.id;
+      if(activityMeta) activityMeta.textContent=[record.id,record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ');
+      if(activityForm) activityForm.elements.recordId.value=record.id;
+      if(activityMessage) activityMessage.textContent='';
+      if(activityList) {
+        activityList.innerHTML='';
+        const timeline=record.timeline||[];
+        if(!timeline.length) activityList.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No activity has been recorded yet.'));
+        timeline.forEach((event)=>{
+          const row=document.createElement('article'); row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+          const head=document.createElement('div'); head.className='flex items-start justify-between gap-3';
+          head.append(text('strong','text-sm text-[var(--koa-forest)]',activityLabel(event.type)),text('span','shrink-0 text-[.65rem] text-[var(--koa-ink)]/40',dateTime(event.createdAt)));
+          row.appendChild(head);
+          if(event.detail) row.appendChild(text('p','mt-2 text-sm leading-6 text-[var(--koa-ink)]/62',event.detail));
+          if(event.amount) row.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-clay)]',money(event.amount)+(event.reference?' · '+event.reference:'')));
+          activityList.appendChild(row);
+        });
+      }
+      activityDialog?.showModal();
     }
 
     function renderRecordCard(record) {
@@ -318,30 +433,126 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderWorkQueue() {
       if(!workQueue)return;
       workQueue.innerHTML='';
-      const actionable=(payload.records||[])
-        .filter((record)=>record.stage!=='booked' && record.stage!=='lost')
-        .map((record)=>({record,plan:workflowPlan(record)}))
-        .filter((entry)=>entry.plan.run)
-        .sort((a,b)=>a.plan.priority-b.plan.priority || String(b.record.updatedAt||b.record.createdAt).localeCompare(String(a.record.updatedAt||a.record.createdAt)));
-      if(workCount) workCount.textContent=actionable.length+(actionable.length===1?' item':' items');
+      const reminders=payload.reminders||[];
+      if(workCount) workCount.textContent=reminders.length+(reminders.length===1?' reminder':' reminders');
 
-      actionable.slice(0,9).forEach(({record,plan})=>{
+      reminders.slice(0,12).forEach((reminder)=>{
+        const record=(payload.records||[]).find((entry)=>entry.id===reminder.recordId);
+        if(!record)return;
+        const plan=workflowPlan(record);
         const card=document.createElement('article');
-        card.className='rounded-xl border border-white/12 bg-white/[.06] p-4';
+        card.className='rounded-xl border '+(reminder.priority===0?'border-red-300/30 bg-red-400/10':'border-white/12 bg-white/[.06]')+' p-4';
         card.append(
-          text('p','text-[.52rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]',record.status+' · '+relativeAge(record.updatedAt||record.createdAt)),
-          text('h3','mt-2 text-sm font-bold text-white',record.customer?.name||'Client name TBD'),
-          text('p','mt-1 text-xs leading-5 text-white/48',[record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ')),
-          text('p','mt-3 text-xs leading-5 text-white/65',plan.reason)
+          text('p','text-[.52rem] font-black uppercase tracking-[.1em] '+(reminder.priority===0?'text-red-200':'text-[var(--koa-amber-light)]'),reminder.title),
+          text('h3','mt-2 text-sm font-bold text-white',reminder.customerName||record.customer?.name||'Client name TBD'),
+          text('p','mt-1 text-xs leading-5 text-white/48',[reminder.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ')),
+          text('p','mt-3 text-xs leading-5 text-white/68',reminder.detail)
         );
         const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
-        actions.append(actionButton(plan.label,'rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',plan.run));
+        if(plan.run) actions.append(actionButton(plan.label,'rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',plan.run));
         addQuickLinks(actions,record,'rounded-full border border-white/15 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white/78');
         card.appendChild(actions);
         workQueue.appendChild(card);
       });
-      if(!actionable.length) workQueue.appendChild(text('p','text-sm text-white/52','No active records need attention right now.'));
+
+      if(!reminders.length) {
+        const fallback=(payload.records||[])
+          .filter((record)=>record.stage!=='booked' && record.stage!=='lost' && record.stage!=='converted')
+          .map((record)=>({record,plan:workflowPlan(record)}))
+          .filter((entry)=>entry.plan.run)
+          .slice(0,6);
+        fallback.forEach(({record,plan})=>{
+          const card=document.createElement('article'); card.className='rounded-xl border border-white/12 bg-white/[.06] p-4';
+          card.append(text('p','text-[.52rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]','Next action'),text('h3','mt-2 text-sm font-bold text-white',record.customer?.name||'Client name TBD'),text('p','mt-3 text-xs leading-5 text-white/65',plan.reason));
+          const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
+          actions.append(actionButton(plan.label,'rounded-full bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]',plan.run));
+          addQuickLinks(actions,record,'rounded-full border border-white/15 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white/78');
+          card.appendChild(actions); workQueue.appendChild(card);
+        });
+        if(!fallback.length) workQueue.appendChild(text('p','text-sm text-white/52','No active records need attention right now.'));
+      }
     }
+
+    function renderBookedDashboard() {
+      if(!bookedDashboard)return;
+      bookedDashboard.innerHTML='';
+      const rows=(payload.records||[])
+        .filter((record)=>record.stage==='booked')
+        .sort((a,b)=>String(a.customer?.eventDate||'9999').localeCompare(String(b.customer?.eventDate||'9999')));
+
+      rows.forEach((record)=>{
+        const summary=record.bookingSummary||{};
+        const payments=summary.payments||[];
+        const nextPayment=payments
+          .filter((item)=>item.status!=='paid')
+          .sort((a,b)=>String(a.dueDate||'9999').localeCompare(String(b.dueDate||'9999')))[0];
+
+        const card=document.createElement('article'); card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        card.append(
+          text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Booked · '+(summary.contractStatus==='signed'?'Agreement signed':'Agreement pending')),
+          text('h3','display mt-2 text-3xl text-[var(--koa-forest)]',record.customer?.name||'Client name TBD'),
+          text('p','mt-2 text-sm text-[var(--koa-ink)]/55',[record.customer?.eventDate?new Date(record.customer.eventDate+'T12:00:00').toLocaleDateString():'' ,packageLabel(recordPackage(record))].filter(Boolean).join(' · '))
+        );
+        const finances=document.createElement('div'); finances.className='mt-4 grid grid-cols-2 gap-3';
+        const paidBox=document.createElement('div'); paidBox.className='rounded-xl bg-white p-3'; paidBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Paid'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.paid||0)));
+        const dueBox=document.createElement('div'); dueBox.className='rounded-xl bg-white p-3'; dueBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Outstanding'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.outstanding||0)));
+        finances.append(paidBox,dueBox); card.appendChild(finances);
+        if(nextPayment) card.appendChild(text('p','mt-3 text-xs leading-5 text-[var(--koa-ink)]/55','Next: '+nextPayment.label+' · '+money(nextPayment.amount)+(nextPayment.dueDate?' · due '+nextPayment.dueDate:'')));
+
+        const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
+        const primary='rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+        const small='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+        actions.append(actionButton('Manage booking',primary,()=>openBooking(record)));
+        addQuickLinks(actions,record,small);
+        card.appendChild(actions);
+        bookedDashboard.appendChild(card);
+      });
+      if(!rows.length) bookedDashboard.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No booked events yet.'));
+    }
+
+    function openBooking(record) {
+      bookingRecord=record;
+      const summary=record.bookingSummary||{};
+      if(bookingTitle) bookingTitle.textContent=record.customer?.name||record.id;
+      if(bookingMeta) bookingMeta.textContent=[record.id,record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ');
+      textContent('[data-booking-contract]',summary.contractStatus==='signed'?(summary.signedAt?'Signed '+dateTime(summary.signedAt):'Signed'):'Awaiting signature');
+      textContent('[data-booking-paid]',money(summary.paid||0));
+      textContent('[data-booking-outstanding]',money(summary.outstanding||0));
+      if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
+      if(bookingMessage) bookingMessage.textContent='';
+      if(bookingPayments) {
+        bookingPayments.innerHTML='';
+        (summary.payments||[]).forEach((payment)=>{
+          const row=document.createElement('article'); row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+          const top=document.createElement('div'); top.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
+          const left=document.createElement('div'); left.append(text('strong','text-sm text-[var(--koa-forest)]',payment.label),text('p','mt-1 text-xs text-[var(--koa-ink)]/48',(payment.dueDate?'Due '+payment.dueDate:'Due date TBD')+' · '+money(payment.amount)));
+          const badge=text('span','w-fit rounded-full '+(payment.status==='paid'?'bg-[var(--koa-sand)] text-[var(--koa-forest)]':'border border-[var(--koa-line)] text-[var(--koa-clay)]')+' px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em]',payment.status==='paid'?'Paid':'Pending');
+          top.append(left,badge); row.appendChild(top);
+
+          const controls=document.createElement('div'); controls.className='mt-4 grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end';
+          const refLabel=document.createElement('label'); refLabel.className='grid gap-1 text-xs font-semibold'; refLabel.textContent='Reference';
+          const ref=document.createElement('input'); ref.className='rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2'; ref.value=payment.reference||''; ref.placeholder='Check, invoice, receipt…'; refLabel.appendChild(ref);
+          const urlLabel=document.createElement('label'); urlLabel.className='grid gap-1 text-xs font-semibold'; urlLabel.textContent='Payment URL';
+          const url=document.createElement('input'); url.className='rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2'; url.value=payment.paymentUrl||''; url.placeholder='Secure payment link'; urlLabel.appendChild(url);
+          const saveLink=actionButton('Save link','rounded-full border border-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=>{
+            if(bookingMessage)bookingMessage.textContent='Saving payment link…';
+            await api({action:'configure-payment-link',recordId:record.id,paymentId:payment.id,paymentUrl:url.value});
+            await load(String(searchInput?.value||'').trim()); bookingMessage.textContent='Payment link saved.';
+          });
+          const paid=actionButton(payment.status==='paid'?'Mark pending':'Mark paid','rounded-full bg-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+            if(bookingMessage)bookingMessage.textContent='Updating payment…';
+            await api({action:'record-payment',recordId:record.id,paymentId:payment.id,status:payment.status==='paid'?'pending':'paid',reference:ref.value,paymentUrl:url.value});
+            await load(String(searchInput?.value||'').trim());
+            const refreshed=(payload.records||[]).find((entry)=>entry.id===record.id); if(refreshed)openBooking(refreshed);
+          });
+          controls.append(refLabel,urlLabel,saveLink,paid); row.appendChild(controls);
+          bookingPayments.appendChild(row);
+        });
+      }
+      bookingDialog?.showModal();
+    }
+
+    function textContent(selector,value){const el=document.querySelector(selector);if(el)el.textContent=value;}
 
     function renderPipeline() {
       pipeline.innerHTML='';
@@ -478,7 +689,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(response.status===401){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
       payload=await response.json(); if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderFunnel();renderPipeline();renderQuotes();
+      renderStats();renderWorkQueue();renderFunnel();renderPipeline();renderBookedDashboard();renderQuotes();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
@@ -503,6 +714,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:Number(data.get('taxRate')||0),depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
         editingRecord=result.record;proposalMessage.textContent='Saved.';await load(String(searchInput?.value||'').trim());openProposal(result.record);
       }catch(error){proposalMessage.textContent=error.message||'Unable to save proposal.';}
+    });
+
+    document.querySelectorAll('[data-close-activity]').forEach((button)=>button.addEventListener('click',()=>activityDialog?.close()));
+    document.querySelectorAll('[data-close-booking]').forEach((button)=>button.addEventListener('click',()=>bookingDialog?.close()));
+
+    activityForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault(); const data=new FormData(activityForm); if(activityMessage)activityMessage.textContent='Saving…';
+      try{
+        await api({action:'log-activity',recordId:data.get('recordId'),type:data.get('type'),detail:data.get('detail')});
+        activityForm.elements.detail.value='';
+        await load(String(searchInput?.value||'').trim());
+        const refreshed=(payload.records||[]).find((entry)=>entry.id===data.get('recordId'));
+        if(refreshed)openActivity(refreshed);
+      }catch(error){if(activityMessage)activityMessage.textContent=error.message||'Unable to save activity.';}
     });
 
     copyClientLink?.addEventListener('click',async()=>{
