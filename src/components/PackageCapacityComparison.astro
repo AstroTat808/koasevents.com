@@ -1,0 +1,30 @@
+---
+import { businessRules } from '../data/businessRules';
+
+interface Props {
+  furnitureCoverage: string;
+  dark?: boolean;
+  compact?: boolean;
+}
+
+const { furnitureCoverage, dark = false, compact = false } = Astro.props;
+const venueCapacity = businessRules.venue.maximumOccupancy.value;
+---
+
+<div
+  class:list={[
+    'grid grid-cols-2 overflow-hidden rounded-xl border',
+    compact ? 'mt-4' : 'mt-5',
+    dark ? 'border-white/15 bg-white/[.05]' : 'border-[var(--koa-line)] bg-[var(--koa-ivory)]',
+  ]}
+  aria-label="Venue capacity compared with furniture included"
+>
+  <div class:list={['p-3 sm:p-4', dark ? 'border-r border-white/15' : 'border-r border-[var(--koa-line)]']}>
+    <p class:list={['text-[.55rem] font-black uppercase tracking-[.11em]', dark ? 'text-white/45' : 'text-[var(--koa-clay)]']}>Venue capacity</p>
+    <p class:list={['mt-1 text-sm font-bold leading-5', dark ? 'text-white' : 'text-[var(--koa-forest)]']}>Up to {venueCapacity} persons</p>
+  </div>
+  <div class="p-3 sm:p-4">
+    <p class:list={['text-[.55rem] font-black uppercase tracking-[.11em]', dark ? 'text-white/45' : 'text-[var(--koa-clay)]']}>Furniture included</p>
+    <p class:list={['mt-1 text-sm font-bold leading-5', dark ? 'text-white' : 'text-[var(--koa-forest)]']}>{furnitureCoverage}</p>
+  </div>
+</div>
