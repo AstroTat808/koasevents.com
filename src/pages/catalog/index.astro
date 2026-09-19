@@ -1587,13 +1587,31 @@ const badgeClass = {
         if (!id || !item) return;
 
         if (selected.has(id)) {
+          if (selected.get(id)?.auto) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+          }
           selected.delete(id);
           autoSelected.delete(id);
           setItemButtonState(id, false);
         } else {
           const quantityInput = card.querySelector('[data-item-quantity]');
           const quantity = quantityInput ? Math.max(1, Number(quantityInput.value || 1)) : 1;
-          selected.set(id, { name: item.name, quantity, auto: false });
+          const autoRequired = autoRequiredItemIds().includes(id) && suggestedQuantity(item) > 0;
+
+          if (autoRequired) {
+            dismissedAuto.delete(id);
+            autoOverrides.set(id, quantity);
+            selected.set(id, {
+              name: item.name,
+              quantity,
+              auto: true,
+              overridden: quantity !== suggestedQuantity(item),
+            });
+            autoSelected.add(id);
+          } else {
+            selected.set(id, { name: item.name, quantity, auto: false });
+          }
           setItemButtonState(id, true);
         }
 
@@ -1650,19 +1668,67 @@ const badgeClass = {
       card.querySelector('[data-item-quantity]')?.addEventListener('input', (event) => {
         const id = card.dataset.id;
         const item = id ? itemById.get(id) : null;
-        if (!id || !item || !selected.has(id)) return;
-        autoSelected.delete(id);
-        selected.set(id, { name: item.name, quantity: Math.max(1, Number(event.target.value || 1)), auto: false });
+        if (!id || !item) return;
+
+        const rawQuantity = Math.max(0, Math.min(500, Number(event.target.value || 0)));
+        const autoRequired = autoRequiredItemIds().includes(id);
+
+        if (autoRequired && (selected.get(id)?.auto || dismissedAuto.has(id))) {
+          if (rawQuantity <= 0) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+            selected.delete(id);
+            autoSelected.delete(id);
+            setItemButtonState(id, false);
+          } else {
+            dismissedAuto.delete(id);
+            autoOverrides.set(id, rawQuantity);
+            selected.set(id, {
+              name: item.name,
+              quantity: rawQuantity,
+              auto: true,
+              overridden: rawQuantity !== suggestedQuantity(item),
+            });
+            autoSelected.add(id);
+            setItemButtonState(id, true);
+          }
+          syncQuote();
+          return;
+        }
+
+        if (!selected.has(id)) return;
+        selected.set(id, { name: item.name, quantity: Math.max(1, rawQuantity || 1), auto: false });
         syncQuote();
       });
     });
 
-    restoreSelectionState();
-    if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
-    applyFilters();
-    refreshPackageInclusions();
-    refreshBundleAvailability();
-    renderGuestAdjustment();
-    syncSuggestedQuantities();
+    saveQuoteButton?.addEventListener('click', saveCurrentQuote);
+
+    copyQuoteLink?.addEventListener('click', async () => {
+      const value = savedQuoteLink?.value || '';
+      if (!value) return;
+      try {
+        await navigator.clipboard.writeText(value);
+        const original = copyQuoteLink.textContent;
+        copyQuoteLink.textContent = 'Copied ✓';
+        window.setTimeout(() => { copyQuoteLink.textContent = original; }, 1200);
+      } catch {
+        savedQuoteLink?.focus();
+        savedQuoteLink?.select();
+      }
+    });
+
+    async function initializeBuilder() {
+      await restoreSelectionState();
+      if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
+      applyFilters();
+      renderSelectedPackageDetails();
+      refreshPackageInclusions();
+      refreshBundleAvailability();
+      renderGuestAdjustment();
+      syncSuggestedQuantities();
+    }
+
+    initializeBuilder();
   </script>
 </BaseLayout>
