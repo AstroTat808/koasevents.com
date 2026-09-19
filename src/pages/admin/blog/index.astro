@@ -12,14 +12,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="grid gap-4">
             <label class="grid gap-2 text-sm font-semibold">Title<input name="title" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <label class="grid gap-2 text-sm font-semibold">Slug<input name="slug" placeholder="auto-generated-from-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">SEO title<input name="seoTitle" placeholder="Search/social title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Meta description<textarea name="metaDescription" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
             <label class="grid gap-2 text-sm font-semibold">Excerpt<textarea name="excerpt" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
             <label class="grid gap-2 text-sm font-semibold">Article<textarea name="body" rows="14" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
             <label class="grid gap-2 text-sm font-semibold">Featured image URL<input name="featuredImage" placeholder="Imported automatically from Wix" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <label class="grid gap-2 text-sm font-semibold">Author<input name="author" placeholder="Koa’s Events" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Category<input name="category" placeholder="Wedding Planning" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Tags<input name="tags" placeholder="wedding planning, Big Island, venue" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="flex items-center gap-3 text-sm font-semibold"><input name="featured" type="checkbox" class="h-4 w-4" /> Feature this article on the blog landing page</label>
             <label class="grid gap-2 text-sm font-semibold">Status<select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="draft">Draft</option><option value="published">Published</option></select></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save entry</button>
             <button type="button" data-new class="text-left text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Clear form / new entry</button>
-            <button type="button" data-import-wix class="text-left text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Import / refresh from old Wix blog</button>
+            <button type="button" data-restore-legacy class="text-left text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Restore legacy posts from GitHub backup</button>
             <p data-message class="text-sm text-[var(--koa-ink)]/58"></p>
           </div>
         </form>
@@ -60,7 +65,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const edit = document.createElement('button'); edit.className='link-arrow'; edit.textContent='Edit';
         edit.addEventListener('click', () => {
           form.elements.title.value=post.title; form.elements.slug.value=post.slug; form.elements.originalSlug.value=post.slug;
-          form.elements.excerpt.value=post.excerpt; form.elements.body.value=post.body; form.elements.featuredImage.value=post.featuredImage || ''; form.elements.author.value=post.author || ''; form.elements.status.value=post.status;
+          form.elements.seoTitle.value=post.seoTitle || post.title || ''; form.elements.metaDescription.value=post.metaDescription || post.excerpt || ''; form.elements.excerpt.value=post.excerpt; form.elements.body.value=post.body; form.elements.featuredImage.value=post.featuredImage || ''; form.elements.author.value=post.author || ''; form.elements.category.value=post.category || ''; form.elements.tags.value=(post.tags || []).join(', '); form.elements.featured.checked=Boolean(post.featured); form.elements.status.value=post.status;
           form.scrollIntoView({behavior:'smooth'});
         });
         const del = document.createElement('button'); del.className='text-sm font-semibold text-red-700'; del.textContent='Delete';
@@ -87,17 +92,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       event.preventDefault();
       const data=new FormData(form);
       const original=String(data.get('originalSlug')||'');
-      const payload={action:'save',title:data.get('title'),slug:data.get('slug'),excerpt:data.get('excerpt'),body:data.get('body'),featuredImage:data.get('featuredImage'),author:data.get('author'),status:data.get('status')};
+      const payload={action:'save',title:data.get('title'),slug:data.get('slug'),seoTitle:data.get('seoTitle'),metaDescription:data.get('metaDescription'),excerpt:data.get('excerpt'),body:data.get('body'),featuredImage:data.get('featuredImage'),author:data.get('author'),category:data.get('category'),tags:data.get('tags'),featured:data.get('featured')==='on',status:data.get('status')};
       if(original && original!==payload.slug) await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',slug:original})});
       const response=await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
       if(message) message.textContent=response.ok?'Saved.':'Save failed.';
       if(response.ok){clearForm();await load();}
     });
     document.querySelector('[data-new]')?.addEventListener('click',clearForm);
-    document.querySelector('[data-import-wix]')?.addEventListener('click', async () => {
-      if (message) message.textContent='Importing the old Wix blog…';
-      const response=await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'import-wix'})});
-      if (message) message.textContent=response.ok?'Wix blog import complete.':'Wix import could not complete.';
+    document.querySelector('[data-restore-legacy]')?.addEventListener('click', async () => {
+      if (message) message.textContent='Restoring legacy posts from the GitHub-backed archive…';
+      const response=await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'restore-legacy'})});
+      if (message) message.textContent=response.ok?'Legacy blog archive restored.':'Legacy restore could not complete.';
       if(response.ok) await load();
     });
     load();
