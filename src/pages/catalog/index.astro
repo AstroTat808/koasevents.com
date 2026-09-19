@@ -1536,7 +1536,8 @@ const badgeClass = {
         const actions = document.createElement('div');
         actions.className = 'grid shrink-0 justify-items-end gap-2';
 
-        if (entry.auto) {
+        const selectedItem = itemById.get(id);
+        if (entry.auto || selectedItem?.quantityMode) {
           const quantityWrap = document.createElement('label');
           quantityWrap.className = 'grid gap-1 text-[.52rem] font-black uppercase tracking-[.09em] text-white/38';
           quantityWrap.textContent = 'Qty';
@@ -1552,23 +1553,32 @@ const badgeClass = {
             const cardInput = cardFor(id)?.querySelector('[data-item-quantity]');
 
             if (quantity <= 0) {
-              dismissedAuto.add(id);
-              autoOverrides.delete(id);
+              if (entry.auto) {
+                dismissedAuto.add(id);
+                autoOverrides.delete(id);
+              }
               selected.delete(id);
               autoSelected.delete(id);
-              if (cardInput) cardInput.value = String(suggestedQuantity(itemById.get(id)));
+              if (cardInput) cardInput.value = entry.auto ? String(suggestedQuantity(selectedItem)) : '1';
               setItemButtonState(id, false);
-            } else {
+            } else if (entry.auto) {
               dismissedAuto.delete(id);
               autoOverrides.set(id, quantity);
-              const item = itemById.get(id);
               selected.set(id, {
-                name: item?.name || entry.name,
+                name: selectedItem?.name || entry.name,
                 quantity,
                 auto: true,
-                overridden: quantity !== suggestedQuantity(item),
+                overridden: quantity !== suggestedQuantity(selectedItem),
               });
               autoSelected.add(id);
+              if (cardInput) cardInput.value = String(quantity);
+              setItemButtonState(id, true);
+            } else {
+              selected.set(id, {
+                name: selectedItem?.name || entry.name,
+                quantity,
+                auto: false,
+              });
               if (cardInput) cardInput.value = String(quantity);
               setItemButtonState(id, true);
             }
@@ -1577,7 +1587,7 @@ const badgeClass = {
           quantityWrap.appendChild(quantityInput);
           actions.appendChild(quantityWrap);
 
-          if (entry.overridden) {
+          if (entry.auto && entry.overridden) {
             const reset = document.createElement('button');
             reset.type = 'button';
             reset.className = 'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)] hover:text-white';
