@@ -60,6 +60,15 @@ export default async (req: Request, context: Context) => {
 
   if (req.method === 'GET') {
     if (proposal.status === 'draft') return Response.json({ error: 'This proposal has not been sent yet.' }, { status: 403 });
+    if (proposal.status === 'sent') {
+      proposal.status = 'viewed';
+      proposal.viewedAt = new Date().toISOString();
+      record.status = 'viewed';
+      record.updatedAt = proposal.viewedAt;
+      const next = list.map((entry: any) => entry.id === record.id ? record : entry);
+      await store.setJSON('records/' + record.id, record);
+      await store.setJSON('records/index', next);
+    }
     return Response.json({ proposal: publicRecord(record) }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
