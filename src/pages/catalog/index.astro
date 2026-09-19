@@ -879,11 +879,11 @@ const badgeClass = {
           const extraChairs = Math.max(0, guests - Number(inventory.includedChairCount ?? 0));
           guestAdjustmentCopy.textContent = base + (
             extraChairs > 0
-              ? 'For ' + guests + ' guests, ' + extraChairs + ' additional ceremony chairs and ' + extraChairs + ' additional reception chairs are preselected below. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
+              ? 'For ' + guests + ' guests, we suggest ' + extraChairs + ' additional ceremony chairs and ' + extraChairs + ' additional reception chairs. You can adjust or remove those suggestions and your choice will be preserved. Because Orchid includes 2 tables of your choice, the number of additional tables depends on the table style you select and will be confirmed in the quote.'
               : 'Your entered guest count is within the included chair quantity. Table capacity still depends on which 2 table styles you select.'
           );
         } else if (additions.length) {
-          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so the additional chair and table quantities below are automatically preselected in your quote.';
+          guestAdjustmentCopy.textContent = base + 'Your guest count exceeds part of the included furniture inventory, so we suggest additional chair and table quantities below. You can adjust or remove any suggestion and the builder will preserve your choice.';
         } else {
           guestAdjustmentCopy.textContent = base + 'Your entered guest count fits within the published included furniture quantities using the 8-guests-per-round planning default.';
         }
