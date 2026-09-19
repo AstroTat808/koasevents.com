@@ -5,6 +5,8 @@ import Footer from '../../components/Footer.astro';
 import { catalogCategories, catalogItems, catalogPricingNote, catalogBundles, bundleSavingsTiers } from '../../data/catalog';
 
 const featured = catalogItems.filter((item) => item.featured);
+const browseCatalogItems = catalogItems.filter((item) => item.category !== 'packages');
+const browseCatalogCategories = catalogCategories.filter((category) => category.id !== 'packages');
 const catalogClientData = catalogItems.map((item) => ({
   id: item.id,
   name: item.name,
@@ -38,7 +40,7 @@ const badgeClass = {
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Rental + enhancement catalog</p>
           <h1 class="display mt-5 text-6xl leading-[.93] sm:text-7xl">Build your event without the PDF.</h1>
-          <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">Search Koa’s packages, furniture, tabletop pieces, décor, production, Mobile Bar options and services. Add anything you’re considering to a quote request and we’ll price the final scope around your date, quantities and event plan.</p>
+          <p class="mt-7 max-w-2xl text-base leading-7 text-[var(--koa-ink)]/68">Choose your wedding starting point, then browse furniture, tabletop pieces, décor, production, Mobile Bar options and services. Add the extras you’re considering to a quote request and we’ll price the final scope around your date, quantities and event plan.</p>
         </div>
         <div class="grid gap-3 sm:grid-cols-2">
           {featured.map((item) => (
@@ -145,7 +147,7 @@ const badgeClass = {
     <section class="sticky top-0 z-30 border-y border-[var(--koa-line)] bg-[rgba(251,248,241,.94)] py-4 backdrop-blur">
       <div class="container-shell flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div class="flex gap-2 overflow-x-auto pb-1 lg:pb-0" data-catalog-filters>
-          {catalogCategories.map((category, index) => (
+          {browseCatalogCategories.map((category, index) => (
             <button
               type="button"
               data-category={category.id}
@@ -168,11 +170,11 @@ const badgeClass = {
               <p class="eyebrow text-[var(--koa-clay)]">Browse the collection</p>
               <h2 class="display mt-3 text-4xl sm:text-5xl">Pricing you can actually scan.</h2>
             </div>
-            <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{catalogItems.length} items</p>
+            <p class="text-xs leading-5 text-[var(--koa-ink)]/48" data-catalog-count>{browseCatalogItems.length} items</p>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2" data-catalog-grid>
-            {catalogItems.map((item) => (
+            {browseCatalogItems.map((item) => (
               <article
                 data-catalog-item
                 data-id={item.id}
@@ -183,7 +185,7 @@ const badgeClass = {
                 class="card-lift flex min-h-[19rem] flex-col rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6"
               >
                 <div class="flex items-start justify-between gap-4">
-                  <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{catalogCategories.find((category) => category.id === item.category)?.label}</span>
+                  <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{browseCatalogCategories.find((category) => category.id === item.category)?.label}</span>
                   <span class="text-right text-[.66rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">{item.priceLabel}</span>
                 </div>
                 {item.badges?.length && (
