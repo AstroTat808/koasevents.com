@@ -75,7 +75,21 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
 
     const details = describeState(saved);
     const allText = details.all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
-    const autoDetailed = details.all.filter((entry) => entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const autoDetailed = details.all.filter((entry) => entry.auto).map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: 
+    const manualDetailed = details.all.filter((entry) => !entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+
+    if (selectedItemsInput) selectedItemsInput.value = allText;
+    if (autoBreakdownInput) autoBreakdownInput.value = autoDetailed;
+    if (manualAddOnsInput) manualAddOnsInput.value = manualDetailed;
+    if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
+    if (stateInput) stateInput.value = JSON.stringify(saved);
+
+    carriedPlan?.classList.remove('hidden');
+    if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
+    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + (autoDetailed || 'none') + ' Manual add-ons: ' + details.manualText + '. These selections will be submitted with this inquiry.';
+  }
+</script>
+</BaseLayout> + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
     const manualDetailed = details.all.filter((entry) => !entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
 
     if (selectedItemsInput) selectedItemsInput.value = allText;
