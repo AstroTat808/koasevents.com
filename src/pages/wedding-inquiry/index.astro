@@ -3,21 +3,90 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 const requestedPackage=Astro.url.searchParams.get('package') || '';
+const requestedGuests=Astro.url.searchParams.get('guests') || '';
 ---
 <BaseLayout title="Big Island Wedding Venue Availability | Koa’s Events" description="Tell Koa’s Events about your Hawaiʻi Island wedding date, guest count, budget and vision." canonical="https://www.koasevents.com/wedding-inquiry/">
 <Header overlay={false}/>
 <main><section class="py-16 lg:py-24"><div class="container-shell grid gap-14 lg:grid-cols-[.75fr_1.25fr] lg:gap-20">
 <aside><p class="eyebrow text-[var(--koa-clay)]">Wedding availability</p><h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Start with the wedding, not the equipment list.</h1><p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">We only need enough information to understand your date, guest count, budget and the kind of experience you are planning. Detailed rentals, décor and production choices can come later.</p><div class="mt-10 rounded-[1.5rem] bg-[var(--koa-forest)] p-7 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Signature Wedding</p><p class="display mt-4 text-4xl">Starting at $20,000</p><p class="mt-4 text-sm leading-6 text-white/64">Interested in a more supported wedding weekend? Select the Signature Experience in the form and we’ll qualify the fit from there.</p></div></aside>
-<form name="koa-wedding-inquiry" method="POST" action="/wedding-inquiry-thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.8rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-9">
+<form name="koa-wedding-inquiry" method="POST" action="/wedding-inquiry-thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.8rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-9" data-wedding-inquiry-form>
 <input type="hidden" name="form-name" value="koa-wedding-inquiry"/>
-          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Wedding Inquiry (%{submissionId})" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
+          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Wedding Inquiry (%{submissionId})" />
+          <input type="hidden" name="selectedCatalogItems" value="" data-selected-catalog-items />
+          <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
+          <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
+          <input type="hidden" name="estimatedGuestFurnitureTotal" value="" data-estimated-furniture-total />
+          <input type="hidden" name="catalogSelectionState" value="" data-catalog-selection-state />
+          <p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
 <div class="grid gap-6">
+<div class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5" data-carried-plan>
+  <p class="eyebrow text-[var(--koa-clay)]">Carried from your quote builder</p>
+  <p class="mt-2 text-sm font-bold text-[var(--koa-forest)]" data-carried-plan-title></p>
+  <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62" data-carried-plan-copy></p>
+  <a href="/catalog/#start-building" class="link-arrow mt-4">Edit package or rentals →</a>
+</div>
 <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">First name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="firstName" required autocomplete="given-name"/></label><label class="grid gap-2 text-sm font-semibold">Last name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="lastName" required autocomplete="family-name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Phone<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="tel" name="phone" required autocomplete="tel"/></label></div>
-<div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Wedding date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="weddingDate" required/></label><label class="grid gap-2 text-sm font-semibold">Alternate date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="alternateDate"/></label><label class="grid gap-2 text-sm font-semibold">Estimated guest count<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" required/></label><label class="grid gap-2 text-sm font-semibold">Wedding budget<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="budget" required><option value="">Choose one</option><option>Under $10,000</option><option>$10,000–$19,999</option><option>$20,000–$29,999</option><option>$30,000–$49,999</option><option>$50,000+</option></select></label></div>
+<div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Wedding date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="weddingDate" required/></label><label class="grid gap-2 text-sm font-semibold">Alternate date<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="alternateDate"/></label><label class="grid gap-2 text-sm font-semibold">Estimated guest count<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required/></label><label class="grid gap-2 text-sm font-semibold">Wedding budget<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="budget" required><option value="">Choose one</option><option>Under $10,000</option><option>$10,000–$19,999</option><option>$20,000–$29,999</option><option>$30,000–$49,999</option><option>$50,000+</option></select></label></div>
 <label class="grid gap-2 text-sm font-semibold">Where are you planning from?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="planningFrom" required><option value="">Choose one</option><option>Hawaiʻi Island resident</option><option>Elsewhere in Hawaiʻi</option><option>Destination wedding — U.S. mainland</option><option>Destination wedding — international</option></select></label>
 <label class="grid gap-2 text-sm font-semibold">Which starting point interests you?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="packageInterest"><option value="">Not sure yet</option><option value="signature" selected={requestedPackage==='signature'}>Koa’s Signature Wedding Experience — from $20,000</option><option value="hibiscus" selected={requestedPackage==='hibiscus'}>Hibiscus — from $8,000</option><option value="orchid" selected={requestedPackage==='orchid'}>Orchid — from $3,000</option><option value="gardenia" selected={requestedPackage==='gardenia'}>Gardenia — from $1,500</option></select></label>
 <label class="grid gap-2 text-sm font-semibold">Tell us what you envision for your wedding<textarea class="min-h-40 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="vision" placeholder="What do you want the weekend to feel like? What matters most to you?" required></textarea></label>
 <button class="rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Submit + continue to discovery call</button>
 <p class="text-center text-sm leading-6 text-[var(--koa-ink)]/56">Submitting an inquiry does not reserve a date. Your date is secured only after the applicable agreement and deposit are completed.</p>
 </div></form></div></section></main><Footer/>
+<script is:inline define:vars={{ requestedPackage, requestedGuests }}>
+  const form = document.querySelector('[data-wedding-inquiry-form]');
+  const packageField = form?.querySelector('[name="packageInterest"]');
+  const guestField = form?.querySelector('[name="guestCount"]');
+  const carriedPlan = document.querySelector('[data-carried-plan]');
+  const carriedPlanTitle = document.querySelector('[data-carried-plan-title]');
+  const carriedPlanCopy = document.querySelector('[data-carried-plan-copy]');
+  const selectedItemsInput = form?.querySelector('[data-selected-catalog-items]');
+  const autoBreakdownInput = form?.querySelector('[data-auto-rental-breakdown]');
+  const manualAddOnsInput = form?.querySelector('[data-manual-add-ons]');
+  const estimateInput = form?.querySelector('[data-estimated-furniture-total]');
+  const stateInput = form?.querySelector('[data-catalog-selection-state]');
+
+  function normalizedInquiryPackage(id) {
+    if (id === 'signature-wedding' || id === 'plumeria') return 'signature';
+    return id || '';
+  }
+
+  function describeState(state) {
+    const auto = (state?.selected || []).filter((entry) => entry.auto);
+    const manual = (state?.selected || []).filter((entry) => !entry.auto);
+    const autoText = auto.length
+      ? auto.map((entry) => entry.quantity + ' × ' + entry.name).join(', ')
+      : 'No automatic furniture add-ons';
+    const manualText = manual.length
+      ? manual.map((entry) => entry.quantity + ' × ' + entry.name).join(', ')
+      : 'No manual add-ons';
+    return { autoText, manualText, all: [...auto, ...manual] };
+  }
+
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
+
+  if (saved) {
+    const queryPackage = normalizedInquiryPackage(requestedPackage);
+    const savedPackage = normalizedInquiryPackage(saved.startingPoint);
+    const packageValue = queryPackage || savedPackage;
+    if (packageField && packageValue) packageField.value = packageValue;
+    if (guestField && !requestedGuests && saved.guestCount) guestField.value = String(saved.guestCount);
+
+    const details = describeState(saved);
+    const allText = details.all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const autoDetailed = details.all.filter((entry) => entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const manualDetailed = details.all.filter((entry) => !entry.auto).map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+
+    if (selectedItemsInput) selectedItemsInput.value = allText;
+    if (autoBreakdownInput) autoBreakdownInput.value = autoDetailed;
+    if (manualAddOnsInput) manualAddOnsInput.value = manualDetailed;
+    if (estimateInput) estimateInput.value = saved.estimatedFurnitureTotal || '';
+    if (stateInput) stateInput.value = JSON.stringify(saved);
+
+    carriedPlan?.classList.remove('hidden');
+    if (carriedPlanTitle) carriedPlanTitle.textContent = (packageField?.selectedOptions?.[0]?.textContent || 'Saved wedding plan') + ' · ' + (guestField?.value || saved.guestCount) + ' guests';
+    if (carriedPlanCopy) carriedPlanCopy.textContent = 'Automatic rentals: ' + details.autoText + '. Manual add-ons: ' + details.manualText + '. These selections will be submitted with this inquiry.';
+  }
+</script>
 </BaseLayout>
