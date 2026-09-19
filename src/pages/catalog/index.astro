@@ -1382,23 +1382,24 @@ const badgeClass = {
         const row = document.createElement('div');
         row.dataset.selectedRow = 'true';
         row.className =
-          'flex items-center justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
+          'flex items-start justify-between gap-3 rounded-xl border border-white/10 px-4 py-3 text-sm';
 
         const label = document.createElement('span');
-        label.className = 'min-w-0';
+        label.className = 'min-w-0 flex-1';
         const title = document.createElement('span');
-        title.className = 'block';
+        title.className = 'block font-semibold';
         title.textContent = entry.quantity && entry.quantity !== 1 ? entry.name + ' × ' + entry.quantity : entry.name;
         label.appendChild(title);
+
         if (entry.auto) {
           const auto = document.createElement('span');
           auto.className = 'mt-1 block text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]';
-          auto.textContent = 'Guest-count add-on';
+          auto.textContent = entry.overridden ? 'Guest-count add-on · adjusted by you' : 'Guest-count add-on · suggested';
           label.appendChild(auto);
 
           const reason = document.createElement('span');
           reason.className = 'mt-2 block text-xs leading-5 text-white/55';
-          reason.textContent = autoRentalReason(id, entry.quantity);
+          reason.textContent = autoRentalReason(id, entry.quantity, Boolean(entry.overridden));
           label.appendChild(reason);
 
           const estimate = estimatedLineTotal(id, entry);
@@ -1408,22 +1409,93 @@ const badgeClass = {
             price.textContent = currency(estimate) + ' estimated (' + currency(itemById.get(id)?.estimatedUnitPrice) + ' × ' + entry.quantity + ')';
             label.appendChild(price);
           }
+        } else {
+          const item = itemById.get(id);
+          if (item?.priceLabel) {
+            const price = document.createElement('span');
+            price.className = 'mt-1 block text-xs text-white/48';
+            price.textContent = item.priceLabel;
+            label.appendChild(price);
+          }
+        }
+
+        const actions = document.createElement('div');
+        actions.className = 'grid shrink-0 justify-items-end gap-2';
+
+        if (entry.auto) {
+          const quantityWrap = document.createElement('label');
+          quantityWrap.className = 'grid gap-1 text-[.52rem] font-black uppercase tracking-[.09em] text-white/38';
+          quantityWrap.textContent = 'Qty';
+          const quantityInput = document.createElement('input');
+          quantityInput.type = 'number';
+          quantityInput.min = '0';
+          quantityInput.max = '500';
+          quantityInput.value = String(entry.quantity);
+          quantityInput.className = 'w-16 rounded-lg border border-white/15 bg-white/[.06] px-2 py-1.5 text-center text-sm font-bold text-white outline-none focus:border-[var(--koa-amber)]';
+          quantityInput.setAttribute('aria-label', 'Quantity for ' + entry.name);
+          quantityInput.addEventListener('change', () => {
+            const quantity = Math.max(0, Math.min(500, Number(quantityInput.value || 0)));
+            const cardInput = cardFor(id)?.querySelector('[data-item-quantity]');
+
+            if (quantity <= 0) {
+              dismissedAuto.add(id);
+              autoOverrides.delete(id);
+              selected.delete(id);
+              autoSelected.delete(id);
+              if (cardInput) cardInput.value = String(suggestedQuantity(itemById.get(id)));
+              setItemButtonState(id, false);
+            } else {
+              dismissedAuto.delete(id);
+              autoOverrides.set(id, quantity);
+              const item = itemById.get(id);
+              selected.set(id, {
+                name: item?.name || entry.name,
+                quantity,
+                auto: true,
+                overridden: quantity !== suggestedQuantity(item),
+              });
+              autoSelected.add(id);
+              if (cardInput) cardInput.value = String(quantity);
+              setItemButtonState(id, true);
+            }
+            syncQuote();
+          });
+          quantityWrap.appendChild(quantityInput);
+          actions.appendChild(quantityWrap);
+
+          if (entry.overridden) {
+            const reset = document.createElement('button');
+            reset.type = 'button';
+            reset.className = 'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)] hover:text-white';
+            reset.textContent = 'Use suggested';
+            reset.addEventListener('click', () => {
+              dismissedAuto.delete(id);
+              autoOverrides.delete(id);
+              syncSuggestedQuantities();
+            });
+            actions.appendChild(reset);
+          }
         }
 
         const remove = document.createElement('button');
         remove.type = 'button';
-        remove.className = 'text-white/45 hover:text-white';
-        remove.setAttribute('aria-label', 'Remove ' + entry.name);
+        remove.className = 'min-h-8 min-w-8 rounded-full border border-white/10 text-white/45 hover:text-white';
+        remove.setAttribute('aria-label', (entry.auto ? 'Remove suggested ' : 'Remove ') + entry.name);
         remove.textContent = '×';
 
         remove.addEventListener('click', () => {
+          if (entry.auto) {
+            dismissedAuto.add(id);
+            autoOverrides.delete(id);
+          }
           selected.delete(id);
           autoSelected.delete(id);
           setItemButtonState(id, false);
           syncQuote();
         });
 
-        row.append(label, remove);
+        actions.appendChild(remove);
+        row.append(label, actions);
         quoteList?.appendChild(row);
       });
 
@@ -1433,21 +1505,51 @@ const badgeClass = {
       const manualEntries = entries.filter(([, entry]) => !entry.auto);
       const autoBreakdown = autoEntries.map(([id, entry]) => {
         const estimate = estimatedLineTotal(id, entry);
-        return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
+        return (entry.quantity + ' × ' + entry.name) + ' — ' + autoRentalReason(id, entry.quantity, Boolean(entry.overridden)) + (estimate ? ' Estimated: ' + currency(estimate) + '.' : '');
       }).join(' | ');
       const manualBreakdown = manualEntries.map(([, entry]) => entry.quantity + ' × ' + entry.name).join(' | ');
       const furnitureTotal = autoEntries.reduce((sum, [id, entry]) => sum + estimatedLineTotal(id, entry), 0);
+      const basePrice = packageBasePrice();
+      const estimatedTotal = basePrice + furnitureTotal;
+      const customNotes = packageCustomQuoteNotes(entries);
+      const plan = selectedPackagePlan();
 
       if (selectedInput) selectedInput.value = joined;
       if (autoRentalBreakdownInput) autoRentalBreakdownInput.value = autoBreakdown;
       if (manualAddOnsInput) manualAddOnsInput.value = manualBreakdown;
       if (estimatedFurnitureTotalInput) estimatedFurnitureTotalInput.value = furnitureTotal ? currency(furnitureTotal) + ' planning estimate' : '$0';
+      if (basePackagePriceInput) basePackagePriceInput.value = basePrice ? currency(basePrice) : '';
+      if (startingTotalInput) startingTotalInput.value = basePrice ? currency(estimatedTotal) + ' planning estimate' : '';
+      if (packageIncludesInput) packageIncludesInput.value = plan ? ['Furniture / inventory: ' + plan.includedInventory, ...(plan.includes || [])].join(' | ') : '';
+      if (customQuoteItemsInput) customQuoteItemsInput.value = customNotes.join(' | ');
+
       if (selectedPreview) {
         selectedPreview.textContent =
           joined || 'Choose rentals or enhancements above and they’ll appear here.';
       }
+
       furnitureEstimate?.classList.toggle('hidden', furnitureTotal <= 0);
       if (furnitureEstimateTotal) furnitureEstimateTotal.textContent = currency(furnitureTotal);
+
+      startingTotalPanel?.classList.toggle('hidden', basePrice <= 0);
+      if (startingTotal) startingTotal.textContent = currency(estimatedTotal);
+      if (startingTotalBase) startingTotalBase.textContent = basePrice ? 'Base package: ' + currency(basePrice) : '';
+      if (startingTotalFurniture) startingTotalFurniture.textContent = 'Estimated guest-count furniture: ' + currency(furnitureTotal);
+      if (startingTotalNote) {
+        startingTotalNote.textContent = startingPoint === 'gardenia' && guestCount() > 10
+          ? 'Planning floor only: Gardenia celebrations above 10 guests require a custom package quote. Custom-priced and manually selected add-ons are not included here.'
+          : 'Package base plus estimated automatic guest-count furniture. Custom-priced or manually selected add-ons are not included in this number.';
+      }
+
+      customQuotePanel?.classList.toggle('hidden', customNotes.length === 0);
+      if (customQuoteList) {
+        customQuoteList.innerHTML = '';
+        customNotes.forEach((note) => {
+          const row = document.createElement('p');
+          row.textContent = '• ' + note;
+          customQuoteList.appendChild(row);
+        });
+      }
 
       renderSavings();
       persistSelectionState();
