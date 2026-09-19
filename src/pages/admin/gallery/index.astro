@@ -1,39 +1,95 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { galleryMedia, koaMarketingGallery } from '../../../data/media';
-const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:item.src, alt:item.alt }));
+
+const curated = [
+  ...koaMarketingGallery.map((item) => ({ src: item.src, alt: item.alt, category: item.category })),
+  ...galleryMedia.map((item) => ({ src: item.src, alt: item.alt, category: 'Legacy Archive' })),
+];
+const categories = ['Venue','Ceremony','Reception','Mobile Bar','Enhancements','Hospitality','Stay'];
+const curatedCategories = [...categories, 'Legacy Archive'];
 ---
 <BaseLayout noindex title="Gallery Admin | Koa’s Events" description="Manage Koa’s Events gallery." canonical="https://www.koasevents.com/admin/gallery/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
-      <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Admin</p><h1 class="display mt-3 text-5xl">Gallery photos</h1></div><a href="/admin/" class="link-arrow">Admin home →</a></div>
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin</p>
+          <h1 class="display mt-3 text-5xl">Gallery photos</h1>
+          <p class="mt-4 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">
+            Move photos between gallery categories and drag the focal point directly on each image to control how it is centered when cropped.
+          </p>
+        </div>
+        <a href="/admin/" class="link-arrow">Admin home →</a>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">
+        Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.
+      </div>
+
       <div data-admin-ui class="hidden">
         <form data-upload-form class="grid gap-4 rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)] md:grid-cols-2">
-          <label class="grid gap-2 text-sm font-semibold md:col-span-2">Photo<input name="file" type="file" accept="image/*" required class="rounded-xl border border-[var(--koa-line)] p-3" /></label>
-          <label class="grid gap-2 text-sm font-semibold">Category<select name="category" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option>Venue</option><option>Ceremony</option><option>Reception</option><option>Mobile Bar</option><option>Enhancements</option><option>Hospitality</option><option>Stay</option></select></label>
-          <label class="grid gap-2 text-sm font-semibold">Alt text<input name="alt" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-          <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white md:col-span-2">Optimize & upload photo</button>
+          <label class="grid gap-2 text-sm font-semibold md:col-span-2">
+            Photo
+            <input name="file" type="file" accept="image/*" required class="rounded-xl border border-[var(--koa-line)] p-3" />
+          </label>
+          <label class="grid gap-2 text-sm font-semibold">
+            Category
+            <select name="category" class="rounded-xl border border-[var(--koa-line)] px-4 py-3">
+              {categories.map((category) => <option>{category}</option>)}
+            </select>
+          </label>
+          <label class="grid gap-2 text-sm font-semibold">
+            Alt text
+            <input name="alt" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+          </label>
+          <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white md:col-span-2">
+            Optimize & upload photo
+          </button>
           <p data-upload-message class="text-sm text-[var(--koa-ink)]/58 md:col-span-2"></p>
         </form>
 
-        <section class="mt-10"><h2 class="display text-4xl">Uploaded photos</h2><div data-uploaded-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div></section>
-        <section class="mt-14"><h2 class="display text-4xl">Built-in gallery photos</h2><p class="mt-3 text-sm text-[var(--koa-ink)]/58">Hide or restore a built-in photo without deleting the source asset.</p><div data-curated-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div></section>
+        <section class="mt-10">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 class="display text-4xl">Uploaded photos</h2>
+              <p class="mt-2 text-sm text-[var(--koa-ink)]/58">Change category or drag the image to reposition its focal point.</p>
+            </div>
+          </div>
+          <div data-uploaded-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </section>
+
+        <section class="mt-14">
+          <h2 class="display text-4xl">Built-in gallery photos</h2>
+          <p class="mt-3 max-w-2xl text-sm text-[var(--koa-ink)]/58">
+            Reassign a built-in photo to another category, drag to set its crop center, or hide it without deleting the source asset.
+          </p>
+          <div data-curated-grid class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+        </section>
       </div>
     </div>
   </main>
+
   <script id="curated-data" type="application/json" set:html={JSON.stringify(curated)}></script>
+  <script id="categories-data" type="application/json" set:html={JSON.stringify(categories)}></script>
+  <script id="curated-categories-data" type="application/json" set:html={JSON.stringify(curatedCategories)}></script>
+
   <script>
     import { getUser } from '@netlify/identity';
+
     const curated = JSON.parse(document.getElementById('curated-data')?.textContent || '[]');
-    const ui=document.querySelector('[data-admin-ui]');
-    const unauthorized=document.querySelector('[data-unauthorized]');
-    const uploadForm=document.querySelector('[data-upload-form]');
-    const uploadMessage=document.querySelector('[data-upload-message]');
-    const uploadedGrid=document.querySelector('[data-uploaded-grid]');
-    const curatedGrid=document.querySelector('[data-curated-grid]');
+    const categories = JSON.parse(document.getElementById('categories-data')?.textContent || '[]');
+    const curatedCategories = JSON.parse(document.getElementById('curated-categories-data')?.textContent || '[]');
+
+    const ui = document.querySelector('[data-admin-ui]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const uploadForm = document.querySelector('[data-upload-form]');
+    const uploadMessage = document.querySelector('[data-upload-message]');
+    const uploadedGrid = document.querySelector('[data-uploaded-grid]');
+    const curatedGrid = document.querySelector('[data-curated-grid]');
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    let state={uploads:[],hiddenCurated:[]};
+
+    let state = { uploads: [], hiddenCurated: [], curatedEdits: {} };
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
@@ -42,57 +98,230 @@ const curated = [...koaMarketingGallery, ...galleryMedia].map((item) => ({ src:i
     }
 
     async function optimizedFile(file) {
-      const bitmap=await createImageBitmap(file);
-      const max=2200, scale=Math.min(1,max/Math.max(bitmap.width,bitmap.height));
-      const canvas=document.createElement('canvas');
-      canvas.width=Math.round(bitmap.width*scale); canvas.height=Math.round(bitmap.height*scale);
-      canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height);
-      const blob=await new Promise((resolve)=>canvas.toBlob(resolve,'image/webp',0.86));
-      return new File([blob], file.name.replace(/\.[^.]+$/, '')+'.webp', {type:'image/webp'});
+      const bitmap = await createImageBitmap(file);
+      const max = 2200;
+      const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(bitmap.width * scale);
+      canvas.height = Math.round(bitmap.height * scale);
+      canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.86));
+      return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.webp', { type: 'image/webp' });
     }
 
-    function card(src,alt,buttonText,onClick,muted=false) {
-      const article=document.createElement('article'); article.className='overflow-hidden rounded-[1.2rem] border border-[var(--koa-line)] bg-white';
-      const img=document.createElement('img'); img.src=src; img.alt=alt; img.className='h-52 w-full object-cover '+(muted?'opacity-35':'');
-      const body=document.createElement('div'); body.className='p-4';
-      const p=document.createElement('p'); p.className='text-xs leading-5 text-[var(--koa-ink)]/58'; p.textContent=alt;
-      const button=document.createElement('button'); button.className='mt-4 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]'; button.textContent=buttonText; button.addEventListener('click',onClick);
-      body.append(p,button); article.append(img,body); return article;
+    async function post(payload) {
+      const response = await fetch('/api/gallery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error('Gallery update failed');
+      return response.json();
+    }
+
+    function makeSelect(options, value) {
+      const select = document.createElement('select');
+      select.className = 'w-full rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-semibold';
+      options.forEach((option) => {
+        const el = document.createElement('option');
+        el.value = option;
+        el.textContent = option;
+        el.selected = option === value;
+        select.append(el);
+      });
+      return select;
+    }
+
+    function visualEditorCard({ src, alt, category, focalX = 50, focalY = 50, muted = false, kind, id, originalCategory }) {
+      const article = document.createElement('article');
+      article.className = 'overflow-hidden rounded-[1.2rem] border border-[var(--koa-line)] bg-white shadow-sm';
+
+      const frame = document.createElement('div');
+      frame.className = 'group relative h-64 cursor-grab touch-none overflow-hidden bg-[var(--koa-sand)] active:cursor-grabbing';
+
+      const img = document.createElement('img');
+      img.src = src;
+      img.alt = alt;
+      img.draggable = false;
+      img.className = 'pointer-events-none h-full w-full select-none object-cover transition-opacity ' + (muted ? 'opacity-30' : '');
+      img.style.objectPosition = `${focalX}% ${focalY}%`;
+
+      const crosshair = document.createElement('div');
+      crosshair.className = 'pointer-events-none absolute size-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-black/25 shadow-[0_1px_8px_rgba(0,0,0,.35)]';
+      crosshair.style.left = focalX + '%';
+      crosshair.style.top = focalY + '%';
+
+      const hint = document.createElement('div');
+      hint.className = 'pointer-events-none absolute left-3 top-3 rounded-full bg-black/60 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.12em] text-white backdrop-blur';
+      hint.textContent = 'Drag to center';
+
+      frame.append(img, crosshair, hint);
+
+      const body = document.createElement('div');
+      body.className = 'space-y-4 p-4';
+
+      const p = document.createElement('p');
+      p.className = 'line-clamp-2 min-h-10 text-xs leading-5 text-[var(--koa-ink)]/58';
+      p.textContent = alt;
+
+      const label = document.createElement('label');
+      label.className = 'grid gap-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/60';
+      label.textContent = 'Category';
+      const select = makeSelect(kind === 'curated' ? curatedCategories : categories, category);
+      label.append(select);
+
+      const position = document.createElement('p');
+      position.className = 'text-[.68rem] font-semibold text-[var(--koa-ink)]/45';
+      position.textContent = `Focal point: ${Math.round(focalX)}% × ${Math.round(focalY)}%`;
+
+      const status = document.createElement('p');
+      status.className = 'min-h-5 text-xs font-semibold text-[var(--koa-clay)]';
+
+      const actions = document.createElement('div');
+      actions.className = 'flex flex-wrap gap-3';
+
+      const secondary = document.createElement('button');
+      secondary.type = 'button';
+      secondary.className = 'text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]';
+
+      if (kind === 'upload') {
+        secondary.textContent = 'Remove';
+        secondary.addEventListener('click', async () => {
+          if (!confirm('Remove this uploaded gallery photo?')) return;
+          await post({ action: 'delete-upload', id });
+          await load();
+        });
+      } else {
+        secondary.textContent = muted ? 'Restore' : 'Hide';
+        secondary.addEventListener('click', async () => {
+          await post({ action: 'visibility', src, hidden: !muted });
+          await load();
+        });
+
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]/45';
+        reset.textContent = 'Reset';
+        reset.addEventListener('click', async () => {
+          await post({ action: 'reset-curated', src });
+          await load();
+        });
+        actions.append(reset);
+      }
+
+      actions.prepend(secondary);
+      body.append(p, label, position, status, actions);
+      article.append(frame, body);
+
+      let x = Number(focalX) || 50;
+      let y = Number(focalY) || 50;
+      let saveTimer;
+
+      const save = async () => {
+        status.textContent = 'Saving…';
+        const payload = kind === 'upload'
+          ? { action: 'update-upload', id, category: select.value, focalX: x, focalY: y }
+          : { action: 'update-curated', src, category: select.value, focalX: x, focalY: y };
+        try {
+          await post(payload);
+          status.textContent = 'Saved';
+          setTimeout(() => { if (status.textContent === 'Saved') status.textContent = ''; }, 1200);
+        } catch {
+          status.textContent = 'Save failed';
+        }
+      };
+
+      const queueSave = () => {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(save, 250);
+      };
+
+      function setPoint(clientX, clientY) {
+        const rect = frame.getBoundingClientRect();
+        x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+        y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+        img.style.objectPosition = `${x}% ${y}%`;
+        crosshair.style.left = x + '%';
+        crosshair.style.top = y + '%';
+        position.textContent = `Focal point: ${Math.round(x)}% × ${Math.round(y)}%`;
+      }
+
+      frame.addEventListener('pointerdown', (event) => {
+        frame.setPointerCapture(event.pointerId);
+        setPoint(event.clientX, event.clientY);
+      });
+      frame.addEventListener('pointermove', (event) => {
+        if (!frame.hasPointerCapture(event.pointerId)) return;
+        setPoint(event.clientX, event.clientY);
+      });
+      frame.addEventListener('pointerup', (event) => {
+        if (frame.hasPointerCapture(event.pointerId)) frame.releasePointerCapture(event.pointerId);
+        queueSave();
+      });
+      frame.addEventListener('pointercancel', queueSave);
+      select.addEventListener('change', save);
+
+      return article;
     }
 
     function render() {
-      uploadedGrid.innerHTML='';
-      state.uploads.forEach((item)=>uploadedGrid.append(card(item.src,item.alt,'Remove',async()=>{
-        if(!confirm('Remove this uploaded gallery photo?'))return;
-        await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete-upload',id:item.id})}); await load();
-      })));
-      curatedGrid.innerHTML='';
-      curated.forEach((item)=>{
-        const hidden=state.hiddenCurated.includes(item.src);
-        curatedGrid.append(card(item.src,item.alt,hidden?'Restore':'Hide',async()=>{
-          await fetch('/api/gallery',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'visibility',src:item.src,hidden:!hidden})}); await load();
-        },hidden));
+      uploadedGrid.innerHTML = '';
+      state.uploads.forEach((item) => {
+        uploadedGrid.append(visualEditorCard({
+          ...item,
+          kind: 'upload',
+          focalX: item.focalX ?? 50,
+          focalY: item.focalY ?? 50,
+        }));
+      });
+
+      curatedGrid.innerHTML = '';
+      curated.forEach((item) => {
+        const edit = state.curatedEdits?.[item.src] || {};
+        const hidden = state.hiddenCurated.includes(item.src);
+        curatedGrid.append(visualEditorCard({
+          ...item,
+          kind: 'curated',
+          category: edit.category || item.category || 'Venue',
+          originalCategory: item.category,
+          focalX: edit.focalX ?? 50,
+          focalY: edit.focalY ?? 50,
+          muted: hidden,
+        }));
       });
     }
 
-    async function load(){
-      const user=await getUser();
-      if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+    async function load() {
+      const user = await getUser();
+      if (!hasAdminAccess(user)) {
+        unauthorized?.classList.remove('hidden');
+        return;
+      }
       ui?.classList.remove('hidden');
-      const response=await fetch('/api/gallery');
-      state=await response.json(); render();
+      const response = await fetch('/api/gallery');
+      state = await response.json();
+      render();
     }
 
-    uploadForm?.addEventListener('submit',async(event)=>{
-      event.preventDefault(); const data=new FormData(uploadForm); const raw=data.get('file');
-      if(!(raw instanceof File))return;
-      if(uploadMessage)uploadMessage.textContent='Optimizing image…';
-      const file=await optimizedFile(raw); data.set('file',file);
-      if(uploadMessage)uploadMessage.textContent='Uploading…';
-      const response=await fetch('/api/gallery',{method:'POST',body:data});
-      if(uploadMessage)uploadMessage.textContent=response.ok?'Uploaded.':'Upload failed.';
-      if(response.ok){uploadForm.reset();await load();}
+    uploadForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(uploadForm);
+      const raw = data.get('file');
+      if (!(raw instanceof File)) return;
+
+      if (uploadMessage) uploadMessage.textContent = 'Optimizing image…';
+      const file = await optimizedFile(raw);
+      data.set('file', file);
+
+      if (uploadMessage) uploadMessage.textContent = 'Uploading…';
+      const response = await fetch('/api/gallery', { method: 'POST', body: data });
+      if (uploadMessage) uploadMessage.textContent = response.ok ? 'Uploaded.' : 'Upload failed.';
+      if (response.ok) {
+        uploadForm.reset();
+        await load();
+      }
     });
+
     load();
   </script>
 </BaseLayout>
