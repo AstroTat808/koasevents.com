@@ -329,7 +329,7 @@ export async function qboUpdate(context: Context, entity: string, payload: any) 
   if (!connection) throw new Error('QuickBooks is not connected.');
   return qboRequest(
     context,
-    '/v3/company/' + encodeURIComponent(connection.realmId) + '/' + entity.toLowerCase() + '?operation=update',
+    '/v3/company/' + encodeURIComponent(connection.realmId) + '/' + entity.toLowerCase(),
     { method: 'POST', body: JSON.stringify({ ...payload, sparse: true }) },
   );
 }
