@@ -239,6 +239,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         text('p','mt-1 text-xs leading-5 text-[var(--koa-ink)]/50',[record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · '))
       );
       if(record.customer?.email) article.appendChild(text('p','mt-2 break-all text-xs text-[var(--koa-ink)]/55',record.customer.email));
+      if(record.customer?.phone) article.appendChild(text('p','mt-1 text-xs text-[var(--koa-ink)]/50',record.customer.phone));
+      if(record.inquiry) {
+        const inquiryMeta = [record.inquiry.service, record.inquiry.eventType, record.inquiry.guestCount ? record.inquiry.guestCount + ' guests' : '', record.inquiry.budget].filter(Boolean).join(' · ');
+        if(inquiryMeta) article.appendChild(text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',inquiryMeta));
+      }
       if(record.quoteId) article.appendChild(text('p','mt-2 font-mono text-[.65rem] text-[var(--koa-ink)]/45','Quote '+record.quoteId));
 
       const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
