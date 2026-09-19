@@ -65,6 +65,12 @@ type EventOps = {
   updatedAt: string;
   status: 'planning' | 'ready' | 'event_day' | 'complete';
   finalGuestCount: number;
+  setupStart: string;
+  guestArrival: string;
+  eventStart: string;
+  eventEnd: string;
+  teardownEnd: string;
+  venueArea: string;
   notes: string;
   vendors: Vendor[];
   questionnaire: QuestionAnswer[];
@@ -186,6 +192,12 @@ function defaultOps(record: any): EventOps {
     updatedAt: now,
     status: 'planning',
     finalGuestCount: guestCount,
+    setupStart: '',
+    guestArrival: '',
+    eventStart: '',
+    eventEnd: '',
+    teardownEnd: '',
+    venueArea: 'Koa’s Events',
     notes: '',
     vendors: [],
     questionnaire: seedQuestionnaire(),
@@ -335,6 +347,12 @@ export default async (req: Request, context: Context) => {
     const statusValues = new Set(['planning','ready','event_day','complete']);
     ops.status = statusValues.has(payload?.status) ? payload.status : ops.status;
     ops.finalGuestCount = Math.round(num(payload?.finalGuestCount, 0, 1000));
+    ops.setupStart = clean(payload?.setupStart, 20);
+    ops.guestArrival = clean(payload?.guestArrival, 20);
+    ops.eventStart = clean(payload?.eventStart, 20);
+    ops.eventEnd = clean(payload?.eventEnd, 20);
+    ops.teardownEnd = clean(payload?.teardownEnd, 20);
+    ops.venueArea = clean(payload?.venueArea, 180) || 'Koa’s Events';
     ops.notes = clean(payload?.notes, 12000);
   } else if (action === 'save-vendors') {
     ops.vendors = sanitizeVendors(payload?.vendors);
