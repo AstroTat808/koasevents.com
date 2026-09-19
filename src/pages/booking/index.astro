@@ -89,7 +89,7 @@ import Footer from '../../components/Footer.astro';
                 <p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p>
                 <h2 class="display mt-3 text-4xl">Booking payments</h2>
               </div>
-              <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/48">Your event becomes booked when the signed agreement and reservation deposit are complete. Later milestones remain visible here.</p>
+              <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/48">Your event becomes booked when the signed agreement and QuickBooks reservation-deposit invoice are complete. Later QuickBooks invoice milestones remain visible here.</p>
             </div>
             <div data-payments class="mt-6 grid gap-3"></div>
             <div data-payment-note class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-sm leading-6 text-[var(--koa-ink)]/62"></div>
@@ -153,7 +153,6 @@ import Footer from '../../components/Footer.astro';
       }
 
       const payments=document.querySelector('[data-payments]'); payments.innerHTML='';
-      let hasOnlineLink=false;
       (data.payments||[]).forEach((item)=>{
         const row=document.createElement('div');
         row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-center';
@@ -162,28 +161,23 @@ import Footer from '../../components/Footer.astro';
         const meta=document.createElement('p'); meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';
         meta.textContent=(item.dueDate?'Due '+dateLabel(item.dueDate):'Due date confirmed by Koa’s')+' · '+money(item.amount);
         left.append(title,meta);
-        if(item.status==='paid'){
-          const paid=document.createElement('p'); paid.className='mt-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-forest)]';
-          paid.textContent='Paid'+(item.paidAt?' · '+dateLabel(item.paidAt):'');
-          left.appendChild(paid);
+
+        if(item.invoiceId){
+          const invoice=document.createElement('p'); invoice.className='mt-2 text-xs text-[var(--koa-ink)]/55';
+          invoice.textContent='QuickBooks invoice'+(item.docNumber?' #'+item.docNumber:'')+' · '+(item.status==='paid'?'paid':money(item.balance)+' remaining');
+          left.appendChild(invoice);
         }
 
         const right=document.createElement('div');
-        if(item.status==='paid'){
-          const badge=document.createElement('span'); badge.className='rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]'; badge.textContent='Complete'; right.appendChild(badge);
-        } else if(item.paymentUrl){
-          hasOnlineLink=true;
-          const link=document.createElement('a'); link.href=item.paymentUrl; link.target='_blank'; link.rel='noreferrer'; link.className='inline-flex rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white'; link.textContent='Pay online'; right.appendChild(link);
-        } else {
-          const badge=document.createElement('span'); badge.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]'; badge.textContent='Payment link pending'; right.appendChild(badge);
-        }
+        const badge=document.createElement('span');
+        badge.className='rounded-full '+(item.status==='paid'?'bg-[var(--koa-sand)] text-[var(--koa-forest)]':'border border-[var(--koa-line)] text-[var(--koa-clay)]')+' px-3 py-2 text-[.58rem] font-black uppercase tracking-[.1em]';
+        badge.textContent=item.status==='paid'?'Paid':item.status==='open'?'Invoice issued':'Invoice not issued';
+        right.appendChild(badge);
         row.append(left,right); payments.appendChild(row);
       });
 
       const note=document.querySelector('[data-payment-note]');
-      if(note) note.textContent=hasOnlineLink
-        ? 'Use the secure payment button shown for any milestone with online payment enabled. Payment status is updated by Koa’s in the booking record.'
-        : 'Online payment is not yet enabled for this booking. Koa’s will provide payment instructions or activate the secure payment link for the applicable milestone.';
+      if(note) note.textContent='Koa’s issues estimates, invoices and payment requests through QuickBooks Online. Use the payment instructions in the QuickBooks invoice email you receive; the Koa’s website does not collect payment information.';
 
       bookedSection?.classList.toggle('hidden',data.status!=='booked');
     }
