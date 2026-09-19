@@ -47,14 +47,52 @@ KNOWN_POSTS = [
 
 FEATURED_OVERRIDES = {
     "big-island-rainforest-wedding-venue-guide-how-to-plan-an-intimate-celebration-in-mountain-view-haw": "/media/koa/ceremony-live-wide.webp",
-    "koa-s-mobile-bar-frequently-asked-questions": "/media/koa/mobile-bar-guest-service.webp",
+    "koa-s-mobile-bar-frequently-asked-questions": "/media/koa/mobile-bar-detail.webp",
     "the-comprehensive-a-z-wedding-glossary-for-brides-koa-s-events-edition": "/media/koa/pavilion-reception-wide.webp",
     "5-biggest-bachelorette-party-mistakes-and-how-to-avoid-them": "/media/koa/tropical-brunch.webp",
-    "real-brides-share-their-wedding-bachelorette-pain-points-and-how-koa-s-events-can-help-you-avoid": "/media/koa/bridal-suite-wedding-ready.webp",
-    "micro-weddings-vs-traditional-weddings-choosing-the-perfect-style-for-your-special-day-at-koa-s-ev": "/media/koa/ceremony-vows-closeup.webp",
-    "how-to-have-a-beautiful-5-000-wedding-at-koa-s-events": "/media/koa/pavilion-reception-daylight-alt.webp",
-    "the-art-of-aloha-infusing-hawaiian-culture-into-modern-wedding": "/media/koa/ceremony-setup-tropical.webp",
+    "real-brides-share-their-wedding-bachelorette-pain-points-and-how-koa-s-events-can-help-you-avoid": "/media/koa/bridal-lounge-wedding-ready.webp",
+    "micro-weddings-vs-traditional-weddings-choosing-the-perfect-style-for-your-special-day-at-koa-s-ev": "/media/koa/ceremony-live-centered-wide.webp",
+    "how-to-have-a-beautiful-5-000-wedding-at-koa-s-events": "/media/koa/pavilion-reception-evening.webp",
+    "micro-wedding-or-traditional-wedding": "/media/koa/ceremony-garden-aisle-sunlit.webp",
+    "the-art-of-aloha-infusing-hawaiian-culture-into-modern-wedding": "/media/koa/ceremony-live-guest-view.webp",
     "i-m-engaged-now-what": "/media/koa/pavilion-stairs-romantic.webp",
+}
+
+# Only replace inline images where the Koa gallery has a more relevant,
+# more marketable photograph. Specific explanatory images (for example
+# tariff graphics, conch blowing, and poke bowls) are intentionally retained.
+INLINE_OVERRIDES = {
+    "big-island-rainforest-wedding-venue-guide-how-to-plan-an-intimate-celebration-in-mountain-view-haw": {
+        1: ("/media/koa/pavilion-day-lush.webp", "Koa’s open-air pavilion surrounded by lush tropical landscaping in Mountain View, Hawaiʻi"),
+    },
+    "koa-s-mobile-bar-frequently-asked-questions": {
+        1: ("/media/koa/signature-cocktail-pour.webp", "Signature cocktail being prepared at Koa’s Mobile Bar"),
+    },
+    "the-comprehensive-a-z-wedding-glossary-for-brides-koa-s-events-edition": {
+        1: ("/media/koa/reception-rust-blue.webp", "Styled Koa’s reception showing tables, rentals, florals, and event layout"),
+    },
+    "5-biggest-bachelorette-party-mistakes-and-how-to-avoid-them": {
+        1: ("/media/koa/bridal-lounge-wedding-ready.webp", "Wedding-ready lounge at Koa’s for a relaxed bridal or bachelorette gathering"),
+        2: ("/media/koa/cottage-porch-dining.webp", "Covered cottage porch at Koa’s arranged for an intimate group meal"),
+        3: ("/media/koa/champagne-feature.webp", "Champagne and floral celebration feature at Koa’s"),
+        4: ("/media/koa/cottage-loft-suite.webp", "Cozy Koa’s cottage loft for a relaxed wedding-weekend gathering"),
+        5: ("/media/koa/cottage-exterior-events.webp", "Koa’s cottage and tropical grounds for private celebrations on Hawaiʻi Island"),
+    },
+    "micro-weddings-vs-traditional-weddings-choosing-the-perfect-style-for-your-special-day-at-koa-s-ev": {
+        1: ("/media/koa/reception-rust-blue.webp", "Full reception setup at Koa’s illustrating a more traditional wedding format"),
+    },
+    "how-to-have-a-beautiful-5-000-wedding-at-koa-s-events": {
+        1: ("/media/koa/tropical-dinner-table.webp", "Tropical dinner table at Koa’s showing how focused styling can create a polished reception"),
+    },
+    "micro-wedding-or-traditional-wedding": {
+        1: ("/media/koa/ceremony-live-vertical.webp", "Intimate live wedding ceremony at Koa’s on Hawaiʻi Island"),
+    },
+    "the-art-of-aloha-infusing-hawaiian-culture-into-modern-wedding": {
+        1: ("/media/koa/tropical-dinner-table.webp", "Tropical Hawaiʻi-inspired reception table with island florals at Koa’s"),
+    },
+    "i-m-engaged-now-what": {
+        1: ("/media/koa/pavilion-welcome-front.webp", "Koa’s pavilion entrance, a useful visual when newly engaged couples begin comparing venues"),
+    },
 }
 
 FALLBACK_DATES = {
@@ -387,15 +425,19 @@ def sanitize_and_localize(node: Tag | None, slug: str, title: str, cache: dict[s
         source.decompose()
 
     for index, img in enumerate(root.find_all("img"), 1):
-        remote = image_candidate(img)
-        if not remote:
-            img.decompose()
-            continue
-        try:
-            local = download_image(remote, slug, f"inline-{index:02d}", cache)
-        except Exception as exc:
-            raise RuntimeError(f"inline image download failed for {slug}: {remote}: {exc}") from exc
-        alt = clean_text(str(img.get("alt") or "")) or f"{title} — image {index}"
+        override = INLINE_OVERRIDES.get(slug, {}).get(index)
+        if override:
+            local, alt = override
+        else:
+            remote = image_candidate(img)
+            if not remote:
+                img.decompose()
+                continue
+            try:
+                local = download_image(remote, slug, f"inline-{index:02d}", cache)
+            except Exception as exc:
+                raise RuntimeError(f"inline image download failed for {slug}: {remote}: {exc}") from exc
+            alt = clean_text(str(img.get("alt") or "")) or f"{title} — image {index}"
         img.attrs = {
             "src": local,
             "alt": alt,
@@ -613,14 +655,37 @@ def verify(posts: list[dict]):
         if "wixstatic.com" in post["bodyHtml"].lower():
             failures.append(f"{post['slug']}: bodyHtml still references wixstatic.com")
         for image in post["images"]:
-            if not image["src"].startswith("/media/blog/"):
+            if not image["src"].startswith("/media/"):
                 failures.append(f"{post['slug']}: non-local image src {image['src']}")
             image_file = Path("public") / image["src"].lstrip("/")
             if not image_file.exists():
                 failures.append(f"{post['slug']}: missing image file {image_file}")
 
+    # Prevent blog hero repetition with any image currently used on the homepage.
+    homepage_file = Path("src/pages/index.astro")
+    media_file = Path("src/data/media.ts")
+    if homepage_file.exists() and media_file.exists():
+        homepage_source = homepage_file.read_text(encoding="utf-8")
+        media_source = media_file.read_text(encoding="utf-8")
+        media_lookup = {
+            match.group(1): "/media/koa/" + match.group(2)
+            for match in re.finditer(r"([A-Za-z0-9_]+): koaMarketing\\('([^']+)'", media_source)
+        }
+        homepage_keys = set(re.findall(r"koaMarketingMedia\\.([A-Za-z0-9_]+)", homepage_source))
+        homepage_images = {media_lookup[key] for key in homepage_keys if key in media_lookup}
+        seen_featured = {}
+        for post in posts:
+            feature = post["featuredImage"]
+            if feature in homepage_images:
+                failures.append(f"{post['slug']}: featured image duplicates homepage media {feature}")
+            if feature in seen_featured:
+                failures.append(
+                    f"{post['slug']}: featured image duplicates blog post {seen_featured[feature]}: {feature}"
+                )
+            seen_featured[feature] = post["slug"]
+
     if failures:
-        raise RuntimeError("Wix-independence verification failed:\n- " + "\n- ".join(failures))
+        raise RuntimeError("Wix-independence/content verification failed:\n- " + "\n- ".join(failures))
 
 
 def main():
