@@ -48,7 +48,7 @@ type PaymentItem = {
 type SalesRecord = {
   id: string;
   kind: 'inquiry' | 'lead' | 'proposal';
-  stage: 'inquiry' | 'lead' | 'proposal' | 'booked' | 'lost';
+  stage: 'inquiry' | 'lead' | 'proposal' | 'booked' | 'lost' | 'converted';
   quoteId?: string;
   packageId?: string;
   createdAt: string;
@@ -491,9 +491,13 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId) : undefined,
     };
+    source.stage = 'converted';
+    source.status = 'converted';
+    source.updatedAt = now;
+    records = await saveRecord(context, source, records);
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: kind, packageId, quoteId: source.quoteId || '', recordId: record.id, sourceRecordId: source.id });
-    return Response.json({ ok: true, record });
+    return Response.json({ ok: true, record, convertedSourceId: source.id });
   }
 
   if (payload.action === 'update-proposal') {
