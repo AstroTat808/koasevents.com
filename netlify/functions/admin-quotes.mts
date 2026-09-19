@@ -119,7 +119,13 @@ function normalizePackage(value: unknown) {
 
 async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
   const store = salesStoreFor(context);
-  return (await store.get('records/index', { type: 'json' })) || [];
+  const raw = ((await store.get('records/index', { type: 'json' })) || []) as SalesRecord[];
+  return raw.map((record: any) => ({
+    ...record,
+    stage: record.stage || (record.kind === 'proposal' ? 'proposal' : record.kind === 'lead' ? 'lead' : 'inquiry'),
+    updatedAt: record.updatedAt || record.createdAt,
+    packageId: normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage),
+  }));
 }
 
 async function writeSalesIndex(context: Context, records: SalesRecord[]) {
@@ -203,10 +209,13 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '') {
 
   const subtotal = lines.reduce((sum, line) => sum + finite(line.amount), 0);
   const depositAmount = Math.round(subtotal * 0.10 * 100) / 100;
+  const remaining = Math.max(0, subtotal - depositAmount);
+  const secondAmount = Math.round((remaining / 2) * 100) / 100;
+  const finalAmount = Math.round((remaining - secondAmount) * 100) / 100;
   const schedule: PaymentItem[] = [
     { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-    { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -90) : '', amount: 0 },
-    { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -60) : '', amount: 0 },
+    { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -90) : '', amount: secondAmount },
+    { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -60) : '', amount: finalAmount },
   ];
 
   return {
