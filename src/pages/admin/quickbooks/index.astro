@@ -30,12 +30,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
           <div data-config-warning class="mt-6 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/20 p-5">
             <p class="font-semibold text-[var(--koa-ink)]">Intuit app credentials are not configured on Netlify yet.</p>
-            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/60">Add the server-side environment variables below, then return here and connect Koa’s QuickBooks company. The client secret and token-encryption key are never entered into the browser.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/60">Add the two Intuit app credentials below, then return here and connect Koa’s QuickBooks company. The client secret is never entered into the browser.</p>
             <div class="mt-4 grid gap-2 font-mono text-xs text-[var(--koa-forest)]">
               <code>INTUIT_CLIENT_ID</code>
               <code>INTUIT_CLIENT_SECRET</code>
-              <code>QBO_TOKEN_ENCRYPTION_KEY</code>
-              <code>QBO_ENVIRONMENT=production</code>
             </div>
             <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/50">Registered Intuit redirect URI: <code data-redirect-uri></code></p>
           </div>
