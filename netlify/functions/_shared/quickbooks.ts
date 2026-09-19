@@ -39,28 +39,35 @@ function config() {
 export function quickBooksConfiguration() {
   const c = config();
   return {
-    configured: Boolean(c.clientId && c.clientSecret && c.encryptionKey),
+    configured: Boolean(c.clientId && c.clientSecret),
     clientIdConfigured: Boolean(c.clientId),
     clientSecretConfigured: Boolean(c.clientSecret),
-    encryptionKeyConfigured: Boolean(c.encryptionKey),
+    encryptionKeyConfigured: Boolean(c.encryptionKey || c.clientSecret),
     serviceItemConfigured: Boolean(c.itemId),
     environment: c.environment,
   };
 }
 
-function encryptionBytes() {
-  const encoded = config().encryptionKey;
-  const bytes = Buffer.from(encoded, 'base64');
-  if (bytes.length !== 32) {
-    throw new Error('QBO_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.');
+async function encryptionBytes() {
+  const c = config();
+  if (c.encryptionKey) {
+    const bytes = Buffer.from(c.encryptionKey, 'base64');
+    if (bytes.length !== 32) {
+      throw new Error('QBO_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key when provided.');
+    }
+    return bytes;
   }
-  return bytes;
+  if (!c.clientSecret) {
+    throw new Error('INTUIT_CLIENT_SECRET is required for QuickBooks token encryption.');
+  }
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(c.clientSecret));
+  return new Uint8Array(digest);
 }
 
 async function encryptionKey(usages: KeyUsage[]) {
   return crypto.subtle.importKey(
     'raw',
-    encryptionBytes(),
+    await encryptionBytes(),
     { name: 'AES-GCM' },
     false,
     usages,
