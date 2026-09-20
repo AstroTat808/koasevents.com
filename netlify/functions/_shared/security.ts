@@ -219,15 +219,15 @@ export async function analyzeInquirySecurity(payload: any, recentEvents: Securit
     const repeatedDigits = /^(\d)\1{7,}$/.test(digits);
     const obviousSequence = /1234567890|0987654321|0123456789/.test(digits);
     if (digits.length < 10 || digits.length > 15 || repeatedDigits || obviousSequence) {
-      addSignal(signals, 'suspicious_phone', 'Phone number appears synthetic or malformed', 20);
+      addSignal(signals, 'suspicious_phone', 'Phone number appears synthetic or malformed', 25);
     }
   }
 
   const urls = lower.match(/(?:https?:\/\/|www\.)[^\s<>()]+/g) || [];
   const bareDomains = lower.match(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|co|biz|xyz|top|site|online|info)\b/g) || [];
   const linkCount = new Set([...urls, ...bareDomains]).size;
-  if (linkCount === 1) addSignal(signals, 'external_link', 'Message contains an external link', 15);
-  if (linkCount >= 2) addSignal(signals, 'multiple_links', 'Message contains multiple external links', 30);
+  if (linkCount === 1) addSignal(signals, 'external_link', 'Message contains an external link', 20);
+  if (linkCount >= 2) addSignal(signals, 'multiple_links', 'Message contains multiple external links', 35);
   if (/\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|rb\.gy|cutt\.ly)\b/i.test(lower)) {
     addSignal(signals, 'shortened_url', 'Message contains a shortened URL', 25);
   }
@@ -283,7 +283,7 @@ export async function analyzeInquirySecurity(payload: any, recentEvents: Securit
 
   const velocityBlocked = sameSourceRecent >= 6 || sameSourceHour >= 20;
   const score = Math.min(100, signals.reduce((total, signal) => total + signal.score, 0));
-  const disposition: SecurityDisposition = score >= 80 ? 'blocked' : score >= 30 ? 'flagged' : 'allowed';
+  const disposition: SecurityDisposition = score >= 80 ? 'blocked' : score >= 20 ? 'flagged' : 'allowed';
 
   return {
     disposition,
