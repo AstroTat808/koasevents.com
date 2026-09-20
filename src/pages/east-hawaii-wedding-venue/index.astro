@@ -1,0 +1,147 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import Header from '../../components/Header.astro';
+import Footer from '../../components/Footer.astro';
+import ResponsiveImage from '../../components/ResponsiveImage.astro';
+import PackageCapacityComparison from '../../components/PackageCapacityComparison.astro';
+import { businessRules } from '../../data/businessRules';
+import { koaMarketingMedia } from '../../data/media';
+
+const signaturePackage = businessRules.venueWeddingPackages.find((item) => item.name === 'Plumeria')!;
+const planningPoints = [
+  {
+    title: 'Hilo-area guest plans',
+    copy: 'Couples with guests staying or arriving around Hilo can keep the celebration on the east side while choosing a private property setting instead of a hotel ballroom or downtown event space.',
+  },
+  {
+    title: 'Mountain View setting',
+    copy: 'Koa’s is located in Mountain View on four tropical acres with a 1,500 sq. ft. pavilion, getting-ready space and an approved maximum occupancy of 100 persons.',
+  },
+  {
+    title: 'Volcano-side itineraries',
+    copy: 'For couples building an East Hawaiʻi itinerary around Volcano and the surrounding rainforest side of the island, the venue keeps the wedding experience in the same broader region.',
+  },
+];
+---
+<BaseLayout
+  title="East Hawaiʻi Wedding Venue Near Hilo & Volcano | Koa’s Events"
+  description="Explore Koa’s private East Hawaiʻi wedding venue in Mountain View, near Hilo and Volcano, with flexible wedding packages for celebrations up to 100 guests."
+  canonical="https://koasevents.com/east-hawaii-wedding-venue/"
+>
+  <main>
+    <section class="relative min-h-[84svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[90svh]">
+      <ResponsiveImage {...koaMarketingMedia.ceremonyLiveCenteredWide} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
+      <div class="hero-shade absolute inset-0"></div>
+      <Header />
+      <div class="container-shell relative z-10 flex min-h-[84svh] items-end pb-14 pt-32 md:min-h-[90svh] md:pt-40 lg:pb-24">
+        <div class="max-w-5xl">
+          <p class="eyebrow text-white/65">Mountain View · East Hawaiʻi · Big Island</p>
+          <h1 class="display mt-5 max-w-5xl text-6xl leading-[.9] sm:text-7xl lg:text-[6.8rem]">A private East Hawaiʻi wedding venue near Hilo and Volcano.</h1>
+          <p class="mt-7 max-w-2xl text-base leading-7 text-white/80 sm:text-lg">Koa’s Events gives couples a private rainforest setting in Mountain View with room for up to {businessRules.venue.maximumOccupancy.value} guests, flexible wedding collections and an event experience that can be styled in very different directions.</p>
+          <div class="mt-9 flex flex-wrap gap-3">
+            <a href="/wedding-inquiry/" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check your wedding date</a>
+            <a href="/venue/packages/" class="link-arrow px-2 py-3.5 text-white">Compare wedding packages →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-36">
+      <div class="container-shell grid gap-14 lg:grid-cols-[.78fr_1.22fr] lg:items-center lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Why this page exists</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">One useful East Hawaiʻi guide instead of a page for every town.</h2>
+          <p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Couples often search for wedding venues using the place names they already know—Hilo, Volcano, Mountain View or simply “Big Island.” Koa’s is one venue in Mountain View, so this guide explains how the property fits East Hawaiʻi planning without pretending there are separate Koa’s locations in each community.</p>
+          <a href="/weddings/" class="link-arrow mt-8 text-[var(--koa-forest)]">See the full wedding experience →</a>
+        </div>
+        <div class="relative h-[27rem] overflow-hidden rounded-[1.7rem] sm:h-[34rem] lg:h-[40rem] lg:rounded-[2rem]">
+          <ResponsiveImage {...koaMarketingMedia.pavilionWelcomeFront} width={1200} height={1200} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell">
+        <div class="grid gap-10 lg:grid-cols-[.72fr_1.28fr] lg:items-end">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Planning the east side</p>
+            <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Think about where your guests will stay, how the day will flow and what kind of setting you want.</h2>
+          </div>
+          <p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/62 lg:justify-self-end">The right venue is not only about a search term. It is about the guest experience, access time, event design, weather plan, vendors, bar service and how much of the weekend you want centered around one property.</p>
+        </div>
+        <div class="mt-12 grid gap-4 lg:grid-cols-3">
+          {planningPoints.map((item, index) => (
+            <article class="rounded-[1.45rem] bg-[var(--koa-ivory)] p-7">
+              <p class="eyebrow text-[var(--koa-clay)]">0{index + 1}</p>
+              <h3 class="display mt-8 text-4xl">{item.title}</h3>
+              <p class="mt-4 text-sm leading-7 text-[var(--koa-ink)]/64">{item.copy}</p>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-forest)] py-24 text-white lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:items-center lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-amber-light)]">The property</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Private, tropical and intentionally flexible.</h2>
+          <p class="mt-7 text-base leading-7 text-white/68">Koa’s is not designed around one permanent wedding look. The pavilion and grounds can move from tropical and organic to romantic, modern, candlelit or bold depending on the planner, florist, rentals and design choices you bring into the space.</p>
+          <div class="mt-8 grid gap-4 sm:grid-cols-3">
+            <div class="rounded-2xl border border-white/12 p-5"><strong class="display block text-4xl">4</strong><span class="mt-2 block text-xs uppercase tracking-[.12em] text-white/50">tropical acres</span></div>
+            <div class="rounded-2xl border border-white/12 p-5"><strong class="display block text-4xl">1,500</strong><span class="mt-2 block text-xs uppercase tracking-[.12em] text-white/50">sq. ft. pavilion</span></div>
+            <div class="rounded-2xl border border-white/12 p-5"><strong class="display block text-4xl">{businessRules.venue.maximumOccupancy.value}</strong><span class="mt-2 block text-xs uppercase tracking-[.12em] text-white/50">person maximum</span></div>
+          </div>
+        </div>
+        <div class="relative h-[25rem] overflow-hidden rounded-[1.6rem] sm:h-[31rem] lg:h-[38rem] lg:rounded-[2rem]">
+          <ResponsiveImage {...koaMarketingMedia.pavilionReceptionWide} width={1200} height={1000} sizes="(min-width:1024px) 52vw,100vw" class="absolute inset-0 h-full w-full object-cover"/>
+        </div>
+      </div>
+    </section>
+
+    <section class="py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[.78fr_1.22fr] lg:gap-24">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Choose the level of support</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Start with the venue, or build a fuller wedding weekend.</h2>
+        </div>
+        <div>
+          <p class="text-base leading-7 text-[var(--koa-ink)]/68">Koa’s publishes four wedding collections with different levels of access, included inventory and support. The flagship Signature Wedding Experience includes the private property, weekend cottage access, ceremony and reception foundations, Mobile Bar service and planning support.</p>
+          <PackageCapacityComparison furnitureCoverage={signaturePackage.includedFurnitureCoverage} />
+          <div class="mt-7 flex flex-wrap gap-5">
+            <a href="/venue/packages/" class="link-arrow text-[var(--koa-forest)]">Compare all wedding packages →</a>
+            <a href="/signature-wedding/" class="link-arrow text-[var(--koa-forest)]">Explore the Signature Experience →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32">
+      <div class="container-shell grid gap-12 lg:grid-cols-[1.08fr_.92fr] lg:items-center lg:gap-24">
+        <div class="relative h-[28rem] overflow-hidden rounded-[1.7rem] sm:h-[34rem] lg:h-[40rem] lg:rounded-[2rem]">
+          <ResponsiveImage {...koaMarketingMedia.ceremonyVowsCloseup} width={1200} height={1300} sizes="(min-width:1024px) 55vw,100vw" class="absolute inset-0 h-full w-full object-cover"/>
+        </div>
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Before you choose a venue</p>
+          <h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Ask whether the property supports the wedding you actually want to build.</h2>
+          <p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Look beyond the location name and compare guest capacity, included access, rain planning, vendor requirements, beverage service, getting-ready space, furniture, sound rules and how much coordination support is included. Those details shape the wedding day more than a map pin alone.</p>
+          <div class="mt-8 flex flex-wrap gap-5">
+            <a href="/venue/faq/" class="link-arrow text-[var(--koa-forest)]">Read venue policies + FAQ →</a>
+            <a href="/gallery/" class="link-arrow text-[var(--koa-forest)]">See real Koa’s setups →</a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="bg-[var(--koa-ink)] py-20 text-white">
+      <div class="container-shell grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+        <div>
+          <p class="eyebrow text-white/45">Planning a Hilo, Volcano or East Hawaiʻi wedding?</p>
+          <h2 class="display mt-4 max-w-4xl text-5xl leading-[1] sm:text-6xl">Start with your date, guest count and the experience you want.</h2>
+        </div>
+        <a href="/wedding-inquiry/" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Check wedding availability</a>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</BaseLayout>
