@@ -3,6 +3,31 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
+export type SecurityVerdict = 'not_spam' | 'confirmed_spam';
+export type BlockTarget = 'network' | 'email' | 'domain';
+export type BlockDuration = '24h' | '7d' | 'permanent';
+
+export interface SecurityReview {
+  verdict: SecurityVerdict;
+  reviewedAt: string;
+  reviewedBy: string;
+}
+
+export interface BlocklistEntry {
+  id: string;
+  target: BlockTarget;
+  value: string;
+  label: string;
+  source: 'manual' | 'automatic';
+  reason: string;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  permanent: boolean;
+  incidentId: string;
+  createdBy: string;
+}
+
 export interface SecurityEvent {
   id: string;
   createdAt: string;
@@ -14,11 +39,13 @@ export interface SecurityEvent {
   riskScore: number;
   ipFingerprint: string;
   emailDomain: string;
+  emailFingerprint: string;
   emailPreview: string;
   phonePreview: string;
   messageFingerprint: string;
   recordId: string;
   detail: string;
+  review?: SecurityReview;
 }
 
 const DISPOSABLE_EMAIL_DOMAINS = new Set([
@@ -136,9 +163,52 @@ export async function messageFingerprint(payload: any) {
   return normalized ? hmacFingerprint(normalized) : '';
 }
 
+async function getSecurityReviews(context: Context) {
+  const store = storeFor(context);
+  return ((await store.get('reviews/index', { type: 'json', consistency: 'strong' })) || {}) as Record<string, SecurityReview>;
+}
+
 export async function getSecurityEvents(context: Context) {
   const store = storeFor(context);
-  return ((await store.get('events/index', { type: 'json', consistency: 'strong' })) || []) as SecurityEvent[];
+  const [events, reviews] = await Promise.all([
+    store.get('events/index', { type: 'json', consistency: 'strong' }),
+    getSecurityReviews(context),
+  ]);
+  const list = (Array.isArray(events) ? events : []) as SecurityEvent[];
+  return list.map((event) => reviews[event.id] ? { ...event, review: reviews[event.id] } : event);
+}
+
+export async function setSecurityReview(
+  context: Context,
+  eventId: string,
+  verdict: SecurityVerdict,
+  reviewedBy: string,
+) {
+  const store = storeFor(context);
+  const eventKey = clean(eventId, 100);
+  if (!eventKey) throw new Error('Incident ID is required.');
+  const events = await getSecurityEvents(context);
+  if (!events.some((event) => event.id === eventKey)) throw new Error('Security incident not found.');
+
+  const review: SecurityReview = {
+    verdict,
+    reviewedAt: new Date().toISOString(),
+    reviewedBy: clean(reviewedBy, 240),
+  };
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await store.getWithMetadata('reviews/index', { type: 'json', consistency: 'strong' });
+    const map = current?.data && typeof current.data === 'object' ? current.data as Record<string, SecurityReview> : {};
+    const next = { ...map, [eventKey]: review };
+    const write = current
+      ? await store.setJSON('reviews/index', next, { onlyIfMatch: current.etag })
+      : await store.setJSON('reviews/index', next, { onlyIfNew: true });
+    if (write.modified) return review;
+  }
+
+  const fallback = ((await store.get('reviews/index', { type: 'json', consistency: 'strong' })) || {}) as Record<string, SecurityReview>;
+  await store.setJSON('reviews/index', { ...fallback, [eventKey]: review });
+  return review;
 }
 
 async function prependEvent(context: Context, event: SecurityEvent) {
@@ -176,6 +246,7 @@ export async function recordSecurityEvent(
     riskScore: Math.max(0, Math.min(100, Math.round(Number(input.riskScore || 0)))),
     ipFingerprint: clean(input.ipFingerprint, 40) || await ipFingerprint(req),
     emailDomain: clean(input.emailDomain, 180),
+    emailFingerprint: clean(input.emailFingerprint, 40),
     emailPreview: clean(input.emailPreview, 260),
     phonePreview: clean(input.phonePreview, 40),
     messageFingerprint: clean(input.messageFingerprint, 40),
@@ -186,12 +257,188 @@ export async function recordSecurityEvent(
   return event;
 }
 
-export function securityIdentity(payload: any) {
+export async function securityIdentity(payload: any) {
+  const email = clean(payload?.customer?.email, 240).toLowerCase();
   return {
-    emailDomain: emailDomain(payload?.customer?.email),
-    emailPreview: emailPreview(payload?.customer?.email),
+    emailDomain: emailDomain(email),
+    emailFingerprint: email ? await hmacFingerprint(email) : '',
+    emailPreview: emailPreview(email),
     phonePreview: phonePreview(payload?.customer?.phone),
   };
+}
+
+function durationExpiry(duration: BlockDuration, now = Date.now()) {
+  if (duration === 'permanent') return '';
+  const milliseconds = duration === '24h' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+  return new Date(now + milliseconds).toISOString();
+}
+
+export function isBlockActive(entry: BlocklistEntry, now = Date.now()) {
+  return Boolean(entry.permanent || (entry.expiresAt && new Date(entry.expiresAt).getTime() > now));
+}
+
+export async function getBlocklist(context: Context, activeOnly = false) {
+  const store = storeFor(context);
+  const list = ((await store.get('blocklist/index', { type: 'json', consistency: 'strong' })) || []) as BlocklistEntry[];
+  return activeOnly ? list.filter((entry) => isBlockActive(entry)) : list;
+}
+
+async function saveBlocklistEntry(context: Context, candidate: BlocklistEntry) {
+  const store = storeFor(context);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await store.getWithMetadata('blocklist/index', { type: 'json', consistency: 'strong' });
+    const list = Array.isArray(current?.data) ? current.data as BlocklistEntry[] : [];
+    const existing = list.find((entry) => entry.target === candidate.target && entry.value === candidate.value);
+    const entry = existing
+      ? { ...existing, ...candidate, id: existing.id, createdAt: existing.createdAt }
+      : candidate;
+    const next = [entry, ...list.filter((item) => item.id !== entry.id)].slice(0, 2000);
+    const write = current
+      ? await store.setJSON('blocklist/index', next, { onlyIfMatch: current.etag })
+      : await store.setJSON('blocklist/index', next, { onlyIfNew: true });
+    if (write.modified) return entry;
+  }
+
+  const fallback = ((await store.get('blocklist/index', { type: 'json', consistency: 'strong' })) || []) as BlocklistEntry[];
+  const existing = fallback.find((entry) => entry.target === candidate.target && entry.value === candidate.value);
+  const entry = existing ? { ...existing, ...candidate, id: existing.id, createdAt: existing.createdAt } : candidate;
+  await store.setJSON('blocklist/index', [entry, ...fallback.filter((item) => item.id !== entry.id)].slice(0, 2000));
+  return entry;
+}
+
+export async function createBlocklistEntry(
+  context: Context,
+  input: {
+    target: BlockTarget;
+    value: string;
+    label: string;
+    duration: BlockDuration;
+    source: 'manual' | 'automatic';
+    reason: string;
+    incidentId?: string;
+    createdBy?: string;
+  },
+) {
+  const now = new Date().toISOString();
+  const value = clean(input.value, 240).toLowerCase();
+  if (!value) throw new Error('Blocklist target is unavailable.');
+
+  return saveBlocklistEntry(context, {
+    id: 'BLK-' + idSuffix(),
+    target: input.target,
+    value,
+    label: clean(input.label, 260),
+    source: input.source,
+    reason: clean(input.reason, 500),
+    createdAt: now,
+    updatedAt: now,
+    expiresAt: durationExpiry(input.duration),
+    permanent: input.duration === 'permanent',
+    incidentId: clean(input.incidentId, 100),
+    createdBy: clean(input.createdBy, 240),
+  });
+}
+
+export async function removeBlocklistEntry(context: Context, blockId: string) {
+  const store = storeFor(context);
+  const id = clean(blockId, 100);
+  if (!id) throw new Error('Block ID is required.');
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await store.getWithMetadata('blocklist/index', { type: 'json', consistency: 'strong' });
+    const list = Array.isArray(current?.data) ? current.data as BlocklistEntry[] : [];
+    const next = list.filter((entry) => entry.id !== id);
+    if (next.length === list.length) return false;
+    const write = await store.setJSON('blocklist/index', next, { onlyIfMatch: current.etag });
+    if (write.modified) return true;
+  }
+  return false;
+}
+
+export async function findActiveBlock(
+  context: Context,
+  identity: { networkFingerprint?: string; emailFingerprint?: string; emailDomain?: string },
+) {
+  const active = await getBlocklist(context, true);
+  return active.find((entry) =>
+    (entry.target === 'network' && entry.value === clean(identity.networkFingerprint, 40).toLowerCase()) ||
+    (entry.target === 'email' && entry.value === clean(identity.emailFingerprint, 40).toLowerCase()) ||
+    (entry.target === 'domain' && entry.value === clean(identity.emailDomain, 180).toLowerCase())
+  ) || null;
+}
+
+function abuseCount(
+  events: SecurityEvent[],
+  target: 'network' | 'email',
+  value: string,
+  withinMs: number,
+  now = Date.now(),
+) {
+  return events.filter((event) => {
+    if (event.review?.verdict === 'not_spam') return false;
+    const abusive = event.disposition === 'blocked' || event.review?.verdict === 'confirmed_spam';
+    if (!abusive) return false;
+    const time = new Date(event.createdAt).getTime();
+    if (!Number.isFinite(time) || now - time > withinMs) return false;
+    return target === 'network' ? event.ipFingerprint === value : event.emailFingerprint === value;
+  }).length;
+}
+
+export function automaticBlockDecision(
+  events: SecurityEvent[],
+  identity: { networkFingerprint?: string; emailFingerprint?: string },
+  now = Date.now(),
+) {
+  const decisions: Array<{ target: 'network' | 'email'; value: string; duration: BlockDuration; reason: string }> = [];
+  const day = 24 * 60 * 60 * 1000;
+  const week = 7 * day;
+  const month = 30 * day;
+
+  const email = clean(identity.emailFingerprint, 40);
+  if (email) {
+    const email24h = abuseCount(events, 'email', email, day, now);
+    const email7d = abuseCount(events, 'email', email, week, now);
+    const email30d = abuseCount(events, 'email', email, month, now);
+    if (email30d >= 12) decisions.push({ target: 'email', value: email, duration: 'permanent', reason: '12 or more confirmed/blocked incidents from this email identity in 30 days.' });
+    else if (email7d >= 6) decisions.push({ target: 'email', value: email, duration: '7d', reason: '6 or more confirmed/blocked incidents from this email identity in 7 days.' });
+    else if (email24h >= 3) decisions.push({ target: 'email', value: email, duration: '24h', reason: '3 or more confirmed/blocked incidents from this email identity in 24 hours.' });
+  }
+
+  const network = clean(identity.networkFingerprint, 40);
+  if (network) {
+    const network24h = abuseCount(events, 'network', network, day, now);
+    const network7d = abuseCount(events, 'network', network, week, now);
+    const network30d = abuseCount(events, 'network', network, month, now);
+    if (network30d >= 30) decisions.push({ target: 'network', value: network, duration: 'permanent', reason: '30 or more confirmed/blocked incidents from this network in 30 days.' });
+    else if (network7d >= 15) decisions.push({ target: 'network', value: network, duration: '7d', reason: '15 or more confirmed/blocked incidents from this network in 7 days.' });
+    else if (network24h >= 6) decisions.push({ target: 'network', value: network, duration: '24h', reason: '6 or more confirmed/blocked incidents from this network in 24 hours.' });
+  }
+
+  return decisions;
+}
+
+export async function applyAutomaticBlocks(
+  context: Context,
+  event: SecurityEvent,
+  events: SecurityEvent[],
+) {
+  const decisions = automaticBlockDecision(events, {
+    networkFingerprint: event.ipFingerprint,
+    emailFingerprint: event.emailFingerprint,
+  });
+
+  const created: BlocklistEntry[] = [];
+  for (const decision of decisions) {
+    created.push(await createBlocklistEntry(context, {
+      ...decision,
+      label: decision.target === 'email' ? event.emailPreview : 'Network ' + event.ipFingerprint.slice(0, 10),
+      source: 'automatic',
+      incidentId: event.id,
+      createdBy: 'system',
+    }));
+  }
+  return created;
 }
 
 function addSignal(signals: Array<{ code: string; label: string; score: number }>, code: string, label: string, score: number) {
@@ -252,6 +499,7 @@ export async function analyzeInquirySecurity(payload: any, recentEvents: Securit
   if (fingerprint) {
     const now = Date.now();
     const same = recentEvents.filter((event) =>
+      event.review?.verdict !== 'not_spam' &&
       event.messageFingerprint === fingerprint &&
       event.createdAt &&
       now - new Date(event.createdAt).getTime() <= 7 * 24 * 60 * 60 * 1000
