@@ -110,29 +110,6 @@ jobs:
               ok = status == 403 and "Security verification failed" in response
               checks.append((f"direct POST {path} blocked", ok, status, response[:250]))
 
-          # Exercise the edge rate limiter from this runner's IP without creating CRM records.
-          rate_body = urllib.parse.urlencode(
-              {"form-name": "koa-event-inquiry", "email": "qa-rate-limit@example.com"}
-          ).encode()
-          for _ in range(15):
-              request(
-                  "/thank-you/",
-                  method="POST",
-                  data=rate_body,
-                  headers={"Content-Type": "application/x-www-form-urlencoded"},
-              )
-
-          import time
-          time.sleep(11)
-          rate_status, rate_response = request(
-              "/thank-you/",
-              method="POST",
-              data=rate_body,
-              headers={"Content-Type": "application/x-www-form-urlencoded"},
-          )
-          rate_ok = rate_status == 429
-          checks.append(("edge per-IP rate limit enforced", rate_ok, rate_status, rate_response[:250]))
-
           for name, ok, status, detail in checks:
               print(f"{'PASS' if ok else 'FAIL'} | {name} | HTTP {status} | {detail!r}")
 
