@@ -283,7 +283,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       <form data-activity-form class="mt-6 rounded-xl bg-[var(--koa-sand)] p-4">
         <input type="hidden" name="recordId" />
         <div class="grid gap-3 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
-          <label class="grid gap-2 text-xs font-semibold">Activity type<select name="type" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2.5"><option value="note">Note</option><option value="call">Call</option><option value="email">Email</option><option value="meeting">Meeting</option></select></label>
+          <label class="grid gap-2 text-xs font-semibold">Activity type<select name="type" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2.5"><option value="note">Note</option><option value="call">Call</option><option value="email">Email</option><option value="meeting">Meeting</option><option value="responded">Response completed</option></select></label>
           <label class="grid gap-2 text-xs font-semibold">Details<input name="detail" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2.5" placeholder="What happened?" required /></label>
           <button class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add activity</button>
         </div>
@@ -608,9 +608,69 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         quickbooks_status_synced:'QBO status synced', client_planning_updated:'Client planning updated',
         client_document_uploaded:'Client planning document uploaded', client_document_removed:'Client planning document removed',
         event_ops_updated:'Event Ops updated', booked:'Event booked', call:'Call', email:'Email',
-        meeting:'Meeting', note:'Note'
+        meeting:'Meeting', note:'Note', responded:'Response completed',
+        discovery_call_requested:'Discovery Call requested',
+        lead_notification_sent:'Team lead email sent', lead_notification_failed:'Team lead email failed',
+        client_confirmation_sent:'Client confirmation sent', client_confirmation_failed:'Client confirmation failed',
+        lead_response_reminder_sent:'Response reminder sent', lead_response_reminder_failed:'Response reminder failed',
+        email_sent:'Email sent', email_delivered:'Email delivered', email_bounced:'Email bounced', email_failed:'Email failed'
       };
       return labels[type]||String(type||'Activity').replaceAll('_',' ');
+    }
+
+    function emailStatusLabel(status) {
+      const normalized=String(status||'').toLowerCase();
+      if(normalized==='delivered')return 'Delivered';
+      if(normalized==='bounced')return 'Bounced';
+      if(normalized==='failed')return 'Failed';
+      if(normalized==='sent')return 'Email sent';
+      return 'Pending';
+    }
+
+    function emailStatusClass(status) {
+      const normalized=String(status||'').toLowerCase();
+      if(normalized==='delivered')return 'border border-emerald-200 bg-emerald-50 text-emerald-800';
+      if(normalized==='bounced'||normalized==='failed')return 'border border-red-200 bg-red-50 text-red-700';
+      if(normalized==='sent')return 'border border-blue-200 bg-blue-50 text-blue-800';
+      return 'border border-amber-200 bg-amber-50 text-amber-800';
+    }
+
+    function appendCommunicationStatus(container,record) {
+      const communications=record.communications||{};
+      const items=[
+        ['Client confirmation',communications.clientConfirmation],
+        ['Team notification',communications.internalNotification],
+        ['Discovery confirmation',communications.discoveryConfirmation],
+        ['Response reminder',communications.responseReminder]
+      ].filter(([,entry])=>entry&&entry.status);
+
+      if(!items.length)return;
+      const wrap=document.createElement('div');
+      wrap.className='mt-3 flex flex-wrap gap-2';
+      items.forEach(([label,entry])=>{
+        const badge=text(
+          'span',
+          'w-fit rounded-full px-3 py-1.5 text-[.54rem] font-black uppercase tracking-[.07em] '+emailStatusClass(entry.status),
+          label+' · '+emailStatusLabel(entry.status)
+        );
+        if(entry.updatedAt)badge.title=label+' updated '+dateTime(entry.updatedAt);
+        wrap.appendChild(badge);
+      });
+      container.appendChild(wrap);
+    }
+
+    function hasResponseActivity(record) {
+      const responseTypes=new Set(['email','call','meeting','responded','proposal_sent','quickbooks_estimate_sent']);
+      return (record.timeline||[]).some((event)=>responseTypes.has(String(event.type||'')));
+    }
+
+    async function markResponded(record) {
+      try {
+        await logActivity(record,'responded','Lead marked responded in CRM.');
+        await load(String(searchInput?.value||'').trim());
+      } catch(error) {
+        if(message)message.textContent=error?.message||'Unable to mark this lead responded.';
+      }
     }
 
     function addQuickLinks(container,record,className) {
@@ -714,6 +774,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         }
       }
       if(record.quoteId) article.appendChild(text('p','mt-2 font-mono text-[.65rem] text-[var(--koa-ink)]/45','Quote '+record.quoteId));
+      appendCommunicationStatus(article,record);
 
       if(record.stage!=='booked') {
         const next=document.createElement('div');
@@ -731,6 +792,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const link=document.createElement('a'); link.className=small; link.target='_blank'; link.rel='noreferrer'; link.href='/proposal/?token='+encodeURIComponent(record.proposal.publicToken); link.textContent='Client view'; actions.appendChild(link);
       }
       if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        if(!hasResponseActivity(record)) {
+          actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
+        }
         actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       addQuickLinks(actions,record,small);
@@ -1024,6 +1088,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         article.appendChild(estimate);
       }
 
+      appendCommunicationStatus(article,record);
+
       const tasks=mobileFollowups(record);
       const taskBox=document.createElement('div');taskBox.className='mt-4';
       taskBox.appendChild(text('p','text-[.54rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Follow-up'));
@@ -1043,6 +1109,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(plan.run && record.stage!=='booked') actions.append(actionButton(plan.label,primary,plan.run));
       if(record.kind==='proposal') actions.append(actionButton('Proposal',small,()=>openProposal(record)));
       if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        if(!hasResponseActivity(record)) {
+          actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
+        }
         actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       addQuickLinks(actions,record,small);
