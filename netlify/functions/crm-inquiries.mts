@@ -1,5 +1,12 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import {
+  analyzeInquirySecurity,
+  getSecurityEvents,
+  ipFingerprint,
+  recordSecurityEvent,
+  securityIdentity,
+} from './_shared/security.ts';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -175,11 +182,26 @@ export default async (req: Request, context: Context) => {
   let payload: any;
   try { payload = JSON.parse(rawBody); } catch { return json(req, { error: 'Invalid JSON.' }, 400); }
 
+  const formName = cleanText(payload.formName, 80);
+  const sourceFingerprint = await ipFingerprint(req);
+  const identity = securityIdentity(payload);
+
   if (cleanText(payload.honeypot, 120)) {
+    await recordSecurityEvent(context, req, {
+      disposition: 'blocked',
+      category: 'honeypot',
+      formName,
+      reasons: ['Hidden honeypot field was populated'],
+      reasonCodes: ['honeypot'],
+      riskScore: 100,
+      ipFingerprint: sourceFingerprint,
+      ...identity,
+      detail: 'Submission silently discarded by the honeypot check.',
+    });
     return json(req, { ok: true, id: '' });
   }
 
-  const formName = cleanText(payload.formName, 80);
+
   const protectedActions: Record<string, string> = {
     'koa-event-inquiry': 'event_inquiry',
     'koa-wedding-inquiry': 'wedding_inquiry',
@@ -189,11 +211,63 @@ export default async (req: Request, context: Context) => {
   if (expectedTurnstileAction) {
     const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
     if (!turnstile.ok) {
+      await recordSecurityEvent(context, req, {
+        disposition: 'blocked',
+        category: 'turnstile_failed',
+        formName,
+        reasons: ['Cloudflare Turnstile verification failed'],
+        reasonCodes: ['turnstile_failed', ...((turnstile.codes || []).slice(0, 4))],
+        riskScore: 100,
+        ipFingerprint: sourceFingerprint,
+        ...identity,
+        detail: 'Rejected before CRM storage.',
+      });
       return json(req, {
         error: turnstile.error || 'Security verification failed.',
         code: 'turnstile_failed',
       }, 403);
     }
+  }
+
+  const recentSecurityEvents = await getSecurityEvents(context);
+  const security = await analyzeInquirySecurity(payload, recentSecurityEvents.slice(0, 2500), sourceFingerprint);
+
+  if (security.velocityBlocked) {
+    await recordSecurityEvent(context, req, {
+      disposition: 'blocked',
+      category: 'rate_limited',
+      formName,
+      reasons: [security.velocityReason],
+      reasonCodes: ['verified_submission_velocity'],
+      riskScore: 100,
+      ipFingerprint: sourceFingerprint,
+      messageFingerprint: security.messageFingerprint,
+      ...identity,
+      detail: 'Verified visitor exceeded the application-level inquiry velocity limit.',
+    });
+    return json(req, {
+      error: 'Too many inquiries have been submitted from this network. Please try again later.',
+      code: 'rate_limited',
+    }, 429);
+  }
+
+  if (security.disposition === 'blocked') {
+    await recordSecurityEvent(context, req, {
+      disposition: 'blocked',
+      category: 'inquiry_screened',
+      formName,
+      reasons: security.reasons,
+      reasonCodes: security.reasonCodes,
+      riskScore: security.riskScore,
+      ipFingerprint: sourceFingerprint,
+      messageFingerprint: security.messageFingerprint,
+      ...identity,
+      detail: 'Submission blocked by the Koa’s inquiry risk screen.',
+    });
+    return json(req, {
+      error: 'We could not accept this submission. Please review the information and try again.',
+      code: 'submission_blocked',
+    }, 403);
   }
 
   const now = new Date();
@@ -218,6 +292,12 @@ export default async (req: Request, context: Context) => {
       phone: cleanText(payload.customer?.phone, 80),
       eventDate: cleanText(payload.customer?.eventDate, 40),
       notes: cleanText(payload.customer?.notes, 4000),
+    },
+    security: {
+      disposition: security.disposition,
+      riskScore: security.riskScore,
+      reasons: security.reasons,
+      reasonCodes: security.reasonCodes,
     },
     inquiry: {
       formName,
@@ -278,6 +358,22 @@ export default async (req: Request, context: Context) => {
   await store.setJSON('records/' + id, record);
   await store.setJSON('records/index', [record, ...current].slice(0, 1500));
 
+  await recordSecurityEvent(context, req, {
+    disposition: security.disposition,
+    category: 'inquiry_screened',
+    formName,
+    reasons: security.reasons,
+    reasonCodes: security.reasonCodes,
+    riskScore: security.riskScore,
+    ipFingerprint: sourceFingerprint,
+    messageFingerprint: security.messageFingerprint,
+    recordId: id,
+    ...identity,
+    detail: security.disposition === 'flagged'
+      ? 'Accepted into CRM with a security review flag.'
+      : 'Accepted into CRM after security screening.',
+  });
+
   await appendEvent(store, {
     id: 'EVT-' + idSuffix(),
     type: 'inquiry',
@@ -297,4 +393,11 @@ export default async (req: Request, context: Context) => {
   return json(req, { ok: true, id, ...(turnstileProof ? { turnstileProof } : {}) });
 };
 
-export const config: Config = { path: '/api/crm/inquiries' };
+export const config: Config = {
+  path: '/api/crm/inquiries',
+  rateLimit: {
+    windowLimit: 12,
+    windowSize: 60,
+    aggregateBy: ['ip', 'domain'],
+  },
+};
