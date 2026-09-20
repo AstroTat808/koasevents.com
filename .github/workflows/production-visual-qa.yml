@@ -45,6 +45,7 @@ permissions:
 
 env:
   PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.com' }}
+  EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   VISUAL_RESULTS: visual-results
 
 jobs:
@@ -102,6 +103,34 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  admin-startup-audit:
+    name: Admin startup browser audit
+    needs: source-build-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install browser QA dependencies
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium
+      - name: Wait for this exact Netlify deploy
+        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
+      - name: Verify every admin page reaches a visible startup state
+        run: python scripts/production_visual_qa.py --mode admin --browser chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-admin-startup-${{ github.run_id }}
+          path: visual-results/admin-chromium
+          retention-days: 30
+          if-no-files-found: error
+
   visual-audit:
     name: Responsive visual audit
     needs: deployed-smoke
@@ -135,7 +164,7 @@ jobs:
   qa-summary:
     name: Visual QA summary
     if: always()
-    needs: [source-build-audit, deployed-smoke, visual-audit]
+    needs: [source-build-audit, deployed-smoke, admin-startup-audit, visual-audit]
     runs-on: ubuntu-latest
     steps:
       - name: Publish run summary
@@ -147,6 +176,7 @@ jobs:
             echo '| --- | --- |'
             echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
             echo '| Staging route smoke | ${{ needs.deployed-smoke.result }} |'
+            echo '| Admin startup browser audit | ${{ needs.admin-startup-audit.result }} |'
             echo '| Responsive visual audit | ${{ needs.visual-audit.result }} |'
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
