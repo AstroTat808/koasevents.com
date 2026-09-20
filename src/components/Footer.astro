@@ -1,3 +1,8 @@
+---
+import { businessRules } from '../data/businessRules';
+
+const directionsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(businessRules.contact.venueAddress);
+---
 <footer class="relative overflow-hidden bg-[var(--koa-ink)] py-16 text-white">
   <div class="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,var(--koa-amber),transparent)]"></div>
   <div class="container-shell grid gap-12 lg:grid-cols-[1.3fr_.75fr_.65fr]">
@@ -6,8 +11,16 @@
       <p class="display mt-9 max-w-xl text-5xl leading-[1]">Gather beautifully.</p><div class="luxury-rule mt-6"></div>
       <p class="mt-6 max-w-lg text-sm leading-7 text-white/58">A private rainforest wedding venue in Mountain View, direct stays at Koa’s, and island-wide mobile bar service rooted in warm hospitality and Hawaiʻi Island character.</p>
     </div>
-    <div class="text-sm leading-8 text-white/66"><p class="eyebrow text-white/38">Visit + connect</p><p class="mt-5 font-bold text-white">Mountain View, Hawaiʻi</p><p>Venue · Stays · Island-wide mobile bar</p><a class="mt-4 block text-white hover:text-[var(--koa-amber-light)]" href="tel:+18448085627">844-808-KOAS</a><a class="text-white hover:text-[var(--koa-amber-light)]" href="mailto:aloha@koasevents.com">aloha@koasevents.com</a></div>
-    <div class="grid content-start gap-1 text-sm leading-8 text-white/66"><p class="eyebrow mb-4 text-white/38">Explore</p><a class="hover:text-[var(--koa-amber-light)]" href="/about/">About Koa’s</a><a class="hover:text-[var(--koa-amber-light)]" href="/signature-wedding/">Signature Wedding</a><a class="hover:text-[var(--koa-amber-light)]" href="/weddings/">Weddings</a><a class="hover:text-[var(--koa-amber-light)]" href="/east-hawaii-wedding-venue/">East Hawaiʻi Wedding Venue</a><a class="hover:text-[var(--koa-amber-light)]" href="/venue/">Venue</a><a class="hover:text-[var(--koa-amber-light)]" href="/gallery/">Gallery</a><a class="hover:text-[var(--koa-amber-light)]" href="/stay/">Stay at Koa’s</a><a class="hover:text-[var(--koa-amber-light)]" href="/mobile-bar/">Mobile Bar</a><a class="hover:text-[var(--koa-amber-light)]" href="/catalog/">Rentals + Pricing</a><a class="hover:text-[var(--koa-amber-light)]" href="/private-events/">Private Events</a><a class="hover:text-[var(--koa-amber-light)]" href="/corporate-events/">Corporate Events</a><a class="mt-2 font-bold text-white hover:text-[var(--koa-amber-light)]" href="/wedding-inquiry/">Check Wedding Availability</a></div>
+    <div class="text-sm leading-8 text-white/66">
+      <p class="eyebrow text-white/38">Visit + connect</p>
+      <p class="mt-5 font-bold text-white">Mountain View, Hawaiʻi</p>
+      <a class="block text-white hover:text-[var(--koa-amber-light)]" href={directionsUrl} target="_blank" rel="noopener noreferrer">{businessRules.contact.venueAddress}</a>
+      <p>Venue · Stays · Island-wide mobile bar</p>
+      <a class="mt-4 block text-white hover:text-[var(--koa-amber-light)]" href="tel:+18448085627">844-808-KOAS</a>
+      <a class="block text-white hover:text-[var(--koa-amber-light)]" href="mailto:aloha@koasevents.com">aloha@koasevents.com</a>
+      <a class="mt-2 block font-bold text-white hover:text-[var(--koa-amber-light)]" href={directionsUrl} target="_blank" rel="noopener noreferrer">Get directions →</a>
+    </div>
+    <div class="grid content-start gap-1 text-sm leading-8 text-white/66"><p class="eyebrow mb-4 text-white/38">Explore</p><a class="hover:text-[var(--koa-amber-light)]" href="/about/">About Koa’s</a><a class="hover:text-[var(--koa-amber-light)]" href="/contact/">Contact + Directions</a><a class="hover:text-[var(--koa-amber-light)]" href="/signature-wedding/">Signature Wedding</a><a class="hover:text-[var(--koa-amber-light)]" href="/weddings/">Weddings</a><a class="hover:text-[var(--koa-amber-light)]" href="/east-hawaii-wedding-venue/">East Hawaiʻi Wedding Venue</a><a class="hover:text-[var(--koa-amber-light)]" href="/venue/">Venue</a><a class="hover:text-[var(--koa-amber-light)]" href="/gallery/">Gallery</a><a class="hover:text-[var(--koa-amber-light)]" href="/stay/">Stay at Koa’s</a><a class="hover:text-[var(--koa-amber-light)]" href="/mobile-bar/">Mobile Bar</a><a class="hover:text-[var(--koa-amber-light)]" href="/catalog/">Rentals + Pricing</a><a class="hover:text-[var(--koa-amber-light)]" href="/private-events/">Private Events</a><a class="hover:text-[var(--koa-amber-light)]" href="/corporate-events/">Corporate Events</a><a class="mt-2 font-bold text-white hover:text-[var(--koa-amber-light)]" href="/wedding-inquiry/">Check Wedding Availability</a></div>
   </div>
   <div class="container-shell mt-14 flex flex-col gap-3 border-t border-white/10 pt-7 text-xs tracking-[.04em] text-white/38 sm:flex-row sm:items-center sm:justify-between">
     <p>© {new Date().getFullYear()} Koa’s Events · Hawaiʻi Island</p>
