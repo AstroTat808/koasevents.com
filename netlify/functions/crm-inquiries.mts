@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { sendLeadNotification } from './_shared/lead-email.ts';
 import {
   analyzeInquirySecurity,
   applyAutomaticBlocks,
@@ -290,6 +291,8 @@ export default async (req: Request, context: Context) => {
   const protectedActions: Record<string, string> = {
     'koa-event-inquiry': 'event_inquiry',
     'koa-wedding-inquiry': 'wedding_inquiry',
+    'koa-discovery-call-request': 'discovery_call',
+    'koa-stay-inquiry': 'stay_inquiry',
   };
   const expectedTurnstileAction = protectedActions[formName] || '';
 
@@ -415,10 +418,75 @@ export default async (req: Request, context: Context) => {
       automaticRentalBreakdown: cleanText(payload.inquiry?.automaticRentalBreakdown, 8000),
       manualAddOns: cleanText(payload.inquiry?.manualAddOns, 8000),
       catalogSelectionState: cleanText(payload.inquiry?.catalogSelectionState, 30000),
+      preferredDate: cleanText(payload.inquiry?.preferredDate, 40),
+      preferredTime: cleanText(payload.inquiry?.preferredTime, 80),
+      alternateWindow: cleanText(payload.inquiry?.alternateWindow, 500),
+      sourceRecordId: cleanText(payload.inquiry?.sourceRecordId, 80),
+      arrival: cleanText(payload.inquiry?.arrival, 40),
+      departure: cleanText(payload.inquiry?.departure, 40),
+      stayType: cleanText(payload.inquiry?.stayType, 120),
     },
   };
 
-  if (formName === 'koa-event-inquiry' || formName === 'koa-wedding-inquiry') {
+  const notificationConfigured = Boolean(String(Netlify.env.get('RESEND_API_KEY') || '').trim());
+
+  if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
+    const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
+    const existing = existingRecords.find((entry: any) =>
+      entry?.id === record.inquiry.sourceRecordId &&
+      String(entry.customer?.email || '').trim().toLowerCase() === record.customer.email.toLowerCase()
+    );
+
+    if (existing) {
+      existing.updatedAt = now.toISOString();
+      existing.inquiry = {
+        ...(existing.inquiry || {}),
+        discoveryCall: {
+          preferredDate: record.inquiry.preferredDate || record.customer.eventDate,
+          preferredTime: record.inquiry.preferredTime,
+          alternateWindow: record.inquiry.alternateWindow,
+          requestedAt: now.toISOString(),
+        },
+      };
+      await store.setJSON('records/' + existing.id, existing);
+      await store.setJSON(
+        'records/index',
+        existingRecords.map((entry: any) => entry?.id === existing.id ? existing : entry).slice(0, 1500),
+      );
+      await appendEvent(store, {
+        id: 'EVT-' + idSuffix(),
+        type: 'discovery_call_requested',
+        packageId: existing.packageId || existing.inquiry?.venuePackage || '',
+        quoteId: existing.quoteId || '',
+        recordId: existing.id,
+        createdAt: now.toISOString(),
+        detail: [
+          record.inquiry.preferredDate || record.customer.eventDate,
+          record.inquiry.preferredTime,
+          record.inquiry.alternateWindow,
+        ].filter(Boolean).join(' · '),
+      });
+      context.waitUntil(sendLeadNotification({
+        ...existing,
+        source: 'koa-discovery-call-request',
+        customer: { ...existing.customer, eventDate: record.inquiry.preferredDate || record.customer.eventDate },
+        inquiry: {
+          ...(existing.inquiry || {}),
+          preferredDate: record.inquiry.preferredDate || record.customer.eventDate,
+          preferredTime: record.inquiry.preferredTime,
+          alternateWindow: record.inquiry.alternateWindow,
+        },
+      }));
+      return json(req, {
+        ok: true,
+        id: existing.id,
+        attached: true,
+        notificationConfigured,
+      });
+    }
+  }
+
+  if (['koa-event-inquiry', 'koa-wedding-inquiry', 'koa-mobile-bar-inquiry', 'koa-stay-inquiry'].includes(formName)) {
     const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
     const normalizedEmail = record.customer.email.toLowerCase();
     const duplicate = existingRecords.find((entry: any) => {
@@ -438,6 +506,7 @@ export default async (req: Request, context: Context) => {
         ok: true,
         id: duplicate.id,
         deduplicated: true,
+        notificationConfigured,
         ...(turnstileProof ? { turnstileProof } : {}),
       });
     }
@@ -500,11 +569,18 @@ export default async (req: Request, context: Context) => {
       : '',
   });
 
+  context.waitUntil(sendLeadNotification(record));
+
   const turnstileProof = expectedTurnstileAction
     ? await createTurnstileProof(formName, record.customer.email)
     : '';
 
-  return json(req, { ok: true, id, ...(turnstileProof ? { turnstileProof } : {}) });
+  return json(req, {
+    ok: true,
+    id,
+    notificationConfigured,
+    ...(turnstileProof ? { turnstileProof } : {}),
+  });
 };
 
 export const config: Config = {
