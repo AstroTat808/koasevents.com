@@ -20,26 +20,8 @@ const celebrations = [
   { title: 'Corporate', copy: 'Retreats, client events and team gatherings with hospitality and operational clarity.', href: '/corporate-events/', image: koaMarketingMedia.pavilionReceptionDaylightAlt },
 ];
 
-const schema = {
-  '@context': 'https://schema.org',
-  '@type': 'EventVenue',
-  name: "Koa's Events",
-  url: 'https://www.koasevents.com/',
-  email: businessRules.contact.email,
-  telephone: businessRules.contact.phone,
-  maximumAttendeeCapacity: businessRules.venue.maximumOccupancy.value,
-  address: {
-    '@type': 'PostalAddress',
-    streetAddress: '11-3334 Hibiscus St',
-    addressLocality: 'Mountain View',
-    addressRegion: 'HI',
-    postalCode: '96771',
-    addressCountry: 'US',
-  },
-};
 ---
-<BaseLayout title="Koa’s Events | Big Island Event Venue & Mobile Bar" description="Host a wedding or event for up to 100 guests at Koa’s Events in Mountain View, Hawaiʻi, or bring Koa’s Mobile Bar anywhere on the Big Island." canonical="https://www.koasevents.com/">
-<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+<BaseLayout title="Koa’s Events | Big Island Event Venue & Mobile Bar" description="Host a wedding or event for up to 100 guests at Koa’s Events in Mountain View, Hawaiʻi, or bring Koa’s Mobile Bar anywhere on the Big Island." canonical="https://koasevents.com/">
 <main>
   <section class="relative min-h-[90svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[96svh]">
     <ResponsiveImage {...koaMarketingMedia.pavilionSunsetWide} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
