@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from html import escape
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 BASE=os.environ.get("PRODUCTION_BASE_URL","https://koasevents.netlify.app").rstrip("/")
@@ -37,6 +37,20 @@ class Finding:
 def get(path,timeout=25):
  try:
   with urlopen(Request(BASE+path,headers={"User-Agent":"KoaEvents-Visual-QA/1.0","Cache-Control":"no-cache"}),timeout=timeout) as r:
+   return r.status,{k.lower():v for k,v in r.headers.items()},r.read()
+ except HTTPError as e:return e.code,{k.lower():v for k,v in e.headers.items()},e.read()
+ except URLError as e:return 0,{},str(e).encode()
+
+def post(path,data,content_type,headers=None,timeout=25):
+ body=data.encode("utf-8") if isinstance(data,str) else data
+ request_headers={
+  "User-Agent":"KoaEvents-Security-QA/1.0",
+  "Cache-Control":"no-cache",
+  "Content-Type":content_type,
+  **(headers or {})
+ }
+ try:
+  with urlopen(Request(BASE+path,data=body,headers=request_headers,method="POST"),timeout=timeout) as r:
    return r.status,{k.lower():v for k,v in r.headers.items()},r.read()
  except HTTPError as e:return e.code,{k.lower():v for k,v in e.headers.items()},e.read()
  except URLError as e:return 0,{},str(e).encode()
@@ -81,7 +95,7 @@ def source_mode():
  print(json.dumps(report,indent=2));return 1 if failures else 0
 
 def smoke_mode():
- OUT.mkdir(parents=True,exist_ok=True);checks=[];failures=[]
+ OUT.mkdir(parents=True,exist_ok=True);checks=[];security=[];failures=[]
  for name,path in ROUTES:
   status,headers,body=get(path)
   ok=200<=status<400 and len(body)>250
@@ -90,9 +104,55 @@ def smoke_mode():
  status,headers,_=get("/")
  missing=[h for h in ("x-content-type-options","referrer-policy") if not headers.get(h)]
  if missing:failures.append("Homepage missing security headers: "+", ".join(missing))
- report={"mode":"smoke","baseUrl":BASE,"checks":checks,"failures":failures}
+
+ for path,action in (("/inquire/","event_inquiry"),("/wedding-inquiry/","wedding_inquiry")):
+  status,_,body=get(path)
+  html=body.decode("utf-8","ignore")
+  ok=status==200 and "cf-turnstile" in html and "challenges.cloudflare.com/turnstile/v0/api.js" in html and f'data-action="{action}"' in html
+  security.append({"check":"widget-present","path":path,"status":status,"action":action,"ok":ok})
+  if not ok:failures.append(f"Turnstile widget/script/action missing from {path}")
+
+ crm_payload=json.dumps({
+  "formName":"koa-event-inquiry",
+  "customer":{"email":"qa-turnstile@example.com"},
+  "inquiry":{"service":"venue","eventType":"QA"}
+ })
+ status,_,body=post(
+  "/api/crm/inquiries",
+  crm_payload,
+  "application/json",
+  {"X-Koa-Inquiry-Capture":"1"}
+ )
+ blocked=status==403 and b"turnstile_failed" in body
+ security.append({"check":"crm-missing-token-blocked","status":status,"ok":blocked})
+ if not blocked:failures.append(f"CRM accepted or mishandled a protected submission without Turnstile: HTTP {status}")
+
+ fake_payload=json.dumps({
+  "formName":"koa-event-inquiry",
+  "turnstileToken":"not-a-valid-turnstile-token",
+  "customer":{"email":"qa-turnstile@example.com"},
+  "inquiry":{"service":"venue","eventType":"QA"}
+ })
+ status,_,body=post(
+  "/api/crm/inquiries",
+  fake_payload,
+  "application/json",
+  {"X-Koa-Inquiry-Capture":"1"}
+ )
+ blocked=status==403 and b"turnstile_failed" in body
+ security.append({"check":"crm-invalid-token-blocked","status":status,"ok":blocked})
+ if not blocked:failures.append(f"CRM accepted or mishandled an invalid Turnstile token: HTTP {status}")
+
+ for path,form_name in (("/thank-you/","koa-event-inquiry"),("/wedding-inquiry-thank-you/","koa-wedding-inquiry")):
+  body=urlencode({"form-name":form_name,"email":"qa-turnstile@example.com"})
+  status,_,response=post(path,body,"application/x-www-form-urlencoded")
+  blocked=status==403 and b"Security verification failed" in response
+  security.append({"check":"direct-netlify-post-blocked","path":path,"status":status,"ok":blocked})
+  if not blocked:failures.append(f"Direct Netlify Forms POST bypass was not blocked at {path}: HTTP {status}")
+
+ report={"mode":"smoke","baseUrl":BASE,"checks":checks,"security":security,"failures":failures}
  (OUT/"production-smoke.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
- print(json.dumps({"checks":len(checks),"failures":failures},indent=2));return 1 if failures else 0
+ print(json.dumps({"checks":len(checks),"security":security,"failures":failures},indent=2));return 1 if failures else 0
 
 def wait_mode(seconds=600):
  deadline=time.time()+seconds
