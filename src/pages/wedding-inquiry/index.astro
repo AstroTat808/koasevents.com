@@ -6,7 +6,7 @@ const requestedPackage=Astro.url.searchParams.get('package') || '';
 const requestedGuests=Astro.url.searchParams.get('guests') || '';
 const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 ---
-<BaseLayout title="Big Island Wedding Venue Availability | Koa’s Events" description="Tell Koa’s Events about your Hawaiʻi Island wedding date, guest count, budget and vision." canonical="https://www.koasevents.com/wedding-inquiry/">
+<BaseLayout title="Big Island Wedding Venue Availability | Koa’s Events" description="Tell Koa’s Events about your Hawaiʻi Island wedding date, guest count, budget and vision." canonical="https://koasevents.com/wedding-inquiry/">
 <Header overlay={false}/>
 <main><section class="py-16 lg:py-24"><div class="container-shell grid gap-14 lg:grid-cols-[.75fr_1.25fr] lg:gap-20">
 <aside><p class="eyebrow text-[var(--koa-clay)]">Wedding availability</p><h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Start with the wedding, not the equipment list.</h1><p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">We only need enough information to understand your date, guest count, budget and the kind of experience you are planning. Detailed rentals, décor and production choices can come later.</p><div class="mt-10 rounded-[1.5rem] bg-[var(--koa-forest)] p-7 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Signature Wedding</p><p class="display mt-4 text-4xl">Starting at $20,000</p><p class="mt-4 text-sm leading-6 text-white/64">Interested in a more supported wedding weekend? Select the Signature Experience in the form and we’ll qualify the fit from there.</p></div></aside>
