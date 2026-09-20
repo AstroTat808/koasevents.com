@@ -57,6 +57,55 @@ function turnstileSecret() {
   return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
 }
 
+function mobileIngestSecret() {
+  return String(Netlify.env.get('KOA_MOBILE_BAR_INGEST_SECRET') || '').trim();
+}
+
+async function verifyMobileSource(req: Request, formName: string) {
+  if (formName !== 'koa-mobile-bar-inquiry') return { ok: true, fingerprint: '' };
+
+  const secret = mobileIngestSecret();
+  if (!secret) return { ok: false, fingerprint: '', reason: 'Mobile Bar ingest secret is not configured.' };
+
+  const fingerprint = cleanText(req.headers.get('x-koa-mobile-source'), 40).toLowerCase();
+  const timestamp = cleanText(req.headers.get('x-koa-mobile-timestamp'), 20);
+  const signature = cleanText(req.headers.get('x-koa-mobile-signature'), 160);
+
+  if (!fingerprint || !timestamp || !signature) {
+    return { ok: false, fingerprint: '', reason: 'Mobile Bar source authentication is missing.' };
+  }
+
+  const issuedAt = Number(timestamp);
+  if (!Number.isFinite(issuedAt) || Math.abs(Math.floor(Date.now() / 1000) - issuedAt) > 300) {
+    return { ok: false, fingerprint: '', reason: 'Mobile Bar source authentication expired.' };
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const expectedBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode('v1|' + timestamp + '|' + fingerprint + '|koa-mobile-bar-inquiry'),
+  );
+  const expected = base64Url(expectedBuffer);
+
+  if (expected.length !== signature.length) return { ok: false, fingerprint: '', reason: 'Mobile Bar source authentication failed.' };
+
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    mismatch |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  }
+  return mismatch === 0
+    ? { ok: true, fingerprint }
+    : { ok: false, fingerprint: '', reason: 'Mobile Bar source authentication failed.' };
+}
+
 function base64Url(bytes: ArrayBuffer) {
   let binary = '';
   for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
@@ -152,7 +201,7 @@ function responseHeaders(req: Request) {
     ...(origin ? {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture, X-Koa-Inquiry-QA',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture, X-Koa-Inquiry-QA, X-Koa-Mobile-Source, X-Koa-Mobile-Timestamp, X-Koa-Mobile-Signature',
       'Vary': 'Origin',
     } : {}),
   };
@@ -185,7 +234,11 @@ export default async (req: Request, context: Context) => {
   try { payload = JSON.parse(rawBody); } catch { return json(req, { error: 'Invalid JSON.' }, 400); }
 
   const formName = cleanText(payload.formName, 80);
-  const sourceFingerprint = await ipFingerprint(req);
+  const mobileSource = await verifyMobileSource(req, formName);
+  if (!mobileSource.ok) {
+    return json(req, { error: 'Mobile Bar source authentication failed.', code: 'mobile_source_auth_failed' }, 403);
+  }
+  const sourceFingerprint = mobileSource.fingerprint || await ipFingerprint(req);
   const identity = await securityIdentity(payload);
 
   const activeBlock = await findActiveBlock(context, {
