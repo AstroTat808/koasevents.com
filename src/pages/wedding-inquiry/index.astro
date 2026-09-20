@@ -153,8 +153,11 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 
       form.dataset.crmCaptured = '1';
       form.querySelector('[name="cf-turnstile-response"]')?.remove();
+      try {
+        if (payload?.id) sessionStorage.setItem('koaWeddingRecordId', String(payload.id));
+      } catch {}
 
-      if (payload?.deduplicated) {
+      if (payload?.notificationConfigured || payload?.deduplicated) {
         window.location.assign('/wedding-inquiry-thank-you/');
         return;
       }
