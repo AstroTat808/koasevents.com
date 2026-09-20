@@ -1195,6 +1195,9 @@ export default async (req: Request, context: Context) => {
         reasons: Array.isArray(source.security.reasons) ? [...source.security.reasons] : [],
         reasonCodes: Array.isArray(source.security.reasonCodes) ? [...source.security.reasonCodes] : [],
       } : undefined,
+      communications: source.communications ? Object.fromEntries(
+        Object.entries(source.communications).map(([key, value]) => [key, { ...(value as any) }])
+      ) : undefined,
       inquiry: source.inquiry ? { ...source.inquiry } : undefined,
       quote: quote || undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
