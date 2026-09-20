@@ -1527,7 +1527,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }catch(error){if(message)message.textContent=error?.message||'Unable to move selected records to Trash.';}
     });
 
+    const initialQuery = new URLSearchParams(window.location.search).get('q') || '';
+    if (searchInput && initialQuery) searchInput.value = initialQuery;
     updateSelectionUi();
-    load();
+    load(initialQuery);
   </script>
 </BaseLayout>
