@@ -232,7 +232,24 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 
 function contractSections(record: SalesRecord) {
   const proposal = record.proposal;
-  const packageName = PACKAGE_NAMES[normalizePackage(record.packageId)] || 'Koa’s Events services';
+  const packageId = normalizePackage(record.packageId);
+  const packageName = PACKAGE_NAMES[packageId] || 'Koa’s Events services';
+  const isMobileBar = packageId.startsWith('mobile-');
+
+  if (isMobileBar) {
+    return [
+      { heading: '1. Event & Service Scope', body: 'This Mobile Bar Services Agreement is between Koa’s Events / Koa’s Mobile Bar (“Koa’s”) and ' + (record.customer?.name || 'the Client') + '. The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal controls the selected package, guest count, service hours, staffing, travel, add-ons, pricing, and other event-specific details.' },
+      { heading: '2. Dry-Bar Alcohol Responsibility', body: 'Koa’s Mobile Bar operates as a dry-bar service. The Client is responsible for purchasing and supplying all alcoholic beverages. Koa’s may provide planning guidance and a shopping list based on the agreed menu and guest count, but the Client remains responsible for the alcohol purchase and availability.' },
+      { heading: '3. Mobile Bar Access, Setup & Utilities', body: 'The Client is responsible for providing safe and reasonably level access for the mobile bar and adequate space for setup, service, and breakdown. Any venue restrictions, access limitations, utility requirements, parking instructions, or load-in rules must be disclosed before the event. Generator hookup or other service equipment will be used as described in the accepted proposal.' },
+      { heading: '4. Staffing, Service Time & Guest Count', body: 'Bartender staffing, service duration, guest count, additional guests, additional service hours, gratuity structure, and any related charges are governed by the accepted proposal. Changes requested after proposal acceptance may require revised pricing and are subject to availability.' },
+      { heading: '5. Travel & Location', body: 'Travel charges are based on the event location and the travel terms shown in the accepted proposal. The Client is responsible for providing an accurate event address and notifying Koa’s of location changes before the event.' },
+      { heading: '6. Payments & Reservation', body: 'The finalized proposal total is $' + Number(proposal?.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized scope. Payment amounts and due dates are those shown in the accepted proposal and booking payment schedule. The event date is not reserved until the required agreement and reservation payment are completed.' },
+      { heading: '7. Add-ons, Custom Items & Final Adjustments', body: 'Custom-priced enhancements, personalized items, glassware, beverage stations, decor, menu presentation, and other selected add-ons are subject to the specifications, lead times, and pricing shown in the final proposal. Any approved changes will be reflected in the CRM proposal and payment records.' },
+      { heading: '8. Safety, Service & Client Cooperation', body: 'Koa’s may pause or stop service when reasonably necessary for guest safety, staff safety, venue compliance, or responsible beverage service. The Client agrees to cooperate with Koa’s staff and venue requirements and to prevent unauthorized self-service from the mobile bar.' },
+      { heading: '9. Electronic Signature & Entire Agreement', body: 'The accepted proposal, this agreement, and any written amendments recorded by Koa’s form the agreement for the mobile bar services. By signing electronically, the Client confirms review of the scope and pricing and agrees that the recorded name, acknowledgement, and timestamp constitute the Client’s electronic signature.' },
+    ];
+  }
+
   return [
     { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3334 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (record.customer?.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
     { heading: '2. Premises Use & Access', body: 'Lessee is granted exclusive access to the property for the scheduled event. Koa’s Events reserves the right to define accessible areas if only a portion of the venue is being rented. Unauthorized access to non-designated areas is prohibited.' },
@@ -255,7 +272,7 @@ function ensureBooking(record: SalesRecord) {
       updatedAt: new Date().toISOString(),
       contract: {
         version: 1,
-        title: 'Koa’s Events Venue & Services Agreement',
+        title: normalizePackage(record.packageId).startsWith('mobile-') ? 'Koa’s Mobile Bar Services Agreement' : 'Koa’s Events Venue & Services Agreement',
         generatedAt: new Date().toISOString(),
         status: 'pending',
         sections: contractSections(record),
