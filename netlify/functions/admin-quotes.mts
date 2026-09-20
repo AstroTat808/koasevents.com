@@ -199,6 +199,14 @@ async function saveRecord(context: Context, record: SalesRecord, records: SalesR
   return next;
 }
 
+async function deleteRecord(context: Context, recordId: string, records: SalesRecord[]) {
+  const store = salesStoreFor(context);
+  const next = records.filter((entry) => entry.id !== recordId);
+  await store.delete('records/' + recordId);
+  await writeSalesIndex(context, next);
+  return next;
+}
+
 async function listQuotes(context: Context): Promise<SavedQuote[]> {
   const store = quoteStoreFor(context);
   const result = await store.list({ prefix: 'quotes/' });
@@ -872,6 +880,40 @@ export default async (req: Request, context: Context) => {
   if (!payload?.action) return Response.json({ error: 'Missing action.' }, { status: 400 });
 
   let records = await readSalesIndex(context);
+
+  if (payload.action === 'delete-record') {
+    const recordId = cleanText(payload.recordId, 80);
+    const record = records.find((entry) => entry.id === recordId);
+    if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
+
+    if (!['inquiry', 'lead'].includes(record.kind) || ['proposal', 'booked'].includes(record.stage)) {
+      return Response.json({
+        error: 'Only inquiry and lead records can be deleted here. Proposals and booked records are protected.',
+      }, { status: 400 });
+    }
+
+    const downstream = records.filter((entry) => entry.source === record.id);
+    if (downstream.length) {
+      return Response.json({
+        error: 'This record has a downstream ' + downstream.map((entry) => entry.kind).join(', ') + ' record. Delete is blocked to protect the CRM history.',
+      }, { status: 409 });
+    }
+
+    records = await deleteRecord(context, record.id, records);
+    await appendEvent(context, {
+      type: 'record_deleted',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: 'Administrator deleted a ' + record.kind + ' record from the CRM.',
+    });
+
+    return Response.json({
+      ok: true,
+      deletedId: record.id,
+      kind: record.kind,
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
 
   if (payload.action === 'convert') {
     const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
