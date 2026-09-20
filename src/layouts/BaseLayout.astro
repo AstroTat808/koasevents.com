@@ -35,7 +35,6 @@ const socialImageUrl = new URL(socialImage, siteUrl).href;
 const logoUrl = new URL('/brand/koa-mark.png', siteUrl).href;
 const businessImageUrl = new URL('/media/koa/pavilion-sunset-wide.webp', siteUrl).href;
 const directionsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(businessRules.contact.venueAddress);
-const officialProfiles = ['https://www.instagram.com/koasevents/'];
 const organizationId = new URL('/#organization', siteUrl).href;
 const websiteId = new URL('/#website', siteUrl).href;
 const robotsContent = noindex
@@ -205,7 +204,6 @@ const seoSchema = {
       image: businessImageUrl,
       email: 'aloha@koasevents.com',
       telephone: '+1-844-808-5627',
-      sameAs: officialProfiles,
       hasMap: directionsUrl,
       maximumAttendeeCapacity: businessRules.venue.maximumOccupancy.value,
       priceRange: '$
