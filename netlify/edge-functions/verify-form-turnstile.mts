@@ -70,6 +70,10 @@ export default async (req: Request, context: Context) => {
   const expectedFormName = expectedForms[pathname];
   if (!expectedFormName) return context.next();
 
+  const passThroughForms: Record<string, string[]> = {
+    '/thank-you/': ['koa-discovery-call-request', 'koa-stay-inquiry', 'koa-catalog-quote-request'],
+  };
+
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
     return blocked('Invalid form submission.');
@@ -82,6 +86,7 @@ export default async (req: Request, context: Context) => {
   }
 
   const formName = clean(params.get('form-name'), 80);
+  if ((passThroughForms[pathname] || []).includes(formName)) return context.next();
   if (formName !== expectedFormName) return blocked();
 
   const email = clean(params.get('email'), 240);
@@ -90,20 +95,7 @@ export default async (req: Request, context: Context) => {
     return blocked();
   }
 
-  params.delete('koa-turnstile-proof');
-  params.delete('cf-turnstile-response');
-
-  const headers = new Headers(req.headers);
-  headers.delete('content-length');
-  headers.set('content-type', 'application/x-www-form-urlencoded;charset=UTF-8');
-
-  const nextRequest = new Request(req.url, {
-    method: 'POST',
-    headers,
-    body: params.toString(),
-  });
-
-  return context.next(nextRequest);
+  return context.next();
 };
 
 export const config: Config = {
