@@ -7,7 +7,10 @@ on:
       - '.github/workflows/turnstile-security-smoke.yml'
       - 'src/pages/inquire/index.astro'
       - 'src/pages/wedding-inquiry/index.astro'
+      - 'src/pages/wedding-inquiry-thank-you/index.astro'
+      - 'src/pages/stay/index.astro'
       - 'netlify/functions/crm-inquiries.mts'
+      - 'netlify/functions/_shared/lead-email.ts'
       - 'netlify/functions/_shared/security.ts'
       - 'netlify/edge-functions/verify-form-turnstile.mts'
   workflow_dispatch:
@@ -64,6 +67,8 @@ jobs:
           for path, action in [
               ("/inquire/", "event_inquiry"),
               ("/wedding-inquiry/", "wedding_inquiry"),
+              ("/wedding-inquiry-thank-you/", "discovery_call"),
+              ("/stay/", "stay_inquiry"),
           ]:
               status, body = request(path)
               ok = (
@@ -74,33 +79,41 @@ jobs:
               )
               checks.append((f"widget {path}", ok, status, body[:250]))
 
-          for token_name, token in [("missing", ""), ("invalid", "not-a-valid-turnstile-token")]:
-              payload = {
-                  "formName": "koa-event-inquiry",
-                  "customer": {"email": "qa-turnstile@example.com"},
-                  "inquiry": {"service": "venue", "eventType": "QA"},
-              }
-              if token:
-                  payload["turnstileToken"] = token
-              status, body = request(
-                  "/api/crm/inquiries",
-                  method="POST",
-                  data=json.dumps(payload).encode(),
-                  headers={
-                      "Content-Type": "application/json",
-                      "X-Koa-Inquiry-Capture": "1",
-                  },
-              )
-              parsed = {}
-              try:
-                  parsed = json.loads(body)
-              except Exception:
-                  pass
-              ok = status == 403 and parsed.get("code") in {"turnstile_failed", "blocked"}
-              checks.append((f"CRM {token_name} token blocked", ok, status, body[:250]))
+          for form_name in [
+              "koa-event-inquiry",
+              "koa-wedding-inquiry",
+              "koa-discovery-call-request",
+              "koa-stay-inquiry",
+          ]:
+              for token_name, token in [("missing", ""), ("invalid", "not-a-valid-turnstile-token")]:
+                  payload = {
+                      "formName": form_name,
+                      "customer": {"email": "qa-turnstile@example.com"},
+                      "inquiry": {"service": "qa", "eventType": "QA"},
+                  }
+                  if token:
+                      payload["turnstileToken"] = token
+                  status, body = request(
+                      "/api/crm/inquiries",
+                      method="POST",
+                      data=json.dumps(payload).encode(),
+                      headers={
+                          "Content-Type": "application/json",
+                          "X-Koa-Inquiry-Capture": "1",
+                      },
+                  )
+                  parsed = {}
+                  try:
+                      parsed = json.loads(body)
+                  except Exception:
+                      pass
+                  ok = status == 403 and parsed.get("code") in {"turnstile_failed", "blocked"}
+                  checks.append((f"CRM {form_name} {token_name} token blocked", ok, status, body[:250]))
 
           for path, form_name in [
               ("/thank-you/", "koa-event-inquiry"),
+              ("/thank-you/", "koa-discovery-call-request"),
+              ("/thank-you/", "koa-stay-inquiry"),
               ("/wedding-inquiry-thank-you/", "koa-wedding-inquiry"),
           ]:
               body = urllib.parse.urlencode(
