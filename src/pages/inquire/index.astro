@@ -264,9 +264,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
       const auto = (saved.selected || []).filter((entry) => entry.auto);
       const manual = (saved.selected || []).filter((entry) => !entry.auto);
       const all = [...auto, ...manual];
-      const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
       const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: USD ' + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
-      const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+      const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
 
       if (selectedItemsInput) selectedItemsInput.value = allText;
       if (autoBreakdownInput) autoBreakdownInput.value = autoText;
@@ -280,8 +280,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
     }
 
     form?.addEventListener('submit', async (event) => {
-      if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
       event.preventDefault();
+      if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
 
       const submitButton = form.querySelector('button[type="submit"]');
       const errorBox = form.querySelector('[data-submit-error]');
