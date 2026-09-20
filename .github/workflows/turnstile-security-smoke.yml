@@ -91,7 +91,12 @@ jobs:
                       "X-Koa-Inquiry-Capture": "1",
                   },
               )
-              ok = status == 403 and "turnstile_failed" in body
+              parsed = {}
+              try:
+                  parsed = json.loads(body)
+              except Exception:
+                  pass
+              ok = status == 403 and parsed.get("code") in {"turnstile_failed", "blocked"}
               checks.append((f"CRM {token_name} token blocked", ok, status, body[:250]))
 
           for path, form_name in [
