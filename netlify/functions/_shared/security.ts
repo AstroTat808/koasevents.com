@@ -225,7 +225,8 @@ export async function analyzeInquirySecurity(payload: any, recentEvents: Securit
 
   const urls = lower.match(/(?:https?:\/\/|www\.)[^\s<>()]+/g) || [];
   const bareDomains = lower.match(/\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|co|biz|xyz|top|site|online|info)\b/g) || [];
-  const linkCount = new Set([...urls, ...bareDomains]).size;
+  const standaloneDomains = bareDomains.filter((domain) => !urls.some((url) => url.includes(domain)));
+  const linkCount = new Set([...urls, ...standaloneDomains]).size;
   if (linkCount === 1) addSignal(signals, 'external_link', 'Message contains an external link', 20);
   if (linkCount >= 2) addSignal(signals, 'multiple_links', 'Message contains multiple external links', 35);
   if (/\b(?:bit\.ly|tinyurl\.com|t\.co|goo\.gl|rb\.gy|cutt\.ly)\b/i.test(lower)) {
