@@ -488,8 +488,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(record.inquiry) {
         const inquiryMeta = [record.inquiry.eventType, record.inquiry.guestCount ? record.inquiry.guestCount + ' guests' : '', record.inquiry.eventLocation, record.inquiry.budget].filter(Boolean).join(' · ');
         if(inquiryMeta) article.appendChild(text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',inquiryMeta));
-        if(record.inquiry.service === 'mobile-bar' && record.inquiry.estimatedTotal) {
-          article.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-clay)]','Website estimate · '+money(record.inquiry.estimatedTotal)));
+        if(record.inquiry.service === 'mobile-bar') {
+          if(record.inquiry.estimatedTotal) {
+            article.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-clay)]','Website estimate · '+money(record.inquiry.estimatedTotal)));
+          }
+          const serviceMeta=[
+            record.inquiry.serviceHours ? record.inquiry.serviceHours+' service hr' : '',
+            record.inquiry.bartenderCount ? record.inquiry.bartenderCount+' bartender'+(record.inquiry.bartenderCount===1?'':'s') : '',
+            record.inquiry.oneWayMiles ? record.inquiry.oneWayMiles+' one-way mi' : '',
+            record.inquiry.glasswareCount ? record.inquiry.glasswareCount+' glassware' : '',
+            record.inquiry.gratuityMode ? String(record.inquiry.gratuityMode).replaceAll('-',' ') : ''
+          ].filter(Boolean).join(' · ');
+          if(serviceMeta) article.appendChild(text('p','mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50',serviceMeta));
+          if(Array.isArray(record.inquiry.customAddOns) && record.inquiry.customAddOns.length) {
+            article.appendChild(text('p','mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50','Custom add-ons · '+record.inquiry.customAddOns.join(', ')));
+          }
+          if(Array.isArray(record.inquiry.estimateLineItems) && record.inquiry.estimateLineItems.length) {
+            const breakdown=document.createElement('details');breakdown.className='mt-3 rounded-xl bg-[var(--koa-sand)] p-3';
+            const summary=document.createElement('summary');summary.className='cursor-pointer text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';summary.textContent='Website estimate breakdown';
+            breakdown.appendChild(summary);
+            const lines=document.createElement('div');lines.className='mt-3 grid gap-1.5';
+            record.inquiry.estimateLineItems.forEach((line)=>{
+              const row=document.createElement('div');row.className='flex justify-between gap-4 text-[.68rem] text-[var(--koa-ink)]/58';
+              row.append(text('span','',line.description||line.id||'Item'),text('strong','shrink-0 text-[var(--koa-forest)]',money(line.amount||0)));
+              lines.appendChild(row);
+            });
+            breakdown.appendChild(lines);article.appendChild(breakdown);
+          }
         }
       }
       if(record.quoteId) article.appendChild(text('p','mt-2 font-mono text-[.65rem] text-[var(--koa-ink)]/45','Quote '+record.quoteId));
