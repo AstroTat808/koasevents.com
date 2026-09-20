@@ -8,8 +8,9 @@ import { koaMarketingMedia } from '../../data/media';
 const schema = {
   '@context': 'https://schema.org',
   '@type': 'Organization',
+  '@id': 'https://koasevents.com/#organization',
   name: "Koa's Events",
-  url: 'https://www.koasevents.com/',
+  url: 'https://koasevents.com/',
   founder: [
     { '@type': 'Person', name: 'Shaun Scott' },
     { '@type': 'Person', name: 'Chris Sibel' },
@@ -18,8 +19,8 @@ const schema = {
 ---
 <BaseLayout
   title="About Koa’s Events | Our Story on Hawaiʻi Island"
-  description="Meet Shaun and Chris and learn the story behind Koa’s Events, a private Hawaiʻi Island venue and mobile bar built around warm hospitality, flexibility and meaningful gatherings."
-  canonical="https://www.koasevents.com/about/"
+  description="Meet Shaun and Chris and learn the story behind Koa’s Events, a private Hawaiʻi Island venue and mobile bar built for warm, flexible, meaningful celebrations."
+  canonical="https://koasevents.com/about/"
 >
   <script type="application/ld+json" set:html={JSON.stringify(schema)} />
   <main>
