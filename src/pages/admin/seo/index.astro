@@ -79,6 +79,33 @@ const cards = [
           </div>
         </section>
 
+        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Mobile Bar · Search Console</p>
+              <h2 class="display mt-3 text-4xl">Dedicated mobile-bar domain</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-white/58">{localSeoDashboard.mobileBarSite.status}</p>
+            </div>
+            <a href={localSeoDashboard.mobileBarSite.siteUrl} target="_blank" rel="noreferrer" class="link-arrow text-white">Open koasmobilebar.com →</a>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/50">Sitemap URLs</p><strong class="display mt-2 block text-3xl">{localSeoDashboard.mobileBarSite.sitemapSubmittedUrls}</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/50">Sitemap errors</p><strong class="display mt-2 block text-3xl">{localSeoDashboard.mobileBarSite.sitemapErrors}</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/50">Warnings</p><strong class="display mt-2 block text-3xl">{localSeoDashboard.mobileBarSite.sitemapWarnings}</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/50">Performance months</p><strong class="display mt-2 block text-3xl">{localSeoDashboard.mobileBarSite.months.length}</strong></article>
+          </div>
+          {localSeoDashboard.mobileBarSite.months.length ? (
+            <div class="mt-6 overflow-x-auto">
+              <table class="w-full min-w-[660px] text-sm">
+                <thead><tr class="border-b border-white/10 text-left text-[.55rem] font-black uppercase tracking-[.1em] text-white/50"><th class="py-2 pr-4">Month</th><th class="py-2 pr-4">Impressions</th><th class="py-2 pr-4">Clicks</th><th class="py-2 pr-4">CTR</th><th class="py-2">Avg. position</th></tr></thead>
+                <tbody>{localSeoDashboard.mobileBarSite.months.map((row) => <tr class="border-b border-white/10"><td class="py-3 pr-4">{row.month}</td><td class="py-3 pr-4">{row.impressions}</td><td class="py-3 pr-4">{row.clicks}</td><td class="py-3 pr-4">{(row.ctr*100).toFixed(1)}%</td><td class="py-3">{row.avgPosition ?? '—'}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ) : (
+            <p class="mt-6 rounded-xl border border-white/10 bg-white/[.05] p-4 text-sm text-white/58">Search Console has the property and sitemap, but Google has not returned query/page performance rows yet. This section will begin filling automatically once the domain earns impressions.</p>
+          )}
+        </section>
+
         <section class="rounded-[1.5rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
           <div>
             <p class="eyebrow text-[var(--koa-amber-light)]">Tracked commercial queries</p>
