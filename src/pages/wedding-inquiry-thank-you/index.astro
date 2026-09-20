@@ -14,13 +14,26 @@ import Footer from '../../components/Footer.astro';
 </div></section>
 <section id="schedule" class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.75fr_1.25fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Discovery call</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Give us a few windows that work for you.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">Your contact details carry forward from the inquiry, so this step is focused on scheduling. You can still edit them below if anything changed.</p></div>
 <form name="koa-discovery-call-request" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]" data-discovery-form><input type="hidden" name="form-name" value="koa-discovery-call-request"/>
-          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Discovery Call Request (%{submissionId})" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
+          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Discovery Call Request" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
           <div class="mb-5 hidden rounded-xl border border-[var(--koa-forest)]/15 bg-[var(--koa-sand)] p-4" data-carried-contact><p class="eyebrow text-[var(--koa-clay)]">Carried forward</p><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">We filled in the contact details from your wedding inquiry.</p></div>
           <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required autocomplete="name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="email" type="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Best day<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="preferredDate" required/></label><label class="grid gap-2 text-sm font-semibold">Best time window<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="preferredTime" required><option value="">Choose one</option><option>Morning</option><option>Midday</option><option>Afternoon</option><option>Evening</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Alternate day/time<textarea class="min-h-24 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="alternateWindow" placeholder="Give us another window that works for you."></textarea></label><button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Request discovery call</button></div></form></div></section>
 </main><Footer/>
 <script>
   const discoveryForm = document.querySelector('[data-discovery-form]');
   const carriedContact = document.querySelector('[data-carried-contact]');
+  discoveryForm?.addEventListener('submit', (event) => {
+    if (discoveryForm.dataset.submitting === '1') {
+      event.preventDefault();
+      return;
+    }
+    discoveryForm.dataset.submitting = '1';
+    const submitButton = discoveryForm.querySelector('button[type="submit"]');
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = 'Sending…';
+    }
+  });
+
   try {
     const contact = JSON.parse(sessionStorage.getItem('koaWeddingContact') || 'null');
     if (contact && discoveryForm) {
