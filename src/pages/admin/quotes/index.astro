@@ -144,6 +144,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.12em] text-white">Search</button>
             </form>
           </div>
+          <div class="mt-4 flex flex-wrap items-center gap-2">
+            <span data-selected-count class="text-xs font-bold text-[var(--koa-ink)]/55">0 selected</span>
+            <button type="button" data-bulk-lost class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Mark selected lost</button>
+            <button type="button" data-bulk-trash class="rounded-full border border-red-200 bg-red-50 px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700">Move selected to Trash</button>
+            <button type="button" data-clear-selection class="rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Clear</button>
+          </div>
           <p data-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
           <div data-pipeline class="mt-6 grid gap-5 xl:grid-cols-4"></div>
         </section>
@@ -159,6 +165,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div><p class="eyebrow text-[var(--koa-clay)]">Saved configurations</p><h2 class="display mt-3 text-4xl">Quote builder snapshots</h2></div>
           <div data-quote-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Trash</p>
+              <h2 class="display mt-3 text-4xl">Deleted inquiries + leads</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">Deleted inquiry and lead records remain here for 30 days, then are permanently purged automatically.</p>
+            </div>
+            <span data-trash-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 records</span>
+          </div>
+          <div data-trash-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
         </section>
       </div>
     </div>
@@ -306,6 +324,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const bookedDashboard = document.querySelector('[data-booked-dashboard]');
     const funnelBody = document.querySelector('[data-funnel]');
     const message = document.querySelector('[data-message]');
+    const selectedCount = document.querySelector('[data-selected-count]');
+    const bulkLostButton = document.querySelector('[data-bulk-lost]');
+    const bulkTrashButton = document.querySelector('[data-bulk-trash]');
+    const clearSelectionButton = document.querySelector('[data-clear-selection]');
+    const trashList = document.querySelector('[data-trash-list]');
+    const trashCount = document.querySelector('[data-trash-count]');
     const searchForm = document.querySelector('[data-search-form]');
     const searchInput = document.querySelector('[data-search-input]');
     const mobileRecords = document.querySelector('[data-mobile-records]');
@@ -440,18 +464,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return result;
     }
 
+    function updateSelectionUi() {
+      if(selectedCount) selectedCount.textContent=selectedRecordIds.size+' selected';
+      const disabled=!selectedRecordIds.size;
+      [bulkLostButton,bulkTrashButton,clearSelectionButton].forEach((button)=>{
+        if(button) {
+          button.disabled=disabled;
+          button.classList.toggle('opacity-40',disabled);
+          button.classList.toggle('cursor-not-allowed',disabled);
+        }
+      });
+    }
+
+    function toggleSelected(recordId, checked) {
+      if(checked) selectedRecordIds.add(recordId);
+      else selectedRecordIds.delete(recordId);
+      updateSelectionUi();
+    }
+
     async function deleteCrmRecord(record) {
       if(!['inquiry','lead'].includes(record.kind) || ['proposal','booked'].includes(record.stage)) return;
       const name=record.customer?.name || record.id;
-      if(!confirm('Delete '+record.kind+' '+name+' from the CRM?\n\nThis permanently removes the CRM record. Proposals and booked records are protected.')) return;
-      if(!confirm('Confirm permanent deletion of '+record.id+'?')) return;
+      if(!confirm('Move '+record.kind+' '+name+' to Trash?\n\nYou can restore it for 30 days. Proposals and booked records are protected.')) return;
       try {
-        if(message) message.textContent='Deleting '+record.id+'…';
+        if(message) message.textContent='Moving '+record.id+' to Trash…';
         await api({action:'delete-record',recordId:record.id});
+        selectedRecordIds.delete(record.id);
         await load(String(searchInput?.value||'').trim());
-        if(message) message.textContent='Deleted '+record.id+'.';
+        if(message) message.textContent='Moved '+record.id+' to Trash.';
       } catch(error) {
-        if(message) message.textContent=error?.message || 'Unable to delete CRM record.';
+        if(message) message.textContent=error?.message || 'Unable to move CRM record to Trash.';
       }
     }
 
@@ -599,6 +641,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const article=document.createElement('article');
       article.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-4 shadow-sm';
       const plan=workflowPlan(record);
+      if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        const selectRow=document.createElement('label');
+        selectRow.className='mb-3 flex items-center gap-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45';
+        const checkbox=document.createElement('input');
+        checkbox.type='checkbox';
+        checkbox.checked=selectedRecordIds.has(record.id);
+        checkbox.addEventListener('change',()=>toggleSelected(record.id,checkbox.checked));
+        selectRow.append(checkbox,document.createTextNode('Select'));
+        article.appendChild(selectRow);
+      }
       article.append(
         text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',record.kind+' · '+record.status),
         text('h3','mt-2 font-mono text-xs font-bold text-[var(--koa-forest)]',record.id),
@@ -858,6 +910,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderMobileCard(record) {
       const article=document.createElement('article');
       article.className='rounded-[1.2rem] border border-white/10 bg-white p-5 text-[var(--koa-ink)] shadow-sm';
+      if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        const selectRow=document.createElement('label');
+        selectRow.className='mb-3 flex items-center gap-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45';
+        const checkbox=document.createElement('input');
+        checkbox.type='checkbox';
+        checkbox.checked=selectedRecordIds.has(record.id);
+        checkbox.addEventListener('change',()=>toggleSelected(record.id,checkbox.checked));
+        selectRow.append(checkbox,document.createTextNode('Select'));
+        article.appendChild(selectRow);
+      }
 
       const top=document.createElement('div');top.className='flex items-start justify-between gap-3';
       const left=document.createElement('div');
@@ -1132,7 +1194,59 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         else if(lead) actions.append(actionButton('Build proposal',primary,()=>promote(lead,'proposal',true)));
         else if(inquiry) actions.append(actionButton('Qualify lead',primary,()=>promote(inquiry,'lead')));
         else actions.append(actionButton('Create lead',primary,()=>openConvert(quote,'lead')));
+        actions.append(actionButton('Delete quote','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
+          if(!confirm('Permanently delete saved quote '+quote.id+'?\n\nQuotes attached to proposals or booked records are protected and cannot be deleted.')) return;
+          try{
+            if(message) message.textContent='Deleting saved quote '+quote.id+'…';
+            await api({action:'delete-quote',quoteId:quote.id});
+            await load(String(searchInput?.value||'').trim());
+            if(message) message.textContent='Deleted saved quote '+quote.id+'.';
+          }catch(error){if(message)message.textContent=error?.message||'Unable to delete saved quote.';}
+        }));
         article.appendChild(actions); quoteList.appendChild(article);
+      });
+    }
+
+    function renderTrash() {
+      if(!trashList)return;
+      trashList.innerHTML='';
+      const rows=payload.trash||[];
+      if(trashCount) trashCount.textContent=rows.length+(rows.length===1?' record':' records');
+      if(!rows.length){
+        trashList.appendChild(text('p','text-sm text-[var(--koa-ink)]/48','Trash is empty.'));
+        return;
+      }
+      rows.forEach((entry)=>{
+        const card=document.createElement('article');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const daysLeft=Math.max(0,Math.ceil((new Date(entry.expiresAt).getTime()-Date.now())/86400000));
+        card.append(
+          text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',entry.kind+' · Trash'),
+          text('h3','mt-2 text-sm font-semibold text-[var(--koa-forest)]',entry.customerName||entry.id),
+          text('p','mt-1 font-mono text-[.62rem] text-[var(--koa-ink)]/42',entry.id),
+          text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',[entry.eventDate,packageLabel(entry.packageId),entry.customerEmail].filter(Boolean).join(' · ')),
+          text('p','mt-2 text-[.66rem] font-bold text-[var(--koa-clay)]','Purges in '+daysLeft+' day'+(daysLeft===1?'':'s'))
+        );
+        const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
+        actions.append(
+          actionButton('Restore','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+            try{
+              await api({action:'restore-record',recordId:entry.id});
+              await load(String(searchInput?.value||'').trim());
+              if(message)message.textContent='Restored '+entry.id+'.';
+            }catch(error){if(message)message.textContent=error?.message||'Unable to restore record.';}
+          }),
+          actionButton('Delete permanently','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
+            if(!confirm('Permanently delete '+entry.id+'? This cannot be undone.')) return;
+            if(!confirm('Final confirmation: permanently delete this CRM record now?')) return;
+            try{
+              await api({action:'permanent-delete-record',recordId:entry.id});
+              await load(String(searchInput?.value||'').trim());
+              if(message)message.textContent='Permanently deleted '+entry.id+'.';
+            }catch(error){if(message)message.textContent=error?.message||'Unable to permanently delete record.';}
+          })
+        );
+        card.appendChild(actions);trashList.appendChild(card);
       });
     }
 
@@ -1224,8 +1338,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
       payload=await response.json();
       qboState=qboResponse.ok?await qboResponse.json():null;
+      const liveIds=new Set((payload.records||[]).map((record)=>record.id));
+      [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
+      updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderBookedDashboard();renderQuotes();
+      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderBookedDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
@@ -1310,6 +1427,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
     document.querySelector('[data-print-proposal]')?.addEventListener('click',()=>{if(editingRecord)printProposal(editingRecord);});
+
+    clearSelectionButton?.addEventListener('click',()=>{
+      selectedRecordIds.clear();
+      updateSelectionUi();
+      renderPipeline();
+      renderMobileBar();
+    });
+
+    bulkLostButton?.addEventListener('click',async()=>{
+      const ids=[...selectedRecordIds];
+      if(!ids.length)return;
+      if(!confirm('Mark '+ids.length+' selected CRM record'+(ids.length===1?'':'s')+' as lost?'))return;
+      try{
+        const result=await api({action:'bulk-lost',recordIds:ids});
+        selectedRecordIds.clear();
+        await load(String(searchInput?.value||'').trim());
+        if(message)message.textContent=(result.updated||[]).length+' record(s) marked lost'+((result.skipped||[]).length?' · '+result.skipped.length+' skipped':'')+'.';
+      }catch(error){if(message)message.textContent=error?.message||'Unable to mark selected records lost.';}
+    });
+
+    bulkTrashButton?.addEventListener('click',async()=>{
+      const ids=[...selectedRecordIds];
+      if(!ids.length)return;
+      if(!confirm('Move '+ids.length+' selected CRM record'+(ids.length===1?'':'s')+' to Trash for 30 days?'))return;
+      try{
+        const result=await api({action:'bulk-trash',recordIds:ids});
+        selectedRecordIds.clear();
+        await load(String(searchInput?.value||'').trim());
+        if(message)message.textContent=(result.moved||[]).length+' record(s) moved to Trash'+((result.skipped||[]).length?' · '+result.skipped.length+' skipped':'')+'.';
+      }catch(error){if(message)message.textContent=error?.message||'Unable to move selected records to Trash.';}
+    });
+
+    updateSelectionUi();
     load();
   </script>
 </BaseLayout>
