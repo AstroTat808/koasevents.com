@@ -25,7 +25,7 @@ const related = allPosts
   .sort((a, b) => b.score - a.score || b.publishedAt.localeCompare(a.publishedAt))
   .slice(0, 3);
 
-const canonical = `https://www.koasevents.com/blog/${post.slug}/`;
+const canonical = `https://koasevents.com/blog/${post.slug}/`;
 const publishedLabel = new Date(post.publishedAt).toLocaleDateString('en-US', {
   year: 'numeric',
   month: 'long',
@@ -121,7 +121,7 @@ const articleSchema = {
   '@type': 'BlogPosting',
   headline: post.title,
   description: post.metaDescription,
-  image: new URL(post.featuredImage, 'https://www.koasevents.com').href,
+  image: new URL(post.featuredImage, 'https://koasevents.com').href,
   datePublished: post.publishedAt,
   dateModified: post.updatedAt,
   author: {
@@ -130,11 +130,12 @@ const articleSchema = {
   },
   publisher: {
     '@type': 'Organization',
+    '@id': 'https://koasevents.com/#organization',
     name: "Koa's Events",
-    url: 'https://www.koasevents.com/',
+    url: 'https://koasevents.com/',
     logo: {
       '@type': 'ImageObject',
-      url: 'https://www.koasevents.com/brand/koa-mark.png',
+      url: 'https://koasevents.com/brand/koa-mark.png',
     },
   },
   mainEntityOfPage: canonical,
@@ -142,15 +143,6 @@ const articleSchema = {
   keywords: post.tags.join(', '),
 };
 
-const breadcrumbSchema = {
-  '@context': 'https://schema.org',
-  '@type': 'BreadcrumbList',
-  itemListElement: [
-    { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://www.koasevents.com/' },
-    { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://www.koasevents.com/blog/' },
-    { '@type': 'ListItem', position: 3, name: post.title, item: canonical },
-  ],
-};
 ---
 <BaseLayout
   title={post.seoTitle}
@@ -159,6 +151,7 @@ const breadcrumbSchema = {
   socialImage={post.featuredImage}
   socialImageAlt={post.title}
   ogType="article"
+  breadcrumbTitle={post.title}
 >
   <Header overlay={false} />
   <main>
@@ -399,7 +392,6 @@ const breadcrumbSchema = {
   </script>
 
   <script type="application/ld+json" set:html={JSON.stringify(articleSchema)} />
-  <script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 </BaseLayout>
 
 <style>
