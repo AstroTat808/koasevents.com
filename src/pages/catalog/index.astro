@@ -1420,7 +1420,7 @@ const badgeClass = {
       }
     }
 
-    async function saveCurrentQuote() {
+    async function performSaveCurrentQuote() {
       if (!startingPoint) {
         if (saveQuoteError) {
           saveQuoteError.textContent = 'Choose a wedding collection before saving.';
@@ -1465,6 +1465,17 @@ const badgeClass = {
         return '';
       } finally {
         if (saveQuoteButton) saveQuoteButton.disabled = false;
+      }
+    }
+
+    let saveQuoteInFlight = null;
+    async function saveCurrentQuote() {
+      if (saveQuoteInFlight) return await saveQuoteInFlight;
+      saveQuoteInFlight = performSaveCurrentQuote();
+      try {
+        return await saveQuoteInFlight;
+      } finally {
+        saveQuoteInFlight = null;
       }
     }
 
