@@ -103,7 +103,7 @@ export default async (req: Request, context: Context) => {
     body: params.toString(),
   });
 
-  return context.nextRequest(nextRequest);
+  return context.next(nextRequest);
 };
 
 export const config: Config = {
