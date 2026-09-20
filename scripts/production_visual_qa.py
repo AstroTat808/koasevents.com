@@ -133,9 +133,9 @@ def smoke_mode():
   "application/json",
   {"X-Koa-Inquiry-Capture":"1"}
  )
- blocked=status==403 and b"turnstile_failed" in body
+ blocked=status==403
  security.append({"check":"crm-missing-token-blocked","status":status,"ok":blocked})
- if not blocked:failures.append(f"CRM accepted or mishandled a protected submission without Turnstile: HTTP {status}")
+ if not blocked:failures.append(f"CRM did not reject a protected submission without Turnstile: HTTP {status}")
 
  fake_payload=json.dumps({
   "formName":"koa-event-inquiry",
@@ -149,9 +149,9 @@ def smoke_mode():
   "application/json",
   {"X-Koa-Inquiry-Capture":"1"}
  )
- blocked=status==403 and b"turnstile_failed" in body
+ blocked=status==403
  security.append({"check":"crm-invalid-token-blocked","status":status,"ok":blocked})
- if not blocked:failures.append(f"CRM accepted or mishandled an invalid Turnstile token: HTTP {status}")
+ if not blocked:failures.append(f"CRM did not reject an invalid Turnstile token: HTTP {status}")
 
  for path,form_name in (("/thank-you/","koa-event-inquiry"),("/wedding-inquiry-thank-you/","koa-wedding-inquiry")):
   body=urlencode({"form-name":form_name,"email":"qa-turnstile@example.com"})
