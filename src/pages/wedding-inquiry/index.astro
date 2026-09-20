@@ -136,6 +136,20 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
       if (!response.ok || payload?.ok !== true) {
         throw new Error(payload?.error || 'We could not verify this submission. Please try again.');
       }
+      if (turnstileSiteKey && !payload?.turnstileProof) {
+        throw new Error('Security verification could not be completed. Please try again.');
+      }
+
+      if (payload?.turnstileProof) {
+        let proofInput = form.querySelector('[name="koa-turnstile-proof"]');
+        if (!proofInput) {
+          proofInput = document.createElement('input');
+          proofInput.type = 'hidden';
+          proofInput.name = 'koa-turnstile-proof';
+          form.appendChild(proofInput);
+        }
+        proofInput.value = payload.turnstileProof;
+      }
 
       form.dataset.crmCaptured = '1';
       form.querySelector('[name="cf-turnstile-response"]')?.remove();
