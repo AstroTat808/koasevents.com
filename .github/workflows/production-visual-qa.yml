@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
+      - 'scripts/security_logic_qa.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -18,6 +19,7 @@ on:
     paths:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
+      - 'scripts/security_logic_qa.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -64,6 +66,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build production site
         run: npm run build
+      - name: Test inquiry security rules
+        run: node --experimental-strip-types scripts/security_logic_qa.mjs
       - name: Audit source structure
         run: python scripts/production_visual_qa.py --mode source
       - uses: actions/upload-artifact@v4
