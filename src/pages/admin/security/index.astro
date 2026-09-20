@@ -1,0 +1,339 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Security & Spam" description="Review Koa’s Events inquiry security, spam screening, and blocked attempts." canonical="https://www.koasevents.com/admin/security/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Security</p>
+          <h1 class="display mt-3 text-5xl">Security + Spam</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Monitor Turnstile failures, rate limiting, suspicious inquiries, repeated-message patterns, and legitimate inquiry volume. Network identifiers are one-way fingerprints rather than stored IP addresses.</p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <label class="flex items-center gap-2 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-xs font-bold text-[var(--koa-forest)]">
+            Range
+            <select data-range class="bg-transparent font-black outline-none">
+              <option value="1">24 hours</option>
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+          </label>
+          <a href="/admin/quotes/" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sales CRM</a>
+          <a href="/admin/" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Admin home</a>
+        </div>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+
+      <div data-app class="hidden grid gap-6">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <article class="rounded-[1.35rem] bg-[var(--koa-forest)] p-5 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Accepted</p>
+            <p data-accepted class="display mt-3 text-4xl">0</p>
+            <p class="mt-2 text-xs text-white/60">Clean + flagged inquiries allowed into CRM.</p>
+          </article>
+          <article class="rounded-[1.35rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Blocked</p>
+            <p data-blocked class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p>
+            <p class="mt-2 text-xs text-[var(--koa-ink)]/50">Turnstile, rate-limit, honeypot, or risk-screen blocks.</p>
+          </article>
+          <article class="rounded-[1.35rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Flagged</p>
+            <p data-flagged class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p>
+            <p class="mt-2 text-xs text-[var(--koa-ink)]/50">Accepted inquiries requiring review.</p>
+          </article>
+          <article class="rounded-[1.35rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Block rate</p>
+            <p data-block-rate class="display mt-3 text-4xl text-[var(--koa-forest)]">0%</p>
+            <p class="mt-2 text-xs text-[var(--koa-ink)]/50">Share of recorded security decisions blocked.</p>
+          </article>
+          <article class="rounded-[1.35rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Flag rate</p>
+            <p data-flag-rate class="display mt-3 text-4xl text-[var(--koa-forest)]">0%</p>
+            <p class="mt-2 text-xs text-[var(--koa-ink)]/50">Share of accepted inquiries marked for review.</p>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
+          <article class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Volume</p><h2 class="display mt-2 text-3xl">Daily security decisions</h2></div>
+              <p data-generated class="text-xs text-[var(--koa-ink)]/45"></p>
+            </div>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full min-w-[620px] text-left text-sm">
+                <thead class="border-b border-[var(--koa-line)] text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">
+                  <tr><th class="py-3 pr-4">Date</th><th class="py-3 pr-4">Accepted</th><th class="py-3 pr-4">Flagged</th><th class="py-3 pr-4">Blocked</th><th class="py-3">Total</th></tr>
+                </thead>
+                <tbody data-daily></tbody>
+              </table>
+            </div>
+          </article>
+
+          <div class="grid gap-6">
+            <article class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">Signals</p>
+              <h2 class="display mt-2 text-3xl">Top reasons</h2>
+              <div data-reasons class="mt-5 grid gap-2"></div>
+            </article>
+            <article class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">Sources</p>
+              <h2 class="display mt-2 text-3xl">Repeated networks</h2>
+              <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/45">Fingerprints are irreversible short hashes; raw IP addresses are not displayed or retained here.</p>
+              <div data-sources class="mt-5 grid gap-2"></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Review queue</p>
+              <h2 class="display mt-2 text-3xl">Blocked + flagged attempts</h2>
+            </div>
+            <p data-status class="text-xs text-[var(--koa-ink)]/45">Loading…</p>
+          </div>
+
+          <div class="mt-5 overflow-x-auto">
+            <table class="w-full min-w-[980px] text-left text-sm">
+              <thead class="border-b border-[var(--koa-line)] text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">
+                <tr>
+                  <th class="py-3 pr-4">When</th>
+                  <th class="py-3 pr-4">Decision</th>
+                  <th class="py-3 pr-4">Risk</th>
+                  <th class="py-3 pr-4">Contact</th>
+                  <th class="py-3 pr-4">Network</th>
+                  <th class="py-3 pr-4">Reason</th>
+                  <th class="py-3">CRM</th>
+                </tr>
+              </thead>
+              <tbody data-incidents></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const app = document.querySelector('[data-app]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const range = document.querySelector('[data-range]');
+    const status = document.querySelector('[data-status]');
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+    }
+
+    function setText(selector, value) {
+      const element = document.querySelector(selector);
+      if (element) element.textContent = String(value);
+    }
+
+    function label(value) {
+      return String(value || '')
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase());
+    }
+
+    function badge(disposition) {
+      const span = document.createElement('span');
+      span.className = disposition === 'blocked'
+        ? 'inline-flex rounded-full bg-red-50 px-2.5 py-1 text-[.62rem] font-black uppercase tracking-[.08em] text-red-700'
+        : 'inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[.62rem] font-black uppercase tracking-[.08em] text-amber-800';
+      span.textContent = disposition;
+      return span;
+    }
+
+    function emptyRow(message, colspan) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = colspan;
+      td.className = 'py-8 text-center text-sm text-[var(--koa-ink)]/45';
+      td.textContent = message;
+      tr.appendChild(td);
+      return tr;
+    }
+
+    function renderDaily(rows) {
+      const body = document.querySelector('[data-daily]');
+      if (!body) return;
+      body.replaceChildren();
+      const visible = (rows || []).slice(-14).reverse();
+      if (!visible.length) {
+        body.appendChild(emptyRow('No security activity in this range.', 5));
+        return;
+      }
+      visible.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-[var(--koa-line)]/70';
+        [row.date, row.accepted, row.flagged, row.blocked, row.accepted + row.blocked].forEach((value, index) => {
+          const td = document.createElement('td');
+          td.className = 'py-3 pr-4 ' + (index === 0 ? 'font-semibold' : '');
+          td.textContent = String(value);
+          tr.appendChild(td);
+        });
+        body.appendChild(tr);
+      });
+    }
+
+    function renderReasons(rows) {
+      const box = document.querySelector('[data-reasons]');
+      if (!box) return;
+      box.replaceChildren();
+      if (!(rows || []).length) {
+        const p = document.createElement('p');
+        p.className = 'text-sm text-[var(--koa-ink)]/45';
+        p.textContent = 'No suspicious signals recorded.';
+        box.appendChild(p);
+        return;
+      }
+      rows.slice(0, 10).forEach((row) => {
+        const div = document.createElement('div');
+        div.className = 'flex items-center justify-between gap-3 rounded-xl bg-[var(--koa-sand)] px-4 py-3';
+        const name = document.createElement('span');
+        name.className = 'text-sm font-semibold';
+        name.textContent = label(row.label);
+        const count = document.createElement('span');
+        count.className = 'rounded-full bg-white px-2.5 py-1 text-xs font-black text-[var(--koa-forest)]';
+        count.textContent = String(row.count);
+        div.append(name, count);
+        box.appendChild(div);
+      });
+    }
+
+    function renderSources(rows) {
+      const box = document.querySelector('[data-sources]');
+      if (!box) return;
+      box.replaceChildren();
+      if (!(rows || []).length) {
+        const p = document.createElement('p');
+        p.className = 'text-sm text-[var(--koa-ink)]/45';
+        p.textContent = 'No repeated network activity in this range.';
+        box.appendChild(p);
+        return;
+      }
+      rows.forEach((row) => {
+        const div = document.createElement('div');
+        div.className = 'grid grid-cols-[1fr_auto] gap-3 rounded-xl bg-[var(--koa-sand)] px-4 py-3';
+        const left = document.createElement('div');
+        const title = document.createElement('p');
+        title.className = 'font-mono text-xs font-bold text-[var(--koa-forest)]';
+        title.textContent = row.fingerprint;
+        const meta = document.createElement('p');
+        meta.className = 'mt-1 text-xs text-[var(--koa-ink)]/48';
+        meta.textContent = row.count + ' attempts · ' + row.blocked + ' blocked · ' + row.flagged + ' flagged';
+        left.append(title, meta);
+        const count = document.createElement('span');
+        count.className = 'self-center rounded-full bg-white px-2.5 py-1 text-xs font-black';
+        count.textContent = String(row.count);
+        div.append(left, count);
+        box.appendChild(div);
+      });
+    }
+
+    function renderIncidents(rows) {
+      const body = document.querySelector('[data-incidents]');
+      if (!body) return;
+      body.replaceChildren();
+      if (!(rows || []).length) {
+        body.appendChild(emptyRow('No blocked or flagged attempts in this range.', 7));
+        return;
+      }
+
+      rows.forEach((row) => {
+        const tr = document.createElement('tr');
+        tr.className = 'border-b border-[var(--koa-line)]/70 align-top';
+
+        const when = document.createElement('td');
+        when.className = 'py-4 pr-4 whitespace-nowrap text-xs';
+        when.textContent = new Date(row.createdAt).toLocaleString();
+
+        const decision = document.createElement('td');
+        decision.className = 'py-4 pr-4';
+        decision.appendChild(badge(row.disposition));
+
+        const risk = document.createElement('td');
+        risk.className = 'py-4 pr-4 font-black text-[var(--koa-forest)]';
+        risk.textContent = String(row.riskScore);
+
+        const contact = document.createElement('td');
+        contact.className = 'py-4 pr-4 text-xs leading-5';
+        contact.textContent = [row.emailPreview, row.phonePreview].filter(Boolean).join(' · ') || '—';
+
+        const source = document.createElement('td');
+        source.className = 'py-4 pr-4 font-mono text-xs';
+        source.textContent = row.sourceFingerprint || '—';
+
+        const reason = document.createElement('td');
+        reason.className = 'max-w-md py-4 pr-4 text-xs leading-5';
+        reason.textContent = (row.reasons || []).join(' · ') || label(row.category);
+
+        const crm = document.createElement('td');
+        crm.className = 'py-4 text-xs';
+        if (row.recordId) {
+          const link = document.createElement('a');
+          link.href = '/admin/quotes/?q=' + encodeURIComponent(row.recordId);
+          link.className = 'font-black text-[var(--koa-clay)] underline';
+          link.textContent = row.recordId;
+          crm.appendChild(link);
+        } else {
+          crm.textContent = 'Blocked before CRM';
+        }
+
+        tr.append(when, decision, risk, contact, source, reason, crm);
+        body.appendChild(tr);
+      });
+    }
+
+    async function load() {
+      if (status) status.textContent = 'Loading…';
+      const days = String(range?.value || '30');
+      const response = await fetch('/api/admin/security?days=' + encodeURIComponent(days), { cache: 'no-store' });
+      if (response.status === 401) {
+        app?.classList.add('hidden');
+        unauthorized?.classList.remove('hidden');
+        return;
+      }
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        if (status) status.textContent = payload.error || 'Unable to load security data.';
+        return;
+      }
+
+      const totals = payload.totals || {};
+      setText('[data-accepted]', totals.accepted || 0);
+      setText('[data-blocked]', totals.blocked || 0);
+      setText('[data-flagged]', totals.flagged || 0);
+      setText('[data-block-rate]', (totals.blockRate || 0) + '%');
+      setText('[data-flag-rate]', (totals.flagRate || 0) + '%');
+      setText('[data-generated]', 'Updated ' + new Date(payload.generatedAt).toLocaleString());
+      if (status) status.textContent = (payload.recent || []).length + ' incidents shown';
+
+      renderDaily(payload.daily || []);
+      renderReasons(payload.topReasons || []);
+      renderSources(payload.topSources || []);
+      renderIncidents(payload.recent || []);
+    }
+
+    async function initialize() {
+      const user = await getUser();
+      if (!hasAdminAccess(user)) {
+        unauthorized?.classList.remove('hidden');
+        return;
+      }
+      app?.classList.remove('hidden');
+      await load();
+    }
+
+    range?.addEventListener('change', load);
+    initialize();
+  </script>
+</BaseLayout>
