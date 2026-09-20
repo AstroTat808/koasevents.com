@@ -822,7 +822,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function responseWaitSince(record) {
       const values=[record.createdAt];
       (record.timeline||[]).forEach((event)=>{
-        if(event?.createdAt) values.push(event.createdAt);
+        if(event?.createdAt && ['inquiry','lead'].includes(String(event.type||''))) values.push(event.createdAt);
       });
       const times=values.map((value)=>new Date(value||0).getTime()).filter((value)=>Number.isFinite(value)&&value>0);
       return times.length ? Math.min(...times) : new Date(record.createdAt||0).getTime();
