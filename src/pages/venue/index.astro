@@ -7,14 +7,8 @@ import { businessRules } from '../../data/businessRules';
 import { media, koaMarketingMedia } from '../../data/media';
 
 const packages = businessRules.venueWeddingPackages;
-const schema = {
-  '@context':'https://schema.org','@type':'EventVenue',name:"Koa's Events",url:'https://www.koasevents.com/venue/',
-  telephone:businessRules.contact.phone,email:businessRules.contact.email,maximumAttendeeCapacity:businessRules.venue.maximumOccupancy.value,
-  address:{'@type':'PostalAddress',streetAddress:'11-3334 Hibiscus St',addressLocality:'Mountain View',addressRegion:'HI',postalCode:'96771',addressCountry:'US'}
-};
 ---
-<BaseLayout title="Big Island Wedding & Event Venue | Koa’s Events" description="Explore Koa’s Events in Mountain View, Hawaiʻi: a private tropical event venue for weddings, celebrations, retreats and corporate gatherings for up to 100 guests." canonical="https://www.koasevents.com/venue/">
-<script type="application/ld+json" set:html={JSON.stringify(schema)} />
+<BaseLayout title="Big Island Wedding & Event Venue | Koa’s Events" description="Explore Koa’s Events in Mountain View, Hawaiʻi: a private tropical event venue for weddings, celebrations, retreats and corporate gatherings for up to 100 guests." canonical="https://koasevents.com/venue/">
 <main>
 <section class="relative min-h-[84svh] overflow-hidden bg-[var(--koa-ink)] text-white md:min-h-[88svh]">
   <ResponsiveImage {...koaMarketingMedia.pavilionWelcomeFront} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover" priority />
