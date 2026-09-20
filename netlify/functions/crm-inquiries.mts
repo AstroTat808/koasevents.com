@@ -82,7 +82,7 @@ async function createTurnstileProof(formName: string, email: unknown) {
   return issuedAt + '.' + base64Url(signature);
 }
 
-async function verifyTurnstile(req: Request, token: unknown, expectedAction: string) {
+async function verifyTurnstile(req: Request, token: unknown, expectedAction: string, allowedHostnames?: string[]) {
   const secret = turnstileSecret();
   if (!secret) return { ok: true, configured: false };
 
@@ -111,13 +111,16 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
     const requestHostname = new URL(req.url).hostname.toLowerCase();
     const verifiedHostname = cleanText(data?.hostname, 255).toLowerCase();
     const verifiedAction = cleanText(data?.action, 64);
+    const expectedHostnames = (allowedHostnames?.length ? allowedHostnames : [requestHostname])
+      .map((value) => cleanText(value, 255).toLowerCase())
+      .filter(Boolean);
 
     return {
       ok: Boolean(
         result.ok &&
         data?.success &&
         verifiedAction === expectedAction &&
-        verifiedHostname === requestHostname
+        expectedHostnames.includes(verifiedHostname)
       ),
       configured: true,
       error: data?.success ? 'Security verification did not match this form. Please try again.' : 'Security verification failed. Please try again.',
@@ -273,14 +276,23 @@ export default async (req: Request, context: Context) => {
   }
 
 
-  const protectedActions: Record<string, string> = {
-    'koa-event-inquiry': 'event_inquiry',
-    'koa-wedding-inquiry': 'wedding_inquiry',
+  const protectedForms: Record<string, { action: string; hostnames?: string[] }> = {
+    'koa-event-inquiry': { action: 'event_inquiry' },
+    'koa-wedding-inquiry': { action: 'wedding_inquiry' },
+    'koa-mobile-bar-inquiry': {
+      action: 'mobile_bar_inquiry',
+      hostnames: ['koasmobilebar.com', 'www.koasmobilebar.com'],
+    },
   };
-  const expectedTurnstileAction = protectedActions[formName] || '';
+  const turnstileConfig = protectedForms[formName];
 
-  if (expectedTurnstileAction) {
-    const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
+  if (turnstileConfig) {
+    const turnstile = await verifyTurnstile(
+      req,
+      payload.turnstileToken,
+      turnstileConfig.action,
+      turnstileConfig.hostnames,
+    );
     if (!turnstile.ok) {
       const securityEvent = await recordSecurityEvent(context, req, {
         disposition: 'blocked',
@@ -461,7 +473,7 @@ export default async (req: Request, context: Context) => {
       : '',
   });
 
-  const turnstileProof = expectedTurnstileAction
+  const turnstileProof = turnstileConfig
     ? await createTurnstileProof(formName, record.customer.email)
     : '';
 
