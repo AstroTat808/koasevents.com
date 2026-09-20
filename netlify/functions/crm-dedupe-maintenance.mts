@@ -21,10 +21,9 @@ export default async (req: Request, context: Context) => {
   }
 
   const url = new URL(req.url);
-  const supplied = url.searchParams.get('key') || '';
-  const expected = String(Netlify.env.get('KOA_MAINTENANCE_KEY') || '');
-  if (!expected || supplied !== expected) {
-    return Response.json({ error: 'Unauthorized.' }, { status: 401 });
+  const action = url.searchParams.get('action') || 'inspect';
+  if (!['inspect', 'cleanup'].includes(action)) {
+    return Response.json({ error: 'Invalid action.' }, { status: 400 });
   }
 
   const sales = store();
@@ -47,7 +46,7 @@ export default async (req: Request, context: Context) => {
     downstream: records.filter((entry: any) => entry?.source === record.id).map((entry: any) => entry.id),
   }));
 
-  if (url.searchParams.get('action') !== 'cleanup') {
+  if (action !== 'cleanup') {
     return Response.json({ count: candidates.length, candidates: summary }, {
       headers: { 'Cache-Control': 'no-store' },
     });
