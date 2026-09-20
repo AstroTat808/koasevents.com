@@ -123,6 +123,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
             guestCount: data.get('guestCount'),
             budget: data.get('budget'),
             venuePackage: packageId,
+            alternativeDate: data.get('alternateDate'),
+            planningFrom: data.get('planningFrom'),
             priorities: data.get('vision'),
             selectedCatalogItems: data.get('selectedCatalogItems'),
             automaticRentalBreakdown: data.get('automaticRentalBreakdown'),
