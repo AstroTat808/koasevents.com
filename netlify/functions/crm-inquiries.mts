@@ -68,7 +68,7 @@ function responseHeaders(req: Request) {
     ...(origin ? {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture, X-Koa-Inquiry-QA',
       'Vary': 'Origin',
     } : {}),
   };
@@ -157,6 +157,31 @@ export default async (req: Request, context: Context) => {
       catalogSelectionState: cleanText(payload.inquiry?.catalogSelectionState, 30000),
     },
   };
+
+  const qaMode =
+    req.headers.get('x-koa-inquiry-qa') === '1' &&
+    formName === 'koa-mobile-bar-qa' &&
+    /^qa\+[a-z0-9._-]+@example\.com$/i.test(record.customer.email);
+
+  if (qaMode) {
+    const qaKey = 'qa/records/' + id;
+    await store.setJSON(qaKey, record);
+    const stored = await store.get(qaKey, { type: 'json' });
+    await store.delete(qaKey);
+    if (!stored) return json(req, { error: 'CRM QA round-trip storage failed.' }, 500);
+    return json(req, {
+      ok: true,
+      id,
+      qa: true,
+      record: {
+        id: stored.id,
+        source: stored.source,
+        packageId: stored.packageId,
+        customer: stored.customer,
+        inquiry: stored.inquiry,
+      },
+    });
+  }
 
   const current = (await store.get('records/index', { type: 'json' })) || [];
   await store.setJSON('records/' + id, record);
