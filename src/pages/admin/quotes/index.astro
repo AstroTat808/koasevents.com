@@ -373,6 +373,49 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </div>
   </dialog>
 
+  <dialog data-profit-dialog class="w-[min(96vw,900px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-profit-form class="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+      <input type="hidden" name="recordId" />
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Mobile Bar profitability</p>
+          <h2 data-profit-title class="display mt-3 text-4xl">Quote margin</h2>
+          <p data-profit-meta class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55"></p>
+        </div>
+        <button type="button" data-close-profit class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+      </div>
+
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Revenue</p><strong data-profit-revenue class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Direct costs</p><strong data-profit-direct class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+        <article class="rounded-xl bg-[var(--koa-forest)] p-4 text-white"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/55">Profit</p><strong data-profit-dollars class="display mt-2 block text-3xl">$0</strong></article>
+        <article class="rounded-xl bg-[var(--koa-ink)] p-4 text-white"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/55">Margin</p><strong data-profit-margin class="display mt-2 block text-3xl">0%</strong></article>
+      </div>
+
+      <div class="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <label class="grid gap-2 text-sm font-semibold">Bartender wage rate / hr<input name="bartenderWageRate" type="number" min="0" max="500" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <div class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Bartender wages</p><strong data-profit-bartender-wages class="mt-2 block text-xl text-[var(--koa-forest)]">$0</strong><p data-profit-labor-meta class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div>
+        <label class="grid gap-2 text-sm font-semibold">Supplies / consumables cost<input name="suppliesCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Travel / fuel / towing cost<input name="travelCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Add-on / vendor direct cost<input name="addOnCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Gratuity payout<input name="gratuityCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Other direct costs<input name="otherDirectCosts" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">Internal cost notes<textarea name="notes" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Ice, mixers, rental/vendor costs, unusual logistics, breakage, etc."></textarea></label>
+      </div>
+
+      <div class="mt-6 overflow-x-auto rounded-xl border border-[var(--koa-line)]">
+        <table class="w-full min-w-[620px] border-collapse text-sm">
+          <thead><tr class="border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] text-left text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-4 py-3">Cost category</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
+          <tbody data-profit-breakdown></tbody>
+        </table>
+      </div>
+
+      <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/45">Revenue uses the current proposal total when available, otherwise the website estimate. Gratuity defaults to the quote’s gratuity line as a pass-through cost. Enter actual supplies, towing/fuel, vendor/add-on and other direct costs for an accurate event margin.</p>
+      <div class="mt-6 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save costs</button><button type="button" data-close-profit class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
+      <p data-profit-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
+    </form>
+  </dialog>
+
   <script>
     import { getUser } from '@netlify/identity';
 
@@ -419,6 +462,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileLeadSources = document.querySelector('[data-mobile-lead-sources]');
     const mobileUpcoming = document.querySelector('[data-mobile-upcoming]');
     const mobileStaffing = document.querySelector('[data-mobile-staffing]');
+    const profitDialog = document.querySelector('[data-profit-dialog]');
+    const profitForm = document.querySelector('[data-profit-form]');
+    const profitTitle = document.querySelector('[data-profit-title]');
+    const profitMeta = document.querySelector('[data-profit-meta]');
+    const profitRevenue = document.querySelector('[data-profit-revenue]');
+    const profitDirect = document.querySelector('[data-profit-direct]');
+    const profitDollars = document.querySelector('[data-profit-dollars]');
+    const profitMargin = document.querySelector('[data-profit-margin]');
+    const profitBartenderWages = document.querySelector('[data-profit-bartender-wages]');
+    const profitLaborMeta = document.querySelector('[data-profit-labor-meta]');
+    const profitBreakdown = document.querySelector('[data-profit-breakdown]');
+    const profitMessage = document.querySelector('[data-profit-message]');
 
     const convertDialog = document.querySelector('[data-convert-dialog]');
     const convertForm = document.querySelector('[data-convert-form]');
@@ -470,6 +525,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let activityRecord = null;
     let bookingRecord = null;
     let qboState = null;
+    let profitRecord = null;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -1272,6 +1328,103 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return Array.isArray(record.reminders) ? record.reminders : [];
     }
 
+    function mobileRevenue(record) {
+      const proposalTotal=Number(record.proposal?.total||0);
+      const estimate=Number(record.inquiry?.estimatedTotal||0);
+      if(proposalTotal>0)return proposalTotal;
+      if(estimate>0)return estimate;
+      const lines=Array.isArray(record.inquiry?.estimateLineItems)?record.inquiry.estimateLineItems:[];
+      return lines.reduce((sum,line)=>sum+Number(line?.amount||0),0);
+    }
+
+    function quotedGratuity(record) {
+      const proposalLines=Array.isArray(record.proposal?.lineItems)?record.proposal.lineItems:[];
+      const inquiryLines=Array.isArray(record.inquiry?.estimateLineItems)?record.inquiry.estimateLineItems:[];
+      const lines=proposalLines.length?proposalLines:inquiryLines;
+      return lines.filter((line)=>String(line?.id||'')==='gratuity' || /gratuity/i.test(String(line?.description||''))).reduce((sum,line)=>sum+Number(line?.amount||0),0);
+    }
+
+    function profitValues(record, overrides={}) {
+      const model={...(record?.profitModel||{}),...overrides};
+      const revenue=mobileRevenue(record);
+      const hours=Math.max(0,Number(record?.inquiry?.serviceHours||0));
+      const bartenders=Math.max(0,Number(record?.inquiry?.bartenderCount||0));
+      const bartenderWageRate=Math.max(0,Number(model.bartenderWageRate ?? 40));
+      const bartenderWages=hours*bartenders*bartenderWageRate;
+      const suppliesCost=Math.max(0,Number(model.suppliesCost||0));
+      const travelCost=Math.max(0,Number(model.travelCost||0));
+      const addOnCost=Math.max(0,Number(model.addOnCost||0));
+      const hasSavedGratuity=record?.profitModel && Object.prototype.hasOwnProperty.call(record.profitModel,'gratuityCost');
+      const gratuityCost=Math.max(0,Number(model.gratuityCost ?? (hasSavedGratuity?0:quotedGratuity(record))));
+      const otherDirectCosts=Math.max(0,Number(model.otherDirectCosts||0));
+      const directCosts=bartenderWages+suppliesCost+travelCost+addOnCost+gratuityCost+otherDirectCosts;
+      const profit=revenue-directCosts;
+      const margin=revenue>0?(profit/revenue)*100:0;
+      return {revenue,hours,bartenders,bartenderWageRate,bartenderWages,suppliesCost,travelCost,addOnCost,gratuityCost,otherDirectCosts,directCosts,profit,margin};
+    }
+
+    function formProfitOverrides() {
+      if(!profitForm)return {};
+      return {
+        bartenderWageRate:Number(profitForm.elements.bartenderWageRate.value||0),
+        suppliesCost:Number(profitForm.elements.suppliesCost.value||0),
+        travelCost:Number(profitForm.elements.travelCost.value||0),
+        addOnCost:Number(profitForm.elements.addOnCost.value||0),
+        gratuityCost:Number(profitForm.elements.gratuityCost.value||0),
+        otherDirectCosts:Number(profitForm.elements.otherDirectCosts.value||0),
+        notes:String(profitForm.elements.notes.value||'')
+      };
+    }
+
+    function recalcProfitDialog() {
+      if(!profitRecord||!profitForm)return;
+      const values=profitValues(profitRecord,formProfitOverrides());
+      if(profitRevenue)profitRevenue.textContent=money(values.revenue);
+      if(profitDirect)profitDirect.textContent=money(values.directCosts);
+      if(profitDollars)profitDollars.textContent=money(values.profit);
+      if(profitMargin)profitMargin.textContent=(Number.isFinite(values.margin)?values.margin:0).toFixed(1)+'%';
+      if(profitBartenderWages)profitBartenderWages.textContent=money(values.bartenderWages);
+      if(profitLaborMeta)profitLaborMeta.textContent=values.bartenders+' bartender'+(values.bartenders===1?'':'s')+' × '+values.hours+' hr × '+money(values.bartenderWageRate)+'/hr';
+      if(profitBreakdown){
+        profitBreakdown.innerHTML='';
+        [
+          ['Bartender wages',values.bartenderWages],
+          ['Supplies / consumables',values.suppliesCost],
+          ['Travel / fuel / towing',values.travelCost],
+          ['Add-on / vendor costs',values.addOnCost],
+          ['Gratuity payout',values.gratuityCost],
+          ['Other direct costs',values.otherDirectCosts],
+          ['Total direct costs',values.directCosts],
+          ['Profit',values.profit]
+        ].forEach(([label,amount],index)=>{
+          const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)] '+(index>=6?'font-bold':'');
+          const name=document.createElement('td');name.className='px-4 py-3';name.textContent=String(label);
+          const value=document.createElement('td');value.className='px-4 py-3 text-right';value.textContent=money(amount);
+          tr.append(name,value);profitBreakdown.appendChild(tr);
+        });
+      }
+    }
+
+    function openProfitModel(record) {
+      if(!profitDialog||!profitForm)return;
+      profitRecord=record;
+      const model=record.profitModel||{};
+      const hasSaved=Boolean(record.profitModel);
+      profitForm.elements.recordId.value=record.id;
+      profitForm.elements.bartenderWageRate.value=String(model.bartenderWageRate ?? 40);
+      profitForm.elements.suppliesCost.value=String(model.suppliesCost ?? 0);
+      profitForm.elements.travelCost.value=String(model.travelCost ?? 0);
+      profitForm.elements.addOnCost.value=String(model.addOnCost ?? 0);
+      profitForm.elements.gratuityCost.value=String(hasSaved ? (model.gratuityCost ?? 0) : quotedGratuity(record));
+      profitForm.elements.otherDirectCosts.value=String(model.otherDirectCosts ?? 0);
+      profitForm.elements.notes.value=String(model.notes||'');
+      if(profitTitle)profitTitle.textContent=(record.customer?.name||record.id)+' · margin';
+      if(profitMeta)profitMeta.textContent=[packageLabel(recordPackage(record)),record.customer?.eventDate,record.inquiry?.guestCount?record.inquiry.guestCount+' guests':''].filter(Boolean).join(' · ');
+      if(profitMessage)profitMessage.textContent=hasSaved?'Saved cost model loaded.':'Working assumptions loaded. Enter actual direct costs before relying on the margin.';
+      recalcProfitDialog();
+      profitDialog.showModal();
+    }
+
     function renderMobileCard(record) {
       const article=document.createElement('article');
       article.className='rounded-[1.2rem] border border-white/10 bg-white p-5 text-[var(--koa-ink)] shadow-sm';
@@ -1321,6 +1474,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         article.appendChild(estimate);
       }
 
+      if(mobileRevenue(record)>0) {
+        const p=profitValues(record);
+        const marginBox=document.createElement('div');marginBox.className='mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const head=document.createElement('div');head.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');left.append(text('p','text-[.54rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Working margin'),text('strong','mt-1 block text-lg text-[var(--koa-forest)]',money(p.profit)+' profit'));
+        const right=document.createElement('div');right.className='text-right';right.append(text('strong','display text-2xl text-[var(--koa-forest)]',(Number.isFinite(p.margin)?p.margin:0).toFixed(1)+'%'),text('p','mt-1 text-[.58rem] text-[var(--koa-ink)]/42','margin'));
+        head.append(left,right);marginBox.appendChild(head);
+        marginBox.appendChild(text('p','mt-2 text-[.64rem] leading-5 text-[var(--koa-ink)]/48','Revenue '+money(p.revenue)+' · direct costs '+money(p.directCosts)+(record.profitModel?' · saved costs':' · enter actual costs')));
+        article.appendChild(marginBox);
+      }
+
       appendCommunicationStatus(article,record);
 
       const tasks=mobileFollowups(record);
@@ -1347,6 +1511,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         }
         actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
+      if(mobileRevenue(record)>0) actions.append(actionButton('Margin',small,()=>openProfitModel(record)));
       addQuickLinks(actions,record,small);
       article.appendChild(actions);
       return article;
@@ -1719,6 +1884,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
+    document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
+    profitForm?.querySelectorAll('input,textarea').forEach((input)=>input.addEventListener('input',recalcProfitDialog));
     document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
     document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
     proposalForm?.querySelectorAll('[name="discountAmount"],[name="taxRate"]').forEach((input)=>input.addEventListener('input',recalcEditor));
@@ -1730,6 +1897,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         convertMessage.textContent=(result.reused?'Existing record opened: ':'Created ')+result.record.id+'.'; setTimeout(()=>convertDialog.close(),500); await load(String(searchInput?.value||'').trim());
         if(result.record.kind==='proposal') openProposal(result.record);
       }catch(error){convertMessage.textContent=error.message||'Unable to create record.';}
+    });
+
+    profitForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      if(!profitRecord)return;
+      if(profitMessage)profitMessage.textContent='Saving cost model…';
+      try{
+        const result=await api({action:'update-profit-model',recordId:profitRecord.id,profitModel:formProfitOverrides()});
+        profitRecord=result.record||profitRecord;
+        if(profitMessage)profitMessage.textContent='Saved.';
+        recalcProfitDialog();
+        await load(String(searchInput?.value||'').trim());
+      }catch(error){if(profitMessage)profitMessage.textContent=error?.message||'Unable to save cost model.';}
     });
 
     proposalForm?.addEventListener('submit',async(event)=>{
