@@ -47,3 +47,8 @@ Yelp, Apple Maps and MapQuest also blocked direct crawler access through robots 
 3. Refresh WeddingWire business facts and capacity/package positioning.
 4. Monitor Google/Bing indexing until old Wix 3334 snippets disappear.
 5. Verify Facebook, Yelp, Apple Maps, Bing Maps, MapQuest, The Knot and Yellow Pages from their business-owner surfaces and standardize name/address/phone/website.
+
+
+## CRM tracking
+
+The live Local SEO admin dashboard at `/admin/seo/` is the working citation register. Update each directory there as listings are corrected or verified. The tracker persists status, address found, notes, last-checked date and administrator attribution.
