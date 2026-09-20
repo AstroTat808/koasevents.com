@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { businessRules } from '../data/businessRules';
 
 interface Props {
   title: string;
@@ -9,6 +10,7 @@ interface Props {
   socialImage?: string;
   socialImageAlt?: string;
   ogType?: 'website' | 'article';
+  breadcrumbTitle?: string;
 }
 
 const {
@@ -19,12 +21,19 @@ const {
   socialImage = '/media/koa/pavilion-sunset-wide.webp',
   socialImageAlt = "Koa's Events pavilion and tropical grounds on Hawaiʻi Island",
   ogType = 'website',
+  breadcrumbTitle,
 } = Astro.props;
 
-const siteUrl = Astro.site ?? new URL('https://www.koasevents.com');
-const canonicalUrl = new URL(canonical ?? Astro.url.pathname, siteUrl).href;
+const siteUrl = Astro.site ?? new URL('https://koasevents.com');
+const canonicalObject = new URL(canonical ?? Astro.url.pathname, siteUrl);
+canonicalObject.protocol = 'https:';
+canonicalObject.port = '';
+if (canonicalObject.hostname === 'www.koasevents.com') canonicalObject.hostname = 'koasevents.com';
+const canonicalUrl = canonicalObject.href;
+const canonicalPath = canonicalObject.pathname;
 const socialImageUrl = new URL(socialImage, siteUrl).href;
 const logoUrl = new URL('/brand/koa-mark.png', siteUrl).href;
+const businessImageUrl = new URL('/media/koa/pavilion-sunset-wide.webp', siteUrl).href;
 const organizationId = new URL('/#organization', siteUrl).href;
 const websiteId = new URL('/#website', siteUrl).href;
 const robotsContent = noindex
@@ -32,20 +41,162 @@ const robotsContent = noindex
   : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 const buildCommit = String(process.env.COMMIT_REF || '').trim();
 
+const breadcrumbLabelMap: Record<string, string> = {
+  about: 'About',
+  weddings: 'Weddings',
+  'signature-wedding': 'Signature Wedding',
+  venue: 'Venue',
+  packages: 'Wedding Venue Packages',
+  faq: 'FAQ',
+  'mobile-bar': 'Mobile Bar',
+  'private-events': 'Private Events',
+  'corporate-events': 'Corporate Events',
+  stay: 'Stay',
+  gallery: 'Gallery',
+  catalog: 'Event Rentals',
+  blog: 'Blog',
+  inquire: 'Inquire',
+  'wedding-inquiry': 'Wedding Inquiry',
+  privacy: 'Privacy Policy',
+  terms: 'Terms of Use',
+};
+
+const pathSegments = canonicalPath.split('/').filter(Boolean);
+const breadcrumbSchema = !noindex && pathSegments.length > 0
+  ? {
+      '@type': 'BreadcrumbList',
+      '@id': canonicalUrl + '#breadcrumb',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: new URL('/', siteUrl).href,
+        },
+        ...pathSegments.map((segment, index) => ({
+          '@type': 'ListItem',
+          position: index + 2,
+          name: index === pathSegments.length - 1 && breadcrumbTitle
+            ? breadcrumbTitle
+            : (breadcrumbLabelMap[segment] || segment.replaceAll('-', ' ')),
+          item: new URL('/' + pathSegments.slice(0, index + 1).join('/') + '/', siteUrl).href,
+        })),
+      ],
+    }
+  : null;
+
+const serviceDefinitions: Record<string, { name: string; serviceType: string; description: string }> = {
+  '/weddings/': {
+    name: "Koa's Events Wedding Venue Service",
+    serviceType: 'Wedding venue rental',
+    description: 'Private rainforest wedding venue service in Mountain View, Hawaiʻi for celebrations of up to 100 guests.',
+  },
+  '/signature-wedding/': {
+    name: "The Koa's Signature Wedding Experience",
+    serviceType: 'Wedding venue and wedding weekend service',
+    description: 'A premium private rainforest wedding weekend experience at Koa’s Events in Mountain View, Hawaiʻi.',
+  },
+  '/venue/': {
+    name: "Koa's Events Venue Rental",
+    serviceType: 'Event venue rental',
+    description: 'Private event venue rental in Mountain View, Hawaiʻi with flexible wedding and celebration configurations.',
+  },
+  '/venue/packages/': {
+    name: "Koa's Events Wedding Venue Packages",
+    serviceType: 'Wedding venue rental',
+    description: 'Wedding venue packages and starting configurations for celebrations at Koa’s Events in Mountain View, Hawaiʻi.',
+  },
+  '/mobile-bar/': {
+    name: "Koa's Mobile Bar",
+    serviceType: 'Mobile bar and bartending service',
+    description: 'Professional dry-bar and bartender service for weddings, private events and corporate gatherings across Hawaiʻi Island.',
+  },
+  '/private-events/': {
+    name: "Koa's Private Event Services",
+    serviceType: 'Private event venue and mobile bar service',
+    description: 'Venue and mobile bar services for birthdays, showers, reunions, retreats and milestone celebrations on Hawaiʻi Island.',
+  },
+  '/corporate-events/': {
+    name: "Koa's Corporate Event Services",
+    serviceType: 'Corporate event venue and mobile bar service',
+    description: 'Venue and beverage-service planning for retreats, client events, workshops and company celebrations on Hawaiʻi Island.',
+  },
+  '/stay/': {
+    name: "Stay at Koa's",
+    serviceType: 'Direct cottage stay service',
+    description: 'Direct cottage stay requests in Mountain View, Hawaiʻi, including wedding-weekend and independent stays.',
+  },
+  '/catalog/': {
+    name: "Koa's Event Rental Service",
+    serviceType: 'Event rental service',
+    description: 'Event rental inventory and add-ons available for Koa’s Events celebrations on Hawaiʻi Island.',
+  },
+};
+
+const serviceDefinition = serviceDefinitions[canonicalPath];
+const signaturePackage = businessRules.venueWeddingPackages.find((item) => item.name === 'Plumeria');
+const serviceOffers =
+  canonicalPath === '/signature-wedding/' && signaturePackage
+    ? [{
+        '@type': 'Offer',
+        name: signaturePackage.publicName,
+        price: String(signaturePackage.price),
+        priceCurrency: 'USD',
+        url: canonicalUrl,
+      }]
+    : canonicalPath === '/venue/packages/'
+      ? businessRules.venueWeddingPackages.map((item) => ({
+          '@type': 'Offer',
+          name: item.publicName,
+          price: String(item.price),
+          priceCurrency: 'USD',
+          url: new URL('/venue/packages/#' + item.name.toLowerCase(), siteUrl).href,
+        }))
+      : canonicalPath === '/mobile-bar/'
+        ? businessRules.mobileBar.packages.map((item) => ({
+            '@type': 'Offer',
+            name: item.name,
+            price: String(item.price),
+            priceCurrency: 'USD',
+            url: new URL('/mobile-bar/#packages', siteUrl).href,
+          }))
+        : undefined;
+
+const serviceSchema = serviceDefinition
+  ? {
+      '@type': 'Service',
+      '@id': canonicalUrl + '#service',
+      url: canonicalUrl,
+      name: serviceDefinition.name,
+      serviceType: serviceDefinition.serviceType,
+      description: serviceDefinition.description,
+      provider: { '@id': organizationId },
+      areaServed: {
+        '@type': 'AdministrativeArea',
+        name: 'Hawaiʻi Island, Hawaii',
+      },
+      ...(serviceOffers ? { offers: serviceOffers } : {}),
+    }
+  : null;
+
 const seoSchema = {
   '@context': 'https://schema.org',
   '@graph': [
     {
-      '@type': 'Organization',
+      '@type': ['LocalBusiness', 'EventVenue'],
       '@id': organizationId,
       name: "Koa's Events",
+      legalName: "Koa's Events LLC",
       url: new URL('/', siteUrl).href,
+      description: 'A private wedding and event venue in Mountain View, Hawaiʻi, with mobile bar service available across Hawaiʻi Island.',
       logo: {
         '@type': 'ImageObject',
         url: logoUrl,
       },
+      image: businessImageUrl,
       email: 'aloha@koasevents.com',
       telephone: '+1-844-808-5627',
+      maximumAttendeeCapacity: businessRules.venue.maximumOccupancy.value,
       address: {
         '@type': 'PostalAddress',
         streetAddress: '11-3334 Hibiscus St',
@@ -57,6 +208,13 @@ const seoSchema = {
       areaServed: {
         '@type': 'AdministrativeArea',
         name: 'Hawaiʻi Island, Hawaii',
+      },
+      contactPoint: {
+        '@type': 'ContactPoint',
+        contactType: 'customer service',
+        telephone: '+1-844-808-5627',
+        email: 'aloha@koasevents.com',
+        availableLanguage: 'English',
       },
     },
     {
@@ -77,9 +235,10 @@ const seoSchema = {
       about: { '@id': organizationId },
       inLanguage: 'en-US',
     },
+    ...(serviceSchema ? [serviceSchema] : []),
+    ...(breadcrumbSchema ? [breadcrumbSchema] : []),
   ],
-};
----
+};---
 <!doctype html>
 <html lang="en">
   <head>
