@@ -45,6 +45,22 @@ jobs:
 
           checks = []
 
+          admin_status, admin_body = request("/admin/security/")
+          checks.append((
+              "security dashboard page available",
+              admin_status == 200 and "Security + Spam" in admin_body,
+              admin_status,
+              admin_body[:250],
+          ))
+
+          api_status, api_body = request("/api/admin/security?days=1")
+          checks.append((
+              "security dashboard API requires admin auth",
+              api_status == 401,
+              api_status,
+              api_body[:250],
+          ))
+
           for path, action in [
               ("/inquire/", "event_inquiry"),
               ("/wedding-inquiry/", "wedding_inquiry"),
