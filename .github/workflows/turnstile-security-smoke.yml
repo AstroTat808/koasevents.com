@@ -20,6 +20,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - name: Validate security heuristics and escalation logic
+        run: npm run qa:security
       - name: Verify live Turnstile protection
         shell: python
         run: |
