@@ -213,7 +213,18 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
   </main>
   <Footer />
 
-  {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  {turnstileSiteKey && (
+    <>
+      <script is:inline>
+        if (window.innerWidth <= 360) {
+          document.querySelectorAll('.cf-turnstile[data-size]').forEach((element) => {
+            element.setAttribute('data-size', 'compact');
+          });
+        }
+      </script>
+      <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    </>
+  )}
   <script is:inline define:vars={{ requestedService, requestedPackage, requestedGuests, turnstileSiteKey }}>
     const form = document.querySelector('[data-inquiry-form]');
     const venueFields = document.querySelector('[data-venue-fields]');
