@@ -1,4 +1,4 @@
-# Koa’s Events — Google Business Profile Content Calendar
+# Koa’s Events — 36-Week Google Business Profile Content Calendar
 
 **Cadence:** 2 posts per week (Tuesday + Friday)  
 **Period:** 2026-09-22 through 2027-05-28  
@@ -14,7 +14,7 @@
 - Before publishing an image, confirm its current gallery focal point/crop so the GBP version matches the website’s approved presentation.
 - Review GBP Insights monthly and adjust future post topics toward the posts producing website clicks, calls and direction requests.
 
-## Six-month calendar
+## 36-week calendar
 
 | Date | Pillar | Post angle | Koa’s image asset | Draft GBP post | CTA |
 |---|---|---|---|---|---|
