@@ -128,6 +128,42 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
   }
 }
 
+
+async function verifyMobileBarSourceFingerprint(req: Request) {
+  const fingerprint = cleanText(req.headers.get('x-koa-source-fingerprint'), 40);
+  const timestamp = cleanText(req.headers.get('x-koa-source-timestamp'), 20);
+  const signature = cleanText(req.headers.get('x-koa-source-signature'), 120);
+  if (!fingerprint || !timestamp || !signature) return '';
+
+  const issuedAt = Number(timestamp);
+  if (!Number.isFinite(issuedAt) || Math.abs(Math.floor(Date.now() / 1000) - issuedAt) > 300) return '';
+
+  const secret = turnstileSecret();
+  if (!secret) return '';
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const expectedBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode('mobile-bar|' + fingerprint + '|' + timestamp),
+  );
+  const expected = base64Url(expectedBuffer);
+
+  if (expected.length !== signature.length) return '';
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    mismatch |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  }
+  return mismatch === 0 ? fingerprint : '';
+}
+
 async function appendEvent(store: any, event: Record<string, unknown>) {
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
@@ -152,7 +188,7 @@ function responseHeaders(req: Request) {
     ...(origin ? {
       'Access-Control-Allow-Origin': origin,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture, X-Koa-Inquiry-QA',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture, X-Koa-Inquiry-QA, X-Koa-Source-Fingerprint, X-Koa-Source-Timestamp, X-Koa-Source-Signature',
       'Vary': 'Origin',
     } : {}),
   };
@@ -185,7 +221,10 @@ export default async (req: Request, context: Context) => {
   try { payload = JSON.parse(rawBody); } catch { return json(req, { error: 'Invalid JSON.' }, 400); }
 
   const formName = cleanText(payload.formName, 80);
-  const sourceFingerprint = await ipFingerprint(req);
+  const trustedMobileBarFingerprint = formName === 'koa-mobile-bar-inquiry'
+    ? await verifyMobileBarSourceFingerprint(req)
+    : '';
+  const sourceFingerprint = trustedMobileBarFingerprint || await ipFingerprint(req);
   const identity = await securityIdentity(payload);
 
   const activeBlock = await findActiveBlock(context, {
