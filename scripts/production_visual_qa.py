@@ -100,6 +100,28 @@ def source_mode():
  if legacy_marketing_pages:failures.append("Legacy editorial/Wix imagery remains on marketing pages: "+", ".join(sorted(set(legacy_marketing_pages))[:40]))
  missing_media=[ref for ref in sorted(media_refs) if not (ROOT/"public"/ref.lstrip("/")).is_file()]
  if missing_media:failures.append("Missing local media assets referenced by source: "+", ".join(missing_media[:40]))
+ admin_quotes=(SRC/"pages/admin/quotes/index.astro").read_text(encoding="utf-8",errors="ignore")
+ admin_quotes_api=(ROOT/"netlify/functions/admin-quotes.mts").read_text(encoding="utf-8",errors="ignore")
+ profit_requirements={
+  "margin health filter":"data-mobile-filter-margin",
+  "margin health summary":"data-mobile-margin-health-summary",
+  "automatic cost mode":"Automatic operating estimate",
+  "ice cost field":"name=\"iceCost\"",
+  "mixers cost field":"name=\"mixersCost\"",
+  "garnishes cost field":"name=\"garnishesCost\"",
+  "cups cost field":"name=\"cupsCost\"",
+ }
+ for label,needle in profit_requirements.items():
+  if needle not in admin_quotes:failures.append("Mobile Bar profitability UI missing "+label+": "+needle)
+ for label,needle in {
+  "profit cost mode":"costMode: 'auto' | 'manual'",
+  "persisted ice cost":"iceCost: number",
+  "persisted mixers cost":"mixersCost: number",
+  "persisted garnishes cost":"garnishesCost: number",
+  "persisted cups cost":"cupsCost: number",
+ }.items():
+  if needle not in admin_quotes_api:failures.append("Mobile Bar profitability API missing "+label+": "+needle)
+
  report={"mode":"source","sourceFiles":len(files),"mediaReferences":len(media_refs),"legacyMarketingPages":sorted(set(legacy_marketing_pages)),"missingMedia":missing_media,"failures":failures,"warnings":warnings}
  (OUT/"source-audit.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  print(json.dumps(report,indent=2));return 1 if failures else 0
