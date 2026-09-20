@@ -33,6 +33,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Awaiting response</p>
+              <h2 class="display mt-3 text-4xl">Leads still waiting on us</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">Open inquiries and leads with no logged staff response, ordered by the oldest client request first. The internal SLA reminder is based on weekday business hours in Hawai‘i.</p>
+            </div>
+            <span data-unanswered-count class="rounded-full bg-[var(--koa-sand)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">0 waiting</span>
+          </div>
+          <div data-unanswered-leads class="mt-6 grid gap-3 lg:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Package funnel</p><h2 class="display mt-3 text-4xl">From interest to booked event</h2><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/56">Views are unique browser sessions that selected a package. Later stages count saved quotes and CRM records.</p></div>
             <p class="text-xs leading-5 text-[var(--koa-ink)]/45">Conversion rates are directional funnel indicators, not cross-device identity matching.</p>
@@ -332,6 +344,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const pipeline = document.querySelector('[data-pipeline]');
     const workQueue = document.querySelector('[data-work-queue]');
     const workCount = document.querySelector('[data-work-count]');
+    const unansweredLeads = document.querySelector('[data-unanswered-leads]');
+    const unansweredCount = document.querySelector('[data-unanswered-count]');
     const quoteList = document.querySelector('[data-quote-list]');
     const bookedDashboard = document.querySelector('[data-booked-dashboard]');
     const funnelBody = document.querySelector('[data-funnel]');
@@ -611,6 +625,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         lead_notification_sent:'Team lead email sent', lead_notification_failed:'Team lead email failed',
         client_confirmation_sent:'Client confirmation sent', client_confirmation_failed:'Client confirmation failed',
         lead_response_reminder_sent:'Response reminder sent', lead_response_reminder_failed:'Response reminder failed',
+        client_follow_up_sent:'24-hour client follow-up sent', client_follow_up_failed:'24-hour client follow-up failed',
         email_sent:'Email sent', email_delivered:'Email delivered', email_bounced:'Email bounced', email_failed:'Email failed'
       };
       return labels[type]||String(type||'Activity').replaceAll('_',' ');
@@ -639,7 +654,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ['Client confirmation',communications.clientConfirmation],
         ['Team notification',communications.internalNotification],
         ['Discovery confirmation',communications.discoveryConfirmation],
-        ['Response reminder',communications.responseReminder]
+        ['Response reminder',communications.responseReminder],
+        ['24-hour follow-up',communications.clientFollowUp]
       ].filter(([,entry])=>entry&&entry.status);
 
       if(!items.length)return;
@@ -801,6 +817,82 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const age=relativeAge(record.updatedAt||record.createdAt);
       if(age) article.appendChild(text('p','mt-3 text-[.62rem] text-[var(--koa-ink)]/36',age));
       return article;
+    }
+
+    function responseWaitSince(record) {
+      const values=[record.createdAt];
+      (record.timeline||[]).forEach((event)=>{
+        if(event?.createdAt) values.push(event.createdAt);
+      });
+      const times=values.map((value)=>new Date(value||0).getTime()).filter((value)=>Number.isFinite(value)&&value>0);
+      return times.length ? Math.min(...times) : new Date(record.createdAt||0).getTime();
+    }
+
+    function hstBusinessHoursBetween(startMs,endMs=Date.now()) {
+      if(!Number.isFinite(startMs)||endMs<=startMs)return 0;
+      const offset=-10*60*60*1000;
+      const localStart=startMs+offset;
+      const localEnd=endMs+offset;
+      const firstDay=Math.floor(localStart/86400000)*86400000;
+      const lastDay=Math.floor(localEnd/86400000)*86400000;
+      let total=0;
+      for(let dayMs=firstDay;dayMs<=lastDay;dayMs+=86400000){
+        const day=new Date(dayMs).getUTCDay();
+        if(day===0||day===6)continue;
+        const open=dayMs+9*3600000;
+        const close=dayMs+17*3600000;
+        const from=Math.max(localStart,open);
+        const to=Math.min(localEnd,close);
+        if(to>from)total+=to-from;
+      }
+      return total/3600000;
+    }
+
+    function waitingLabel(startMs) {
+      const wall=Math.max(0,(Date.now()-startMs)/3600000);
+      const business=hstBusinessHoursBetween(startMs);
+      if(wall<24)return Math.max(0,Math.floor(wall))+'h elapsed · '+business.toFixed(business<10?1:0)+' business hr';
+      const days=Math.floor(wall/24);
+      const hours=Math.floor(wall%24);
+      return days+'d '+hours+'h elapsed · '+business.toFixed(business<10?1:0)+' business hr';
+    }
+
+    function renderUnansweredLeads() {
+      if(!unansweredLeads)return;
+      unansweredLeads.innerHTML='';
+      const rows=(payload.records||[])
+        .filter((record)=>['inquiry','lead'].includes(record.kind)&&['inquiry','lead'].includes(record.stage)&&!hasResponseActivity(record))
+        .map((record)=>({record,startMs:responseWaitSince(record)}))
+        .sort((a,b)=>a.startMs-b.startMs);
+
+      if(unansweredCount)unansweredCount.textContent=rows.length+(rows.length===1?' waiting':' waiting');
+
+      rows.forEach(({record,startMs})=>{
+        const card=document.createElement('article');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const business=hstBusinessHoursBetween(startMs);
+        const overdue=business>=4;
+        card.append(
+          text('p','text-[.54rem] font-black uppercase tracking-[.1em] '+(overdue?'text-red-700':'text-[var(--koa-clay)]'),overdue?'Response SLA due':'Waiting for first response'),
+          text('h3','mt-2 text-base font-semibold text-[var(--koa-forest)]',record.customer?.name||'Client name TBD'),
+          text('p','mt-1 text-xs leading-5 text-[var(--koa-ink)]/50',[record.customer?.eventDate,packageLabel(recordPackage(record)),record.customer?.email].filter(Boolean).join(' · ')),
+          text('p','mt-3 text-xs font-bold '+(overdue?'text-red-700':'text-[var(--koa-ink)]/60'),waitingLabel(startMs))
+        );
+
+        appendCommunicationStatus(card,record);
+
+        const actions=document.createElement('div');
+        actions.className='mt-4 flex flex-wrap gap-2';
+        const small='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+        if(record.customer?.email) actions.append(actionButton('Email',small,()=>logAndOpen(record,'email','mailto:'+encodeURIComponent(record.customer.email))));
+        if(record.customer?.phone) actions.append(actionButton('Call',small,()=>logAndOpen(record,'call','tel:'+String(record.customer.phone).replace(/[^+\d]/g,''))));
+        actions.append(actionButton('Mark responded','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white',()=>markResponded(record)));
+        actions.append(actionButton('Activity',small,()=>openActivity(record)));
+        card.appendChild(actions);
+        unansweredLeads.appendChild(card);
+      });
+
+      if(!rows.length) unansweredLeads.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','Every active inquiry and lead has a response logged.'));
     }
 
     function renderWorkQueue() {
@@ -1477,7 +1569,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderQuotes();renderTrash();
+      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
