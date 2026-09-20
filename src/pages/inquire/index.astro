@@ -360,6 +360,12 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 
         form.dataset.crmCaptured = '1';
         form.querySelector('[name="cf-turnstile-response"]')?.remove();
+
+        if (payload?.notificationConfigured || payload?.deduplicated) {
+          window.location.assign('/thank-you/');
+          return;
+        }
+
         form.submit();
       } catch (error) {
         form.dataset.submitting = '0';
