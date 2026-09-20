@@ -44,11 +44,11 @@ function idSuffix() {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-async function verifyTurnstile(req: Request, token: unknown) {
-  const secret = String(process.env.TURNSTILE_SECRET_KEY || '').trim();
+async function verifyTurnstile(req: Request, token: unknown, expectedAction: string) {
+  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
   if (!secret) return { ok: true, configured: false };
 
-  const responseToken = cleanText(token, 4096);
+  const responseToken = cleanText(token, 2048);
   if (!responseToken) return { ok: false, configured: true, error: 'Complete the security check and try again.' };
 
   const remoteIp =
@@ -67,12 +67,22 @@ async function verifyTurnstile(req: Request, token: unknown) {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body,
+      signal: AbortSignal.timeout(10_000),
     });
     const data: any = await result.json().catch(() => null);
+    const requestHostname = new URL(req.url).hostname.toLowerCase();
+    const verifiedHostname = cleanText(data?.hostname, 255).toLowerCase();
+    const verifiedAction = cleanText(data?.action, 64);
+
     return {
-      ok: Boolean(result.ok && data?.success),
+      ok: Boolean(
+        result.ok &&
+        data?.success &&
+        verifiedAction === expectedAction &&
+        verifiedHostname === requestHostname
+      ),
       configured: true,
-      error: data?.success ? '' : 'Security verification failed. Please try again.',
+      error: data?.success ? 'Security verification did not match this form. Please try again.' : 'Security verification failed. Please try again.',
       codes: Array.isArray(data?.['error-codes']) ? data['error-codes'] : [],
     };
   } catch {
@@ -140,17 +150,25 @@ export default async (req: Request, context: Context) => {
     return json(req, { ok: true, id: '' });
   }
 
-  const turnstile = await verifyTurnstile(req, payload.turnstileToken);
-  if (!turnstile.ok) {
-    return json(req, {
-      error: turnstile.error || 'Security verification failed.',
-      code: 'turnstile_failed',
-    }, 403);
+  const formName = cleanText(payload.formName, 80);
+  const protectedActions: Record<string, string> = {
+    'koa-event-inquiry': 'event_inquiry',
+    'koa-wedding-inquiry': 'wedding_inquiry',
+  };
+  const expectedTurnstileAction = protectedActions[formName] || '';
+
+  if (expectedTurnstileAction) {
+    const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
+    if (!turnstile.ok) {
+      return json(req, {
+        error: turnstile.error || 'Security verification failed.',
+        code: 'turnstile_failed',
+      }, 403);
+    }
   }
 
   const now = new Date();
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
-  const formName = cleanText(payload.formName, 80);
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
   const store = salesStoreFor(context);
