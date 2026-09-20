@@ -195,7 +195,7 @@ export default async (req: Request, context: Context) => {
   });
 
   if (activeBlock) {
-    await recordSecurityEvent(context, req, {
+    const securityEvent = await recordSecurityEvent(context, req, {
       disposition: 'blocked',
       category: 'blocklist',
       formName,
@@ -208,6 +208,8 @@ export default async (req: Request, context: Context) => {
         ? 'Blocked by a permanent ' + activeBlock.target + ' rule.'
         : 'Blocked until ' + activeBlock.expiresAt + ' by a ' + activeBlock.target + ' rule.',
     });
+    const blockHistory = await getSecurityEvents(context);
+    await applyAutomaticBlocks(context, securityEvent, blockHistory);
     return json(req, {
       error: 'We could not accept this submission.',
       code: 'blocked',
@@ -215,7 +217,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (cleanText(payload.honeypot, 120)) {
-    await recordSecurityEvent(context, req, {
+    const securityEvent = await recordSecurityEvent(context, req, {
       disposition: 'blocked',
       category: 'honeypot',
       formName,
@@ -226,6 +228,8 @@ export default async (req: Request, context: Context) => {
       ...identity,
       detail: 'Submission silently discarded by the honeypot check.',
     });
+    const honeypotHistory = await getSecurityEvents(context);
+    await applyAutomaticBlocks(context, securityEvent, honeypotHistory);
     return json(req, { ok: true, id: '' });
   }
 
@@ -239,7 +243,7 @@ export default async (req: Request, context: Context) => {
   if (expectedTurnstileAction) {
     const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
     if (!turnstile.ok) {
-      await recordSecurityEvent(context, req, {
+      const securityEvent = await recordSecurityEvent(context, req, {
         disposition: 'blocked',
         category: 'turnstile_failed',
         formName,
@@ -250,6 +254,8 @@ export default async (req: Request, context: Context) => {
         ...identity,
         detail: 'Rejected before CRM storage.',
       });
+      const turnstileHistory = await getSecurityEvents(context);
+      await applyAutomaticBlocks(context, securityEvent, turnstileHistory);
       return json(req, {
         error: turnstile.error || 'Security verification failed.',
         code: 'turnstile_failed',
