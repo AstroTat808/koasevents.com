@@ -1,0 +1,101 @@
+name: Turnstile production security smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/turnstile-security-smoke.yml'
+      - 'src/pages/inquire/index.astro'
+      - 'src/pages/wedding-inquiry/index.astro'
+      - 'netlify/functions/crm-inquiries.mts'
+      - 'netlify/edge-functions/verify-form-turnstile.mts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  security-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify live Turnstile protection
+        shell: python
+        run: |
+          import json
+          import urllib.parse
+          import urllib.request
+          from urllib.error import HTTPError
+
+          base = "https://koasevents.com"
+
+          def request(path, method="GET", data=None, headers=None):
+              req = urllib.request.Request(
+                  base + path,
+                  data=data,
+                  method=method,
+                  headers={"User-Agent": "KoaEvents-Turnstile-QA/1.0", **(headers or {})},
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      return response.status, response.read().decode("utf-8", "replace")
+              except HTTPError as exc:
+                  return exc.code, exc.read().decode("utf-8", "replace")
+
+          checks = []
+
+          for path, action in [
+              ("/inquire/", "event_inquiry"),
+              ("/wedding-inquiry/", "wedding_inquiry"),
+          ]:
+              status, body = request(path)
+              ok = (
+                  status == 200
+                  and "cf-turnstile" in body
+                  and "challenges.cloudflare.com/turnstile/v0/api.js" in body
+                  and f'data-action="{action}"' in body
+              )
+              checks.append((f"widget {path}", ok, status, body[:250]))
+
+          for token_name, token in [("missing", ""), ("invalid", "not-a-valid-turnstile-token")]:
+              payload = {
+                  "formName": "koa-event-inquiry",
+                  "customer": {"email": "qa-turnstile@example.com"},
+                  "inquiry": {"service": "venue", "eventType": "QA"},
+              }
+              if token:
+                  payload["turnstileToken"] = token
+              status, body = request(
+                  "/api/crm/inquiries",
+                  method="POST",
+                  data=json.dumps(payload).encode(),
+                  headers={
+                      "Content-Type": "application/json",
+                      "X-Koa-Inquiry-Capture": "1",
+                  },
+              )
+              ok = status == 403 and "turnstile_failed" in body
+              checks.append((f"CRM {token_name} token blocked", ok, status, body[:250]))
+
+          for path, form_name in [
+              ("/thank-you/", "koa-event-inquiry"),
+              ("/wedding-inquiry-thank-you/", "koa-wedding-inquiry"),
+          ]:
+              body = urllib.parse.urlencode(
+                  {"form-name": form_name, "email": "qa-turnstile@example.com"}
+              ).encode()
+              status, response = request(
+                  path,
+                  method="POST",
+                  data=body,
+                  headers={"Content-Type": "application/x-www-form-urlencoded"},
+              )
+              ok = status == 403 and "Security verification failed" in response
+              checks.append((f"direct POST {path} blocked", ok, status, response[:250]))
+
+          for name, ok, status, detail in checks:
+              print(f"{'PASS' if ok else 'FAIL'} | {name} | HTTP {status} | {detail!r}")
+
+          failures = [name for name, ok, *_ in checks if not ok]
+          if failures:
+              raise SystemExit("Failed checks: " + ", ".join(failures))
