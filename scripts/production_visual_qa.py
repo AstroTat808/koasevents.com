@@ -156,12 +156,20 @@ def smoke_mode():
 
 def wait_mode(seconds=600):
  deadline=time.time()+seconds
+ last={}
  while time.time()<deadline:
-  status,_,body=get("/signature-wedding/",20)
-  if status==200 and b"Signature Wedding" in body:
-   print(json.dumps({"ready":True,"baseUrl":BASE,"status":status},indent=2));return 0
+  page_status,_,body=get("/signature-wedding/",20)
+  crm_status,_,_=get("/api/crm/inquiries",20)
+  admin_status,_,_=get("/api/admin/security?days=1",20)
+  last={"page":page_status,"crm":crm_status,"adminSecurity":admin_status}
+  if (
+   page_status==200 and b"Signature Wedding" in body
+   and crm_status==405
+   and admin_status==401
+  ):
+   print(json.dumps({"ready":True,"baseUrl":BASE,"status":last},indent=2));return 0
   time.sleep(10)
- print(json.dumps({"ready":False,"baseUrl":BASE},indent=2));return 1
+ print(json.dumps({"ready":False,"baseUrl":BASE,"status":last},indent=2));return 1
 
 DOM=r"""() => {
  const vis=e=>{if(e.closest('details:not([open])'))return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0};
