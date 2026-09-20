@@ -73,6 +73,10 @@ type BookingState = {
 type ProfitModel = {
   costMode: 'auto' | 'manual';
   bartenderWageRate: number;
+  iceCost: number;
+  mixersCost: number;
+  garnishesCost: number;
+  cupsCost: number;
   suppliesCost: number;
   travelCost: number;
   addOnCost: number;
@@ -697,6 +701,10 @@ function sanitizeProfitModel(input: any, current?: ProfitModel): ProfitModel {
   return {
     costMode,
     bartenderWageRate: finite(input?.bartenderWageRate ?? current?.bartenderWageRate ?? 40, 0, 500),
+    iceCost: finite(input?.iceCost ?? current?.iceCost ?? 0),
+    mixersCost: finite(input?.mixersCost ?? current?.mixersCost ?? 0),
+    garnishesCost: finite(input?.garnishesCost ?? current?.garnishesCost ?? 0),
+    cupsCost: finite(input?.cupsCost ?? current?.cupsCost ?? 0),
     suppliesCost: finite(input?.suppliesCost ?? current?.suppliesCost ?? 0),
     travelCost: finite(input?.travelCost ?? current?.travelCost ?? 0),
     addOnCost: finite(input?.addOnCost ?? current?.addOnCost ?? 0),
