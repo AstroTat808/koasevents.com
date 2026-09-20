@@ -101,6 +101,26 @@ function tokenEndpoint() {
   return 'https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer';
 }
 
+function revokeEndpoint() {
+  return 'https://developer.api.intuit.com/v2/oauth2/tokens/revoke';
+}
+
+async function revokeToken(token: string) {
+  const response = await fetch(revokeEndpoint(), {
+    method: 'POST',
+    headers: {
+      Authorization: basicAuthorization(),
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  });
+  if (!response.ok) {
+    const data: any = await response.json().catch(() => ({}));
+    throw new Error(data.error_description || data.error || 'QuickBooks token revocation failed.');
+  }
+}
+
 function accountingBase() {
   return config().environment === 'sandbox'
     ? 'https://sandbox-quickbooks.api.intuit.com'
@@ -154,7 +174,13 @@ export async function getQuickBooksConnection(context: Context) {
 }
 
 export async function disconnectQuickBooks(context: Context) {
-  await integrationStore(context).delete('quickbooks/connection');
+  const store = integrationStore(context);
+  const connection = await getQuickBooksConnection(context);
+  if (!connection) return;
+
+  const tokens = await decryptTokens(connection);
+  await revokeToken(tokens.refreshToken || tokens.accessToken);
+  await store.delete('quickbooks/connection');
 }
 
 export async function getQuickBooksSettings(context: Context) {
@@ -175,7 +201,7 @@ export async function saveQuickBooksSettings(context: Context, settings: { servi
 
 export async function createOAuthState(context: Context, requestUrl: string) {
   const c = config();
-  if (!c.clientId || !c.clientSecret || !c.encryptionKey) {
+  if (!c.clientId || !c.clientSecret) {
     throw new Error('QuickBooks environment variables are not configured.');
   }
   const bytes = new Uint8Array(24);
