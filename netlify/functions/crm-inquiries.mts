@@ -2,6 +2,8 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
   analyzeInquirySecurity,
+  applyAutomaticBlocks,
+  findActiveBlock,
   getSecurityEvents,
   ipFingerprint,
   recordSecurityEvent,
@@ -184,7 +186,33 @@ export default async (req: Request, context: Context) => {
 
   const formName = cleanText(payload.formName, 80);
   const sourceFingerprint = await ipFingerprint(req);
-  const identity = securityIdentity(payload);
+  const identity = await securityIdentity(payload);
+
+  const activeBlock = await findActiveBlock(context, {
+    networkFingerprint: sourceFingerprint,
+    emailFingerprint: identity.emailFingerprint,
+    emailDomain: identity.emailDomain,
+  });
+
+  if (activeBlock) {
+    await recordSecurityEvent(context, req, {
+      disposition: 'blocked',
+      category: 'blocklist',
+      formName,
+      reasons: ['Submission matched an active ' + activeBlock.target + ' blocklist entry'],
+      reasonCodes: ['blocklist_' + activeBlock.target],
+      riskScore: 100,
+      ipFingerprint: sourceFingerprint,
+      ...identity,
+      detail: activeBlock.permanent
+        ? 'Blocked by a permanent ' + activeBlock.target + ' rule.'
+        : 'Blocked until ' + activeBlock.expiresAt + ' by a ' + activeBlock.target + ' rule.',
+    });
+    return json(req, {
+      error: 'We could not accept this submission.',
+      code: 'blocked',
+    }, 403);
+  }
 
   if (cleanText(payload.honeypot, 120)) {
     await recordSecurityEvent(context, req, {
@@ -233,7 +261,7 @@ export default async (req: Request, context: Context) => {
   const security = await analyzeInquirySecurity(payload, recentSecurityEvents.slice(0, 2500), sourceFingerprint);
 
   if (security.velocityBlocked) {
-    await recordSecurityEvent(context, req, {
+    const securityEvent = await recordSecurityEvent(context, req, {
       disposition: 'blocked',
       category: 'rate_limited',
       formName,
@@ -245,6 +273,7 @@ export default async (req: Request, context: Context) => {
       ...identity,
       detail: 'Verified visitor exceeded the application-level inquiry velocity limit.',
     });
+    await applyAutomaticBlocks(context, securityEvent, [securityEvent, ...recentSecurityEvents]);
     return json(req, {
       error: 'Too many inquiries have been submitted from this network. Please try again later.',
       code: 'rate_limited',
@@ -252,7 +281,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (security.disposition === 'blocked') {
-    await recordSecurityEvent(context, req, {
+    const securityEvent = await recordSecurityEvent(context, req, {
       disposition: 'blocked',
       category: 'inquiry_screened',
       formName,
@@ -264,6 +293,7 @@ export default async (req: Request, context: Context) => {
       ...identity,
       detail: 'Submission blocked by the Koa’s inquiry risk screen.',
     });
+    await applyAutomaticBlocks(context, securityEvent, [securityEvent, ...recentSecurityEvents]);
     return json(req, {
       error: 'We could not accept this submission. Please review the information and try again.',
       code: 'submission_blocked',
