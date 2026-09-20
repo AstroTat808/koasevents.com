@@ -323,7 +323,10 @@ def findings(dom,console,page_errors,request_failed,asset_failed):
  f=[]
  filtered_page_errors=[
   message for message in page_errors
-  if not ("challenges.cloudflare.com" in message and "accessing a frame with origin" in message)
+  if not (
+   ("challenges.cloudflare.com" in message and "accessing a frame with origin" in message)
+   or ("deploy-preview-" in BASE and message.strip()=="[Cloudflare Turnstile] Error: 110200.")
+  )
  ]
  if filtered_page_errors:f.append(Finding("page-error","critical","JavaScript page errors detected",filtered_page_errors[:10]))
  if console:f.append(Finding("console-error","warning","Console errors detected",console[:10]))
