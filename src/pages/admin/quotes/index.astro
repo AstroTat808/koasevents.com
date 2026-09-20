@@ -73,7 +73,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Follow-ups due</p><strong data-mobile-stat-followups class="display mt-2 block text-3xl">0</strong></article>
             <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Estimate value</p><strong data-mobile-stat-value class="display mt-2 block text-3xl">$0</strong></article>
             <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Avg. estimate</p><strong data-mobile-stat-average class="display mt-2 block text-3xl">$0</strong></article>
-            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Custom add-ons</p><strong data-mobile-stat-custom class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Enhancements</p><strong data-mobile-stat-custom class="display mt-2 block text-3xl">0</strong></article>
           </div>
 
           <div class="mt-6 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
@@ -874,7 +874,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ].filter(Boolean).join(' · ');
           if(serviceMeta) article.appendChild(text('p','mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50',serviceMeta));
           if(Array.isArray(record.inquiry.customAddOns) && record.inquiry.customAddOns.length) {
-            article.appendChild(text('p','mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50','Custom add-ons · '+record.inquiry.customAddOns.join(', ')));
+            article.appendChild(text('p','mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50','Enhancements · '+record.inquiry.customAddOns.join(', ')));
           }
           if(Array.isArray(record.inquiry.estimateLineItems) && record.inquiry.estimateLineItems.length) {
             const breakdown=document.createElement('details');breakdown.className='mt-3 rounded-xl bg-[var(--koa-sand)] p-3';
@@ -1457,7 +1457,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const head=document.createElement('div');head.className='flex items-center justify-between gap-3';
         head.append(text('span','text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Website calculator'),text('strong','display text-2xl text-[var(--koa-forest)]',money(record.inquiry.estimatedTotal)));
         estimate.appendChild(head);
-        const meta=[record.inquiry.serviceHours?record.inquiry.serviceHours+' hr':'',record.inquiry.bartenderCount?record.inquiry.bartenderCount+' bartenders':'',record.inquiry.oneWayMiles?record.inquiry.oneWayMiles+' mi one-way':'',record.inquiry.glasswareCount?record.inquiry.glasswareCount+' glassware':''].filter(Boolean).join(' · ');
+        const meta=[record.inquiry.serviceHours?record.inquiry.serviceHours+' hr':'',record.inquiry.bartenderCount?record.inquiry.bartenderCount+' bartenders':'',record.inquiry.oneWayMiles?record.inquiry.oneWayMiles+' mi one-way':'',record.inquiry.glasswareCount?record.inquiry.glasswareCount+' '+(record.inquiry.glasswareType==='premium'?'premium':'standard')+' glassware':''].filter(Boolean).join(' · ');
         if(meta) estimate.appendChild(text('p','mt-2 text-[.66rem] leading-5 text-[var(--koa-ink)]/52',meta));
         if(Array.isArray(record.inquiry.customAddOns)&&record.inquiry.customAddOns.length) estimate.appendChild(text('p','mt-2 text-[.66rem] font-semibold text-[var(--koa-clay)]','Custom add-ons · '+record.inquiry.customAddOns.join(', ')));
         if(Array.isArray(record.inquiry.estimateLineItems)&&record.inquiry.estimateLineItems.length){
