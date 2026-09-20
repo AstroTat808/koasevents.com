@@ -2,6 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout noindex title="Your Koa’s Wedding Journey Starts Here" description="Next steps after submitting a wedding inquiry to Koa’s Events." canonical="https://www.koasevents.com/wedding-inquiry-thank-you/">
 <Header overlay={false}/>
@@ -16,31 +17,108 @@ import Footer from '../../components/Footer.astro';
 <form name="koa-discovery-call-request" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]" data-discovery-form><input type="hidden" name="form-name" value="koa-discovery-call-request"/>
           <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Discovery Call Request" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p>
           <div class="mb-5 hidden rounded-xl border border-[var(--koa-forest)]/15 bg-[var(--koa-sand)] p-4" data-carried-contact><p class="eyebrow text-[var(--koa-clay)]">Carried forward</p><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">We filled in the contact details from your wedding inquiry.</p></div>
-          <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required autocomplete="name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="email" type="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Best day<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="preferredDate" required/></label><label class="grid gap-2 text-sm font-semibold">Best time window<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="preferredTime" required><option value="">Choose one</option><option>Morning</option><option>Midday</option><option>Afternoon</option><option>Evening</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Alternate day/time<textarea class="min-h-24 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="alternateWindow" placeholder="Give us another window that works for you."></textarea></label><button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Request discovery call</button></div></form></div></section>
+          <div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required autocomplete="name"/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="email" type="email" required autocomplete="email"/></label><label class="grid gap-2 text-sm font-semibold">Best day<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="preferredDate" required/></label><label class="grid gap-2 text-sm font-semibold">Best time window<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="preferredTime" required><option value="">Choose one</option><option>Morning</option><option>Midday</option><option>Afternoon</option><option>Evening</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Alternate day/time<textarea class="min-h-24 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="alternateWindow" placeholder="Give us another window that works for you."></textarea></label>
+          {turnstileSiteKey && (
+            <div class="sm:col-span-2 rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+              <div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-action="discovery_call" data-theme="light" data-size="flexible"></div>
+            </div>
+          )}
+          <p class="hidden sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert" data-submit-error></p>
+          <button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white disabled:cursor-not-allowed disabled:opacity-60" type="submit">Request discovery call</button></div></form></div></section>
 </main><Footer/>
-<script>
+{turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+<script is:inline define:vars={{ turnstileSiteKey }}>
   const discoveryForm = document.querySelector('[data-discovery-form]');
   const carriedContact = document.querySelector('[data-carried-contact]');
-  discoveryForm?.addEventListener('submit', (event) => {
-    if (discoveryForm.dataset.submitting === '1') {
-      event.preventDefault();
+  let carried = null;
+
+  try {
+    carried = JSON.parse(sessionStorage.getItem('koaWeddingContact') || 'null');
+    if (carried && discoveryForm) {
+      if (carried.name) discoveryForm.elements.name.value = carried.name;
+      if (carried.email) discoveryForm.elements.email.value = carried.email;
+      carriedContact?.classList.remove('hidden');
+    }
+  } catch {}
+
+  discoveryForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (discoveryForm.dataset.submitting === '1') return;
+
+    const submitButton = discoveryForm.querySelector('button[type="submit"]');
+    const errorBox = discoveryForm.querySelector('[data-submit-error]');
+    const data = new FormData(discoveryForm);
+    const turnstileToken = String(data.get('cf-turnstile-response') || '');
+
+    if (turnstileSiteKey && !turnstileToken) {
+      if (errorBox) {
+        errorBox.textContent = 'Complete the security check before requesting your discovery call.';
+        errorBox.classList.remove('hidden');
+      }
       return;
     }
+
     discoveryForm.dataset.submitting = '1';
-    const submitButton = discoveryForm.querySelector('button[type="submit"]');
     if (submitButton) {
       submitButton.disabled = true;
       submitButton.textContent = 'Sending…';
     }
-  });
+    if (errorBox) errorBox.classList.add('hidden');
 
-  try {
-    const contact = JSON.parse(sessionStorage.getItem('koaWeddingContact') || 'null');
-    if (contact && discoveryForm) {
-      if (contact.name) discoveryForm.elements.name.value = contact.name;
-      if (contact.email) discoveryForm.elements.email.value = contact.email;
-      carriedContact?.classList.remove('hidden');
+    let sourceRecordId = '';
+    try { sourceRecordId = sessionStorage.getItem('koaWeddingRecordId') || ''; } catch {}
+
+    try {
+      const response = await fetch('/api/crm/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
+        body: JSON.stringify({
+          formName: 'koa-discovery-call-request',
+          honeypot: data.get('bot-field'),
+          turnstileToken,
+          customer: {
+            name: data.get('name'),
+            email: data.get('email'),
+            phone: carried?.phone || '',
+            eventDate: data.get('preferredDate'),
+            notes: data.get('alternateWindow'),
+          },
+          inquiry: {
+            service: 'discovery-call',
+            eventType: 'Discovery Call',
+            preferredDate: data.get('preferredDate'),
+            preferredTime: data.get('preferredTime'),
+            alternateWindow: data.get('alternateWindow'),
+            sourceRecordId,
+          },
+        }),
+        keepalive: true,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || 'We could not save your discovery-call request. Please try again.');
+      }
+
+      discoveryForm.querySelector('[name="cf-turnstile-response"]')?.remove();
+
+      if (payload?.notificationConfigured) {
+        window.location.assign('/thank-you/');
+        return;
+      }
+
+      discoveryForm.submit();
+    } catch (error) {
+      discoveryForm.dataset.submitting = '0';
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.textContent = 'Request discovery call';
+      }
+      if (errorBox) {
+        errorBox.textContent = error instanceof Error ? error.message : 'We could not save your discovery-call request. Please try again.';
+        errorBox.classList.remove('hidden');
+      }
+      if (window.turnstile?.reset) window.turnstile.reset();
     }
-  } catch {}
+  });
 </script>
 </BaseLayout>
