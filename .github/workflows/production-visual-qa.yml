@@ -32,7 +32,7 @@ on:
       base_url:
         description: 'URL to audit'
         required: false
-        default: 'https://koasevents.netlify.app'
+        default: 'https://koasevents.com'
 
 concurrency:
   group: koa-production-visual-qa-${{ github.workflow }}-${{ github.ref }}
@@ -42,7 +42,7 @@ permissions:
   contents: read
 
 env:
-  PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.netlify.app' }}
+  PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.com' }}
   VISUAL_RESULTS: visual-results
 
 jobs:
