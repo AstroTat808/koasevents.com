@@ -440,6 +440,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return result;
     }
 
+    async function deleteCrmRecord(record) {
+      if(!['inquiry','lead'].includes(record.kind) || ['proposal','booked'].includes(record.stage)) return;
+      const name=record.customer?.name || record.id;
+      if(!confirm('Delete '+record.kind+' '+name+' from the CRM?\n\nThis permanently removes the CRM record. Proposals and booked records are protected.')) return;
+      if(!confirm('Confirm permanent deletion of '+record.id+'?')) return;
+      try {
+        if(message) message.textContent='Deleting '+record.id+'…';
+        await api({action:'delete-record',recordId:record.id});
+        await load(String(searchInput?.value||'').trim());
+        if(message) message.textContent='Deleted '+record.id+'.';
+      } catch(error) {
+        if(message) message.textContent=error?.message || 'Unable to delete CRM record.';
+      }
+    }
+
     async function qboApi(body) {
       const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const result=await response.json().catch(()=>({}));
@@ -647,6 +662,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(plan.run && record.stage!=='booked') actions.append(actionButton(plan.label,primary,plan.run));
       if(record.kind==='proposal' && record.proposal?.status!=='draft' && record.proposal?.publicToken) {
         const link=document.createElement('a'); link.className=small; link.target='_blank'; link.rel='noreferrer'; link.href='/proposal/?token='+encodeURIComponent(record.proposal.publicToken); link.textContent='Client view'; actions.appendChild(link);
+      }
+      if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       addQuickLinks(actions,record,small);
       article.appendChild(actions);
@@ -894,6 +912,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const plan=workflowPlan(record);
       if(plan.run && record.stage!=='booked') actions.append(actionButton(plan.label,primary,plan.run));
       if(record.kind==='proposal') actions.append(actionButton('Proposal',small,()=>openProposal(record)));
+      if(['inquiry','lead'].includes(record.kind) && !['proposal','booked'].includes(record.stage)) {
+        actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
+      }
       addQuickLinks(actions,record,small);
       article.appendChild(actions);
       return article;
