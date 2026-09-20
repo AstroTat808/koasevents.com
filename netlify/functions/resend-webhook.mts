@@ -117,24 +117,10 @@ export default async (req: Request, context: Context) => {
   const emailId = String(payload?.data?.email_id || payload?.data?.id || '').trim();
   if (!emailId) return new Response(null, { status: 204 });
 
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
-  if (!apiKey) return new Response('Email integration unavailable', { status: 503 });
-
-  let email: any;
-  try {
-    const response = await fetch('https://api.resend.com/emails/' + encodeURIComponent(emailId), {
-      headers: { Authorization: 'Bearer ' + apiKey },
-      signal: AbortSignal.timeout(10_000),
-    });
-    if (!response.ok) {
-      return new Response(null, { status: response.status >= 500 ? 503 : 204 });
-    }
-    email = await response.json();
-  } catch {
-    return new Response('Email verification unavailable', { status: 503 });
-  }
-
-  const status = normalizeStatus(email?.last_event || email?.status || payload?.type);
+  // The payload is authoritative only after Svix signature verification above.
+  // Using the signed event type also keeps this endpoint compatible with a
+  // sending-only Resend API key.
+  const status = normalizeStatus(payload?.type);
   if (!status) return new Response(null, { status: 204 });
 
   const store = getStore({ name: 'koa-sales', consistency: 'strong' });
