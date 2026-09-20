@@ -9,6 +9,12 @@
 # Approved administrators are restricted to the allowlist in netlify/functions/_shared/admin.ts.
 
 
+
+[[redirects]]
+  from = "/guest-suites"
+  to = "/stay/"
+  status = 301
+
 [[redirects]]
   from = "/events"
   to = "/weddings/"
