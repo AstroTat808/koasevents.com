@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Koa’s Sales CRM" description="Manage Koa’s Events inquiries, quotes, leads, proposals and bookings." canonical="https://www.koasevents.com/admin/quotes/">
+<BaseLayout noindex title="Koa’s Sales CRM" description="Manage Koa’s Events inquiries, quotes, leads, proposals and bookings." canonical="https://koasevents.com/admin/quotes/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -186,6 +186,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-booked-dashboard class="mt-6 grid gap-4 lg:grid-cols-2"></div>
         </section>
 
+        <section class="rounded-[1.5rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Google reviews</p>
+              <h2 class="display mt-3 text-4xl">Post-event review request dashboard</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-white/62">Uses the same automation rules as the sender: one request per booked proposal, scheduled one day after the event, with a 14-day eligibility window.</p>
+            </div>
+            <p class="max-w-md text-xs leading-5 text-white/45">Delivery status comes from Resend. Bounces and failures stay visible here so they can be handled instead of silently disappearing.</p>
+          </div>
+
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Upcoming</p><strong data-review-stat-upcoming class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Eligible now</p><strong data-review-stat-eligible class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Delivered</p><strong data-review-stat-delivered class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-red-200/20 bg-red-950/20 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-100/70">Needs attention</p><strong data-review-stat-failed class="display mt-2 block text-3xl">0</strong></article>
+          </div>
+
+          <div class="mt-6 grid gap-4 xl:grid-cols-2">
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Upcoming</p><h3 class="display mt-2 text-3xl">Scheduled after future events</h3></div>
+              <div data-review-upcoming class="mt-5 grid gap-3"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-[var(--koa-amber-light)]/20 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]">Eligible now</p><h3 class="display mt-2 text-3xl">Past clients still waiting for a request</h3></div>
+              <div data-review-eligible class="mt-5 grid gap-3"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-emerald-200/15 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-emerald-100/70">Delivered</p><h3 class="display mt-2 text-3xl">Review requests successfully delivered</h3></div>
+              <div data-review-delivered class="mt-5 grid gap-3"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-red-200/15 bg-red-950/10 p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-100/70">Needs attention</p><h3 class="display mt-2 text-3xl">Failed or bounced review emails</h3></div>
+              <div data-review-failed class="mt-5 grid gap-3"></div>
+            </section>
+          </div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div><p class="eyebrow text-[var(--koa-clay)]">Saved configurations</p><h2 class="display mt-3 text-4xl">Quote builder snapshots</h2></div>
           <div data-quote-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
@@ -348,6 +385,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const unansweredCount = document.querySelector('[data-unanswered-count]');
     const quoteList = document.querySelector('[data-quote-list]');
     const bookedDashboard = document.querySelector('[data-booked-dashboard]');
+    const reviewUpcoming = document.querySelector('[data-review-upcoming]');
+    const reviewEligible = document.querySelector('[data-review-eligible]');
+    const reviewDelivered = document.querySelector('[data-review-delivered]');
+    const reviewFailed = document.querySelector('[data-review-failed]');
+    const reviewStatUpcoming = document.querySelector('[data-review-stat-upcoming]');
+    const reviewStatEligible = document.querySelector('[data-review-stat-eligible]');
+    const reviewStatDelivered = document.querySelector('[data-review-stat-delivered]');
+    const reviewStatFailed = document.querySelector('[data-review-stat-failed]');
     const funnelBody = document.querySelector('[data-funnel]');
     const message = document.querySelector('[data-message]');
     const selectedCount = document.querySelector('[data-selected-count]');
@@ -997,6 +1042,102 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length) lostList.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No lost inquiries or leads.'));
     }
 
+    function hawaiiToday() {
+      const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      const values=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
+      return values.year+'-'+values.month+'-'+values.day;
+    }
+
+    function dayNumber(value) {
+      const raw=String(value||'').slice(0,10);
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;
+      const stamp=Date.parse(raw+'T00:00:00Z');
+      return Number.isFinite(stamp)?Math.floor(stamp/86400000):null;
+    }
+
+    function reviewAgeDays(eventDate) {
+      const eventDay=dayNumber(eventDate);
+      const today=dayNumber(hawaiiToday());
+      return eventDay===null||today===null?null:today-eventDay;
+    }
+
+    function reviewScheduledDate(eventDate) {
+      const day=dayNumber(eventDate);
+      if(day===null)return '';
+      return new Date((day+1)*86400000).toISOString().slice(0,10);
+    }
+
+    function reviewStatus(record) {
+      return String(record?.communications?.reviewRequest?.status||'').toLowerCase();
+    }
+
+    function reviewCard(record,mode) {
+      const status=reviewStatus(record);
+      const card=document.createElement('article');
+      card.className='rounded-xl border border-white/10 bg-black/10 p-4';
+      const title=record.customer?.name||'Client name TBD';
+      const eventDate=record.customer?.eventDate||'';
+      const scheduled=reviewScheduledDate(eventDate);
+      const meta=[eventDate?'Event '+eventDate:'Date TBD',packageLabel(recordPackage(record)),record.customer?.email||''].filter(Boolean).join(' · ');
+      card.append(
+        text('h4','font-semibold text-white',title),
+        text('p','mt-1 text-xs leading-5 text-white/52',meta)
+      );
+
+      let detail='';
+      if(mode==='upcoming') detail=scheduled?'Scheduled review request: '+scheduled:'Scheduled after event';
+      else if(mode==='eligible') detail='Eligible now · next automation run can send this request';
+      else if(mode==='delivered') detail='Delivered'+(record.communications?.reviewRequest?.updatedAt?' · '+dateTime(record.communications.reviewRequest.updatedAt):'');
+      else detail=(status==='bounced'?'Bounced':'Failed')+(record.communications?.reviewRequest?.updatedAt?' · '+dateTime(record.communications.reviewRequest.updatedAt):'');
+
+      card.appendChild(text('p','mt-3 text-xs font-bold '+(mode==='failed'?'text-red-100':'text-[var(--koa-amber-light)]'),detail));
+
+      const actions=document.createElement('div');actions.className='mt-3 flex flex-wrap gap-2';
+      const link=document.createElement('a');link.href='/admin/events/?record='+encodeURIComponent(record.id);link.className='rounded-full border border-white/15 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white';link.textContent='Event Ops';actions.appendChild(link);
+      if(record.customer?.email){
+        const mail=document.createElement('a');mail.href='mailto:'+encodeURIComponent(record.customer.email);mail.className='rounded-full border border-white/15 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white';mail.textContent='Email client';actions.appendChild(mail);
+      }
+      card.appendChild(actions);
+      return card;
+    }
+
+    function renderReviewBucket(container,rows,mode,emptyCopy) {
+      if(!container)return;
+      container.innerHTML='';
+      rows.slice(0,25).forEach((record)=>container.appendChild(reviewCard(record,mode)));
+      if(!rows.length)container.appendChild(text('p','text-sm text-white/45',emptyCopy));
+      if(rows.length>25)container.appendChild(text('p','text-xs text-white/40','Showing 25 of '+rows.length+' records.'));
+    }
+
+    function renderReviewDashboard() {
+      const booked=(payload.records||[]).filter((record)=>record.stage==='booked'&&record.kind==='proposal'&&record.customer?.email&&record.customer?.eventDate);
+      const upcoming=booked.filter((record)=>{
+        const age=reviewAgeDays(record.customer.eventDate);
+        return age!==null&&age<1&&!reviewStatus(record);
+      }).sort((a,b)=>String(a.customer?.eventDate||'').localeCompare(String(b.customer?.eventDate||'')));
+
+      const eligible=booked.filter((record)=>{
+        const age=reviewAgeDays(record.customer.eventDate);
+        return age!==null&&age>=1&&age<=14&&!reviewStatus(record);
+      }).sort((a,b)=>String(a.customer?.eventDate||'').localeCompare(String(b.customer?.eventDate||'')));
+
+      const delivered=booked.filter((record)=>reviewStatus(record)==='delivered')
+        .sort((a,b)=>String(b.communications?.reviewRequest?.updatedAt||'').localeCompare(String(a.communications?.reviewRequest?.updatedAt||'')));
+
+      const failed=booked.filter((record)=>['failed','bounced'].includes(reviewStatus(record)))
+        .sort((a,b)=>String(b.communications?.reviewRequest?.updatedAt||'').localeCompare(String(a.communications?.reviewRequest?.updatedAt||'')));
+
+      if(reviewStatUpcoming)reviewStatUpcoming.textContent=String(upcoming.length);
+      if(reviewStatEligible)reviewStatEligible.textContent=String(eligible.length);
+      if(reviewStatDelivered)reviewStatDelivered.textContent=String(delivered.length);
+      if(reviewStatFailed)reviewStatFailed.textContent=String(failed.length);
+
+      renderReviewBucket(reviewUpcoming,upcoming,'upcoming','No future booked events are waiting for review scheduling.');
+      renderReviewBucket(reviewEligible,eligible,'eligible','No past clients are currently waiting for a review request.');
+      renderReviewBucket(reviewDelivered,delivered,'delivered','No delivered review requests yet.');
+      renderReviewBucket(reviewFailed,failed,'failed','No failed or bounced review requests.');
+    }
+
     function renderBookedDashboard() {
       if(!bookedDashboard)return;
       bookedDashboard.innerHTML='';
@@ -1571,7 +1712,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderQuotes();renderTrash();
+      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
