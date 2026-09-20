@@ -1,7 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /admin/
-Disallow: /thank-you/
-Disallow: /wedding-inquiry-thank-you/
 
-Sitemap: https://www.koasevents.com/sitemap.xml
+Sitemap: https://koasevents.com/sitemap.xml
