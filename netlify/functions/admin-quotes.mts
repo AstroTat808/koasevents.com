@@ -678,6 +678,137 @@ function funnelAnalytics(events: any[], records: SalesRecord[]) {
   });
 }
 
+
+function mobileBarAnalytics(records: SalesRecord[]) {
+  const mobile = records.filter((record: any) => {
+    const packageId = normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage || record.inquiry?.mobileBarPackage);
+    return packageId.startsWith('mobile-') || record.inquiry?.service === 'mobile-bar';
+  });
+  const active = mobile.filter((record) => !['converted','lost'].includes(record.stage));
+  const inquiries = mobile.filter((record) => record.kind === 'inquiry');
+  const leads = mobile.filter((record) => record.kind === 'lead');
+  const proposals = mobile.filter((record) => record.kind === 'proposal');
+  const booked = mobile.filter((record) => record.stage === 'booked');
+
+  const valueFor = (record: any) => {
+    const proposalTotal = finite(record.proposal?.total);
+    const websiteEstimate = finite(record.inquiry?.estimatedTotal);
+    const base = PACKAGE_PRICES[normalizePackage(record.packageId || record.inquiry?.mobileBarPackage)] || 0;
+    return proposalTotal || websiteEstimate || base;
+  };
+  const bartendersFor = (record: any) => {
+    const selected = Math.round(finite(record.inquiry?.bartenderCount));
+    if (selected > 0) return selected;
+    const guests = Math.max(1, Math.round(finite(record.inquiry?.guestCount)));
+    return Math.max(1, Math.ceil(guests / 75));
+  };
+  const hoursFor = (record: any) => {
+    const selected = finite(record.inquiry?.serviceHours);
+    return selected > 0 ? selected : 4;
+  };
+  const weightFor = (record: any) => {
+    if (record.stage === 'booked') return 1;
+    if (record.kind === 'proposal') {
+      const status = record.proposal?.status || record.status;
+      if (status === 'accepted') return .95;
+      if (status === 'viewed') return .75;
+      if (status === 'sent') return .65;
+      if (status === 'draft') return .50;
+      return .45;
+    }
+    if (record.stage === 'lead') return .30;
+    return .15;
+  };
+  const rate = (numerator: number, denominator: number) => denominator ? Math.min(1, numerator / denominator) : null;
+
+  const today = new Date();
+  const todayKey = today.toISOString().slice(0,10);
+  const monthKeys = Array.from({ length: 6 }, (_, index) => {
+    const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + index, 1));
+    return date.toISOString().slice(0,7);
+  });
+
+  const monthlyForecast = monthKeys.map((month) => {
+    const rows = active.filter((record: any) => String(record.customer?.eventDate || '').slice(0,7) === month);
+    const bookedRevenue = rows.filter((record) => record.stage === 'booked').reduce((sum, record) => sum + valueFor(record), 0);
+    const weightedPipeline = rows.filter((record) => record.stage !== 'booked').reduce((sum, record) => sum + valueFor(record) * weightFor(record), 0);
+    const grossPipeline = rows.reduce((sum, record) => sum + valueFor(record), 0);
+    const bartenderShifts = rows.reduce((sum, record) => sum + bartendersFor(record), 0);
+    const bartenderHours = rows.reduce((sum, record) => sum + bartendersFor(record) * hoursFor(record), 0);
+    return {
+      month,
+      eventCount: rows.length,
+      bookedRevenue: Math.round(bookedRevenue * 100) / 100,
+      weightedPipeline: Math.round(weightedPipeline * 100) / 100,
+      forecastRevenue: Math.round((bookedRevenue + weightedPipeline) * 100) / 100,
+      grossPipeline: Math.round(grossPipeline * 100) / 100,
+      bartenderShifts,
+      bartenderHours: Math.round(bartenderHours * 10) / 10,
+    };
+  });
+
+  const packageIds = ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
+  const packagePopularity = packageIds.map((packageId) => ({
+    packageId,
+    inquiries: inquiries.filter((record: any) => normalizePackage(record.packageId || record.inquiry?.mobileBarPackage) === packageId).length,
+    active: active.filter((record: any) => normalizePackage(record.packageId || record.inquiry?.mobileBarPackage) === packageId).length,
+    booked: booked.filter((record: any) => normalizePackage(record.packageId || record.inquiry?.mobileBarPackage) === packageId).length,
+  })).sort((a,b) => b.inquiries - a.inquiries || b.active - a.active);
+
+  const sourceCounts = new Map<string, number>();
+  inquiries.forEach((record: any) => {
+    const source = cleanText(record.inquiry?.referralSource || record.inquiry?.source || 'Direct / unknown', 120) || 'Direct / unknown';
+    sourceCounts.set(source, (sourceCounts.get(source) || 0) + 1);
+  });
+  const leadSources = [...sourceCounts.entries()]
+    .map(([source,count]) => ({ source,count }))
+    .sort((a,b) => b.count-a.count || a.source.localeCompare(b.source))
+    .slice(0,12);
+
+  const upcomingEvents = active
+    .filter((record: any) => String(record.customer?.eventDate || '') >= todayKey)
+    .sort((a:any,b:any) => String(a.customer?.eventDate || '').localeCompare(String(b.customer?.eventDate || '')))
+    .slice(0,20)
+    .map((record: any) => ({
+      id: record.id,
+      eventDate: record.customer?.eventDate || '',
+      customerName: record.customer?.name || 'Client name TBD',
+      packageId: normalizePackage(record.packageId || record.inquiry?.mobileBarPackage),
+      stage: record.stage,
+      quoteStatus: record.proposal?.status || (record.inquiry?.estimatedTotal ? 'website-estimate' : record.status),
+      value: Math.round(valueFor(record) * 100) / 100,
+      bartenders: bartendersFor(record),
+      serviceHours: hoursFor(record),
+      guestCount: Math.round(finite(record.inquiry?.guestCount)),
+      eventLocation: cleanText(record.inquiry?.eventLocation, 320),
+    }));
+
+  const bookedValues = booked.map(valueFor).filter((value) => value > 0);
+  return {
+    counts: {
+      inquiries: inquiries.length,
+      leads: leads.length,
+      proposals: proposals.length,
+      booked: booked.length,
+      active: active.length,
+    },
+    conversions: {
+      inquiryToLead: rate(leads.length, inquiries.length),
+      leadToProposal: rate(proposals.length, leads.length),
+      proposalToBooked: rate(booked.length, proposals.length),
+      inquiryToBooked: rate(booked.length, inquiries.length),
+    },
+    averageBookingValue: bookedValues.length
+      ? Math.round((bookedValues.reduce((sum,value) => sum + value, 0) / bookedValues.length) * 100) / 100
+      : 0,
+    bookedRevenue: Math.round(bookedValues.reduce((sum,value) => sum + value, 0) * 100) / 100,
+    monthlyForecast,
+    packagePopularity,
+    leadSources,
+    upcomingEvents,
+  };
+}
+
 export default async (req: Request, context: Context) => {
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
@@ -723,6 +854,7 @@ export default async (req: Request, context: Context) => {
       quotes: filteredQuotes.slice(0, 300),
       analytics: quoteAnalytics(allQuotes),
       funnel: funnelAnalytics(events, records),
+      mobileBarAnalytics: mobileBarAnalytics(records),
       conversions,
       reminders,
       records: enrichedRecords,
