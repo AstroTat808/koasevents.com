@@ -346,6 +346,24 @@ export async function createBlocklistEntry(
   });
 }
 
+export async function removeAutomaticBlocksForIncident(context: Context, incidentId: string) {
+  const store = storeFor(context);
+  const id = clean(incidentId, 100);
+  if (!id) return 0;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await store.getWithMetadata('blocklist/index', { type: 'json', consistency: 'strong' });
+    const list = Array.isArray(current?.data) ? current.data as BlocklistEntry[] : [];
+    const next = list.filter((entry) => !(entry.source === 'automatic' && entry.incidentId === id));
+    const removed = list.length - next.length;
+    if (!removed) return 0;
+    const write = await store.setJSON('blocklist/index', next, { onlyIfMatch: current.etag });
+    if (write.modified) return removed;
+  }
+
+  return 0;
+}
+
 export async function removeBlocklistEntry(context: Context, blockId: string) {
   const store = storeFor(context);
   const id = clean(blockId, 100);
