@@ -627,7 +627,7 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
           '<tr><td style="padding:28px 30px;">' +
             '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;">Koa’s lead follow-up reminder</div>' +
             '<div style="padding-top:8px;font-family:Georgia,Times New Roman,serif;font-size:32px;line-height:38px;font-weight:700;color:#173d30;">' + esc(clientName) + ' is waiting for a response.</div>' +
-            '<div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">This lead has been open for about ' + esc(Math.max(1, Math.floor(hoursOpen))) + ' hours with no response activity logged in the Sales CRM.</div>' +
+            '<div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">This lead has been open for about ' + esc(Math.max(1, Math.floor(hoursOpen))) + ' business hours with no response activity logged in the Sales CRM.</div>' +
             '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">' + rowsFor(record) + '</table>' +
             '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr><td bgcolor="#173d30" style="border-radius:999px;"><a href="' + esc(crmUrl) + '" style="display:inline-block;padding:14px 22px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-decoration:none;color:#ffffff;">Open lead in CRM →</a></td></tr></table>' +
           '</td></tr>' +
@@ -638,7 +638,7 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
     'Koa’s lead follow-up reminder',
     '',
     clientName + ' is waiting for a response.',
-    'This lead has been open for about ' + Math.max(1, Math.floor(hoursOpen)) + ' hours with no response activity logged in the Sales CRM.',
+    'This lead has been open for about ' + Math.max(1, Math.floor(hoursOpen)) + ' business hours with no response activity logged in the Sales CRM.',
     '',
     'Open in Sales CRM:',
     crmUrl,
@@ -665,7 +665,7 @@ function clientFollowUpCopy(record: LeadRecord) {
     return {
       subject: 'A quick follow-up on your Koa’s wedding inquiry',
       title: 'Just following up on your wedding plans.',
-      body: 'I wanted to make sure your wedding inquiry came through and let you know we still have the details you shared. If anything has changed with your date, guest count, package interest, or vision, just reply to this email and send the update.',
+      body: 'We wanted to make sure your wedding inquiry came through and let you know we still have the details you shared. If anything has changed with your date, guest count, package interest, or vision, just reply to this email and send the update.',
       detail: [date ? 'Wedding date: ' + date : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : '', pkg ? 'Package interest: ' + pkg : ''].filter(Boolean).join(' · '),
     };
   }
@@ -674,7 +674,7 @@ function clientFollowUpCopy(record: LeadRecord) {
     return {
       subject: 'A quick follow-up on your Koa’s Mobile Bar inquiry',
       title: 'Just checking in on your Mobile Bar plans.',
-      body: 'I wanted to make sure your Mobile Bar request came through and let you know we still have the event details and estimate selections you sent. If your location, guest count, service hours, or bar plans have changed, reply here and send the latest information.',
+      body: 'We wanted to make sure your Mobile Bar request came through and let you know we still have the event details and estimate selections you sent. If your location, guest count, service hours, or bar plans have changed, reply here and send the latest information.',
       detail: [date ? 'Event date: ' + date : '', inquiry.eventLocation ? 'Location: ' + inquiry.eventLocation : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
     };
   }
@@ -683,7 +683,7 @@ function clientFollowUpCopy(record: LeadRecord) {
     return {
       subject: 'A quick follow-up on your Stay at Koa’s inquiry',
       title: 'Just checking in on your stay request.',
-      body: 'I wanted to make sure your stay request came through and let you know we still have the dates and details you shared. If your travel dates, party size, or plans have changed, reply here and send the latest information.',
+      body: 'We wanted to make sure your stay request came through and let you know we still have the dates and details you shared. If your travel dates, party size, or plans have changed, reply here and send the latest information.',
       detail: [inquiry.arrival ? 'Arrival: ' + formatDate(inquiry.arrival) : '', inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '', inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
     };
   }
@@ -692,7 +692,7 @@ function clientFollowUpCopy(record: LeadRecord) {
     return {
       subject: 'A quick follow-up on your Koa’s discovery call request',
       title: 'Just checking in on your discovery call request.',
-      body: 'I wanted to make sure your preferred call window came through. If your availability has changed, reply here with another day or time that works well for you.',
+      body: 'We wanted to make sure your preferred call window came through. If your availability has changed, reply here with another day or time that works well for you.',
       detail: [inquiry.preferredDate ? 'Preferred date: ' + formatDate(inquiry.preferredDate) : '', inquiry.preferredTime ? 'Preferred time: ' + inquiry.preferredTime : ''].filter(Boolean).join(' · '),
     };
   }
@@ -700,7 +700,7 @@ function clientFollowUpCopy(record: LeadRecord) {
   return {
     subject: 'A quick follow-up on your Koa’s Events inquiry',
     title: 'Just following up on your event plans.',
-    body: 'I wanted to make sure your inquiry came through and let you know we still have the event details you shared. If anything has changed with your date, guest count, event type, or priorities, reply here and send the latest information.',
+    body: 'We wanted to make sure your inquiry came through and let you know we still have the event details you shared. If anything has changed with your date, guest count, event type, or priorities, reply here and send the latest information.',
     detail: [date ? 'Event date: ' + date : '', inquiry.eventType ? 'Event: ' + inquiry.eventType : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
   };
 }
