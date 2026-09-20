@@ -428,3 +428,228 @@ export async function sendLeadNotification(record: LeadRecord) {
 
   return { sent: false, configured: true, id: '' };
 }
+
+
+function firstName(record: LeadRecord) {
+  const name = String(record.customer?.name || '').trim();
+  return name.split(/\s+/)[0] || 'there';
+}
+
+function clientConfirmationCopy(record: LeadRecord) {
+  const inquiry = record.inquiry || {};
+  const kind = leadKind(record);
+  if (kind === 'wedding') {
+    return {
+      eyebrow: 'Wedding inquiry received',
+      title: 'Mahalo for thinking of Koa’s for your wedding.',
+      subject: 'We received your Koa’s wedding inquiry',
+      intro: 'We received your wedding inquiry and our team will review the date, guest count, package interest, and the details you shared.',
+      detail: [
+        record.customer?.eventDate ? 'Wedding date: ' + formatDate(record.customer.eventDate) : '',
+        inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : '',
+        packageLabel(record) ? 'Package interest: ' + packageLabel(record) : '',
+      ].filter(Boolean).join(' · '),
+    };
+  }
+  if (kind === 'mobile') {
+    return {
+      eyebrow: 'Mobile Bar inquiry received',
+      title: 'Your Mobile Bar request is in.',
+      subject: 'We received your Koa’s Mobile Bar inquiry',
+      intro: 'We received your Mobile Bar inquiry and estimate details. Our team will review the event location, service scope, staffing, and selections you submitted.',
+      detail: [
+        record.customer?.eventDate ? 'Event date: ' + formatDate(record.customer.eventDate) : '',
+        inquiry.eventLocation ? 'Location: ' + inquiry.eventLocation : '',
+        inquiry.estimatedTotal ? 'Website estimate: ' + money(inquiry.estimatedTotal) : '',
+      ].filter(Boolean).join(' · '),
+    };
+  }
+  if (kind === 'stay') {
+    return {
+      eyebrow: 'Stay inquiry received',
+      title: 'We received your Stay at Koa’s request.',
+      subject: 'We received your Stay at Koa’s inquiry',
+      intro: 'We received your stay request and will review the requested dates, party size, and stay type.',
+      detail: [
+        inquiry.arrival || record.customer?.eventDate ? 'Arrival: ' + formatDate(inquiry.arrival || record.customer?.eventDate) : '',
+        inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '',
+        inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : '',
+      ].filter(Boolean).join(' · '),
+    };
+  }
+  if (kind === 'discovery') {
+    return {
+      eyebrow: 'Discovery call request received',
+      title: 'Your preferred call window is saved.',
+      subject: 'We received your Koa’s discovery call request',
+      intro: 'We received your discovery-call preferences and attached them to your Koa’s inquiry.',
+      detail: [
+        inquiry.preferredDate || record.customer?.eventDate ? 'Preferred date: ' + formatDate(inquiry.preferredDate || record.customer?.eventDate) : '',
+        inquiry.preferredTime ? 'Preferred time: ' + inquiry.preferredTime : '',
+      ].filter(Boolean).join(' · '),
+    };
+  }
+  return {
+    eyebrow: 'Private event inquiry received',
+    title: 'Mahalo for reaching out to Koa’s Events.',
+    subject: 'We received your Koa’s Events inquiry',
+    intro: 'We received your event inquiry and will review the date, guest count, service request, location, and priorities you shared.',
+    detail: [
+      record.customer?.eventDate ? 'Event date: ' + formatDate(record.customer.eventDate) : '',
+      inquiry.eventType ? 'Event: ' + inquiry.eventType : '',
+      inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : '',
+    ].filter(Boolean).join(' · '),
+  };
+}
+
+function clientConfirmationHtml(record: LeadRecord) {
+  const copy = clientConfirmationCopy(record);
+  return (
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+    '<body style="margin:0;padding:0;background-color:#f5f0e7;">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7">' +
+        '<tr><td align="center" style="padding:28px 12px;">' +
+          '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:650px;background:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
+            '<tr><td bgcolor="#173d30" style="padding:24px 28px;background:#173d30;border-radius:22px 22px 0 0;">' +
+              '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>' +
+                '<td width="56"><img src="https://koasevents.com/brand/koa-mark.png" width="52" height="52" alt="Koa’s Events" style="display:block;border:0;border-radius:12px;"></td>' +
+                '<td style="padding-left:14px;"><div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#e4c48f;">Koa’s Events</div>' +
+                '<div style="padding-top:4px;font-family:Georgia,Times New Roman,serif;font-size:27px;line-height:32px;font-weight:700;color:#ffffff;">' + esc(copy.eyebrow) + '</div></td>' +
+              '</tr></table>' +
+            '</td></tr>' +
+            '<tr><td style="padding:32px 30px;">' +
+              '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">Aloha ' + esc(firstName(record)) + ',</div>' +
+              '<div style="padding-top:10px;font-family:Georgia,Times New Roman,serif;font-size:34px;line-height:40px;font-weight:700;color:#173d30;">' + esc(copy.title) + '</div>' +
+              '<div style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f;">' + esc(copy.intro) + '</div>' +
+              (copy.detail ? '<div style="margin-top:20px;padding:16px 18px;background:#f5f0e7;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:21px;font-weight:700;color:#173d30;">' + esc(copy.detail) + '</div>' : '') +
+              '<div style="padding-top:20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f;">A member of our team will follow up after reviewing your request. You can reply directly to this email if there is anything you would like to add in the meantime.</div>' +
+              '<div style="padding-top:26px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#173d30;"><strong>Mahalo,</strong><br>Koa’s Events</div>' +
+              '<div style="padding-top:24px;margin-top:24px;border-top:1px solid #ece7dc;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#8a918d;">This is an automatic confirmation that your request reached Koa’s. It is not a booking confirmation or reservation of your date.</div>' +
+            '</td></tr>' +
+          '</table>' +
+        '</td></tr>' +
+      '</table>' +
+    '</body></html>'
+  );
+}
+
+function clientConfirmationText(record: LeadRecord) {
+  const copy = clientConfirmationCopy(record);
+  return [
+    'Aloha ' + firstName(record) + ',',
+    '',
+    copy.title,
+    '',
+    copy.intro,
+    copy.detail,
+    '',
+    'A member of our team will follow up after reviewing your request. You can reply directly to this email if there is anything you would like to add in the meantime.',
+    '',
+    'Mahalo,',
+    'Koa’s Events',
+    '',
+    'This is an automatic confirmation that your request reached Koa’s. It is not a booking confirmation or reservation of your date.',
+  ].filter(Boolean).join('\n');
+}
+
+async function sendWithResend(args: {
+  to: string[];
+  from: string;
+  subject: string;
+  html: string;
+  text: string;
+  replyTo?: string;
+  idempotencyKey: string;
+}) {
+  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  if (!apiKey) return { sent: false, configured: false, id: '' };
+
+  try {
+    const response = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': args.idempotencyKey.slice(0, 256),
+      },
+      body: JSON.stringify({
+        from: args.from,
+        to: args.to,
+        subject: args.subject,
+        html: args.html,
+        text: args.text,
+        reply_to: args.replyTo || undefined,
+      }),
+      signal: AbortSignal.timeout(12_000),
+    });
+    const body: any = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.error('Resend email failed', response.status, body?.message || body?.name || '');
+      return { sent: false, configured: true, id: '' };
+    }
+    return { sent: true, configured: true, id: String(body?.id || '') };
+  } catch (error) {
+    console.error('Resend email error', error);
+    return { sent: false, configured: true, id: '' };
+  }
+}
+
+export async function sendClientConfirmation(record: LeadRecord) {
+  const email = String(record.customer?.email || '').trim();
+  if (!email || !email.includes('@')) return { sent: false, configured: Boolean(Netlify.env.get('RESEND_API_KEY')), id: '' };
+
+  const copy = clientConfirmationCopy(record);
+  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
+  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+
+  return sendWithResend({
+    to: [email],
+    from,
+    subject: copy.subject,
+    html: clientConfirmationHtml(record),
+    text: clientConfirmationText(record),
+    replyTo,
+    idempotencyKey: 'koa-client-confirmation-' + record.id + '-' + String(record.source || 'website'),
+  });
+}
+
+export async function sendResponseReminder(record: LeadRecord, hoursOpen: number) {
+  const to = String(Netlify.env.get('KOA_LEAD_EMAIL_TO') || 'aloha@koasevents.com').trim();
+  const from = String(Netlify.env.get('KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
+  const crmUrl = 'https://koasevents.com/admin/quotes/?q=' + encodeURIComponent(record.id);
+  const title = heading(record);
+  const clientName = String(record.customer?.name || 'Client name TBD');
+  const subject = 'Follow-up due — ' + clientName + ' · ' + title.replace(/^New /, '');
+  const html =
+    '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e7;">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #e7dfd0;border-radius:20px;">' +
+          '<tr><td style="padding:28px 30px;">' +
+            '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;">Koa’s lead follow-up reminder</div>' +
+            '<div style="padding-top:8px;font-family:Georgia,Times New Roman,serif;font-size:32px;line-height:38px;font-weight:700;color:#173d30;">' + esc(clientName) + ' is waiting for a response.</div>' +
+            '<div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">This lead has been open for about ' + esc(Math.max(1, Math.floor(hoursOpen))) + ' hours with no response activity logged in the Sales CRM.</div>' +
+            '<div style="padding-top:18px;">' + rowsFor(record) + '</div>' +
+            '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr><td bgcolor="#173d30" style="border-radius:999px;"><a href="' + esc(crmUrl) + '" style="display:inline-block;padding:14px 22px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-decoration:none;color:#ffffff;">Open lead in CRM →</a></td></tr></table>' +
+          '</td></tr>' +
+        '</table>' +
+      '</td></tr></table>' +
+    '</body></html>';
+  const text = [
+    'Koa’s lead follow-up reminder',
+    '',
+    clientName + ' is waiting for a response.',
+    'This lead has been open for about ' + Math.max(1, Math.floor(hoursOpen)) + ' hours with no response activity logged in the Sales CRM.',
+    '',
+    'Open in Sales CRM:',
+    crmUrl,
+  ].join('\n');
+
+  return sendWithResend({
+    to: [to],
+    from,
+    subject,
+    html,
+    text,
+    idempotencyKey: 'koa-lead-response-reminder-' + record.id,
+  });
+}
