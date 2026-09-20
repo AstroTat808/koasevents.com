@@ -590,6 +590,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         text('p','mt-2 text-sm font-semibold',record.customer?.name || 'Client name TBD'),
         text('p','mt-1 text-xs leading-5 text-[var(--koa-ink)]/50',[record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · '))
       );
+      if(record.security?.disposition === 'flagged') {
+        const security=document.createElement('div');
+        security.className='mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3';
+        security.append(
+          text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-amber-800','Security review · risk '+Number(record.security.riskScore||0)),
+          text('p','mt-1 text-xs leading-5 text-amber-950/70',(record.security.reasons||[]).join(' · ') || 'Suspicious inquiry signals detected.')
+        );
+        article.appendChild(security);
+      }
       if(record.inquiry) {
         const inquiryMeta = [record.inquiry.eventType, record.inquiry.guestCount ? record.inquiry.guestCount + ' guests' : '', record.inquiry.eventLocation, record.inquiry.budget].filter(Boolean).join(' · ');
         if(inquiryMeta) article.appendChild(text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',inquiryMeta));
