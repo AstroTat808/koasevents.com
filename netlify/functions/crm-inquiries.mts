@@ -44,6 +44,42 @@ function idSuffix() {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+async function verifyTurnstile(req: Request, token: unknown) {
+  const secret = String(process.env.TURNSTILE_SECRET_KEY || '').trim();
+  if (!secret) return { ok: true, configured: false };
+
+  const responseToken = cleanText(token, 4096);
+  if (!responseToken) return { ok: false, configured: true, error: 'Complete the security check and try again.' };
+
+  const remoteIp =
+    cleanText(req.headers.get('x-nf-client-connection-ip'), 80) ||
+    cleanText(req.headers.get('cf-connecting-ip'), 80) ||
+    cleanText(req.headers.get('x-forwarded-for')?.split(',')[0], 80);
+
+  const body = new URLSearchParams({
+    secret,
+    response: responseToken,
+    ...(remoteIp ? { remoteip: remoteIp } : {}),
+  });
+
+  try {
+    const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    const data: any = await result.json().catch(() => null);
+    return {
+      ok: Boolean(result.ok && data?.success),
+      configured: true,
+      error: data?.success ? '' : 'Security verification failed. Please try again.',
+      codes: Array.isArray(data?.['error-codes']) ? data['error-codes'] : [],
+    };
+  } catch {
+    return { ok: false, configured: true, error: 'Security verification is temporarily unavailable. Please try again.' };
+  }
+}
+
 async function appendEvent(store: any, event: Record<string, unknown>) {
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
@@ -102,6 +138,14 @@ export default async (req: Request, context: Context) => {
 
   if (cleanText(payload.honeypot, 120)) {
     return json(req, { ok: true, id: '' });
+  }
+
+  const turnstile = await verifyTurnstile(req, payload.turnstileToken);
+  if (!turnstile.ok) {
+    return json(req, {
+      error: turnstile.error || 'Security verification failed.',
+      code: 'turnstile_failed',
+    }, 403);
   }
 
   const now = new Date();
