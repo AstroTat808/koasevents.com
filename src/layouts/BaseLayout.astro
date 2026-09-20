@@ -44,6 +44,7 @@ const buildCommit = String(process.env.COMMIT_REF || '').trim();
 const breadcrumbLabelMap: Record<string, string> = {
   about: 'About',
   weddings: 'Weddings',
+  'east-hawaii-wedding-venue': 'East Hawaiʻi Wedding Venue',
   'signature-wedding': 'Signature Wedding',
   venue: 'Venue',
   packages: 'Wedding Venue Packages',
@@ -90,6 +91,11 @@ const serviceDefinitions: Record<string, { name: string; serviceType: string; de
     name: "Koa's Events Wedding Venue Service",
     serviceType: 'Wedding venue rental',
     description: 'Private rainforest wedding venue service in Mountain View, Hawaiʻi for celebrations of up to 100 guests.',
+  },
+  '/east-hawaii-wedding-venue/': {
+    name: "Koa's East Hawaiʻi Wedding Venue",
+    serviceType: 'East Hawaiʻi wedding venue rental',
+    description: 'Private Mountain View wedding venue serving couples comparing Hilo, Volcano and East Hawaiʻi wedding locations.',
   },
   '/signature-wedding/': {
     name: "The Koa's Signature Wedding Experience",
