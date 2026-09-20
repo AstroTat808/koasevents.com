@@ -41,7 +41,18 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 <button class="rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white disabled:cursor-not-allowed disabled:opacity-60" type="submit">Submit + continue to discovery call</button>
 <p class="text-center text-sm leading-6 text-[var(--koa-ink)]/56">Submitting an inquiry does not reserve a date. Your date is secured only after the applicable agreement and deposit are completed.</p>
 </div></form></div></section></main><Footer/>
-{turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+{turnstileSiteKey && (
+    <>
+      <script is:inline>
+        if (window.innerWidth <= 360) {
+          document.querySelectorAll('.cf-turnstile[data-size]').forEach((element) => {
+            element.setAttribute('data-size', 'compact');
+          });
+        }
+      </script>
+      <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    </>
+  )}
 <script is:inline define:vars={{ requestedPackage, requestedGuests, turnstileSiteKey }}>
   const form = document.querySelector('[data-wedding-inquiry-form]');
   const packageField = form?.querySelector('[name="packageInterest"]');
