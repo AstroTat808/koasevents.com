@@ -30,6 +30,7 @@ const websiteId = new URL('/#website', siteUrl).href;
 const robotsContent = noindex
   ? 'noindex, nofollow, noarchive'
   : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
+const buildCommit = String(process.env.COMMIT_REF || '').trim();
 
 const seoSchema = {
   '@context': 'https://schema.org',
@@ -85,6 +86,7 @@ const seoSchema = {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
+    {buildCommit && <meta name="koa-build-commit" content={buildCommit} />}
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
