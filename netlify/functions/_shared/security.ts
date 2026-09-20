@@ -54,6 +54,12 @@ const DISPOSABLE_EMAIL_DOMAINS = new Set([
   'guerrillamailblock.com',
   'mailinator.com',
   'maildrop.cc',
+  'emailondeck.com',
+  'fakeinbox.com',
+  'getnada.com',
+  'mohmal.com',
+  'minuteinbox.com',
+  'burnermail.io',
   'sharklasers.com',
   'temp-mail.org',
   'tempmail.com',
@@ -480,16 +486,20 @@ export async function analyzeInquirySecurity(payload: any, recentEvents: Securit
     addSignal(signals, 'shortened_url', 'Message contains a shortened URL', 25);
   }
 
-  const cryptoPitch = /\b(?:crypto(?:currency)?|bitcoin|ethereum|blockchain|forex|airdrop|token sale|trading platform|investment opportunity|digital asset)\b/i.test(lower);
-  const marketingPitch = /\b(?:seo|backlinks?|guest posts?|domain authority|google ranking|website traffic|web design|marketing agency|marketing services|lead generation|sponsored content|paid ads)\b/i.test(lower);
+  const cryptoPitch = /\b(?:crypto(?:currency)?|bitcoin|ethereum|blockchain|forex|airdrop|token sale|trading platform|investment opportunity|digital asset|web3|nft(?:s)?)\b/i.test(lower);
+  const marketingPitch = /\b(?:seo|backlinks?|guest posts?|domain authority|google ranking|website traffic|web design|website redesign|marketing agency|marketing services|lead generation|sponsored content|paid ads|press release|link building|search engine optimization)\b/i.test(lower);
+  const financePitch = /\b(?:business loan|working capital|merchant cash advance|credit repair|debt relief|funding offer|pre.?approved loan|guaranteed approval)\b/i.test(lower);
+  const gamblingPitch = /\b(?:online casino|sportsbook|betting platform|casino bonus|gambling site)\b/i.test(lower);
   const remotePitch = /\b(?:whatsapp|telegram)\b/i.test(lower);
 
   if (cryptoPitch) addSignal(signals, 'crypto_pitch', 'Crypto, trading, or investment solicitation language', 65);
   if (marketingPitch) addSignal(signals, 'marketing_solicitation', 'SEO, backlink, marketing, or website-sales solicitation language', 50);
-  if ((cryptoPitch || marketingPitch) && linkCount > 0) {
+  if (financePitch) addSignal(signals, 'finance_solicitation', 'Loan, funding, debt, or credit solicitation language', 60);
+  if (gamblingPitch) addSignal(signals, 'gambling_solicitation', 'Casino, sportsbook, or gambling solicitation language', 70);
+  if ((cryptoPitch || marketingPitch || financePitch || gamblingPitch) && linkCount > 0) {
     addSignal(signals, 'solicitation_with_link', 'Commercial solicitation includes an external link', 20);
   }
-  if (remotePitch && (cryptoPitch || marketingPitch || linkCount > 0)) {
+  if (remotePitch && (cryptoPitch || marketingPitch || financePitch || gamblingPitch || linkCount > 0)) {
     addSignal(signals, 'offplatform_contact', 'Solicitation pushes conversation to WhatsApp or Telegram', 15);
   }
   if (/<(?:script|iframe|object|embed|form|style)\b/i.test(text)) {
