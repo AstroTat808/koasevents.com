@@ -425,6 +425,9 @@ export default async (req: Request, context: Context) => {
       arrival: cleanText(payload.inquiry?.arrival, 40),
       departure: cleanText(payload.inquiry?.departure, 40),
       stayType: cleanText(payload.inquiry?.stayType, 120),
+      planningFrom: cleanText(payload.inquiry?.planningFrom, 160),
+      barStyle: cleanText(payload.inquiry?.barStyle, 160),
+      venueTour: cleanText(payload.inquiry?.venueTour, 160),
     },
   };
 
