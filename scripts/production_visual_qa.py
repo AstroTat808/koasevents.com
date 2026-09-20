@@ -26,6 +26,16 @@ VIEWPORTS=[
  ("phone-small",320,568,2),("phone",390,844,2),("tablet",768,1024,2),
  ("desktop",1440,1000,1),("wide",1920,1080,1)
 ]
+ADMIN_ROUTES=[
+ ("admin-home","/admin/"),
+ ("admin-blog","/admin/blog/"),
+ ("admin-calendar","/admin/calendar/"),
+ ("admin-events","/admin/events/"),
+ ("admin-gallery","/admin/gallery/"),
+ ("admin-quickbooks","/admin/quickbooks/"),
+ ("admin-crm","/admin/quotes/"),
+ ("admin-security","/admin/security/")
+]
 
 @dataclass
 class Finding:
@@ -156,12 +166,19 @@ def smoke_mode():
 
 def wait_mode(seconds=600):
  deadline=time.time()+seconds
+ expected=os.environ.get("EXPECTED_COMMIT","").strip().lower()
+ deployed=""
  while time.time()<deadline:
   status,_,body=get("/signature-wedding/",20)
-  if status==200 and b"Signature Wedding" in body:
-   print(json.dumps({"ready":True,"baseUrl":BASE,"status":status},indent=2));return 0
+  html=body.decode("utf-8","ignore")
+  commit_match=re.search(r'<meta\s+name=["\']koa-build-commit["\']\s+content=["\']([^"\']+)["\']',html,re.I)
+  deployed=(commit_match.group(1).strip().lower() if commit_match else "")
+  content_ready=status==200 and "Signature Wedding" in html
+  commit_ready=(not expected) or deployed==expected
+  if content_ready and commit_ready:
+   print(json.dumps({"ready":True,"baseUrl":BASE,"status":status,"expectedCommit":expected,"deployedCommit":deployed},indent=2));return 0
   time.sleep(10)
- print(json.dumps({"ready":False,"baseUrl":BASE},indent=2));return 1
+ print(json.dumps({"ready":False,"baseUrl":BASE,"expectedCommit":expected,"lastDeployedCommit":deployed},indent=2));return 1
 
 DOM=r"""() => {
  const vis=e=>{if(e.closest('details:not([open])'))return false;const s=getComputedStyle(e),r=e.getBoundingClientRect();return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0};
@@ -316,6 +333,67 @@ def html_report(results):
  return f"""<!doctype html><html><head><meta charset='utf-8'><title>Koa visual QA</title><style>
  body{{font-family:system-ui;margin:0;background:#f6f1e7;color:#10261e}}main{{max-width:1200px;margin:auto;padding:32px}}article{{background:#fff;margin:20px 0;padding:24px;border-radius:18px;border:1px solid #dfd5c4}}.pill{{display:inline-block;background:#fff;border:1px solid #d8c7a9;border-radius:999px;padding:10px 14px;margin:4px}}li{{margin:12px 0;line-height:1.45}}.critical strong{{color:#a12626}}.warning strong{{color:#8a5b00}}.design strong{{color:#6a4c93}}.pass strong{{color:#276749}}pre{{white-space:pre-wrap;overflow:auto;background:#f7f7f5;padding:12px;border-radius:10px;font-size:12px}}</style></head><body><main><h1>Koa's Events production visual QA</h1><p>Automated heuristics surface pages and viewports that deserve human design review.</p><p><span class='pill'>Critical: {counts['critical']}</span><span class='pill'>Warnings: {counts['warning']}</span><span class='pill'>Design flags: {counts['design']}</span></p>{''.join(cards)}</main></body></html>"""
 
+
+def admin_mode(browser_name):
+ try:
+  from playwright.sync_api import sync_playwright
+ except ImportError:
+  print("Install Playwright: pip install playwright && python -m playwright install chromium",file=sys.stderr);return 2
+
+ root=OUT/("admin-"+browser_name);root.mkdir(parents=True,exist_ok=True)
+ results=[];failures=[]
+ with sync_playwright() as p:
+  browser=getattr(p,browser_name).launch()
+  ctx=browser.new_context(viewport={"width":1440,"height":1000},reduced_motion="reduce",color_scheme="light")
+  for name,path in ADMIN_ROUTES:
+   page=ctx.new_page()
+   page_errors=[];console_errors=[];request_failed=[]
+   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+   page.on("requestfailed",lambda r,t=request_failed:t.append(r.url) if urlparse(r.url).netloc==urlparse(BASE).netloc else None)
+   status=0;state={};detail=""
+   try:
+    response=page.goto(BASE+path,wait_until="networkidle",timeout=45000)
+    status=response.status if response else 0
+    page.wait_for_timeout(800)
+    state=page.evaluate("""() => {
+      const visible=(el)=>{
+        if(!el)return false;
+        const s=getComputedStyle(el),r=el.getBoundingClientRect();
+        return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
+      };
+      const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-admin-ui]','[data-app]','[data-admin-links]'];
+      const visibleSelectors=selectors.filter((selector)=>visible(document.querySelector(selector)));
+      return {visibleSelectors,title:document.title,bodyText:(document.body.innerText||'').trim().slice(0,500)};
+    }""")
+    allowed_visible=bool(state.get("visibleSelectors"))
+    if status>=400:
+     detail=f"Document returned HTTP {status}"
+    elif page_errors:
+     detail="JavaScript page errors: "+" | ".join(page_errors[:5])
+    elif not allowed_visible:
+     detail="No visible admin UI, login, role-warning, or unauthorized state after startup."
+    if detail:
+     failures.append({"route":path,"detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+   except Exception as exc:
+    detail=str(exc)
+    failures.append({"route":path,"detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+
+   shot=root/f"{name}.png"
+   try: page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+   except Exception: pass
+   results.append({
+    "name":name,"path":path,"status":status,"state":state,"pageErrors":page_errors,
+    "consoleErrors":console_errors,"requestFailed":request_failed,"failure":detail,"screenshot":str(shot)
+   })
+   page.close()
+  ctx.close();browser.close()
+
+ report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"failures":failures}
+ (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+ print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
+ return 1 if failures else 0
+
 def browser_mode(browser_name):
  try:from playwright.sync_api import sync_playwright
  except ImportError:
@@ -385,7 +463,7 @@ def browser_mode(browser_name):
 
 def main():
  p=argparse.ArgumentParser(description="Koa's Events production visual QA")
- p.add_argument("--mode",choices=("source","wait","smoke","browser"),required=True)
+ p.add_argument("--mode",choices=("source","wait","smoke","browser","admin"),required=True)
  p.add_argument("--browser",choices=("chromium","webkit"),default="chromium")
  p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);a=p.parse_args()
  global BASE
@@ -393,6 +471,7 @@ def main():
  if a.mode=="source":return source_mode()
  if a.mode=="wait":return wait_mode(a.wait_seconds)
  if a.mode=="smoke":return smoke_mode()
+ if a.mode=="admin":return admin_mode(a.browser)
  return browser_mode(a.browser)
 
 if __name__=="__main__":sys.exit(main())
