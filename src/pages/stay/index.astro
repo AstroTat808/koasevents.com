@@ -5,6 +5,8 @@ import Footer from '../../components/Footer.astro';
 import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { media, koaMarketingMedia } from '../../data/media';
 
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+
 const stayDetails = [
   { image: koaMarketingMedia.bridalSuiteWeddingReady, label: 'Bridal suite' },
   { image: koaMarketingMedia.bridalLoungeWeddingReady, label: 'Getting-ready lounge' },
@@ -40,6 +42,89 @@ const stayDetails = [
 </section>
 <section class="bg-[var(--koa-sand)] py-20 lg:py-24"><div class="container-shell grid gap-4 lg:grid-cols-3">{[['Wedding weekends','Coordinate a stay with the wedding experience when the selected collection includes cottage access.'],['Direct stays','Request independent stay dates directly through Koa’s rather than beginning on a marketplace.'],['Mountain View base','Use Koa’s as a quiet Mountain View home base while exploring the Hilo/Volcano side of Hawaiʻi Island.']].map(([t,c],i)=><article class="rounded-[1.4rem] bg-[var(--koa-ivory)] p-7"><p class="eyebrow text-[var(--koa-clay)]">0{i+1}</p><h2 class="display mt-8 text-4xl">{t}</h2><p class="mt-4 text-sm leading-6 text-[var(--koa-ink)]/64">{c}</p></article>)}</div></section>
 <section id="stay-request" class="py-24 lg:py-32"><div class="container-shell grid gap-12 lg:grid-cols-[.72fr_1.28fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">Direct stay request</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Tell us when you’d like to stay.</h2><p class="mt-6 text-sm leading-7 text-[var(--koa-ink)]/62">Rates, occupancy limits, minimum stays and final lodging policies will be confirmed in the direct booking response until the live booking engine is launched.</p></div>
-<form name="koa-stay-inquiry" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]"><input type="hidden" name="form-name" value="koa-stay-inquiry"/>
-          <input type="hidden" name="subject" data-remove-prefix value="New Stay at Koa’s Inquiry (%{submissionId})" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p><div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required/></label><label class="grid gap-2 text-sm font-semibold">Arrival<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="arrival" required/></label><label class="grid gap-2 text-sm font-semibold">Departure<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="departure" required/></label><label class="grid gap-2 text-sm font-semibold">Number of guests<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" name="guests" required/></label><label class="grid gap-2 text-sm font-semibold">Stay type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="stayType"><option>Independent stay</option><option>Wedding weekend</option><option>Event-related stay</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Anything we should know?<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes"></textarea></label><button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Request stay availability</button></div></form></div></section>
-</main><Footer/></BaseLayout>
+<form name="koa-stay-inquiry" method="POST" action="/thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-7 shadow-[var(--shadow-soft)]" data-stay-form><input type="hidden" name="form-name" value="koa-stay-inquiry"/>
+          <input type="hidden" name="subject" data-remove-prefix value="New Stay at Koa’s Inquiry" /><p class="hidden"><label>Don’t fill this out: <input name="bot-field"/></label></p><div class="grid gap-5 sm:grid-cols-2"><label class="grid gap-2 text-sm font-semibold">Name<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="name" required/></label><label class="grid gap-2 text-sm font-semibold">Email<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="email" name="email" required/></label><label class="grid gap-2 text-sm font-semibold">Arrival<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="arrival" required/></label><label class="grid gap-2 text-sm font-semibold">Departure<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="date" name="departure" required/></label><label class="grid gap-2 text-sm font-semibold">Number of guests<input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" type="number" min="1" name="guests" required/></label><label class="grid gap-2 text-sm font-semibold">Stay type<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="stayType"><option>Independent stay</option><option>Wedding weekend</option><option>Event-related stay</option></select></label><label class="grid gap-2 text-sm font-semibold sm:col-span-2">Anything we should know?<textarea class="min-h-28 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="notes"></textarea></label>
+          {turnstileSiteKey && (
+            <div class="sm:col-span-2 rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+              <div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-action="stay_inquiry" data-theme="light" data-size="flexible"></div>
+            </div>
+          )}
+          <p class="hidden sm:col-span-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert" data-submit-error></p>
+          <button class="sm:col-span-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white disabled:cursor-not-allowed disabled:opacity-60" type="submit">Request stay availability</button></div></form></div></section>
+</main><Footer/>
+{turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+<script is:inline define:vars={{ turnstileSiteKey }}>
+  const stayForm = document.querySelector('[data-stay-form]');
+  stayForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (stayForm.dataset.submitting === '1') return;
+
+    const submitButton = stayForm.querySelector('button[type="submit"]');
+    const errorBox = stayForm.querySelector('[data-submit-error]');
+    const data = new FormData(stayForm);
+    const turnstileToken = String(data.get('cf-turnstile-response') || '');
+
+    if (turnstileSiteKey && !turnstileToken) {
+      if (errorBox) {
+        errorBox.textContent = 'Complete the security check before requesting stay availability.';
+        errorBox.classList.remove('hidden');
+      }
+      return;
+    }
+
+    stayForm.dataset.submitting = '1';
+    if (submitButton) submitButton.disabled = true;
+    if (errorBox) errorBox.classList.add('hidden');
+
+    try {
+      const response = await fetch('/api/crm/inquiries', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
+        body: JSON.stringify({
+          formName: 'koa-stay-inquiry',
+          honeypot: data.get('bot-field'),
+          turnstileToken,
+          customer: {
+            name: data.get('name'),
+            email: data.get('email'),
+            phone: '',
+            eventDate: data.get('arrival'),
+            notes: data.get('notes'),
+          },
+          inquiry: {
+            service: 'stay',
+            eventType: 'Stay',
+            guestCount: data.get('guests'),
+            priorities: data.get('notes'),
+            arrival: data.get('arrival'),
+            departure: data.get('departure'),
+            stayType: data.get('stayType'),
+          },
+        }),
+        keepalive: true,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || 'We could not save your stay request. Please try again.');
+      }
+
+      stayForm.querySelector('[name="cf-turnstile-response"]')?.remove();
+
+      if (payload?.notificationConfigured || payload?.deduplicated) {
+        window.location.assign('/thank-you/');
+        return;
+      }
+
+      stayForm.submit();
+    } catch (error) {
+      stayForm.dataset.submitting = '0';
+      if (submitButton) submitButton.disabled = false;
+      if (errorBox) {
+        errorBox.textContent = error instanceof Error ? error.message : 'We could not save your stay request. Please try again.';
+        errorBox.classList.remove('hidden');
+      }
+      if (window.turnstile?.reset) window.turnstile.reset();
+    }
+  });
+</script>
+</BaseLayout>
