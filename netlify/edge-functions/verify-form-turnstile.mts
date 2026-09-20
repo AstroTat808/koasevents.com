@@ -109,4 +109,9 @@ export default async (req: Request, context: Context) => {
 export const config: Config = {
   path: ['/thank-you/', '/wedding-inquiry-thank-you/'],
   method: 'POST',
+  rateLimit: {
+    windowLimit: 12,
+    windowSize: 60,
+    aggregateBy: ['ip', 'domain'],
+  },
 };
