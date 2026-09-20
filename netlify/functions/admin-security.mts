@@ -6,6 +6,7 @@ import {
   createBlocklistEntry,
   getBlocklist,
   getSecurityEvents,
+  removeAutomaticBlocksForIncident,
   removeBlocklistEntry,
   setSecurityReview,
   type BlockDuration,
@@ -136,12 +137,15 @@ export default async (req: Request, context: Context) => {
       const review = await setSecurityReview(context, incidentId, verdict, adminEmail);
       let automaticBlocks = [];
       let crmCleanup = { moved: false, reason: '' };
+      let reversedAutomaticBlocks = 0;
       if (verdict === 'confirmed_spam') {
         const reviewedEvents = events.map((event) => event.id === incidentId ? { ...event, review } : event);
         automaticBlocks = await applyAutomaticBlocks(context, { ...incident, review }, reviewedEvents);
         crmCleanup = await autoTrashConfirmedSpamRecord(context, { ...incident, review }, adminEmail);
+      } else {
+        reversedAutomaticBlocks = await removeAutomaticBlocksForIncident(context, incidentId);
       }
-      return Response.json({ ok: true, review, automaticBlocks, crmCleanup }, { headers: { 'Cache-Control': 'private, no-store' } });
+      return Response.json({ ok: true, review, automaticBlocks, crmCleanup, reversedAutomaticBlocks }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     if (action === 'block') {
