@@ -418,6 +418,31 @@ export default async (req: Request, context: Context) => {
     },
   };
 
+  if (formName === 'koa-event-inquiry' || formName === 'koa-wedding-inquiry') {
+    const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
+    const normalizedEmail = record.customer.email.toLowerCase();
+    const duplicate = existingRecords.find((entry: any) => {
+      if (!entry || entry.source !== formName) return false;
+      if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
+      if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
+      if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
+      const createdAt = Date.parse(String(entry.createdAt || ''));
+      return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;
+    });
+
+    if (duplicate) {
+      const turnstileProof = expectedTurnstileAction
+        ? await createTurnstileProof(formName, record.customer.email)
+        : '';
+      return json(req, {
+        ok: true,
+        id: duplicate.id,
+        deduplicated: true,
+        ...(turnstileProof ? { turnstileProof } : {}),
+      });
+    }
+  }
+
   const qaMode =
     req.headers.get('x-koa-inquiry-qa') === '1' &&
     formName === 'koa-mobile-bar-qa' &&
