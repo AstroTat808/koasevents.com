@@ -155,6 +155,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Lost leads</p>
+              <h2 class="display mt-3 text-4xl">Review, reopen, or clean up lost opportunities</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">Lost inquiries and leads stay searchable here until you reopen them or move them into the 30-day Trash.</p>
+            </div>
+            <span data-lost-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 records</span>
+          </div>
+          <div data-lost-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Booked events</p><h2 class="display mt-3 text-4xl">Contracts, payments + upcoming events</h2></div>
             <p class="max-w-md text-xs leading-5 text-[var(--koa-ink)]/45">A record enters Booked automatically when the agreement is signed and the reservation deposit is recorded.</p>
@@ -330,6 +342,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const clearSelectionButton = document.querySelector('[data-clear-selection]');
     const trashList = document.querySelector('[data-trash-list]');
     const trashCount = document.querySelector('[data-trash-count]');
+    const lostList = document.querySelector('[data-lost-list]');
+    const lostCount = document.querySelector('[data-lost-count]');
     const searchForm = document.querySelector('[data-search-form]');
     const searchInput = document.querySelector('[data-search-input]');
     const mobileRecords = document.querySelector('[data-mobile-records]');
@@ -771,6 +785,59 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
         if(!fallback.length) workQueue.appendChild(text('p','text-sm text-white/52','No active records need attention right now.'));
       }
+    }
+
+    function renderLostLeads() {
+      if(!lostList)return;
+      lostList.innerHTML='';
+      const rows=(payload.records||[])
+        .filter((record)=>record.stage==='lost' && ['inquiry','lead'].includes(record.kind))
+        .sort((a,b)=>new Date(b.updatedAt||b.createdAt||0).getTime()-new Date(a.updatedAt||a.createdAt||0).getTime());
+
+      if(lostCount) lostCount.textContent=rows.length+(rows.length===1?' record':' records');
+
+      rows.forEach((record)=>{
+        const card=document.createElement('article');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const meta=[
+          record.customer?.eventDate,
+          packageLabel(recordPackage(record)),
+          record.customer?.email
+        ].filter(Boolean).join(' · ');
+        card.append(
+          text('p','text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Lost '+record.kind),
+          text('h3','display mt-2 text-3xl text-[var(--koa-forest)]',record.customer?.name||'Client name TBD'),
+          text('p','mt-1 font-mono text-[.62rem] text-[var(--koa-ink)]/42',record.id)
+        );
+        if(meta) card.appendChild(text('p','mt-2 text-xs leading-5 text-[var(--koa-ink)]/55',meta));
+        if(record.customer?.notes) card.appendChild(text('p','mt-3 line-clamp-3 text-xs leading-5 text-[var(--koa-ink)]/52',record.customer.notes));
+
+        const actions=document.createElement('div');
+        actions.className='mt-4 flex flex-wrap gap-2';
+        actions.append(
+          actionButton('Reopen','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+            try{
+              if(message)message.textContent='Reopening '+record.id+'…';
+              await api({action:'reopen-lost',recordId:record.id});
+              await load(String(searchInput?.value||'').trim());
+              if(message)message.textContent='Reopened '+record.id+'.';
+            }catch(error){if(message)message.textContent=error?.message||'Unable to reopen record.';}
+          }),
+          actionButton('Move to Trash','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
+            if(!confirm('Move lost record '+record.id+' to Trash for 30 days?'))return;
+            try{
+              if(message)message.textContent='Moving '+record.id+' to Trash…';
+              await api({action:'delete-record',recordId:record.id});
+              await load(String(searchInput?.value||'').trim());
+              if(message)message.textContent='Moved '+record.id+' to Trash.';
+            }catch(error){if(message)message.textContent=error?.message||'Unable to move record to Trash.';}
+          })
+        );
+        card.appendChild(actions);
+        lostList.appendChild(card);
+      });
+
+      if(!rows.length) lostList.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No lost inquiries or leads.'));
     }
 
     function renderBookedDashboard() {
@@ -1342,7 +1409,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderBookedDashboard();renderQuotes();renderTrash();
+      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
