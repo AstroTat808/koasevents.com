@@ -35,11 +35,79 @@ function communicationLabel(key: string) {
   return labels[key] || key.replace(/([A-Z])/g, ' $1').trim();
 }
 
+function base64ToBytes(value: string) {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
+  const binary = atob(padded);
+  return Uint8Array.from(binary, (char) => char.charCodeAt(0));
+}
+
+function timingSafeEqual(left: Uint8Array, right: Uint8Array) {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) diff |= left[index] ^ right[index];
+  return diff === 0;
+}
+
+async function verifyWebhookSignature(req: Request, rawBody: string) {
+  const secret = String(Netlify.env.get('RESEND_WEBHOOK_SECRET') || '').trim();
+  if (!secret.startsWith('whsec_')) return false;
+
+  const messageId = req.headers.get('svix-id') || '';
+  const timestamp = req.headers.get('svix-timestamp') || '';
+  const signatureHeader = req.headers.get('svix-signature') || '';
+  if (!messageId || !timestamp || !signatureHeader) return false;
+
+  const timestampSeconds = Number(timestamp);
+  if (!Number.isFinite(timestampSeconds)) return false;
+  if (Math.abs(Date.now() / 1000 - timestampSeconds) > 5 * 60) return false;
+
+  let keyBytes: Uint8Array;
+  try {
+    keyBytes = base64ToBytes(secret.slice('whsec_'.length));
+  } catch {
+    return false;
+  }
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signedContent = messageId + '.' + timestamp + '.' + rawBody;
+  const digest = new Uint8Array(await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(signedContent),
+  ));
+
+  const signatures = signatureHeader
+    .split(' ')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => entry.startsWith('v1,') ? entry.slice(3) : '')
+    .filter(Boolean);
+
+  return signatures.some((value) => {
+    try {
+      return timingSafeEqual(digest, base64ToBytes(value));
+    } catch {
+      return false;
+    }
+  });
+}
+
 export default async (req: Request, context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const raw = await req.text();
   if (raw.length > 100_000) return new Response('Payload too large', { status: 413 });
+
+  if (!(await verifyWebhookSignature(req, raw))) {
+    return new Response('Invalid webhook signature', { status: 401 });
+  }
 
   const payload: any = (() => {
     try { return JSON.parse(raw); } catch { return null; }
