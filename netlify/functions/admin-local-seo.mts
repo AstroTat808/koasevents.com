@@ -29,7 +29,7 @@ const DEFAULT_CITATIONS: CitationRecord[] = [
     platform: 'WeddingWire',
     url: 'https://www.weddingwire.com/biz/koas-events/2ca2beefbadb7bb8.html',
     status: 'needs-update',
-    notes: 'Street address was not exposed in the audited public page, but capacity, starting price and package/service copy are stale.',
+    notes: 'Public WeddingWire results checked 2026-09-20 still show 60 guests and a $1,500 starting price. Update capacity and current pricing/service copy in the WeddingWire business account.',
     lastChecked: '2026-09-20',
   },
   {
