@@ -628,7 +628,7 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
             '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;">Koa’s lead follow-up reminder</div>' +
             '<div style="padding-top:8px;font-family:Georgia,Times New Roman,serif;font-size:32px;line-height:38px;font-weight:700;color:#173d30;">' + esc(clientName) + ' is waiting for a response.</div>' +
             '<div style="padding-top:14px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">This lead has been open for about ' + esc(Math.max(1, Math.floor(hoursOpen))) + ' hours with no response activity logged in the Sales CRM.</div>' +
-            '<div style="padding-top:18px;">' + rowsFor(record) + '</div>' +
+            '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;">' + rowsFor(record) + '</table>' +
             '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr><td bgcolor="#173d30" style="border-radius:999px;"><a href="' + esc(crmUrl) + '" style="display:inline-block;padding:14px 22px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-decoration:none;color:#ffffff;">Open lead in CRM →</a></td></tr></table>' +
           '</td></tr>' +
         '</table>' +
