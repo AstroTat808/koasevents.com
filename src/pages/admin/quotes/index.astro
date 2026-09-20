@@ -64,6 +64,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Custom add-ons</p><strong data-mobile-stat-custom class="display mt-2 block text-3xl">0</strong></article>
           </div>
 
+          <div class="mt-6 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Revenue forecast</p><h3 class="display mt-2 text-3xl">Next six months</h3></div><p class="max-w-sm text-[.68rem] leading-5 text-white/48">Booked revenue is firm CRM value. Open pipeline is probability-weighted by stage and should be treated as a planning forecast, not guaranteed revenue.</p></div>
+              <div data-mobile-forecast class="mt-5 grid gap-3"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Conversion health</p><h3 class="display mt-2 text-3xl">Pipeline efficiency</h3></div>
+              <div data-mobile-conversion class="mt-5 grid grid-cols-2 gap-3"></div>
+            </section>
+          </div>
+
+          <div class="mt-4 grid gap-4 xl:grid-cols-2">
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Package popularity</p><h3 class="display mt-2 text-3xl">What clients choose</h3></div>
+              <div data-mobile-package-popularity class="mt-5 grid gap-3"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Lead sources</p><h3 class="display mt-2 text-3xl">Where inquiries originate</h3></div>
+              <div data-mobile-lead-sources class="mt-5 grid gap-3"></div>
+            </section>
+          </div>
+
+          <div class="mt-4 grid gap-4 xl:grid-cols-[1.2fr_.8fr]">
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Upcoming events</p><h3 class="display mt-2 text-3xl">What is on the calendar</h3></div>
+              <div data-mobile-upcoming class="mt-5 grid gap-3 md:grid-cols-2"></div>
+            </section>
+            <section class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+              <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Staffing forecast</p><h3 class="display mt-2 text-3xl">Bartender demand</h3></div>
+              <div data-mobile-staffing class="mt-5 grid gap-2"></div>
+            </section>
+          </div>
+
           <div class="mt-6 grid gap-3 rounded-[1.2rem] border border-white/10 bg-black/10 p-4 md:grid-cols-2 xl:grid-cols-5">
             <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Stage
               <select data-mobile-filter-stage class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
@@ -283,6 +316,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileFilterQuote = document.querySelector('[data-mobile-filter-quote]');
     const mobileFilterFollowup = document.querySelector('[data-mobile-filter-followup]');
     const mobileSort = document.querySelector('[data-mobile-sort]');
+    const mobileForecast = document.querySelector('[data-mobile-forecast]');
+    const mobileConversion = document.querySelector('[data-mobile-conversion]');
+    const mobilePackagePopularity = document.querySelector('[data-mobile-package-popularity]');
+    const mobileLeadSources = document.querySelector('[data-mobile-lead-sources]');
+    const mobileUpcoming = document.querySelector('[data-mobile-upcoming]');
+    const mobileStaffing = document.querySelector('[data-mobile-staffing]');
 
     const convertDialog = document.querySelector('[data-convert-dialog]');
     const convertForm = document.querySelector('[data-convert-form]');
@@ -328,7 +367,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    let payload = { quotes: [], analytics: {}, funnel: [], conversions: {}, records: [] };
+    let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, conversions: {}, records: [] };
     let editingRecord = null;
     let activityRecord = null;
     let bookingRecord = null;
@@ -872,6 +911,104 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return records;
     }
 
+    function monthLabel(value) {
+      if(!/^\d{4}-\d{2}$/.test(String(value||''))) return String(value||'');
+      return new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(value+'-01T00:00:00Z'));
+    }
+
+    function renderMetric(container,label,value,detail='') {
+      const card=document.createElement('article');card.className='rounded-xl border border-white/10 bg-black/10 p-3';
+      card.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-white/48',label),text('strong','display mt-1 block text-2xl text-white',value));
+      if(detail) card.appendChild(text('p','mt-1 text-[.62rem] leading-5 text-white/45',detail));
+      container.appendChild(card);
+    }
+
+    function renderBarRow(container,label,value,maxValue,meta='') {
+      const row=document.createElement('div');row.className='grid gap-2';
+      const head=document.createElement('div');head.className='flex items-center justify-between gap-4 text-xs';
+      head.append(text('span','font-semibold text-white/80',label),text('span','shrink-0 text-white/55',meta||String(value)));
+      const track=document.createElement('div');track.className='h-2 overflow-hidden rounded-full bg-black/20';
+      const bar=document.createElement('div');bar.className='h-full rounded-full bg-[var(--koa-amber-light)]';
+      bar.style.width=(maxValue>0?Math.max(3,Math.min(100,(Number(value||0)/maxValue)*100)):0)+'%';
+      track.appendChild(bar);row.append(head,track);container.appendChild(row);
+    }
+
+    function renderMobileAnalytics() {
+      const analytics=payload.mobileBarAnalytics||{};
+      const conversions=analytics.conversions||{};
+      if(mobileConversion){
+        mobileConversion.innerHTML='';
+        renderMetric(mobileConversion,'Inquiry → lead',percent(conversions.inquiryToLead),'Qualification rate');
+        renderMetric(mobileConversion,'Lead → proposal',percent(conversions.leadToProposal),'Proposal creation');
+        renderMetric(mobileConversion,'Proposal → booked',percent(conversions.proposalToBooked),'Close rate');
+        renderMetric(mobileConversion,'Inquiry → booked',percent(conversions.inquiryToBooked),'End-to-end');
+        renderMetric(mobileConversion,'Avg booking',money(analytics.averageBookingValue||0),'Booked Mobile Bar records');
+        renderMetric(mobileConversion,'Booked revenue',money(analytics.bookedRevenue||0),'CRM booked value');
+      }
+
+      const forecast=Array.isArray(analytics.monthlyForecast)?analytics.monthlyForecast:[];
+      if(mobileForecast){
+        mobileForecast.innerHTML='';
+        const maxForecast=Math.max(1,...forecast.map((row)=>Number(row.forecastRevenue||0)));
+        forecast.forEach((row)=>{
+          const article=document.createElement('article');article.className='rounded-xl border border-white/10 bg-black/10 p-3';
+          const top=document.createElement('div');top.className='flex items-start justify-between gap-4';
+          const left=document.createElement('div');left.append(text('strong','text-sm text-white',monthLabel(row.month)),text('p','mt-1 text-[.62rem] text-white/45',row.eventCount+' event'+(row.eventCount===1?'':'s')));
+          const right=document.createElement('div');right.className='text-right';right.append(text('strong','display text-xl text-white',money(row.forecastRevenue)),text('p','mt-1 text-[.58rem] uppercase tracking-[.08em] text-white/45','forecast'));
+          top.append(left,right);
+          const track=document.createElement('div');track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+          const bar=document.createElement('div');bar.className='h-full rounded-full bg-[var(--koa-amber-light)]';bar.style.width=Math.max(2,Math.min(100,Number(row.forecastRevenue||0)/maxForecast*100))+'%';track.appendChild(bar);
+          const detail=text('p','mt-2 text-[.62rem] leading-5 text-white/48','Booked '+money(row.bookedRevenue)+' · weighted open pipeline '+money(row.weightedPipeline)+' · gross pipeline '+money(row.grossPipeline));
+          article.append(top,track,detail);mobileForecast.appendChild(article);
+        });
+        if(!forecast.length) mobileForecast.appendChild(text('p','text-sm text-white/45','No forecast months available yet.'));
+      }
+
+      const popularity=Array.isArray(analytics.packagePopularity)?analytics.packagePopularity:[];
+      if(mobilePackagePopularity){
+        mobilePackagePopularity.innerHTML='';
+        const max=Math.max(1,...popularity.map((row)=>Number(row.inquiries||row.active||0)));
+        popularity.forEach((row)=>renderBarRow(mobilePackagePopularity,packageLabel(row.packageId),Number(row.inquiries||0),max,(row.inquiries||0)+' inquiries · '+(row.booked||0)+' booked'));
+        if(!popularity.some((row)=>row.inquiries||row.active)) mobilePackagePopularity.appendChild(text('p','text-sm text-white/45','Package interest will appear as Mobile Bar inquiries arrive.'));
+      }
+
+      const sources=Array.isArray(analytics.leadSources)?analytics.leadSources:[];
+      if(mobileLeadSources){
+        mobileLeadSources.innerHTML='';
+        const max=Math.max(1,...sources.map((row)=>Number(row.count||0)));
+        sources.forEach((row)=>renderBarRow(mobileLeadSources,row.source,Number(row.count||0),max,String(row.count||0)));
+        if(!sources.length) mobileLeadSources.appendChild(text('p','text-sm text-white/45','Lead-source reporting will populate from inquiry attribution.'));
+      }
+
+      const upcoming=Array.isArray(analytics.upcomingEvents)?analytics.upcomingEvents:[];
+      if(mobileUpcoming){
+        mobileUpcoming.innerHTML='';
+        upcoming.slice(0,10).forEach((event)=>{
+          const article=document.createElement('article');article.className='rounded-xl border border-white/10 bg-black/10 p-4';
+          article.append(
+            text('p','text-[.52rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]',event.eventDate||'Date TBD'),
+            text('strong','mt-1 block text-sm text-white',event.customerName||'Client name TBD'),
+            text('p','mt-1 text-[.64rem] leading-5 text-white/50',[packageLabel(event.packageId),event.stage,event.quoteStatus].filter(Boolean).join(' · ')),
+            text('p','mt-2 text-[.68rem] font-semibold text-white/75',money(event.value||0)+' · '+event.bartenders+' bartender'+(event.bartenders===1?'':'s')+' · '+event.serviceHours+' hr')
+          );
+          if(event.eventLocation) article.appendChild(text('p','mt-1 text-[.62rem] leading-5 text-white/42',event.eventLocation));
+          mobileUpcoming.appendChild(article);
+        });
+        if(!upcoming.length) mobileUpcoming.appendChild(text('p','text-sm text-white/45','No upcoming Mobile Bar events or opportunities have dates yet.'));
+      }
+
+      if(mobileStaffing){
+        mobileStaffing.innerHTML='';
+        forecast.forEach((row)=>{
+          const line=document.createElement('div');line.className='flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/10 px-3 py-3';
+          const left=document.createElement('div');left.append(text('strong','text-xs text-white',monthLabel(row.month)),text('p','mt-1 text-[.6rem] text-white/42',row.eventCount+' dated event'+(row.eventCount===1?'':'s')));
+          const right=document.createElement('div');right.className='text-right';right.append(text('strong','text-sm text-white',row.bartenderShifts+' bartender shifts'),text('p','mt-1 text-[.6rem] text-white/45',row.bartenderHours+' bartender-hours'));
+          line.append(left,right);mobileStaffing.appendChild(line);
+        });
+        if(!forecast.length) mobileStaffing.appendChild(text('p','text-sm text-white/45','Staffing demand will populate from dated opportunities.'));
+      }
+    }
+
     function renderMobileBar() {
       const all=(payload.records||[]).filter(isMobileBarRecord);
       const shown=filteredMobileRecords();
@@ -893,6 +1030,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         shown.slice(0,100).forEach((record)=>mobileRecords.appendChild(renderMobileCard(record)));
         if(!shown.length) mobileRecords.appendChild(text('p','rounded-xl border border-white/10 bg-white/[.05] p-5 text-sm text-white/55','No Mobile Bar records match these filters.'));
       }
+
+      renderMobileAnalytics();
 
       if(mobileReport){
         mobileReport.innerHTML='';
