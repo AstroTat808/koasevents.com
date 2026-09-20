@@ -1,0 +1,268 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { localSeoDashboard } from '../../../data/localSeoDashboard';
+
+const latestMonth = localSeoDashboard.months[localSeoDashboard.months.length - 1];
+const previousMonth = localSeoDashboard.months[localSeoDashboard.months.length - 2];
+
+const delta = (current: number, previous: number) => {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+};
+const fmtDelta = (value: number | null) => value == null ? '—' : `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
+
+const cards = [
+  { label: 'GBP impressions', value: latestMonth.gbp.impressions, delta: delta(latestMonth.gbp.impressions, previousMonth.gbp.impressions) },
+  { label: 'Website clicks', value: latestMonth.gbp.websiteClicks, delta: delta(latestMonth.gbp.websiteClicks, previousMonth.gbp.websiteClicks) },
+  { label: 'Call clicks', value: latestMonth.gbp.calls, delta: delta(latestMonth.gbp.calls, previousMonth.gbp.calls) },
+  { label: 'Directions', value: latestMonth.gbp.directions, delta: delta(latestMonth.gbp.directions, previousMonth.gbp.directions) },
+  { label: 'Google reviews', value: localSeoDashboard.reviews.count, delta: null },
+  { label: 'Average rating', value: localSeoDashboard.reviews.averageRating.toFixed(1), delta: null },
+];
+---
+<BaseLayout noindex title="Koa’s Local SEO Dashboard" description="Track Koa’s local search performance, Google Business Profile activity, citations and rankings." canonical="https://koasevents.com/admin/seo/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Local SEO</p>
+          <h1 class="display mt-3 text-5xl">Local search control center</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Google Business Profile performance, Search Console trends, commercial query rankings, citation consistency and GBP publishing history in one place.</p>
+        </div>
+        <a href="/admin/" class="link-arrow">Admin home →</a>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+
+      <div data-admin-ui class="hidden grid gap-8">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          {cards.map((card) => (
+            <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-clay)]">{card.label}</p>
+              <p class="display mt-3 text-4xl text-[var(--koa-forest)]">{card.value}</p>
+              <p class="mt-2 text-xs text-[var(--koa-ink)]/45">{card.delta == null ? `Snapshot ${localSeoDashboard.snapshotDate}` : `${fmtDelta(card.delta)} vs. prior month`}</p>
+            </article>
+          ))}
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Month over month</p>
+              <h2 class="display mt-3 text-4xl">Google Business Profile + Search Console</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">September is a partial month through September 20, 2026. Search Console average position is impression-weighted.</p>
+            </div>
+            <span class="rounded-full bg-[var(--koa-sand)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Baseline through {localSeoDashboard.snapshotDate}</span>
+          </div>
+
+          <div class="mt-6 overflow-x-auto">
+            <table class="w-full min-w-[980px] border-collapse text-sm">
+              <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">
+                <th class="py-3 pr-4">Month</th><th class="py-3 pr-4">GBP impressions</th><th class="py-3 pr-4">Website clicks</th><th class="py-3 pr-4">Calls</th><th class="py-3 pr-4">Directions</th><th class="py-3 pr-4">GSC impressions</th><th class="py-3 pr-4">GSC clicks</th><th class="py-3 pr-4">CTR</th><th class="py-3">Avg. position</th>
+              </tr></thead>
+              <tbody>
+                {localSeoDashboard.months.map((row) => (
+                  <tr class="border-b border-[var(--koa-line)]">
+                    <td class="py-4 pr-4 font-semibold">{row.month}</td>
+                    <td class="py-4 pr-4">{row.gbp.impressions}</td>
+                    <td class="py-4 pr-4">{row.gbp.websiteClicks}</td>
+                    <td class="py-4 pr-4">{row.gbp.calls}</td>
+                    <td class="py-4 pr-4">{row.gbp.directions}</td>
+                    <td class="py-4 pr-4">{row.searchConsole.impressions}</td>
+                    <td class="py-4 pr-4">{row.searchConsole.clicks}</td>
+                    <td class="py-4 pr-4">{(row.searchConsole.ctr * 100).toFixed(1)}%</td>
+                    <td class="py-4">{row.searchConsole.avgPosition ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+          <div>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Tracked commercial queries</p>
+            <h2 class="display mt-3 text-4xl">Ranking movement by month</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-white/58">Lower average position is better. These are the search themes already producing meaningful local commercial intent for Koa’s.</p>
+          </div>
+          <div class="mt-6 grid gap-4 xl:grid-cols-2">
+            {localSeoDashboard.trackedQueries.map((query) => (
+              <article class="rounded-[1.2rem] border border-white/10 bg-white/[.05] p-5">
+                <h3 class="display text-3xl">{query.query}</h3>
+                <div class="mt-4 overflow-x-auto">
+                  <table class="w-full min-w-[520px] text-sm">
+                    <thead><tr class="border-b border-white/10 text-left text-[.55rem] font-black uppercase tracking-[.1em] text-white/50"><th class="py-2 pr-3">Month</th><th class="py-2 pr-3">Impressions</th><th class="py-2 pr-3">Clicks</th><th class="py-2">Position</th></tr></thead>
+                    <tbody>
+                      {query.months.map((row) => (
+                        <tr class="border-b border-white/10"><td class="py-3 pr-3">{row.month}</td><td class="py-3 pr-3">{row.impressions}</td><td class="py-3 pr-3">{row.clicks}</td><td class="py-3">{row.avgPosition ?? '—'}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Citation tracker</p>
+              <h2 class="display mt-3 text-4xl">Keep every directory aligned to 11-3330</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">Mark listings verified, flag outdated citations, add notes and record what address each directory currently displays.</p>
+            </div>
+            <div class="flex flex-wrap gap-2 text-xs font-black uppercase tracking-[.08em]">
+              <span data-citation-verified class="rounded-full bg-emerald-50 px-3 py-2 text-emerald-800">0 verified</span>
+              <span data-citation-update class="rounded-full bg-amber-50 px-3 py-2 text-amber-800">0 needs update</span>
+              <span data-citation-unverified class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[var(--koa-forest)]">0 unverified</span>
+            </div>
+          </div>
+          <p data-citation-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
+          <div data-citations class="mt-6 grid gap-4 xl:grid-cols-2"></div>
+
+          <form data-add-citation class="mt-6 grid gap-3 rounded-[1.2rem] bg-[var(--koa-sand)] p-5 lg:grid-cols-[1fr_1.4fr_1.4fr_auto] lg:items-end">
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Platform<input name="platform" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></label>
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Listing URL<input name="url" type="url" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></label>
+            <label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Notes<input name="notes" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Add citation</button>
+          </form>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Google Business Profile posts</p>
+              <h2 class="display mt-3 text-4xl">Publishing history</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">The GBP connector exposes post state and Google search URL, but not post-level impression/click metrics. Performance is evaluated against the profile-level monthly metrics above.</p>
+            </div>
+            <a href="/admin/" class="link-arrow">72-post calendar is stored in the project →</a>
+          </div>
+
+          <div class="mt-6 overflow-x-auto">
+            <table class="w-full min-w-[820px] border-collapse text-sm">
+              <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Published</th><th class="py-3 pr-4">Calendar date</th><th class="py-3 pr-4">Pillar</th><th class="py-3 pr-4">Post</th><th class="py-3 pr-4">State</th><th class="py-3">Destination</th></tr></thead>
+              <tbody>
+                {localSeoDashboard.publishedPosts.length ? localSeoDashboard.publishedPosts.map((post) => (
+                  <tr class="border-b border-[var(--koa-line)]"><td class="py-4 pr-4">{post.date}</td><td class="py-4 pr-4">{post.calendarDate}</td><td class="py-4 pr-4">{post.pillar}</td><td class="py-4 pr-4">{post.searchUrl ? <a class="underline" href={post.searchUrl} target="_blank" rel="noreferrer">{post.title}</a> : post.title}</td><td class="py-4 pr-4">{post.state}</td><td class="py-4"><a class="underline" href={post.destinationUrl} target="_blank" rel="noreferrer">Open page</a></td></tr>
+                )) : (
+                  <tr><td colspan="6" class="py-6 text-[var(--koa-ink)]/45">No automated GBP posts have been published from the new calendar yet. The first scheduled date is September 22, 2026.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const ui = document.querySelector('[data-admin-ui]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const citationsWrap = document.querySelector('[data-citations]');
+    const message = document.querySelector('[data-citation-message]');
+    const addForm = document.querySelector('[data-add-citation]');
+    let citationPayload = { citations: [], totals: {} };
+
+    function hasAdminAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+    }
+
+    function text(tag,className,content) {
+      const el=document.createElement(tag);
+      if(className)el.className=className;
+      el.textContent=content;
+      return el;
+    }
+
+    function statusLabel(value) {
+      return ({verified:'Verified','needs-update':'Needs update',unverified:'Unverified','not-applicable':'Not applicable'})[value] || value;
+    }
+
+    function renderCitations() {
+      if(!citationsWrap)return;
+      citationsWrap.innerHTML='';
+      const totals=citationPayload.totals||{};
+      document.querySelector('[data-citation-verified]').textContent=String(totals.verified||0)+' verified';
+      document.querySelector('[data-citation-update]').textContent=String(totals.needsUpdate||0)+' needs update';
+      document.querySelector('[data-citation-unverified]').textContent=String(totals.unverified||0)+' unverified';
+
+      (citationPayload.citations||[]).forEach((item)=>{
+        const card=document.createElement('form');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        card.dataset.citationId=item.id;
+
+        const head=document.createElement('div');
+        head.className='flex flex-wrap items-start justify-between gap-3';
+        const titleWrap=document.createElement('div');
+        titleWrap.append(text('h3','display text-3xl text-[var(--koa-forest)]',item.platform),text('p','mt-1 text-xs text-[var(--koa-ink)]/45',item.lastChecked?'Last checked '+item.lastChecked:'Not yet verified'));
+        head.appendChild(titleWrap);
+        if(item.url){
+          const link=document.createElement('a');link.href=item.url;link.target='_blank';link.rel='noreferrer';link.className='link-arrow text-xs';link.textContent='Open listing →';head.appendChild(link);
+        }
+        card.appendChild(head);
+
+        const fields=document.createElement('div');
+        fields.className='mt-4 grid gap-3 sm:grid-cols-2';
+        fields.innerHTML='<label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Status<select name="status" class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"><option value="verified">Verified</option><option value="needs-update">Needs update</option><option value="unverified">Unverified</option><option value="not-applicable">Not applicable</option></select></label><label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]">Address found<input name="addressFound" class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></label><label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)] sm:col-span-2">Listing URL<input name="url" type="url" class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></label><label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)] sm:col-span-2">Notes<textarea name="notes" rows="3" class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-sm font-normal normal-case tracking-normal text-[var(--koa-ink)]"></textarea></label>';
+        fields.querySelector('[name="status"]').value=item.status||'unverified';
+        fields.querySelector('[name="addressFound"]').value=item.addressFound||'';
+        fields.querySelector('[name="url"]').value=item.url||'';
+        fields.querySelector('[name="notes"]').value=item.notes||'';
+        card.appendChild(fields);
+
+        const actions=document.createElement('div');
+        actions.className='mt-4 flex items-center gap-3';
+        const save=document.createElement('button');save.type='submit';save.className='rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white';save.textContent='Save citation';
+        const state=text('span','text-xs font-bold text-[var(--koa-ink)]/45',statusLabel(item.status));
+        actions.append(save,state);card.appendChild(actions);
+        citationsWrap.appendChild(card);
+      });
+    }
+
+    async function refreshCitations() {
+      const response=await fetch('/api/admin/local-seo',{cache:'no-store'});
+      if(!response.ok)throw new Error('Unable to load citation tracker.');
+      citationPayload=await response.json();
+      renderCitations();
+    }
+
+    citationsWrap?.addEventListener('submit',async(event)=>{
+      const form=event.target.closest('form[data-citation-id]');
+      if(!form)return;
+      event.preventDefault();
+      const data=new FormData(form);
+      if(message)message.textContent='Saving citation…';
+      const response=await fetch('/api/admin/local-seo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'update-citation',id:form.dataset.citationId,status:data.get('status'),addressFound:data.get('addressFound'),url:data.get('url'),notes:data.get('notes')})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){if(message)message.textContent=result.error||'Unable to save citation.';return;}
+      if(message)message.textContent='Citation saved.';
+      await refreshCitations();
+    });
+
+    addForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(addForm);
+      if(message)message.textContent='Adding citation…';
+      const response=await fetch('/api/admin/local-seo',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'add-citation',platform:data.get('platform'),url:data.get('url'),notes:data.get('notes')})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){if(message)message.textContent=result.error||'Unable to add citation.';return;}
+      addForm.reset();
+      if(message)message.textContent='Citation added.';
+      await refreshCitations();
+    });
+
+    async function initialize() {
+      const user=await getUser();
+      if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      ui?.classList.remove('hidden');
+      try{await refreshCitations();}catch(error){if(message)message.textContent=error instanceof Error?error.message:'Unable to load Local SEO data.';}
+    }
+
+    initialize();
+  </script>
+</BaseLayout>
