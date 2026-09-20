@@ -3,7 +3,7 @@ import { wixBlogPosts } from '../data/wixBlogPosts';
 
 export const prerender = true;
 
-const SITE = 'https://www.koasevents.com';
+const SITE = 'https://koasevents.com';
 
 type SitemapEntry = {
   path: string;
