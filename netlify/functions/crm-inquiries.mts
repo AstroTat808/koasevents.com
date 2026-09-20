@@ -469,17 +469,30 @@ export default async (req: Request, context: Context) => {
           record.inquiry.alternateWindow,
         ].filter(Boolean).join(' · '),
       });
-      context.waitUntil(sendLeadNotification({
-        ...existing,
-        source: 'koa-discovery-call-request',
-        customer: { ...existing.customer, eventDate: record.inquiry.preferredDate || record.customer.eventDate },
-        inquiry: {
-          ...(existing.inquiry || {}),
-          preferredDate: record.inquiry.preferredDate || record.customer.eventDate,
-          preferredTime: record.inquiry.preferredTime,
-          alternateWindow: record.inquiry.alternateWindow,
-        },
-      }));
+      context.waitUntil((async () => {
+        const notification = await sendLeadNotification({
+          ...existing,
+          source: 'koa-discovery-call-request',
+          customer: { ...existing.customer, eventDate: record.inquiry.preferredDate || record.customer.eventDate },
+          inquiry: {
+            ...(existing.inquiry || {}),
+            preferredDate: record.inquiry.preferredDate || record.customer.eventDate,
+            preferredTime: record.inquiry.preferredTime,
+            alternateWindow: record.inquiry.alternateWindow,
+          },
+        });
+        await appendEvent(store, {
+          id: 'EVT-' + idSuffix(),
+          type: notification.sent ? 'lead_notification_sent' : 'lead_notification_failed',
+          packageId: existing.packageId || existing.inquiry?.venuePackage || '',
+          quoteId: existing.quoteId || '',
+          recordId: existing.id,
+          createdAt: new Date().toISOString(),
+          detail: notification.sent
+            ? 'Branded Discovery Call notification sent' + (notification.id ? ' · ' + notification.id : '')
+            : 'Branded Discovery Call notification could not be sent',
+        });
+      })().catch((error) => console.error('Discovery notification tracking failed', error)));
       return json(req, {
         ok: true,
         id: existing.id,
@@ -572,7 +585,20 @@ export default async (req: Request, context: Context) => {
       : '',
   });
 
-  context.waitUntil(sendLeadNotification(record));
+  context.waitUntil((async () => {
+    const notification = await sendLeadNotification(record);
+    await appendEvent(store, {
+      id: 'EVT-' + idSuffix(),
+      type: notification.sent ? 'lead_notification_sent' : 'lead_notification_failed',
+      packageId: packageId || record.inquiry.venuePackage || record.inquiry.mobileBarPackage || '',
+      quoteId,
+      recordId: id,
+      createdAt: new Date().toISOString(),
+      detail: notification.sent
+        ? 'Branded lead notification sent' + (notification.id ? ' · ' + notification.id : '')
+        : 'Branded lead notification could not be sent',
+    });
+  })().catch((error) => console.error('Lead notification tracking failed', error)));
 
   const turnstileProof = expectedTurnstileAction
     ? await createTurnstileProof(formName, record.customer.email)
