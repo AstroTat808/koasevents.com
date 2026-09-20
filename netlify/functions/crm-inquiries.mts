@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { sendLeadNotification } from './_shared/lead-email.ts';
+import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import {
   analyzeInquirySecurity,
   applyAutomaticBlocks,
@@ -181,6 +181,34 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
 async function appendEvent(store: any, event: Record<string, unknown>) {
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
+}
+
+async function persistCommunicationResults(
+  store: any,
+  recordId: string,
+  results: Record<string, { sent?: boolean; configured?: boolean; id?: string }>,
+) {
+  const stored: any = await store.get('records/' + recordId, { type: 'json' });
+  if (!stored) return;
+
+  const at = new Date().toISOString();
+  const communications = { ...(stored.communications || {}) };
+  for (const [key, result] of Object.entries(results)) {
+    communications[key] = {
+      messageId: String(result?.id || ''),
+      status: result?.sent ? 'sent' : 'failed',
+      sentAt: result?.sent ? at : '',
+      updatedAt: at,
+    };
+  }
+  stored.communications = communications;
+
+  await store.setJSON('records/' + recordId, stored);
+  const index = (await store.get('records/index', { type: 'json' })) || [];
+  await store.setJSON(
+    'records/index',
+    index.map((entry: any) => entry?.id === recordId ? { ...entry, communications } : entry).slice(0, 1500),
+  );
 }
 
 function allowedOrigin(req: Request) {
@@ -391,6 +419,10 @@ export default async (req: Request, context: Context) => {
       reasons: security.reasons,
       reasonCodes: security.reasonCodes,
     },
+    communications: {
+      internalNotification: { messageId: '', status: 'pending', sentAt: '', updatedAt: now.toISOString() },
+      clientConfirmation: { messageId: '', status: 'pending', sentAt: '', updatedAt: now.toISOString() },
+    },
     inquiry: {
       formName,
       service: cleanText(payload.inquiry?.service, 80),
@@ -470,7 +502,7 @@ export default async (req: Request, context: Context) => {
         ].filter(Boolean).join(' · '),
       });
       context.waitUntil((async () => {
-        const notification = await sendLeadNotification({
+        const discoveryRecord = {
           ...existing,
           source: 'koa-discovery-call-request',
           customer: { ...existing.customer, eventDate: record.inquiry.preferredDate || record.customer.eventDate },
@@ -480,6 +512,14 @@ export default async (req: Request, context: Context) => {
             preferredTime: record.inquiry.preferredTime,
             alternateWindow: record.inquiry.alternateWindow,
           },
+        };
+        const [notification, confirmation] = await Promise.all([
+          sendLeadNotification(discoveryRecord),
+          sendClientConfirmation(discoveryRecord),
+        ]);
+        await persistCommunicationResults(store, existing.id, {
+          discoveryNotification: notification,
+          discoveryConfirmation: confirmation,
         });
         await appendEvent(store, {
           id: 'EVT-' + idSuffix(),
@@ -489,8 +529,19 @@ export default async (req: Request, context: Context) => {
           recordId: existing.id,
           createdAt: new Date().toISOString(),
           detail: notification.sent
-            ? 'Branded Discovery Call notification sent' + (notification.id ? ' · ' + notification.id : '')
-            : 'Branded Discovery Call notification could not be sent',
+            ? 'Branded Discovery Call team notification sent' + (notification.id ? ' · ' + notification.id : '')
+            : 'Branded Discovery Call team notification could not be sent',
+        });
+        await appendEvent(store, {
+          id: 'EVT-' + idSuffix(),
+          type: confirmation.sent ? 'client_confirmation_sent' : 'client_confirmation_failed',
+          packageId: existing.packageId || existing.inquiry?.venuePackage || '',
+          quoteId: existing.quoteId || '',
+          recordId: existing.id,
+          createdAt: new Date().toISOString(),
+          detail: confirmation.sent
+            ? 'Discovery Call confirmation sent to client' + (confirmation.id ? ' · ' + confirmation.id : '')
+            : 'Discovery Call confirmation could not be sent',
         });
       })().catch((error) => console.error('Discovery notification tracking failed', error)));
       return json(req, {
@@ -586,7 +637,14 @@ export default async (req: Request, context: Context) => {
   });
 
   context.waitUntil((async () => {
-    const notification = await sendLeadNotification(record);
+    const [notification, confirmation] = await Promise.all([
+      sendLeadNotification(record),
+      sendClientConfirmation(record),
+    ]);
+    await persistCommunicationResults(store, id, {
+      internalNotification: notification,
+      clientConfirmation: confirmation,
+    });
     await appendEvent(store, {
       id: 'EVT-' + idSuffix(),
       type: notification.sent ? 'lead_notification_sent' : 'lead_notification_failed',
@@ -595,10 +653,21 @@ export default async (req: Request, context: Context) => {
       recordId: id,
       createdAt: new Date().toISOString(),
       detail: notification.sent
-        ? 'Branded lead notification sent' + (notification.id ? ' · ' + notification.id : '')
-        : 'Branded lead notification could not be sent',
+        ? 'Branded team lead notification sent' + (notification.id ? ' · ' + notification.id : '')
+        : 'Branded team lead notification could not be sent',
     });
-  })().catch((error) => console.error('Lead notification tracking failed', error)));
+    await appendEvent(store, {
+      id: 'EVT-' + idSuffix(),
+      type: confirmation.sent ? 'client_confirmation_sent' : 'client_confirmation_failed',
+      packageId: packageId || record.inquiry.venuePackage || record.inquiry.mobileBarPackage || '',
+      quoteId,
+      recordId: id,
+      createdAt: new Date().toISOString(),
+      detail: confirmation.sent
+        ? 'Immediate branded confirmation sent to client' + (confirmation.id ? ' · ' + confirmation.id : '')
+        : 'Immediate client confirmation could not be sent',
+    });
+  })().catch((error) => console.error('Lead email tracking failed', error)));
 
   const turnstileProof = expectedTurnstileAction
     ? await createTurnstileProof(formName, record.customer.email)
