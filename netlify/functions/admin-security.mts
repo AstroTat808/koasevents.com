@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin.ts';
 import {
   applyAutomaticBlocks,
@@ -34,6 +35,84 @@ function topEntries(map: Record<string, number>, limit = 12) {
     .slice(0, limit);
 }
 
+function salesStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-sales', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-sales' });
+}
+
+function securityEventId() {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
+async function appendSalesEvent(context: Context, event: Record<string, unknown>) {
+  const store = salesStoreFor(context);
+  const current = ((await store.get('analytics/events/index', { type: 'json' })) || []) as any[];
+  await store.setJSON('analytics/events/index', [{
+    id: 'EVT-' + securityEventId(),
+    createdAt: new Date().toISOString(),
+    ...event,
+  }, ...current].slice(0, 10000));
+}
+
+async function autoTrashConfirmedSpamRecord(
+  context: Context,
+  incident: SecurityEvent,
+  adminEmail: string,
+) {
+  const recordId = clean(incident.recordId, 100);
+  if (!recordId) return { moved: false, reason: 'Security incident has no CRM record.' };
+
+  const store = salesStoreFor(context);
+  const records = (((await store.get('records/index', { type: 'json', consistency: 'strong' })) || []) as any[]);
+  const record = records.find((entry) => entry?.id === recordId);
+  if (!record) return { moved: false, reason: 'CRM record is no longer active.' };
+
+  if (!['inquiry', 'lead'].includes(String(record.kind || '')) || ['proposal', 'booked'].includes(String(record.stage || ''))) {
+    return { moved: false, reason: 'Only inquiry and lead records are eligible for automatic spam cleanup.' };
+  }
+
+  const downstream = records.filter((entry) => entry?.source === record.id);
+  if (downstream.length) {
+    return { moved: false, reason: 'CRM record has downstream history and was preserved.' };
+  }
+
+  const trash = (((await store.get('trash/index', { type: 'json', consistency: 'strong' })) || []) as any[]);
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const activeTrash = trash.filter((entry) => new Date(entry?.expiresAt || 0).getTime() > now.getTime());
+  const trashEntry = {
+    id: record.id,
+    kind: record.kind,
+    customerName: clean(record.customer?.name, 180),
+    customerEmail: clean(record.customer?.email, 240),
+    eventDate: clean(record.customer?.eventDate, 40),
+    packageId: clean(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage || record.inquiry?.mobileBarPackage, 80),
+    deletedAt: now.toISOString(),
+    expiresAt,
+    deletedBy: 'security:' + adminEmail,
+    reason: 'Confirmed spam',
+    securityIncidentId: incident.id,
+  };
+
+  await store.setJSON('trash/records/' + record.id, record);
+  await store.setJSON('trash/index', [trashEntry, ...activeTrash.filter((entry) => entry?.id !== record.id)].slice(0, 1000));
+  await store.delete('records/' + record.id);
+  await store.setJSON('records/index', records.filter((entry) => entry?.id !== record.id).slice(0, 1500));
+
+  await appendSalesEvent(context, {
+    type: 'confirmed_spam_trashed',
+    recordId: record.id,
+    quoteId: record.quoteId || '',
+    packageId: record.packageId || '',
+    detail: 'Confirmed-spam CRM record automatically moved to 30-day Trash from Security + Spam.',
+  });
+
+  return { moved: true, recordId: record.id, expiresAt };
+}
+
 export default async (req: Request, context: Context) => {
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
@@ -56,11 +135,13 @@ export default async (req: Request, context: Context) => {
 
       const review = await setSecurityReview(context, incidentId, verdict, adminEmail);
       let automaticBlocks = [];
+      let crmCleanup = { moved: false, reason: '' };
       if (verdict === 'confirmed_spam') {
         const reviewedEvents = events.map((event) => event.id === incidentId ? { ...event, review } : event);
         automaticBlocks = await applyAutomaticBlocks(context, { ...incident, review }, reviewedEvents);
+        crmCleanup = await autoTrashConfirmedSpamRecord(context, { ...incident, review }, adminEmail);
       }
-      return Response.json({ ok: true, review, automaticBlocks }, { headers: { 'Cache-Control': 'private, no-store' } });
+      return Response.json({ ok: true, review, automaticBlocks, crmCleanup }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
     if (action === 'block') {
