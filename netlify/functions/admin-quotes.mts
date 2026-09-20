@@ -93,6 +93,12 @@ type SalesRecord = {
     reasons: string[];
     reasonCodes: string[];
   };
+  communications?: Record<string, {
+    messageId?: string;
+    status?: 'pending' | 'sent' | 'delivered' | 'bounced' | 'failed' | string;
+    sentAt?: string;
+    updatedAt?: string;
+  }>;
   inquiry?: Record<string, unknown>;
   quote?: SavedQuote;
   proposal?: {
@@ -1215,7 +1221,7 @@ export default async (req: Request, context: Context) => {
 
   if (payload.action === 'log-activity') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
-    const allowed = new Set(['call', 'email', 'note', 'meeting']);
+    const allowed = new Set(['call', 'email', 'note', 'meeting', 'responded']);
     const type = cleanText(payload.type, 30);
     if (!record || !allowed.has(type)) return Response.json({ error: 'Record or activity type not found.' }, { status: 400 });
 
