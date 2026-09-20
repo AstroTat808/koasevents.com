@@ -71,6 +71,7 @@ type BookingState = {
 };
 
 type ProfitModel = {
+  costMode: 'auto' | 'manual';
   bartenderWageRate: number;
   suppliesCost: number;
   travelCost: number;
@@ -691,7 +692,10 @@ function sanitizeLines(input: unknown): ProposalLine[] {
 }
 
 function sanitizeProfitModel(input: any, current?: ProfitModel): ProfitModel {
+  const requestedMode = cleanText(input?.costMode ?? current?.costMode ?? (current ? 'manual' : 'auto'), 20);
+  const costMode = requestedMode === 'manual' ? 'manual' : 'auto';
   return {
+    costMode,
     bartenderWageRate: finite(input?.bartenderWageRate ?? current?.bartenderWageRate ?? 40, 0, 500),
     suppliesCost: finite(input?.suppliesCost ?? current?.suppliesCost ?? 0),
     travelCost: finite(input?.travelCost ?? current?.travelCost ?? 0),
