@@ -63,16 +63,12 @@ export default async (req: Request, context: Context) => {
   if (!secret) return context.next();
 
   const pathname = new URL(req.url).pathname;
-  const expectedForms: Record<string, string> = {
-    '/thank-you/': 'koa-event-inquiry',
-    '/wedding-inquiry-thank-you/': 'koa-wedding-inquiry',
+  const expectedForms: Record<string, string[]> = {
+    '/thank-you/': ['koa-event-inquiry', 'koa-discovery-call-request', 'koa-stay-inquiry'],
+    '/wedding-inquiry-thank-you/': ['koa-wedding-inquiry'],
   };
-  const expectedFormName = expectedForms[pathname];
-  if (!expectedFormName) return context.next();
-
-  const passThroughForms: Record<string, string[]> = {
-    '/thank-you/': ['koa-discovery-call-request', 'koa-stay-inquiry', 'koa-catalog-quote-request'],
-  };
+  const allowedFormNames = expectedForms[pathname];
+  if (!allowedFormNames) return context.next();
 
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {
@@ -86,8 +82,7 @@ export default async (req: Request, context: Context) => {
   }
 
   const formName = clean(params.get('form-name'), 80);
-  if ((passThroughForms[pathname] || []).includes(formName)) return context.next();
-  if (formName !== expectedFormName) return blocked();
+  if (!allowedFormNames.includes(formName)) return blocked();
 
   const email = clean(params.get('email'), 240);
   const proof = clean(params.get('koa-turnstile-proof'), 1000);
