@@ -16,6 +16,28 @@ function cleanNumber(value: unknown, min = 0, max = 1000000) {
   return Number.isFinite(parsed) ? Math.min(max, Math.max(min, parsed)) : 0;
 }
 
+function cleanLineItems(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 40).map((line: any, index: number) => {
+    const quantity = Math.max(1, Math.round(cleanNumber(line?.quantity, 1, 2000)));
+    const unitPrice = cleanNumber(line?.unitPrice, 0, 1000000);
+    const amount = cleanNumber(line?.amount ?? quantity * unitPrice, 0, 10000000);
+    return {
+      id: cleanText(line?.id || 'line-' + (index + 1), 80),
+      description: cleanText(line?.description, 240),
+      quantity,
+      unitPrice: Math.round(unitPrice * 100) / 100,
+      amount: Math.round(amount * 100) / 100,
+      custom: Boolean(line?.custom),
+    };
+  }).filter((line) => line.description);
+}
+
+function cleanStringList(value: unknown, maxItems = 30, maxLength = 160) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, maxItems).map((item) => cleanText(item, maxLength)).filter(Boolean);
+}
+
 function idSuffix() {
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -27,23 +49,60 @@ async function appendEvent(store: any, event: Record<string, unknown>) {
   await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
 }
 
-export default async (req: Request, context: Context) => {
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
-
-  const origin = req.headers.get('origin');
+function allowedOrigin(req: Request) {
+  const origin = req.headers.get('origin') || '';
+  if (!origin) return '';
   const requestOrigin = new URL(req.url).origin;
-  if (origin && origin !== requestOrigin) {
+  const allowed = new Set([
+    requestOrigin,
+    'https://koasmobilebar.com',
+    'https://www.koasmobilebar.com',
+  ]);
+  return allowed.has(origin) ? origin : '';
+}
+
+function responseHeaders(req: Request) {
+  const origin = allowedOrigin(req);
+  return {
+    'Cache-Control': 'private, no-store',
+    ...(origin ? {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Koa-Inquiry-Capture',
+      'Vary': 'Origin',
+    } : {}),
+  };
+}
+
+function json(req: Request, body: unknown, status = 200) {
+  return Response.json(body, { status, headers: responseHeaders(req) });
+}
+
+export default async (req: Request, context: Context) => {
+  const origin = req.headers.get('origin');
+  if (origin && !allowedOrigin(req)) {
     return Response.json({ error: 'Cross-site inquiry capture is not allowed.' }, { status: 403 });
   }
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: responseHeaders(req) });
+  }
+
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405, headers: responseHeaders(req) });
+
   if (req.headers.get('x-koa-inquiry-capture') !== '1') {
-    return Response.json({ error: 'Missing inquiry-capture request header.' }, { status: 400 });
+    return json(req, { error: 'Missing inquiry-capture request header.' }, 400);
   }
 
   const rawBody = await req.text();
-  if (rawBody.length > 80_000) return Response.json({ error: 'Inquiry is too large.' }, { status: 413 });
+  if (rawBody.length > 80_000) return json(req, { error: 'Inquiry is too large.' }, 413);
 
   let payload: any;
-  try { payload = JSON.parse(rawBody); } catch { return Response.json({ error: 'Invalid JSON.' }, { status: 400 }); }
+  try { payload = JSON.parse(rawBody); } catch { return json(req, { error: 'Invalid JSON.' }, 400); }
+
+  if (cleanText(payload.honeypot, 120)) {
+    return json(req, { ok: true, id: '' });
+  }
 
   const now = new Date();
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
@@ -80,6 +139,18 @@ export default async (req: Request, context: Context) => {
       eventLocation: cleanText(payload.inquiry?.eventLocation, 320),
       priorities: cleanText(payload.inquiry?.priorities, 4000),
       source: cleanText(payload.inquiry?.source, 200),
+      alternativeDate: cleanText(payload.inquiry?.alternativeDate, 40),
+      contactMethod: cleanText(payload.inquiry?.contactMethod, 80),
+      referralSource: cleanText(payload.inquiry?.referralSource, 120),
+      serviceHours: cleanNumber(payload.inquiry?.serviceHours, 0, 24),
+      oneWayMiles: cleanNumber(payload.inquiry?.oneWayMiles, 0, 500),
+      bartenderCount: Math.round(cleanNumber(payload.inquiry?.bartenderCount, 0, 20)),
+      gratuityMode: cleanText(payload.inquiry?.gratuityMode, 80),
+      glasswareCount: Math.round(cleanNumber(payload.inquiry?.glasswareCount, 0, 2000)),
+      estimatedTotal: Math.round(cleanNumber(payload.inquiry?.estimatedTotal, 0, 10000000) * 100) / 100,
+      estimateLineItems: cleanLineItems(payload.inquiry?.estimateLineItems),
+      customAddOns: cleanStringList(payload.inquiry?.customAddOns),
+      calculatorVersion: cleanText(payload.inquiry?.calculatorVersion, 40),
       selectedCatalogItems: cleanText(payload.inquiry?.selectedCatalogItems, 8000),
       automaticRentalBreakdown: cleanText(payload.inquiry?.automaticRentalBreakdown, 8000),
       manualAddOns: cleanText(payload.inquiry?.manualAddOns, 8000),
@@ -94,13 +165,16 @@ export default async (req: Request, context: Context) => {
   await appendEvent(store, {
     id: 'EVT-' + idSuffix(),
     type: 'inquiry',
-    packageId: packageId || record.inquiry.venuePackage || '',
+    packageId: packageId || record.inquiry.venuePackage || record.inquiry.mobileBarPackage || '',
     quoteId,
     recordId: id,
     createdAt: now.toISOString(),
+    detail: record.inquiry.service === 'mobile-bar' && record.inquiry.estimatedTotal
+      ? 'Mobile bar estimate submitted at $' + Number(record.inquiry.estimatedTotal).toFixed(2)
+      : '',
   });
 
-  return Response.json({ ok: true, id }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return json(req, { ok: true, id });
 };
 
 export const config: Config = { path: '/api/crm/inquiries' };
