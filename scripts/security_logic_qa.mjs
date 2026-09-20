@@ -6,7 +6,7 @@ globalThis.Netlify = {
   },
 };
 
-const { analyzeInquirySecurity } = await import('../netlify/functions/_shared/security.ts');
+const { analyzeInquirySecurity, automaticBlockDecision } = await import('../netlify/functions/_shared/security.ts');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -133,7 +133,67 @@ async function run() {
   console.log('PASS | SEO solicitation + link blocked');
   console.log('PASS | crypto solicitation + link blocked');
   console.log('PASS | repeated message flagged');
+  const abuseEvent = (index, hoursAgo = 0, review = null) => ({
+    id: 'SEC-ABUSE-' + index,
+    createdAt: new Date(Date.now() - hoursAgo * 3600000).toISOString(),
+    disposition: 'blocked',
+    category: 'inquiry_screened',
+    formName: 'koa-event-inquiry',
+    reasons: ['test abuse'],
+    reasonCodes: ['test_abuse'],
+    riskScore: 100,
+    ipFingerprint: 'network-abuse',
+    emailDomain: 'spam.example',
+    emailFingerprint: 'email-abuse',
+    emailPreview: 's***@spam.example',
+    phonePreview: '•••9999',
+    messageFingerprint: 'message-' + index,
+    recordId: '',
+    detail: '',
+    ...(review ? { review } : {}),
+  });
+
+  const email24h = automaticBlockDecision(
+    [abuseEvent(1), abuseEvent(2, 1), abuseEvent(3, 2)],
+    { emailFingerprint: 'email-abuse', networkFingerprint: 'network-other' },
+  );
+  assert(email24h.some((decision) => decision.target === 'email' && decision.duration === '24h'), 'Email should auto-block for 24h after 3 abusive incidents in 24 hours.');
+
+  const email7d = automaticBlockDecision(
+    Array.from({ length: 6 }, (_, index) => abuseEvent(index, index * 12)),
+    { emailFingerprint: 'email-abuse', networkFingerprint: 'network-other' },
+  );
+  assert(email7d.some((decision) => decision.target === 'email' && decision.duration === '7d'), 'Email should auto-block for 7d after 6 abusive incidents in 7 days.');
+
+  const emailPermanent = automaticBlockDecision(
+    Array.from({ length: 12 }, (_, index) => abuseEvent(index, index * 36)),
+    { emailFingerprint: 'email-abuse', networkFingerprint: 'network-other' },
+  );
+  assert(emailPermanent.some((decision) => decision.target === 'email' && decision.duration === 'permanent'), 'Email should auto-block permanently after 12 abusive incidents in 30 days.');
+
+  const network24h = automaticBlockDecision(
+    Array.from({ length: 6 }, (_, index) => abuseEvent(index, index)),
+    { emailFingerprint: 'other-email', networkFingerprint: 'network-abuse' },
+  );
+  assert(network24h.some((decision) => decision.target === 'network' && decision.duration === '24h'), 'Network should auto-block for 24h after 6 abusive incidents in 24 hours.');
+
+  const notSpamEvents = [
+    abuseEvent(1, 0, { verdict: 'not_spam', reviewedAt: new Date().toISOString(), reviewedBy: 'admin@example.com' }),
+    abuseEvent(2, 1, { verdict: 'not_spam', reviewedAt: new Date().toISOString(), reviewedBy: 'admin@example.com' }),
+    abuseEvent(3, 2, { verdict: 'not_spam', reviewedAt: new Date().toISOString(), reviewedBy: 'admin@example.com' }),
+  ];
+  const notSpamDecision = automaticBlockDecision(
+    notSpamEvents,
+    { emailFingerprint: 'email-abuse', networkFingerprint: 'network-abuse' },
+  );
+  assert(notSpamDecision.length === 0, 'Not-spam reviews must be excluded from automatic escalation.');
+
   console.log('PASS | verified-submission velocity limit detected');
+  console.log('PASS | automatic email 24h escalation');
+  console.log('PASS | automatic email 7d escalation');
+  console.log('PASS | automatic email permanent escalation');
+  console.log('PASS | automatic network 24h escalation');
+  console.log('PASS | not-spam review excluded from escalation');
 }
 
 await run();
