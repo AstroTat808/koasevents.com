@@ -99,6 +99,19 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
         throw new Error(payload?.error || 'We could not save your discovery-call request. Please try again.');
       }
 
+      if (turnstileSiteKey && !payload?.turnstileProof) {
+        throw new Error('Security verification could not be completed. Please try again.');
+      }
+      if (payload?.turnstileProof) {
+        let proofInput = discoveryForm.querySelector('[name="koa-turnstile-proof"]');
+        if (!proofInput) {
+          proofInput = document.createElement('input');
+          proofInput.type = 'hidden';
+          proofInput.name = 'koa-turnstile-proof';
+          discoveryForm.appendChild(proofInput);
+        }
+        proofInput.value = payload.turnstileProof;
+      }
       discoveryForm.querySelector('[name="cf-turnstile-response"]')?.remove();
 
       if (payload?.notificationConfigured) {
