@@ -59,7 +59,11 @@ function turnstileSecret() {
 }
 
 function mobileIngestSecret() {
-  return String(Netlify.env.get('KOA_MOBILE_BAR_INGEST_SECRET') || '').trim();
+  const dedicated = String(Netlify.env.get('KOA_MOBILE_BAR_INGEST_SECRET') || '').trim();
+  if (dedicated) return dedicated;
+
+  const turnstile = turnstileSecret();
+  return turnstile ? `koa-mobile-bar-ingest-v1:${turnstile}` : '';
 }
 
 async function verifyMobileSource(req: Request, formName: string) {
