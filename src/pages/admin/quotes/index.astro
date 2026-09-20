@@ -591,10 +591,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return await api({action:'log-activity',recordId:record.id,type,detail});
     }
 
-    async function logAndOpen(record,type,href) {
-      try { await logActivity(record,type,type==='email'?'Email initiated from CRM.':'Call initiated from CRM.'); } catch {}
+    function logAndOpen(record,type,href) {
       window.location.href=href;
-      window.setTimeout(()=>load(String(searchInput?.value||'').trim()),600);
     }
 
     function activityLabel(type) {
