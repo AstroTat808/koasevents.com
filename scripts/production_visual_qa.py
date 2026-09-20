@@ -100,6 +100,28 @@ def source_mode():
  if legacy_marketing_pages:failures.append("Legacy editorial/Wix imagery remains on marketing pages: "+", ".join(sorted(set(legacy_marketing_pages))[:40]))
  missing_media=[ref for ref in sorted(media_refs) if not (ROOT/"public"/ref.lstrip("/")).is_file()]
  if missing_media:failures.append("Missing local media assets referenced by source: "+", ".join(missing_media[:40]))
+ admin_quotes=(SRC/"pages/admin/quotes/index.astro").read_text(encoding="utf-8",errors="ignore")
+ admin_quotes_api=(ROOT/"netlify/functions/admin-quotes.mts").read_text(encoding="utf-8",errors="ignore")
+ profit_requirements={
+  "margin health filter":"data-mobile-filter-margin",
+  "margin health summary":"data-mobile-margin-health-summary",
+  "automatic cost mode":"Automatic operating estimate",
+  "ice cost field":"name=\"iceCost\"",
+  "mixers cost field":"name=\"mixersCost\"",
+  "garnishes cost field":"name=\"garnishesCost\"",
+  "cups cost field":"name=\"cupsCost\"",
+ }
+ for label,needle in profit_requirements.items():
+  if needle not in admin_quotes:failures.append("Mobile Bar profitability UI missing "+label+": "+needle)
+ for label,needle in {
+  "profit cost mode":"costMode: 'auto' | 'manual'",
+  "persisted ice cost":"iceCost: number",
+  "persisted mixers cost":"mixersCost: number",
+  "persisted garnishes cost":"garnishesCost: number",
+  "persisted cups cost":"cupsCost: number",
+ }.items():
+  if needle not in admin_quotes_api:failures.append("Mobile Bar profitability API missing "+label+": "+needle)
+
  report={"mode":"source","sourceFiles":len(files),"mediaReferences":len(media_refs),"legacyMarketingPages":sorted(set(legacy_marketing_pages)),"missingMedia":missing_media,"failures":failures,"warnings":warnings}
  (OUT/"source-audit.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  print(json.dumps(report,indent=2));return 1 if failures else 0
@@ -299,7 +321,14 @@ def expert_design_findings(dom, route, viewport):
 
 def findings(dom,console,page_errors,request_failed,asset_failed):
  f=[]
- if page_errors:f.append(Finding("page-error","critical","JavaScript page errors detected",page_errors[:10]))
+ filtered_page_errors=[
+  message for message in page_errors
+  if not (
+   ("challenges.cloudflare.com" in message and "accessing a frame with origin" in message)
+   or ("deploy-preview-" in BASE and message.strip()=="[Cloudflare Turnstile] Error: 110200.")
+  )
+ ]
+ if filtered_page_errors:f.append(Finding("page-error","critical","JavaScript page errors detected",filtered_page_errors[:10]))
  if console:f.append(Finding("console-error","warning","Console errors detected",console[:10]))
  if request_failed:f.append(Finding("request-failed","critical","Same-origin requests failed",request_failed[:15]))
  if asset_failed:f.append(Finding("asset-http-error","critical","Document assets returned HTTP errors",asset_failed[:15]))
@@ -353,7 +382,7 @@ def admin_mode(browser_name):
    page.on("requestfailed",lambda r,t=request_failed:t.append(r.url) if urlparse(r.url).netloc==urlparse(BASE).netloc else None)
    status=0;state={};detail=""
    try:
-    response=page.goto(BASE+path,wait_until="networkidle",timeout=45000)
+    response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
     status=response.status if response else 0
     page.wait_for_timeout(800)
     state=page.evaluate("""() => {
@@ -411,8 +440,9 @@ def browser_mode(browser_name):
     page.on("response",lambda r,t=asset_failed:t.append({"url":r.url,"status":r.status}) if r.status>=400 and r.request.resource_type in {"document","script","stylesheet","image","font"} else None)
     nav=None
     try:
-     response=page.goto(BASE+path,wait_until="networkidle",timeout=45000)
+     response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
      if response and response.status>=400:nav=f"Document returned HTTP {response.status}"
+     page.wait_for_timeout(700)
      page.evaluate("""async () => {
        const imgs=[...document.images];
        imgs.forEach(img=>{img.loading='eager';});
@@ -426,7 +456,7 @@ def browser_mode(browser_name):
          const done=()=>r();
          img.addEventListener('load',done,{once:true});
          img.addEventListener('error',done,{once:true});
-         setTimeout(done,2500);
+         setTimeout(done,7000);
        })));
      }""")
      page.wait_for_timeout(150)

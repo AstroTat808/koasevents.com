@@ -109,7 +109,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </section>
           </div>
 
-          <div class="mt-6 grid gap-3 rounded-[1.2rem] border border-white/10 bg-black/10 p-4 md:grid-cols-2 xl:grid-cols-5">
+          <div data-mobile-margin-health-summary class="mt-4 grid gap-3 sm:grid-cols-3"></div>
+
+          <div class="mt-6 grid gap-3 rounded-[1.2rem] border border-white/10 bg-black/10 p-4 md:grid-cols-2 xl:grid-cols-6">
             <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Stage
               <select data-mobile-filter-stage class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
                 <option value="all">All stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option>
@@ -128,6 +130,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Follow-up
               <select data-mobile-filter-followup class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
                 <option value="all">All</option><option value="due">Needs follow-up</option><option value="clear">No task due</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Margin health
+              <select data-mobile-filter-margin class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="all">All margins</option><option value="green">Green · 50%+</option><option value="yellow">Yellow · 35–49.9%</option><option value="red">Red · under 35%</option>
               </select>
             </label>
             <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Sort
@@ -373,49 +380,67 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </div>
   </dialog>
 
-  <dialog data-profit-dialog class="w-[min(96vw,900px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
-    <form data-profit-form class="max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+  <dialog data-profit-dialog class="w-[min(96vw,980px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-profit-form class="max-h-[90vh] overflow-y-auto p-5 sm:p-8">
       <input type="hidden" name="recordId" />
       <div class="flex items-start justify-between gap-4">
-        <div>
+        <div class="min-w-0">
           <p class="eyebrow text-[var(--koa-clay)]">Mobile Bar profitability</p>
           <h2 data-profit-title class="display mt-3 text-4xl">Quote margin</h2>
           <p data-profit-meta class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55"></p>
         </div>
-        <button type="button" data-close-profit class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+        <button type="button" data-close-profit class="shrink-0 rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
       </div>
 
-      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Revenue</p><strong data-profit-revenue class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
-        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Direct costs</p><strong data-profit-direct class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
-        <article class="rounded-xl bg-[var(--koa-forest)] p-4 text-white"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/55">Profit</p><strong data-profit-dollars class="display mt-2 block text-3xl">$0</strong></article>
-        <article class="rounded-xl bg-[var(--koa-ink)] p-4 text-white"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/55">Margin</p><strong data-profit-margin class="display mt-2 block text-3xl">0%</strong></article>
+      <div class="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Revenue</p><strong data-profit-revenue class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+        <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Direct costs</p><strong data-profit-direct class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+        <article class="rounded-xl bg-[var(--koa-forest)] p-4 text-white"><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-white/65">Profit</p><strong data-profit-dollars class="display mt-2 block text-3xl">$0</strong></article>
+        <article data-profit-margin-card class="rounded-xl border p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em]">Margin</p><strong data-profit-margin class="display mt-2 block text-3xl">0%</strong></article>
+        <article data-profit-health-card class="rounded-xl border p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em]">Health</p><strong data-profit-health class="mt-2 block text-xl">—</strong><p data-profit-health-copy class="mt-1 text-xs leading-5"></p></article>
       </div>
 
-      <div class="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="mt-7 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <label class="grid gap-2 text-sm font-semibold sm:max-w-sm">Cost model
+          <select name="costMode" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3">
+            <option value="auto">Automatic operating estimate</option>
+            <option value="manual">Manual actual-cost override</option>
+          </select>
+        </label>
+        <p data-profit-mode-copy class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/55">Automatic mode estimates the major direct costs from this quote’s package, guests, service hours, travel and selected enhancements.</p>
+      </div>
+
+      <div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <label class="grid gap-2 text-sm font-semibold">Bartender wage rate / hr<input name="bartenderWageRate" type="number" min="0" max="500" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <div class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Bartender wages</p><strong data-profit-bartender-wages class="mt-2 block text-xl text-[var(--koa-forest)]">$0</strong><p data-profit-labor-meta class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div>
-        <label class="grid gap-2 text-sm font-semibold">Supplies / consumables cost<input name="suppliesCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Travel / fuel / towing cost<input name="travelCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Add-on / vendor direct cost<input name="addOnCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Gratuity payout<input name="gratuityCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Other direct costs<input name="otherDirectCosts" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">Internal cost notes<textarea name="notes" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Ice, mixers, rental/vendor costs, unusual logistics, breakage, etc."></textarea></label>
+        <div class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Bartender wages</p><strong data-profit-bartender-wages class="mt-2 block text-xl text-[var(--koa-forest)]">$0</strong><p data-profit-labor-meta class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div>
+        <label class="grid gap-2 text-sm font-semibold">Ice<input data-auto-cost-field name="iceCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Mixers<input data-auto-cost-field name="mixersCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Garnishes<input data-auto-cost-field name="garnishesCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Cups / toss-ware<input data-auto-cost-field name="cupsCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Other consumable supplies<input data-auto-cost-field name="suppliesCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Fuel / towing / vehicle<input data-auto-cost-field name="travelCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Add-on / vendor direct cost<input data-auto-cost-field name="addOnCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Gratuity payout<input data-auto-cost-field name="gratuityCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Other direct-cost reserve<input data-auto-cost-field name="otherDirectCosts" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold sm:col-span-2 lg:col-span-3">Internal cost notes<textarea name="notes" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Record actual vendor invoices, unusual towing, breakage, special supply requirements, etc."></textarea></label>
       </div>
 
       <div class="mt-6 overflow-x-auto rounded-xl border border-[var(--koa-line)]">
-        <table class="w-full min-w-[620px] border-collapse text-sm">
-          <thead><tr class="border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] text-left text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-4 py-3">Cost category</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
+        <table class="w-full min-w-[640px] border-collapse text-sm">
+          <thead><tr class="border-b border-[var(--koa-line)] bg-[var(--koa-ivory)] text-left text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-4 py-3">Cost category</th><th class="px-4 py-3 text-right">Amount</th></tr></thead>
           <tbody data-profit-breakdown></tbody>
         </table>
       </div>
 
-      <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/45">Revenue uses the current proposal total when available, otherwise the website estimate. Gratuity defaults to the quote’s gratuity line as a pass-through cost. Enter actual supplies, towing/fuel, vendor/add-on and other direct costs for an accurate event margin.</p>
-      <div class="mt-6 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save costs</button><button type="button" data-close-profit class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
+      <details class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <summary class="cursor-pointer text-xs font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Automatic estimate assumptions</summary>
+        <p class="mt-3 text-xs leading-6 text-[var(--koa-ink)]/55">Auto mode uses package-specific per-guest rates for ice, mixers, garnishes, cups and consumables; actual round-trip mileage at $1.10/mile plus towing allowances; direct-cost ratios for priced enhancements; quoted gratuity as a pass-through; and a 2% miscellaneous event-cost reserve. Glassware reduces disposable-cup demand.</p>
+      </details>
+
+      <div class="mt-6 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save cost model</button><button type="button" data-close-profit class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
       <p data-profit-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
     </form>
   </dialog>
-
   <script>
     import { getUser } from '@netlify/identity';
 
@@ -455,7 +480,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileFilterPackage = document.querySelector('[data-mobile-filter-package]');
     const mobileFilterQuote = document.querySelector('[data-mobile-filter-quote]');
     const mobileFilterFollowup = document.querySelector('[data-mobile-filter-followup]');
+    const mobileFilterMargin = document.querySelector('[data-mobile-filter-margin]');
     const mobileSort = document.querySelector('[data-mobile-sort]');
+    const mobileMarginHealthSummary = document.querySelector('[data-mobile-margin-health-summary]');
     const mobileForecast = document.querySelector('[data-mobile-forecast]');
     const mobileConversion = document.querySelector('[data-mobile-conversion]');
     const mobilePackagePopularity = document.querySelector('[data-mobile-package-popularity]');
@@ -470,6 +497,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const profitDirect = document.querySelector('[data-profit-direct]');
     const profitDollars = document.querySelector('[data-profit-dollars]');
     const profitMargin = document.querySelector('[data-profit-margin]');
+    const profitMarginCard = document.querySelector('[data-profit-margin-card]');
+    const profitHealthCard = document.querySelector('[data-profit-health-card]');
+    const profitHealth = document.querySelector('[data-profit-health]');
+    const profitHealthCopy = document.querySelector('[data-profit-health-copy]');
+    const profitModeCopy = document.querySelector('[data-profit-mode-copy]');
     const profitBartenderWages = document.querySelector('[data-profit-bartender-wages]');
     const profitLaborMeta = document.querySelector('[data-profit-labor-meta]');
     const profitBreakdown = document.querySelector('[data-profit-breakdown]');
@@ -540,6 +572,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       unspecified: 'Unspecified',
     };
     const stageLabels = { inquiry: 'Inquiries', lead: 'Leads', proposal: 'Proposals', booked: 'Booked' };
+    const marginThresholds = { green: 50, yellow: 35 };
+    const autoCostRates = {
+      'mobile-oahu': { ice:.45, mixers:1.50, garnishes:.65, cups:.75, supplies:.55 },
+      'mobile-maui': { ice:.50, mixers:1.85, garnishes:.80, cups:.80, supplies:.65 },
+      'mobile-big-island': { ice:.55, mixers:2.25, garnishes:1.00, cups:.85, supplies:.75 },
+      'mobile-custom': { ice:.50, mixers:1.75, garnishes:.80, cups:.80, supplies:.65 }
+    };
+    const addOnCostRatios = {
+      'champagne-toast':.30, 'champagne-tower':.30, 'upgraded-tossware':.45, 'vinyl-logo':.35,
+      'personalized-stirrers':.45, 'drink-accessories':.45, 'balloon-garland':.50,
+      'soda-station':.35, 'juice-punch-station':.35, 'coffee-bar':.40, 'bar-decor':.40,
+      'acrylic-bar-menu':.35, 'glassware-standard':.18, 'glassware-premium':.18
+    };
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
@@ -1337,36 +1382,88 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return lines.reduce((sum,line)=>sum+Number(line?.amount||0),0);
     }
 
-    function quotedGratuity(record) {
+    function quoteLines(record) {
       const proposalLines=Array.isArray(record.proposal?.lineItems)?record.proposal.lineItems:[];
       const inquiryLines=Array.isArray(record.inquiry?.estimateLineItems)?record.inquiry.estimateLineItems:[];
-      const lines=proposalLines.length?proposalLines:inquiryLines;
-      return lines.filter((line)=>String(line?.id||'')==='gratuity' || /gratuity/i.test(String(line?.description||''))).reduce((sum,line)=>sum+Number(line?.amount||0),0);
+      return proposalLines.length?proposalLines:inquiryLines;
+    }
+
+    function quotedGratuity(record) {
+      return quoteLines(record).filter((line)=>String(line?.id||'')==='gratuity' || /gratuity/i.test(String(line?.description||''))).reduce((sum,line)=>sum+Number(line?.amount||0),0);
+    }
+
+    function automaticCostEstimate(record, bartenderWageRate=40) {
+      const revenue=mobileRevenue(record);
+      const packageId=recordPackage(record);
+      const rate=autoCostRates[packageId]||autoCostRates['mobile-custom'];
+      const guests=Math.max(1,Number(record?.inquiry?.guestCount||100));
+      const hours=Math.max(0,Number(record?.inquiry?.serviceHours||4));
+      const bartenders=Math.max(1,Number(record?.inquiry?.bartenderCount||1));
+      const oneWayMiles=Math.max(0,Number(record?.inquiry?.oneWayMiles||0));
+      const glasswareCount=Math.max(0,Number(record?.inquiry?.glasswareCount||0));
+      const cupGuests=Math.max(0,guests-Math.min(guests,glasswareCount));
+      const bartenderWages=hours*bartenders*Math.max(0,Number(bartenderWageRate||40));
+      const iceCost=Math.max(25,guests*rate.ice);
+      const mixersCost=Math.max(35,guests*rate.mixers);
+      const garnishesCost=Math.max(20,guests*rate.garnishes);
+      const cupsCost=cupGuests>0?Math.max(15,cupGuests*rate.cups):0;
+      const suppliesCost=Math.max(25,guests*rate.supplies);
+      const travelCost=oneWayMiles>0?(oneWayMiles*2*1.10)+15+(oneWayMiles>60?50:0):0;
+      const addOnCost=quoteLines(record).reduce((sum,line)=>{
+        const id=String(line?.id||'');
+        const ratio=addOnCostRatios[id]||0;
+        return sum+(Number(line?.amount||0)*ratio);
+      },0);
+      const gratuityCost=quotedGratuity(record);
+      const otherDirectCosts=revenue>0?Math.max(25,revenue*.02):0;
+      return {bartenderWages,iceCost,mixersCost,garnishesCost,cupsCost,suppliesCost,travelCost,addOnCost,gratuityCost,otherDirectCosts};
+    }
+
+    function recordCostMode(record) {
+      return record?.profitModel?.costMode || (record?.profitModel ? 'manual' : 'auto');
     }
 
     function profitValues(record, overrides={}) {
       const model={...(record?.profitModel||{}),...overrides};
       const revenue=mobileRevenue(record);
-      const hours=Math.max(0,Number(record?.inquiry?.serviceHours||0));
-      const bartenders=Math.max(0,Number(record?.inquiry?.bartenderCount||0));
+      const hours=Math.max(0,Number(record?.inquiry?.serviceHours||4));
+      const bartenders=Math.max(1,Number(record?.inquiry?.bartenderCount||1));
       const bartenderWageRate=Math.max(0,Number(model.bartenderWageRate ?? 40));
-      const bartenderWages=hours*bartenders*bartenderWageRate;
-      const suppliesCost=Math.max(0,Number(model.suppliesCost||0));
-      const travelCost=Math.max(0,Number(model.travelCost||0));
-      const addOnCost=Math.max(0,Number(model.addOnCost||0));
-      const hasSavedGratuity=record?.profitModel && Object.prototype.hasOwnProperty.call(record.profitModel,'gratuityCost');
-      const gratuityCost=Math.max(0,Number(model.gratuityCost ?? (hasSavedGratuity?0:quotedGratuity(record))));
-      const otherDirectCosts=Math.max(0,Number(model.otherDirectCosts||0));
-      const directCosts=bartenderWages+suppliesCost+travelCost+addOnCost+gratuityCost+otherDirectCosts;
+      const costMode=model.costMode || recordCostMode(record);
+      const auto=automaticCostEstimate(record,bartenderWageRate);
+      const pick=(key)=>costMode==='auto'?Number(auto[key]||0):Math.max(0,Number(model[key]||0));
+      const bartenderWages=auto.bartenderWages;
+      const iceCost=pick('iceCost');
+      const mixersCost=pick('mixersCost');
+      const garnishesCost=pick('garnishesCost');
+      const cupsCost=pick('cupsCost');
+      const suppliesCost=pick('suppliesCost');
+      const travelCost=pick('travelCost');
+      const addOnCost=pick('addOnCost');
+      const gratuityCost=pick('gratuityCost');
+      const otherDirectCosts=pick('otherDirectCosts');
+      const directCosts=bartenderWages+iceCost+mixersCost+garnishesCost+cupsCost+suppliesCost+travelCost+addOnCost+gratuityCost+otherDirectCosts;
       const profit=revenue-directCosts;
       const margin=revenue>0?(profit/revenue)*100:0;
-      return {revenue,hours,bartenders,bartenderWageRate,bartenderWages,suppliesCost,travelCost,addOnCost,gratuityCost,otherDirectCosts,directCosts,profit,margin};
+      return {costMode,revenue,hours,bartenders,bartenderWageRate,bartenderWages,iceCost,mixersCost,garnishesCost,cupsCost,suppliesCost,travelCost,addOnCost,gratuityCost,otherDirectCosts,directCosts,profit,margin};
+    }
+
+    function marginHealth(margin) {
+      const value=Number(margin||0);
+      if(value>=marginThresholds.green)return {key:'green',label:'Highly profitable',copy:'50%+ margin',box:'border-emerald-200 bg-emerald-50 text-emerald-800',pill:'bg-emerald-100 text-emerald-800'};
+      if(value>=marginThresholds.yellow)return {key:'yellow',label:'Acceptable',copy:'35–49.9% margin',box:'border-amber-200 bg-amber-50 text-amber-900',pill:'bg-amber-100 text-amber-900'};
+      return {key:'red',label:'Low margin',copy:'Under 35% margin',box:'border-red-200 bg-red-50 text-red-800',pill:'bg-red-100 text-red-800'};
     }
 
     function formProfitOverrides() {
       if(!profitForm)return {};
       return {
+        costMode:String(profitForm.elements.costMode.value||'auto'),
         bartenderWageRate:Number(profitForm.elements.bartenderWageRate.value||0),
+        iceCost:Number(profitForm.elements.iceCost.value||0),
+        mixersCost:Number(profitForm.elements.mixersCost.value||0),
+        garnishesCost:Number(profitForm.elements.garnishesCost.value||0),
+        cupsCost:Number(profitForm.elements.cupsCost.value||0),
         suppliesCost:Number(profitForm.elements.suppliesCost.value||0),
         travelCost:Number(profitForm.elements.travelCost.value||0),
         addOnCost:Number(profitForm.elements.addOnCost.value||0),
@@ -1376,28 +1473,59 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       };
     }
 
+    function syncProfitFormCosts(values) {
+      if(!profitForm)return;
+      ['iceCost','mixersCost','garnishesCost','cupsCost','suppliesCost','travelCost','addOnCost','gratuityCost','otherDirectCosts'].forEach((key)=>{
+        if(values[key]!=null)profitForm.elements[key].value=String(Math.round(Number(values[key])*100)/100);
+      });
+      const auto=values.costMode==='auto';
+      profitForm.querySelectorAll('[data-auto-cost-field]').forEach((input)=>{
+        input.readOnly=auto;
+        input.classList.toggle('bg-[var(--koa-sand)]/45',auto);
+        input.classList.toggle('text-[var(--koa-ink)]/60',auto);
+      });
+      if(profitModeCopy)profitModeCopy.textContent=auto
+        ? 'Automatic mode is recalculating these costs from the current quote. Switch to Manual actual-cost override after you have invoices or event-specific cost information.'
+        : 'Manual mode uses the actual direct costs you enter below. Switch back to Automatic operating estimate at any time.';
+    }
+
     function recalcProfitDialog() {
       if(!profitRecord||!profitForm)return;
-      const values=profitValues(profitRecord,formProfitOverrides());
+      let overrides=formProfitOverrides();
+      let values=profitValues(profitRecord,overrides);
+      if(values.costMode==='auto'){
+        syncProfitFormCosts(values);
+        overrides=formProfitOverrides();
+        values=profitValues(profitRecord,overrides);
+      } else syncProfitFormCosts(values);
+      const health=marginHealth(values.margin);
       if(profitRevenue)profitRevenue.textContent=money(values.revenue);
       if(profitDirect)profitDirect.textContent=money(values.directCosts);
       if(profitDollars)profitDollars.textContent=money(values.profit);
       if(profitMargin)profitMargin.textContent=(Number.isFinite(values.margin)?values.margin:0).toFixed(1)+'%';
+      if(profitMarginCard)profitMarginCard.className='rounded-xl border p-4 '+health.box;
+      if(profitHealthCard)profitHealthCard.className='rounded-xl border p-4 '+health.box;
+      if(profitHealth)profitHealth.textContent=health.label;
+      if(profitHealthCopy)profitHealthCopy.textContent=health.copy;
       if(profitBartenderWages)profitBartenderWages.textContent=money(values.bartenderWages);
       if(profitLaborMeta)profitLaborMeta.textContent=values.bartenders+' bartender'+(values.bartenders===1?'':'s')+' × '+values.hours+' hr × '+money(values.bartenderWageRate)+'/hr';
       if(profitBreakdown){
         profitBreakdown.innerHTML='';
         [
           ['Bartender wages',values.bartenderWages],
-          ['Supplies / consumables',values.suppliesCost],
-          ['Travel / fuel / towing',values.travelCost],
+          ['Ice',values.iceCost],
+          ['Mixers',values.mixersCost],
+          ['Garnishes',values.garnishesCost],
+          ['Cups / toss-ware',values.cupsCost],
+          ['Other consumable supplies',values.suppliesCost],
+          ['Fuel / towing / vehicle',values.travelCost],
           ['Add-on / vendor costs',values.addOnCost],
           ['Gratuity payout',values.gratuityCost],
-          ['Other direct costs',values.otherDirectCosts],
+          ['Other direct-cost reserve',values.otherDirectCosts],
           ['Total direct costs',values.directCosts],
           ['Profit',values.profit]
         ].forEach(([label,amount],index)=>{
-          const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)] '+(index>=6?'font-bold':'');
+          const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)] '+(index>=10?'font-bold':'');
           const name=document.createElement('td');name.className='px-4 py-3';name.textContent=String(label);
           const value=document.createElement('td');value.className='px-4 py-3 text-right';value.textContent=money(amount);
           tr.append(name,value);profitBreakdown.appendChild(tr);
@@ -1409,22 +1537,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!profitDialog||!profitForm)return;
       profitRecord=record;
       const model=record.profitModel||{};
-      const hasSaved=Boolean(record.profitModel);
+      const costMode=recordCostMode(record);
       profitForm.elements.recordId.value=record.id;
+      profitForm.elements.costMode.value=costMode;
       profitForm.elements.bartenderWageRate.value=String(model.bartenderWageRate ?? 40);
-      profitForm.elements.suppliesCost.value=String(model.suppliesCost ?? 0);
-      profitForm.elements.travelCost.value=String(model.travelCost ?? 0);
-      profitForm.elements.addOnCost.value=String(model.addOnCost ?? 0);
-      profitForm.elements.gratuityCost.value=String(hasSaved ? (model.gratuityCost ?? 0) : quotedGratuity(record));
-      profitForm.elements.otherDirectCosts.value=String(model.otherDirectCosts ?? 0);
+      const initial=costMode==='auto'?profitValues(record,{costMode,bartenderWageRate:Number(model.bartenderWageRate??40)}):profitValues(record,{...model,costMode});
+      ['iceCost','mixersCost','garnishesCost','cupsCost','suppliesCost','travelCost','addOnCost','gratuityCost','otherDirectCosts'].forEach((key)=>{
+        profitForm.elements[key].value=String(Math.round(Number(initial[key]||0)*100)/100);
+      });
       profitForm.elements.notes.value=String(model.notes||'');
       if(profitTitle)profitTitle.textContent=(record.customer?.name||record.id)+' · margin';
       if(profitMeta)profitMeta.textContent=[packageLabel(recordPackage(record)),record.customer?.eventDate,record.inquiry?.guestCount?record.inquiry.guestCount+' guests':''].filter(Boolean).join(' · ');
-      if(profitMessage)profitMessage.textContent=hasSaved?'Saved cost model loaded.':'Working assumptions loaded. Enter actual direct costs before relying on the margin.';
+      if(profitMessage)profitMessage.textContent=costMode==='auto'?'Automatic operating estimate loaded.':'Saved manual actual-cost model loaded.';
       recalcProfitDialog();
       profitDialog.showModal();
     }
-
     function renderMobileCard(record) {
       const article=document.createElement('article');
       article.className='rounded-[1.2rem] border border-white/10 bg-white p-5 text-[var(--koa-ink)] shadow-sm';
@@ -1476,12 +1603,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       if(mobileRevenue(record)>0) {
         const p=profitValues(record);
-        const marginBox=document.createElement('div');marginBox.className='mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const health=marginHealth(p.margin);
+        const marginBox=document.createElement('div');marginBox.className='mt-4 rounded-xl border p-4 '+health.box;
         const head=document.createElement('div');head.className='flex items-start justify-between gap-3';
-        const left=document.createElement('div');left.append(text('p','text-[.54rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Working margin'),text('strong','mt-1 block text-lg text-[var(--koa-forest)]',money(p.profit)+' profit'));
-        const right=document.createElement('div');right.className='text-right';right.append(text('strong','display text-2xl text-[var(--koa-forest)]',(Number.isFinite(p.margin)?p.margin:0).toFixed(1)+'%'),text('p','mt-1 text-[.58rem] text-[var(--koa-ink)]/42','margin'));
+        const left=document.createElement('div');left.append(text('p','text-[.58rem] font-black uppercase tracking-[.1em]','Profit health'),text('strong','mt-1 block text-lg',money(p.profit)+' profit'));
+        const right=document.createElement('div');right.className='text-right';right.append(text('span','inline-flex rounded-full px-2.5 py-1 text-[.58rem] font-black uppercase tracking-[.08em] '+health.pill,health.label),text('strong','display mt-2 block text-2xl',(Number.isFinite(p.margin)?p.margin:0).toFixed(1)+'%'));
         head.append(left,right);marginBox.appendChild(head);
-        marginBox.appendChild(text('p','mt-2 text-[.64rem] leading-5 text-[var(--koa-ink)]/48','Revenue '+money(p.revenue)+' · direct costs '+money(p.directCosts)+(record.profitModel?' · saved costs':' · enter actual costs')));
+        marginBox.appendChild(text('p','mt-2 text-[.68rem] leading-5','Revenue '+money(p.revenue)+' · direct costs '+money(p.directCosts)+' · '+(p.costMode==='auto'?'automatic cost model':'manual actual costs')));
         article.appendChild(marginBox);
       }
 
@@ -1523,11 +1651,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const pkg=String(mobileFilterPackage?.value||'all');
       const quote=String(mobileFilterQuote?.value||'all');
       const follow=String(mobileFilterFollowup?.value||'all');
+      const margin=String(mobileFilterMargin?.value||'all');
       if(stage!=='all') records=records.filter((r)=>r.stage===stage);
       if(pkg!=='all') records=records.filter((r)=>recordPackage(r)===pkg);
       if(quote!=='all') records=records.filter((r)=>mobileQuoteStatus(r)===quote);
       if(follow==='due') records=records.filter((r)=>mobileFollowups(r).length);
       if(follow==='clear') records=records.filter((r)=>!mobileFollowups(r).length);
+      if(margin!=='all') records=records.filter((r)=>mobileRevenue(r)>0 && marginHealth(profitValues(r).margin).key===margin);
       const sort=String(mobileSort?.value||'recent');
       records=[...records].sort((a,b)=>{
         if(sort==='event-date') return String(a.customer?.eventDate||'9999').localeCompare(String(b.customer?.eventDate||'9999'));
@@ -1651,6 +1781,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-mobile-stat-value]',money(value));
       textContent('[data-mobile-stat-average]',money(estimates.length?value/estimates.length:0));
       textContent('[data-mobile-stat-custom]',String(all.filter((r)=>Array.isArray(r.inquiry?.customAddOns)&&r.inquiry.customAddOns.length).length));
+
+      if(mobileMarginHealthSummary){
+        mobileMarginHealthSummary.innerHTML='';
+        const eligible=all.filter((r)=>mobileRevenue(r)>0);
+        const counts={green:0,yellow:0,red:0};
+        eligible.forEach((record)=>{counts[marginHealth(profitValues(record).margin).key]+=1;});
+        [
+          ['green','Healthy · 50%+',counts.green,'border-emerald-300/30 bg-emerald-400/10 text-emerald-100'],
+          ['yellow','Watch · 35–49.9%',counts.yellow,'border-amber-300/30 bg-amber-400/10 text-amber-100'],
+          ['red','Low · under 35%',counts.red,'border-red-300/30 bg-red-400/10 text-red-100']
+        ].forEach(([key,label,count,classes])=>{
+          const card=document.createElement('article');card.className='rounded-xl border p-4 '+classes;
+          card.append(text('p','text-[.6rem] font-black uppercase tracking-[.09em]',label),text('strong','display mt-2 block text-3xl',String(count)));
+          mobileMarginHealthSummary.appendChild(card);
+        });
+      }
 
       if(mobileRecords){
         mobileRecords.innerHTML='';
@@ -1881,11 +2027,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
-    [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
+    [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
     profitForm?.querySelectorAll('input,textarea').forEach((input)=>input.addEventListener('input',recalcProfitDialog));
+    profitForm?.elements.costMode?.addEventListener('change',recalcProfitDialog);
     document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
     document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
     proposalForm?.querySelectorAll('[name="discountAmount"],[name="taxRate"]').forEach((input)=>input.addEventListener('input',recalcEditor));
