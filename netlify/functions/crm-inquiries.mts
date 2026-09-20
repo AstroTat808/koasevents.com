@@ -446,6 +446,7 @@ export default async (req: Request, context: Context) => {
       bartenderCount: Math.round(cleanNumber(payload.inquiry?.bartenderCount, 0, 20)),
       gratuityMode: cleanText(payload.inquiry?.gratuityMode, 80),
       glasswareCount: Math.round(cleanNumber(payload.inquiry?.glasswareCount, 0, 2000)),
+      glasswareType: cleanText(payload.inquiry?.glasswareType, 40),
       estimatedTotal: Math.round(cleanNumber(payload.inquiry?.estimatedTotal, 0, 10000000) * 100) / 100,
       estimateLineItems: cleanLineItems(payload.inquiry?.estimateLineItems),
       customAddOns: cleanStringList(payload.inquiry?.customAddOns),

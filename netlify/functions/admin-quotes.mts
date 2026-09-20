@@ -70,6 +70,17 @@ type BookingState = {
   payments: BookingPayment[];
 };
 
+type ProfitModel = {
+  bartenderWageRate: number;
+  suppliesCost: number;
+  travelCost: number;
+  addOnCost: number;
+  gratuityCost: number;
+  otherDirectCosts: number;
+  notes: string;
+  updatedAt: string;
+};
+
 type SalesRecord = {
   id: string;
   kind: 'inquiry' | 'lead' | 'proposal';
@@ -117,6 +128,7 @@ type SalesRecord = {
     acceptance?: { name: string; acceptedAt: string };
   };
   booking?: BookingState;
+  profitModel?: ProfitModel;
 };
 
 type TrashEntry = {
@@ -175,9 +187,9 @@ const PACKAGE_PRICES: Record<string, number> = {
   orchid: 10000,
   hibiscus: 15000,
   'signature-wedding': 20000,
-  'mobile-oahu': 1200,
-  'mobile-maui': 1500,
-  'mobile-big-island': 1800,
+  'mobile-oahu': 1500,
+  'mobile-maui': 2000,
+  'mobile-big-island': 2500,
 };
 
 const PACKAGE_NAMES: Record<string, string> = {
@@ -676,6 +688,19 @@ function sanitizeLines(input: unknown): ProposalLine[] {
       custom: Boolean(line?.custom),
     };
   }).filter((line) => line.description);
+}
+
+function sanitizeProfitModel(input: any, current?: ProfitModel): ProfitModel {
+  return {
+    bartenderWageRate: finite(input?.bartenderWageRate ?? current?.bartenderWageRate ?? 40, 0, 500),
+    suppliesCost: finite(input?.suppliesCost ?? current?.suppliesCost ?? 0),
+    travelCost: finite(input?.travelCost ?? current?.travelCost ?? 0),
+    addOnCost: finite(input?.addOnCost ?? current?.addOnCost ?? 0),
+    gratuityCost: finite(input?.gratuityCost ?? current?.gratuityCost ?? 0),
+    otherDirectCosts: finite(input?.otherDirectCosts ?? current?.otherDirectCosts ?? 0),
+    notes: cleanText(input?.notes ?? current?.notes ?? '', 3000),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function sanitizeSchedule(input: unknown): PaymentItem[] {
@@ -1200,6 +1225,7 @@ export default async (req: Request, context: Context) => {
       ) : undefined,
       inquiry: source.inquiry ? { ...source.inquiry } : undefined,
       quote: quote || undefined,
+      profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
     };
     source.stage = 'converted';
@@ -1209,6 +1235,26 @@ export default async (req: Request, context: Context) => {
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: kind, packageId, quoteId: source.quoteId || '', recordId: record.id, sourceRecordId: source.id });
     return Response.json({ ok: true, record, convertedSourceId: source.id });
+  }
+
+  if (payload.action === 'update-profit-model') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
+    const packageId = normalizePackage(record.packageId || record.inquiry?.mobileBarPackage);
+    if (!packageId.startsWith('mobile-') && record.inquiry?.service !== 'mobile-bar') {
+      return Response.json({ error: 'Profit model is available for Mobile Bar records only.' }, { status: 400 });
+    }
+    record.profitModel = sanitizeProfitModel(payload.profitModel || {}, record.profitModel);
+    record.updatedAt = new Date().toISOString();
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'profit_model_updated',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: 'Mobile Bar direct-cost model updated by administrator.',
+    });
+    return Response.json({ ok: true, record });
   }
 
   if (payload.action === 'update-proposal') {
