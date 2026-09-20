@@ -67,8 +67,8 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
   try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
 
   form?.addEventListener('submit', async (event) => {
-    if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
     event.preventDefault();
+    if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
 
     const submitButton = form.querySelector('button[type="submit"]');
     const errorBox = form.querySelector('[data-submit-error]');
