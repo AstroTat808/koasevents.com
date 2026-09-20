@@ -49,7 +49,7 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
 
         <div class="mt-12 space-y-14 sm:mt-16 sm:space-y-16">
           {grouped.map((group) => (
-            <section data-gallery-section={group.category}>
+            <section id={'gallery-' + group.category.toLowerCase().replace(/[^a-z0-9]+/g, '-')} data-gallery-section={group.category} class="scroll-mt-28">
               <div class="mb-5 flex items-end justify-between gap-4 border-b border-white/12 pb-4 sm:mb-6">
                 <div><p class="eyebrow text-[var(--koa-amber-light)]">{group.category}</p><h3 class="display mt-2 text-[2.1rem] leading-none sm:text-4xl">{group.images.length} photos</h3></div>
                 <span class="pb-1 text-[.62rem] font-bold uppercase tracking-[.14em] text-white/38 sm:hidden">Swipe →</span>
