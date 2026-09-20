@@ -76,7 +76,7 @@ const categoryBySrc = new Map(koaMarketingGallery.map((image) => [image.src, ima
 const featuredCaption = captionMap[post.featuredImage] || '';
 const featuredGalleryHref = galleryAnchor(categoryBySrc.get(post.featuredImage));
 
-const escapeRegex = (value: string) => value.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const renderArticleBody = (html: string) => {
   let rendered = html || '';
   const inlineImages = (post.images || []).filter((image) => image.src !== post.featuredImage);
