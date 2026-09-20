@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 globalThis.Netlify = {
   env: {
     get(name) {
@@ -194,6 +195,15 @@ async function run() {
   console.log('PASS | automatic email permanent escalation');
   console.log('PASS | automatic network 24h escalation');
   console.log('PASS | not-spam review excluded from escalation');
+
+  const crmSource = readFileSync('netlify/functions/crm-inquiries.mts', 'utf8');
+  assert(crmSource.includes("'koa-mobile-bar-inquiry'"), 'Mobile Bar form must be protected by central Turnstile verification.');
+  assert(crmSource.includes("action: 'mobile_bar_inquiry'"), 'Mobile Bar Turnstile action is missing.');
+  assert(crmSource.includes("'koasmobilebar.com', 'www.koasmobilebar.com'"), 'Mobile Bar Turnstile hostname allowlist is missing.');
+  assert(crmSource.includes("x-koa-source-signature"), 'Signed Mobile Bar source fingerprint verification is missing.');
+  console.log('PASS | Mobile Bar Turnstile verification centralized');
+  console.log('PASS | signed Mobile Bar network fingerprint verification configured');
+
 }
 
 await run();
