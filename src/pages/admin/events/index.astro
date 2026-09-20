@@ -108,7 +108,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Guest count</p><p data-summary-guests class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article>
                 <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Checklist</p><p data-summary-checklist class="display mt-2 text-3xl text-[var(--koa-forest)]">0%</p></article>
                 <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Vendor insurance</p><p data-summary-insurance class="display mt-2 text-3xl text-[var(--koa-forest)]">0/0</p></article>
-                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Documents</p><p data-summary-documents class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article>
+                <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Documents</p><p data-summary-documents class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article><article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Google review request</p><p data-summary-review class="display mt-2 text-2xl text-[var(--koa-forest)]">Not sent</p></article>
               </div>
             </div>
           </div>
@@ -228,6 +228,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const vendors=selected.ops.vendors||[];
       document.querySelector('[data-summary-insurance]').textContent=vendors.filter((v)=>v.insuranceStatus==='approved').length+'/'+vendors.length;
       document.querySelector('[data-summary-documents]').textContent=String((selected.ops.documents||[]).length);
+      const reviewStatus=String(selected.record?.communications?.reviewRequest?.status||'').toLowerCase();
+      document.querySelector('[data-summary-review]').textContent=reviewStatus==='delivered'?'Delivered':reviewStatus==='bounced'?'Bounced':reviewStatus==='failed'?'Failed':reviewStatus==='sent'?'Email sent':'Not sent';
       document.querySelector('[data-readiness]').textContent=(selected.ops.status||'planning').replaceAll('_',' ')+' · '+completion()+'% checklist';
     }
 
