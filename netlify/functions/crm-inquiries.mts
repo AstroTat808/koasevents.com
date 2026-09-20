@@ -44,8 +44,37 @@ function idSuffix() {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
+function turnstileSecret() {
+  return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
+}
+
+function base64Url(bytes: ArrayBuffer) {
+  let binary = '';
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+async function createTurnstileProof(formName: string, email: unknown) {
+  const secret = turnstileSecret();
+  if (!secret) return '';
+
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const normalizedEmail = cleanText(email, 240).toLowerCase();
+  const message = formName + '|' + normalizedEmail + '|' + issuedAt;
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message));
+  return issuedAt + '.' + base64Url(signature);
+}
+
 async function verifyTurnstile(req: Request, token: unknown, expectedAction: string) {
-  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
+  const secret = turnstileSecret();
   if (!secret) return { ok: true, configured: false };
 
   const responseToken = cleanText(token, 2048);
@@ -261,7 +290,11 @@ export default async (req: Request, context: Context) => {
       : '',
   });
 
-  return json(req, { ok: true, id });
+  const turnstileProof = expectedTurnstileAction
+    ? await createTurnstileProof(formName, record.customer.email)
+    : '';
+
+  return json(req, { ok: true, id, ...(turnstileProof ? { turnstileProof } : {}) });
 };
 
 export const config: Config = { path: '/api/crm/inquiries' };
