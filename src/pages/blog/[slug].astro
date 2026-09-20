@@ -76,6 +76,39 @@ const categoryBySrc = new Map(koaMarketingGallery.map((image) => [image.src, ima
 const featuredCaption = captionMap[post.featuredImage] || '';
 const featuredGalleryHref = galleryAnchor(categoryBySrc.get(post.featuredImage));
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^$()|[\]\\{}]/g, '\\const featuredGalleryHref = galleryAnchor(categoryBySrc.get(post.featuredImage));
+');
+const renderArticleBody = (html: string) => {
+  let rendered = html || '';
+  const inlineImages = (post.images || []).filter((image) => image.src !== post.featuredImage);
+
+  for (const image of inlineImages) {
+    const caption = captionMap[image.src] || '';
+    const category = categoryBySrc.get(image.src);
+    if (!caption && !category) continue;
+
+    const link = category
+      ? '<a href="' + galleryAnchor(category) + '" class="blog-gallery-deep-link">View this setup in the full gallery →</a>'
+      : '';
+    const copy = caption
+      ? '<span class="blog-caption-copy">' + caption + '</span>'
+      : '';
+    const editorial = '<figcaption class="blog-editorial-caption">' + copy + link + '</figcaption>';
+
+    const figurePattern = new RegExp(
+      '(<figure\\b[\\s\\S]*?<img\\b[^>]*\\bsrc="' + escapeRegex(image.src) + '"[^>]*>[\\s\\S]*?)(</figure>)',
+      'i'
+    );
+
+    if (figurePattern.test(rendered)) {
+      rendered = rendered.replace(figurePattern, '$1' + editorial + '$2');
+    }
+  }
+
+  return rendered;
+};
+const renderedBodyHtml = renderArticleBody(post.bodyHtml || '');
+
 const lightboxSeed = [
   { src: post.featuredImage, alt: post.title },
   ...(post.images || [])
@@ -182,8 +215,8 @@ const breadcrumbSchema = {
       <div class="container-shell pb-20 lg:pb-28">
         <div class="mx-auto grid max-w-6xl gap-12 lg:grid-cols-[minmax(0,1fr)_17rem]">
           <div>
-            {post.bodyHtml ? (
-              <div class="blog-prose" set:html={post.bodyHtml} />
+            {renderedBodyHtml ? (
+              <div class="blog-prose" set:html={renderedBodyHtml} />
             ) : (
               <div class="blog-prose">
                 {post.body.split(/\n\s*\n/).filter(Boolean).map((paragraph) => <p>{paragraph}</p>)}
@@ -300,7 +333,7 @@ const breadcrumbSchema = {
     </div>
   </dialog>
 
-  <script is:inline define:vars={{ lightboxSeed, captionMap, categoryBySrcEntries: [...categoryBySrc.entries()] }}>
+  <script is:inline define:vars={{ lightboxSeed }}>
     (() => {
       const dialog = document.getElementById('blog-lightbox');
       const image = dialog?.querySelector('[data-blog-lightbox-image]');
@@ -334,10 +367,6 @@ const breadcrumbSchema = {
         trigger.addEventListener('click', () => show(index));
       });
 
-      const categoryBySrc = new Map(Array.isArray(categoryBySrcEntries) ? categoryBySrcEntries : []);
-      const toGalleryHref = (category) =>
-        category ? '/gallery/#gallery-' + String(category).toLowerCase().replace(/[^a-z0-9]+/g, '-') : '/gallery/';
-
       document.querySelectorAll('.blog-prose img').forEach((articleImage) => {
         if (!(articleImage instanceof HTMLImageElement)) return;
         const src = articleImage.getAttribute('src') || articleImage.src;
@@ -353,37 +382,6 @@ const breadcrumbSchema = {
             show(index);
           }
         });
-
-        const figure = articleImage.closest('figure');
-        if (!figure) return;
-        const captionText = captionMap?.[src] || '';
-        const category = categoryBySrc.get(src);
-        if (!captionText && !category) return;
-
-        let figcaption = figure.querySelector(':scope > figcaption');
-        if (!(figcaption instanceof HTMLElement)) {
-          figcaption = document.createElement('figcaption');
-          figure.append(figcaption);
-        }
-        figcaption.classList.add('blog-editorial-caption');
-
-        if (captionText) {
-          let copy = figcaption.querySelector('[data-editorial-caption-copy]');
-          if (!copy) {
-            copy = document.createElement('span');
-            copy.setAttribute('data-editorial-caption-copy', '');
-            figcaption.prepend(copy);
-          }
-          copy.textContent = captionText;
-        }
-
-        if (category && !figcaption.querySelector('[data-gallery-deep-link]')) {
-          const link = document.createElement('a');
-          link.href = toGalleryHref(category);
-          link.setAttribute('data-gallery-deep-link', '');
-          link.textContent = 'View this setup in the full gallery →';
-          figcaption.append(link);
-        }
       });
 
       dialog.querySelector('[data-blog-lightbox-close]')?.addEventListener('click', () => dialog.close());
@@ -466,6 +464,9 @@ const breadcrumbSchema = {
     gap: .45rem;
     line-height: 1.55;
     margin-top: .75rem;
+  }
+  .blog-prose :global(.blog-caption-copy) {
+    display: block;
   }
   .blog-prose :global(.blog-editorial-caption a) {
     color: var(--koa-forest);
