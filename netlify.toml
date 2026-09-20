@@ -11,12 +11,6 @@
 
 
 [[redirects]]
-  from = "https://www.koasevents.com/*"
-  to = "https://koasevents.com/:splat"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/guest-suites"
   to = "/stay/"
   status = 301
