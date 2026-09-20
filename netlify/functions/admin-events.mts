@@ -324,6 +324,7 @@ export default async (req: Request, context: Context) => {
           proposal: record.proposal || {},
           booking: record.booking || null,
           accounting: record.accounting || null,
+          communications: record.communications || {},
         },
         ops,
       };
