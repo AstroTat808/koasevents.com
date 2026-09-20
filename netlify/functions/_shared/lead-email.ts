@@ -70,9 +70,7 @@ function heading(record: LeadRecord) {
   if (kind === 'discovery') return 'New Discovery Call Request';
   if (kind === 'mobile') return 'New Mobile Bar Inquiry';
 
-  const eventType = String(record.inquiry?.eventType || '').trim();
-  if (eventType && !/^event$/i.test(eventType)) return 'New ' + eventType + ' Inquiry';
-  return 'New Event Inquiry';
+  return 'New Private Event Inquiry';
 }
 
 function packageLabel(record: LeadRecord) {
