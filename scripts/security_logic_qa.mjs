@@ -81,6 +81,30 @@ async function run() {
   assert(crypto.disposition === 'blocked', 'Crypto solicitation with a link should be blocked.');
   assert(crypto.reasonCodes.includes('crypto_pitch'), 'Crypto reason missing.');
 
+  const finance = await analyzeInquirySecurity(
+    payload({
+      inquiry: {
+        priorities: 'We can offer a pre-approved business loan and working capital. Visit https://funding.example.com today.',
+      },
+    }),
+    [],
+    'source-finance',
+  );
+  assert(finance.disposition === 'blocked', 'Funding solicitation with a link should be blocked.');
+  assert(finance.reasonCodes.includes('finance_solicitation'), 'Finance solicitation reason missing.');
+
+  const gambling = await analyzeInquirySecurity(
+    payload({
+      inquiry: {
+        priorities: 'Promote our online casino and sportsbook at https://casino.example.com with a casino bonus.',
+      },
+    }),
+    [],
+    'source-gambling',
+  );
+  assert(gambling.disposition === 'blocked', 'Gambling solicitation should be blocked.');
+  assert(gambling.reasonCodes.includes('gambling_solicitation'), 'Gambling solicitation reason missing.');
+
   const duplicateSeed = await analyzeInquirySecurity(payload(), [], 'source-duplicate');
   const duplicate = await analyzeInquirySecurity(
     payload(),
@@ -132,6 +156,8 @@ async function run() {
   console.log('PASS | disposable email flagged');
   console.log('PASS | SEO solicitation + link blocked');
   console.log('PASS | crypto solicitation + link blocked');
+  console.log('PASS | finance solicitation + link blocked');
+  console.log('PASS | gambling solicitation blocked');
   console.log('PASS | repeated message flagged');
   const abuseEvent = (index, hoursAgo = 0, review = null) => ({
     id: 'SEC-ABUSE-' + index,
