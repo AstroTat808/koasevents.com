@@ -1,6 +1,17 @@
 import type { Config, Context } from '@netlify/functions';
 import { requireAdmin } from './_shared/admin.ts';
-import { getSecurityEvents, type SecurityEvent } from './_shared/security.ts';
+import {
+  applyAutomaticBlocks,
+  createBlocklistEntry,
+  getBlocklist,
+  getSecurityEvents,
+  removeBlocklistEntry,
+  setSecurityReview,
+  type BlockDuration,
+  type BlockTarget,
+  type SecurityEvent,
+  type SecurityVerdict,
+} from './_shared/security.ts';
 
 function clean(value: unknown, max = 120) {
   return String(value || '').trim().slice(0, max);
@@ -26,6 +37,68 @@ function topEntries(map: Record<string, number>, limit = 12) {
 export default async (req: Request, context: Context) => {
   const auth = await requireAdmin();
   if (auth.response) return auth.response;
+
+  if (req.method === 'POST') {
+    const payload: any = await req.json().catch(() => null);
+    const action = clean(payload?.action, 40);
+    const adminEmail = clean(auth.user?.email, 240).toLowerCase();
+    const events = await getSecurityEvents(context);
+
+    if (action === 'review') {
+      const incidentId = clean(payload?.incidentId, 100);
+      const verdict = clean(payload?.verdict, 40) as SecurityVerdict;
+      if (!['not_spam', 'confirmed_spam'].includes(verdict)) {
+        return Response.json({ error: 'Invalid review verdict.' }, { status: 400 });
+      }
+
+      const incident = events.find((event) => event.id === incidentId);
+      if (!incident) return Response.json({ error: 'Security incident not found.' }, { status: 404 });
+
+      const review = await setSecurityReview(context, incidentId, verdict, adminEmail);
+      let automaticBlocks = [];
+      if (verdict === 'confirmed_spam') {
+        const reviewedEvents = events.map((event) => event.id === incidentId ? { ...event, review } : event);
+        automaticBlocks = await applyAutomaticBlocks(context, { ...incident, review }, reviewedEvents);
+      }
+      return Response.json({ ok: true, review, automaticBlocks }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    if (action === 'block') {
+      const incidentId = clean(payload?.incidentId, 100);
+      const target = clean(payload?.target, 20) as BlockTarget;
+      const duration = clean(payload?.duration, 20) as BlockDuration;
+      if (!['email', 'domain'].includes(target) || !['24h', '7d', 'permanent'].includes(duration)) {
+        return Response.json({ error: 'Invalid blocklist request.' }, { status: 400 });
+      }
+
+      const incident = events.find((event) => event.id === incidentId);
+      if (!incident) return Response.json({ error: 'Security incident not found.' }, { status: 404 });
+
+      const value = target === 'email' ? incident.emailFingerprint : incident.emailDomain;
+      const label = target === 'email' ? incident.emailPreview : incident.emailDomain;
+      if (!value) return Response.json({ error: 'This incident does not have an available ' + target + ' target.' }, { status: 400 });
+
+      const block = await createBlocklistEntry(context, {
+        target,
+        value,
+        label,
+        duration,
+        source: 'manual',
+        reason: 'Manually blocked from Security + Spam dashboard.',
+        incidentId,
+        createdBy: adminEmail,
+      });
+      return Response.json({ ok: true, block }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    if (action === 'unblock') {
+      const removed = await removeBlocklistEntry(context, clean(payload?.blockId, 100));
+      return Response.json({ ok: true, removed }, { headers: { 'Cache-Control': 'private, no-store' } });
+    }
+
+    return Response.json({ error: 'Unknown security action.' }, { status: 400 });
+  }
+
   if (req.method !== 'GET') return new Response('Method not allowed', { status: 405 });
 
   const url = new URL(req.url);
@@ -108,11 +181,30 @@ export default async (req: Request, context: Context) => {
       riskScore: event.riskScore,
       sourceFingerprint: event.ipFingerprint.slice(0, 10),
       emailDomain: event.emailDomain,
+      emailFingerprint: event.emailFingerprint,
       emailPreview: event.emailPreview,
       phonePreview: event.phonePreview,
       recordId: event.recordId,
       detail: event.detail,
+      review: event.review || null,
     }));
+
+  const blocklist = (await getBlocklist(context, false))
+    .map((entry) => ({
+      id: entry.id,
+      target: entry.target,
+      label: entry.label,
+      source: entry.source,
+      reason: entry.reason,
+      createdAt: entry.createdAt,
+      expiresAt: entry.expiresAt,
+      permanent: entry.permanent,
+      active: entry.permanent || Boolean(entry.expiresAt && new Date(entry.expiresAt).getTime() > now),
+      incidentId: entry.incidentId,
+      createdBy: entry.createdBy,
+    }))
+    .sort((a, b) => Number(b.active) - Number(a.active) || String(b.createdAt).localeCompare(String(a.createdAt)))
+    .slice(0, 200);
 
   return Response.json({
     days,
@@ -128,6 +220,7 @@ export default async (req: Request, context: Context) => {
     topForms: topEntries(forms),
     topSources,
     recent,
+    blocklist,
   }, {
     headers: { 'Cache-Control': 'private, no-store' },
   });
