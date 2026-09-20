@@ -8,6 +8,17 @@
 # Content Admin authorization is enforced in the admin UI and server-side functions.
 # Approved administrators are restricted to the allowlist in netlify/functions/_shared/admin.ts.
 
+
+[[redirects]]
+  from = "/events"
+  to = "/weddings/"
+  status = 301
+
+[[redirects]]
+  from = "/post/*"
+  to = "/blog/:splat/"
+  status = 301
+
 [[redirects]]
   from = "/wedding-packages"
   to = "/venue/packages/"
@@ -42,6 +53,37 @@
   from = "/custom-event-package-questionnaire"
   to = "/wedding-inquiry/"
   status = 301
+
+
+[[headers]]
+  for = "/admin/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/booking/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/proposal/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/planning/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/thank-you/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/wedding-inquiry-thank-you/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
 
 [[headers]]
   for = "/*"
