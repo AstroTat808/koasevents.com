@@ -87,6 +87,12 @@ type SalesRecord = {
     eventDate: string;
     notes: string;
   };
+  security?: {
+    disposition: 'allowed' | 'flagged';
+    riskScore: number;
+    reasons: string[];
+    reasonCodes: string[];
+  };
   inquiry?: Record<string, unknown>;
   quote?: SavedQuote;
   proposal?: {
@@ -938,6 +944,12 @@ export default async (req: Request, context: Context) => {
       status: kind === 'proposal' ? 'draft' : 'new',
       source: source.id,
       customer: { ...source.customer },
+      security: source.security ? {
+        disposition: source.security.disposition,
+        riskScore: Number(source.security.riskScore || 0),
+        reasons: Array.isArray(source.security.reasons) ? [...source.security.reasons] : [],
+        reasonCodes: Array.isArray(source.security.reasonCodes) ? [...source.security.reasonCodes] : [],
+      } : undefined,
       inquiry: source.inquiry ? { ...source.inquiry } : undefined,
       quote: quote || undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
