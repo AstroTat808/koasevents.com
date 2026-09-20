@@ -16,6 +16,7 @@ const staticEntries: SitemapEntry[] = [
   { path: '/', changefreq: 'weekly', priority: '1.0' },
   { path: '/about/', changefreq: 'monthly', priority: '0.8' },
   { path: '/weddings/', changefreq: 'weekly', priority: '0.9' },
+  { path: '/east-hawaii-wedding-venue/', changefreq: 'monthly', priority: '0.85' },
   { path: '/signature-wedding/', changefreq: 'weekly', priority: '0.9' },
   { path: '/venue/', changefreq: 'weekly', priority: '0.9' },
   { path: '/venue/packages/', changefreq: 'weekly', priority: '0.85' },
