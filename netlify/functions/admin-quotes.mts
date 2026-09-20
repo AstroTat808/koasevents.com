@@ -806,6 +806,7 @@ export default async (req: Request, context: Context) => {
       status: kind === 'proposal' ? 'draft' : 'new',
       source: source.id,
       customer: { ...source.customer },
+      inquiry: source.inquiry ? { ...source.inquiry } : undefined,
       quote: quote || undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
     };
