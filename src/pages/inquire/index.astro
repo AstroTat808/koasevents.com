@@ -6,6 +6,7 @@ import Footer from '../../components/Footer.astro';
 const requestedService = Astro.url.searchParams.get('service') || '';
 const requestedPackage = Astro.url.searchParams.get('package') || '';
 const requestedGuests = Astro.url.searchParams.get('guests') || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout
   title="Check Big Island Event Venue Availability | Koa’s Events"
@@ -186,7 +187,21 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
               </select>
             </label>
 
-            <button class="mt-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white transition hover:bg-[var(--koa-ink)]" type="submit">
+            {turnstileSiteKey && (
+              <div class="rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+                <div
+                  class="cf-turnstile"
+                  data-sitekey={turnstileSiteKey}
+                  data-action="event_inquiry"
+                  data-theme="light"
+                  data-size="flexible"
+                ></div>
+              </div>
+            )}
+
+            <p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert" data-submit-error></p>
+
+            <button class="mt-2 rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white transition hover:bg-[var(--koa-ink)] disabled:cursor-not-allowed disabled:opacity-60" type="submit">
               Send event details
             </button>
 
@@ -198,7 +213,8 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
   </main>
   <Footer />
 
-  <script is:inline define:vars={{ requestedService, requestedPackage, requestedGuests }}>
+  {turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+  <script is:inline define:vars={{ requestedService, requestedPackage, requestedGuests, turnstileSiteKey }}>
     const form = document.querySelector('[data-inquiry-form]');
     const venueFields = document.querySelector('[data-venue-fields]');
     const mobileFields = document.querySelector('[data-mobile-fields]');
@@ -264,20 +280,40 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
     }
 
     form?.addEventListener('submit', async (event) => {
-      if (form.dataset.crmCaptured === '1') return;
+      if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
       event.preventDefault();
+
+      const submitButton = form.querySelector('button[type="submit"]');
+      const errorBox = form.querySelector('[data-submit-error]');
       const data = new FormData(form);
+      const turnstileToken = String(data.get('cf-turnstile-response') || '');
+
+      if (turnstileSiteKey && !turnstileToken) {
+        if (errorBox) {
+          errorBox.textContent = 'Complete the security check before sending your inquiry.';
+          errorBox.classList.remove('hidden');
+        }
+        return;
+      }
+
       const rawPackage = String(data.get('venuePackage') || '');
       const packageId = rawPackage === 'plumeria' ? 'signature-wedding' : rawPackage;
       const quoteId = new URLSearchParams(window.location.search).get('quote') || '';
+
+      form.dataset.submitting = '1';
+      if (submitButton) submitButton.disabled = true;
+      if (errorBox) errorBox.classList.add('hidden');
+
       try {
-        await fetch('/api/crm/inquiries', {
+        const response = await fetch('/api/crm/inquiries', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
           body: JSON.stringify({
             formName: 'koa-event-inquiry',
             quoteId,
             packageId,
+            honeypot: data.get('bot-field'),
+            turnstileToken,
             customer: {
               name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
               email: data.get('email'),
@@ -303,9 +339,23 @@ const requestedGuests = Astro.url.searchParams.get('guests') || '';
           }),
           keepalive: true,
         });
-      } catch {}
-      form.dataset.crmCaptured = '1';
-      form.submit();
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok !== true) {
+          throw new Error(payload?.error || 'We could not verify this submission. Please try again.');
+        }
+
+        form.dataset.crmCaptured = '1';
+        form.querySelector('[name="cf-turnstile-response"]')?.remove();
+        form.submit();
+      } catch (error) {
+        form.dataset.submitting = '0';
+        if (submitButton) submitButton.disabled = false;
+        if (errorBox) {
+          errorBox.textContent = error instanceof Error ? error.message : 'We could not send your inquiry. Please try again.';
+          errorBox.classList.remove('hidden');
+        }
+        if (window.turnstile?.reset) window.turnstile.reset();
+      }
     });
 
     updateConditionalFields();
