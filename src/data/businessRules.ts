@@ -16,7 +16,7 @@ export const businessRules = {
     phone: '+1-844-808-5627',
     phoneDisplay: '844-808-KOAS',
     email: 'aloha@koasevents.com',
-    venueAddress: '11-3334 Hibiscus St, Mountain View, HI 96771',
+    venueAddress: '11-3330 Hibiscus St, Mountain View, HI 96771',
     publicMailingAddress: 'PO Box 169, Mountain View, HI 96771',
   },
 
