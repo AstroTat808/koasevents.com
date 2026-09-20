@@ -113,6 +113,18 @@ type SalesRecord = {
   booking?: BookingState;
 };
 
+type TrashEntry = {
+  id: string;
+  kind: 'inquiry' | 'lead';
+  customerName: string;
+  customerEmail: string;
+  eventDate: string;
+  packageId: string;
+  deletedAt: string;
+  expiresAt: string;
+  deletedBy: string;
+};
+
 function quoteStoreFor(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name: 'koa-quotes', consistency: 'strong' })
@@ -199,12 +211,81 @@ async function saveRecord(context: Context, record: SalesRecord, records: SalesR
   return next;
 }
 
-async function deleteRecord(context: Context, recordId: string, records: SalesRecord[]) {
+async function readTrashIndex(context: Context): Promise<TrashEntry[]> {
+  return ((await salesStoreFor(context).get('trash/index', { type: 'json' })) || []) as TrashEntry[];
+}
+
+async function writeTrashIndex(context: Context, entries: TrashEntry[]) {
+  await salesStoreFor(context).setJSON('trash/index', entries.slice(0, 1000));
+}
+
+async function purgeExpiredTrash(context: Context, entries?: TrashEntry[]) {
   const store = salesStoreFor(context);
-  const next = records.filter((entry) => entry.id !== recordId);
-  await store.delete('records/' + recordId);
+  const current = entries || await readTrashIndex(context);
+  const now = Date.now();
+  const expired = current.filter((entry) => new Date(entry.expiresAt).getTime() <= now);
+  if (!expired.length) return current;
+  await Promise.all(expired.map((entry) => store.delete('trash/records/' + entry.id)));
+  const active = current.filter((entry) => new Date(entry.expiresAt).getTime() > now);
+  await writeTrashIndex(context, active);
+  return active;
+}
+
+async function moveRecordToTrash(
+  context: Context,
+  record: SalesRecord,
+  records: SalesRecord[],
+  deletedBy: string,
+) {
+  const store = salesStoreFor(context);
+  const now = new Date();
+  const entry: TrashEntry = {
+    id: record.id,
+    kind: record.kind as 'inquiry' | 'lead',
+    customerName: cleanText(record.customer?.name, 180),
+    customerEmail: cleanText(record.customer?.email, 240),
+    eventDate: cleanText(record.customer?.eventDate, 40),
+    packageId: normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage || record.inquiry?.mobileBarPackage),
+    deletedAt: now.toISOString(),
+    expiresAt: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    deletedBy: cleanText(deletedBy, 240),
+  };
+
+  await store.setJSON('trash/records/' + record.id, record);
+  const trash = await purgeExpiredTrash(context);
+  await writeTrashIndex(context, [entry, ...trash.filter((item) => item.id !== entry.id)]);
+  const next = records.filter((item) => item.id !== record.id);
+  await store.delete('records/' + record.id);
   await writeSalesIndex(context, next);
-  return next;
+  return { records: next, entry };
+}
+
+async function restoreTrashRecord(context: Context, recordId: string, records: SalesRecord[]) {
+  const store = salesStoreFor(context);
+  const trash = await purgeExpiredTrash(context);
+  const entry = trash.find((item) => item.id === recordId);
+  if (!entry) throw new Error('Trash record not found or has expired.');
+  if (records.some((record) => record.id === recordId)) throw new Error('A live CRM record with this ID already exists.');
+
+  const record = await store.get('trash/records/' + recordId, { type: 'json' }) as SalesRecord | null;
+  if (!record) throw new Error('Trash record data is no longer available.');
+
+  const next = [record, ...records].slice(0, 1500);
+  await store.setJSON('records/' + record.id, record);
+  await writeSalesIndex(context, next);
+  await store.delete('trash/records/' + recordId);
+  await writeTrashIndex(context, trash.filter((item) => item.id !== recordId));
+  return { records: next, record };
+}
+
+async function permanentlyDeleteTrashRecord(context: Context, recordId: string) {
+  const store = salesStoreFor(context);
+  const trash = await purgeExpiredTrash(context);
+  const exists = trash.some((item) => item.id === recordId);
+  if (!exists) return false;
+  await store.delete('trash/records/' + recordId);
+  await writeTrashIndex(context, trash.filter((item) => item.id !== recordId));
+  return true;
 }
 
 async function listQuotes(context: Context): Promise<SavedQuote[]> {
@@ -830,7 +911,8 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const q = cleanText(url.searchParams.get('q'), 120).toLowerCase();
-    const [allQuotes, records, events] = await Promise.all([listQuotes(context), readSalesIndex(context), readEvents(context)]);
+    const [allQuotes, records, events, trashRaw] = await Promise.all([listQuotes(context), readSalesIndex(context), readEvents(context), readTrashIndex(context)]);
+    const trash = await purgeExpiredTrash(context, trashRaw);
 
     const filteredQuotes = q ? allQuotes.filter((quote) => [
       quote.id, quote.state?.startingPoint, quote.state?.guestCount,
@@ -872,6 +954,7 @@ export default async (req: Request, context: Context) => {
       conversions,
       reminders,
       records: enrichedRecords,
+      trash,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
@@ -888,31 +971,145 @@ export default async (req: Request, context: Context) => {
 
     if (!['inquiry', 'lead'].includes(record.kind) || ['proposal', 'booked'].includes(record.stage)) {
       return Response.json({
-        error: 'Only inquiry and lead records can be deleted here. Proposals and booked records are protected.',
+        error: 'Only inquiry and lead records can be moved to Trash. Proposals and booked records are protected.',
       }, { status: 400 });
     }
 
     const downstream = records.filter((entry) => entry.source === record.id);
     if (downstream.length) {
       return Response.json({
-        error: 'This record has a downstream ' + downstream.map((entry) => entry.kind).join(', ') + ' record. Delete is blocked to protect the CRM history.',
+        error: 'This record has a downstream ' + downstream.map((entry) => entry.kind).join(', ') + ' record. Trash is blocked to protect the CRM history.',
       }, { status: 409 });
     }
 
-    records = await deleteRecord(context, record.id, records);
+    const moved = await moveRecordToTrash(context, record, records, cleanText(auth.user?.email, 240));
+    records = moved.records;
     await appendEvent(context, {
-      type: 'record_deleted',
+      type: 'record_trashed',
       recordId: record.id,
       quoteId: record.quoteId || '',
       packageId: record.packageId || '',
-      detail: 'Administrator deleted a ' + record.kind + ' record from the CRM.',
+      detail: 'Administrator moved a ' + record.kind + ' record to Trash for 30 days.',
     });
 
     return Response.json({
       ok: true,
       deletedId: record.id,
       kind: record.kind,
+      trash: moved.entry,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'restore-record') {
+    const recordId = cleanText(payload.recordId, 80);
+    try {
+      const restored = await restoreTrashRecord(context, recordId, records);
+      records = restored.records;
+      await appendEvent(context, {
+        type: 'record_restored',
+        recordId: restored.record.id,
+        quoteId: restored.record.quoteId || '',
+        packageId: restored.record.packageId || '',
+        detail: 'Administrator restored a CRM record from Trash.',
+      });
+      return Response.json({ ok: true, record: restored.record }, { headers: { 'Cache-Control': 'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : 'Unable to restore CRM record.' }, { status: 400 });
+    }
+  }
+
+  if (payload.action === 'permanent-delete-record') {
+    const recordId = cleanText(payload.recordId, 80);
+    const removed = await permanentlyDeleteTrashRecord(context, recordId);
+    if (!removed) return Response.json({ error: 'Trash record not found.' }, { status: 404 });
+    await appendEvent(context, {
+      type: 'record_permanently_deleted',
+      recordId,
+      detail: 'Administrator permanently deleted a CRM record from Trash.',
+    });
+    return Response.json({ ok: true, deletedId: recordId }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'delete-quote') {
+    const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
+    if (!/^[2-9A-HJ-NP-Z]{16}$/.test(quoteId)) return Response.json({ error: 'Valid quote ID required.' }, { status: 400 });
+    const quote = await getQuote(context, quoteId);
+    if (!quote) return Response.json({ error: 'Saved quote not found.' }, { status: 404 });
+
+    const protectedRecords = records.filter((record) =>
+      record.quoteId === quoteId && (record.kind === 'proposal' || record.stage === 'booked')
+    );
+    if (protectedRecords.length) {
+      return Response.json({
+        error: 'This saved quote is attached to a proposal or booked record and is protected from deletion.',
+      }, { status: 409 });
+    }
+
+    await quoteStoreFor(context).delete('quotes/' + quoteId);
+    await appendEvent(context, {
+      type: 'quote_deleted',
+      quoteId,
+      detail: 'Administrator permanently deleted a saved quote snapshot.',
+    });
+    return Response.json({ ok: true, deletedQuoteId: quoteId }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'bulk-trash') {
+    const ids = Array.from(new Set((Array.isArray(payload.recordIds) ? payload.recordIds : [])
+      .map((value: unknown) => cleanText(value, 80))
+      .filter(Boolean))).slice(0, 100);
+    if (!ids.length) return Response.json({ error: 'Select at least one inquiry or lead.' }, { status: 400 });
+
+    const moved: string[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+    for (const id of ids) {
+      const record = records.find((entry) => entry.id === id);
+      if (!record) { skipped.push({ id, reason: 'Record not found.' }); continue; }
+      if (!['inquiry', 'lead'].includes(record.kind) || ['proposal', 'booked'].includes(record.stage)) {
+        skipped.push({ id, reason: 'Only inquiry and lead records can be moved to Trash.' });
+        continue;
+      }
+      if (records.some((entry) => entry.source === record.id)) {
+        skipped.push({ id, reason: 'Downstream CRM record exists.' });
+        continue;
+      }
+      const result = await moveRecordToTrash(context, record, records, cleanText(auth.user?.email, 240));
+      records = result.records;
+      moved.push(id);
+    }
+
+    for (const id of moved) {
+      await appendEvent(context, { type: 'record_trashed', recordId: id, detail: 'Administrator bulk-moved CRM record to Trash for 30 days.' });
+    }
+    return Response.json({ ok: true, moved, skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'bulk-lost') {
+    const ids = Array.from(new Set((Array.isArray(payload.recordIds) ? payload.recordIds : [])
+      .map((value: unknown) => cleanText(value, 80))
+      .filter(Boolean))).slice(0, 100);
+    if (!ids.length) return Response.json({ error: 'Select at least one inquiry or lead.' }, { status: 400 });
+
+    const updated: string[] = [];
+    const skipped: Array<{ id: string; reason: string }> = [];
+    for (const id of ids) {
+      const record = records.find((entry) => entry.id === id);
+      if (!record) { skipped.push({ id, reason: 'Record not found.' }); continue; }
+      if (!['inquiry', 'lead'].includes(record.kind) || ['proposal', 'booked'].includes(record.stage)) {
+        skipped.push({ id, reason: 'Only inquiry and lead records can be marked lost in bulk.' });
+        continue;
+      }
+      record.stage = 'lost';
+      record.status = 'lost';
+      record.updatedAt = new Date().toISOString();
+      records = await saveRecord(context, record, records);
+      updated.push(id);
+    }
+
+    for (const id of updated) {
+      await appendEvent(context, { type: 'stage_changed', recordId: id, detail: 'Administrator bulk-marked CRM record as lost.' });
+    }
+    return Response.json({ ok: true, updated, skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (payload.action === 'convert') {
