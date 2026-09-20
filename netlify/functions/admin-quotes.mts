@@ -151,6 +151,9 @@ const PACKAGE_PRICES: Record<string, number> = {
   orchid: 10000,
   hibiscus: 15000,
   'signature-wedding': 20000,
+  'mobile-oahu': 1200,
+  'mobile-maui': 1500,
+  'mobile-big-island': 1800,
 };
 
 const PACKAGE_NAMES: Record<string, string> = {
@@ -158,6 +161,10 @@ const PACKAGE_NAMES: Record<string, string> = {
   orchid: 'Orchid Wedding Collection',
   hibiscus: 'Hibiscus Wedding Collection',
   'signature-wedding': 'Koa’s Signature Wedding Experience',
+  'mobile-oahu': 'Koa’s Mobile Bar — Oahu Package',
+  'mobile-maui': 'Koa’s Mobile Bar — Maui Package',
+  'mobile-big-island': 'Koa’s Mobile Bar — Big Island Package',
+  'mobile-custom': 'Koa’s Mobile Bar — Custom Service',
 };
 
 async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
@@ -167,7 +174,7 @@ async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
     ...record,
     stage: record.stage || (record.kind === 'proposal' ? 'proposal' : record.kind === 'lead' ? 'lead' : 'inquiry'),
     updatedAt: record.updatedAt || record.createdAt,
-    packageId: normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage),
+    packageId: normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.venuePackage || record.inquiry?.mobileBarPackage),
   }));
 }
 
@@ -440,10 +447,12 @@ function bookingSummary(record: SalesRecord) {
   };
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '') {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
+  const inquiryLines = Array.isArray((inquiry as any)?.estimateLineItems) ? (inquiry as any).estimateLineItems : [];
+  const mobileEstimate = finite((inquiry as any)?.estimatedTotal || 0);
   const base = finite(state.basePackagePrice || PACKAGE_PRICES[normalizedPackage] || 0);
   if (base > 0) {
     lines.push({
@@ -468,6 +477,36 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
       custom: amount <= 0,
     });
   });
+
+  if (!quote && inquiryLines.length) {
+    lines.length = 0;
+    inquiryLines.slice(0, 50).forEach((item: any, index: number) => {
+      const quantity = Math.max(1, Math.round(finite(item?.quantity, 1, 2000)));
+      const unitPrice = finite(item?.unitPrice);
+      const amount = finite(item?.amount || quantity * unitPrice);
+      const description = cleanText(item?.description, 240);
+      if (!description) return;
+      lines.push({
+        id: cleanText(item?.id || 'mobile-line-' + (index + 1), 80),
+        description,
+        quantity,
+        unitPrice: amount > 0 ? unitPrice || amount / quantity : 0,
+        amount,
+        custom: Boolean(item?.custom) || amount <= 0,
+      });
+    });
+  }
+
+  if (!quote && !lines.length && mobileEstimate > 0) {
+    lines.push({
+      id: 'mobile-estimate',
+      description: PACKAGE_NAMES[normalizedPackage] || 'Koa’s Mobile Bar estimated service',
+      quantity: 1,
+      unitPrice: mobileEstimate,
+      amount: mobileEstimate,
+      custom: false,
+    });
+  }
 
   const subtotal = lines.reduce((sum, line) => sum + finite(line.amount), 0);
   const discountAmount = Math.min(subtotal, finite(state.estimatedKnownSavings || 0));
@@ -600,7 +639,7 @@ function quoteAnalytics(quotes: SavedQuote[]) {
 }
 
 function funnelAnalytics(events: any[], records: SalesRecord[]) {
-  const ids = ['gardenia','orchid','hibiscus','signature-wedding'];
+  const ids = ['gardenia','orchid','hibiscus','signature-wedding','mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
   return ids.map((packageId) => {
     const views = new Set(events.filter((e) => e.type === 'package_view' && normalizePackage(e.packageId) === packageId).map((e) => e.sessionId || e.id)).size;
     const saves = new Set(events.filter((e) => e.type === 'quote_saved' && normalizePackage(e.packageId) === packageId).map((e) => e.quoteId || e.id)).size;
@@ -738,7 +777,7 @@ export default async (req: Request, context: Context) => {
 
     const quote = source.quote || await getQuote(context, source.quoteId || '');
     const now = new Date().toISOString();
-    const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage);
+    const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage || source.inquiry?.mobileBarPackage);
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -751,7 +790,7 @@ export default async (req: Request, context: Context) => {
       source: source.id,
       customer: { ...source.customer },
       quote: quote || undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
