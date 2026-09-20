@@ -45,6 +45,64 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section class="rounded-[1.5rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7" data-mobile-bar-section>
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Mobile Bar</p>
+              <h2 class="display mt-3 text-4xl">Mobile Bar pipeline + reporting</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-white/62">Filter Mobile Bar opportunities, see lead and quote status, inspect calculator pricing, work follow-up tasks, and track package conversion without mixing these leads into venue-only reporting.</p>
+            </div>
+            <span data-mobile-count class="w-fit rounded-full border border-white/15 bg-white/[.06] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white/75">0 records</span>
+          </div>
+
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Open</p><strong data-mobile-stat-open class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Booked</p><strong data-mobile-stat-booked class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Follow-ups due</p><strong data-mobile-stat-followups class="display mt-2 block text-3xl">0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Estimate value</p><strong data-mobile-stat-value class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Avg. estimate</p><strong data-mobile-stat-average class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Custom add-ons</p><strong data-mobile-stat-custom class="display mt-2 block text-3xl">0</strong></article>
+          </div>
+
+          <div class="mt-6 grid gap-3 rounded-[1.2rem] border border-white/10 bg-black/10 p-4 md:grid-cols-2 xl:grid-cols-5">
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Stage
+              <select data-mobile-filter-stage class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="all">All stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Package
+              <select data-mobile-filter-package class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="all">All packages</option><option value="mobile-oahu">Oahu</option><option value="mobile-maui">Maui</option><option value="mobile-big-island">Big Island</option><option value="mobile-custom">Custom</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Quote status
+              <select data-mobile-filter-quote class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="all">All quote states</option><option value="website-estimate">Website estimate</option><option value="draft">Proposal draft</option><option value="sent">Proposal sent</option><option value="viewed">Proposal viewed</option><option value="accepted">Proposal accepted</option><option value="booked">Proposal booked</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Follow-up
+              <select data-mobile-filter-followup class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="all">All</option><option value="due">Needs follow-up</option><option value="clear">No task due</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white/62">Sort
+              <select data-mobile-sort class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                <option value="recent">Most recent</option><option value="event-date">Event date</option><option value="estimate-high">Estimate: high to low</option><option value="followup">Follow-up priority</option>
+              </select>
+            </label>
+          </div>
+
+          <div data-mobile-records class="mt-5 grid gap-4 lg:grid-cols-2 2xl:grid-cols-3"></div>
+
+          <div class="mt-7 overflow-x-auto rounded-[1.2rem] border border-white/10 bg-white/[.05] p-4">
+            <div class="mb-3 flex items-center justify-between gap-4"><div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Package report</p><p class="mt-1 text-sm text-white/65">Mobile Bar funnel by package from CRM records currently loaded.</p></div></div>
+            <table class="w-full min-w-[760px] border-collapse text-sm">
+              <thead><tr class="border-b border-white/10 text-left text-[.56rem] font-black uppercase tracking-[.1em] text-white/50"><th class="py-3 pr-4">Package</th><th class="py-3 pr-4">Inquiries</th><th class="py-3 pr-4">Leads</th><th class="py-3 pr-4">Proposals</th><th class="py-3 pr-4">Booked</th><th class="py-3 pr-4">Avg estimate</th><th class="py-3">Follow-ups</th></tr></thead>
+              <tbody data-mobile-report></tbody>
+            </table>
+          </div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Pipeline</p><h2 class="display mt-3 text-4xl">Inquiries → leads → proposals → booked</h2></div>
@@ -217,6 +275,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const message = document.querySelector('[data-message]');
     const searchForm = document.querySelector('[data-search-form]');
     const searchInput = document.querySelector('[data-search-input]');
+    const mobileRecords = document.querySelector('[data-mobile-records]');
+    const mobileReport = document.querySelector('[data-mobile-report]');
+    const mobileCount = document.querySelector('[data-mobile-count]');
+    const mobileFilterStage = document.querySelector('[data-mobile-filter-stage]');
+    const mobileFilterPackage = document.querySelector('[data-mobile-filter-package]');
+    const mobileFilterQuote = document.querySelector('[data-mobile-filter-quote]');
+    const mobileFilterFollowup = document.querySelector('[data-mobile-filter-followup]');
+    const mobileSort = document.querySelector('[data-mobile-sort]');
 
     const convertDialog = document.querySelector('[data-convert-dialog]');
     const convertForm = document.querySelector('[data-convert-form]');
@@ -707,6 +773,148 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function textContent(selector,value){const el=document.querySelector(selector);if(el)el.textContent=value;}
 
+    function isMobileBarRecord(record) {
+      const id=recordPackage(record);
+      return String(id||'').startsWith('mobile-') || record.inquiry?.service==='mobile-bar';
+    }
+
+    function mobileQuoteStatus(record) {
+      if(record.kind==='proposal') return record.proposal?.status || record.status || 'draft';
+      if(record.stage==='booked') return 'booked';
+      if(record.inquiry?.estimatedTotal) return 'website-estimate';
+      return 'unquoted';
+    }
+
+    function mobileFollowups(record) {
+      return Array.isArray(record.reminders) ? record.reminders : [];
+    }
+
+    function renderMobileCard(record) {
+      const article=document.createElement('article');
+      article.className='rounded-[1.2rem] border border-white/10 bg-white p-5 text-[var(--koa-ink)] shadow-sm';
+
+      const top=document.createElement('div');top.className='flex items-start justify-between gap-3';
+      const left=document.createElement('div');
+      left.append(
+        text('p','text-[.54rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',record.stage+' · '+mobileQuoteStatus(record).replaceAll('-',' ')),
+        text('h3','mt-1 text-base font-semibold text-[var(--koa-forest)]',record.customer?.name||'Client name TBD'),
+        text('p','mt-1 font-mono text-[.62rem] text-[var(--koa-ink)]/42',record.id)
+      );
+      const pkg=text('span','shrink-0 rounded-full bg-[var(--koa-sand)] px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',packageLabel(recordPackage(record)));
+      top.append(left,pkg);article.appendChild(top);
+
+      const info=[record.customer?.eventDate,record.inquiry?.eventType,record.inquiry?.guestCount?record.inquiry.guestCount+' guests':'',record.inquiry?.eventLocation].filter(Boolean).join(' · ');
+      if(info) article.appendChild(text('p','mt-3 text-xs leading-5 text-[var(--koa-ink)]/55',info));
+
+      if(record.inquiry?.estimatedTotal) {
+        const estimate=document.createElement('div');estimate.className='mt-4 rounded-xl bg-[var(--koa-sand)] p-4';
+        const head=document.createElement('div');head.className='flex items-center justify-between gap-3';
+        head.append(text('span','text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Website calculator'),text('strong','display text-2xl text-[var(--koa-forest)]',money(record.inquiry.estimatedTotal)));
+        estimate.appendChild(head);
+        const meta=[record.inquiry.serviceHours?record.inquiry.serviceHours+' hr':'',record.inquiry.bartenderCount?record.inquiry.bartenderCount+' bartenders':'',record.inquiry.oneWayMiles?record.inquiry.oneWayMiles+' mi one-way':'',record.inquiry.glasswareCount?record.inquiry.glasswareCount+' glassware':''].filter(Boolean).join(' · ');
+        if(meta) estimate.appendChild(text('p','mt-2 text-[.66rem] leading-5 text-[var(--koa-ink)]/52',meta));
+        if(Array.isArray(record.inquiry.customAddOns)&&record.inquiry.customAddOns.length) estimate.appendChild(text('p','mt-2 text-[.66rem] font-semibold text-[var(--koa-clay)]','Custom add-ons · '+record.inquiry.customAddOns.join(', ')));
+        if(Array.isArray(record.inquiry.estimateLineItems)&&record.inquiry.estimateLineItems.length){
+          const details=document.createElement('details');details.className='mt-3 border-t border-[var(--koa-line)] pt-3';
+          const summary=document.createElement('summary');summary.className='cursor-pointer text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';summary.textContent='Calculator breakdown';
+          details.appendChild(summary);
+          const list=document.createElement('div');list.className='mt-2 grid gap-1.5';
+          record.inquiry.estimateLineItems.forEach((line)=>{
+            const row=document.createElement('div');row.className='flex justify-between gap-4 text-[.66rem] text-[var(--koa-ink)]/58';
+            row.append(text('span','',line.description||line.id||'Item'),text('strong','shrink-0',money(line.amount||0)));list.appendChild(row);
+          });
+          details.appendChild(list);estimate.appendChild(details);
+        }
+        article.appendChild(estimate);
+      }
+
+      const tasks=mobileFollowups(record);
+      const taskBox=document.createElement('div');taskBox.className='mt-4';
+      taskBox.appendChild(text('p','text-[.54rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]','Follow-up'));
+      if(tasks.length){
+        tasks.slice(0,3).forEach((task)=>{
+          const row=document.createElement('div');row.className='mt-2 rounded-lg border border-[var(--koa-line)] px-3 py-2';
+          row.append(text('strong','text-xs text-[var(--koa-forest)]',task.title||'Follow-up due'),text('p','mt-1 text-[.66rem] leading-5 text-[var(--koa-ink)]/52',task.detail||''));
+          taskBox.appendChild(row);
+        });
+      } else taskBox.appendChild(text('p','mt-2 text-xs text-[var(--koa-ink)]/42','No follow-up task currently due.'));
+      article.appendChild(taskBox);
+
+      const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
+      const small='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+      const primary='rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white';
+      const plan=workflowPlan(record);
+      if(plan.run && record.stage!=='booked') actions.append(actionButton(plan.label,primary,plan.run));
+      if(record.kind==='proposal') actions.append(actionButton('Proposal',small,()=>openProposal(record)));
+      addQuickLinks(actions,record,small);
+      article.appendChild(actions);
+      return article;
+    }
+
+    function filteredMobileRecords() {
+      let records=(payload.records||[]).filter(isMobileBarRecord);
+      const stage=String(mobileFilterStage?.value||'all');
+      const pkg=String(mobileFilterPackage?.value||'all');
+      const quote=String(mobileFilterQuote?.value||'all');
+      const follow=String(mobileFilterFollowup?.value||'all');
+      if(stage!=='all') records=records.filter((r)=>r.stage===stage);
+      if(pkg!=='all') records=records.filter((r)=>recordPackage(r)===pkg);
+      if(quote!=='all') records=records.filter((r)=>mobileQuoteStatus(r)===quote);
+      if(follow==='due') records=records.filter((r)=>mobileFollowups(r).length);
+      if(follow==='clear') records=records.filter((r)=>!mobileFollowups(r).length);
+      const sort=String(mobileSort?.value||'recent');
+      records=[...records].sort((a,b)=>{
+        if(sort==='event-date') return String(a.customer?.eventDate||'9999').localeCompare(String(b.customer?.eventDate||'9999'));
+        if(sort==='estimate-high') return Number(b.inquiry?.estimatedTotal||b.proposal?.total||0)-Number(a.inquiry?.estimatedTotal||a.proposal?.total||0);
+        if(sort==='followup') return (mobileFollowups(a)[0]?.priority||99)-(mobileFollowups(b)[0]?.priority||99);
+        return new Date(b.updatedAt||b.createdAt||0).getTime()-new Date(a.updatedAt||a.createdAt||0).getTime();
+      });
+      return records;
+    }
+
+    function renderMobileBar() {
+      const all=(payload.records||[]).filter(isMobileBarRecord);
+      const shown=filteredMobileRecords();
+      if(mobileCount) mobileCount.textContent=shown.length+' of '+all.length+' records';
+      const open=all.filter((r)=>r.stage!=='booked'&&r.stage!=='lost'&&r.stage!=='converted').length;
+      const booked=all.filter((r)=>r.stage==='booked').length;
+      const followups=all.reduce((sum,r)=>sum+mobileFollowups(r).length,0);
+      const estimates=all.map((r)=>Number(r.inquiry?.estimatedTotal||0)).filter((v)=>v>0);
+      const value=estimates.reduce((sum,v)=>sum+v,0);
+      textContent('[data-mobile-stat-open]',String(open));
+      textContent('[data-mobile-stat-booked]',String(booked));
+      textContent('[data-mobile-stat-followups]',String(followups));
+      textContent('[data-mobile-stat-value]',money(value));
+      textContent('[data-mobile-stat-average]',money(estimates.length?value/estimates.length:0));
+      textContent('[data-mobile-stat-custom]',String(all.filter((r)=>Array.isArray(r.inquiry?.customAddOns)&&r.inquiry.customAddOns.length).length));
+
+      if(mobileRecords){
+        mobileRecords.innerHTML='';
+        shown.slice(0,100).forEach((record)=>mobileRecords.appendChild(renderMobileCard(record)));
+        if(!shown.length) mobileRecords.appendChild(text('p','rounded-xl border border-white/10 bg-white/[.05] p-5 text-sm text-white/55','No Mobile Bar records match these filters.'));
+      }
+
+      if(mobileReport){
+        mobileReport.innerHTML='';
+        ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'].forEach((packageId)=>{
+          const rows=all.filter((r)=>recordPackage(r)===packageId);
+          const estimates=rows.map((r)=>Number(r.inquiry?.estimatedTotal||0)).filter((v)=>v>0);
+          const tr=document.createElement('tr');tr.className='border-b border-white/10';
+          const values=[
+            packageLabel(packageId),
+            rows.filter((r)=>r.stage==='inquiry').length,
+            rows.filter((r)=>r.stage==='lead').length,
+            rows.filter((r)=>r.stage==='proposal').length,
+            rows.filter((r)=>r.stage==='booked').length,
+            money(estimates.length?estimates.reduce((s,v)=>s+v,0)/estimates.length:0),
+            rows.reduce((sum,r)=>sum+mobileFollowups(r).length,0)
+          ];
+          values.forEach((value,index)=>{const td=document.createElement('td');td.className='py-3 pr-4 '+(index===0?'font-semibold text-white':'text-white/72');td.textContent=String(value);tr.appendChild(td);});
+          mobileReport.appendChild(tr);
+        });
+      }
+    }
+
     function renderPipeline() {
       pipeline.innerHTML='';
       ['inquiry','lead','proposal','booked'].forEach((stage)=>{
@@ -848,10 +1056,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       payload=await response.json();
       qboState=qboResponse.ok?await qboResponse.json():null;
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderFunnel();renderPipeline();renderBookedDashboard();renderQuotes();
+      renderStats();renderWorkQueue();renderFunnel();renderMobileBar();renderPipeline();renderBookedDashboard();renderQuotes();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
+    [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
