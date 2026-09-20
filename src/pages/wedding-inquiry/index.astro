@@ -12,7 +12,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 <aside><p class="eyebrow text-[var(--koa-clay)]">Wedding availability</p><h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Start with the wedding, not the equipment list.</h1><p class="mt-7 max-w-xl text-base leading-7 text-[var(--koa-ink)]/68">We only need enough information to understand your date, guest count, budget and the kind of experience you are planning. Detailed rentals, décor and production choices can come later.</p><div class="mt-10 rounded-[1.5rem] bg-[var(--koa-forest)] p-7 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Signature Wedding</p><p class="display mt-4 text-4xl">Starting at $20,000</p><p class="mt-4 text-sm leading-6 text-white/64">Interested in a more supported wedding weekend? Select the Signature Experience in the form and we’ll qualify the fit from there.</p></div></aside>
 <form name="koa-wedding-inquiry" method="POST" action="/wedding-inquiry-thank-you/" data-netlify="true" netlify-honeypot="bot-field" class="rounded-[1.8rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-9" data-wedding-inquiry-form>
 <input type="hidden" name="form-name" value="koa-wedding-inquiry"/>
-          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Wedding Inquiry (%{submissionId})" />
+          <input type="hidden" name="subject" data-remove-prefix value="New Koa’s Wedding Inquiry" />
           <input type="hidden" name="selectedCatalogItems" value="" data-selected-catalog-items />
           <input type="hidden" name="automaticRentalBreakdown" value="" data-auto-rental-breakdown />
           <input type="hidden" name="manualAddOns" value="" data-manual-add-ons />
@@ -153,6 +153,21 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 
       form.dataset.crmCaptured = '1';
       form.querySelector('[name="cf-turnstile-response"]')?.remove();
+
+      if (payload?.deduplicated) {
+        window.location.assign('/wedding-inquiry-thank-you/');
+        return;
+      }
+
+      form.querySelector('[name="catalogSelectionState"]')?.setAttribute('disabled', 'disabled');
+      form.querySelector('[name="automaticRentalBreakdown"]')?.setAttribute('disabled', 'disabled');
+      ['selectedCatalogItems', 'manualAddOns', 'estimatedGuestFurnitureTotal', 'savedQuoteId'].forEach((name) => {
+        const field = form.querySelector('[name="' + name + '"]');
+        if (field) form.appendChild(field);
+      });
+      if (packageField?.selectedOptions?.[0]) {
+        packageField.selectedOptions[0].value = packageField.selectedOptions[0].textContent?.trim() || packageField.value;
+      }
       form.submit();
     } catch (error) {
       form.dataset.submitting = '0';
@@ -179,14 +194,14 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
     const auto = (state.selected || []).filter((entry) => entry.auto);
     const manual = (state.selected || []).filter((entry) => !entry.auto);
     const all = [...auto, ...manual];
-    const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const allText = all.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
     const autoText = auto.map((entry) => entry.quantity + ' × ' + entry.name + (entry.reason ? ' — ' + entry.reason : '') + (entry.estimatedLineTotal ? ' Estimated: USD ' + Number(entry.estimatedLineTotal).toFixed(0) + '.' : '')).join(' | ');
-    const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join(' | ');
+    const manualText = manual.map((entry) => entry.quantity + ' × ' + entry.name).join('\n');
 
     if (selectedItemsInput) selectedItemsInput.value = allText;
     if (autoBreakdownInput) autoBreakdownInput.value = autoText;
     if (manualAddOnsInput) manualAddOnsInput.value = manualText;
-    if (estimateInput) estimateInput.value = state.estimatedFurnitureTotal || '';
+    if (estimateInput) estimateInput.value = state.estimatedFurnitureTotal ? money(state.estimatedFurnitureTotal) : '';
     if (stateInput) stateInput.value = JSON.stringify(state);
     if (savedQuoteIdInput) savedQuoteIdInput.value = quoteId;
     if (editPlanLink && quoteId) editPlanLink.href = '/catalog/?quote=' + encodeURIComponent(quoteId);
