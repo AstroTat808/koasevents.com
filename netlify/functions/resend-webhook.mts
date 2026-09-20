@@ -31,6 +31,7 @@ function communicationLabel(key: string) {
     discoveryNotification: 'Discovery Call team notification',
     discoveryConfirmation: 'Discovery Call client confirmation',
     responseReminder: 'Internal response reminder',
+    clientFollowUp: '24-hour client follow-up',
   };
   return labels[key] || key.replace(/([A-Z])/g, ' $1').trim();
 }
