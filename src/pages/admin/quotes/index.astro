@@ -626,6 +626,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         client_confirmation_sent:'Client confirmation sent', client_confirmation_failed:'Client confirmation failed',
         lead_response_reminder_sent:'Response reminder sent', lead_response_reminder_failed:'Response reminder failed',
         client_follow_up_sent:'24-hour client follow-up sent', client_follow_up_failed:'24-hour client follow-up failed',
+        review_request_sent:'Google review request sent', review_request_failed:'Google review request failed',
         email_sent:'Email sent', email_delivered:'Email delivered', email_bounced:'Email bounced', email_failed:'Email failed'
       };
       return labels[type]||String(type||'Activity').replaceAll('_',' ');
@@ -655,7 +656,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ['Team notification',communications.internalNotification],
         ['Discovery confirmation',communications.discoveryConfirmation],
         ['Response reminder',communications.responseReminder],
-        ['24-hour follow-up',communications.clientFollowUp]
+        ['24-hour follow-up',communications.clientFollowUp],
+        ['Google review request',communications.reviewRequest]
       ].filter(([,entry])=>entry&&entry.status);
 
       if(!items.length)return;
