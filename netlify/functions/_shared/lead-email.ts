@@ -653,3 +653,110 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
     idempotencyKey: 'koa-lead-response-reminder-' + record.id,
   });
 }
+
+
+function clientFollowUpCopy(record: LeadRecord) {
+  const kind = leadKind(record);
+  const inquiry = record.inquiry || {};
+  const date = formatDate(record.customer?.eventDate || inquiry.arrival || inquiry.preferredDate);
+  const pkg = packageLabel(record);
+
+  if (kind === 'wedding') {
+    return {
+      subject: 'A quick follow-up on your Koa’s wedding inquiry',
+      title: 'Just following up on your wedding plans.',
+      body: 'I wanted to make sure your wedding inquiry came through and let you know we still have the details you shared. If anything has changed with your date, guest count, package interest, or vision, just reply to this email and send the update.',
+      detail: [date ? 'Wedding date: ' + date : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : '', pkg ? 'Package interest: ' + pkg : ''].filter(Boolean).join(' · '),
+    };
+  }
+
+  if (kind === 'mobile') {
+    return {
+      subject: 'A quick follow-up on your Koa’s Mobile Bar inquiry',
+      title: 'Just checking in on your Mobile Bar plans.',
+      body: 'I wanted to make sure your Mobile Bar request came through and let you know we still have the event details and estimate selections you sent. If your location, guest count, service hours, or bar plans have changed, reply here and send the latest information.',
+      detail: [date ? 'Event date: ' + date : '', inquiry.eventLocation ? 'Location: ' + inquiry.eventLocation : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
+    };
+  }
+
+  if (kind === 'stay') {
+    return {
+      subject: 'A quick follow-up on your Stay at Koa’s inquiry',
+      title: 'Just checking in on your stay request.',
+      body: 'I wanted to make sure your stay request came through and let you know we still have the dates and details you shared. If your travel dates, party size, or plans have changed, reply here and send the latest information.',
+      detail: [inquiry.arrival ? 'Arrival: ' + formatDate(inquiry.arrival) : '', inquiry.departure ? 'Departure: ' + formatDate(inquiry.departure) : '', inquiry.guestCount ? 'Guests: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
+    };
+  }
+
+  if (kind === 'discovery') {
+    return {
+      subject: 'A quick follow-up on your Koa’s discovery call request',
+      title: 'Just checking in on your discovery call request.',
+      body: 'I wanted to make sure your preferred call window came through. If your availability has changed, reply here with another day or time that works well for you.',
+      detail: [inquiry.preferredDate ? 'Preferred date: ' + formatDate(inquiry.preferredDate) : '', inquiry.preferredTime ? 'Preferred time: ' + inquiry.preferredTime : ''].filter(Boolean).join(' · '),
+    };
+  }
+
+  return {
+    subject: 'A quick follow-up on your Koa’s Events inquiry',
+    title: 'Just following up on your event plans.',
+    body: 'I wanted to make sure your inquiry came through and let you know we still have the event details you shared. If anything has changed with your date, guest count, event type, or priorities, reply here and send the latest information.',
+    detail: [date ? 'Event date: ' + date : '', inquiry.eventType ? 'Event: ' + inquiry.eventType : '', inquiry.guestCount ? 'Guest count: ' + inquiry.guestCount : ''].filter(Boolean).join(' · '),
+  };
+}
+
+export async function sendClientFollowUp(record: LeadRecord) {
+  const email = String(record.customer?.email || '').trim();
+  if (!email || !email.includes('@')) {
+    return { sent: false, configured: Boolean(Netlify.env.get('RESEND_API_KEY')), id: '' };
+  }
+
+  const copy = clientFollowUpCopy(record);
+  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
+  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+  const detail = copy.detail
+    ? '<div style="margin-top:20px;padding:15px 17px;background:#f5f0e7;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:21px;font-weight:700;color:#173d30;">' + esc(copy.detail) + '</div>'
+    : '';
+
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+    '<body style="margin:0;padding:0;background:#f5f0e7;">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px;">' +
+        '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:650px;background:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
+          '<tr><td style="padding:32px 30px;">' +
+            '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;color:#a96d4a;">Koa’s Events</div>' +
+            '<div style="padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#66736d;">Aloha ' + esc(firstName(record)) + ',</div>' +
+            '<div style="padding-top:8px;font-family:Georgia,Times New Roman,serif;font-size:34px;line-height:40px;font-weight:700;color:#173d30;">' + esc(copy.title) + '</div>' +
+            '<div style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">' + esc(copy.body) + '</div>' +
+            detail +
+            '<div style="padding-top:20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">There is no need to submit another form. A reply to this email will keep everything together for our team.</div>' +
+            '<div style="padding-top:26px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:22px;color:#173d30;"><strong>Mahalo,</strong><br>Koa’s Events Team</div>' +
+          '</td></tr>' +
+        '</table>' +
+      '</td></tr></table>' +
+    '</body></html>';
+
+  const text = [
+    'Aloha ' + firstName(record) + ',',
+    '',
+    copy.title,
+    '',
+    copy.body,
+    copy.detail,
+    '',
+    'There is no need to submit another form. A reply to this email will keep everything together for our team.',
+    '',
+    'Mahalo,',
+    'Koa’s Events Team',
+  ].filter(Boolean).join('\n');
+
+  return sendWithResend({
+    to: [email],
+    from,
+    subject: copy.subject,
+    html,
+    text,
+    replyTo,
+    idempotencyKey: 'koa-client-follow-up-' + record.id,
+  });
+}
