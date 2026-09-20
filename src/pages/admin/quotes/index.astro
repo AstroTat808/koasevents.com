@@ -405,7 +405,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, conversions: {}, records: [] };
+    let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, conversions: {}, records: [], trash: [] };
+    const selectedRecordIds = new Set();
     let editingRecord = null;
     let activityRecord = null;
     let bookingRecord = null;
