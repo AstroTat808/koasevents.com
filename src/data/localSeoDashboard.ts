@@ -41,6 +41,17 @@ export const localSeoDashboard = {
     count: 6,
     averageRating: 4.3,
   },
+  mobileBarSite: {
+    property: 'sc-domain:koasmobilebar.com',
+    siteUrl: 'https://koasmobilebar.com/',
+    sitemapUrl: 'https://koasmobilebar.com/sitemap.xml',
+    sitemapSubmittedUrls: 16,
+    sitemapErrors: 0,
+    sitemapWarnings: 0,
+    lastSitemapDownload: '2026-09-20T05:14:40.855Z',
+    status: 'Verified in Search Console; awaiting first performance data.',
+    months: [] as Array<{ month: string; impressions: number; clicks: number; ctr: number; avgPosition: number | null }>,
+  },
   months: [
     { month: '2026-04', gbp: { impressions: 751, websiteClicks: 40, calls: 3, directions: 57 }, searchConsole: { impressions: 2664, clicks: 97, ctr: 0.0364, avgPosition: 16.76 } },
     { month: '2026-05', gbp: { impressions: 842, websiteClicks: 42, calls: 0, directions: 76 }, searchConsole: { impressions: 3137, clicks: 100, ctr: 0.0319, avgPosition: 19.92 } },
