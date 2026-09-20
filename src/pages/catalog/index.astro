@@ -320,7 +320,7 @@ const badgeClass = {
                     <p class="text-xs font-semibold text-[var(--koa-ink)]/72">Quantity</p>
                     <div class="mt-2 flex items-center gap-2">
                       <button type="button" data-quantity-decrease class="grid min-h-11 min-w-11 place-items-center rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] text-lg font-bold text-[var(--koa-forest)]" aria-label={"Decrease " + item.name + " quantity"}>−</button>
-                      <input data-item-quantity type="number" min="0" value="1" class="min-h-11 w-20 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-center text-sm font-bold text-[var(--koa-ink)]" />
+                      <input data-item-quantity type="number" min="0" value="1" aria-label={"Quantity for " + item.name} class="min-h-11 w-20 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2.5 text-center text-sm font-bold text-[var(--koa-ink)]" />
                       <button type="button" data-quantity-increase class="grid min-h-11 min-w-11 place-items-center rounded-full bg-[var(--koa-forest)] text-lg font-bold text-white" aria-label={"Increase " + item.name + " quantity"}>+</button>
                     </div>
                     <p class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/48">Once added, use − / + to update the quote instantly.</p>
