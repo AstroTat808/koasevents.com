@@ -1,0 +1,32 @@
+name: One-time CRM test dedupe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/one-time-crm-dedupe.yml'
+      - 'netlify/functions/crm-dedupe-maintenance.mts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait for maintenance route and clean exact duplicate test lead
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in {1..45}; do
+            status="$(curl -sS -o /tmp/cleanup.json -w '%{http_code}' 'https://koasevents.com/api/maintenance/crm-dedupe?action=cleanup' || true)"
+            if [ "$status" = "200" ]; then
+              cat /tmp/cleanup.json
+              break
+            fi
+            sleep 4
+          done
+          test -s /tmp/cleanup.json
+          node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/cleanup.json','utf8'));if(!x.ok)process.exit(1);console.log('kept='+x.kept);console.log('moved='+(x.moved||[]).join(','));console.log('candidateCount='+(x.candidates||[]).length)"
