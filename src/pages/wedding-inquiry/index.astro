@@ -4,6 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 const requestedPackage=Astro.url.searchParams.get('package') || '';
 const requestedGuests=Astro.url.searchParams.get('guests') || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout title="Big Island Wedding Venue Availability | Koa’s Events" description="Tell Koa’s Events about your Hawaiʻi Island wedding date, guest count, budget and vision." canonical="https://www.koasevents.com/wedding-inquiry/">
 <Header overlay={false}/>
@@ -31,10 +32,17 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
 <label class="grid gap-2 text-sm font-semibold">Where are you planning from?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="planningFrom" required><option value="">Choose one</option><option>Hawaiʻi Island resident</option><option>Elsewhere in Hawaiʻi</option><option>Destination wedding — U.S. mainland</option><option>Destination wedding — international</option></select></label>
 <label class="grid gap-2 text-sm font-semibold">Which starting point interests you?<select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="packageInterest"><option value="">Not sure yet</option><option value="signature" selected={requestedPackage==='signature'}>Koa’s Signature Wedding Experience — from $20,000</option><option value="hibiscus" selected={requestedPackage==='hibiscus'}>Hibiscus — from $15,000</option><option value="orchid" selected={requestedPackage==='orchid'}>Orchid — from $10,000</option><option value="gardenia" selected={requestedPackage==='gardenia'}>Gardenia — from $5,000</option></select></label>
 <label class="grid gap-2 text-sm font-semibold">Tell us what you envision for your wedding<textarea class="min-h-40 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3" name="vision" placeholder="What do you want the weekend to feel like? What matters most to you?" required></textarea></label>
-<button class="rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white" type="submit">Submit + continue to discovery call</button>
+{turnstileSiteKey && (
+  <div class="rounded-2xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+    <div class="cf-turnstile" data-sitekey={turnstileSiteKey} data-action="wedding_inquiry" data-theme="light" data-size="flexible"></div>
+  </div>
+)}
+<p class="hidden rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="alert" data-submit-error></p>
+<button class="rounded-full bg-[var(--koa-forest)] px-6 py-4 text-xs font-black uppercase tracking-[.13em] text-white disabled:cursor-not-allowed disabled:opacity-60" type="submit">Submit + continue to discovery call</button>
 <p class="text-center text-sm leading-6 text-[var(--koa-ink)]/56">Submitting an inquiry does not reserve a date. Your date is secured only after the applicable agreement and deposit are completed.</p>
 </div></form></div></section></main><Footer/>
-<script is:inline define:vars={{ requestedPackage, requestedGuests }}>
+{turnstileSiteKey && <script is:inline src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>}
+<script is:inline define:vars={{ requestedPackage, requestedGuests, turnstileSiteKey }}>
   const form = document.querySelector('[data-wedding-inquiry-form]');
   const packageField = form?.querySelector('[name="packageInterest"]');
   const guestField = form?.querySelector('[name="guestCount"]');
@@ -59,9 +67,22 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
   try { saved = JSON.parse(localStorage.getItem('koaQuoteStateV1') || 'null'); } catch {}
 
   form?.addEventListener('submit', async (event) => {
-    if (form.dataset.crmCaptured === '1') return;
+    if (form.dataset.crmCaptured === '1' || form.dataset.submitting === '1') return;
     event.preventDefault();
+
+    const submitButton = form.querySelector('button[type="submit"]');
+    const errorBox = form.querySelector('[data-submit-error]');
     const data = new FormData(form);
+    const turnstileToken = String(data.get('cf-turnstile-response') || '');
+
+    if (turnstileSiteKey && !turnstileToken) {
+      if (errorBox) {
+        errorBox.textContent = 'Complete the security check before sending your wedding inquiry.';
+        errorBox.classList.remove('hidden');
+      }
+      return;
+    }
+
     const packageValue = String(data.get('packageInterest') || '');
     const packageId = packageValue === 'signature' ? 'signature-wedding' : packageValue;
     try {
@@ -74,14 +95,21 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
         packageInterest: String(data.get('packageInterest') || ''),
       }));
     } catch {}
+
+    form.dataset.submitting = '1';
+    if (submitButton) submitButton.disabled = true;
+    if (errorBox) errorBox.classList.add('hidden');
+
     try {
-      await fetch('/api/crm/inquiries', {
+      const response = await fetch('/api/crm/inquiries', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Koa-Inquiry-Capture': '1' },
         body: JSON.stringify({
           formName: 'koa-wedding-inquiry',
           quoteId,
           packageId,
+          honeypot: data.get('bot-field'),
+          turnstileToken,
           customer: {
             name: [data.get('firstName'), data.get('lastName')].filter(Boolean).join(' '),
             email: data.get('email'),
@@ -104,9 +132,23 @@ const requestedGuests=Astro.url.searchParams.get('guests') || '';
         }),
         keepalive: true,
       });
-    } catch {}
-    form.dataset.crmCaptured = '1';
-    form.submit();
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok !== true) {
+        throw new Error(payload?.error || 'We could not verify this submission. Please try again.');
+      }
+
+      form.dataset.crmCaptured = '1';
+      form.querySelector('[name="cf-turnstile-response"]')?.remove();
+      form.submit();
+    } catch (error) {
+      form.dataset.submitting = '0';
+      if (submitButton) submitButton.disabled = false;
+      if (errorBox) {
+        errorBox.textContent = error instanceof Error ? error.message : 'We could not send your wedding inquiry. Please try again.';
+        errorBox.classList.remove('hidden');
+      }
+      if (window.turnstile?.reset) window.turnstile.reset();
+    }
   });
 
   function money(value) {
