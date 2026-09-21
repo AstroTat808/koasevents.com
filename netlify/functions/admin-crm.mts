@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
+import { appendCleanupAudit, readCleanupAudit } from './_shared/crm-cleanup-audit';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -73,7 +74,7 @@ export default async (req:Request, context:Context) => {
 
   if (req.method === 'GET') {
     const salesRecords = await readIndex<any>(sales,'records/index');
-    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages, trash] = await Promise.all([
+    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages, trash, cleanupAudit] = await Promise.all([
       readIndex<Task>(crm,'tasks/index'),
       readIndex<Appointment>(crm,'appointments/index'),
       readIndex<Note>(crm,'notes/index'),
@@ -84,6 +85,7 @@ export default async (req:Request, context:Context) => {
       readIndex<Activity>(crm,'activity/index'),
       readIndex<any>(crm,'client-messages/index'),
       readIndex<any>(sales,'trash/index'),
+      readCleanupAudit(context,1500),
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
     const cleanupSettings:any = (await sales.get('settings/crm-cleanup',{type:'json'})) || { mode:'auto_trash', updatedAt:'', updatedBy:'' };
@@ -130,7 +132,7 @@ export default async (req:Request, context:Context) => {
       });
     }
 
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupSettings:{
+    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupSettings:{
       mode: normalizeCleanupMode(cleanupSettings.mode),
       updatedAt: cleanupSettings.updatedAt || '',
       updatedBy: cleanupSettings.updatedBy || '',
@@ -151,12 +153,15 @@ export default async (req:Request, context:Context) => {
     const records=await readIndex<any>(sales,'records/index');
     const record=records.find((x:any)=>x.id===recordId);
     if(!record) return Response.json({error:'CRM record not found'},{status:404});
+    const before=assessCrmRecord(record);
     const now=new Date().toISOString();
     record.cleanupReview={verdict:'legitimate',reviewedAt:now,reviewedBy:actor};
+    delete record.cleanupManualFlag;
     record.updatedAt=now;
     await sales.setJSON('records/'+record.id,record);
     await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
     await appendActivity(crm,record.id,'cleanup_approved','Marked legitimate by '+actor);
+    await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate.',score:before.score,reasons:before.reasons});
     return Response.json({ok:true,recordId:record.id,cleanup:assessCrmRecord(record)});
   }
 
@@ -167,10 +172,12 @@ export default async (req:Request, context:Context) => {
     const record=records.find((x:any)=>x.id===recordId);
     if(!record) return Response.json({error:'CRM record not found'},{status:404});
     delete record.cleanupReview;
+    delete record.cleanupManualFlag;
     record.updatedAt=new Date().toISOString();
     await sales.setJSON('records/'+record.id,record);
     await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
     await appendActivity(crm,record.id,'cleanup_review_reset','Cleanup review reset by '+actor);
+    await appendCleanupAudit(context,{recordId:record.id,action:'review_reset',actor,detail:'Cleanup review override and manual flag cleared.'});
     return Response.json({ok:true,recordId:record.id,cleanup:assessCrmRecord(record)});
   }
 
@@ -178,7 +185,25 @@ export default async (req:Request, context:Context) => {
     const mode=normalizeCleanupMode(body.mode);
     const settings={mode,updatedAt:new Date().toISOString(),updatedBy:actor};
     await sales.setJSON('settings/crm-cleanup',settings);
+    await appendCleanupAudit(context,{action:'policy_changed',actor,detail:'Cleanup policy changed to '+mode+'.'});
     return Response.json({ok:true,settings});
+  }
+
+  if (action === 'flag-cleanup-review') {
+    const recordId=clean(body.recordId,100);
+    if(!recordId) return Response.json({error:'recordId required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((x:any)=>x.id===recordId);
+    if(!record) return Response.json({error:'CRM record not found'},{status:404});
+    delete record.cleanupReview;
+    record.cleanupManualFlag={flaggedAt:new Date().toISOString(),flaggedBy:actor,note:clean(body.note,500)};
+    record.updatedAt=new Date().toISOString();
+    await sales.setJSON('records/'+record.id,record);
+    await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
+    const assessment=assessCrmRecord(record);
+    await appendActivity(crm,record.id,'cleanup_flagged','Manually flagged for review by '+actor);
+    await appendCleanupAudit(context,{recordId:record.id,action:'manual_flagged',actor,detail:record.cleanupManualFlag.note||'Client manually flagged for review.',score:assessment.score,reasons:assessment.reasons});
+    return Response.json({ok:true,recordId:record.id,cleanup:assessment});
   }
 
   if (action === 'save-project') {
