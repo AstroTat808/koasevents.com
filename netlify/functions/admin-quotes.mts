@@ -745,7 +745,10 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
     const last = index === rows.length - 1;
     const amount = last
       ? Math.max(0, roundMoney(remaining - allocated))
-      : Math.max(0, roundMoney(remaining * Math.min(100, Math.max(0, Number(item.percentOfRemaining || 0))) / 100));
+      : Math.min(
+          Math.max(0, roundMoney(remaining - allocated)),
+          Math.max(0, roundMoney(remaining * Math.min(100, Math.max(0, Number(item.percentOfRemaining || 0))) / 100)),
+        );
     allocated = roundMoney(allocated + amount);
     return {
       label: cleanText(item.label || (last ? 'Final balance' : 'Payment'), 160),
