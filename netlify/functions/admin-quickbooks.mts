@@ -60,11 +60,11 @@ function idSuffix() {
   return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-async function readRecords(context: Context) {
+export async function readQuickBooksSalesRecords(context: Context) {
   return ((await salesStoreFor(context).get('records/index', { type: 'json' })) || []) as any[];
 }
 
-async function saveRecord(context: Context, record: any, records: any[]) {
+export async function saveQuickBooksSalesRecord(context: Context, record: any, records: any[]) {
   const store = salesStoreFor(context);
   const next = records.map((entry) => entry.id === record.id ? record : entry);
   await store.setJSON('records/' + record.id, record);
@@ -315,7 +315,29 @@ async function createMilestoneInvoice(context: Context, record: any, itemId: str
   return invoice;
 }
 
-async function syncAccountingStatus(context: Context, record: any) {
+export async function refreshQuickBooksPaymentSnapshot(context: Context, record: any) {
+  const state = quickBooksState(record);
+  if (!state.customerId) return state;
+  try {
+    const paymentData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + escapeQbo(String(state.customerId)) + "' maxresults 1000");
+    const payments = Array.isArray(paymentData?.QueryResponse?.Payment) ? paymentData.QueryResponse.Payment : [];
+    state.paymentSync = {
+      count: payments.length,
+      paymentIds: payments.slice(0, 100).map((payment: any) => String(payment?.Id || '')).filter(Boolean),
+      lastSyncedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    state.paymentSync = {
+      count: null,
+      paymentIds: [],
+      lastSyncedAt: new Date().toISOString(),
+      warning: clean(error instanceof Error ? error.message : 'QuickBooks payment query was unavailable.', 300),
+    };
+  }
+  return state;
+}
+
+export async function syncQuickBooksAccountingStatus(context: Context, record: any) {
   const state = quickBooksState(record);
 
   if (state.estimateId) {
@@ -364,7 +386,7 @@ function moneyDelta(a: unknown, b: unknown) {
   return Math.round((Number(a || 0) - Number(b || 0)) * 100) / 100;
 }
 
-function buildAccountingAudit(records: any[]) {
+export function buildQuickBooksAccountingAudit(records: any[]) {
   const rows = (Array.isArray(records) ? records : [])
     .filter((record: any) => record?.kind === 'proposal' && record?.proposal)
     .map((record: any) => {
@@ -506,8 +528,8 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
     ]);
-    const records = await readRecords(context);
-    const accountingAudit = buildAccountingAudit(records);
+    const records = await readQuickBooksSalesRecords(context);
+    const accountingAudit = buildQuickBooksAccountingAudit(records);
     const receipts = Array.isArray(webhookHistory) && webhookHistory.length
       ? webhookHistory
       : (webhookReceipt ? [webhookReceipt] : []);
@@ -561,6 +583,11 @@ export default async (req: Request, context: Context) => {
       venueWeddingPercent: payload?.venueWeddingPercent,
       mobileBarPercent: payload?.mobileBarPercent,
       privateEventPercent: payload?.privateEventPercent,
+      venueWeddingSecondDueDaysBefore: payload?.venueWeddingSecondDueDaysBefore,
+      venueWeddingFinalDueDaysBefore: payload?.venueWeddingFinalDueDaysBefore,
+      mobileBarFinalDueDaysBefore: payload?.mobileBarFinalDueDaysBefore,
+      privateEventFinalDueDaysBefore: payload?.privateEventFinalDueDaysBefore,
+      defaultFinalDueDaysBefore: payload?.defaultFinalDueDaysBefore,
     });
     return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -828,7 +855,7 @@ export default async (req: Request, context: Context) => {
     const secondDue = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
     const finalDue = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
 
-    let records = await readRecords(context);
+    let records = await readQuickBooksSalesRecords(context);
     const record: any = {
       id: recordId,
       kind: 'proposal',
@@ -899,7 +926,7 @@ export default async (req: Request, context: Context) => {
     const customer = await ensureCustomer(context, record);
     const estimate = await syncEstimate(context, record, itemId);
     const invoice = await createMilestoneInvoice(context, record, itemId, 'pay-1');
-    await saveRecord(context, record, records);
+    await saveQuickBooksSalesRecord(context, record, records);
 
     const paymentAmount = Number(invoice?.Balance ?? invoice?.TotalAmt ?? depositAmount);
     if (!(paymentAmount > 0 && paymentAmount <= 5)) {
@@ -1050,7 +1077,7 @@ export default async (req: Request, context: Context) => {
     const secondDue = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
     const finalDue = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
 
-    let records = await readRecords(context);
+    let records = await readQuickBooksSalesRecords(context);
     const record: any = {
       id: recordId,
       kind: 'proposal',
@@ -1120,7 +1147,7 @@ export default async (req: Request, context: Context) => {
 
     const customer = await ensureCustomer(context, record);
     const invoice = await createMilestoneInvoice(context, record, itemId, 'pay-1');
-    await saveRecord(context, record, records);
+    await saveQuickBooksSalesRecord(context, record, records);
 
     const paymentCreated: any = await qboCreate(context, 'payment', {
       CustomerRef: { value: String(customer.Id) },
@@ -1250,7 +1277,7 @@ export default async (req: Request, context: Context) => {
     return Response.json({ ok: true, test: result });
   }
 
-  let records = await readRecords(context);
+  let records = await readQuickBooksSalesRecords(context);
   const record = records.find((entry) => entry.id === clean(payload?.recordId, 100) && entry.kind === 'proposal');
   if (!record) return Response.json({ error: 'Proposal record not found.' }, { status: 404 });
   const settings = await getQuickBooksSettings(context);
@@ -1261,7 +1288,7 @@ export default async (req: Request, context: Context) => {
 
   if (action === 'sync-estimate') {
     const estimate = await syncEstimate(context, record, itemId);
-    records = await saveRecord(context, record, records);
+    records = await saveQuickBooksSalesRecord(context, record, records);
     await appendEvent(context, {
       type: 'quickbooks_estimate_synced',
       recordId: record.id,
@@ -1281,7 +1308,7 @@ export default async (req: Request, context: Context) => {
       state.estimateEmailStatus = String(estimate.EmailStatus || 'EmailSent');
       state.estimateLastSyncedAt = new Date().toISOString();
     }
-    records = await saveRecord(context, record, records);
+    records = await saveQuickBooksSalesRecord(context, record, records);
     await appendEvent(context, {
       type: 'quickbooks_estimate_sent',
       recordId: record.id,
@@ -1294,7 +1321,7 @@ export default async (req: Request, context: Context) => {
   if (action === 'create-invoice') {
     const paymentId = clean(payload?.paymentId, 80);
     const invoice = await createMilestoneInvoice(context, record, itemId, paymentId);
-    records = await saveRecord(context, record, records);
+    records = await saveQuickBooksSalesRecord(context, record, records);
     await appendEvent(context, {
       type: 'quickbooks_invoice_created',
       recordId: record.id,
@@ -1317,7 +1344,7 @@ export default async (req: Request, context: Context) => {
       entry.balance = Number(invoice.Balance ?? entry.balance ?? entry.amount ?? 0);
       entry.lastSyncedAt = new Date().toISOString();
     }
-    records = await saveRecord(context, record, records);
+    records = await saveQuickBooksSalesRecord(context, record, records);
     await appendEvent(context, {
       type: 'quickbooks_invoice_sent',
       recordId: record.id,
@@ -1328,27 +1355,10 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'sync-and-recheck') {
-    const state = await syncAccountingStatus(context, record);
-    if (state.customerId) {
-      try {
-        const paymentData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + escapeQbo(String(state.customerId)) + "' maxresults 1000");
-        const payments = Array.isArray(paymentData?.QueryResponse?.Payment) ? paymentData.QueryResponse.Payment : [];
-        state.paymentSync = {
-          count: payments.length,
-          paymentIds: payments.slice(0, 100).map((payment: any) => String(payment?.Id || '')).filter(Boolean),
-          lastSyncedAt: new Date().toISOString(),
-        };
-      } catch (error) {
-        state.paymentSync = {
-          count: null,
-          paymentIds: [],
-          lastSyncedAt: new Date().toISOString(),
-          warning: clean(error instanceof Error ? error.message : 'QuickBooks payment query was unavailable.', 300),
-        };
-      }
-    }
-    records = await saveRecord(context, record, records);
-    const accountingAudit = buildAccountingAudit(records);
+    const state = await syncQuickBooksAccountingStatus(context, record);
+    await refreshQuickBooksPaymentSnapshot(context, record);
+    records = await saveQuickBooksSalesRecord(context, record, records);
+    const accountingAudit = buildQuickBooksAccountingAudit(records);
     await appendEvent(context, {
       type: 'quickbooks_accounting_recheck',
       recordId: record.id,
@@ -1360,8 +1370,8 @@ export default async (req: Request, context: Context) => {
 
   if (action === 'sync-status') {
     const beforeStage = record.stage;
-    const state = await syncAccountingStatus(context, record);
-    records = await saveRecord(context, record, records);
+    const state = await syncQuickBooksAccountingStatus(context, record);
+    records = await saveQuickBooksSalesRecord(context, record, records);
     await appendEvent(context, {
       type: 'quickbooks_status_synced',
       recordId: record.id,
