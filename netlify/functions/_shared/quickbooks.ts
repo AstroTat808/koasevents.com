@@ -215,8 +215,21 @@ export async function disconnectQuickBooks(context: Context) {
   await store.delete('quickbooks/connection');
 }
 
+function settingsKey() {
+  return 'quickbooks/settings/' + config().environment;
+}
+
 export async function getQuickBooksSettings(context: Context) {
-  return (await integrationStore(context).get('quickbooks/settings', { type: 'json' }) as any) || {
+  const store = integrationStore(context);
+  const environmentSpecific = await store.get(settingsKey(), { type: 'json' }) as any;
+  if (environmentSpecific) return environmentSpecific;
+
+  if (config().environment === 'sandbox') {
+    const legacy = await store.get('quickbooks/settings', { type: 'json' }) as any;
+    if (legacy) return legacy;
+  }
+
+  return {
     serviceItemId: '',
     serviceItemName: '',
   };
@@ -227,7 +240,7 @@ export async function saveQuickBooksSettings(context: Context, settings: { servi
     serviceItemId: String(settings.serviceItemId || '').trim().slice(0, 80),
     serviceItemName: String(settings.serviceItemName || '').trim().slice(0, 240),
   };
-  await integrationStore(context).setJSON('quickbooks/settings', clean);
+  await integrationStore(context).setJSON(settingsKey(), clean);
   return clean;
 }
 
