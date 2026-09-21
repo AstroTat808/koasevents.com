@@ -69,6 +69,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save mapping</button>
           </form>
           <p data-item-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
+          <p data-item-account class="mt-1 text-xs text-[var(--koa-ink)]/45"></p>
           <div data-sandbox-test class="mt-6 hidden border-t border-[var(--koa-line)] pt-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -89,6 +90,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
               <p data-linked-test-message class="mt-3 text-sm text-[var(--koa-ink)]/58"></p>
             </div>
+          </div>
+        </section>
+
+        <section data-production-test class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Controlled production test</p>
+          <h2 class="display mt-3 text-4xl">Verify the real QuickBooks company safely</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Creates one clearly labeled $1 test customer, estimate and invoice. Nothing is emailed and no payment is recorded.</p>
+          <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p data-production-test-status class="text-sm font-semibold text-[var(--koa-ink)]">Ready after a production service item is mapped.</p>
+              <p data-production-test-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50"></p>
+            </div>
+            <button data-run-production-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run $1 production test</button>
           </div>
         </section>
 
@@ -132,6 +146,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
     const itemMessage=document.querySelector('[data-item-message]');
+    const itemAccount=document.querySelector('[data-item-account]');
     const refreshItems=document.querySelector('[data-refresh-items]');
     const sandboxTest=document.querySelector('[data-sandbox-test]');
     const runSandboxTest=document.querySelector('[data-run-sandbox-test]');
@@ -142,6 +157,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const prodWebhook=document.querySelector('[data-prod-webhook]');
     const prodRedirect=document.querySelector('[data-prod-redirect]');
     const prodEnvironment=document.querySelector('[data-prod-environment]');
+    const productionTest=document.querySelector('[data-production-test]');
+    const runProductionTest=document.querySelector('[data-run-production-test]');
+    const productionTestStatus=document.querySelector('[data-production-test-status]');
+    const productionTestDetail=document.querySelector('[data-production-test-detail]');
     const refreshDiagnostics=document.querySelector('[data-refresh-diagnostics]');
     const diagConnection=document.querySelector('[data-diag-connection]');
     const diagCompany=document.querySelector('[data-diag-company]');
@@ -199,9 +218,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await api({action:'list-items'});items=data.items||[];
         if(!itemSelect)throw new Error('QuickBooks item selector is unavailable.');
         itemSelect.innerHTML='<option value="">Choose an item…</option>';
-        items.forEach((item)=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name+' · '+item.type;itemSelect.appendChild(option);});
+        items.forEach((item)=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name+' · '+item.type+(item.incomeAccountName?' · '+item.incomeAccountName:'');itemSelect.appendChild(option);});
         if(state.settings?.serviceItemId)itemSelect.value=state.settings.serviceItemId;
         itemMessage.textContent=items.length?items.length+' eligible QuickBooks items loaded.':'No active Service or Non-Inventory items found.';
+        const selected=items.find((item)=>item.id===itemSelect.value);
+        if(itemAccount)itemAccount.textContent=selected?.incomeAccountName?'Income account: '+selected.incomeAccountName:'';
       }catch(err){itemMessage.textContent=err.message||'Unable to load items.';}
     }
 
@@ -214,6 +235,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       disconnect.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
       sandboxTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='sandbox');
+      productionTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='production');
       company.textContent=connected?(state.connection.companyName||'QuickBooks company connected'):'Not connected';
       status.textContent=!configured
         ? 'Server credentials are required before OAuth can begin.'
@@ -224,6 +246,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
       if(prodEnvironment)prodEnvironment.textContent=String(state?.configuration?.environment||'unknown').toUpperCase();
+      if(productionTestStatus){
+        const ptest=state?.productionTest;
+        productionTestStatus.textContent=!ptest
+          ? 'Ready after a production service item is mapped.'
+          : 'Last test: '+String(ptest.status||'unknown')+' · '+(ptest.completedAt?when(ptest.completedAt):'');
+        if(productionTestDetail)productionTestDetail.textContent=ptest
+          ? 'Customer '+(ptest.customerName||ptest.customerId||'')+' · Estimate '+(ptest.estimateDocNumber||ptest.estimateId||'')+' · Invoice '+(ptest.invoiceDocNumber||ptest.invoiceId||'')+' · $'+Number(ptest.invoiceBalance||0).toFixed(2)+' open · emailed: '+(ptest.emailed?'Yes':'No')
+          : '';
+      }
       if(linkedTestMessage){
         const linked=state?.linkedTest;
         linkedTestMessage.textContent=!linked
@@ -249,7 +280,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
     refreshItems?.addEventListener('click',loadItems);
+    itemSelect?.addEventListener('change',()=>{
+      const selected=items.find((item)=>item.id===itemSelect.value);
+      if(itemAccount)itemAccount.textContent=selected?.incomeAccountName?'Income account: '+selected.incomeAccountName:'';
+    });
     refreshDiagnostics?.addEventListener('click',load);
+    runProductionTest?.addEventListener('click',async()=>{
+      if(!productionTestStatus)return;
+      productionTestStatus.textContent='Creating controlled $1 production customer, estimate and invoice…';
+      runProductionTest.disabled=true;
+      try{
+        const data=await api({action:'production-smoke-test'});
+        const t=data.test||{};
+        productionTestStatus.textContent='Passed: '+(t.customerName||'test customer')+' · estimate '+(t.estimateDocNumber||t.estimateId||'')+' · invoice '+(t.invoiceDocNumber||t.invoiceId||'')+'.';
+        if(productionTestDetail)productionTestDetail.textContent='Invoice balance $'+Number(t.invoiceBalance||0).toFixed(2)+' · nothing emailed · no payment recorded.';
+        await load();
+      }catch(err){
+        productionTestStatus.textContent=err.message||'Production test failed.';
+      }finally{
+        runProductionTest.disabled=false;
+      }
+    });
+
     runLinkedTest?.addEventListener('click',async()=>{
       if(!linkedTestMessage)return;
       linkedTestMessage.textContent='Creating CRM-linked sandbox booking, deposit invoice and payment…';
