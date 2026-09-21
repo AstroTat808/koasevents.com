@@ -1,7 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore,getStore } from '@netlify/blobs';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
-import { masterInsuranceForEvent } from './_shared/vendor-insurance-sync.ts';
+import { applyMasterInsuranceToAssignments, masterInsuranceForEvent } from './_shared/vendor-insurance-sync.ts';
 
 function sales(c:Context){return c.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
 function ops(c:Context){return c.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
@@ -63,6 +63,8 @@ export default async(req:Request,context:Context)=>{
   if(record.stage!=='booked')return Response.json({error:'Vendor Marketplace becomes available after booking.'},{status:403});
   let event:any=await os.get('events/'+record.id,{type:'json'});if(!event)event={recordId:record.id,vendors:[],documents:[]};
   const all=(await list(vs,'vendors/index')).filter(v=>v.status==='published');
+  const refreshedTeam=applyMasterInsuranceToAssignments(event.vendors||[],all,record.customer?.eventDate);
+  if(JSON.stringify(refreshedTeam)!==JSON.stringify(event.vendors||[])){event.vendors=refreshedTeam;event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);}
   const reviews=await list(vs,'reviews/index'),favorites=await list(vs,'favorites/'+record.id),requests=await list(vs,'requests/index');
   const clientRequests=requests.filter(r=>r.recordId===record.id);
   const publicVendors=all.map(v=>publicVendor(v,reviews,record,event));
