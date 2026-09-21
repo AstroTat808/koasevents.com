@@ -77,6 +77,7 @@ type BookingState = {
     koaSignature?: { name: string; signedAt: string } | null;
   };
   payments: BookingPayment[];
+  bartenderAssignments?: Array<{ id:string; name:string; assignedAt:string; assignedBy:string }>;
 };
 
 type ProfitModel = {
@@ -364,6 +365,29 @@ async function writeMobileBarProfitSettings(context: Context, input: any): Promi
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
   return settings;
 }
+function mobileBarStaffingConflicts(record:SalesRecord, bartenderIds:string[], records:SalesRecord[], settings:MobileBarProfitSettings) {
+  const eventDate=cleanText(record.customer?.eventDate,20);
+  const requested=new Set(bartenderIds);
+  const conflicts:string[]=[];
+  if(!eventDate) conflicts.push('Event date is required before assigning bartenders.');
+  if(settings.staffing.blackoutDates.includes(eventDate)) conflicts.push('This event date is a Mobile Bar blackout date.');
+  const roster=new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+  for(const id of requested){
+    const bartender=roster.get(id);
+    if(!bartender) conflicts.push('Bartender '+id+' is not in the Mobile Bar roster.');
+    else if(bartender.active===false) conflicts.push(bartender.name+' is inactive.');
+    else if(bartender.unavailableDates.includes(eventDate)) conflicts.push(bartender.name+' is unavailable on '+eventDate+'.');
+  }
+  for(const other of records){
+    if(other.id===record.id || other.stage!=='booked' || cleanText(other.customer?.eventDate,20)!==eventDate) continue;
+    const assigned=Array.isArray(other.booking?.bartenderAssignments)?other.booking!.bartenderAssignments!:[];
+    assigned.forEach((bartender)=>{
+      if(requested.has(bartender.id)) conflicts.push(bartender.name+' is already assigned to '+(other.customer?.name||other.id)+' on '+eventDate+'.');
+    });
+  }
+  return Array.from(new Set(conflicts));
+}
+
 
 async function saveRecord(context: Context, record: SalesRecord, records: SalesRecord[]) {
   const store = salesStoreFor(context);
@@ -601,6 +625,7 @@ function ensureBooking(record: SalesRecord) {
         signature: null,
         koaSignature: null,
       },
+      bartenderAssignments: [],
       payments: (record.proposal.paymentSchedule || []).map((item, index) => ({
         id: 'pay-' + (index + 1),
         label: item.label,
@@ -1498,6 +1523,7 @@ export default async (req: Request, context: Context) => {
     'bulk-trash':'crm.destructive',
     'bulk-trash-client-chains':'crm.destructive',
     'update-mobile-bar-profit-settings':'sales.profit_settings',
+    'update-mobile-bar-bartender-assignments':'sales.profit_settings',
     'update-profit-model':'sales.profit_settings',
   };
   const requestedCapability=capabilityByAction[String(payload.action)];
@@ -1942,6 +1968,43 @@ export default async (req: Request, context: Context) => {
     await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly gross-profit target.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget}});
     return Response.json({ ok: true, settings }, { headers: { 'Cache-Control':'private, no-store' } });
   }
+  if (payload.action === 'update-mobile-bar-bartender-assignments') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record || record.stage !== 'booked' || !normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.mobileBarPackage).startsWith('mobile-')) {
+      return Response.json({ error: 'Booked Mobile Bar event not found.' }, { status: 404 });
+    }
+    const settings = await readMobileBarProfitSettings(context);
+    const requestedIds = Array.from(new Set((Array.isArray(payload.bartenderIds) ? payload.bartenderIds : [])
+      .map((value:unknown)=>cleanText(value,80))
+      .filter(Boolean))).slice(0,20);
+    const conflicts = mobileBarStaffingConflicts(record, requestedIds, records, settings);
+    if (conflicts.length) return Response.json({ error: conflicts[0], conflicts }, { status: 409 });
+
+    const roster = new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+    const now = new Date().toISOString();
+    const booking = ensureBooking(record);
+    if (!booking) return Response.json({ error: 'Booking state is unavailable.' }, { status: 400 });
+    booking.bartenderAssignments = requestedIds.map((id)=>({
+      id,
+      name: roster.get(id)?.name || id,
+      assignedAt: now,
+      assignedBy: cleanText(auth.user?.email,240) || 'admin',
+    }));
+    booking.updatedAt = now;
+    record.updatedAt = now;
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'mobile_bar_bartenders_assigned',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: booking.bartenderAssignments.length
+        ? 'Assigned Mobile Bar bartenders: ' + booking.bartenderAssignments.map((entry)=>entry.name).join(', ')
+        : 'Cleared Mobile Bar bartender assignments.',
+    });
+    return Response.json({ ok: true, record, conflicts: [] }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
   if (payload.action === 'update-profit-model') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
     if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
