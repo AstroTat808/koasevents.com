@@ -1,0 +1,97 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Staff Workspace" description="Operational workspace for Koa’s Events sales and event staff." canonical="https://koasevents.com/staff/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-14">
+    <div class="container-shell max-w-5xl">
+      <section class="rounded-[1.8rem] bg-white p-7 shadow-[var(--shadow-soft)] sm:p-10">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+            <h1 class="display mt-3 text-5xl">Staff Workspace</h1>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Sales, client management, content and event operations in one protected workspace. Technical administration is not available here.</p>
+          </div>
+          <button data-logout class="hidden rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Sign out</button>
+        </div>
+
+        <div data-auth-panel class="mt-8">
+          <form data-login-form class="grid max-w-md gap-4">
+            <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" autocomplete="current-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
+            <p data-auth-error class="hidden text-sm text-red-700"></p>
+          </form>
+
+          <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+            <p class="font-semibold text-[var(--koa-ink)]">This account does not have staff workspace access.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Assign the account one of these Identity roles: <strong>staff</strong>, <strong>sales</strong>, or <strong>manager</strong>.</p>
+          </div>
+
+          <div data-staff-ui class="hidden">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <a href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates, payments and activity.</span></a>
+              <a href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups, quote records and conversion reporting.</span></a>
+              <a href="/admin/quotes/#mobile-bar" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/68">Dedicated Mobile Bar pipeline, pricing details, follow-ups and reporting.</span></a>
+              <a href="/admin/blog/" class="rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and manage Koa’s journal content.</span></a>
+              <a href="/admin/events/" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/68">Documents, vendors, questionnaires, timelines, checklists and event-day tasks.</span></a>
+              <a href="/admin/calendar/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/72">Events, deadlines, staffing assignments, vendor arrivals and conflict detection.</span></a>
+            </div>
+
+            <div class="mt-7 rounded-[1.2rem] bg-[var(--koa-sand)] p-5">
+              <p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Protected technical administration</p>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks connection/settings, Gallery administration, SEO tools, Security + Spam controls, and other technical configuration remain administrator-only.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    import { getUser, login, logout } from '@netlify/identity';
+
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const allowedRoles = new Set(['admin','staff','sales','manager']);
+    const loginForm = document.querySelector('[data-login-form]');
+    const staffUi = document.querySelector('[data-staff-ui]');
+    const roleWarning = document.querySelector('[data-role-warning]');
+    const authError = document.querySelector('[data-auth-error]');
+    const logoutButton = document.querySelector('[data-logout]');
+
+    function hasStaffAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = user?.app_metadata?.roles || [];
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.some((role) => allowedRoles.has(String(role || '').toLowerCase())));
+    }
+
+    function show(user) {
+      const access = Boolean(user) && hasStaffAccess(user);
+      loginForm?.classList.toggle('hidden', Boolean(user));
+      staffUi?.classList.toggle('hidden', !access);
+      roleWarning?.classList.toggle('hidden', !user || access);
+      logoutButton?.classList.toggle('hidden', !user);
+    }
+
+    loginForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(loginForm);
+      try {
+        const user = await login(String(data.get('email') || ''), String(data.get('password') || ''));
+        authError?.classList.add('hidden');
+        show(user);
+      } catch (err) {
+        if (authError) {
+          authError.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
+          authError.classList.remove('hidden');
+        }
+      }
+    });
+
+    logoutButton?.addEventListener('click', async () => {
+      await logout();
+      show(null);
+    });
+
+    show(await getUser());
+  </script>
+</BaseLayout>
