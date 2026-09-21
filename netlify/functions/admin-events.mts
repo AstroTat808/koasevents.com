@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireOperations } from './_shared/admin';
+import { isApprovedManager, requireOperations } from './_shared/admin';
 
 type Vendor = {
   id: string;
@@ -334,6 +334,9 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (!isApprovedManager(auth.user)) {
+    return Response.json({ error: 'Manager permission required to change Event Ops.' }, { status: 403 });
+  }
 
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 40);
