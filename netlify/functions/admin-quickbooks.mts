@@ -561,6 +561,11 @@ export default async (req: Request, context: Context) => {
       venueWeddingPercent: payload?.venueWeddingPercent,
       mobileBarPercent: payload?.mobileBarPercent,
       privateEventPercent: payload?.privateEventPercent,
+      venueWeddingSecondDueDaysBefore: payload?.venueWeddingSecondDueDaysBefore,
+      venueWeddingFinalDueDaysBefore: payload?.venueWeddingFinalDueDaysBefore,
+      mobileBarFinalDueDaysBefore: payload?.mobileBarFinalDueDaysBefore,
+      privateEventFinalDueDaysBefore: payload?.privateEventFinalDueDaysBefore,
+      defaultFinalDueDaysBefore: payload?.defaultFinalDueDaysBefore,
     });
     return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
