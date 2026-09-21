@@ -160,7 +160,11 @@ export default async (req:Request, context:Context) => {
     const localDateKey=(iso:string)=>{
       const d=new Date(iso);
       if(Number.isNaN(d.getTime())) return '';
-      return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+      const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+      const year=parts.find((p)=>p.type==='year')?.value||'';
+      const month=parts.find((p)=>p.type==='month')?.value||'';
+      const day=parts.find((p)=>p.type==='day')?.value||'';
+      return year&&month&&day?year+'-'+month+'-'+day:'';
     };
     const weekStartKey=(dateKey:string)=>{
       if(!dateKey) return '';
