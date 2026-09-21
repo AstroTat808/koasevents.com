@@ -37,6 +37,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <a href="/admin/calendar/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/72">Events, deadlines, staffing assignments, vendor arrivals and conflict detection.</span></a>
             </div>
 
+            <form data-password-form class="mt-7 grid gap-3 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5 sm:max-w-xl">
+              <div><p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Account security</p><h2 class="display mt-2 text-3xl">Change password</h2></div>
+              <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <button class="w-fit rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Update password</button>
+              <p data-password-message class="text-sm text-[var(--koa-ink)]/58"></p>
+            </form>
+
             <div class="mt-7 rounded-[1.2rem] bg-[var(--koa-sand)] p-5">
               <p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Protected technical administration</p>
               <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks connection/settings, Gallery administration, SEO tools, Security + Spam controls, and other technical configuration remain administrator-only.</p>
@@ -48,7 +56,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getUser, login, logout } from '@netlify/identity';
+    import { getUser, login, logout, updateUser } from '@netlify/identity';
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const allowedRoles = new Set(['admin','staff','sales','manager']);
@@ -60,8 +68,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     function hasStaffAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
-      const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.some((role) => allowedRoles.has(String(role || '').toLowerCase())));
+      const roleSources = [user?.roles, user?.appMetadata?.roles, user?.app_metadata?.roles];
+      const roles = roleSources.find(Array.isArray) || [];
+      return approvedAdminEmails.has(email) || roles.some((role) => allowedRoles.has(String(role || '').toLowerCase()));
     }
 
     function show(user) {
@@ -84,6 +93,26 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           authError.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
           authError.classList.remove('hidden');
         }
+      }
+    });
+
+    document.querySelector('[data-password-form]')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const password = String(data.get('password') || '');
+      const confirmPassword = String(data.get('confirmPassword') || '');
+      const message = document.querySelector('[data-password-message]');
+      if (password !== confirmPassword) {
+        if (message) message.textContent = 'The passwords do not match.';
+        return;
+      }
+      try {
+        await updateUser({ password });
+        form.reset();
+        if (message) message.textContent = 'Password updated.';
+      } catch (err) {
+        if (message) message.textContent = err instanceof Error ? err.message : 'Unable to update password.';
       }
     });
 
