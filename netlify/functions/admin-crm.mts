@@ -1,7 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
-import { assessCrmRecord } from './_shared/crm-cleanup';
+import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -86,8 +86,16 @@ export default async (req:Request, context:Context) => {
       readIndex<any>(sales,'trash/index'),
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
-    const projects = salesRecords.filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test').slice(0,1500).map(r => normalizeProject(r, metaMap.get(r.id) || null));
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages},{
+    const cleanupSettings:any = (await sales.get('settings/crm-cleanup',{type:'json'})) || { mode:'auto_trash', updatedAt:'', updatedBy:'' };
+    const projects = salesRecords
+      .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test')
+      .slice(0,1500)
+      .map(r => ({...normalizeProject(r, metaMap.get(r.id) || null), cleanup: assessCrmRecord(r)}));
+    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,cleanupSettings:{
+      mode: normalizeCleanupMode(cleanupSettings.mode),
+      updatedAt: cleanupSettings.updatedAt || '',
+      updatedBy: cleanupSettings.updatedBy || '',
+    }},{
       headers:{'Cache-Control':'private, no-store'}
     });
   }
@@ -97,6 +105,42 @@ export default async (req:Request, context:Context) => {
   if (!body) return Response.json({error:'Invalid JSON.'},{status:400});
   const action = clean(body.action,60);
   const actor = clean(auth.user?.email,240) || 'admin';
+
+  if (action === 'approve-cleanup-review') {
+    const recordId=clean(body.recordId,100);
+    if(!recordId) return Response.json({error:'recordId required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((x:any)=>x.id===recordId);
+    if(!record) return Response.json({error:'CRM record not found'},{status:404});
+    const now=new Date().toISOString();
+    record.cleanupReview={verdict:'legitimate',reviewedAt:now,reviewedBy:actor};
+    record.updatedAt=now;
+    await sales.setJSON('records/'+record.id,record);
+    await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
+    await appendActivity(crm,record.id,'cleanup_approved','Marked legitimate by '+actor);
+    return Response.json({ok:true,recordId:record.id,cleanup:assessCrmRecord(record)});
+  }
+
+  if (action === 'clear-cleanup-review') {
+    const recordId=clean(body.recordId,100);
+    if(!recordId) return Response.json({error:'recordId required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((x:any)=>x.id===recordId);
+    if(!record) return Response.json({error:'CRM record not found'},{status:404});
+    delete record.cleanupReview;
+    record.updatedAt=new Date().toISOString();
+    await sales.setJSON('records/'+record.id,record);
+    await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
+    await appendActivity(crm,record.id,'cleanup_review_reset','Cleanup review reset by '+actor);
+    return Response.json({ok:true,recordId:record.id,cleanup:assessCrmRecord(record)});
+  }
+
+  if (action === 'save-cleanup-settings') {
+    const mode=normalizeCleanupMode(body.mode);
+    const settings={mode,updatedAt:new Date().toISOString(),updatedBy:actor};
+    await sales.setJSON('settings/crm-cleanup',settings);
+    return Response.json({ok:true,settings});
+  }
 
   if (action === 'save-project') {
     const recordId = clean(body.recordId,100);
