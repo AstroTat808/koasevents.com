@@ -213,6 +213,7 @@ export default async (req:Request, context:Context) => {
       const cutoff=Date.now()-days*24*60*60*1000;
       const rows=allAudit.filter((entry:any)=>Date.parse(entry.createdAt)>=cutoff);
       const caughtRows=rows.filter((entry:any)=>caughtActions.has(entry.action)&&entry.recordId);
+      const detectorRows=rows.filter((entry:any)=>['auto_flagged','auto_trashed'].includes(entry.action)&&entry.recordId);
       const falsePositiveRows=rows.filter((entry:any)=>entry.action==='approved_legitimate'&&entry.recordId);
       const autoTrashRows=rows.filter((entry:any)=>entry.action==='auto_trashed'&&entry.recordId);
       const restoreRows=rows.filter((entry:any)=>entry.action==='restored'&&entry.recordId);
@@ -220,6 +221,10 @@ export default async (req:Request, context:Context) => {
       const firstCaughtById=new Map<string,any>();
       for(const entry of caughtRows){
         if(!firstCaughtById.has(entry.recordId)) firstCaughtById.set(entry.recordId,entry);
+      }
+      const firstDetectorById=new Map<string,any>();
+      for(const entry of detectorRows){
+        if(!firstDetectorById.has(entry.recordId)) firstDetectorById.set(entry.recordId,entry);
       }
       const firstApprovalById=new Map<string,any>();
       for(const entry of falsePositiveRows){
@@ -235,15 +240,16 @@ export default async (req:Request, context:Context) => {
       }
 
       const caughtEntries=[...firstCaughtById.values()];
+      const detectorEntries=[...firstDetectorById.values()];
       const approvedEntries=[...firstApprovalById.values()];
       const autoTrashEntries=[...firstAutoTrashById.values()];
       const restoredEntries=[...firstRestoreById.values()];
       const caughtIds=new Set(firstCaughtById.keys());
-      const falsePositiveCaughtEntries=caughtEntries.filter((entry:any)=>laterAction(entry.recordId,entry.createdAt,new Set(['approved_legitimate'])));
+      const falsePositiveCaughtEntries=detectorEntries.filter((entry:any)=>laterAction(entry.recordId,entry.createdAt,new Set(['approved_legitimate'])));
       const autoTrashReversedEntries=autoTrashEntries.filter((entry:any)=>laterAction(entry.recordId,entry.createdAt,new Set(['restored','approved_legitimate'])));
       const autoTrashRetainedEntries=autoTrashEntries.filter((entry:any)=>!laterAction(entry.recordId,entry.createdAt,new Set(['restored','approved_legitimate'])));
 
-      const falsePositiveRate=roundPct(falsePositiveCaughtEntries.length,caughtEntries.length);
+      const falsePositiveRate=roundPct(falsePositiveCaughtEntries.length,detectorEntries.length);
       const autoTrashAccuracy=roundPct(autoTrashRetainedEntries.length,autoTrashEntries.length);
 
       const breakdownMaps:any={
@@ -273,14 +279,15 @@ export default async (req:Request, context:Context) => {
         .slice(0,15);
 
       const buildTrend=(granularity:'day'|'week')=>{
-        const bucket=new Map<string,{period:string;caught:any[];approved:any[];autoTrash:any[]}>();
+        const bucket=new Map<string,{period:string;caught:any[];detected:any[];approved:any[];autoTrash:any[]}>();
         const ensure=(iso:string)=>{
           const day=localDateKey(iso); if(!day) return null;
           const period=granularity==='day'?day:weekStartKey(day);
-          const row=bucket.get(period)||{period,caught:[],approved:[],autoTrash:[]};
+          const row=bucket.get(period)||{period,caught:[],detected:[],approved:[],autoTrash:[]};
           bucket.set(period,row); return row;
         };
         for(const entry of caughtEntries){const row=ensure(entry.createdAt);if(row)row.caught.push(entry);}
+        for(const entry of detectorEntries){const row=ensure(entry.createdAt);if(row)row.detected.push(entry);}
         for(const entry of approvedEntries){const row=ensure(entry.createdAt);if(row)row.approved.push(entry);}
         for(const entry of autoTrashEntries){const row=ensure(entry.createdAt);if(row)row.autoTrash.push(entry);}
 
@@ -294,18 +301,19 @@ export default async (req:Request, context:Context) => {
         const result:any[]=[];
         while(cursor<=endDate){
           const key=localDateKey(cursor.toISOString());
-          const stored=bucket.get(key)||{period:key,caught:[],approved:[],autoTrash:[]};
+          const stored=bucket.get(key)||{period:key,caught:[],detected:[],approved:[],autoTrash:[]};
           const caughtClients=uniqueClients(stored.caught);
+          const detectorClients=uniqueClients(stored.detected);
           const approvedClients=uniqueClients(stored.approved);
           const autoTrashClients=uniqueClients(stored.autoTrash);
-          const falsePositives=stored.caught.filter((entry:any)=>laterAction(entry.recordId,entry.createdAt,new Set(['approved_legitimate'])));
+          const falsePositives=stored.detected.filter((entry:any)=>laterAction(entry.recordId,entry.createdAt,new Set(['approved_legitimate'])));
           const retainedAutoTrash=stored.autoTrash.filter((entry:any)=>!laterAction(entry.recordId,entry.createdAt,new Set(['restored','approved_legitimate'])));
           result.push({
             period:key,
             label:granularity==='day'?labelDate(key):'Week of '+labelDate(key),
             bogusCaught:caughtClients.length,
             falsePositivesApproved:approvedClients.length,
-            falsePositiveRate:roundPct(uniqueClients(falsePositives).length,caughtClients.length),
+            falsePositiveRate:roundPct(uniqueClients(falsePositives).length,detectorClients.length),
             autoTrashAccuracy:roundPct(uniqueClients(retainedAutoTrash).length,autoTrashClients.length),
             clients:{
               bogusCaught:caughtClients,
