@@ -42,6 +42,7 @@ type ProposalLine = {
   quickBooksItemId?: string;
   category?: 'service' | 'rental' | 'mileage' | 'fee';
   unitLabel?: string;
+  getExempt?: boolean;
 };
 
 type PaymentItem = {
@@ -739,6 +740,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
         quickBooksItemId: cleanText(item?.quickBooksItemId, 80) || undefined,
         category: ['service','rental','mileage','fee'].includes(String(item?.category || '')) ? item.category : undefined,
         unitLabel: cleanText(item?.unitLabel, 40) || undefined,
+        getExempt: item?.getExempt === true,
       });
     });
   }
@@ -756,7 +758,13 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
 
   const subtotal = lines.reduce((sum, line) => sum + finite(line.amount), 0);
   const discountAmount = Math.min(subtotal, finite(state.estimatedKnownSavings || 0));
-  const total = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
+  const taxableGross = lines.filter((line) => line.getExempt !== true).reduce((sum, line) => sum + finite(line.amount), 0);
+  const taxableAfterDiscount = subtotal > 0
+    ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
+    : 0;
+  const taxRate = 4.712;
+  const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
+  const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
   const depositAmount = Math.round(total * 0.10 * 100) / 100;
   const remaining = Math.max(0, total - depositAmount);
   const secondAmount = Math.round((remaining / 2) * 100) / 100;
@@ -774,8 +782,8 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     lineItems: lines,
     subtotal,
     discountAmount,
-    taxRate: 0,
-    taxAmount: 0,
+    taxRate,
+    taxAmount,
     total,
     depositAmount,
     paymentSchedule: schedule,
@@ -806,6 +814,7 @@ function sanitizeLines(input: unknown): ProposalLine[] {
       quickBooksItemId: cleanText(line?.quickBooksItemId, 80) || undefined,
       category: ['service','rental','mileage','fee'].includes(String(line?.category || '')) ? line.category : undefined,
       unitLabel: cleanText(line?.unitLabel, 40) || undefined,
+      getExempt: line?.getExempt === true,
     };
   }).filter((line) => line.description);
 }
@@ -844,10 +853,13 @@ function updateProposal(record: SalesRecord, payload: any) {
   const lineItems = sanitizeLines(payload.lineItems);
   const subtotal = Math.round(lineItems.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
   const discountAmount = Math.min(subtotal, finite(payload.discountAmount));
-  const taxable = Math.max(0, subtotal - discountAmount);
-  const taxRate = finite(payload.taxRate, 0, 100);
-  const taxAmount = Math.round(taxable * taxRate) / 100;
-  const total = Math.round((taxable + taxAmount) * 100) / 100;
+  const taxableGross = lineItems.filter((line) => line.getExempt !== true).reduce((sum, line) => sum + line.amount, 0);
+  const taxableAfterDiscount = subtotal > 0
+    ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
+    : 0;
+  const taxRate = 4.712;
+  const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
+  const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
   const statusValues = new Set(['draft','sent','viewed','accepted','declined','expired','booked']);
   const requestedStatus = cleanText(payload.status, 30);
   const status = statusValues.has(requestedStatus) ? requestedStatus as any : current.status;
@@ -1584,7 +1596,7 @@ export default async (req: Request, context: Context) => {
     const preserved = (current.lineItems || []).filter((line) => line.id !== 'margin-target-adjustment');
     const baseSubtotal = preserved.reduce((sum, line) => sum + finite(line.amount), 0);
     const discount = Math.min(baseSubtotal, finite(current.discountAmount));
-    const taxRate = finite(current.taxRate, 0, 100);
+    const taxRate = 4.712;
     const taxMultiplier = 1 + taxRate / 100;
     const requiredTaxable = taxMultiplier > 0 ? targetTotal / taxMultiplier : targetTotal;
     const requiredSubtotal = Math.max(0, requiredTaxable + discount);
@@ -1603,9 +1615,12 @@ export default async (req: Request, context: Context) => {
 
     const subtotal = Math.round(lineItems.reduce((sum, line) => sum + finite(line.amount), 0) * 100) / 100;
     const discountAmount = Math.min(subtotal, finite(current.discountAmount));
-    const taxable = Math.max(0, subtotal - discountAmount);
-    const taxAmount = Math.round(taxable * taxRate) / 100;
-    const total = Math.round((taxable + taxAmount) * 100) / 100;
+    const taxableGross = lineItems.filter((line) => line.getExempt !== true).reduce((sum, line) => sum + finite(line.amount), 0);
+    const taxableAfterDiscount = subtotal > 0
+      ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
+      : 0;
+    const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
+    const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
 
     const oldSchedule = Array.isArray(current.paymentSchedule) ? current.paymentSchedule : [];
     const oldScheduleTotal = oldSchedule.reduce((sum, item) => sum + finite(item.amount), 0);
