@@ -82,29 +82,26 @@ async function timedFetch(url:string, init:RequestInit={}) {
 
 export async function runSystemHealth(source:'hourly'|'manual'='hourly'):Promise<HealthSnapshot> {
   const origin=baseUrl().replace(/\/$/,'');
-  const checks:HealthCheck[]=[];
-
-  for(const [id,name,path,marker] of PAGE_CHECKS){
+  const pageChecks=PAGE_CHECKS.map(async ([id,name,path,marker]):Promise<HealthCheck>=>{
     const result=await timedFetch(origin+path);
     let body='';
     if(result.response) body=await result.response.text().catch(()=>'');
     const ok=Boolean(result.response?.ok && body.includes(marker));
-    checks.push({
+    return {
       id,name,kind:'page',path,ok,status:result.response?.status||0,ms:result.ms,
       detail:result.error || (ok?'Page shell + startup marker present':result.response?.ok?'Expected startup marker missing':'Page request failed'),
-    });
-  }
-
-  for(const [id,name,path] of API_CHECKS){
+    };
+  });
+  const apiChecks=API_CHECKS.map(async ([id,name,path]):Promise<HealthCheck>=>{
     const result=await timedFetch(origin+path);
     const status=result.response?.status||0;
     const ok=Boolean(result.response && [200,401,403].includes(status));
-    checks.push({
+    return {
       id,name,kind:'api',path,ok,status,ms:result.ms,
       detail:result.error || (ok?(status===200?'Endpoint reachable':'Endpoint reachable and authorization enforced'):'Unexpected API response'),
-    });
-  }
-
+    };
+  });
+  const checks=await Promise.all([...pageChecks,...apiChecks]);
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
