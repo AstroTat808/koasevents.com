@@ -34,7 +34,7 @@ export async function createSignWellContract(record:any,origin:string){
   const koaName=clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||'Koa’s Events',180);
   const testMode=String(Netlify.env.get('SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true';
   const html=contractHtml(record);
-  const fileBase64=btoa(unescape(encodeURIComponent(html)));
+  const fileBase64=Buffer.from(html,'utf8').toString('base64');
   const payload={
     test_mode:testMode,draft:false,name:(record.booking?.contract?.title||'Koa’s Events Agreement')+' · '+(record.customer?.name||record.id),
     subject:'Your Koa’s Events agreement is ready to sign',
@@ -44,7 +44,7 @@ export async function createSignWellContract(record:any,origin:string){
       {id:'1',name:clean(record.customer?.name,180),email:clientEmail},
       {id:'2',name:koaName,email:koaEmail}
     ],
-    apply_signing_order:true,embedded_signing:true,embedded_signing_notifications:true,text_tags:true,
+    apply_signing_order:true,embedded_signing:true,embedded_signing_notifications:true,with_signature_page:true,
     reminders:true,expires_in:14,allow_decline:true,allow_reassign:false,
     redirect_url:origin+'/portal/?token='+encodeURIComponent(record.proposal?.publicToken||''),
     metadata:{record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
