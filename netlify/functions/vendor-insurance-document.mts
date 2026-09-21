@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
+import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
 
 function vendorStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -79,7 +80,8 @@ export default async (req: Request, context: Context) => {
     };
     vendor.updatedAt = new Date().toISOString();
     await store.setJSON('vendors/index', rows.slice(0, 2000));
-    return Response.json({ ok: true, insurance: vendor.insurance }, { headers: { 'Cache-Control': 'private, no-store' } });
+    const affectedEvents = await syncVendorInsuranceToUpcomingEvents(context, vendor);
+    return Response.json({ ok: true, insurance: vendor.insurance, affectedEvents }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (req.method === 'GET') {
