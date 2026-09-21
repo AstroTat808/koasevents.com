@@ -77,7 +77,22 @@ type BookingState = {
     koaSignature?: { name: string; signedAt: string } | null;
   };
   payments: BookingPayment[];
-  bartenderAssignments?: Array<{ id:string; name:string; assignedAt:string; assignedBy:string }>;
+  bartenderAssignments?: Array<{
+    id:string;
+    name:string;
+    assignedAt:string;
+    assignedBy:string;
+    responseStatus?:'pending'|'confirmed'|'declined';
+    respondedAt?:string;
+  }>;
+  bartenderTimecards?: Array<{
+    bartenderId:string;
+    name:string;
+    clockInAt:string;
+    clockOutAt:string;
+    totalMinutes:number;
+    updatedAt:string;
+  }>;
   bartenderPerformance?: Array<{
     bartenderId:string;
     name:string;
@@ -122,6 +137,8 @@ type MobileBarBartenderAvailability = {
   unavailableDates: string[];
   maxEventsPerWeek: number;
   maxEventsPerMonth: number;
+  hourlyRate: number;
+  portalToken: string;
 };
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
@@ -325,6 +342,8 @@ function bartenderAvailabilityList(input:unknown): MobileBarBartenderAvailabilit
     unavailableDates: isoDateList(entry?.unavailableDates, 366),
     maxEventsPerWeek: Math.round(finite(entry?.maxEventsPerWeek ?? 0, 0, 31)),
     maxEventsPerMonth: Math.round(finite(entry?.maxEventsPerMonth ?? 0, 0, 100)),
+    hourlyRate: Math.round(finite(entry?.hourlyRate ?? 40, 0, 500) * 100) / 100,
+    portalToken: cleanText(entry?.portalToken, 120) || publicToken(),
   })).filter((entry)=>entry.name);
 }
 
@@ -681,6 +700,7 @@ function ensureBooking(record: SalesRecord) {
         koaSignature: null,
       },
       bartenderAssignments: [],
+      bartenderTimecards: [],
       bartenderPerformance: [],
       payments: (record.proposal.paymentSchedule || []).map((item, index) => ({
         id: 'pay-' + (index + 1),
@@ -2073,12 +2093,18 @@ export default async (req: Request, context: Context) => {
     const now = new Date().toISOString();
     const booking = ensureBooking(record);
     if (!booking) return Response.json({ error: 'Booking state is unavailable.' }, { status: 400 });
-    booking.bartenderAssignments = requestedIds.map((id)=>({
-      id,
-      name: roster.get(id)?.name || id,
-      assignedAt: now,
-      assignedBy: cleanText(auth.user?.email,240) || 'admin',
-    }));
+    const previousAssignments=new Map((booking.bartenderAssignments||[]).map((entry)=>[entry.id,entry]));
+    booking.bartenderAssignments = requestedIds.map((id)=>{
+      const previous=previousAssignments.get(id);
+      return {
+        id,
+        name: roster.get(id)?.name || id,
+        assignedAt: previous?.assignedAt || now,
+        assignedBy: previous?.assignedBy || cleanText(auth.user?.email,240) || 'admin',
+        responseStatus: previous?.responseStatus || 'pending',
+        respondedAt: previous?.respondedAt || '',
+      };
+    });
     booking.updatedAt = now;
     record.updatedAt = now;
     records = await saveRecord(context, record, records);
