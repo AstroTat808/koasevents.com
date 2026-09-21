@@ -72,7 +72,7 @@ export default async (req:Request, context:Context) => {
 
   if (req.method === 'GET') {
     const salesRecords = await readIndex<any>(sales,'records/index');
-    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity] = await Promise.all([
+    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages] = await Promise.all([
       readIndex<Task>(crm,'tasks/index'),
       readIndex<Appointment>(crm,'appointments/index'),
       readIndex<Note>(crm,'notes/index'),
@@ -81,10 +81,11 @@ export default async (req:Request, context:Context) => {
       readIndex<Template>(crm,'templates/index'),
       readIndex<ProjectMeta>(crm,'projects/index'),
       readIndex<Activity>(crm,'activity/index'),
+      readIndex<any>(crm,'client-messages/index'),
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
     const projects = salesRecords.filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test').slice(0,1500).map(r => normalizeProject(r, metaMap.get(r.id) || null));
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity},{
+    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages},{
       headers:{'Cache-Control':'private, no-store'}
     });
   }
