@@ -41,11 +41,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const message = document.querySelector('[data-message]');
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let posts = [];
+    let managerAccess = false;
 
+    function userRoles(user) {
+      const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
+      return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());
+    }
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
-      const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.some((role) => ['admin','staff','sales','manager'].includes(String(role || '').toLowerCase())));
+      const roles = userRoles(user);
+      return approvedAdminEmails.has(email) || roles.some((role) => ['admin','staff','sales','manager'].includes(role));
+    }
+    function hasManagerAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = userRoles(user);
+      return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager');
+    }
+    function applyRoleUi() {
+      const publishedOption=form?.elements?.status?.querySelector?.('option[value="published"]');
+      if(publishedOption) publishedOption.disabled=!managerAccess;
+      document.querySelector('[data-restore-legacy]')?.classList.toggle('hidden',!managerAccess);
     }
 
     function clearForm() {
@@ -74,13 +89,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           await fetch('/api/blog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',slug:post.slug})});
           await load();
         });
-        actions.append(edit,del); row.append(title,meta,actions); list.append(row);
+        if(managerAccess || post.status !== 'published') actions.append(edit);
+        if(managerAccess) actions.append(del);
+        row.append(title,meta,actions); list.append(row);
       });
     }
 
     async function load() {
       const user=await getUser();
       if(!hasAdminAccess(user)){ unauthorized?.classList.remove('hidden'); return; }
+      managerAccess=hasManagerAccess(user); applyRoleUi();
       ui?.classList.remove('hidden');
       const response=await fetch('/api/blog?admin=1');
       if(response.status===401){ ui?.classList.add('hidden'); unauthorized?.classList.remove('hidden'); return; }
