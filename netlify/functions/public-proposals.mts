@@ -82,7 +82,7 @@ function publicRecord(record: any) {
     lineItems: proposal.lineItems || [],
     subtotal: Number(proposal.subtotal || 0),
     discountAmount: Number(proposal.discountAmount || 0),
-    taxRate: Number(proposal.taxRate || 4.712),
+    taxRate: proposal.taxRate == null ? 4.712 : Number(proposal.taxRate),
     taxAmount: Number(proposal.taxAmount || 0),
     total: Number(proposal.total || 0),
     depositAmount: Number(proposal.depositAmount || 0),
