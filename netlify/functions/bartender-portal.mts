@@ -28,6 +28,9 @@ function performance(record:any,bartenderId:string){
   return (Array.isArray(record?.booking?.bartenderPerformance)?record.booking.bartenderPerformance:[])
     .find((entry:any)=>clean(entry?.bartenderId,80)===bartenderId);
 }
+function hawaiiDateKey(now=new Date()){
+  return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+}
 function payForShift(record:any,bartender:any){
   const card=timecard(record,bartender.id);
   const perf=performance(record,bartender.id);
@@ -153,6 +156,7 @@ export default async(req:Request,context:Context)=>{
   if(action==='clock-in'){
     const assignment=activeAssignment(record,bartender.id);
     if(assignment?.responseStatus==='declined')return Response.json({error:'Declined shifts cannot be clocked in.'},{status:409});
+    if(eventDate(record)!==hawaiiDateKey())return Response.json({error:'Clock-in is available on the assigned event date in Hawaiʻi time.'},{status:409});
     const cards=Array.isArray(record.booking.bartenderTimecards)?record.booking.bartenderTimecards:[];
     const existing=cards.find((entry:any)=>clean(entry?.bartenderId,80)===bartender.id);
     if(existing?.clockInAt&&!existing?.clockOutAt)return Response.json({error:'Already clocked in.'},{status:409});
