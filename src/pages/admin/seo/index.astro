@@ -183,7 +183,7 @@ const cards = [
   </main>
 
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const ui = document.querySelector('[data-admin-ui]');
@@ -284,7 +284,7 @@ const cards = [
     });
 
     async function initialize() {
-      const user=await getUser();
+      const user=await getAdminSession();
       if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       ui?.classList.remove('hidden');
       try{await refreshCitations();}catch(error){if(message)message.textContent=error instanceof Error?error.message:'Unable to load Local SEO data.';}
