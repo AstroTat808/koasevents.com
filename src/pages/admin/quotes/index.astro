@@ -24,6 +24,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Saved quote value</p><p data-stat-value class="display mt-3 text-4xl">$0</p></article>
         </section>
 
+        <section data-staff-performance-section class="hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Team performance</p><h2 class="display mt-3 text-4xl">Sales ownership + performance</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/56">Opportunity-level reporting by assigned rep. Response time measures the first logged staff response after the opportunity entered the CRM.</p></div>
+            <select data-performance-period class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><option value="30">Last 30 days</option><option value="90">Last 90 days</option><option value="all">All time</option></select>
+          </div>
+          <div class="mt-6 overflow-x-auto"><table class="w-full min-w-[900px] border-collapse text-sm"><thead><tr class="border-b border-[var(--koa-line)] text-left text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Rep</th><th class="py-3 pr-4">Opportunities</th><th class="py-3 pr-4">Avg response</th><th class="py-3 pr-4">Proposals sent</th><th class="py-3 pr-4">Booked</th><th class="py-3 pr-4">Conversion</th><th class="py-3 pr-4">Booked revenue</th><th class="py-3">Follow-ups overdue</th></tr></thead><tbody data-performance-body></tbody></table></div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-amber-light)]">Needs attention</p><h2 class="display mt-3 text-4xl">Work the next action, not the whole pipeline.</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-white/56">Accepted proposals, new inquiries, viewed proposals, qualified leads and draft proposals are surfaced here in action order.</p></div>
@@ -718,6 +726,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let qboState = null;
     let profitRecord = null;
     let managerAccess = false;
+    let destructiveAccess = false;
+    let profitSettingsAccess = false;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -755,15 +765,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const roles = userRoles(user);
       return approvedAdminEmails.has(email) || roles.some((role) => ['admin','staff','sales','manager'].includes(role));
     }
+    function userPermissions(user){const meta=user?.appMetadata||user?.app_metadata||{};return (Array.isArray(meta.permissions)?meta.permissions:[]).map((p)=>String(p||'').toLowerCase());}
     function hasManagerAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
       const roles = userRoles(user);
       return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager');
     }
-    function applyRoleUi() {
-      if (bulkTrashButton) bulkTrashButton.classList.toggle('hidden', !managerAccess);
-      mobileProfitGoalForm?.classList.toggle('hidden', !managerAccess);
-      if (profitForm) [...profitForm.elements].forEach((el)=>{ if(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement||el instanceof HTMLSelectElement||el instanceof HTMLButtonElement) el.disabled=!managerAccess; });
+    function applyRoleUi(user) {
+      const permissions=userPermissions(user);
+      destructiveAccess=managerAccess||permissions.includes('crm.destructive');
+      profitSettingsAccess=managerAccess||permissions.includes('sales.profit_settings');
+      if (bulkTrashButton) bulkTrashButton.classList.toggle('hidden', !destructiveAccess);
+      mobileProfitGoalForm?.classList.toggle('hidden', !profitSettingsAccess);
+      if (profitForm) [...profitForm.elements].forEach((el)=>{ if(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement||el instanceof HTMLSelectElement||el instanceof HTMLButtonElement) el.disabled=!profitSettingsAccess; });
+      document.querySelector('[data-staff-performance-section]')?.classList.toggle('hidden',!managerAccess);
     }
     function money(value) { return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0)); }
     function dateTime(value) { return value ? new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : ''; }
@@ -778,6 +793,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelector('[data-stat-proposals]').textContent = String(records.filter((r)=>r.stage==='proposal').length);
       document.querySelector('[data-stat-booked]').textContent = String(records.filter((r)=>r.stage==='booked').length);
       document.querySelector('[data-stat-value]').textContent = money(payload.analytics?.estimatedPipelineValue || 0);
+    }
+
+    function renderPerformance(){
+      if(!managerAccess)return;
+      const period=document.querySelector('[data-performance-period]')?.value||'30';
+      const rows=payload.staffPerformance?.[period]||[];
+      const body=document.querySelector('[data-performance-body]');if(!body)return;body.innerHTML='';
+      rows.forEach((row)=>{
+        const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)]';
+        const values=[row.name+' · '+(row.role==='manager'?'Manager':'Sales Rep'),row.opportunities,row.averageResponseHours==null?'—':row.averageResponseHours+' hr',row.proposalsSent,row.booked,row.conversionRate==null?'—':row.conversionRate+'%',money(row.bookedRevenue||0),row.followUpsOverdue];
+        values.forEach((value,index)=>{const td=document.createElement('td');td.className='py-4 pr-4 '+(index===0?'font-semibold text-[var(--koa-forest)]':'');td.textContent=String(value);tr.appendChild(td);});body.appendChild(tr);
+      });
+      if(!rows.length){const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=8;td.className='py-6 text-sm text-[var(--koa-ink)]/45';td.textContent='No assigned staff performance data for this period.';tr.appendChild(td);body.appendChild(tr);}
     }
 
     function renderFunnel() {
@@ -1111,6 +1139,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       if(record.quoteId) article.appendChild(text('p','mt-2 font-mono text-[.65rem] text-[var(--koa-ink)]/45','Quote '+record.quoteId));
       appendCommunicationStatus(article,record);
+      const ownerWrap=document.createElement('div');ownerWrap.className='mt-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+      ownerWrap.appendChild(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Owner'));
+      if(managerAccess){
+        const select=document.createElement('select');select.className='mt-2 w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
+        (payload.staffDirectory||[]).forEach((member)=>{const option=document.createElement('option');option.value=member.id;option.textContent=member.name+' · '+(member.role==='manager'?'Manager':'Sales Rep');select.appendChild(option);});
+        select.value=record.assignment?.userId||'';
+        select.addEventListener('change',async()=>{if(!select.value)return;select.disabled=true;try{await api({action:'assign-owner',recordId:record.id,userId:select.value});await load(String(searchInput?.value||'').trim());}catch(error){if(message)message.textContent=error?.message||'Unable to assign owner.';}finally{select.disabled=false;}});
+        ownerWrap.appendChild(select);
+      }else{
+        ownerWrap.appendChild(text('p','mt-1 text-xs font-semibold text-[var(--koa-forest)]',record.assignment?.name||record.assignment?.email||'Unassigned'));
+      }
+      article.appendChild(ownerWrap);
 
       if(record.stage!=='booked') {
         const next=document.createElement('div');
@@ -1131,7 +1171,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!hasResponseActivity(record)) {
           actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
         }
-        if(managerAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
+        if(destructiveAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       addQuickLinks(actions,record,small);
       article.appendChild(actions);
@@ -2309,7 +2349,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!hasResponseActivity(record)) {
           actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
         }
-        if(managerAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
+        if(destructiveAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       if(mobileRevenue(record)>0) actions.append(actionButton('Margin',small,()=>openProfitModel(record)));
       addQuickLinks(actions,record,small);
@@ -2548,7 +2588,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         else if(lead) actions.append(actionButton('Build proposal',primary,()=>promote(lead,'proposal',true)));
         else if(inquiry) actions.append(actionButton('Qualify lead',primary,()=>promote(inquiry,'lead')));
         else actions.append(actionButton('Create lead',primary,()=>openConvert(quote,'lead')));
-        if(managerAccess) actions.append(actionButton('Delete quote','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
+        if(destructiveAccess) actions.append(actionButton('Delete quote','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
           if(!confirm('Permanently delete saved quote '+quote.id+'?\n\nQuotes attached to proposals or booked records are protected and cannot be deleted.')) return;
           try{
             if(message) message.textContent='Deleting saved quote '+quote.id+'…';
@@ -2694,7 +2734,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(query='') {
       const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
-      managerAccess=hasManagerAccess(user); applyRoleUi();
+      managerAccess=hasManagerAccess(user); applyRoleUi(user);
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
       const [response,qboResponse]=await Promise.all([
         fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'}),
@@ -2719,10 +2759,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderPaymentDashboard();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
+      renderStats();renderPerformance();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderPaymentDashboard();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
+    document.querySelector('[data-performance-period]')?.addEventListener('change',renderPerformance);
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     mobileProfitScope?.addEventListener('change',renderProfitabilityDashboard);
     mobileProfitPeriod?.addEventListener('change',()=>{
