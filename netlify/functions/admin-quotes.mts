@@ -1228,6 +1228,59 @@ export default async (req: Request, context: Context) => {
     return Response.json({ ok: true, moved, skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
+  if (payload.action === 'bulk-trash-client-chains') {
+    const ids = Array.from(new Set((Array.isArray(payload.recordIds) ? payload.recordIds : [])
+      .map((value: unknown) => cleanText(value, 80))
+      .filter(Boolean))).slice(0, 100);
+    if (!ids.length) return Response.json({ error: 'Select at least one client.' }, { status: 400 });
+
+    const moved = new Set<string>();
+    const skipped: Array<{ id: string; reason: string }> = [];
+
+    for (const id of ids) {
+      if (moved.has(id)) continue;
+      const root = records.find((entry) => entry.id === id);
+      if (!root) { skipped.push({ id, reason: 'Record not found.' }); continue; }
+
+      const relatedIds = relatedRecordIds(root, records);
+      const related = records.filter((entry) => relatedIds.has(entry.id));
+      const protectedRecords = related.filter((entry) =>
+        entry.kind === 'proposal' ||
+        entry.stage === 'proposal' ||
+        entry.stage === 'booked' ||
+        Boolean(entry.booking) ||
+        Boolean((entry as any)?.accounting?.quickbooks?.invoices?.length)
+      );
+      if (protectedRecords.length) {
+        skipped.push({ id, reason: 'Client chain contains protected proposal, booking, contract, invoice, or payment data.' });
+        continue;
+      }
+
+      const movable = related.filter((entry) => ['inquiry', 'lead'].includes(entry.kind));
+      if (!movable.length) {
+        skipped.push({ id, reason: 'No inquiry or lead records are eligible for Trash.' });
+        continue;
+      }
+
+      for (const target of movable) {
+        if (!records.some((entry) => entry.id === target.id)) continue;
+        const result = await moveRecordToTrash(context, target, records, cleanText(auth.user?.email, 240));
+        records = result.records;
+        moved.add(target.id);
+      }
+
+      await appendEvent(context, {
+        type: 'client_chain_trashed',
+        recordId: root.id,
+        quoteId: root.quoteId || '',
+        packageId: root.packageId || '',
+        detail: 'Administrator bulk-moved a client chain to Trash for 30 days.',
+      });
+    }
+
+    return Response.json({ ok: true, moved: [...moved], skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
   if (payload.action === 'bulk-lost') {
     const ids = Array.from(new Set((Array.isArray(payload.recordIds) ? payload.recordIds : [])
       .map((value: unknown) => cleanText(value, 80))
