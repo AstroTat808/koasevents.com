@@ -29,6 +29,13 @@ function offsetDate(date: string, days: number) {
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0,10);
 }
+function seedVendorRequirements() {
+  return [
+    ['Wedding Planner','recommended'],['Photographer','recommended'],['Videographer','optional'],['Caterer','recommended'],
+    ['Florist','optional'],['Officiant','recommended'],['DJ','optional'],['Live Musician','optional'],['Entertainment','optional'],
+    ['Hair & Makeup','optional'],['Cake / Dessert','optional'],['Rentals','optional'],['Transportation','optional'],['Bartender / Mobile Bar','optional'],
+  ].map(([category,importance])=>({category,importance,note:''}));
+}
 function seedQuestionnaire() {
   const rows = [
     ['event','Confirm the final guest count.'],
@@ -88,7 +95,7 @@ function defaultOps(record:any) {
   return {
     recordId:record.id,createdAt:now,updatedAt:now,status:'planning',
     finalGuestCount:guestCount,setupStart:'',guestArrival:'',eventStart:'',eventEnd:'',teardownEnd:'',venueArea:'Koa’s Events',
-    notes:'',vendors:[],questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
+    notes:'',vendors:[],vendorRequirements:seedVendorRequirements(),questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
   };
 }
 async function appendEvent(context: Context, event: Record<string,unknown>) {
@@ -108,9 +115,10 @@ function publicOps(record:any,ops:any) {
       status:ops.status || 'planning',
       finalGuestCount:Number(ops.finalGuestCount || 0),
       vendors:(ops.vendors || []).map((v:any)=>({
-        id:v.id,company:v.company||'',contact:v.contact||'',role:v.role||'',email:v.email||'',phone:v.phone||'',arrivalTime:v.arrivalTime||'',notes:v.notes||'',
+        id:v.id,marketplaceVendorId:v.marketplaceVendorId||'',company:v.company||'',contact:v.contact||'',role:v.role||'',email:v.email||'',phone:v.phone||'',arrivalTime:v.arrivalTime||'',notes:v.notes||'',
         insuranceStatus:v.insuranceStatus || 'not_requested',
       })),
+      vendorRequirements:(ops.vendorRequirements||seedVendorRequirements()).map((r:any)=>({category:r.category,importance:r.importance||'optional',note:r.note||'',booked:(ops.vendors||[]).some((v:any)=>String(v.role||'')===String(r.category||''))})),
       questionnaire:(ops.questionnaire || []).map((q:any)=>({
         id:q.id,category:q.category||'general',question:q.question||'',answer:q.answer||'',status:q.status||'open'
       })),
@@ -129,6 +137,7 @@ function sanitizeClientVendors(input:unknown,existing:any[]) {
     const current=existingById.get(rowId) || {};
     return {
       id:rowId,
+      marketplaceVendorId:clean(current.marketplaceVendorId||row?.marketplaceVendorId,100),
       company:clean(row?.company,180),
       contact:clean(row?.contact,180),
       role:clean(row?.role,120),
@@ -170,6 +179,7 @@ export default async (req:Request,context:Context)=>{
 
   let ops:any=await opsStore.get('events/'+record.id,{type:'json'});
   if(!ops){ops=defaultOps(record);await opsStore.setJSON('events/'+record.id,ops);}
+  else if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=seedVendorRequirements();await opsStore.setJSON('events/'+record.id,ops);}
 
   if(req.method==='GET') {
     return Response.json(publicOps(record,ops),{headers:{'Cache-Control':'private, no-store'}});
