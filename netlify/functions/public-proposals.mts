@@ -1,5 +1,8 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { ensureBooking } from './_shared/booking';
+import { createSignWellContract, signWellConfigured } from './_shared/signwell';
+import { markLifecycleEvent } from './_shared/lifecycle';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -143,6 +146,49 @@ export default async (req: Request, context: Context) => {
       proposal.status = 'accepted';
       proposal.acceptance = { name, acceptedAt: now };
       record.status = 'accepted';
+
+      const booking = ensureBooking(record);
+      const signwell = booking?.contract?.signwell || {};
+      if (!signwell.documentId && signWellConfigured()) {
+        try {
+          const created:any = await createSignWellContract(record, new URL(req.url).origin);
+          if (created?.documentId) {
+            booking.contract.signwell = {
+              status: created.status || 'sent',
+              documentId: created.documentId,
+              clientSigningUrl: created.embeddedSigningUrl || '',
+              sentAt: now,
+              completedAt: '',
+              signedPdfStored: false,
+            };
+            await appendEvent(store, {
+              type: 'signwell_contract_sent',
+              recordId: record.id,
+              quoteId: record.quoteId || '',
+              packageId: record.packageId || '',
+              detail: 'Personalized SignWell agreement created and sent for ordered signatures.',
+              reference: created.documentId,
+            });
+          }
+        } catch (error) {
+          booking.contract.signwell = {
+            ...signwell,
+            status: 'send_failed',
+            lastError: error instanceof Error ? error.message : 'SignWell request failed',
+            lastAttemptAt: now,
+          };
+          await appendEvent(store, {
+            type: 'signwell_contract_failed',
+            recordId: record.id,
+            quoteId: record.quoteId || '',
+            packageId: record.packageId || '',
+            detail: booking.contract.signwell.lastError,
+          });
+        }
+      } else if (!signWellConfigured()) {
+        booking.contract.signwell = { ...signwell, status: 'configuration_required' };
+      }
+
       await appendEvent(store, {
         type: 'proposal_accepted',
         recordId: record.id,
@@ -150,6 +196,7 @@ export default async (req: Request, context: Context) => {
         packageId: record.packageId || '',
         detail: 'Proposal accepted by ' + name,
       });
+      await markLifecycleEvent(context, record, 'proposal_accepted', 'Proposal accepted; contract and deposit workflow activated.');
     } else {
       proposal.status = 'declined';
       proposal.declinedAt = now;
