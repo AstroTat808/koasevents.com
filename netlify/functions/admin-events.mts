@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { requireOperations } from './_shared/admin';
 
 type Vendor = {
   id: string;
@@ -286,7 +286,7 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireAdmin();
+  const auth = await requireOperations();
   if (auth.response) return auth.response;
 
   const salesStore = salesStoreFor(context);
