@@ -440,14 +440,10 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'save-get-settings') {
-    const customerRate = Number(payload?.customerRate ?? 4.712);
-    if (!Number.isFinite(customerRate) || customerRate < 0 || customerRate > 4.712) {
-      return Response.json({ error: 'Hawaiʻi GET customer rate must be between 0% and 4.712%.' }, { status: 400 });
-    }
     const getSettings = await saveQuickBooksGetSettings(context, {
-      enabled: payload?.enabled !== false,
+      enabled: true,
       label: clean(payload?.label || 'Hawaiʻi GET', 80),
-      customerRate,
+      customerRate: 4.712,
       quickBooksItemId: clean(payload?.quickBooksItemId, 80),
       quickBooksItemName: clean(payload?.quickBooksItemName, 100),
     });
@@ -466,6 +462,7 @@ export default async (req: Request, context: Context) => {
     const unitLabel = clean(payload?.item?.unitLabel || (category === 'mileage' ? 'mile' : 'each'), 40);
     const unitPrice = Math.max(0, Math.round(Number(payload?.item?.unitPrice || 0) * 100) / 100);
     const active = payload?.item?.active !== false;
+    const getExempt = payload?.item?.getExempt === true;
     if (!name) return Response.json({ error: 'Catalog item name is required.' }, { status: 400 });
 
     const previous = existingCatalog.find((entry: any) => entry.id === id);
@@ -531,6 +528,7 @@ export default async (req: Request, context: Context) => {
       unitLabel,
       unitPrice,
       active,
+      getExempt,
       quickBooksItemId: String(qboItem.Id),
       quickBooksItemName: String(qboItem.Name || name),
       quickBooksType: String(qboItem.Type || requestedType) === 'NonInventory' ? 'NonInventory' : 'Service',
@@ -570,6 +568,7 @@ export default async (req: Request, context: Context) => {
           unitLabel: prior?.unitLabel || 'each',
           unitPrice: Math.max(0, Number(item.UnitPrice || 0)),
           active: item.Active !== false,
+          getExempt: prior?.getExempt === true,
           quickBooksItemId: String(item.Id),
           quickBooksItemName: String(item.Name || ''),
           quickBooksType: String(item.Type || '') === 'NonInventory' ? 'NonInventory' : 'Service',
