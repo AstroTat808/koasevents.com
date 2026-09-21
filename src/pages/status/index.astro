@@ -1,0 +1,114 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Events Status" description="Public service status for Koa’s Events." canonical="https://koasevents.com/status/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-14">
+    <div class="container-shell max-w-5xl">
+      <section class="rounded-[1.8rem] bg-white p-7 shadow-[var(--shadow-soft)] sm:p-10">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+            <h1 class="display mt-3 text-5xl">Service status</h1>
+            <p class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">A simple public view of service availability when Koa’s chooses to publish a client-facing incident.</p>
+          </div>
+          <a href="/" class="rounded-full bg-[var(--koa-ink)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Koa’s home</a>
+        </div>
+
+        <div data-status-loading class="mt-8 rounded-[1.3rem] bg-[var(--koa-sand)] p-6 text-sm text-[var(--koa-ink)]/58">Checking current status…</div>
+
+        <div data-status-disabled class="mt-8 hidden rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6">
+          <p class="display text-3xl text-[var(--koa-forest)]">No public incident is being reported.</p>
+          <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Koa’s is not currently publishing individual service details on this page.</p>
+        </div>
+
+        <div data-status-app class="mt-8 hidden grid gap-6">
+          <section data-overall-card class="rounded-[1.4rem] border p-6">
+            <p class="eyebrow">Current status</p>
+            <h2 data-overall class="display mt-3 text-4xl">—</h2>
+            <p data-updated class="mt-2 text-sm"></p>
+          </section>
+
+          <section>
+            <p class="eyebrow text-[var(--koa-clay)]">Published services</p>
+            <div data-services class="mt-4 grid gap-3 sm:grid-cols-2"></div>
+          </section>
+
+          <section>
+            <p class="eyebrow text-[var(--koa-clay)]">Recent incidents</p>
+            <div data-incidents class="mt-4 grid gap-3"></div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const loading=document.querySelector('[data-status-loading]');
+    const disabled=document.querySelector('[data-status-disabled]');
+    const app=document.querySelector('[data-status-app]');
+    const overall=document.querySelector('[data-overall]');
+    const overallCard=document.querySelector('[data-overall-card]');
+    const updated=document.querySelector('[data-updated]');
+    const services=document.querySelector('[data-services]');
+    const incidents=document.querySelector('[data-incidents]');
+
+    function duration(minutes){
+      const value=Math.max(0,Number(minutes||0));
+      const hours=Math.floor(value/60);
+      const mins=Math.round(value%60);
+      if(hours&&mins)return hours+' hr '+mins+' min';
+      if(hours)return hours+' hr';
+      return mins+' min';
+    }
+
+    function render(data){
+      loading?.classList.add('hidden');
+      if(!data?.enabled){
+        disabled?.classList.remove('hidden');
+        app?.classList.add('hidden');
+        return;
+      }
+
+      disabled?.classList.add('hidden');
+      app?.classList.remove('hidden');
+
+      const degraded=data.overall==='degraded';
+      overall.textContent=degraded?'Some services are experiencing an issue':'All published services are operational';
+      overallCard.className='rounded-[1.4rem] border p-6 '+(degraded?'border-amber-300 bg-amber-50':'border-emerald-200 bg-emerald-50');
+      updated.textContent=data.checkedAt?'Last updated '+new Date(data.checkedAt).toLocaleString():'';
+
+      services.innerHTML='';
+      (data.services||[]).forEach((service)=>{
+        const card=document.createElement('article');
+        const down=service.status==='degraded';
+        card.className='rounded-xl border '+(down?'border-amber-300 bg-amber-50':'border-emerald-200 bg-emerald-50')+' p-4';
+        const top=document.createElement('div');top.className='flex items-center justify-between gap-4';
+        const name=document.createElement('strong');name.className='text-[var(--koa-forest)]';name.textContent=service.name;
+        const badge=document.createElement('span');badge.className='rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.08em] '+(down?'bg-amber-800 text-white':'bg-emerald-800 text-white');badge.textContent=down?'Issue':'Operational';
+        top.append(name,badge);card.appendChild(top);
+        if(typeof service.uptime90d==='number'){
+          const uptime=document.createElement('p');uptime.className='mt-2 text-xs text-[var(--koa-ink)]/48';uptime.textContent='90-day observed uptime: '+service.uptime90d.toFixed(2)+'%';card.appendChild(uptime);
+        }
+        services.appendChild(card);
+      });
+      if(!(data.services||[]).length) services.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No individual services are currently published.</p>';
+
+      incidents.innerHTML='';
+      (data.incidents||[]).forEach((incident)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const title=document.createElement('strong');title.className='text-[var(--koa-forest)]';title.textContent=incident.service;
+        const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/55';
+        detail.textContent=(incident.ongoing?'Ongoing since ':'Observed from ')+new Date(incident.startedAt).toLocaleString()+(incident.endedAt?' until '+new Date(incident.endedAt).toLocaleString():'')+' · '+duration(incident.durationMinutes);
+        card.append(title,detail);incidents.appendChild(card);
+      });
+      if(!(data.incidents||[]).length) incidents.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No recent published incidents.</p>';
+    }
+
+    fetch('/api/status',{cache:'no-store'})
+      .then((response)=>response.ok?response.json():Promise.reject(new Error('Status unavailable')))
+      .then(render)
+      .catch(()=>{
+        loading.textContent='Public status is temporarily unavailable.';
+      });
+  </script>
+</BaseLayout>
