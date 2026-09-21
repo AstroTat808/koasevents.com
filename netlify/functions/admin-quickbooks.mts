@@ -334,13 +334,14 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest] = await Promise.all([
+    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/sandbox-linked-booking-test', { type: 'json' }),
     ]);
     const receipts = Array.isArray(webhookHistory) && webhookHistory.length
       ? webhookHistory
@@ -374,6 +375,7 @@ export default async (req: Request, context: Context) => {
       webhookReceipt: webhookReceipt || null,
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
+      linkedTest: linkedTest || null,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -407,6 +409,134 @@ export default async (req: Request, context: Context) => {
     if (!itemId) return Response.json({ error: 'Select a QuickBooks service item.' }, { status: 400 });
     const settings = await saveQuickBooksSettings(context, { serviceItemId: itemId, serviceItemName: itemName });
     return Response.json({ ok: true, settings });
+  }
+
+  if (action === 'sandbox-linked-booking-test') {
+    const configuration = quickBooksConfiguration();
+    if (configuration.environment !== 'sandbox') {
+      return Response.json({ error: 'CRM-linked sandbox testing is disabled outside the QuickBooks sandbox environment.' }, { status: 409 });
+    }
+
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    if (!itemId) {
+      return Response.json({ error: 'Save a QuickBooks Service or Non-Inventory item mapping first.' }, { status: 409 });
+    }
+
+    const suffix = idSuffix();
+    const recordId = 'QBT-' + suffix;
+    const depositAmount = 25;
+    const total = 250;
+    const now = new Date().toISOString();
+    const eventDate = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
+    const secondDue = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    const finalDue = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+
+    let records = await readRecords(context);
+    const record: any = {
+      id: recordId,
+      kind: 'proposal',
+      stage: 'proposal',
+      createdAt: now,
+      updatedAt: now,
+      status: 'accepted',
+      source: 'quickbooks-sandbox-linked-test',
+      customer: {
+        name: 'QBO Sandbox Linked Test ' + suffix,
+        email: '',
+        phone: '',
+        eventDate,
+        notes: 'Automated CRM-linked QuickBooks sandbox test. Safe to delete after verification.',
+      },
+      proposal: {
+        publicToken: '',
+        status: 'accepted',
+        expirationDate: '',
+        lineItems: [{
+          id: 'sandbox-linked-service',
+          description: 'Koa CRM linked sandbox test',
+          quantity: 1,
+          unitPrice: total,
+          amount: total,
+          custom: false,
+        }],
+        subtotal: total,
+        discountAmount: 0,
+        taxRate: 0,
+        taxAmount: 0,
+        total,
+        depositAmount,
+        paymentSchedule: [
+          { label: 'Reservation deposit', dueDate: today(), amount: depositAmount },
+          { label: 'Second payment', dueDate: secondDue, amount: 112.50 },
+          { label: 'Final payment', dueDate: finalDue, amount: 112.50 },
+        ],
+        notesToClient: 'Automated sandbox integration test.',
+        acceptance: { name: 'Sandbox Test Client', acceptedAt: now },
+      },
+      booking: {
+        status: 'deposit_pending',
+        createdAt: now,
+        updatedAt: now,
+        contract: {
+          version: 1,
+          title: 'Sandbox Test Booking Agreement',
+          generatedAt: now,
+          status: 'signed',
+          sections: [],
+          signature: { name: 'Sandbox Test Client', signedAt: now, acknowledgement: 'Sandbox test signature' },
+          koaSignature: { name: 'Koa’s Events Test', signedAt: now },
+        },
+        payments: [
+          { id: 'pay-1', label: 'Reservation deposit', dueDate: today(), amount: depositAmount, status: 'pending' },
+          { id: 'pay-2', label: 'Second payment', dueDate: secondDue, amount: 112.50, status: 'pending' },
+          { id: 'pay-3', label: 'Final payment', dueDate: finalDue, amount: 112.50, status: 'pending' },
+        ],
+      },
+    };
+
+    records = [record, ...records.filter((entry) => entry.id !== recordId)].slice(0, 1500);
+    const store = salesStoreFor(context);
+    await store.setJSON('records/' + recordId, record);
+    await store.setJSON('records/index', records);
+
+    const customer = await ensureCustomer(context, record);
+    const invoice = await createMilestoneInvoice(context, record, itemId, 'pay-1');
+    await saveRecord(context, record, records);
+
+    const paymentCreated: any = await qboCreate(context, 'payment', {
+      CustomerRef: { value: String(customer.Id) },
+      TotalAmt: depositAmount,
+      Line: [{
+        Amount: depositAmount,
+        LinkedTxn: [{ TxnId: String(invoice.Id), TxnType: 'Invoice' }],
+      }],
+    });
+    const payment = paymentCreated?.Payment;
+    if (!payment?.Id) throw new Error('CRM-linked sandbox payment creation failed.');
+
+    const test = {
+      status: 'payment_created',
+      createdAt: now,
+      recordId,
+      customerId: String(customer.Id),
+      invoiceId: String(invoice.Id),
+      invoiceDocNumber: String(invoice.DocNumber || ''),
+      paymentId: String(payment.Id),
+      depositAmount,
+      expectedStage: 'booked',
+      expectedDepositPaid: true,
+      expectedBalanceDue: 0,
+      webhookPending: true,
+    };
+    await integrationStoreFor(context).setJSON('quickbooks/sandbox-linked-booking-test', test);
+    await appendEvent(context, {
+      type: 'quickbooks_linked_sandbox_test_started',
+      recordId,
+      detail: 'Created CRM-linked QuickBooks sandbox deposit invoice ' + (invoice.DocNumber || invoice.Id) + ' and payment ' + payment.Id + '.',
+    });
+
+    return Response.json({ ok: true, test });
   }
 
   if (action === 'sandbox-smoke-test') {
