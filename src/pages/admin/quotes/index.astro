@@ -530,6 +530,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <a data-event-ops-link href="/admin/events/" class="hidden rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open Event Ops</a>
         <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">QBO setup</a>
       </div>
+      <section data-booking-bartender-section class="mt-6 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Mobile Bar staffing</p><h3 class="display mt-2 text-3xl">Assigned bartenders</h3><p data-booking-bartender-status class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50"></p></div>
+        <form data-booking-bartender-form class="mt-4 grid gap-3">
+          <div data-booking-bartender-options class="grid gap-2 sm:grid-cols-2"></div>
+          <button class="w-fit rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Save bartender assignments</button>
+        </form>
+      </section>
       <div data-booking-payments class="mt-6 grid gap-3"></div>
       <p data-booking-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
     </div>
@@ -750,6 +757,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const countersignButton = document.querySelector('[data-countersign]');
     const qboSyncStatusButton = document.querySelector('[data-qbo-sync-status]');
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
+    const bookingBartenderSection = document.querySelector('[data-booking-bartender-section]');
+    const bookingBartenderForm = document.querySelector('[data-booking-bartender-form]');
+    const bookingBartenderOptions = document.querySelector('[data-booking-bartender-options]');
+    const bookingBartenderStatus = document.querySelector('[data-booking-bartender-status]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, mobileBarProfitSettings: {}, conversions: {}, records: [], trash: [] };
@@ -1157,6 +1168,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(record.inquiry.service === 'mobile-bar') {
           if(record.inquiry.estimatedTotal) {
             article.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-clay)]','Website estimate · '+money(record.inquiry.estimatedTotal)));
+          }
+          if(!['booked','lost','converted'].includes(record.stage)){
+            const score=personalizedProbability(record,'expected');
+            const factorCopy=score.factors?.length?' · calibrated by '+score.factors.map((factor)=>factor.key).join(', '):' · stage baseline';
+            article.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-forest)]','Expected win probability · '+Math.round(score.probability*100)+'%'+factorCopy));
           }
           const serviceMeta=[
             record.inquiry.serviceHours ? record.inquiry.serviceHours+' service hr' : '',
@@ -1655,11 +1671,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length) bookedDashboard.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No booked events yet.'));
     }
 
+    function renderBookingBartenders(record) {
+      const isMobile=record.stage==='booked'&&isMobileBarRecord(record);
+      bookingBartenderSection?.classList.toggle('hidden',!isMobile);
+      if(!isMobile||!bookingBartenderOptions)return;
+      const settings=planningSettings();
+      const eventDate=recordEventDate(record);
+      const assigned=new Set((record.booking?.bartenderAssignments||[]).map((entry)=>entry.id));
+      bookingBartenderOptions.innerHTML='';
+      settings.staffing.bartenders.forEach((bartender)=>{
+        const label=document.createElement('label');
+        const unavailable=bartender.active===false||bartender.unavailableDates?.includes(eventDate);
+        const conflict=(payload.records||[]).some((other)=>other.id!==record.id&&other.stage==='booked'&&recordEventDate(other)===eventDate&&(other.booking?.bartenderAssignments||[]).some((entry)=>entry.id===bartender.id));
+        label.className='flex items-start gap-3 rounded-lg border border-[var(--koa-line)] bg-white p-3 text-sm '+((unavailable||conflict)?'opacity-55':'');
+        const input=document.createElement('input');
+        input.type='checkbox';
+        input.name='bartenderId';
+        input.value=bartender.id;
+        input.checked=assigned.has(bartender.id);
+        input.disabled=unavailable||conflict;
+        const copy=document.createElement('span');
+        const reason=unavailable?(bartender.active===false?'inactive':'unavailable '+eventDate):conflict?'already assigned that date':'available';
+        copy.textContent=bartender.name+' · '+reason;
+        label.append(input,copy);
+        bookingBartenderOptions.appendChild(label);
+      });
+      if(bookingBartenderStatus){
+        const names=(record.booking?.bartenderAssignments||[]).map((entry)=>entry.name);
+        bookingBartenderStatus.textContent=settings.staffing.blackoutDates.includes(eventDate)
+          ? 'Warning: this event date is currently configured as a Mobile Bar blackout date.'
+          : names.length?'Currently assigned: '+names.join(', ')+'.':'No bartenders assigned yet.';
+      }
+    }
+
     function openBooking(record) {
       bookingRecord=record;
       const summary=record.bookingSummary||{};
       if(bookingTitle) bookingTitle.textContent=record.customer?.name||record.id;
       if(bookingMeta) bookingMeta.textContent=[record.id,record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ');
+      renderBookingBartenders(record);
       textContent('[data-booking-contract]',summary.contractStatus==='signed'?(summary.signedAt?'Signed '+dateTime(summary.signedAt):'Signed'):'Awaiting signature');
       textContent('[data-booking-paid]',money(summary.paid||0));
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
@@ -2007,30 +2057,531 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return raw?raw.slice(0,7):'';
     }
 
-    const fallbackScenarioWeights={conservative:{inquiry:.05,lead:.15,draft:.25,proposal:.30,sent:.45,viewed:.55,accepted:.80},expected:{inquiry:.15,lead:.30,draft:.50,proposal:.45,sent:.65,viewed:.75,accepted:.95},aggressive:{inquiry:.30,lead:.50,draft:.65,proposal:.60,sent:.80,viewed:.90,accepted:.98}};
-    const forecastStages=['inquiry','lead','draft','proposal','sent','viewed','accepted'];let rollingForecastRecommendations=null;
-    function scenarioWeights(s='expected'){return payload.mobileBarProfitSettings?.forecastProbabilities?.[s]||fallbackScenarioWeights[s]||fallbackScenarioWeights.expected;}
-    function mobileProfitProbability(record,s='expected'){if(record.stage==='booked')return 1;const w=scenarioWeights(s);if(record.kind==='proposal'){const st=String(record.proposal?.status||record.status||'');return Number(w[st]??w.proposal??0);}return record.stage==='lead'?Number(w.lead||0):Number(w.inquiry||0);}
-    function currentGoalRanges(){const n=new Date(),y=n.getFullYear(),m=n.getMonth(),q=Math.floor(m/3)*3;return{monthly:{key:'monthly',label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(n),start:localDateKey(new Date(y,m,1)),end:localDateKey(new Date(y,m+1,0)),targetKey:'monthlyGrossProfitTarget'},quarterly:{key:'quarterly',label:'Q'+(Math.floor(m/3)+1)+' '+y,start:localDateKey(new Date(y,q,1)),end:localDateKey(new Date(y,q+3,0)),targetKey:'quarterlyGrossProfitTarget'},annual:{key:'annual',label:String(y),start:y+'-01-01',end:y+'-12-31',targetKey:'annualGrossProfitTarget'}};}
-    function recordsInRange(records,r){return records.filter(x=>{const d=recordEventDate(x);return d&&d>=r.start&&d<=r.end;});}
-    function mobileProfitProjection(records,s='expected'){const booked=records.filter(r=>r.stage==='booked'),open=records.filter(r=>r.stage!=='booked');const bp=booked.reduce((a,r)=>a+Number(profitValues(r).profit||0),0),wp=open.reduce((a,r)=>a+Number(profitValues(r).profit||0)*mobileProfitProbability(r,s),0);return{bookedProfit:bp,projectedProfit:bp+wp};}
-    function renderGoalCard(card,r,p,target,avg){if(!card)return;const delta=p.projectedProfit-target,pct=target>0?Math.max(0,Math.min(100,p.projectedProfit/target*100)):0,need=target>0&&delta<0&&avg>0?Math.ceil(-delta/avg):target>0&&delta>=0?0:null;card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">'+r.key+' goal</p><div class="mt-1 flex items-end justify-between gap-3"><strong class="text-base text-white">'+r.label+'</strong><strong class="display text-2xl text-white">'+(target?money(target):'Not set')+'</strong></div><div class="mt-4 grid grid-cols-2 gap-2"><div class="rounded-lg bg-black/10 p-2"><p class="text-[.5rem] uppercase text-white/40">Booked</p><strong class="text-sm text-white">'+money(p.bookedProfit)+'</strong></div><div class="rounded-lg bg-black/10 p-2"><p class="text-[.5rem] uppercase text-white/40">Projected</p><strong class="text-sm text-white">'+money(p.projectedProfit)+'</strong></div><div class="rounded-lg bg-black/10 p-2"><p class="text-[.5rem] uppercase text-white/40">Ahead / behind</p><strong class="text-sm text-white">'+(target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—')+'</strong></div><div class="rounded-lg bg-black/10 p-2"><p class="text-[.5rem] uppercase text-white/40">Bookings needed</p><strong class="text-sm text-white">'+(need==null?'—':need)+'</strong></div></div><div class="mt-3 h-2 overflow-hidden rounded-full bg-black/20"><div class="h-full rounded-full '+(target&&p.projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]')+'" style="width:'+pct+'%"></div></div>';}
-    function packagePlanningStats(all){const booked=all.filter(r=>r.stage==='booked'),overallP=booked.map(r=>Number(profitValues(r).profit||0)).filter(v=>v>0),avgP=overallP.length?overallP.reduce((a,b)=>a+b,0)/overallP.length:0,avgB=booked.length?booked.reduce((a,r)=>a+Math.max(1,Number(r.inquiry?.bartenderCount||1)),0)/booked.length:1,result={};['mobile-oahu','mobile-maui','mobile-big-island'].forEach(id=>{const rows=booked.filter(r=>recordPackage(r)===id),ps=rows.map(r=>Number(profitValues(r).profit||0)).filter(v=>v>0),bs=rows.map(r=>Math.max(1,Number(r.inquiry?.bartenderCount||1)));result[id]={averageProfit:ps.length?ps.reduce((a,b)=>a+b,0)/ps.length:avgP,averageBartenders:bs.length?bs.reduce((a,b)=>a+b,0)/bs.length:avgB,count:rows.length};});return result;}
-    function planningSettings(){const s=payload.mobileBarProfitSettings||{};return{simulator:{bartenderCapacityPerDay:Number(s.simulator?.bartenderCapacityPerDay||0),maxBookingsPerMonth:Number(s.simulator?.maxBookingsPerMonth||0),planningHorizonMonths:Math.max(1,Number(s.simulator?.planningHorizonMonths||6))},staffing:{blackoutDates:Array.isArray(s.staffing?.blackoutDates)?s.staffing.blackoutDates:[],bartenders:Array.isArray(s.staffing?.bartenders)?s.staffing.bartenders:[]}};}
-    function availableBartenders(date,staffing){return staffing.bartenders.filter(b=>b.active!==false&&!b.unavailableDates?.includes(date));}
-    function scheduleMix(counts,stats,all){const ps=planningSettings(),today=new Date();today.setHours(0,0,0,0);const end=new Date(today.getFullYear(),today.getMonth()+ps.simulator.planningHorizonMonths+1,0),booked=all.filter(r=>r.stage==='booked'),used=new Map(),months=new Map();booked.forEach(r=>{const d=recordEventDate(r);if(!d)return;used.set(d,(used.get(d)||0)+Math.max(1,Number(r.inquiry?.bartenderCount||1)));months.set(d.slice(0,7),(months.get(d.slice(0,7))||0)+1);});const ids=['mobile-oahu','mobile-maui','mobile-big-island'],events=[];ids.forEach((id,i)=>{for(let n=0;n<counts[i];n++)events.push({id,bartenders:Math.max(1,Math.ceil(stats[id].averageBartenders||1))});});const assigned=[];for(const ev of events){let placed=false;for(let cur=new Date(today.getTime()+86400000);cur<=end;cur.setDate(cur.getDate()+1)){const d=localDateKey(cur),m=d.slice(0,7);if(ps.staffing.blackoutDates.includes(d))continue;const named=availableBartenders(d,ps.staffing).length,hard=ps.simulator.bartenderCapacityPerDay||Infinity,cap=ps.staffing.bartenders.length?Math.min(hard,named):hard;if((used.get(d)||0)+ev.bartenders>cap)continue;if(ps.simulator.maxBookingsPerMonth&&(months.get(m)||0)+1>ps.simulator.maxBookingsPerMonth)continue;used.set(d,(used.get(d)||0)+ev.bartenders);months.set(m,(months.get(m)||0)+1);assigned.push({...ev,date:d});placed=true;break;}if(!placed)return null;}return assigned;}
-    function feasibleMixes(target,stats,all){if(!(target>0))return[];const ids=['mobile-oahu','mobile-maui','mobile-big-island'],p=ids.map(id=>Math.max(0,stats[id].averageProfit||0));if(!p.some(Boolean))return[];const min=Math.min(...p.filter(Boolean)),max=Math.min(36,Math.ceil(target/min)+4),out=[];for(let a=0;a<=max;a++)for(let b=0;b<=max-a;b++)for(let d=0;d<=max-a-b;d++){const counts=[a,b,d],count=a+b+d;if(!count)continue;const profit=a*p[0]+b*p[1]+d*p[2];if(profit<target)continue;const schedule=scheduleMix(counts,stats,all);if(schedule)out.push({counts,count,profit,schedule});}return out.sort((x,y)=>x.count-y.count||x.profit-y.profit).slice(0,5);}
-    function renderBartenderRows(){if(!bartenderAvailabilityRows)return;const list=planningSettings().staffing.bartenders;bartenderAvailabilityRows.innerHTML='';list.forEach((b,i)=>addBartenderRow(b,i));}
-    function addBartenderRow(b={name:'',active:true,unavailableDates:[]},index=Date.now()){if(!bartenderAvailabilityRows)return;const row=document.createElement('div');row.className='grid gap-2 sm:grid-cols-[1fr_2fr_auto]';row.dataset.bartenderRow='1';row.innerHTML='<input data-bartender-name class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white" placeholder="Bartender name" value="'+escapeHtml(b.name||'')+'"><input data-bartender-dates class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white" placeholder="Unavailable: 2026-10-03, 2026-10-04" value="'+escapeHtml((b.unavailableDates||[]).join(', '))+'"><label class="flex items-center gap-2 text-xs text-white/60"><input data-bartender-active type="checkbox" '+(b.active!==false?'checked':'')+'> Active</label>';bartenderAvailabilityRows.appendChild(row);}
-    function renderBookingSimulator(all){if(!bookingSimResults)return;const stats=packagePlanningStats(all),target=Math.max(0,Number(bookingSimTarget?.value||0)),ps=planningSettings();if(capacitySettingsForm){capacitySettingsForm.elements.bartenderCapacityPerDay.value=String(ps.simulator.bartenderCapacityPerDay);capacitySettingsForm.elements.maxBookingsPerMonth.value=String(ps.simulator.maxBookingsPerMonth);capacitySettingsForm.elements.planningHorizonMonths.value=String(ps.simulator.planningHorizonMonths);}if(staffingSettingsForm&&document.activeElement!==staffingSettingsForm.elements.blackoutDates)staffingSettingsForm.elements.blackoutDates.value=ps.staffing.blackoutDates.join(', ');bookingSimAverages.innerHTML='';['mobile-oahu','mobile-maui','mobile-big-island'].forEach(id=>bookingSimAverages.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',packageLabel(id)+' · '+(stats[id].averageProfit?money(stats[id].averageProfit):'—')+' avg profit')));bookingSimResults.innerHTML='';if(!target){bookingSimResults.appendChild(text('p','text-sm text-white/45','Enter a gross-profit goal to model feasible bookings.'));return;}const mixes=feasibleMixes(target,stats,all);if(!mixes.length){bookingSimResults.appendChild(text('p','text-sm text-red-200','No feasible mix fits the current blackout, bartender, monthly-capacity, and planning-horizon rules.'));return;}mixes.forEach((m,i)=>{const names=m.counts.map((n,j)=>n?n+' '+['Oahu','Maui','Big Island'][j]:'').filter(Boolean).join(' + '),dates=m.schedule.map(x=>formatDateKey(x.date)).slice(0,6).join(', ');bookingSimResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',(i?'Alternative: ':'Best feasible: ')+names+' · '+money(m.profit)+' · earliest dates '+dates));});}
-    function opportunityGroups(all){const byId=new Map(all.map(r=>[r.id,r])),groups=new Map();all.forEach(r=>{let root=r,seen=new Set();while(root.source&&byId.has(root.source)&&!seen.has(root.id)){seen.add(root.id);root=byId.get(root.source);}const key=r.quoteId?'q:'+r.quoteId:'r:'+root.id;(groups.get(key)||groups.set(key,[]).get(key)).push(r);});return[...groups.values()];}
-    function reachedStage(g,stage){if(stage==='inquiry')return true;if(stage==='lead')return g.some(r=>['lead','proposal','booked'].includes(r.stage));if(stage==='draft'||stage==='proposal')return g.some(r=>r.kind==='proposal');return g.some(r=>r.kind==='proposal'&&[stage,'booked',...(stage==='sent'?['viewed','accepted']:stage==='viewed'?['accepted']:[])].includes(String(r.proposal?.status||r.status||'')));}
-    function rollingModel(all){const cutoff=Date.now()-365*86400000,groups=opportunityGroups(all).filter(g=>{const dates=g.map(r=>Date.parse(r.createdAt)).filter(Number.isFinite),created=dates.length?Math.min(...dates):NaN;return Number.isFinite(created)&&created>=cutoff&&created<=Date.now()-30*86400000;}),current=scenarioWeights('expected'),suggested={...current},rows=[];forecastStages.forEach(stage=>{const eligible=groups.filter(g=>reachedStage(g,stage)),booked=eligible.filter(g=>g.some(r=>r.stage==='booked'||r.proposal?.status==='booked')).length,actual=eligible.length?booked/eligible.length:null,enough=eligible.length>=10;if(enough&&actual!=null)suggested[stage]=Math.max(0,Math.min(.99,Math.round(actual*20)/20));rows.push({stage,samples:eligible.length,booked,actual,current:Number(current[stage]||0),suggested:Number(suggested[stage]||0),enough});});return{groups,rows,suggested,hasRecommendations:rows.some(r=>r.enough&&Math.abs(r.suggested-r.current)>=.049)};}
-    function segmentValue(group,key){const r=group.find(x=>x.inquiry)||group[0],inq=r?.inquiry||{};if(key==='source')return String(r?.source||inq.leadSource||inq.source||'Unknown');if(key==='package')return packageLabel(recordPackage(r));if(key==='guests'){const n=Number(inq.guestCount||0);return n<=50?'1–50':n<=100?'51–100':n<=150?'101–150':'151+';}return String(inq.eventType||'Unknown');}
-    function segmentedConversions(all){const groups=rollingModel(all).groups;return['source','package','guests','eventType'].map(key=>{const map=new Map();groups.forEach(g=>{const v=segmentValue(g,key),row=map.get(v)||{label:v,total:0,booked:0};row.total++;if(g.some(r=>r.stage==='booked'||r.proposal?.status==='booked'))row.booked++;map.set(v,row);});return{key,rows:[...map.values()].filter(r=>r.total>=3).sort((a,b)=>b.total-a.total).slice(0,8)};});}
-    function renderForecast(all,ranges){if(mobileScenarioCards){mobileScenarioCards.innerHTML='';['conservative','expected','aggressive'].forEach(s=>{const p=mobileProfitProjection(recordsInRange(all,ranges.annual),s),b=text('button','text-left rounded-xl border border-white/10 bg-black/10 p-3 text-white',s+' · '+money(p.projectedProfit));b.type='button';b.onclick=()=>{mobileForecastScenario.value=s;renderMobileProfitGoalProjection();};mobileScenarioCards.appendChild(b);});}if(forecastSettingsGrid){forecastSettingsGrid.innerHTML='';['conservative','expected','aggressive'].forEach(s=>{const box=document.createElement('div');box.className='rounded-xl border border-white/10 p-3';box.appendChild(text('strong','capitalize text-white',s));const grid=document.createElement('div');grid.className='mt-2 grid gap-2 sm:grid-cols-4';forecastStages.forEach(stage=>{const lab=document.createElement('label');lab.className='text-[.5rem] uppercase text-white/45';lab.textContent=stage;const inp=document.createElement('input');inp.name=s+'_'+stage;inp.type='number';inp.min='0';inp.max='100';inp.value=String(Math.round(Number(scenarioWeights(s)[stage]||0)*100));inp.className='mt-1 w-full rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white';lab.appendChild(inp);grid.appendChild(lab);});box.appendChild(grid);forecastSettingsGrid.appendChild(box);});}const model=rollingModel(all);rollingForecastRecommendations=model;if(rollingForecastResults){rollingForecastResults.innerHTML='';model.rows.forEach((r)=>{ rollingForecastResults.appendChild(text('div','rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60',r.stage+': '+r.samples+' mature · '+(r.actual==null?'—':Math.round(r.actual*100)+'% actual')+' · '+Math.round(r.current*100)+'% expected'+(r.enough?' · '+Math.round(r.suggested*100)+'% recommended':' · need 10 samples'))); });}applyForecastRecommendations?.classList.toggle('hidden',!model.hasRecommendations||!profitSettingsAccess);if(segmentedConversionResults){segmentedConversionResults.innerHTML='';segmentedConversions(all).forEach(seg=>{const box=document.createElement('div');box.className='rounded-lg border border-white/10 p-3';box.appendChild(text('strong','capitalize text-white',seg.key==='guests'?'Guest count':seg.key));seg.rows.forEach(r=>box.appendChild(text('p','mt-1 text-[.58rem] text-white/50',r.label+' · '+r.booked+'/'+r.total+' booked · '+Math.round(r.booked/r.total*100)+'%')));segmentedConversionResults.appendChild(box);});}}
-    function renderMonthlySalesPlan(all){if(!monthlySalesPlanResults)return;const settings=payload.mobileBarProfitSettings||{},target=Number(settings.annualGrossProfitTarget||0),ranges=currentGoalRanges(),bookedYtd=recordsInRange(all,ranges.annual).filter(r=>r.stage==='booked').reduce((a,r)=>a+Number(profitValues(r).profit||0),0),remaining=Math.max(0,target-bookedYtd),now=new Date(),monthsLeft=Math.max(1,12-now.getMonth()),stats=packagePlanningStats(all),ids=['mobile-oahu','mobile-maui','mobile-big-island'];const counts=ids.map(id=>all.filter(r=>r.stage==='booked'&&recordPackage(r)===id).length),sum=counts.reduce((a,b)=>a+b,0),weights=counts.map(c=>sum?c/sum:1/3),monthly=remaining/monthsLeft;monthlySalesPlanResults.innerHTML='';if(!target){monthlySalesPlanResults.appendChild(text('p','text-sm text-white/45','Set an annual gross-profit target to generate a monthly package plan.'));return;}const plan=ids.map((id,i)=>({id,count:stats[id].averageProfit>0?Math.ceil(monthly*weights[i]/stats[id].averageProfit):0}));for(let m=now.getMonth();m<12;m++){const label=new Intl.DateTimeFormat('en-US',{month:'long'}).format(new Date(now.getFullYear(),m,1));monthlySalesPlanResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',label+' · '+plan.map((p,i)=>p.count+' '+['Oahu','Maui','Big Island'][i]).join(' · ')+' · target '+money(monthly)+' profit'));}}
-    function renderMobileProfitGoalProjection(){const all=(payload.records||[]).filter(isMobileBarRecord).filter(r=>!['converted','lost'].includes(r.stage)&&mobileRevenue(r)>0),active=String(mobileForecastScenario?.value||'expected'),ranges=currentGoalRanges(),hist=all.filter(r=>r.stage==='booked').map(r=>Number(profitValues(r).profit||0)).filter(v=>v>0),avg=hist.length?hist.reduce((a,b)=>a+b,0)/hist.length:0,s=payload.mobileBarProfitSettings||{};mobileProfitGoalInputs.forEach(input=>{const key=input.dataset.goalInput,prop=key==='monthly'?'monthlyGrossProfitTarget':key==='quarterly'?'quarterlyGrossProfitTarget':'annualGrossProfitTarget';if(document.activeElement!==input)input.value=String(Number(s[prop]||0)||'');});mobileGoalCards.forEach(card=>{const r=ranges[card.dataset.goalCard];if(r)renderGoalCard(card,r,mobileProfitProjection(recordsInRange(all,r),active),Number(s[r.targetKey]||0),avg);});renderBartenderRows();renderBookingSimulator(all);renderForecast((payload.records||[]).filter(isMobileBarRecord),ranges);renderMonthlySalesPlan(all);}
+    const fallbackScenarioWeights = {
+      conservative:{ inquiry:.05, lead:.15, draft:.25, proposal:.30, sent:.45, viewed:.55, accepted:.80 },
+      expected:{ inquiry:.15, lead:.30, draft:.50, proposal:.45, sent:.65, viewed:.75, accepted:.95 },
+      aggressive:{ inquiry:.30, lead:.50, draft:.65, proposal:.60, sent:.80, viewed:.90, accepted:.98 },
+    };
+    const forecastStages=['inquiry','lead','draft','proposal','sent','viewed','accepted'];
+    let rollingForecastRecommendations=null;
+
+    function scenarioWeights(scenario='expected') {
+      return payload.mobileBarProfitSettings?.forecastProbabilities?.[scenario] || fallbackScenarioWeights[scenario] || fallbackScenarioWeights.expected;
+    }
+
+    function baseStageProbability(record,scenario='expected') {
+      if(record.stage==='booked')return 1;
+      const weights=scenarioWeights(scenario);
+      if(record.kind==='proposal'){
+        const status=String(record.proposal?.status||record.status||'');
+        return Number(weights[status] ?? weights.proposal ?? 0);
+      }
+      return record.stage==='lead'?Number(weights.lead||0):Number(weights.inquiry||0);
+    }
+
+    function currentGoalRanges() {
+      const now=new Date();
+      const year=now.getFullYear();
+      const month=now.getMonth();
+      const quarterStart=Math.floor(month/3)*3;
+      return {
+        monthly:{key:'monthly',label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(now),start:localDateKey(new Date(year,month,1)),end:localDateKey(new Date(year,month+1,0)),targetKey:'monthlyGrossProfitTarget'},
+        quarterly:{key:'quarterly',label:'Q'+(Math.floor(month/3)+1)+' '+year,start:localDateKey(new Date(year,quarterStart,1)),end:localDateKey(new Date(year,quarterStart+3,0)),targetKey:'quarterlyGrossProfitTarget'},
+        annual:{key:'annual',label:String(year),start:year+'-01-01',end:year+'-12-31',targetKey:'annualGrossProfitTarget'},
+      };
+    }
+
+    function recordsInRange(records,range) {
+      return records.filter((record)=>{
+        const date=recordEventDate(record);
+        return date&&date>=range.start&&date<=range.end;
+      });
+    }
+
+    function opportunityGroups(all) {
+      const byId=new Map(all.map((record)=>[record.id,record]));
+      const groups=new Map();
+      all.forEach((record)=>{
+        let root=record;
+        const seen=new Set();
+        while(root.source&&byId.has(root.source)&&!seen.has(root.id)){
+          seen.add(root.id);
+          root=byId.get(root.source);
+        }
+        const key=record.quoteId?'q:'+record.quoteId:'r:'+root.id;
+        if(!groups.has(key))groups.set(key,[]);
+        groups.get(key).push(record);
+      });
+      return [...groups.values()];
+    }
+
+    function groupBooked(group) {
+      return group.some((record)=>record.stage==='booked'||record.proposal?.status==='booked'||record.booking?.status==='booked');
+    }
+
+    function groupRepresentative(group) {
+      return [...group].sort((a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))[0]||group[0];
+    }
+
+    function recordSegmentValue(record,key) {
+      const inquiry=record?.inquiry||{};
+      if(key==='source') return String(inquiry.leadSource||inquiry.source||inquiry.referrer||'Unknown');
+      if(key==='package') return packageLabel(recordPackage(record));
+      if(key==='guests'){
+        const count=Number(inquiry.guestCount||0);
+        return count<=50?'1–50':count<=100?'51–100':count<=150?'101–150':'151+';
+      }
+      return String(inquiry.eventType||'Unknown');
+    }
+
+    function matureOpportunityGroups(all) {
+      const cutoff=Date.now()-365*86400000;
+      const matureBefore=Date.now()-30*86400000;
+      return opportunityGroups(all).filter((group)=>{
+        const dates=group.map((record)=>Date.parse(record.createdAt)).filter(Number.isFinite);
+        const created=dates.length?Math.min(...dates):NaN;
+        return Number.isFinite(created)&&created>=cutoff&&created<=matureBefore;
+      });
+    }
+
+    function segmentCalibration(all) {
+      const groups=matureOpportunityGroups(all);
+      const globalBooked=groups.filter(groupBooked).length;
+      const globalRate=groups.length?globalBooked/groups.length:.35;
+      const dimensions={source:new Map(),package:new Map(),guests:new Map(),eventType:new Map()};
+      groups.forEach((group)=>{
+        const representative=groupRepresentative(group);
+        const booked=groupBooked(group)?1:0;
+        Object.keys(dimensions).forEach((key)=>{
+          const label=recordSegmentValue(representative,key);
+          const row=dimensions[key].get(label)||{label,total:0,booked:0};
+          row.total+=1;
+          row.booked+=booked;
+          dimensions[key].set(label,row);
+        });
+      });
+      return {groups,globalRate,dimensions};
+    }
+
+    function personalizedProbability(record,scenario='expected') {
+      if(record.stage==='booked')return 1;
+      const base=baseStageProbability(record,scenario);
+      const all=(payload.records||[]).filter(isMobileBarRecord);
+      const calibration=segmentCalibration(all);
+      const ratios=[];
+      const factors=[];
+      ['source','package','guests','eventType'].forEach((key)=>{
+        const label=recordSegmentValue(record,key);
+        const row=calibration.dimensions[key].get(label);
+        if(!row||row.total<5)return;
+        const smoothed=(row.booked+(calibration.globalRate*5))/(row.total+5);
+        const rawRatio=calibration.globalRate>0?smoothed/calibration.globalRate:1;
+        const ratio=Math.max(.75,Math.min(1.25,rawRatio));
+        ratios.push(ratio);
+        factors.push({key,label,samples:row.total,rate:smoothed,ratio});
+      });
+      const factor=ratios.length?Math.exp(ratios.reduce((sum,ratio)=>sum+Math.log(ratio),0)/ratios.length):1;
+      return {probability:Math.max(.02,Math.min(.99,base*factor)),base,factor,factors};
+    }
+
+    function mobileProfitProbability(record,scenario='expected') {
+      const scored=personalizedProbability(record,scenario);
+      return typeof scored==='number'?scored:scored.probability;
+    }
+
+    function mobileProfitProjection(records,scenario='expected') {
+      const booked=records.filter((record)=>record.stage==='booked');
+      const open=records.filter((record)=>record.stage!=='booked');
+      const bookedProfit=booked.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const weighted=open.reduce((sum,record)=>sum+Number(profitValues(record).profit||0)*mobileProfitProbability(record,scenario),0);
+      return {bookedProfit,projectedProfit:bookedProfit+weighted};
+    }
+
+    function renderGoalCard(card,range,projection,target,averageBookedProfit) {
+      if(!card)return;
+      const delta=projection.projectedProfit-target;
+      const percentComplete=target>0?Math.max(0,Math.min(100,projection.projectedProfit/target*100)):0;
+      const bookingsNeeded=target>0&&delta<0&&averageBookedProfit>0?Math.ceil(-delta/averageBookedProfit):target>0&&delta>=0?0:null;
+      card.innerHTML='';
+      const heading=document.createElement('div');
+      heading.className='flex items-end justify-between gap-3';
+      heading.append(text('div','',range.label),text('strong','display text-2xl text-white',target?money(target):'Not set'));
+      card.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',range.key+' goal'),heading);
+      const metrics=document.createElement('div');
+      metrics.className='mt-4 grid grid-cols-2 gap-2';
+      [['Booked',money(projection.bookedProfit)],['Projected',money(projection.projectedProfit)],['Ahead / behind',target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—'],['Bookings needed',bookingsNeeded==null?'—':String(bookingsNeeded)]].forEach(([label,value])=>{
+        const item=document.createElement('div');
+        item.className='rounded-lg bg-black/10 p-2';
+        item.append(text('p','text-[.5rem] uppercase text-white/40',label),text('strong','text-sm text-white',value));
+        metrics.appendChild(item);
+      });
+      card.appendChild(metrics);
+      const track=document.createElement('div');
+      track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+      const bar=document.createElement('div');
+      bar.className='h-full rounded-full '+(target&&projection.projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
+      bar.style.width=percentComplete+'%';
+      track.appendChild(bar);
+      card.appendChild(track);
+    }
+
+    function packagePlanningStats(all) {
+      const booked=all.filter((record)=>record.stage==='booked');
+      const overallProfits=booked.map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+      const overallProfit=overallProfits.length?overallProfits.reduce((a,b)=>a+b,0)/overallProfits.length:0;
+      const overallBartenders=booked.length?booked.reduce((sum,record)=>sum+Math.max(1,Number(record.inquiry?.bartenderCount||1)),0)/booked.length:1;
+      const result={};
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        const rows=booked.filter((record)=>recordPackage(record)===packageId);
+        const profits=rows.map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+        const bartenderCounts=rows.map((record)=>Math.max(1,Number(record.inquiry?.bartenderCount||1)));
+        result[packageId]={
+          averageProfit:profits.length?profits.reduce((a,b)=>a+b,0)/profits.length:overallProfit,
+          averageBartenders:bartenderCounts.length?bartenderCounts.reduce((a,b)=>a+b,0)/bartenderCounts.length:overallBartenders,
+          count:rows.length,
+        };
+      });
+      return result;
+    }
+
+    function planningSettings() {
+      const settings=payload.mobileBarProfitSettings||{};
+      return {
+        simulator:{
+          bartenderCapacityPerDay:Number(settings.simulator?.bartenderCapacityPerDay||0),
+          maxBookingsPerMonth:Number(settings.simulator?.maxBookingsPerMonth||0),
+          planningHorizonMonths:Math.max(1,Number(settings.simulator?.planningHorizonMonths||6)),
+        },
+        staffing:{
+          blackoutDates:Array.isArray(settings.staffing?.blackoutDates)?settings.staffing.blackoutDates:[],
+          bartenders:Array.isArray(settings.staffing?.bartenders)?settings.staffing.bartenders:[],
+        },
+      };
+    }
+
+    function availableBartenders(date,staffing,assignedIds=new Set()) {
+      return staffing.bartenders.filter((bartender)=>bartender.active!==false&&!bartender.unavailableDates?.includes(date)&&!assignedIds.has(bartender.id));
+    }
+
+    function scheduleMix(counts,stats,all) {
+      const planning=planningSettings();
+      const today=new Date();
+      today.setHours(0,0,0,0);
+      const end=new Date(today.getFullYear(),today.getMonth()+planning.simulator.planningHorizonMonths+1,0);
+      const booked=all.filter((record)=>record.stage==='booked');
+      const genericUsed=new Map();
+      const assignedIdsByDate=new Map();
+      const monthCounts=new Map();
+
+      booked.forEach((record)=>{
+        const date=recordEventDate(record);
+        if(!date)return;
+        const month=date.slice(0,7);
+        monthCounts.set(month,(monthCounts.get(month)||0)+1);
+        const assigned=Array.isArray(record.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[];
+        if(assigned.length){
+          const set=assignedIdsByDate.get(date)||new Set();
+          assigned.forEach((bartender)=>set.add(bartender.id));
+          assignedIdsByDate.set(date,set);
+        }else{
+          genericUsed.set(date,(genericUsed.get(date)||0)+Math.max(1,Number(record.inquiry?.bartenderCount||1)));
+        }
+      });
+
+      const packageIds=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const events=[];
+      packageIds.forEach((packageId,index)=>{
+        for(let n=0;n<counts[index];n++)events.push({packageId,bartenders:Math.max(1,Math.ceil(stats[packageId].averageBartenders||1))});
+      });
+      events.sort((a,b)=>b.bartenders-a.bartenders);
+
+      const assignments=[];
+      const simulatedUsed=new Map();
+      for(const event of events){
+        let placed=false;
+        for(let cursor=new Date(today.getTime()+86400000);cursor<=end;cursor.setDate(cursor.getDate()+1)){
+          const date=localDateKey(cursor);
+          const month=date.slice(0,7);
+          if(planning.staffing.blackoutDates.includes(date))continue;
+          if(planning.simulator.maxBookingsPerMonth&&(monthCounts.get(month)||0)+1>planning.simulator.maxBookingsPerMonth)continue;
+
+          const hardCap=planning.simulator.bartenderCapacityPerDay||Infinity;
+          const assignedIds=assignedIdsByDate.get(date)||new Set();
+          const namedAvailable=planning.staffing.bartenders.length?availableBartenders(date,planning.staffing,assignedIds).length:Infinity;
+          const generic=(genericUsed.get(date)||0)+(simulatedUsed.get(date)||0);
+          const available=Math.max(0,Math.min(hardCap,namedAvailable)-generic);
+          if(event.bartenders>available)continue;
+
+          simulatedUsed.set(date,(simulatedUsed.get(date)||0)+event.bartenders);
+          monthCounts.set(month,(monthCounts.get(month)||0)+1);
+          assignments.push({...event,date});
+          placed=true;
+          break;
+        }
+        if(!placed)return null;
+      }
+      return assignments;
+    }
+
+    function feasibleMixes(target,stats,all) {
+      if(!(target>0))return[];
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const profits=ids.map((id)=>Math.max(0,stats[id].averageProfit||0));
+      if(!profits.some(Boolean))return[];
+      const minProfit=Math.min(...profits.filter(Boolean));
+      const maxCount=Math.min(36,Math.ceil(target/minProfit)+4);
+      const output=[];
+      for(let oahu=0;oahu<=maxCount;oahu++){
+        for(let maui=0;maui<=maxCount-oahu;maui++){
+          for(let big=0;big<=maxCount-oahu-maui;big++){
+            const counts=[oahu,maui,big];
+            const count=oahu+maui+big;
+            if(!count)continue;
+            const profit=oahu*profits[0]+maui*profits[1]+big*profits[2];
+            if(profit<target)continue;
+            const schedule=scheduleMix(counts,stats,all);
+            if(schedule)output.push({counts,count,profit,schedule});
+          }
+        }
+      }
+      return output.sort((a,b)=>a.count-b.count||a.profit-b.profit).slice(0,5);
+    }
+
+    function renderBartenderRows() {
+      if(!bartenderAvailabilityRows)return;
+      bartenderAvailabilityRows.innerHTML='';
+      planningSettings().staffing.bartenders.forEach((bartender)=>addBartenderRow(bartender));
+    }
+
+    function addBartenderRow(bartender={name:'',active:true,unavailableDates:[]}) {
+      if(!bartenderAvailabilityRows)return;
+      const row=document.createElement('div');
+      row.className='grid gap-2 sm:grid-cols-[1fr_2fr_auto]';
+      row.dataset.bartenderRow='1';
+      const name=document.createElement('input');
+      name.dataset.bartenderName='1';
+      name.value=bartender.name||'';
+      name.placeholder='Bartender name';
+      name.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const dates=document.createElement('input');
+      dates.dataset.bartenderDates='1';
+      dates.value=(bartender.unavailableDates||[]).join(', ');
+      dates.placeholder='Unavailable: 2026-10-03, 2026-10-04';
+      dates.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const label=document.createElement('label');
+      label.className='flex items-center gap-2 text-xs text-white/60';
+      const active=document.createElement('input');
+      active.type='checkbox';
+      active.dataset.bartenderActive='1';
+      active.checked=bartender.active!==false;
+      label.append(active,document.createTextNode(' Active'));
+      row.append(name,dates,label);
+      bartenderAvailabilityRows.appendChild(row);
+    }
+
+    function renderBookingSimulator(all) {
+      if(!bookingSimResults||!bookingSimAverages)return;
+      const stats=packagePlanningStats(all);
+      const target=Math.max(0,Number(bookingSimTarget?.value||0));
+      const settings=planningSettings();
+      if(capacitySettingsForm){
+        capacitySettingsForm.elements.bartenderCapacityPerDay.value=String(settings.simulator.bartenderCapacityPerDay);
+        capacitySettingsForm.elements.maxBookingsPerMonth.value=String(settings.simulator.maxBookingsPerMonth);
+        capacitySettingsForm.elements.planningHorizonMonths.value=String(settings.simulator.planningHorizonMonths);
+      }
+      if(staffingSettingsForm&&document.activeElement!==staffingSettingsForm.elements.blackoutDates)staffingSettingsForm.elements.blackoutDates.value=settings.staffing.blackoutDates.join(', ');
+      bookingSimAverages.innerHTML='';
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        bookingSimAverages.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',packageLabel(packageId)+' · '+(stats[packageId].averageProfit?money(stats[packageId].averageProfit):'—')+' avg profit'));
+      });
+      bookingSimResults.innerHTML='';
+      if(!target){
+        bookingSimResults.appendChild(text('p','text-sm text-white/45','Enter a gross-profit goal to model feasible bookings.'));
+        return;
+      }
+      const mixes=feasibleMixes(target,stats,all);
+      if(!mixes.length){
+        bookingSimResults.appendChild(text('p','text-sm text-red-200','No feasible mix fits the current blackout, bartender, monthly-capacity, and planning-horizon rules.'));
+        return;
+      }
+      mixes.forEach((mix,index)=>{
+        const names=mix.counts.map((count,i)=>count?count+' '+['Oahu','Maui','Big Island'][i]:'').filter(Boolean).join(' + ');
+        const dates=mix.schedule.map((entry)=>formatDateKey(entry.date)).slice(0,6).join(', ');
+        bookingSimResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',(index?'Alternative: ':'Best feasible: ')+names+' · '+money(mix.profit)+' · earliest dates '+dates));
+      });
+    }
+
+    function reachedStage(group,stage) {
+      if(stage==='inquiry')return true;
+      if(stage==='lead')return group.some((record)=>['lead','proposal','booked'].includes(record.stage));
+      if(stage==='draft'||stage==='proposal')return group.some((record)=>record.kind==='proposal');
+      const acceptable=stage==='sent'?['sent','viewed','accepted','booked']:stage==='viewed'?['viewed','accepted','booked']:[stage,'booked'];
+      return group.some((record)=>record.kind==='proposal'&&acceptable.includes(String(record.proposal?.status||record.status||'')));
+    }
+
+    function rollingModel(all) {
+      const groups=matureOpportunityGroups(all);
+      const current=scenarioWeights('expected');
+      const suggested={...current};
+      const rows=[];
+      forecastStages.forEach((stage)=>{
+        const eligible=groups.filter((group)=>reachedStage(group,stage));
+        const booked=eligible.filter(groupBooked).length;
+        const actual=eligible.length?booked/eligible.length:null;
+        const enough=eligible.length>=10;
+        if(enough&&actual!=null)suggested[stage]=Math.max(0,Math.min(.99,Math.round(actual*20)/20));
+        rows.push({stage,samples:eligible.length,booked,actual,current:Number(current[stage]||0),suggested:Number(suggested[stage]||0),enough});
+      });
+      return {groups,rows,suggested,hasRecommendations:rows.some((row)=>row.enough&&Math.abs(row.suggested-row.current)>=.049)};
+    }
+
+    function segmentedConversions(all) {
+      const calibration=segmentCalibration(all);
+      return Object.entries(calibration.dimensions).map(([key,map])=>({
+        key,
+        rows:[...map.values()].filter((row)=>row.total>=3).sort((a,b)=>b.total-a.total).slice(0,8),
+      }));
+    }
+
+    function renderForecast(all,ranges) {
+      if(mobileScenarioCards){
+        mobileScenarioCards.innerHTML='';
+        ['conservative','expected','aggressive'].forEach((scenario)=>{
+          const projection=mobileProfitProjection(recordsInRange(all,ranges.annual),scenario);
+          const button=text('button','text-left rounded-xl border border-white/10 bg-black/10 p-3 text-white',scenario+' · '+money(projection.projectedProfit));
+          button.type='button';
+          button.addEventListener('click',()=>{mobileForecastScenario.value=scenario;renderMobileProfitGoalProjection();});
+          mobileScenarioCards.appendChild(button);
+        });
+      }
+      if(forecastSettingsGrid){
+        forecastSettingsGrid.innerHTML='';
+        ['conservative','expected','aggressive'].forEach((scenario)=>{
+          const box=document.createElement('div');
+          box.className='rounded-xl border border-white/10 p-3';
+          box.appendChild(text('strong','capitalize text-white',scenario));
+          const grid=document.createElement('div');
+          grid.className='mt-2 grid gap-2 sm:grid-cols-4';
+          forecastStages.forEach((stage)=>{
+            const label=document.createElement('label');
+            label.className='text-[.5rem] uppercase text-white/45';
+            label.textContent=stage;
+            const input=document.createElement('input');
+            input.name=scenario+'_'+stage;
+            input.type='number';
+            input.min='0';
+            input.max='100';
+            input.value=String(Math.round(Number(scenarioWeights(scenario)[stage]||0)*100));
+            input.className='mt-1 w-full rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white';
+            label.appendChild(input);
+            grid.appendChild(label);
+          });
+          box.appendChild(grid);
+          forecastSettingsGrid.appendChild(box);
+        });
+      }
+
+      const model=rollingModel(all);
+      rollingForecastRecommendations=model;
+      if(rollingForecastResults){
+        rollingForecastResults.innerHTML='';
+        model.rows.forEach((row)=>{
+          rollingForecastResults.appendChild(text('div','rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60',row.stage+': '+row.samples+' mature · '+(row.actual==null?'—':Math.round(row.actual*100)+'% actual')+' · '+Math.round(row.current*100)+'% expected'+(row.enough?' · '+Math.round(row.suggested*100)+'% recommended':' · need 10 samples')));
+        });
+      }
+      applyForecastRecommendations?.classList.toggle('hidden',!model.hasRecommendations||!profitSettingsAccess);
+
+      if(segmentedConversionResults){
+        segmentedConversionResults.innerHTML='';
+        segmentedConversions(all).forEach((segment)=>{
+          const box=document.createElement('div');
+          box.className='rounded-lg border border-white/10 p-3';
+          box.appendChild(text('strong','capitalize text-white',segment.key==='guests'?'Guest count':segment.key));
+          segment.rows.forEach((row)=>box.appendChild(text('p','mt-1 text-[.58rem] text-white/50',row.label+' · '+row.booked+'/'+row.total+' booked · '+Math.round(row.booked/row.total*100)+'%')));
+          segmentedConversionResults.appendChild(box);
+        });
+      }
+    }
+
+    function seasonalityProfile(all) {
+      const counts=Array(12).fill(1);
+      const booked=all.filter((record)=>record.stage==='booked'&&recordEventDate(record));
+      booked.forEach((record)=>{
+        const month=Number(recordEventDate(record).slice(5,7))-1;
+        if(month>=0&&month<12)counts[month]+=1;
+      });
+      const average=counts.reduce((sum,value)=>sum+value,0)/12;
+      return counts.map((value)=>({count:value,index:average>0?value/average:1}));
+    }
+
+    function historicalPackageMixForMonth(all,monthIndex) {
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const counts=ids.map(()=>1);
+      all.filter((record)=>record.stage==='booked'&&recordEventDate(record)).forEach((record)=>{
+        const month=Number(recordEventDate(record).slice(5,7))-1;
+        if(month!==monthIndex)return;
+        const index=ids.indexOf(recordPackage(record));
+        if(index>=0)counts[index]+=1;
+      });
+      const total=counts.reduce((sum,value)=>sum+value,0);
+      return counts.map((value)=>value/total);
+    }
+
+    function renderMonthlySalesPlan(all) {
+      if(!monthlySalesPlanResults)return;
+      const settings=payload.mobileBarProfitSettings||{};
+      const target=Number(settings.annualGrossProfitTarget||0);
+      const ranges=currentGoalRanges();
+      const bookedYtd=recordsInRange(all,ranges.annual).filter((record)=>record.stage==='booked').reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const remaining=Math.max(0,target-bookedYtd);
+      const now=new Date();
+      const stats=packagePlanningStats(all);
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const seasonality=seasonalityProfile(all);
+      monthlySalesPlanResults.innerHTML='';
+      if(!target){
+        monthlySalesPlanResults.appendChild(text('p','text-sm text-white/45','Set an annual gross-profit target to generate a seasonality-weighted monthly package plan.'));
+        return;
+      }
+      const remainingMonths=[];
+      for(let month=now.getMonth();month<12;month++)remainingMonths.push(month);
+      const seasonalityTotal=remainingMonths.reduce((sum,month)=>sum+seasonality[month].index,0)||remainingMonths.length;
+      remainingMonths.forEach((month)=>{
+        const monthWeight=seasonality[month].index/seasonalityTotal;
+        const monthTarget=remaining*monthWeight;
+        const packageMix=historicalPackageMixForMonth(all,month);
+        const plan=ids.map((id,index)=>({
+          id,
+          count:stats[id].averageProfit>0?Math.ceil((monthTarget*packageMix[index])/stats[id].averageProfit):0,
+        }));
+        const label=new Intl.DateTimeFormat('en-US',{month:'long'}).format(new Date(now.getFullYear(),month,1));
+        const demandLabel=seasonality[month].index>=1.15?'high demand':seasonality[month].index<=.85?'slower month':'typical demand';
+        monthlySalesPlanResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',label+' · '+demandLabel+' ('+seasonality[month].index.toFixed(2)+'×) · '+plan.map((entry,index)=>entry.count+' '+['Oahu','Maui','Big Island'][index]).join(' · ')+' · target '+money(monthTarget)+' profit'));
+      });
+    }
+
+    function renderMobileProfitGoalProjection() {
+      const all=(payload.records||[]).filter(isMobileBarRecord).filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
+      const activeScenario=String(mobileForecastScenario?.value||'expected');
+      const ranges=currentGoalRanges();
+      const historical=all.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+      const averageBookedProfit=historical.length?historical.reduce((a,b)=>a+b,0)/historical.length:0;
+      const settings=payload.mobileBarProfitSettings||{};
+      mobileProfitGoalInputs.forEach((input)=>{
+        const key=input.dataset.goalInput;
+        const property=key==='monthly'?'monthlyGrossProfitTarget':key==='quarterly'?'quarterlyGrossProfitTarget':'annualGrossProfitTarget';
+        if(document.activeElement!==input)input.value=String(Number(settings[property]||0)||'');
+      });
+      mobileGoalCards.forEach((card)=>{
+        const range=ranges[card.dataset.goalCard];
+        if(range)renderGoalCard(card,range,mobileProfitProjection(recordsInRange(all,range),activeScenario),Number(settings[range.targetKey]||0),averageBookedProfit);
+      });
+      renderBartenderRows();
+      renderBookingSimulator(all);
+      renderForecast((payload.records||[]).filter(isMobileBarRecord),ranges);
+      renderMonthlySalesPlan(all);
+    }
+
     function weightedMargin(rows) {
       const revenue=rows.reduce((sum,row)=>sum+Number(row.values.revenue||0),0);
       const profit=rows.reduce((sum,row)=>sum+Number(row.values.profit||0),0);
@@ -2863,6 +3414,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelectorAll('[data-close-activity]').forEach((button)=>button.addEventListener('click',()=>activityDialog?.close()));
     document.querySelectorAll('[data-close-booking]').forEach((button)=>button.addEventListener('click',()=>bookingDialog?.close()));
+    bookingBartenderForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      if(!bookingRecord)return;
+      const bartenderIds=[...bookingBartenderForm.querySelectorAll('input[name="bartenderId"]:checked')].map((input)=>input.value);
+      if(bookingBartenderStatus)bookingBartenderStatus.textContent='Saving bartender assignments…';
+      try{
+        const result=await api({action:'update-mobile-bar-bartender-assignments',recordId:bookingRecord.id,bartenderIds});
+        bookingRecord=result.record||bookingRecord;
+        await load(String(searchInput?.value||'').trim());
+        const refreshed=(payload.records||[]).find((entry)=>entry.id===bookingRecord.id)||bookingRecord;
+        bookingRecord=refreshed;
+        openBooking(refreshed);
+        if(bookingBartenderStatus)bookingBartenderStatus.textContent='Bartender assignments saved.';
+      }catch(error){
+        if(bookingBartenderStatus)bookingBartenderStatus.textContent=error?.message||'Unable to save bartender assignments.';
+      }
+    });
 
     qboSyncEstimateButton?.addEventListener('click',async()=>{
       if(!editingRecord||!quickBooksReady())return;
