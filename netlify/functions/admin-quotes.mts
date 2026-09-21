@@ -731,7 +731,8 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
   const category = proposalCategory(packageId, inquiry);
   const remaining = Math.max(0, roundMoney(total - depositAmount));
   if (category === 'venue-wedding') {
-    const second = roundMoney(remaining / 2);
+    const secondPercent = Math.min(100, Math.max(0, Number(settings.venueWeddingSecondPercentOfRemaining ?? 50)));
+    const second = roundMoney(remaining * secondPercent / 100);
     return [
       { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
       { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingSecondDueDaysBefore) : '', amount: second },
