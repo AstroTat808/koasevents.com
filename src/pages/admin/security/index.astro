@@ -135,7 +135,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const app = document.querySelector('[data-app]');
@@ -467,7 +467,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function initialize() {
-      const user = await getUser();
+      const user = await getAdminSession();
       if (!hasAdminAccess(user)) {
         unauthorized?.classList.remove('hidden');
         return;
