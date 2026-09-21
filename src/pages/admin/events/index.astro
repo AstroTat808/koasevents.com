@@ -193,8 +193,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let payload={events:[]};
     let selected=null;
     let activeTab='overview';
+    let managerAccess=false;
 
-    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
+    function userRoles(user){const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());}
+    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);return approvedAdminEmails.has(email)||roles.some((role)=>['admin','staff','sales','manager'].includes(role));}
+    function hasManagerAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager');}
+    function applyRoleUi(){
+      if(managerAccess)return;
+      overviewForm?.querySelectorAll('input,select,textarea,button').forEach((el)=>el.disabled=true);
+      uploadForm?.classList.add('hidden');
+      ['[data-add-vendor]','[data-save-vendors]','[data-save-questionnaire]','[data-add-timeline]','[data-save-timeline]','[data-save-checklist]','[data-add-task]','[data-save-tasks]'].forEach((selector)=>document.querySelector(selector)?.classList.add('hidden'));
+    }
     function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
     function dateLabel(value){if(!value)return 'Date TBD';return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value));}
     function packageLabel(id){return id==='signature-wedding'?'Signature Wedding Experience':id?String(id).replaceAll('-',' ').replace(/\b\w/g,(m)=>m.toUpperCase()):'Custom';}
@@ -330,7 +339,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const actions=document.createElement('div');actions.className='flex gap-2';
         const open=document.createElement('button');open.type='button';open.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';open.textContent='Open';open.addEventListener('click',()=>openDocument(doc));
         const del=document.createElement('button');del.type='button';del.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';del.textContent='Remove';del.addEventListener('click',()=>deleteDocument(doc));
-        actions.append(open,del);row.append(left,actions);documentsEl.appendChild(row);
+        actions.append(open);if(managerAccess)actions.append(del);row.append(left,actions);documentsEl.appendChild(row);
       });
       if(!(selected?.ops.documents||[]).length)documentsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No event documents uploaded yet.'));
     }
@@ -352,6 +361,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(q=''){
       const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      managerAccess=hasManagerAccess(user);applyRoleUi();
       app.classList.remove('hidden');
       const res=await fetch('/api/admin/events'+(q?'?q='+encodeURIComponent(q):''),{cache:'no-store'});
       if(!res.ok)return;
