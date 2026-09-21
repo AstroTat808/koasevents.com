@@ -2,11 +2,12 @@ import type { Config, Context } from '@netlify/functions';
 import { isApprovedAdmin, requireOperations } from './_shared/admin';
 import {
   cachedDeploymentHistory,
+  calculateUptime,
   persistHealth,
   readHealthHistory,
   readLatestHealth,
   runSystemHealth,
-  sendHealthTransitionAlert,
+  sendHealthTransitionAlerts,
 } from './_shared/system-health';
 
 export default async (req:Request,context:Context) => {
@@ -19,7 +20,7 @@ export default async (req:Request,context:Context) => {
     const previous=await readLatestHealth(context);
     const current=await runSystemHealth('manual');
     await persistHealth(context,current);
-    await sendHealthTransitionAlert(previous,current);
+    await sendHealthTransitionAlerts(previous,current);
     const deployments=await cachedDeploymentHistory(context);
     return Response.json({current,deployments},{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -40,11 +41,13 @@ export default async (req:Request,context:Context) => {
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
-  const [history,deployments]=await Promise.all([
+  const [history,uptimeHistory,deployments]=await Promise.all([
     readHealthHistory(context,120),
+    readHealthHistory(context,5000),
     cachedDeploymentHistory(context),
   ]);
-  return Response.json({current:latest,history,deployments},{headers:{'Cache-Control':'private, no-store'}});
+  const uptime=calculateUptime(uptimeHistory);
+  return Response.json({current:latest,history,uptime,deployments},{headers:{'Cache-Control':'private, no-store'}});
 };
 
 export const config:Config={path:'/api/admin/health'};
