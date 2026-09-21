@@ -321,6 +321,69 @@ async function restoreTrashRecord(context: Context, recordId: string, records: S
   return { records: next, record };
 }
 
+async function trashChainFromStoredRecords(context: Context, recordId: string) {
+  const store = salesStoreFor(context);
+  const trash = await purgeExpiredTrash(context);
+  const rows = await Promise.all(trash.map(async (entry) => ({
+    entry,
+    record: await store.get('trash/records/' + entry.id, { type: 'json' }) as SalesRecord | null,
+  })));
+  const root = rows.find((row) => row.entry.id === recordId && row.record)?.record;
+  if (!root) return { trash, rows, ids: new Set<string>() };
+
+  const ids = new Set<string>([root.id]);
+  if (root.quoteId) rows.filter((row) => row.record?.quoteId === root.quoteId).forEach((row) => ids.add(row.entry.id));
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const row of rows) {
+      const record = row.record;
+      if (!record) continue;
+      if ((record.source && ids.has(record.source)) || (root.source && record.id === root.source)) {
+        if (!ids.has(record.id)) { ids.add(record.id); changed = true; }
+        if (record.source && !ids.has(record.source)) { ids.add(record.source); changed = true; }
+      }
+    }
+  }
+
+  return { trash, rows, ids };
+}
+
+async function restoreTrashClientChain(context: Context, recordId: string, records: SalesRecord[]) {
+  const store = salesStoreFor(context);
+  const chain = await trashChainFromStoredRecords(context, recordId);
+  if (!chain.ids.size) throw new Error('Trash client chain not found or has expired.');
+
+  const restoring = chain.rows
+    .filter((row) => row.record && chain.ids.has(row.entry.id))
+    .map((row) => row.record as SalesRecord);
+
+  if (restoring.some((record) => records.some((live) => live.id === record.id))) {
+    throw new Error('One or more CRM records in this client chain already exist.');
+  }
+
+  let next = records;
+  for (const record of restoring) {
+    await store.setJSON('records/' + record.id, record);
+    next = [record, ...next.filter((item) => item.id !== record.id)].slice(0, 1500);
+  }
+  await writeSalesIndex(context, next);
+
+  for (const id of chain.ids) await store.delete('trash/records/' + id);
+  await writeTrashIndex(context, chain.trash.filter((entry) => !chain.ids.has(entry.id)));
+  return { records: next, restored: restoring };
+}
+
+async function permanentlyDeleteTrashClientChain(context: Context, recordId: string) {
+  const store = salesStoreFor(context);
+  const chain = await trashChainFromStoredRecords(context, recordId);
+  if (!chain.ids.size) return [] as string[];
+  for (const id of chain.ids) await store.delete('trash/records/' + id);
+  await writeTrashIndex(context, chain.trash.filter((entry) => !chain.ids.has(entry.id)));
+  return [...chain.ids];
+}
+
 async function permanentlyDeleteTrashRecord(context: Context, recordId: string) {
   const store = salesStoreFor(context);
   const trash = await purgeExpiredTrash(context);
@@ -1142,6 +1205,36 @@ export default async (req: Request, context: Context) => {
       count: moved.length,
       expiresAt: trashEntries.map((entry) => entry.expiresAt).sort()[0] || '',
     }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'restore-client-chain') {
+    const recordId = cleanText(payload.recordId, 80);
+    try {
+      const restored = await restoreTrashClientChain(context, recordId, records);
+      records = restored.records;
+      await appendEvent(context, {
+        type: 'client_chain_restored',
+        recordId,
+        detail: 'Administrator restored an entire related inquiry/lead chain from Trash.',
+        reference: restored.restored.map((record) => record.id).join(','),
+      });
+      return Response.json({ ok: true, restored: restored.restored.map((record) => record.id), count: restored.restored.length }, { headers: { 'Cache-Control': 'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error: error instanceof Error ? error.message : 'Unable to restore client chain.' }, { status: 400 });
+    }
+  }
+
+  if (payload.action === 'permanent-delete-client-chain') {
+    const recordId = cleanText(payload.recordId, 80);
+    const removed = await permanentlyDeleteTrashClientChain(context, recordId);
+    if (!removed.length) return Response.json({ error: 'Trash client chain not found.' }, { status: 404 });
+    await appendEvent(context, {
+      type: 'client_chain_permanently_deleted',
+      recordId,
+      detail: 'Administrator permanently deleted an entire related client chain from Trash.',
+      reference: removed.join(','),
+    });
+    return Response.json({ ok: true, deleted: removed, count: removed.length }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (payload.action === 'restore-record') {
