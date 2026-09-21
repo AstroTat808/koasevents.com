@@ -1,0 +1,287 @@
+import type { Context } from '@netlify/functions';
+import { getDeployStore, getStore } from '@netlify/blobs';
+
+export type HealthCheck = {
+  id: string;
+  name: string;
+  kind: 'page' | 'api';
+  path: string;
+  ok: boolean;
+  status: number;
+  ms: number;
+  detail: string;
+};
+
+export type HealthSnapshot = {
+  id: string;
+  checkedAt: string;
+  overall: 'healthy' | 'unhealthy';
+  passed: number;
+  failed: number;
+  failedIds: string[];
+  checks: HealthCheck[];
+  source: 'hourly' | 'manual';
+};
+
+const PAGE_CHECKS = [
+  ['business-crm','Business CRM','/admin/crm/','data-admin-ui'],
+  ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
+  ['event-ops','Event Ops','/admin/events/','data-app'],
+  ['master-calendar','Master Calendar','/admin/calendar/','data-app'],
+  ['blog-admin','Blog Admin','/admin/blog/','data-admin-ui'],
+  ['staff-management','Staff Management','/admin/staff/','data-app'],
+  ['quickbooks','QuickBooks','/admin/quickbooks/','data-app'],
+  ['gallery','Gallery','/admin/gallery/','data-admin-ui'],
+  ['security','Security + Spam','/admin/security/','data-app'],
+  ['local-seo','Local SEO','/admin/seo/','data-admin-ui'],
+  ['system-health','System Health','/admin/health/','data-app'],
+  ['staff-home','Staff Home','/staff/','data-staff-ui'],
+] as const;
+
+const API_CHECKS = [
+  ['admin-session','Admin session API','/api/admin/session'],
+  ['business-crm-api','Business CRM API','/api/admin/crm'],
+  ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
+  ['event-ops-api','Event Ops API','/api/admin/events'],
+  ['calendar-api','Master Calendar API','/api/admin/calendar'],
+  ['blog-api','Blog API','/api/blog?admin=1'],
+  ['staff-api','Staff Management API','/api/admin/staff'],
+  ['quickbooks-api','QuickBooks API','/api/admin/quickbooks'],
+  ['gallery-api','Gallery API','/api/gallery'],
+  ['security-api','Security API','/api/admin/security?days=7'],
+  ['seo-api','Local SEO API','/api/admin/local-seo'],
+] as const;
+
+function healthStore(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-system-health' });
+}
+
+function clean(value: unknown, max=500) {
+  return String(value || '').trim().slice(0,max);
+}
+
+function baseUrl() {
+  return clean(Netlify.env.get('URL'),500) || 'https://koasevents.com';
+}
+
+async function timedFetch(url:string, init:RequestInit={}) {
+  const started=Date.now();
+  try {
+    const response=await fetch(url,{
+      ...init,
+      headers:{'Cache-Control':'no-cache','User-Agent':'KoaEvents-Health/1.0',...(init.headers||{})},
+      signal:AbortSignal.timeout(12_000),
+    });
+    return {response,ms:Date.now()-started,error:''};
+  } catch (error) {
+    return {response:null,ms:Date.now()-started,error:error instanceof Error?error.message:'Request failed'};
+  }
+}
+
+export async function runSystemHealth(source:'hourly'|'manual'='hourly'):Promise<HealthSnapshot> {
+  const origin=baseUrl().replace(/\/$/,'');
+  const checks:HealthCheck[]=[];
+
+  for(const [id,name,path,marker] of PAGE_CHECKS){
+    const result=await timedFetch(origin+path);
+    let body='';
+    if(result.response) body=await result.response.text().catch(()=>'');
+    const ok=Boolean(result.response?.ok && body.includes(marker));
+    checks.push({
+      id,name,kind:'page',path,ok,status:result.response?.status||0,ms:result.ms,
+      detail:result.error || (ok?'Page shell + startup marker present':result.response?.ok?'Expected startup marker missing':'Page request failed'),
+    });
+  }
+
+  for(const [id,name,path] of API_CHECKS){
+    const result=await timedFetch(origin+path);
+    const status=result.response?.status||0;
+    const ok=Boolean(result.response && [200,401,403].includes(status));
+    checks.push({
+      id,name,kind:'api',path,ok,status,ms:result.ms,
+      detail:result.error || (ok?(status===200?'Endpoint reachable':'Endpoint reachable and authorization enforced'):'Unexpected API response'),
+    });
+  }
+
+  const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
+  return {
+    id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
+    checkedAt:new Date().toISOString(),
+    overall:failedIds.length?'unhealthy':'healthy',
+    passed:checks.length-failedIds.length,
+    failed:failedIds.length,
+    failedIds,
+    checks,
+    source,
+  };
+}
+
+export async function readLatestHealth(context:Context):Promise<HealthSnapshot|null> {
+  return ((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
+}
+
+export async function readHealthHistory(context:Context,limit=100):Promise<HealthSnapshot[]> {
+  const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
+  return rows.slice(0,Math.max(1,Math.min(500,limit)));
+}
+
+export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
+  const store=healthStore(context);
+  const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
+  await store.setJSON('latest',snapshot);
+  await store.setJSON('history',[snapshot,...history].slice(0,500));
+}
+
+export function healthTransition(previous:HealthSnapshot|null,current:HealthSnapshot) {
+  if(!previous){
+    return current.overall==='unhealthy'
+      ? {changed:true,type:'broken' as const,broken:current.failedIds,recovered:[] as string[]}
+      : {changed:false,type:'none' as const,broken:[] as string[],recovered:[] as string[]};
+  }
+  const prev=new Set(previous.failedIds||[]);
+  const curr=new Set(current.failedIds||[]);
+  const broken=[...curr].filter(id=>!prev.has(id));
+  const recovered=[...prev].filter(id=>!curr.has(id));
+  if(!broken.length&&!recovered.length) return {changed:false,type:'none' as const,broken,recovered};
+  return {
+    changed:true,
+    type:current.overall==='healthy'?'recovered' as const:broken.length?'broken' as const:'partial-recovery' as const,
+    broken,recovered,
+  };
+}
+
+function esc(value:unknown){
+  return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+export async function sendHealthTransitionAlert(previous:HealthSnapshot|null,current:HealthSnapshot) {
+  const transition=healthTransition(previous,current);
+  if(!transition.changed) return {sent:false,reason:'no-change'};
+
+  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+  if(!apiKey) return {sent:false,reason:'resend-not-configured'};
+
+  const configured=clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
+    || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
+    || 'chris@sibel.org';
+  const recipients=configured.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
+  if(!recipients.length) return {sent:false,reason:'no-recipient'};
+
+  const from=clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
+    || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
+    || 'Koa’s Events <leads@koasevents.com>';
+
+  const failedNames=current.checks.filter(row=>!row.ok).map(row=>row.name);
+  const recoveredNames=(previous?.checks||[]).filter(row=>transition.recovered.includes(row.id)).map(row=>row.name);
+  const brokenNames=current.checks.filter(row=>transition.broken.includes(row.id)).map(row=>row.name);
+  const fullyRecovered=current.overall==='healthy';
+
+  const subject=fullyRecovered
+    ? 'Koa’s System Health recovered'
+    : 'Koa’s System Health alert — '+current.failed+' check'+(current.failed===1?'':'s')+' failing';
+
+  const summary=fullyRecovered
+    ? 'All monitored Koa’s admin/staff services are healthy again.'
+    : 'The hourly monitor detected a change in system health.';
+
+  const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;padding:28px;font-family:Arial,sans-serif;color:#173d30">'
+    +'<div style="max-width:680px;margin:auto;background:#fff;border:1px solid #e7dfd0;border-radius:20px;padding:28px">'
+    +'<div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a">Koa’s Events · System Health</div>'
+    +'<h1 style="font-family:Georgia,serif;font-size:30px;margin:10px 0 14px">'+esc(fullyRecovered?'System recovered':'Health change detected')+'</h1>'
+    +'<p style="line-height:1.6;color:#52635b">'+esc(summary)+'</p>'
+    +(brokenNames.length?'<p><strong>Newly failing:</strong> '+brokenNames.map(esc).join(', ')+'</p>':'')
+    +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
+    +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
+    +'<p style="font-size:12px;color:#78827d">Checked '+esc(current.checkedAt)+' · '+current.passed+' passed · '+current.failed+' failed</p>'
+    +'<p><a href="https://koasevents.com/admin/health/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open System Health</a></p>'
+    +'</div></body></html>';
+
+  const text=[
+    'Koa’s Events System Health',
+    summary,
+    brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
+    recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
+    failedNames.length?'Still failing: '+failedNames.join(', '):'',
+    'Checked: '+current.checkedAt,
+    'System Health: https://koasevents.com/admin/health/',
+  ].filter(Boolean).join('\n');
+
+  try{
+    const response=await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+apiKey,
+        'Content-Type':'application/json',
+        'Idempotency-Key':('koa-health-'+current.id).slice(0,256),
+      },
+      body:JSON.stringify({from,to:recipients,subject,html,text}),
+      signal:AbortSignal.timeout(12_000),
+    });
+    const body:any=await response.json().catch(()=>({}));
+    if(!response.ok){
+      console.error('Health alert email failed',response.status,body?.message||'');
+      return {sent:false,reason:'resend-error'};
+    }
+    return {sent:true,id:clean(body?.id,120)};
+  }catch(error){
+    console.error('Health alert email error',error);
+    return {sent:false,reason:'request-error'};
+  }
+}
+
+export async function cachedDeploymentHistory(context:Context) {
+  const store=healthStore(context);
+  const cached:any=await store.get('deployments/cache',{type:'json'});
+  if(cached && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+
+  const origin=baseUrl().replace(/\/$/,'');
+  const home=await timedFetch(origin+'/');
+  const html=home.response?await home.response.text().catch(()=>''):'';
+  const match=(name:string)=>html.match(new RegExp('<meta\\s+name=["\\\']'+name+'["\\\']\\s+content=["\\\']([^"\\\']+)["\\\']','i'))?.[1]||'';
+  const current={
+    commit:match('koa-build-commit'),
+    deployId:match('koa-deploy-id'),
+    builtAt:match('koa-build-time'),
+  };
+
+  const headers={'Accept':'application/vnd.github+json','User-Agent':'KoaEvents-Health/1.0'};
+  let runs:any[]=[];
+  try{
+    const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/actions/workflows/production-visual-qa.yml/runs?per_page=15',{headers,signal:AbortSignal.timeout(12_000)});
+    if(response.ok) runs=(await response.json()).workflow_runs||[];
+  }catch{}
+
+  const history:any[]=[];
+  for(const run of runs.slice(0,12)){
+    let failedJobs:string[]=[];
+    if(run.conclusion==='failure'){
+      try{
+        const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/actions/runs/'+run.id+'/jobs?per_page=50',{headers,signal:AbortSignal.timeout(12_000)});
+        if(response.ok){
+          const jobs=(await response.json()).jobs||[];
+          failedJobs=jobs.filter((job:any)=>job.conclusion==='failure').map((job:any)=>clean(job.name,180));
+        }
+      }catch{}
+    }
+    history.push({
+      runId:String(run.id||''),
+      commit:clean(run.head_sha,80),
+      branch:clean(run.head_branch,100),
+      status:clean(run.status,40),
+      conclusion:clean(run.conclusion,40),
+      event:clean(run.event,40),
+      createdAt:clean(run.created_at,80),
+      updatedAt:clean(run.updated_at,80),
+      url:clean(run.html_url,500),
+      failedJobs,
+    });
+  }
+
+  const lastSuccessfulQa=history.find(row=>row.conclusion==='success')||null;
+  const failedBuilds=history.filter(row=>row.conclusion==='failure');
+  const result={generatedAt:new Date().toISOString(),current,lastSuccessfulDeployment:current,lastSuccessfulQa,failedBuilds,history};
+  await store.setJSON('deployments/cache',result);
+  return result;
+}
