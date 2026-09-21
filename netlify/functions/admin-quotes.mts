@@ -1349,13 +1349,14 @@ export default async (req: Request, context: Context) => {
     const total = Math.round((taxable + taxAmount) * 100) / 100;
 
     const oldSchedule = Array.isArray(current.paymentSchedule) ? current.paymentSchedule : [];
+    const oldScheduleTotal = oldSchedule.reduce((sum, item) => sum + finite(item.amount), 0);
     let paymentSchedule: PaymentItem[] = [];
-    if (oldSchedule.length && currentTotal > 0) {
+    if (oldSchedule.length && oldScheduleTotal > 0) {
       let allocated = 0;
       paymentSchedule = oldSchedule.map((item, index) => {
         const amount = index === oldSchedule.length - 1
           ? Math.max(0, Math.round((total - allocated) * 100) / 100)
-          : Math.max(0, Math.round((finite(item.amount) / currentTotal) * total * 100) / 100);
+          : Math.max(0, Math.round((finite(item.amount) / oldScheduleTotal) * total * 100) / 100);
         allocated += amount;
         return { ...item, amount };
       });
