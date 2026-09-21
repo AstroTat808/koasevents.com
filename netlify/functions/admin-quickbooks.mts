@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
+import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import {
   completeOAuth,
   createOAuthState,
@@ -663,6 +664,17 @@ export default async (req: Request, context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
+
+  if (action === 'test-accounting-alert') {
+    const now = new Date().toISOString();
+    const result = await sendAccountingTransitionAlerts([{
+      recordId: 'TEST-ACCOUNTING',
+      clientName: 'Koa’s Accounting Test',
+      type: 'mismatch_detected',
+      after: [{ code:'test_balance', label:'Test reconciliation balance', expected:100, actual:95, delta:-5 }],
+    }], 'test-' + now, { test:true });
+    return Response.json({ ok:true, result }, { headers: { 'Cache-Control':'private, no-store' } });
+  }
 
   if (action === 'save-deposit-settings') {
     const depositSettings = await saveQuickBooksDepositSettings(context, {
