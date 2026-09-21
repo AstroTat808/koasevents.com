@@ -36,14 +36,22 @@ function env(...names: string[]) {
 }
 
 function config() {
-  const clientId = env('QUICKBOOKS_CLIENT_ID', 'INTUIT_CLIENT_ID');
-  const clientSecret = env('QUICKBOOKS_CLIENT_SECRET', 'INTUIT_CLIENT_SECRET');
-  const encryptionKey = env('QUICKBOOKS_TOKEN_ENCRYPTION_KEY', 'QBO_TOKEN_ENCRYPTION_KEY');
   const rawEnvironment = env('QUICKBOOKS_ENVIRONMENT', 'QBO_ENVIRONMENT') || 'production';
   const environment = rawEnvironment.toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+  const clientId = environment === 'sandbox'
+    ? env('QUICKBOOKS_SANDBOX_CLIENT_ID', 'QUICKBOOKS_CLIENT_ID', 'INTUIT_CLIENT_ID')
+    : env('QUICKBOOKS_PRODUCTION_CLIENT_ID', 'QUICKBOOKS_CLIENT_ID', 'INTUIT_CLIENT_ID');
+  const clientSecret = environment === 'sandbox'
+    ? env('QUICKBOOKS_SANDBOX_CLIENT_SECRET', 'QUICKBOOKS_CLIENT_SECRET', 'INTUIT_CLIENT_SECRET')
+    : env('QUICKBOOKS_PRODUCTION_CLIENT_SECRET', 'QUICKBOOKS_CLIENT_SECRET', 'INTUIT_CLIENT_SECRET');
+  const encryptionKey = env('QUICKBOOKS_TOKEN_ENCRYPTION_KEY', 'QBO_TOKEN_ENCRYPTION_KEY');
   const itemId = env('QUICKBOOKS_SERVICE_ITEM_ID', 'QBO_SERVICE_ITEM_ID');
-  const redirectUri = env('QUICKBOOKS_REDIRECT_URI', 'QBO_REDIRECT_URI');
-  const webhookVerifierToken = env('QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN', 'INTUIT_WEBHOOK_VERIFIER_TOKEN');
+  const redirectUri = environment === 'sandbox'
+    ? env('QUICKBOOKS_SANDBOX_REDIRECT_URI', 'QUICKBOOKS_REDIRECT_URI', 'QBO_REDIRECT_URI')
+    : env('QUICKBOOKS_PRODUCTION_REDIRECT_URI', 'QUICKBOOKS_REDIRECT_URI', 'QBO_REDIRECT_URI');
+  const webhookVerifierToken = environment === 'sandbox'
+    ? env('QUICKBOOKS_SANDBOX_WEBHOOK_VERIFIER_TOKEN', 'QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN', 'INTUIT_WEBHOOK_VERIFIER_TOKEN')
+    : env('QUICKBOOKS_PRODUCTION_WEBHOOK_VERIFIER_TOKEN', 'QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN', 'INTUIT_WEBHOOK_VERIFIER_TOKEN');
   return { clientId, clientSecret, encryptionKey, environment, itemId, redirectUri, webhookVerifierToken };
 }
 
@@ -59,6 +67,16 @@ export function quickBooksConfiguration() {
     redirectUriConfigured: Boolean(c.redirectUri),
     redirectUri: c.redirectUri,
     environment: c.environment,
+    productionCredentialsConfigured: Boolean(
+      env('QUICKBOOKS_PRODUCTION_CLIENT_ID') &&
+      env('QUICKBOOKS_PRODUCTION_CLIENT_SECRET')
+    ),
+    productionWebhookConfigured: Boolean(env('QUICKBOOKS_PRODUCTION_WEBHOOK_VERIFIER_TOKEN')),
+    productionRedirectConfigured: Boolean(env('QUICKBOOKS_PRODUCTION_REDIRECT_URI') || env('QUICKBOOKS_REDIRECT_URI', 'QBO_REDIRECT_URI')),
+    sandboxCredentialsConfigured: Boolean(
+      env('QUICKBOOKS_SANDBOX_CLIENT_ID', 'QUICKBOOKS_CLIENT_ID', 'INTUIT_CLIENT_ID') &&
+      env('QUICKBOOKS_SANDBOX_CLIENT_SECRET', 'QUICKBOOKS_CLIENT_SECRET', 'INTUIT_CLIENT_SECRET')
+    ),
   };
 }
 
