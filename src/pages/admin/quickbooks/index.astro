@@ -541,7 +541,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         row.querySelector('[data-edit]').addEventListener('click',()=>openCatalogItem(item));
         row.querySelector('[data-archive]').disabled=item.active===false;
         row.querySelector('[data-archive]').addEventListener('click',async()=>{
-          if(!confirm('Archive '+item.name+' in the CRM and make its QuickBooks item inactive?'))return;
+          if(!confirm('Archive '+item.name+' in the CRM? Its existing QuickBooks item and transactions will not be changed.'))return;
           if(catalogMessage)catalogMessage.textContent='Archiving '+item.name+'…';
           try{const data=await api({action:'archive-catalog-item',id:item.id});state.catalog=data.catalog||[];renderCatalog();if(catalogMessage)catalogMessage.textContent=item.name+' archived.';}catch(err){if(catalogMessage)catalogMessage.textContent=err.message||'Unable to archive item.';}
         });
