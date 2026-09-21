@@ -54,7 +54,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
     const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -138,6 +138,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     inviteForm?.addEventListener('submit',async(event)=>{event.preventDefault();const data=new FormData(inviteForm);inviteMessage.textContent='Creating staff account…';try{const result=await api({action:'invite',name:data.get('name'),email:data.get('email'),role:data.get('role')});inviteMessage.textContent=result.inviteEmailSent?'Account created and invitation email sent.':'Account created, but email delivery failed. Temporary password: '+result.temporaryPassword;inviteForm.reset();await load();}catch(err){inviteMessage.textContent=err.message;}});
     document.querySelector('[data-refresh]')?.addEventListener('click',load);
-    const user=await getUser();const ok=isAdmin(user);app?.classList.toggle('hidden',!ok);unauthorized?.classList.toggle('hidden',ok);if(ok)await load();
+    const user=await getAdminSession();const ok=isAdmin(user);app?.classList.toggle('hidden',!ok);unauthorized?.classList.toggle('hidden',ok);if(ok)await load();
   </script>
 </BaseLayout>
