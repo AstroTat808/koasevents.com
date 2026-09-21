@@ -92,7 +92,7 @@ function defaultOps(record:any) {
   const seeded:any={
     recordId:record.id,createdAt:now,updatedAt:now,status:'planning',
     finalGuestCount:guestCount,setupStart:'',guestArrival:'',eventStart:'',eventEnd:'',teardownEnd:'',venueArea:'Koa’s Events',
-    notes:'',vendors:[],vendorRequirements:seedVendorRequirements(),questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
+    notes:'',vendors:[],vendorRequirements:seedVendorRequirements(),vendorRequirementsMode:'auto',questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
   };
   seeded.vendorRequirements=suggestVendorRequirements(record,seeded).map((r)=>({category:r.category,importance:r.importance,note:r.note}));
   return seeded;
@@ -178,7 +178,8 @@ export default async (req:Request,context:Context)=>{
 
   let ops:any=await opsStore.get('events/'+record.id,{type:'json'});
   if(!ops){ops=defaultOps(record);await opsStore.setJSON('events/'+record.id,ops);}
-  else if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=seedVendorRequirements();await opsStore.setJSON('events/'+record.id,ops);}
+  else if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';await opsStore.setJSON('events/'+record.id,ops);}
+  else if(!['auto','manual'].includes(String(ops.vendorRequirementsMode||''))){ops.vendorRequirementsMode='manual';await opsStore.setJSON('events/'+record.id,ops);}
 
   if(req.method==='GET') {
     return Response.json(publicOps(record,ops),{headers:{'Cache-Control':'private, no-store'}});
@@ -190,10 +191,12 @@ export default async (req:Request,context:Context)=>{
 
   if(action==='save-guest-count') {
     ops.finalGuestCount=Math.round(num(payload?.finalGuestCount,0,1000));
+    if(ops.vendorRequirementsMode!=='manual'){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}
   } else if(action==='save-vendors') {
     ops.vendors=sanitizeClientVendors(payload?.vendors,ops.vendors||[]);
   } else if(action==='save-questionnaire') {
     ops.questionnaire=sanitizeClientQuestionnaire(payload?.questionnaire,ops.questionnaire||[]);
+    if(ops.vendorRequirementsMode!=='manual'){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}
   } else {
     return Response.json({error:'Unknown planning action.'},{status:400});
   }
