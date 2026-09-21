@@ -1218,13 +1218,15 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const q = cleanText(url.searchParams.get('q'), 120).toLowerCase();
-    const [allQuotes, records, events, trashRaw, mobileBarProfitSettings] = await Promise.all([
+    const [allQuotes, rawRecords, events, trashRaw, mobileBarProfitSettings, staff] = await Promise.all([
       listQuotes(context),
       readSalesIndex(context),
       readEvents(context),
       readTrashIndex(context),
       readMobileBarProfitSettings(context),
+      listOperationalStaff().catch(()=>[] as OperationalStaff[]),
     ]);
+    const records = await ensureAssignments(context, rawRecords, staff);
     const trash = await purgeExpiredTrash(context, trashRaw);
 
     const filteredQuotes = q ? allQuotes.filter((quote) => [
@@ -1269,6 +1271,12 @@ export default async (req: Request, context: Context) => {
       reminders,
       records: enrichedRecords,
       trash,
+      staffDirectory: isApprovedManager(auth.user) ? staff : [],
+      staffPerformance: isApprovedManager(auth.user) ? {
+        '30': staffPerformance(records,events,staff,30),
+        '90': staffPerformance(records,events,staff,90),
+        all: staffPerformance(records,events,staff,null),
+      } : null,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
@@ -1276,24 +1284,48 @@ export default async (req: Request, context: Context) => {
   const payload: any = await req.json().catch(() => null);
   if (!payload?.action) return Response.json({ error: 'Missing action.' }, { status: 400 });
 
-  const managerOnlyActions = new Set([
-    'delete-record',
-    'trash-client-chain',
-    'restore-client-chain',
-    'permanent-delete-client-chain',
-    'restore-record',
-    'permanent-delete-record',
-    'delete-quote',
-    'bulk-trash',
-    'bulk-trash-client-chains',
-    'update-mobile-bar-profit-settings',
-    'update-profit-model',
-  ]);
-  if (managerOnlyActions.has(String(payload.action)) && !isApprovedManager(auth.user)) {
-    return Response.json({ error: 'Manager permission required for this action.' }, { status: 403 });
+  const capabilityByAction:Record<string,any>={
+    'delete-record':'crm.destructive',
+    'trash-client-chain':'crm.destructive',
+    'restore-client-chain':'crm.destructive',
+    'permanent-delete-client-chain':'crm.destructive',
+    'restore-record':'crm.destructive',
+    'permanent-delete-record':'crm.destructive',
+    'delete-quote':'crm.destructive',
+    'bulk-trash':'crm.destructive',
+    'bulk-trash-client-chains':'crm.destructive',
+    'update-mobile-bar-profit-settings':'sales.profit_settings',
+    'update-profit-model':'sales.profit_settings',
+  };
+  const requestedCapability=capabilityByAction[String(payload.action)];
+  if (requestedCapability && !hasCapability(auth.user,requestedCapability)) {
+    return Response.json({ error: 'You do not have permission for this sales action.' }, { status: 403 });
+  }
+  if (payload.action === 'assign-owner' && !isApprovedManager(auth.user)) {
+    return Response.json({ error: 'Manager permission required to assign lead ownership.' }, { status: 403 });
   }
 
   let records = await readSalesIndex(context);
+
+  if (payload.action === 'assign-owner') {
+    const recordId=cleanText(payload.recordId,80);
+    const userId=cleanText(payload.userId,120);
+    const root=records.find(entry=>entry.id===recordId);
+    if(!root) return Response.json({error:'CRM record not found.'},{status:404});
+    const staff=await listOperationalStaff();
+    const member=staff.find(row=>row.id===userId);
+    if(!member) return Response.json({error:'Active Sales Rep or Manager not found.'},{status:404});
+    const related=relatedRecordIds(root,records);
+    const assignment=assignmentFor(member,cleanText(auth.user?.email,240)||'manager');
+    const changed=records.filter(entry=>related.has(entry.id));
+    changed.forEach(entry=>{entry.assignment={...assignment};entry.updatedAt=new Date().toISOString();});
+    const store=salesStoreFor(context);
+    await Promise.all(changed.map(entry=>store.setJSON('records/'+entry.id,entry)));
+    await writeSalesIndex(context,records);
+    await appendEvent(context,{type:'owner_assigned',recordId:root.id,quoteId:root.quoteId||'',packageId:root.packageId||'',detail:'Assigned client opportunity to '+member.name+' ('+member.email+').'});
+    await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'manager',action:'lead_owner_changed',recordId:root.id,subjectId:member.id,subjectEmail:member.email,detail:'Assigned '+(root.customer?.name||root.id)+' to '+member.name+'.',metadata:{chainIds:[...related]}});
+    return Response.json({ok:true,assignment,recordIds:[...related]},{headers:{'Cache-Control':'private, no-store'}});
+  }
 
   if (payload.action === 'delete-record') {
     const recordId = cleanText(payload.recordId, 80);
@@ -1625,6 +1657,17 @@ export default async (req: Request, context: Context) => {
       quote,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId) : undefined,
     };
+    const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
+    if(matchingOwner) record.assignment={...matchingOwner};
+    else {
+      const staff=await listOperationalStaff().catch(()=>[] as OperationalStaff[]);
+      const member=[...staff].sort((a,b)=>{
+        const ac=records.filter(r=>r.assignment?.userId===a.id).length;
+        const bc=records.filter(r=>r.assignment?.userId===b.id).length;
+        return ac-bc||a.name.localeCompare(b.name);
+      })[0];
+      if(member) record.assignment=assignmentFor(member,'automatic-conversion');
+    }
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: kind, packageId, quoteId, recordId: record.id });
     return Response.json({ ok: true, record }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -1671,6 +1714,7 @@ export default async (req: Request, context: Context) => {
       inquiry: source.inquiry ? { ...source.inquiry } : undefined,
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
+      assignment: source.assignment ? { ...source.assignment } : undefined,
       proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
     };
     source.stage = 'converted';
@@ -1688,7 +1732,8 @@ export default async (req: Request, context: Context) => {
       type: 'mobile_bar_profit_settings_updated',
       detail: 'Mobile Bar monthly gross-profit target updated to ' + settings.monthlyGrossProfitTarget.toFixed(2) + '.',
     });
-    return Response.json({ ok: true, settings }, { headers: { 'Cache-Control': 'private, no-store' } });
+    await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly gross-profit target.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget}});
+    return Response.json({ ok: true, settings }, { headers: { 'Cache-Control':'private, no-store' } });
   }
   if (payload.action === 'update-profit-model') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
@@ -1705,8 +1750,9 @@ export default async (req: Request, context: Context) => {
       recordId: record.id,
       quoteId: record.quoteId || '',
       packageId: record.packageId || '',
-      detail: 'Mobile Bar direct-cost model updated by administrator.',
+      detail: 'Mobile Bar direct-cost model updated by staff.',
     });
+    await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_model_changed',recordId:record.id,detail:'Updated Mobile Bar direct-cost model for '+(record.customer?.name||record.id)+'.'});
     return Response.json({ ok: true, record });
   }
 
