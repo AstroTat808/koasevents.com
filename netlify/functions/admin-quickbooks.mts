@@ -249,17 +249,44 @@ async function createMilestoneInvoice(context: Context, record: any, itemId: str
 
   const customer = await ensureCustomer(context, record);
   const amount = Number(payment.amount || 0);
+  const proposal = record.proposal || {};
+  const activeInvoices = state.invoices.filter((entry: any) =>
+    entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
+  );
+  const paymentsReceived = activeInvoices.reduce((sum: number, entry: any) => {
+    const total = Number(entry.total ?? entry.amount ?? 0);
+    const balance = Number(entry.balance ?? total);
+    return sum + Math.max(0, total - balance);
+  }, 0);
+  const proposalTotal = Number(proposal.total || 0);
+  const remainingBalance = Math.max(0, Math.round((proposalTotal - paymentsReceived) * 100) / 100);
+  const remainingAfterMilestone = Math.max(0, Math.round((remainingBalance - amount) * 100) / 100);
+  const depositPercent = Number.isFinite(Number(proposal.depositPercent))
+    ? Number(proposal.depositPercent)
+    : proposalTotal > 0 ? (Number(proposal.depositAmount || 0) / proposalTotal) * 100 : 0;
+  const financialSnapshot = [
+    'Milestone: ' + clean(payment.label, 120),
+    'Scheduled milestone amount: $' + amount.toFixed(2),
+    'Proposal subtotal: $' + Number(proposal.subtotal || 0).toFixed(2),
+    'Discount: $' + Number(proposal.discountAmount || 0).toFixed(2),
+    'Hawaiʻi GET 4.712%: $' + Number(proposal.taxAmount || 0).toFixed(2),
+    'Proposal total: $' + proposalTotal.toFixed(2),
+    'Deposit (' + (Math.round(depositPercent * 1000) / 1000) + '%): $' + Number(proposal.depositAmount || 0).toFixed(2),
+    'Payments received: $' + paymentsReceived.toFixed(2),
+    'Remaining balance before this invoice: $' + remainingBalance.toFixed(2),
+    'Remaining balance after this milestone is paid: $' + remainingAfterMilestone.toFixed(2),
+  ].join('\n');
   const created: any = await qboCreate(context, 'invoice', {
     CustomerRef: { value: String(customer.Id) },
     TxnDate: today(),
     DueDate: isoDate(payment.dueDate) || undefined,
     BillEmail: record.customer?.email ? { Address: clean(record.customer.email, 240) } : undefined,
-    CustomerMemo: { value: clean(payment.label, 180) + ' · Koa’s Events ' + record.id },
-    PrivateNote: 'Koa CRM ' + record.id + ' · ' + clean(payment.label, 180),
+    CustomerMemo: { value: clean('Payment milestone: ' + payment.label + ' · Koa’s Events ' + record.id, 1000) },
+    PrivateNote: clean('Koa CRM ' + record.id + ' · ' + payment.label + ' · proposal total $' + proposalTotal.toFixed(2), 4000),
     Line: [{
       Amount: amount,
       DetailType: 'SalesItemLineDetail',
-      Description: clean(payment.label, 300) + ' for Koa’s Events proposal ' + record.id,
+      Description: clean(financialSnapshot, 4000),
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         Qty: 1,
@@ -331,6 +358,121 @@ async function syncAccountingStatus(context: Context, record: any) {
   return state;
 }
 
+function moneyDelta(a: unknown, b: unknown) {
+  return Math.round((Number(a || 0) - Number(b || 0)) * 100) / 100;
+}
+
+function buildAccountingAudit(records: any[]) {
+  const rows = (Array.isArray(records) ? records : [])
+    .filter((record: any) => record?.kind === 'proposal' && record?.proposal)
+    .map((record: any) => {
+      const proposal = record.proposal || {};
+      const qbo = record?.accounting?.quickbooks || {};
+      const schedule = scheduleFor(record);
+      const activeInvoices = (Array.isArray(qbo.invoices) ? qbo.invoices : []).filter((entry: any) =>
+        entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
+      );
+      const issues: any[] = [];
+      const proposalTotal = Math.round(Number(proposal.total || 0) * 100) / 100;
+      const scheduledTotal = Math.round(schedule.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0) * 100) / 100;
+
+      if (Math.abs(moneyDelta(scheduledTotal, proposalTotal)) >= 0.01) {
+        issues.push({ code:'schedule_total', label:'CRM payment schedule', expected:proposalTotal, actual:scheduledTotal, delta:moneyDelta(scheduledTotal, proposalTotal) });
+      }
+
+      if (qbo.estimateId) {
+        const estimateTotal = Math.round(Number(qbo.estimateTotal || 0) * 100) / 100;
+        if (Math.abs(moneyDelta(estimateTotal, proposalTotal)) >= 0.01) {
+          issues.push({ code:'estimate_total', label:'QuickBooks estimate total', expected:proposalTotal, actual:estimateTotal, delta:moneyDelta(estimateTotal, proposalTotal) });
+        }
+      } else if (['accepted','booked'].includes(String(proposal.status || ''))) {
+        issues.push({ code:'estimate_missing', label:'QuickBooks estimate', expected:proposalTotal, actual:null, delta:null });
+      }
+
+      const invoiceByPayment = new Map(activeInvoices.map((entry: any) => [String(entry.paymentId || ''), entry]));
+      activeInvoices.forEach((invoice: any) => {
+        const milestone = schedule.find((item: any) => String(item.id || '') === String(invoice.paymentId || ''));
+        const invoiceTotal = Math.round(Number(invoice.total ?? invoice.amount ?? 0) * 100) / 100;
+        if (!milestone) {
+          issues.push({ code:'invoice_orphan', label:'QuickBooks invoice ' + (invoice.docNumber || invoice.invoiceId), expected:null, actual:invoiceTotal, delta:null });
+          return;
+        }
+        const milestoneAmount = Math.round(Number(milestone.amount || 0) * 100) / 100;
+        if (Math.abs(moneyDelta(invoiceTotal, milestoneAmount)) >= 0.01) {
+          issues.push({ code:'invoice_milestone', label:(milestone.label || 'Milestone') + ' invoice', expected:milestoneAmount, actual:invoiceTotal, delta:moneyDelta(invoiceTotal, milestoneAmount) });
+        }
+      });
+
+      const issuedTotal = Math.round(activeInvoices.reduce((sum: number, entry: any) => sum + Number(entry.total ?? entry.amount ?? 0), 0) * 100) / 100;
+      const uninvoicedTotal = Math.round(schedule.reduce((sum: number, item: any) => {
+        return sum + (invoiceByPayment.has(String(item.id || '')) ? 0 : Number(item.amount || 0));
+      }, 0) * 100) / 100;
+      const allocatedTotal = Math.round((issuedTotal + uninvoicedTotal) * 100) / 100;
+      if (Math.abs(moneyDelta(allocatedTotal, proposalTotal)) >= 0.01) {
+        issues.push({ code:'allocation_total', label:'Issued invoices + uninvoiced milestones', expected:proposalTotal, actual:allocatedTotal, delta:moneyDelta(allocatedTotal, proposalTotal) });
+      }
+
+      const paymentsReceived = Math.round(activeInvoices.reduce((sum: number, entry: any) => {
+        const total = Number(entry.total ?? entry.amount ?? 0);
+        const balance = Number(entry.balance ?? total);
+        return sum + Math.max(0, total - balance);
+      }, 0) * 100) / 100;
+      const openInvoiceBalance = Math.round(activeInvoices.reduce((sum: number, entry: any) => sum + Math.max(0, Number(entry.balance ?? entry.total ?? entry.amount ?? 0)), 0) * 100) / 100;
+      const remainingBalance = Math.max(0, Math.round((proposalTotal - paymentsReceived) * 100) / 100);
+      const expectedOpenInvoiceBalance = Math.max(0, Math.round((issuedTotal - paymentsReceived) * 100) / 100);
+      const accountedRemainingBalance = Math.round((openInvoiceBalance + uninvoicedTotal) * 100) / 100;
+
+      if (Math.abs(moneyDelta(accountedRemainingBalance, remainingBalance)) >= 0.01) {
+        issues.push({ code:'remaining_balance', label:'Remaining balance (open invoices + uninvoiced milestones)', expected:remainingBalance, actual:accountedRemainingBalance, delta:moneyDelta(accountedRemainingBalance, remainingBalance) });
+      }
+
+      if (Math.abs(moneyDelta(openInvoiceBalance, expectedOpenInvoiceBalance)) >= 0.01) {
+        issues.push({ code:'invoice_balance', label:'QuickBooks open invoice balance', expected:expectedOpenInvoiceBalance, actual:openInvoiceBalance, delta:moneyDelta(openInvoiceBalance, expectedOpenInvoiceBalance) });
+      }
+      if (qbo.balanceDue != null && Math.abs(moneyDelta(qbo.balanceDue, openInvoiceBalance)) >= 0.01) {
+        issues.push({ code:'stored_balance', label:'Stored QuickBooks balance', expected:openInvoiceBalance, actual:Math.round(Number(qbo.balanceDue || 0) * 100) / 100, delta:moneyDelta(qbo.balanceDue, openInvoiceBalance) });
+      }
+
+      return {
+        recordId: record.id,
+        clientName: clean(record.customer?.name || record.id, 180),
+        eventDate: isoDate(record.customer?.eventDate),
+        proposalStatus: String(proposal.status || record.status || ''),
+        proposalTotal,
+        scheduledTotal,
+        estimateId: String(qbo.estimateId || ''),
+        estimateDocNumber: String(qbo.estimateDocNumber || ''),
+        estimateTotal: qbo.estimateId ? Math.round(Number(qbo.estimateTotal || 0) * 100) / 100 : null,
+        invoiceCount: activeInvoices.length,
+        issuedTotal,
+        uninvoicedTotal,
+        paymentsReceived,
+        openInvoiceBalance,
+        remainingBalance,
+        lastSyncedAt: String(qbo.lastSyncedAt || ''),
+        issues,
+        reconciled: issues.length === 0,
+      };
+    })
+    .filter((row: any) => row.estimateId || row.invoiceCount > 0 || ['accepted','booked'].includes(row.proposalStatus))
+    .sort((a: any, b: any) => {
+      if (a.reconciled !== b.reconciled) return a.reconciled ? 1 : -1;
+      return String(a.eventDate || '9999').localeCompare(String(b.eventDate || '9999'));
+    });
+
+  const flagged = rows.filter((row: any) => !row.reconciled);
+  return {
+    generatedAt: new Date().toISOString(),
+    clientCount: rows.length,
+    reconciledCount: rows.length - flagged.length,
+    flaggedCount: flagged.length,
+    totalProposalValue: Math.round(rows.reduce((sum: number, row: any) => sum + row.proposalTotal, 0) * 100) / 100,
+    totalPaymentsReceived: Math.round(rows.reduce((sum: number, row: any) => sum + row.paymentsReceived, 0) * 100) / 100,
+    totalRemainingBalance: Math.round(rows.reduce((sum: number, row: any) => sum + row.remainingBalance, 0) * 100) / 100,
+    rows,
+  };
+}
+
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const isCallback = url.pathname.endsWith('/callback');
@@ -361,6 +503,8 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
     ]);
+    const records = await readRecords(context);
+    const accountingAudit = buildAccountingAudit(records);
     const receipts = Array.isArray(webhookHistory) && webhookHistory.length
       ? webhookHistory
       : (webhookReceipt ? [webhookReceipt] : []);
@@ -398,6 +542,7 @@ export default async (req: Request, context: Context) => {
       linkedTest: linkedTest || null,
       productionTest: productionTest || null,
       productionLinkedTest: productionLinkedTest || null,
+      accountingAudit,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }

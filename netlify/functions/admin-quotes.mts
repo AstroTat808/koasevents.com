@@ -139,6 +139,7 @@ type SalesRecord = {
     taxRate: number;
     taxAmount: number;
     total: number;
+    depositPercent: number;
     depositAmount: number;
     paymentSchedule: PaymentItem[];
     notesToClient: string;
@@ -782,15 +783,9 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const taxRate = 4.712;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
-  const depositAmount = Math.round(total * 0.10 * 100) / 100;
-  const remaining = Math.max(0, total - depositAmount);
-  const secondAmount = Math.round((remaining / 2) * 100) / 100;
-  const finalAmount = Math.round((remaining - secondAmount) * 100) / 100;
-  const schedule: PaymentItem[] = [
-    { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-    { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -90) : '', amount: secondAmount },
-    { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -60) : '', amount: finalAmount },
-  ];
+  const depositPercent = 10;
+  const depositAmount = Math.round(total * depositPercent) / 100;
+  const schedule = rebalancePaymentSchedule([], total, depositAmount, eventDate);
 
   return {
     publicToken: publicToken(),
@@ -802,6 +797,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     taxRate,
     taxAmount,
     total,
+    depositPercent,
     depositAmount,
     paymentSchedule: schedule,
     notesToClient: '',
@@ -865,6 +861,92 @@ function sanitizeSchedule(input: unknown): PaymentItem[] {
   })).filter((item) => item.label);
 }
 
+function roundMoney(value: unknown) {
+  return Math.round(finite(value) * 100) / 100;
+}
+
+function effectiveDepositPercent(proposal: any) {
+  const explicit = Number(proposal?.depositPercent);
+  if (Number.isFinite(explicit)) return Math.min(100, Math.max(0, Math.round(explicit * 1000) / 1000));
+  const total = finite(proposal?.total);
+  const deposit = finite(proposal?.depositAmount);
+  if (total > 0) return Math.min(100, Math.max(0, Math.round((deposit / total) * 100000) / 1000));
+  return 10;
+}
+
+function rebalancePaymentSchedule(input: unknown, totalValue: number, depositValue: number, eventDate = ''): PaymentItem[] {
+  const total = Math.max(0, roundMoney(totalValue));
+  const deposit = Math.min(total, Math.max(0, roundMoney(depositValue)));
+  let schedule = sanitizeSchedule(input);
+
+  if (!schedule.length) {
+    schedule = [
+      { label: 'Reservation deposit', dueDate: '', amount: deposit },
+      { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -90) : '', amount: 0 },
+      { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -60) : '', amount: 0 },
+    ];
+  }
+
+  const first = {
+    ...schedule[0],
+    label: schedule[0]?.label || 'Reservation deposit',
+    amount: deposit,
+  };
+  let remainingRows = schedule.slice(1);
+  const remaining = Math.max(0, roundMoney(total - deposit));
+
+  if (!remainingRows.length && remaining > 0) {
+    remainingRows = [{
+      label: 'Final payment',
+      dueDate: eventDate ? offsetDate(eventDate, -60) : '',
+      amount: remaining,
+    }];
+  }
+  if (!remainingRows.length) return [first];
+
+  const weightTotal = remainingRows.reduce((sum, item) => sum + Math.max(0, finite(item.amount)), 0);
+  let allocated = 0;
+  const balanced = remainingRows.map((item, index) => {
+    const amount = index === remainingRows.length - 1
+      ? Math.max(0, roundMoney(remaining - allocated))
+      : Math.max(0, roundMoney(
+          weightTotal > 0
+            ? remaining * (Math.max(0, finite(item.amount)) / weightTotal)
+            : remaining / remainingRows.length,
+        ));
+    allocated = roundMoney(allocated + amount);
+    return { ...item, amount };
+  });
+  return [first, ...balanced];
+}
+
+function syncUncommittedBookingPayments(record: SalesRecord, schedule: PaymentItem[]) {
+  if (!record.booking?.payments?.length) return;
+  const invoices = Array.isArray((record as any)?.accounting?.quickbooks?.invoices)
+    ? (record as any).accounting.quickbooks.invoices
+    : [];
+  const hasIssuedInvoice = invoices.some((entry: any) =>
+    entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
+  );
+  const hasPaidPayment = record.booking.payments.some((item) => item.status === 'paid');
+  const signedContract = record.booking.contract?.status === 'signed' || Boolean(record.booking.contract?.koaSignature);
+  if (hasIssuedInvoice || hasPaidPayment || signedContract) return;
+
+  record.booking.payments = schedule.map((item, index) => {
+    const current = record.booking!.payments[index];
+    return {
+      id: current?.id || 'pay-' + (index + 1),
+      label: item.label,
+      dueDate: item.dueDate,
+      amount: item.amount,
+      status: current?.status || 'pending',
+      paidAt: current?.paidAt,
+      reference: current?.reference,
+      paymentUrl: current?.paymentUrl,
+    };
+  });
+}
+
 function updateProposal(record: SalesRecord, payload: any) {
   const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '', record.packageId || '');
   const lineItems = sanitizeLines(payload.lineItems);
@@ -877,6 +959,10 @@ function updateProposal(record: SalesRecord, payload: any) {
   const taxRate = 4.712;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
+  const depositPercent = Math.min(100, Math.max(0, finite(payload.depositPercent ?? effectiveDepositPercent(current), 0, 100)));
+  const depositAmount = roundMoney(total * depositPercent / 100);
+  const eventDate = cleanText(payload.customer?.eventDate ?? record.customer?.eventDate, 40);
+  const paymentSchedule = rebalancePaymentSchedule(payload.paymentSchedule ?? current.paymentSchedule, total, depositAmount, eventDate);
   const statusValues = new Set(['draft','sent','viewed','accepted','declined','expired','booked']);
   const requestedStatus = cleanText(payload.status, 30);
   const status = statusValues.has(requestedStatus) ? requestedStatus as any : current.status;
@@ -900,10 +986,12 @@ function updateProposal(record: SalesRecord, payload: any) {
     taxRate,
     taxAmount,
     total,
-    depositAmount: Math.min(total, finite(payload.depositAmount)),
-    paymentSchedule: sanitizeSchedule(payload.paymentSchedule),
+    depositPercent,
+    depositAmount,
+    paymentSchedule,
     notesToClient: cleanText(payload.notesToClient, 6000),
   };
+  syncUncommittedBookingPayments(record, paymentSchedule);
   record.status = status;
   record.stage = status === 'booked' ? 'booked' : 'proposal';
   record.updatedAt = new Date().toISOString();
@@ -1805,28 +1893,14 @@ export default async (req: Request, context: Context) => {
     const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
     const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
 
-    const oldSchedule = Array.isArray(current.paymentSchedule) ? current.paymentSchedule : [];
-    const oldScheduleTotal = oldSchedule.reduce((sum, item) => sum + finite(item.amount), 0);
-    let paymentSchedule: PaymentItem[] = [];
-    if (oldSchedule.length && oldScheduleTotal > 0) {
-      let allocated = 0;
-      paymentSchedule = oldSchedule.map((item, index) => {
-        const amount = index === oldSchedule.length - 1
-          ? Math.max(0, Math.round((total - allocated) * 100) / 100)
-          : Math.max(0, Math.round((finite(item.amount) / oldScheduleTotal) * total * 100) / 100);
-        allocated += amount;
-        return { ...item, amount };
-      });
-    } else {
-      const deposit = Math.round(total * 0.10 * 100) / 100;
-      const remaining = Math.max(0, total - deposit);
-      const second = Math.round((remaining / 2) * 100) / 100;
-      paymentSchedule = [
-        { label: 'Reservation deposit', dueDate: '', amount: deposit },
-        { label: 'Second payment', dueDate: record.customer?.eventDate ? offsetDate(record.customer.eventDate, -90) : '', amount: second },
-        { label: 'Final payment', dueDate: record.customer?.eventDate ? offsetDate(record.customer.eventDate, -60) : '', amount: Math.round((remaining - second) * 100) / 100 },
-      ];
-    }
+    const depositPercent = effectiveDepositPercent(current);
+    const depositAmount = roundMoney(total * depositPercent / 100);
+    const paymentSchedule = rebalancePaymentSchedule(
+      current.paymentSchedule,
+      total,
+      depositAmount,
+      record.customer?.eventDate || '',
+    );
 
     record.proposal = {
       ...current,
@@ -1836,11 +1910,11 @@ export default async (req: Request, context: Context) => {
       taxRate,
       taxAmount,
       total,
-      depositAmount: currentTotal > 0
-        ? Math.min(total, Math.round((finite(current.depositAmount) / currentTotal) * total * 100) / 100)
-        : Math.round(total * 0.10 * 100) / 100,
+      depositPercent,
+      depositAmount,
       paymentSchedule,
     };
+    syncUncommittedBookingPayments(record, paymentSchedule);
     record.updatedAt = new Date().toISOString();
     records = await saveRecord(context, record, records);
     await appendEvent(context, {
