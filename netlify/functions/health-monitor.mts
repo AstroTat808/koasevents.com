@@ -3,7 +3,7 @@ import {
   persistHealth,
   readLatestHealth,
   runSystemHealth,
-  sendHealthTransitionAlert,
+  sendHealthTransitionAlerts,
 } from './_shared/system-health';
 
 export default async (_req:Request,context:Context) => {
@@ -11,8 +11,7 @@ export default async (_req:Request,context:Context) => {
   const previous=await readLatestHealth(context);
   const current=await runSystemHealth('hourly');
   await persistHealth(context,current);
-  await sendHealthTransitionAlert(previous,current);
-  return Response.json({ok:true,overall:current.overall,failed:current.failed,checkedAt:current.checkedAt});
+  await sendHealthTransitionAlerts(previous,current);
 };
 
 export const config:Config={schedule:'@hourly'};
