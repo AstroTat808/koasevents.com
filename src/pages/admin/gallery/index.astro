@@ -108,7 +108,7 @@ const allCategories = [...categories, 'Legacy Archive'];
   <script id="all-categories-data" type="application/json" set:html={JSON.stringify(allCategories)}></script>
 
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
 
     const curated = JSON.parse(document.getElementById('curated-data')?.textContent || '[]');
     const categories = JSON.parse(document.getElementById('categories-data')?.textContent || '[]');
@@ -432,7 +432,7 @@ const allCategories = [...categories, 'Legacy Archive'];
     }
 
     async function load() {
-      const user = await getUser();
+      const user = await getAdminSession();
       if (!hasAdminAccess(user)) {
         unauthorized?.classList.remove('hidden');
         return;
