@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireOperations } from './_shared/admin';
+import { isApprovedManager, requireOperations } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 
@@ -369,7 +369,16 @@ export default async (req:Request, context:Context) => {
   const body:any = await req.json().catch(()=>null);
   if (!body) return Response.json({error:'Invalid JSON.'},{status:400});
   const action = clean(body.action,60);
-  const actor = clean(auth.user?.email,240) || 'admin';
+  const actor = clean(auth.user?.email,240) || 'staff';
+  const managerOnlyActions = new Set([
+    'save-cleanup-settings',
+    'clear-cleanup-review',
+    'save-workflow',
+    'save-template',
+  ]);
+  if (managerOnlyActions.has(action) && !isApprovedManager(auth.user)) {
+    return Response.json({error:'Manager permission required for this action.'},{status:403});
+  }
 
   if (action === 'bulk-approve-cleanup-review') {
     const ids=Array.from(new Set((Array.isArray(body.recordIds)?body.recordIds:[]).map((value:any)=>clean(value,100)).filter(Boolean))).slice(0,100);
