@@ -2,7 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 import { ensureLifecycle, markLifecycleEvent } from './_shared/lifecycle';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
-import { appendCleanupAudit } from './_shared/crm-cleanup-audit';
+import { appendCleanupAudit, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 
 const HST=-10*60*60*1000;
 function hstDate(){return new Date(Date.now()+HST).toISOString().slice(0,10);}
@@ -31,6 +31,7 @@ export default async(_req:Request,context:Context)=>{
         reasons:cleanup.reasons,
         chainIds:[record.id],
         dedupeKey:'auto-trash|'+classificationKey,
+        dimensions:cleanupDimensionsFromRecord(record),
       });
       records=await autoTrashChain(context,record,records);
       continue;
@@ -44,6 +45,7 @@ export default async(_req:Request,context:Context)=>{
         score:cleanup.score,
         reasons:cleanup.reasons,
         dedupeKey:'auto-flag|'+classificationKey+'|'+cleanupMode,
+        dimensions:cleanupDimensionsFromRecord(record),
       });
     }
     await ensureLifecycle(context,record);
