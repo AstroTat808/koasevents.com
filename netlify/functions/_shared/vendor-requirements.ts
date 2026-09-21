@@ -64,6 +64,9 @@ export function suggestVendorRequirements(record:any,ops:any):VendorSuggestion[]
   const guestCount=guests(record,ops);
   const text=allText(record,ops);
   const eventAnswers=answerText(ops,'event');
+  const ceremonyAnswers=answerText(ops,'ceremony');
+  const receptionAnswers=answerText(ops,'reception');
+  const layoutAnswers=answerText(ops,'layout');
   const barAnswers=answerText(ops,'bar');
   const decor=answerText(ops,'decor');
   const rentals=answerText(ops,'rentals');
@@ -114,19 +117,46 @@ export function suggestVendorRequirements(record:any,ops:any):VendorSuggestion[]
     set('DJ','optional','Signature includes audio equipment and Sonos; a DJ is optional unless managed music/MC service is desired.');
   }
 
-  const receptionOnly=/reception only|no ceremony|ceremony off[- ]?site|ceremony elsewhere|already married/.test(eventAnswers+' '+text);
-  const ceremonyOnsite=!receptionOnly&&(wedding||/ceremony|vows|officiant|processional/.test(eventAnswers+' '+timeline));
+  const receptionOnly=/reception only|no ceremony|ceremony off[- ]?site|ceremony elsewhere|already married/.test(eventAnswers+' '+ceremonyAnswers+' '+text);
+  const ceremonyOnsite=!receptionOnly&&(wedding||/ceremony|vows|officiant|processional|on[- ]?site/.test(eventAnswers+' '+ceremonyAnswers+' '+timeline));
   if(receptionOnly)set('Officiant','not_needed','Planning details indicate the ceremony is not being held at this event.');
   else if(ceremonyOnsite)set('Officiant','required','Planning details indicate an on-site wedding ceremony.');
 
-  const meal=/dinner|lunch|brunch|buffet|meal|food service|cater|reception/.test(eventAnswers+' '+text);
+  const meal=/dinner|lunch|brunch|buffet|meal|food service|cater|reception/.test(eventAnswers+' '+receptionAnswers+' '+text);
+  const plated=/plated|served dinner|table service/.test(receptionAnswers+' '+layoutAnswers);
+  const buffet=/buffet|food station|family style|family-style|food truck/.test(receptionAnswers+' '+layoutAnswers);
   if(meal)set('Caterer','required','Planning details indicate a reception meal or food service.');
+  if(plated)set('Caterer','required','A plated/table-service reception requires a confirmed caterer and service plan.');
+  if(buffet)set('Caterer','required','The floor-plan or reception plan includes buffet/station food service.');
 
-  const dry=/dry wedding|no alcohol|no bar|non[- ]?alcoholic only|alcohol[- ]?free/.test(barAnswers+' '+text);
-  const alcohol=!dry&&/open bar|hosted bar|beer|wine|cocktail|champagne|alcohol|bartender/.test(barAnswers+' '+text);
+  const sameSpaceFlip=/same space|room flip|flip the space|ceremony.*reception.*same|reception.*ceremony.*same/.test(ceremonyAnswers+' '+receptionAnswers+' '+layoutAnswers);
+  if(sameSpaceFlip){
+    if(!['gardenia','orchid','hibiscus','signature-wedding'].includes(pkg))set('Wedding Planner','required','Ceremony and reception use the same space, so a coordinated room flip is operationally important.');
+    else set('Wedding Planner','not_needed','Koa’s package coordination covers the planned ceremony-to-reception room flip.','Koa’s coordination covers room flip');
+    set('Rentals','recommended','Ceremony and reception share a space, so furniture/layout transitions should be planned carefully.');
+  }
+
+  const separateAudio=/separate ceremony|ceremony lawn|reception pavilion|two audio zones|multiple sound|separate spaces/.test(ceremonyAnswers+' '+receptionAnswers+' '+layoutAnswers);
+  if(separateAudio)set('DJ','recommended','Separate ceremony/reception spaces benefit from managed audio and microphone coordination.');
+
+  const rainPlan=/rain plan|weather backup|pavilion backup|indoor backup|covered backup/.test(layoutAnswers+' '+eventAnswers);
+  if(rainPlan&&guestCount>=40)set('Rentals','recommended','The weather-backup layout may require flexible furniture or rental planning.');
+
+  const tent=/tent|canopy/.test(layoutAnswers+' '+rentals);
+  if(tent)set('Rentals','required','The floor-plan indicates tent/canopy infrastructure that should be confirmed with the rental vendor.');
+
+  const danceFloor=/dance floor/.test(layoutAnswers+' '+receptionAnswers+' '+timeline);
+  if(danceFloor){set('DJ','recommended','The reception plan includes a dance floor.');set('Rentals','recommended','The floor plan includes a dance floor or related rental need.');}
+
+  const sweetheart=/sweetheart table|head table|wedding party table/.test(layoutAnswers+' '+receptionAnswers);
+  if(sweetheart&&furniture>0&&guestCount>furniture)set('Rentals','recommended','The reception layout adds specialty table/seating needs beyond the package inventory.');
+
+  const dry=/dry wedding|no alcohol|no bar|non[- ]?alcoholic only|alcohol[- ]?free|mocktails only/.test(barAnswers+' '+receptionAnswers+' '+text);
+  const alcohol=!dry&&/open bar|hosted bar|beer|wine|cocktail|champagne|alcohol|bartender|full bar|beer and wine|beer & wine/.test(barAnswers+' '+receptionAnswers+' '+text);
   if(dry)set('Bartender / Mobile Bar','not_needed','Planning answers indicate no alcohol service.');
   else if(koaBar)set('Bartender / Mobile Bar','not_needed','Koa’s Mobile Bar is already included or selected for this event.','Koa’s Mobile Bar already selected');
   else if(alcohol)set('Bartender / Mobile Bar','required','Alcohol service is planned, and Koa’s requires approved bartenders.');
+  if(/cocktail hour|bar location|satellite bar|second bar/.test(barAnswers+' '+receptionAnswers+' '+layoutAnswers)&&!koaBar)set('Bartender / Mobile Bar','required','The reception plan includes a dedicated or multi-location bar service setup.');
 
   if(/floral|flowers|bouquet|boutonniere|centerpiece|arch|lei/.test(decor)&&!signature)set('Florist','recommended','Decor answers include floral elements beyond the package baseline.');
   if(/cake|dessert|cupcake|pastry|sweet table/.test(decor)&&!signature&&pkg!=='gardenia')set('Cake / Dessert','recommended','Planning answers include cake or dessert service.');
