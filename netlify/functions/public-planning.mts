@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { baseVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
+import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -179,7 +179,7 @@ export default async (req:Request,context:Context)=>{
   let ops:any=await opsStore.get('events/'+record.id,{type:'json'});
   if(!ops){ops=defaultOps(record);await opsStore.setJSON('events/'+record.id,ops);}
   else if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';await opsStore.setJSON('events/'+record.id,ops);}
-  else if(!['auto','manual'].includes(String(ops.vendorRequirementsMode||''))){ops.vendorRequirementsMode='manual';await opsStore.setJSON('events/'+record.id,ops);}
+  else if(!['auto','manual'].includes(String(ops.vendorRequirementsMode||''))){if(isBaselineVendorRequirements(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}else{ops.vendorRequirementsMode='manual';}await opsStore.setJSON('events/'+record.id,ops);}
 
   if(req.method==='GET') {
     return Response.json(publicOps(record,ops),{headers:{'Cache-Control':'private, no-store'}});
