@@ -6,6 +6,7 @@ import {
   persistHealth,
   readHealthHistory,
   readLatestHealth,
+  readUptimeHistory,
   runSystemHealth,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
@@ -43,7 +44,7 @@ export default async (req:Request,context:Context) => {
 
   const [history,uptimeHistory,deployments]=await Promise.all([
     readHealthHistory(context,120),
-    readHealthHistory(context,5000),
+    readUptimeHistory(context,2300),
     cachedDeploymentHistory(context),
   ]);
   const uptime=calculateUptime(uptimeHistory);
