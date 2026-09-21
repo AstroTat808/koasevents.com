@@ -29,7 +29,9 @@ function performance(record:any,bartenderId:string){
     .find((entry:any)=>clean(entry?.bartenderId,80)===bartenderId);
 }
 function hawaiiDateKey(now=new Date()){
-  return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).format(now);
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+  const map=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
+  return map.year+'-'+map.month+'-'+map.day;
 }
 function payForShift(record:any,bartender:any){
   const card=timecard(record,bartender.id);
