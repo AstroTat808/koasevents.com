@@ -4,8 +4,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 <BaseLayout noindex title="Blog Admin | Koa’s Events" description="Manage Koa’s Events blog." canonical="https://www.koasevents.com/admin/blog/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
-      <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Admin</p><h1 class="display mt-3 text-5xl">Blog entries</h1></div><a href="/admin/" class="link-arrow">Admin home →</a></div>
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Staff Workspace</p><h1 class="display mt-3 text-5xl">Blog entries</h1></div><a href="/staff/" class="link-arrow">Staff home →</a></div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an authorized staff account at <a class="underline" href="/staff/">Koa’s Staff Workspace</a>.</div>
       <div data-admin-ui class="hidden grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
         <form data-post-form class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <input type="hidden" name="originalSlug" />
@@ -45,7 +45,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
       const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.some((role) => ['admin','staff','sales','manager'].includes(String(role || '').toLowerCase())));
     }
 
     function clearForm() {
