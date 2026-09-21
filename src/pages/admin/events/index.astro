@@ -130,7 +130,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
           <div data-panel="vendors" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
             <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h3 class="display mt-2 text-4xl">Vendor plan + contacts + insurance</h3></div><button type="button" data-add-vendor class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add vendor</button></div>
-            <div class="mt-6 rounded-xl bg-[var(--koa-sand)] p-4"><div class="flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Event Team checklist</p><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Set what this specific wedding requires. Couples will see Required, Recommended, Optional, or Not Needed in their Vendor Marketplace.</p></div><button data-save-vendor-requirements type="button" class="rounded-full bg-[var(--koa-clay)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Save vendor plan</button></div><div data-vendor-requirements class="mt-4 grid gap-2"></div></div>
+            <div class="mt-6 rounded-xl bg-[var(--koa-sand)] p-4"><div class="flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Event Team checklist</p><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Set what this specific wedding requires. Couples will see Required, Recommended, Optional, or Not Needed in their Vendor Marketplace.</p></div><div class="flex flex-wrap gap-2"><button data-apply-vendor-suggestions type="button" class="rounded-full border border-[var(--koa-forest)] bg-white px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Apply smart suggestions</button><button data-save-vendor-requirements type="button" class="rounded-full bg-[var(--koa-clay)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Save vendor plan</button></div></div><div data-vendor-suggestions class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4"></div><div data-vendor-requirements class="mt-4 grid gap-2"></div></div>
             <div data-vendors class="mt-6 grid gap-3"></div>
             <button data-save-vendors class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button>
           </div>
@@ -187,6 +187,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const documentsEl=document.querySelector('[data-documents]');
     const vendorsEl=document.querySelector('[data-vendors]');
     const vendorRequirementsEl=document.querySelector('[data-vendor-requirements]');
+    const vendorSuggestionsEl=document.querySelector('[data-vendor-suggestions]');
     const questionnaireEl=document.querySelector('[data-questionnaire]');
     const timelineEl=document.querySelector('[data-timeline]');
     const checklistEl=document.querySelector('[data-checklist]');
@@ -204,7 +205,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(managerAccess)return;
       overviewForm?.querySelectorAll('input,select,textarea,button').forEach((el)=>el.disabled=true);
       uploadForm?.classList.add('hidden');
-      ['[data-add-vendor]','[data-save-vendors]','[data-save-vendor-requirements]','[data-save-questionnaire]','[data-add-timeline]','[data-save-timeline]','[data-save-checklist]','[data-add-task]','[data-save-tasks]'].forEach((selector)=>document.querySelector(selector)?.classList.add('hidden'));
+      ['[data-add-vendor]','[data-save-vendors]','[data-save-vendor-requirements]','[data-apply-vendor-suggestions]','[data-save-questionnaire]','[data-add-timeline]','[data-save-timeline]','[data-save-checklist]','[data-add-task]','[data-save-tasks]'].forEach((selector)=>document.querySelector(selector)?.classList.add('hidden'));
     }
     function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
     function dateLabel(value){if(!value)return 'Date TBD';return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value));}
@@ -271,7 +272,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       overviewForm.elements.eventEnd.value=entry.ops.eventEnd||'';
       overviewForm.elements.teardownEnd.value=entry.ops.teardownEnd||'';
       overviewForm.elements.notes.value=entry.ops.notes||'';
-      renderVendorRequirements();renderVendors();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
+      renderVendorSuggestions();renderVendorRequirements();renderVendors();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
+    }
+
+    function renderVendorSuggestions(){
+      if(!vendorSuggestionsEl)return;
+      const rows=selected?.vendorSuggestions||[];
+      vendorSuggestionsEl.innerHTML='<p class="eyebrow text-[var(--koa-clay)]">Current smart suggestions</p>';
+      const list=document.createElement('div');list.className='mt-3 grid gap-2 md:grid-cols-2';
+      rows.forEach((r)=>{
+        const item=document.createElement('article');item.className='rounded-lg border border-[var(--koa-line)] p-3';
+        item.innerHTML='<div class="flex items-start justify-between gap-3"><strong class="text-sm">'+escapeHtml(r.category)+'</strong><span class="text-[.55rem] font-black uppercase tracking-[.08em]">'+escapeHtml(String(r.importance).replaceAll('_',' '))+'</span></div><p class="mt-2 text-xs text-[var(--koa-ink)]/55">'+escapeHtml((r.reasons||[]).join(' · '))+'</p>';
+        list.appendChild(item);
+      });
+      vendorSuggestionsEl.appendChild(list);
     }
 
     function renderVendorRequirements(){
@@ -393,6 +407,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-add-vendor]')?.addEventListener('click',()=>{if(vendorsEl.querySelector('p'))vendorsEl.innerHTML='';vendorsEl.appendChild(vendorRow());});
     document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{await saveSection('save-vendors',{vendors:collectVendors()});selected.ops.vendors=collectVendors();renderVendors();renderSummary();});
     document.querySelector('[data-save-vendor-requirements]')?.addEventListener('click',async()=>{await saveSection('save-vendor-requirements',{vendorRequirements:collectVendorRequirements()});renderVendorRequirements();});
+    document.querySelector('[data-apply-vendor-suggestions]')?.addEventListener('click',async()=>{if(!selected)return;const result=await saveSection('apply-vendor-suggestions',{});selected.ops=result.ops;renderVendorRequirements();await load(String(search?.value||'').trim());});
     document.querySelector('[data-save-questionnaire]')?.addEventListener('click',async()=>{await saveSection('save-questionnaire',{questionnaire:collectQuestionnaire()});renderQuestionnaire();});
     document.querySelector('[data-add-timeline]')?.addEventListener('click',()=>{if(timelineEl.querySelector('p'))timelineEl.innerHTML='';timelineEl.appendChild(timelineRow());});
     document.querySelector('[data-save-timeline]')?.addEventListener('click',async()=>{await saveSection('save-timeline',{timeline:collectTimeline()});renderTimeline();});
