@@ -135,6 +135,12 @@ def source_mode():
   "rolling forecast":"data-rolling-forecast",
   "segmented conversion":"data-segmented-conversion",
   "monthly sales plan":"data-monthly-sales-plan",
+  "seasonality profile":"function seasonalityProfile",
+  "personalized win probability":"function personalizedProbability",
+  "win probability card":"Expected win probability",
+  "booking bartender section":"data-booking-bartender-section",
+  "booking bartender form":"data-booking-bartender-form",
+  "booking bartender options":"data-booking-bartender-options",
   "recommended price apply action":"apply-mobile-bar-margin-target",
  }
  for label,needle in profit_requirements.items():
@@ -153,6 +159,9 @@ def source_mode():
   "staffing settings":"staffing:",
   "blackout date persistence":"blackoutDates:",
   "bartender availability":"MobileBarBartenderAvailability",
+  "booking bartender assignment storage":"bartenderAssignments?:",
+  "booking bartender assignment action":"update-mobile-bar-bartender-assignments",
+  "booking staffing conflict validation":"mobileBarStaffingConflicts",
   "profit settings storage":"settings/mobile-bar-profitability",
   "profit settings action":"update-mobile-bar-profit-settings",
   "margin target action":"apply-mobile-bar-margin-target",
