@@ -81,6 +81,7 @@ type EventOps = {
   notes: string;
   vendors: Vendor[];
   vendorRequirements: VendorRequirement[];
+  vendorRequirementsMode: 'auto' | 'manual';
   questionnaire: QuestionAnswer[];
   timeline: TimelineItem[];
   checklist: ChecklistItem[];
@@ -213,6 +214,7 @@ function defaultOps(record: any): EventOps {
     notes: '',
     vendors: [],
     vendorRequirements: seedVendorRequirements(),
+    vendorRequirementsMode: 'auto',
     questionnaire: seedQuestionnaire(),
     timeline: [],
     checklist: seedChecklist(eventDate),
@@ -342,7 +344,11 @@ export default async (req: Request, context: Context) => {
         await opsStore.setJSON('events/' + record.id, ops);
       }
       if (!Array.isArray((ops as any).vendorRequirements)) {
-        (ops as any).vendorRequirements = seedVendorRequirements();
+        (ops as any).vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+        (ops as any).vendorRequirementsMode = 'auto';
+        await opsStore.setJSON('events/' + record.id, ops);
+      } else if (!['auto','manual'].includes(String((ops as any).vendorRequirementsMode || ''))) {
+        (ops as any).vendorRequirementsMode = 'manual';
         await opsStore.setJSON('events/' + record.id, ops);
       }
       return {
@@ -389,14 +395,24 @@ export default async (req: Request, context: Context) => {
     ops.teardownEnd = clean(payload?.teardownEnd, 20);
     ops.venueArea = clean(payload?.venueArea, 180) || 'Koa’s Events';
     ops.notes = clean(payload?.notes, 12000);
+    if ((ops as any).vendorRequirementsMode !== 'manual') {
+      ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+      (ops as any).vendorRequirementsMode = 'auto';
+    }
   } else if (action === 'save-vendors') {
     ops.vendors = sanitizeVendors(payload?.vendors);
   } else if (action === 'save-vendor-requirements') {
     ops.vendorRequirements = sanitizeVendorRequirements(payload?.vendorRequirements);
+    (ops as any).vendorRequirementsMode = 'manual';
   } else if (action === 'apply-vendor-suggestions') {
     ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+    (ops as any).vendorRequirementsMode = 'auto';
   } else if (action === 'save-questionnaire') {
     ops.questionnaire = sanitizeQuestionnaire(payload?.questionnaire);
+    if ((ops as any).vendorRequirementsMode !== 'manual') {
+      ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+      (ops as any).vendorRequirementsMode = 'auto';
+    }
   } else if (action === 'save-timeline') {
     ops.timeline = sanitizeTimeline(payload?.timeline);
   } else if (action === 'save-checklist') {
