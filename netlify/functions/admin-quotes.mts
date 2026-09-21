@@ -581,6 +581,7 @@ function bookingSummary(record: SalesRecord) {
       docNumber: activeInvoice ? (invoice?.docNumber || '') : '',
       balance,
       emailStatus: activeInvoice ? (invoice?.emailStatus || '') : '',
+      paidAt: activeInvoice ? (invoice?.paidAt || '') : '',
       lastSyncedAt: activeInvoice ? (invoice?.lastSyncedAt || '') : '',
     };
   });
