@@ -14,6 +14,12 @@ type Vendor = {
   notes: string;
 };
 
+type VendorRequirement = {
+  category: string;
+  importance: 'required' | 'recommended' | 'optional' | 'not_needed';
+  note: string;
+};
+
 type QuestionAnswer = {
   id: string;
   category: string;
@@ -73,6 +79,7 @@ type EventOps = {
   venueArea: string;
   notes: string;
   vendors: Vendor[];
+  vendorRequirements: VendorRequirement[];
   questionnaire: QuestionAnswer[];
   timeline: TimelineItem[];
   checklist: ChecklistItem[];
@@ -112,6 +119,26 @@ function offsetDate(date: string, days: number) {
   if (Number.isNaN(parsed.getTime())) return '';
   parsed.setUTCDate(parsed.getUTCDate() + days);
   return parsed.toISOString().slice(0, 10);
+}
+
+function seedVendorRequirements(): VendorRequirement[] {
+  const rows: Array<[string, VendorRequirement['importance']]> = [
+    ['Wedding Planner','recommended'],
+    ['Photographer','recommended'],
+    ['Videographer','optional'],
+    ['Caterer','recommended'],
+    ['Florist','optional'],
+    ['Officiant','recommended'],
+    ['DJ','optional'],
+    ['Live Musician','optional'],
+    ['Entertainment','optional'],
+    ['Hair & Makeup','optional'],
+    ['Cake / Dessert','optional'],
+    ['Rentals','optional'],
+    ['Transportation','optional'],
+    ['Bartender / Mobile Bar','optional'],
+  ];
+  return rows.map(([category, importance]) => ({ category, importance, note: '' }));
 }
 
 function seedQuestionnaire(): QuestionAnswer[] {
@@ -200,6 +227,7 @@ function defaultOps(record: any): EventOps {
     venueArea: 'Koa’s Events',
     notes: '',
     vendors: [],
+    vendorRequirements: seedVendorRequirements(),
     questionnaire: seedQuestionnaire(),
     timeline: [],
     checklist: seedChecklist(eventDate),
@@ -213,6 +241,7 @@ function sanitizeVendors(input: unknown): Vendor[] {
   const statuses = new Set(['not_requested','requested','received','approved']);
   return input.slice(0, 100).map((row: any) => ({
     id: clean(row?.id, 80) || id('V'),
+    marketplaceVendorId: clean(row?.marketplaceVendorId, 100),
     company: clean(row?.company, 180),
     contact: clean(row?.contact, 180),
     role: clean(row?.role, 120),
@@ -222,6 +251,16 @@ function sanitizeVendors(input: unknown): Vendor[] {
     insuranceStatus: statuses.has(row?.insuranceStatus) ? row.insuranceStatus : 'not_requested',
     notes: clean(row?.notes, 1600),
   }));
+}
+
+function sanitizeVendorRequirements(input: unknown): VendorRequirement[] {
+  if (!Array.isArray(input)) return seedVendorRequirements();
+  const importance = new Set(['required','recommended','optional','not_needed']);
+  return input.slice(0, 40).map((row: any) => ({
+    category: clean(row?.category, 120),
+    importance: importance.has(row?.importance) ? row.importance : 'optional',
+    note: clean(row?.note, 600),
+  })).filter((row) => row.category);
 }
 
 function sanitizeQuestionnaire(input: unknown): QuestionAnswer[] {
@@ -315,6 +354,10 @@ export default async (req: Request, context: Context) => {
         ops = defaultOps(record);
         await opsStore.setJSON('events/' + record.id, ops);
       }
+      if (!Array.isArray((ops as any).vendorRequirements)) {
+        (ops as any).vendorRequirements = seedVendorRequirements();
+        await opsStore.setJSON('events/' + record.id, ops);
+      }
       return {
         record: {
           id: record.id,
@@ -360,6 +403,8 @@ export default async (req: Request, context: Context) => {
     ops.notes = clean(payload?.notes, 12000);
   } else if (action === 'save-vendors') {
     ops.vendors = sanitizeVendors(payload?.vendors);
+  } else if (action === 'save-vendor-requirements') {
+    ops.vendorRequirements = sanitizeVendorRequirements(payload?.vendorRequirements);
   } else if (action === 'save-questionnaire') {
     ops.questionnaire = sanitizeQuestionnaire(payload?.questionnaire);
   } else if (action === 'save-timeline') {
