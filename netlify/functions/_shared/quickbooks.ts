@@ -288,6 +288,7 @@ export type QuickBooksCatalogItem = {
   unitLabel: string;
   unitPrice: number;
   active: boolean;
+  getExempt: boolean;
   quickBooksItemId: string;
   quickBooksItemName: string;
   quickBooksType: 'Service' | 'NonInventory';
@@ -327,6 +328,7 @@ export async function getQuickBooksCatalog(context: Context): Promise<QuickBooks
     unitLabel: String(item?.unitLabel || 'each').trim().slice(0, 40),
     unitPrice: Math.max(0, Number(item?.unitPrice || 0)),
     active: item?.active !== false,
+    getExempt: item?.getExempt === true,
     quickBooksItemId: String(item?.quickBooksItemId || '').trim().slice(0, 80),
     quickBooksItemName: String(item?.quickBooksItemName || item?.name || '').trim().slice(0, 100),
     quickBooksType: String(item?.quickBooksType || '') === 'NonInventory' ? 'NonInventory' : 'Service',
@@ -345,6 +347,7 @@ export async function saveQuickBooksCatalog(context: Context, catalog: QuickBook
     unitLabel: String(item.unitLabel || 'each').trim().slice(0, 40),
     unitPrice: Math.max(0, Math.round(Number(item.unitPrice || 0) * 100) / 100),
     active: item.active !== false,
+    getExempt: item.getExempt === true,
     quickBooksItemId: String(item.quickBooksItemId || '').trim().slice(0, 80),
     quickBooksItemName: String(item.quickBooksItemName || item.name || '').trim().slice(0, 100),
     quickBooksType: item.quickBooksType === 'NonInventory' ? 'NonInventory' : 'Service',
@@ -359,10 +362,10 @@ export async function saveQuickBooksCatalog(context: Context, catalog: QuickBook
 export async function getQuickBooksGetSettings(context: Context): Promise<QuickBooksGetSettings> {
   const stored = await integrationStore(context).get(getSettingsKey(), { type: 'json' }) as any;
   return {
-    enabled: stored?.enabled !== false,
+    enabled: true,
     label: String(stored?.label || 'Hawaiʻi GET').trim().slice(0, 80),
     statutoryRate: 4.5,
-    customerRate: Math.min(4.712, Math.max(0, Number(stored?.customerRate ?? 4.712))),
+    customerRate: 4.712,
     maxPassOnRate: 4.712,
     quickBooksItemId: String(stored?.quickBooksItemId || '').trim().slice(0, 80),
     quickBooksItemName: String(stored?.quickBooksItemName || '').trim().slice(0, 100),
@@ -372,10 +375,10 @@ export async function getQuickBooksGetSettings(context: Context): Promise<QuickB
 export async function saveQuickBooksGetSettings(context: Context, settings: Partial<QuickBooksGetSettings>) {
   const current = await getQuickBooksGetSettings(context);
   const next: QuickBooksGetSettings = {
-    enabled: settings.enabled == null ? current.enabled : Boolean(settings.enabled),
+    enabled: true,
     label: String(settings.label ?? current.label ?? 'Hawaiʻi GET').trim().slice(0, 80) || 'Hawaiʻi GET',
     statutoryRate: 4.5,
-    customerRate: Math.min(4.712, Math.max(0, Number(settings.customerRate ?? current.customerRate ?? 4.712))),
+    customerRate: 4.712,
     maxPassOnRate: 4.712,
     quickBooksItemId: String(settings.quickBooksItemId ?? current.quickBooksItemId ?? '').trim().slice(0, 80),
     quickBooksItemName: String(settings.quickBooksItemName ?? current.quickBooksItemName ?? '').trim().slice(0, 100),
