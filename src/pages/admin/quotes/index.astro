@@ -707,6 +707,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let bookingRecord = null;
     let qboState = null;
     let profitRecord = null;
+    let managerAccess = false;
 
     const packageNames = {
       'signature-wedding': 'Signature Wedding Experience',
@@ -735,10 +736,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       'acrylic-bar-menu':.35, 'glassware-standard':.18, 'glassware-premium':.18
     };
 
+    function userRoles(user) {
+      const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
+      return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());
+    }
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
-      const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.some((role) => ['admin','staff','sales','manager'].includes(String(role || '').toLowerCase())));
+      const roles = userRoles(user);
+      return approvedAdminEmails.has(email) || roles.some((role) => ['admin','staff','sales','manager'].includes(role));
+    }
+    function hasManagerAccess(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      const roles = userRoles(user);
+      return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager');
+    }
+    function applyRoleUi() {
+      if (bulkTrashButton) bulkTrashButton.classList.toggle('hidden', !managerAccess);
+      mobileProfitGoalForm?.classList.toggle('hidden', !managerAccess);
+      if (profitForm) [...profitForm.elements].forEach((el)=>{ if(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement||el instanceof HTMLSelectElement||el instanceof HTMLButtonElement) el.disabled=!managerAccess; });
     }
     function money(value) { return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0)); }
     function dateTime(value) { return value ? new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)) : ''; }
@@ -1106,7 +1121,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!hasResponseActivity(record)) {
           actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
         }
-        actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
+        if(managerAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       addQuickLinks(actions,record,small);
       article.appendChild(actions);
@@ -2279,7 +2294,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!hasResponseActivity(record)) {
           actions.append(actionButton('Mark responded',small,()=>markResponded(record)));
         }
-        actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
+        if(managerAccess) actions.append(actionButton('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700',()=>deleteCrmRecord(record)));
       }
       if(mobileRevenue(record)>0) actions.append(actionButton('Margin',small,()=>openProfitModel(record)));
       addQuickLinks(actions,record,small);
@@ -2518,7 +2533,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         else if(lead) actions.append(actionButton('Build proposal',primary,()=>promote(lead,'proposal',true)));
         else if(inquiry) actions.append(actionButton('Qualify lead',primary,()=>promote(inquiry,'lead')));
         else actions.append(actionButton('Create lead',primary,()=>openConvert(quote,'lead')));
-        actions.append(actionButton('Delete quote','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
+        if(managerAccess) actions.append(actionButton('Delete quote','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{
           if(!confirm('Permanently delete saved quote '+quote.id+'?\n\nQuotes attached to proposals or booked records are protected and cannot be deleted.')) return;
           try{
             if(message) message.textContent='Deleting saved quote '+quote.id+'…';
@@ -2552,7 +2567,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('p','mt-2 text-[.66rem] font-bold text-[var(--koa-clay)]','Purges in '+daysLeft+' day'+(daysLeft===1?'':'s'))
         );
         const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
-        actions.append(
+        if(managerAccess) actions.append(
           actionButton('Restore','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{
             try{
               await api({action:'restore-record',recordId:entry.id});
@@ -2658,6 +2673,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(query='') {
       const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      managerAccess=hasManagerAccess(user); applyRoleUi();
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
       const [response,qboResponse]=await Promise.all([
         fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'}),
