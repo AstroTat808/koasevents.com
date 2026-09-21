@@ -416,7 +416,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
       }
       if(getForm&&state?.getSettings){
-        getForm.elements.customerRate.value=String(state.getSettings.customerRate ?? 4.5);
+        getForm.elements.customerRate.value=String(state.getSettings.customerRate ?? 4.712);
         getForm.elements.label.value=state.getSettings.label||'Hawaiʻi GET';
       }
       renderCatalog();
