@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireOperations } from './_shared/admin';
+import { isApprovedManager, requireOperations } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
 type BlogPost = {
@@ -75,6 +75,14 @@ export default async (req: Request, context: Context) => {
     const payload = await req.json();
     const action = payload.action || 'save';
     const posts = await readPosts(context);
+    const isManager = isApprovedManager(auth.user);
+
+    if (['delete','restore-legacy'].includes(action) && !isManager) {
+      return Response.json({ error: 'Manager permission required for this action.' }, { status: 403 });
+    }
+    if (action === 'save' && payload.status === 'published' && !isManager) {
+      return Response.json({ error: 'Only managers can publish blog posts. Save this entry as a draft.' }, { status: 403 });
+    }
 
     if (action === 'delete') {
       const next = posts.filter((post) => post.slug !== payload.slug);
