@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
+import { sendVendorEmail } from './_shared/vendor-email.ts';
 
 type VendorStatus='draft'|'published'|'paused';
 type PartnerTier='preferred'|'verified'|'community';
@@ -93,6 +94,13 @@ export default async(req:Request,context:Context)=>{
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
     vendor.status='paused';vendor.updatedAt=new Date().toISOString();
     await store.setJSON('vendors/index',vendors);return Response.json({ok:true,vendor});
+  }
+  if(action==='send-portal-invite'){
+    const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
+    if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending a portal invite.'},{status:400});
+    const url='https://koasevents.com/vendor-portal/?token='+encodeURIComponent(vendor.portalToken);
+    const result=await sendVendorEmail({to:[vendor.email],subject:'Your Koa’s Vendor Portal',title:'Your Koa’s Vendor Portal is ready.',body:'Use this private link to keep your marketplace profile and insurance information current and to respond to availability requests from Koa’s clients.',detail:'Keep this private link for your team. Koa’s retains control of Preferred/Verified status, reviews and internal performance records.',actionLabel:'Open Vendor Portal',actionUrl:url,idempotencyKey:'koa-vendor-portal-'+vendor.id+'-'+new Date().toISOString().slice(0,10)});
+    return Response.json({ok:true,sent:result.sent,url});
   }
   if(action==='moderate-review'){
     const reviews=await list(store,'reviews/index');const row=reviews.find(r=>r.id===body?.reviewId);if(!row)return Response.json({error:'Review not found.'},{status:404});
