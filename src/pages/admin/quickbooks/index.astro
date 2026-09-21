@@ -298,7 +298,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         row.innerHTML='<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/52"></p><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><button type="button" data-edit class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Edit</button><button type="button" data-archive class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Archive</button></div></div>';
         row.querySelector('strong').textContent=item.name+(item.active===false?' · archived':'');
-        row.querySelectorAll('p')[0].textContent=(item.category||'service')+' · 
+        row.querySelectorAll('p')[0].textContent=(item.category||'service')+' · $'+Number(item.unitPrice||0).toFixed(2)+' / '+(item.unitLabel||'each');
+        row.querySelectorAll('p')[1].textContent='QBO '+(item.quickBooksType||'Service')+' #'+(item.quickBooksItemId||'not linked')+(item.incomeAccountName?' · '+item.incomeAccountName:'');
+        row.querySelector('[data-edit]').addEventListener('click',()=>openCatalogItem(item));
+        row.querySelector('[data-archive]').disabled=item.active===false;
+        row.querySelector('[data-archive]').addEventListener('click',async()=>{
+          if(!confirm('Archive '+item.name+' in the CRM? Its existing QuickBooks item and transactions will not be changed.'))return;
+          if(catalogMessage)catalogMessage.textContent='Archiving '+item.name+'…';
+          try{
+            const data=await api({action:'archive-catalog-item',id:item.id});
+            state.catalog=data.catalog||[];
+            renderCatalog();
+            if(catalogMessage)catalogMessage.textContent=item.name+' archived.';
+          }catch(err){
+            if(catalogMessage)catalogMessage.textContent=err.message||'Unable to archive item.';
+          }
+        });
+        catalogList.appendChild(row);
+      });
+    }
+
+    function renderDiagnostics(){
       const connected=Boolean(state?.connection?.connected);
       if(diagConnection)diagConnection.textContent=connected?'Connected':'Not connected';
       if(diagCompany)diagCompany.textContent=connected?(state.connection.companyName||'QuickBooks company connected')+' · '+String(state?.configuration?.environment||''):'OAuth connection required';
