@@ -324,7 +324,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   const selectedProjects=new Set();
   let visibleProjectIds=[];
 
-  function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=user?.app_metadata?.roles||[]; return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin')); }
+  function userRoles(user){ const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles]; return (sources.find(Array.isArray)||[]).map((r)=>String(r||'').toLowerCase()); }
+  function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.some((role)=>['admin','manager','sales','staff'].includes(role)); }
+  function manager(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager'); }
+  function applyRoleUi(user){
+    if(manager(user)) return;
+    ['[data-cleanup-settings]','[data-bulk-trash]','[data-toggle-trash]','[data-trash-client]'].forEach((selector)=>$(selector)?.classList.add('hidden'));
+    $('[data-workflow-form]')?.closest('section')?.classList.add('hidden');
+    $('[data-template-form]')?.closest('section')?.classList.add('hidden');
+  }
   const money=(n)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n)||0);
   const esc=(s)=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const fmt=(s)=>{ if(!s)return '—'; const d=new Date(s); return Number.isNaN(d.getTime())?s:d.toLocaleString('en-US',{dateStyle:'medium',timeStyle:s.includes('T')?'short':undefined}); };
@@ -561,6 +569,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   $('[data-workflow-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const steps=f.steps.value.split('\n').map((line,i)=>{const [days,...rest]=line.split('|');return{id:'',label:'Step '+(i+1),offsetDays:Number(days)||0,taskTitle:rest.join('|').trim()}}).filter(x=>x.taskTitle);await post({action:'save-workflow',id:f.id.value,name:f.name.value,description:f.description.value,trigger:f.trigger.value,steps,active:f.active.checked});f.reset();f.active.checked=true;await load();});
   $('[data-template-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-template',id:f.id.value,type:f.type.value,name:f.name.value,subject:f.subject.value,body:f.body.value,active:f.active.checked});f.reset();f.active.checked=true;await load();});
 
-  (async()=>{const user=await getUser();const ok=admin(user);$('[data-unauthorized]').classList.toggle('hidden',ok);$('[data-admin-ui]').classList.toggle('hidden',!ok);if(ok)await load();})();
+  (async()=>{const user=await getUser();const ok=admin(user);$('[data-unauthorized]').classList.toggle('hidden',ok);$('[data-admin-ui]').classList.toggle('hidden',!ok);if(ok){applyRoleUi(user);await load();}})();
 </script>
 </BaseLayout>
