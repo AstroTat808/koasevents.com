@@ -572,7 +572,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </form>
   </dialog>
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
 
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
@@ -2763,7 +2763,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 
     async function load(query='') {
-      const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      const user=await getAdminSession(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       managerAccess=hasManagerAccess(user); applyRoleUi(user);
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
       const [response,qboResponse]=await Promise.all([
