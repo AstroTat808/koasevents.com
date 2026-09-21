@@ -1,8 +1,9 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { isApprovedManager, requireOperations } from './_shared/admin';
+import { hasCapability, requireOperations } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
+import { appendStaffAudit } from './_shared/staff-audit';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -370,18 +371,19 @@ export default async (req:Request, context:Context) => {
   if (!body) return Response.json({error:'Invalid JSON.'},{status:400});
   const action = clean(body.action,60);
   const actor = clean(auth.user?.email,240) || 'staff';
-  const managerOnlyActions = new Set([
-    'save-cleanup-settings',
-    'clear-cleanup-review',
-    'trash-client-chain',
-    'bulk-trash-client-chains',
-    'restore-client-chain',
-    'permanent-delete-client-chain',
-    'save-workflow',
-    'save-template',
-  ]);
-  if (managerOnlyActions.has(action) && !isApprovedManager(auth.user)) {
-    return Response.json({error:'Manager permission required for this action.'},{status:403});
+  const capabilityByAction:Record<string,any>={
+    'save-cleanup-settings':'crm.cleanup_policy',
+    'clear-cleanup-review':'crm.cleanup_policy',
+    'trash-client-chain':'crm.destructive',
+    'bulk-trash-client-chains':'crm.destructive',
+    'restore-client-chain':'crm.destructive',
+    'permanent-delete-client-chain':'crm.destructive',
+    'save-workflow':'crm.workflows',
+    'save-template':'crm.templates',
+  };
+  const requiredCapability=capabilityByAction[action];
+  if (requiredCapability && !hasCapability(auth.user, requiredCapability)) {
+    return Response.json({error:'You do not have permission for this CRM action.'},{status:403});
   }
 
   if (action === 'bulk-approve-cleanup-review') {
@@ -454,6 +456,7 @@ export default async (req:Request, context:Context) => {
     const settings={mode,updatedAt:new Date().toISOString(),updatedBy:actor};
     await sales.setJSON('settings/crm-cleanup',settings);
     await appendCleanupAudit(context,{action:'policy_changed',actor,detail:'Cleanup policy changed to '+mode+'.'});
+    await appendStaffAudit(context,{actor,action:'crm_cleanup_policy_changed',detail:'Changed CRM cleanup policy to '+mode+'.',metadata:{mode}});
     return Response.json({ok:true,settings});
   }
 
