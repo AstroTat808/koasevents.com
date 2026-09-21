@@ -154,6 +154,7 @@ def source_mode():
   SRC/"pages/admin/security/index.astro",
   SRC/"pages/admin/seo/index.astro",
   SRC/"pages/admin/staff/index.astro",
+  SRC/"pages/admin/health/index.astro",
  ]
  for path in protected_admin_pages:
   text=path.read_text(encoding="utf-8",errors="ignore")
