@@ -79,6 +79,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const warning=document.querySelector('[data-config-warning]');
     const itemSection=document.querySelector('[data-item-section]');
     const itemForm=document.querySelector('[data-item-form]');
+    const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
     const itemMessage=document.querySelector('[data-item-message]');
     const refreshItems=document.querySelector('[data-refresh-items]');
     let state=null;
@@ -92,9 +93,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       itemMessage.textContent='Loading QuickBooks items…';
       try{
         const data=await api({action:'list-items'});items=data.items||[];
-        const select=itemForm.elements.item;select.innerHTML='<option value="">Choose an item…</option>';
-        items.forEach((item)=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name+' · '+item.type;select.appendChild(option);});
-        if(state.settings?.serviceItemId)select.value=state.settings.serviceItemId;
+        if(!itemSelect)throw new Error('QuickBooks item selector is unavailable.');
+        itemSelect.innerHTML='<option value="">Choose an item…</option>';
+        items.forEach((item)=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name+' · '+item.type;itemSelect.appendChild(option);});
+        if(state.settings?.serviceItemId)itemSelect.value=state.settings.serviceItemId;
         itemMessage.textContent=items.length?items.length+' eligible QuickBooks items loaded.':'No active Service or Non-Inventory items found.';
       }catch(err){itemMessage.textContent=err.message||'Unable to load items.';}
     }
@@ -129,7 +131,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
     refreshItems?.addEventListener('click',loadItems);
-    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemForm.elements.item.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
+    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemSelect?.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
 
     load();
   </script>
