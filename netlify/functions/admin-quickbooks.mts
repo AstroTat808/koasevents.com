@@ -334,10 +334,11 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, smokeTest] = await Promise.all([
+    const [connection, settings, webhookReceipt, webhookProcessed, smokeTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
     ]);
     return Response.json({
@@ -351,6 +352,7 @@ export default async (req: Request, context: Context) => {
       } : { connected: false },
       settings,
       webhookReceipt: webhookReceipt || null,
+      webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
