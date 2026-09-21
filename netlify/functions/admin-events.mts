@@ -137,15 +137,22 @@ function seedQuestionnaire(): QuestionAnswer[] {
   const rows = [
     ['event', 'Confirm the final guest count.'],
     ['event', 'What time should guests begin arriving?'],
-    ['event', 'What are the ceremony and reception start times?'],
     ['event', 'Are there accessibility, mobility, or special accommodation needs?'],
+    ['ceremony', 'Will the ceremony be held at Koa’s? If yes, where and what setup do you want?'],
+    ['ceremony', 'How many ceremony chairs are needed, and are there aisle, arch, microphone, or processional requirements?'],
+    ['reception', 'Where will the reception be held, and will it use the same space as the ceremony?'],
+    ['reception', 'What meal style are you planning: plated, buffet, family-style, food stations, food truck, or something else?'],
+    ['reception', 'Will you have a cocktail hour, formal entrances, speeches, first dances, parent dances, or open dancing?'],
+    ['layout', 'Describe the current floor plan: guest tables, sweetheart/head table, buffet/food stations, dance floor, DJ/music location, cake/dessert, and bar location.'],
+    ['layout', 'What is the rain/weather backup layout, and will any furniture need to move or flip between ceremony and reception?'],
     ['vendors', 'Are all vendors finalized? List any vendors still pending.'],
     ['vendors', 'Are there vendor power, water, staging, loading, or parking requirements?'],
-    ['layout', 'What layout or floor-plan decisions are still open?'],
-    ['rentals', 'Which Koa’s rental inventory or outside rental items are confirmed?'],
-    ['bar', 'What bar package/menu and alcohol-service details are confirmed?'],
+    ['rentals', 'Which Koa’s rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
+    ['bar', 'Will alcohol be served? If yes, are you using Koa’s Mobile Bar, another approved bartender, beer/wine only, cocktails, or a full bar?'],
+    ['bar', 'Where will bar service be located, and do you need cocktail-hour service, a satellite/second bar, or special beverage stations?'],
     ['decor', 'What decor, floral, signage, cake, or specialty installation details need coordination?'],
-    ['timeline', 'Are there any special entrances, announcements, dances, speeches, ceremonies, or surprise moments?'],
+    ['timeline', 'List special entrances, announcements, dances, speeches, ceremonies, performances, or surprise moments.'],
+    ['logistics', 'Do guests need shuttles, transportation, parking coordination, accessibility support, or special load-in planning?'],
     ['logistics', 'Who are the day-of decision makers and emergency contacts?'],
   ];
   return rows.map(([category, question]) => ({
@@ -155,6 +162,13 @@ function seedQuestionnaire(): QuestionAnswer[] {
     answer: '',
     status: 'open',
   }));
+}
+
+function ensureQuestionnaire(input: QuestionAnswer[]): QuestionAnswer[] {
+  const existing=Array.isArray(input)?input:[];
+  const seeds=seedQuestionnaire();
+  const normalized=new Set(existing.map((row)=>row.question.trim().toLowerCase()));
+  return [...existing,...seeds.filter((row)=>!normalized.has(row.question.trim().toLowerCase()))];
 }
 
 function seedChecklist(eventDate: string): ChecklistItem[] {
@@ -349,6 +363,8 @@ export default async (req: Request, context: Context) => {
         ops = defaultOps(record);
         await opsStore.setJSON('events/' + record.id, ops);
       }
+      const mergedQuestionnaire=ensureQuestionnaire((ops.questionnaire||[]) as QuestionAnswer[]);
+      if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
       const refreshedVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
       if(JSON.stringify(refreshedVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
