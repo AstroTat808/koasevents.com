@@ -131,7 +131,41 @@ export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
   const store=healthStore(context);
   const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
   await store.setJSON('latest',snapshot);
-  await store.setJSON('history',[snapshot,...history].slice(0,500));
+  await store.setJSON('history',[snapshot,...history].slice(0,5000));
+}
+
+export function calculateUptime(history:HealthSnapshot[]) {
+  const hourly=(history||[]).filter(row=>row?.source==='hourly' && Number.isFinite(Date.parse(String(row.checkedAt||''))));
+  const windows=[
+    {id:'24h',label:'24 hours',hours:24,expected:24},
+    {id:'7d',label:'7 days',hours:24*7,expected:24*7},
+    {id:'30d',label:'30 days',hours:24*30,expected:24*30},
+    {id:'90d',label:'90 days',hours:24*90,expected:24*90},
+  ];
+  const componentMap=new Map<string,{id:string;name:string;kind:string;path:string}>();
+  for(const snapshot of hourly){
+    for(const check of snapshot.checks||[]){
+      if(!componentMap.has(check.id)) componentMap.set(check.id,{id:check.id,name:check.name,kind:check.kind,path:check.path});
+    }
+  }
+  const now=Date.now();
+  const rows=[...componentMap.values()].map(component=>{
+    const periods:Record<string,{uptime:number|null;samples:number;expected:number}>={};
+    for(const window of windows){
+      const cutoff=now-window.hours*60*60*1000;
+      const samples=hourly.filter(snapshot=>Date.parse(snapshot.checkedAt)>=cutoff)
+        .map(snapshot=>snapshot.checks?.find(check=>check.id===component.id))
+        .filter(Boolean) as HealthCheck[];
+      const healthy=samples.filter(check=>check.ok).length;
+      periods[window.id]={
+        uptime:samples.length?Math.round((healthy/samples.length)*10000)/100:null,
+        samples:samples.length,
+        expected:window.expected,
+      };
+    }
+    return {...component,periods};
+  }).sort((a,b)=>a.kind.localeCompare(b.kind)||a.name.localeCompare(b.name));
+  return {generatedAt:new Date().toISOString(),windows,rows,hourlySamples:hourly.length};
 }
 
 export function healthTransition(previous:HealthSnapshot|null,current:HealthSnapshot) {
@@ -156,36 +190,26 @@ function esc(value:unknown){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
-export async function sendHealthTransitionAlert(previous:HealthSnapshot|null,current:HealthSnapshot) {
-  const transition=healthTransition(previous,current);
-  if(!transition.changed) return {sent:false,reason:'no-change'};
-
+async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
   const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
-  if(!apiKey) return {sent:false,reason:'resend-not-configured'};
+  if(!apiKey) return {channel:'email',sent:false,reason:'resend-not-configured'};
 
   const configured=clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
     || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
     || 'chris@sibel.org';
   const recipients=configured.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
-  if(!recipients.length) return {sent:false,reason:'no-recipient'};
+  if(!recipients.length) return {channel:'email',sent:false,reason:'no-recipient'};
 
   const from=clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
     || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
     || 'Koa’s Events <leads@koasevents.com>';
-
-  const failedNames=current.checks.filter(row=>!row.ok).map(row=>row.name);
-  const recoveredNames=(previous?.checks||[]).filter(row=>transition.recovered.includes(row.id)).map(row=>row.name);
-  const brokenNames=current.checks.filter(row=>transition.broken.includes(row.id)).map(row=>row.name);
   const fullyRecovered=current.overall==='healthy';
-
   const subject=fullyRecovered
     ? 'Koa’s System Health recovered'
     : 'Koa’s System Health alert — '+current.failed+' check'+(current.failed===1?'':'s')+' failing';
-
   const summary=fullyRecovered
     ? 'All monitored Koa’s admin/staff services are healthy again.'
-    : 'The hourly monitor detected a change in system health.';
-
+    : 'The health monitor detected a change in system health.';
   const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;padding:28px;font-family:Arial,sans-serif;color:#173d30">'
     +'<div style="max-width:680px;margin:auto;background:#fff;border:1px solid #e7dfd0;border-radius:20px;padding:28px">'
     +'<div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a">Koa’s Events · System Health</div>'
@@ -197,38 +221,101 @@ export async function sendHealthTransitionAlert(previous:HealthSnapshot|null,cur
     +'<p style="font-size:12px;color:#78827d">Checked '+esc(current.checkedAt)+' · '+current.passed+' passed · '+current.failed+' failed</p>'
     +'<p><a href="https://koasevents.com/admin/health/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open System Health</a></p>'
     +'</div></body></html>';
-
   const text=[
-    'Koa’s Events System Health',
-    summary,
+    'Koa’s Events System Health',summary,
     brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
     failedNames.length?'Still failing: '+failedNames.join(', '):'',
     'Checked: '+current.checkedAt,
     'System Health: https://koasevents.com/admin/health/',
   ].filter(Boolean).join('\n');
-
   try{
     const response=await fetch('https://api.resend.com/emails',{
       method:'POST',
-      headers:{
-        Authorization:'Bearer '+apiKey,
-        'Content-Type':'application/json',
-        'Idempotency-Key':('koa-health-'+current.id).slice(0,256),
-      },
+      headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-health-email-'+current.id).slice(0,256)},
       body:JSON.stringify({from,to:recipients,subject,html,text}),
       signal:AbortSignal.timeout(12_000),
     });
     const body:any=await response.json().catch(()=>({}));
-    if(!response.ok){
-      console.error('Health alert email failed',response.status,body?.message||'');
-      return {sent:false,reason:'resend-error'};
-    }
-    return {sent:true,id:clean(body?.id,120)};
+    if(!response.ok) return {channel:'email',sent:false,reason:'resend-error',status:response.status,error:clean(body?.message,240)};
+    return {channel:'email',sent:true,id:clean(body?.id,120)};
   }catch(error){
-    console.error('Health alert email error',error);
-    return {sent:false,reason:'request-error'};
+    return {channel:'email',sent:false,reason:'request-error',error:error instanceof Error?clean(error.message,240):'request-error'};
   }
+}
+
+async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
+  const webhook=clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
+  if(!webhook) return {channel:'slack',sent:false,reason:'not-configured'};
+  const recovered=current.overall==='healthy';
+  const lines=[
+    recovered?'✅ *Koa’s System Health recovered*':'🚨 *Koa’s System Health changed*',
+    brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
+    recoveredNames.length?'*Recovered:* '+recoveredNames.join(', '):'',
+    failedNames.length?'*Still failing:* '+failedNames.join(', '):'',
+    current.passed+' passed · '+current.failed+' failed',
+    '<https://koasevents.com/admin/health/|Open System Health>',
+  ].filter(Boolean);
+  try{
+    const response=await fetch(webhook,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text:lines.join('\n')}),
+      signal:AbortSignal.timeout(12_000),
+    });
+    return response.ok?{channel:'slack',sent:true}:{channel:'slack',sent:false,reason:'slack-error',status:response.status};
+  }catch(error){
+    return {channel:'slack',sent:false,reason:'request-error',error:error instanceof Error?clean(error.message,240):'request-error'};
+  }
+}
+
+async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
+  const sid=clean(Netlify.env.get('TWILIO_ACCOUNT_SID'),200);
+  const token=clean(Netlify.env.get('TWILIO_AUTH_TOKEN'),300);
+  const from=clean(Netlify.env.get('TWILIO_FROM_NUMBER'),80);
+  const recipients=clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
+  if(!sid||!token||!from||!recipients.length) return {channel:'sms',sent:false,reason:'not-configured'};
+  const recovered=current.overall==='healthy';
+  const parts=[
+    recovered?'Koa’s System Health recovered.':'Koa’s System Health alert.',
+    brokenNames.length?'New failing: '+brokenNames.join(', ')+'.':'',
+    recoveredNames.length?'Recovered: '+recoveredNames.join(', ')+'.':'',
+    failedNames.length?'Still failing: '+failedNames.join(', ')+'.':'',
+    'https://koasevents.com/admin/health/',
+  ].filter(Boolean);
+  const body=parts.join(' ').slice(0,1200);
+  const auth='Basic '+btoa(sid+':'+token);
+  const results:any[]=[];
+  for(const to of recipients){
+    try{
+      const form=new URLSearchParams({From:from,To:to,Body:body});
+      const response=await fetch('https://api.twilio.com/2010-04-01/Accounts/'+encodeURIComponent(sid)+'/Messages.json',{
+        method:'POST',
+        headers:{Authorization:auth,'Content-Type':'application/x-www-form-urlencoded'},
+        body:form.toString(),
+        signal:AbortSignal.timeout(12_000),
+      });
+      const data:any=await response.json().catch(()=>({}));
+      results.push({to,sent:response.ok,status:response.status,id:clean(data?.sid,120),error:response.ok?'':clean(data?.message,240)});
+    }catch(error){
+      results.push({to,sent:false,status:0,error:error instanceof Error?clean(error.message,240):'request-error'});
+    }
+  }
+  return {channel:'sms',sent:results.some(row=>row.sent),results};
+}
+
+export async function sendHealthTransitionAlerts(previous:HealthSnapshot|null,current:HealthSnapshot) {
+  const transition=healthTransition(previous,current);
+  if(!transition.changed) return {changed:false,transition,channels:[]};
+  const failedNames=current.checks.filter(row=>!row.ok).map(row=>row.name);
+  const recoveredNames=(previous?.checks||[]).filter(row=>transition.recovered.includes(row.id)).map(row=>row.name);
+  const brokenNames=current.checks.filter(row=>transition.broken.includes(row.id)).map(row=>row.name);
+  const channels=await Promise.all([
+    sendHealthEmail(current,transition,failedNames,recoveredNames,brokenNames),
+    sendHealthSlack(current,failedNames,recoveredNames,brokenNames),
+    sendHealthSms(current,failedNames,recoveredNames,brokenNames),
+  ]);
+  return {changed:true,transition,channels};
 }
 
 export async function cachedDeploymentHistory(context:Context) {
