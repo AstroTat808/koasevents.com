@@ -57,7 +57,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-diag-webhook-check class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4 text-sm text-[var(--koa-ink)]/60"></div>
         </section>
 
-        <section data-accounting-audit class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <section id="accounting-audit" data-accounting-audit class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Accounting reconciliation</p>
@@ -149,6 +149,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-get-message class="mt-2 text-sm text-[var(--koa-ink)]/52"></p>
         </section>
 
+        <section data-deposit-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Proposal defaults</p>
+          <h2 class="display mt-3 text-4xl">Reservation deposit percentages</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the default reservation-deposit percentage used when a new proposal is created. Staff can still change the percentage on an individual proposal before invoicing.</p>
+          <form data-deposit-form class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <label class="grid gap-2 text-sm font-semibold">Venue wedding %
+              <input name="venueWeddingPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">Mobile Bar %
+              <input name="mobileBarPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">Private event %
+              <input name="privateEventPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">General fallback %
+              <input name="defaultPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <div class="sm:col-span-2 xl:col-span-4 flex flex-wrap items-center gap-3">
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save deposit defaults</button>
+              <p data-deposit-message class="text-sm text-[var(--koa-ink)]/52"></p>
+            </div>
+          </form>
+        </section>
+
         <dialog data-catalog-dialog class="w-[min(94vw,760px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
           <form data-catalog-form class="p-7 sm:p-8">
             <input type="hidden" name="id" />
@@ -229,7 +253,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getAdminSession } from '../../../lib/admin-session';
+    import { getUser } from '@netlify/identity';
     const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -251,6 +275,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const getSection=document.querySelector('[data-get-section]');
     const getForm=document.querySelector('[data-get-form]');
     const getMessage=document.querySelector('[data-get-message]');
+    const depositSection=document.querySelector('[data-deposit-section]');
+    const depositForm=document.querySelector('[data-deposit-form]');
+    const depositMessage=document.querySelector('[data-deposit-message]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
     const itemMessage=document.querySelector('[data-item-message]');
@@ -380,8 +407,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=row.clientName||row.recordId;
         const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';meta.textContent=[row.recordId,row.eventDate,row.estimateDocNumber?'Estimate #'+row.estimateDocNumber:'No QBO estimate'].filter(Boolean).join(' · ');
         left.append(title,meta);
+        const actions=document.createElement('div');actions.className='flex flex-wrap items-center gap-2';
         const link=document.createElement('a');link.href='/admin/quotes/?q='+encodeURIComponent(row.recordId);link.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';link.textContent='Open client →';
-        top.append(left,link);card.appendChild(top);
+        actions.appendChild(link);
+        if(!row.reconciled){
+          const recheck=document.createElement('button');
+          recheck.type='button';
+          recheck.className='rounded-full border border-red-200 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700';
+          recheck.textContent='Sync & Recheck';
+          recheck.addEventListener('click',async()=>{
+            recheck.disabled=true;recheck.textContent='Syncing…';
+            try{
+              const result=await api({action:'sync-and-recheck',recordId:row.recordId});
+              state.accountingAudit=result.accountingAudit||state.accountingAudit;
+              renderAccountingAudit();
+            }catch(err){
+              recheck.disabled=false;recheck.textContent='Retry Sync & Recheck';
+              alert(err.message||'Unable to sync and recheck this client.');
+            }
+          });
+          actions.appendChild(recheck);
+        }
+        top.append(left,actions);card.appendChild(top);
         const totals=document.createElement('p');totals.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/58';
         totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(row.estimateTotal)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
         card.appendChild(totals);
@@ -462,6 +509,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       itemSection.classList.toggle('hidden',!connected);
       catalogSection?.classList.toggle('hidden',!connected);
       getSection?.classList.toggle('hidden',!connected);
+      depositSection?.classList.toggle('hidden',!connected);
       sandboxTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='sandbox');
       productionTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='production');
       company.textContent=connected?(state.connection.companyName||'QuickBooks company connected'):'Not connected';
@@ -506,6 +554,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         getForm.elements.customerRate.value='4.712';
         getForm.elements.label.value=state.getSettings.label||'Hawaiʻi GET';
       }
+      if(depositForm&&state?.depositSettings){
+        depositForm.elements.venueWeddingPercent.value=String(state.depositSettings.venueWeddingPercent ?? 10);
+        depositForm.elements.mobileBarPercent.value=String(state.depositSettings.mobileBarPercent ?? 10);
+        depositForm.elements.privateEventPercent.value=String(state.depositSettings.privateEventPercent ?? 10);
+        depositForm.elements.defaultPercent.value=String(state.depositSettings.defaultPercent ?? 10);
+      }
       renderCatalog();
       renderDiagnostics();
       renderAccountingAudit();
@@ -513,7 +567,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function load(){
-      const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
       app.classList.remove('hidden');
       const res=await fetch('/api/admin/quickbooks',{cache:'no-store'});
       if(!res.ok)return;state=await res.json();render();
@@ -558,6 +612,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         state.getSettings=result.getSettings;
         if(getMessage)getMessage.textContent='Saved. New CRM proposals can use '+Number(result.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'% '+String(result.getSettings.label||'Hawaiʻi GET')+'.';
       }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
+    });
+    depositForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(depositForm);
+      if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
+      try{
+        const result=await api({
+          action:'save-deposit-settings',
+          venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),
+          mobileBarPercent:Number(data.get('mobileBarPercent')||0),
+          privateEventPercent:Number(data.get('privateEventPercent')||0),
+          defaultPercent:Number(data.get('defaultPercent')||0),
+        });
+        state.depositSettings=result.depositSettings;
+        if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
+      }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
     cleanupProductionTest?.addEventListener('click',async()=>{
       if(!productionTestStatus)return;
