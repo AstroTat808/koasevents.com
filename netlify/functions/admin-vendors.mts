@@ -94,7 +94,7 @@ export default async(req:Request,context:Context)=>{
     if(!vendor.name||!vendor.category)return Response.json({error:'Vendor name and category are required.'},{status:400});
     const next=[vendor,...vendors.filter(v=>v.id!==vendor.id)];
     await store.setJSON('vendors/index',next.slice(0,2000));
-    return Response.json({ok:true,vendor,affectedEvents});
+    return Response.json({ok:true,vendor});
   }
   if(action==='archive-vendor'){
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
@@ -111,7 +111,7 @@ export default async(req:Request,context:Context)=>{
     if(String(vendor.email||'').includes('@')){
       await sendVendorEmail({to:[vendor.email],subject:decision==='approve'?'Koa’s insurance certificate approved':'Koa’s insurance certificate needs an update',title:decision==='approve'?'Your insurance certificate is approved.':'Your insurance certificate needs an update.',body:decision==='approve'?'Koa’s has reviewed and approved your current insurance certificate.':'Koa’s reviewed your insurance certificate and needs an updated submission before it can be approved.',detail:decision==='approve'?(vendor.insurance.expiresAt?'Expiration: '+vendor.insurance.expiresAt:'Approved'):vendor.insurance.rejectionReason,actionLabel:'Open Vendor Portal',actionUrl:'https://koasevents.com/vendor-portal/?token='+encodeURIComponent(vendor.portalToken),idempotencyKey:'koa-insurance-review-'+vendor.id+'-'+vendor.insurance.reviewedAt});
     }
-    return Response.json({ok:true,vendor});
+    return Response.json({ok:true,vendor,affectedEvents});
   }
   if(action==='send-portal-invite'){
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
