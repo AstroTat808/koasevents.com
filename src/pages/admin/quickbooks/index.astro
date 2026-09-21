@@ -39,6 +39,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Diagnostics</p>
+              <h2 class="display mt-3 text-4xl">QuickBooks integration health</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Connection, webhook delivery, CRM synchronization and the most recent sandbox verification.</p>
+            </div>
+            <button data-refresh-diagnostics type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Refresh diagnostics</button>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Connection</p><strong data-diag-connection class="mt-2 block text-base text-[var(--koa-forest)]">Checking…</strong><p data-diag-company class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48"></p></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Last webhook received</p><strong data-diag-webhook class="mt-2 block text-base text-[var(--koa-forest)]">None yet</strong><p data-diag-webhook-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48"></p></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Last CRM sync</p><strong data-diag-sync class="mt-2 block text-base text-[var(--koa-forest)]">None yet</strong><p data-diag-sync-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48"></p></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Last sandbox test</p><strong data-diag-test class="mt-2 block text-base text-[var(--koa-forest)]">Not run</strong><p data-diag-test-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48"></p></article>
+          </div>
+          <div data-diag-webhook-check class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4 text-sm text-[var(--koa-ink)]/60"></div>
+        </section>
+
         <section data-item-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Accounting mapping</p><h2 class="display mt-3 text-4xl">Default Koa’s service item</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the QuickBooks Service or Non-Inventory item used on synchronized Koa’s estimate and invoice lines. Revenue account treatment stays controlled by that QuickBooks item.</p></div>
