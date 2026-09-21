@@ -197,7 +197,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function userRoles(user){const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());}
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);return approvedAdminEmails.has(email)||roles.some((role)=>['admin','staff','sales','manager'].includes(role));}
-    function hasManagerAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager');}
+    function hasManagerAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);const meta=user?.appMetadata||user?.app_metadata||{};const permissions=Array.isArray(meta.permissions)?meta.permissions.map((p)=>String(p||'').toLowerCase()):[];return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager')||permissions.includes('event_ops.manage');}
     function applyRoleUi(){
       if(managerAccess)return;
       overviewForm?.querySelectorAll('input,select,textarea,button').forEach((el)=>el.disabled=true);
