@@ -438,7 +438,7 @@ export default async (req: Request, context: Context) => {
     detail: action.replace('save-', '') + ' updated in Event Ops.',
   });
 
-  return Response.json({ ok: true, ops }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json({ ok: true, ops, vendorSuggestions: suggestVendorRequirements(record, ops) }, { headers: { 'Cache-Control': 'private, no-store' } });
 };
 
 export const config: Config = { path: '/api/admin/events' };
