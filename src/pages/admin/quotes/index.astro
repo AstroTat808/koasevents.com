@@ -24,9 +24,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Saved quote value</p><p data-stat-value class="display mt-3 text-4xl">$0</p></article>
         </section>
         <section data-accounting-alert class="hidden rounded-[1.4rem] border border-red-200 bg-red-50 p-5 shadow-[var(--shadow-soft)]">
-          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <button data-accounting-alert-toggle type="button" class="flex w-full flex-col gap-4 text-left sm:flex-row sm:items-center sm:justify-between" aria-expanded="false">
             <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">Accounting reconciliation warning</p><h2 class="display mt-2 text-3xl text-red-900"><span data-accounting-alert-count>0</span> client records need review</h2><p data-accounting-alert-detail class="mt-2 text-sm leading-6 text-red-800/75"></p></div>
-            <a href="/admin/quickbooks/#accounting-audit" class="w-fit rounded-full bg-red-700 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Review accounting audit</a>
+            <span data-accounting-alert-action class="w-fit rounded-full bg-red-700 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Show mismatch details ↓</span>
+          </button>
+          <div data-accounting-alert-panel class="hidden mt-5 border-t border-red-200 pt-5">
+            <div data-accounting-alert-list class="grid gap-3"></div>
+            <div class="mt-4"><a href="/admin/quickbooks/#accounting-audit" class="text-xs font-black uppercase tracking-[.1em] text-red-700">Open full accounting audit →</a></div>
           </div>
         </section>
 
@@ -734,6 +738,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingAlert = document.querySelector('[data-accounting-alert]');
     const accountingAlertCount = document.querySelector('[data-accounting-alert-count]');
     const accountingAlertDetail = document.querySelector('[data-accounting-alert-detail]');
+    const accountingAlertToggle = document.querySelector('[data-accounting-alert-toggle]');
+    const accountingAlertAction = document.querySelector('[data-accounting-alert-action]');
+    const accountingAlertPanel = document.querySelector('[data-accounting-alert-panel]');
+    const accountingAlertList = document.querySelector('[data-accounting-alert-list]');
     let profitRecord = null;
     let managerAccess = false;
     let destructiveAccess = false;
@@ -797,9 +805,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function percent(value) { return value == null ? '—' : Math.round(value*100) + '%'; }
 
     function renderAccountingAlert() {
-      const audit=qboState?.accountingAudit;const flagged=Number(audit?.flaggedCount||0);accountingAlert?.classList.toggle('hidden',flagged<=0);
+      const audit=qboState?.accountingAudit;
+      const rows=Array.isArray(audit?.rows)?audit.rows.filter((row)=>!row.reconciled):[];
+      const flagged=rows.length||Number(audit?.flaggedCount||0);
+      accountingAlert?.classList.toggle('hidden',flagged<=0);
       if(accountingAlertCount)accountingAlertCount.textContent=String(flagged);
-      if(accountingAlertDetail){const rows=Array.isArray(audit?.rows)?audit.rows.filter((row)=>!row.reconciled):[];const names=rows.slice(0,3).map((row)=>row.clientName||row.recordId).filter(Boolean);accountingAlertDetail.textContent=flagged<=0?'CRM and QuickBooks values reconcile.':'Mismatch detected for '+(names.length?names.join(', '):flagged+' client record'+(flagged===1?'':'s'))+(flagged>names.length?' and '+(flagged-names.length)+' more':'')+'.';}
+      if(accountingAlertDetail){
+        const names=rows.slice(0,3).map((row)=>row.clientName||row.recordId).filter(Boolean);
+        accountingAlertDetail.textContent=flagged<=0?'CRM and QuickBooks values reconcile.':'Mismatch detected for '+(names.length?names.join(', '):flagged+' client record'+(flagged===1?'':'s'))+(flagged>names.length?' and '+(flagged-names.length)+' more':'')+'. Click to review the exact differences.';
+      }
+      if(accountingAlertList){
+        accountingAlertList.innerHTML='';
+        rows.forEach((row)=>{
+          const card=document.createElement('article');
+          card.className='rounded-xl border border-red-200 bg-white p-4';
+          const header=document.createElement('div');
+          header.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
+          const left=document.createElement('div');
+          const title=document.createElement('strong');title.className='text-sm text-red-900';title.textContent=row.clientName||row.recordId;
+          const meta=document.createElement('p');meta.className='mt-1 text-xs text-red-800/60';meta.textContent=[row.recordId,row.eventDate].filter(Boolean).join(' · ');
+          left.append(title,meta);
+          const link=document.createElement('a');link.href='/admin/quotes/?q='+encodeURIComponent(row.recordId);link.className='text-[.58rem] font-black uppercase tracking-[.08em] text-red-700';link.textContent='Open client →';
+          header.append(left,link);card.appendChild(header);
+          const issues=document.createElement('div');issues.className='mt-3 grid gap-2';
+          (row.issues||[]).forEach((issue)=>{
+            const line=document.createElement('div');line.className='rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900';
+            const expected=issue.expected==null?'—':money(issue.expected);
+            const actual=issue.actual==null?'—':money(issue.actual);
+            const delta=issue.delta==null?'':' · difference '+money(issue.delta);
+            line.textContent=issue.label+': expected '+expected+', actual '+actual+delta;
+            issues.appendChild(line);
+          });
+          card.appendChild(issues);accountingAlertList.appendChild(card);
+        });
+      }
     }
 
     function renderStats() {
@@ -2807,7 +2846,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderAccountingAlert();renderStats();renderPerformance();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderPaymentDashboard();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
     }
 
-    searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
+    accountingAlertToggle?.addEventListener('click',()=>{
+      const expanded=accountingAlertToggle.getAttribute('aria-expanded')==='true';
+      accountingAlertToggle.setAttribute('aria-expanded',String(!expanded));
+      accountingAlertPanel?.classList.toggle('hidden',expanded);
+      if(accountingAlertAction)accountingAlertAction.textContent=expanded?'Show mismatch details ↓':'Hide mismatch details ↑';
+    });
+        searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
     document.querySelector('[data-performance-period]')?.addEventListener('change',renderPerformance);
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     mobileProfitScope?.addEventListener('change',renderProfitabilityDashboard);
