@@ -164,27 +164,63 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-profit-goals>
               <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goal + projection</p>
-                  <h4 data-mobile-profit-goal-title class="mt-1 text-lg font-semibold text-white">Current month</h4>
-                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Projected profit combines booked profit with probability-weighted profit from open Mobile Bar opportunities dated in the current month.</p>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goals + projections</p>
+                  <h4 class="mt-1 text-lg font-semibold text-white">Monthly, quarterly + annual targets</h4>
+                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Each horizon combines booked gross profit with scenario-weighted open-pipeline profit based on event date.</p>
                 </div>
-                <form data-mobile-profit-goal-form class="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
-                  <label class="grid flex-1 gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly gross-profit target
-                    <input data-mobile-profit-goal-input name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="e.g. 10000" />
+                <form data-mobile-profit-goal-form class="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly target
+                    <input data-mobile-profit-goal-input data-goal-input="monthly" name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="10000" />
                   </label>
-                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goal</button>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Quarterly target
+                    <input data-goal-input="quarterly" name="quarterlyGrossProfitTarget" type="number" min="0" max="3000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="30000" />
+                  </label>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Annual target
+                    <input data-goal-input="annual" name="annualGrossProfitTarget" type="number" min="0" max="12000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="120000" />
+                  </label>
+                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goals</button>
                 </form>
               </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Monthly target</p><strong data-mobile-goal-target class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Booked profit</p><strong data-mobile-goal-booked class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Projected profit</p><strong data-mobile-goal-projected class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article data-mobile-goal-gap-card class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Ahead / behind</p><strong data-mobile-goal-gap class="display mt-1 block text-2xl text-white">$0</strong><p data-mobile-goal-gap-copy class="mt-1 text-[.58rem] text-white/42">Set a goal to compare.</p></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Avg. booked profit</p><strong data-mobile-goal-average class="display mt-1 block text-2xl text-white">—</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Bookings needed</p><strong data-mobile-goal-bookings class="display mt-1 block text-2xl text-white">—</strong><p data-mobile-goal-bookings-copy class="mt-1 text-[.58rem] text-white/42">Based on average booked profit.</p></article>
+              <div class="mt-4 grid gap-3 xl:grid-cols-3" data-mobile-goal-horizons>
+                <article data-goal-card="monthly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
+                <article data-goal-card="quarterly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
+                <article data-goal-card="annual" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
               </div>
-              <div class="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><div data-mobile-goal-progress class="h-full rounded-full bg-[var(--koa-amber-light)]" style="width:0%"></div></div>
               <p data-mobile-profit-goal-message aria-live="polite" class="mt-3 text-[.62rem] leading-5 text-white/50"></p>
+            </section>
+
+            <section class="mt-4 grid gap-4 xl:grid-cols-[.9fr_1.1fr]">
+              <article class="rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-booking-simulator>
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">What do I need to book?</p>
+                  <h4 class="mt-1 text-lg font-semibold text-white">Profit-goal booking simulator</h4>
+                  <p class="mt-1 text-[.65rem] leading-5 text-white/45">Enter the additional gross profit you want to create. The simulator uses average booked profit by package and finds practical package mixes.</p>
+                </div>
+                <label class="mt-4 grid gap-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Additional gross profit goal
+                  <input data-booking-sim-target type="number" min="0" max="1000000" step="100" class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="e.g. 15000" />
+                </label>
+                <div data-booking-sim-averages class="mt-4 grid gap-2 sm:grid-cols-3"></div>
+                <div data-booking-sim-results class="mt-4 grid gap-3"></div>
+              </article>
+
+              <article class="rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-forecast-scenarios>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Forecast scenarios</p>
+                    <h4 class="mt-1 text-lg font-semibold text-white">Conservative · Expected · Aggressive</h4>
+                    <p class="mt-1 max-w-2xl text-[.65rem] leading-5 text-white/45">Scenario weights change only open-pipeline probability. Booked profit always counts at 100%.</p>
+                  </div>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Active scenario
+                    <select data-mobile-forecast-scenario class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                      <option value="conservative">Conservative</option>
+                      <option value="expected" selected>Expected</option>
+                      <option value="aggressive">Aggressive</option>
+                    </select>
+                  </label>
+                </div>
+                <div data-mobile-scenario-cards class="mt-4 grid gap-3 md:grid-cols-3"></div>
+                <div data-mobile-scenario-detail class="mt-4 rounded-lg border border-white/10 bg-black/10 p-3 text-[.62rem] leading-5 text-white/55"></div>
+              </article>
             </section>
 
             <div class="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
@@ -626,18 +662,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileProfitPeriodLabel = document.querySelector('[data-mobile-profit-period-label]');
     const mobileProfitGoalForm = document.querySelector('[data-mobile-profit-goal-form]');
     const mobileProfitGoalInput = document.querySelector('[data-mobile-profit-goal-input]');
-    const mobileProfitGoalTitle = document.querySelector('[data-mobile-profit-goal-title]');
-    const mobileGoalTarget = document.querySelector('[data-mobile-goal-target]');
-    const mobileGoalBooked = document.querySelector('[data-mobile-goal-booked]');
-    const mobileGoalProjected = document.querySelector('[data-mobile-goal-projected]');
-    const mobileGoalGapCard = document.querySelector('[data-mobile-goal-gap-card]');
-    const mobileGoalGap = document.querySelector('[data-mobile-goal-gap]');
-    const mobileGoalGapCopy = document.querySelector('[data-mobile-goal-gap-copy]');
-    const mobileGoalAverage = document.querySelector('[data-mobile-goal-average]');
-    const mobileGoalBookings = document.querySelector('[data-mobile-goal-bookings]');
-    const mobileGoalBookingsCopy = document.querySelector('[data-mobile-goal-bookings-copy]');
-    const mobileGoalProgress = document.querySelector('[data-mobile-goal-progress]');
+    const mobileProfitGoalInputs = [...document.querySelectorAll('[data-goal-input]')];
+    const mobileGoalCards = [...document.querySelectorAll('[data-goal-card]')];
     const mobileProfitGoalMessage = document.querySelector('[data-mobile-profit-goal-message]');
+    const bookingSimTarget = document.querySelector('[data-booking-sim-target]');
+    const bookingSimAverages = document.querySelector('[data-booking-sim-averages]');
+    const bookingSimResults = document.querySelector('[data-booking-sim-results]');
+    const mobileForecastScenario = document.querySelector('[data-mobile-forecast-scenario]');
+    const mobileScenarioCards = document.querySelector('[data-mobile-scenario-cards]');
+    const mobileScenarioDetail = document.querySelector('[data-mobile-scenario-detail]');
     const mobileProfitRevenue = document.querySelector('[data-mobile-profit-revenue]');
     const mobileProfitRevenueMeta = document.querySelector('[data-mobile-profit-revenue-meta]');
     const mobileProfitGross = document.querySelector('[data-mobile-profit-gross]');
@@ -777,6 +810,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       profitSettingsAccess=managerAccess||permissions.includes('sales.profit_settings');
       if (bulkTrashButton) bulkTrashButton.classList.toggle('hidden', !destructiveAccess);
       mobileProfitGoalForm?.classList.toggle('hidden', !profitSettingsAccess);
+      mobileProfitGoalInputs.forEach((input)=>{ if(input instanceof HTMLInputElement) input.disabled=!profitSettingsAccess; });
       if (profitForm) [...profitForm.elements].forEach((el)=>{ if(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement||el instanceof HTMLSelectElement||el instanceof HTMLButtonElement) el.disabled=!profitSettingsAccess; });
       document.querySelector('[data-staff-performance-section]')?.classList.toggle('hidden',!managerAccess);
     }
@@ -1961,71 +1995,175 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return raw?raw.slice(0,7):'';
     }
 
-    function mobileProfitProbability(record) {
+    const profitScenarioWeights = {
+      conservative: { inquiry:.05, lead:.15, draft:.25, proposal:.30, sent:.45, viewed:.55, accepted:.80 },
+      expected: { inquiry:.15, lead:.30, draft:.50, proposal:.45, sent:.65, viewed:.75, accepted:.95 },
+      aggressive: { inquiry:.30, lead:.50, draft:.65, proposal:.60, sent:.80, viewed:.90, accepted:.98 },
+    };
+
+    function mobileProfitProbability(record,scenario='expected') {
       if(record.stage==='booked')return 1;
+      const weights=profitScenarioWeights[scenario]||profitScenarioWeights.expected;
       if(record.kind==='proposal'){
         const status=String(record.proposal?.status||record.status||'');
-        if(status==='accepted')return .95;
-        if(status==='viewed')return .75;
-        if(status==='sent')return .65;
-        if(status==='draft')return .50;
-        return .45;
+        if(status==='accepted')return weights.accepted;
+        if(status==='viewed')return weights.viewed;
+        if(status==='sent')return weights.sent;
+        if(status==='draft')return weights.draft;
+        return weights.proposal;
       }
-      if(record.stage==='lead')return .30;
-      return .15;
+      if(record.stage==='lead')return weights.lead;
+      return weights.inquiry;
+    }
+
+    function currentGoalRanges() {
+      const now=new Date();
+      const y=now.getFullYear();
+      const m=now.getMonth();
+      const qStart=Math.floor(m/3)*3;
+      return {
+        monthly:{key:'monthly',label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(now),start:localDateKey(new Date(y,m,1)),end:localDateKey(new Date(y,m+1,0)),targetKey:'monthlyGrossProfitTarget'},
+        quarterly:{key:'quarterly',label:'Q'+(Math.floor(m/3)+1)+' '+y,start:localDateKey(new Date(y,qStart,1)),end:localDateKey(new Date(y,qStart+3,0)),targetKey:'quarterlyGrossProfitTarget'},
+        annual:{key:'annual',label:String(y),start:y+'-01-01',end:y+'-12-31',targetKey:'annualGrossProfitTarget'},
+      };
+    }
+
+    function recordsInRange(records,range) {
+      return records.filter((record)=>{
+        const eventDate=recordEventDate(record);
+        return eventDate && eventDate>=range.start && eventDate<=range.end;
+      });
+    }
+
+    function mobileProfitProjection(records,scenario='expected') {
+      const booked=records.filter((record)=>record.stage==='booked');
+      const open=records.filter((record)=>record.stage!=='booked');
+      const bookedProfit=booked.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const openWeighted=open.reduce((sum,record)=>sum+(Number(profitValues(record).profit||0)*mobileProfitProbability(record,scenario)),0);
+      return {bookedProfit,projectedProfit:bookedProfit+openWeighted,bookedCount:booked.length,openCount:open.length};
+    }
+
+    function renderGoalCard(card,range,projection,target,avgBookedProfit) {
+      if(!card)return;
+      const delta=projection.projectedProfit-target;
+      const pct=target>0?Math.max(0,Math.min(100,(projection.projectedProfit/target)*100)):0;
+      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
+      card.className='rounded-xl border p-4 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
+      card.innerHTML='';
+      const heading=document.createElement('div');heading.className='flex items-start justify-between gap-3';
+      const left=document.createElement('div');left.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',range.key+' goal'),text('strong','mt-1 block text-base text-white',range.label));
+      heading.append(left,text('strong','display text-2xl text-white',target?money(target):'Not set'));
+      card.appendChild(heading);
+      const metrics=document.createElement('div');metrics.className='mt-4 grid grid-cols-2 gap-2';
+      [['Booked',money(projection.bookedProfit)],['Projected',money(projection.projectedProfit)],['Ahead / behind',target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—'],['Bookings needed',bookingsNeeded==null?'—':String(bookingsNeeded)]].forEach(([label,value])=>{
+        const item=document.createElement('div');item.className='rounded-lg border border-white/10 bg-black/10 p-2.5';
+        item.append(text('p','text-[.5rem] font-black uppercase tracking-[.07em] text-white/40',label),text('strong','mt-1 block text-sm text-white',value));
+        metrics.appendChild(item);
+      });
+      card.appendChild(metrics);
+      const track=document.createElement('div');track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+      const bar=document.createElement('div');bar.className='h-full rounded-full '+(target>0&&projection.projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');bar.style.width=pct+'%';track.appendChild(bar);card.appendChild(track);
+    }
+
+    function packageProfitAverages(allMobile) {
+      const booked=allMobile.filter((record)=>record.stage==='booked');
+      const overall=booked.map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+      const overallAverage=overall.length?overall.reduce((sum,value)=>sum+value,0)/overall.length:0;
+      const result={};
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        const values=booked.filter((record)=>recordPackage(record)===packageId).map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+        result[packageId]={average:values.length?values.reduce((sum,value)=>sum+value,0)/values.length:overallAverage,count:values.length,fallback:values.length===0};
+      });
+      return {packages:result,overallAverage,bookedCount:overall.length};
+    }
+
+    function bestBookingMixes(target,averages) {
+      if(!(target>0))return [];
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const profits=ids.map((id)=>Math.max(0,Number(averages[id]?.average||0)));
+      if(!profits.some((value)=>value>0))return [];
+      const minPositive=Math.min(...profits.filter((value)=>value>0));
+      const maxCount=Math.min(60,Math.max(1,Math.ceil(target/minPositive)+4));
+      const candidates=[];
+      for(let a=0;a<=maxCount;a++)for(let b=0;b<=maxCount-a;b++)for(let d=0;d<=maxCount-a-b;d++){
+        const count=a+b+d;if(!count)continue;
+        const profit=a*profits[0]+b*profits[1]+d*profits[2];
+        if(profit+0.01<target)continue;
+        candidates.push({counts:[a,b,d],count,profit,over:profit-target});
+      }
+      candidates.sort((x,y)=>x.count-y.count||x.over-y.over||y.counts[2]-x.counts[2]);
+      const unique=[];const seen=new Set();
+      for(const row of candidates){
+        const key=row.counts.join('-');
+        if(seen.has(key))continue;
+        seen.add(key);unique.push(row);
+        if(unique.length>=5)break;
+      }
+      return unique;
+    }
+
+    function renderBookingSimulator(allMobile) {
+      if(!bookingSimAverages||!bookingSimResults)return;
+      const stats=packageProfitAverages(allMobile);
+      bookingSimAverages.innerHTML='';
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        const row=stats.packages[packageId];
+        const card=document.createElement('div');card.className='rounded-lg border border-white/10 bg-black/10 p-3';
+        card.append(text('p','text-[.5rem] font-black uppercase tracking-[.07em] text-white/40',packageLabel(packageId)),text('strong','mt-1 block text-lg text-white',row.average>0?money(row.average):'—'),text('p','mt-1 text-[.56rem] text-white/40',row.fallback&&row.average>0?'Using overall booked average':row.count+' booked event'+(row.count===1?'':'s')));
+        bookingSimAverages.appendChild(card);
+      });
+      const target=Math.max(0,Number(bookingSimTarget?.value||0));
+      bookingSimResults.innerHTML='';
+      if(!target){bookingSimResults.appendChild(text('p','text-sm text-white/45','Enter a gross-profit goal to see booking combinations.'));return;}
+      const mixes=bestBookingMixes(target,stats.packages);
+      if(!mixes.length){bookingSimResults.appendChild(text('p','text-sm text-white/45','More booked-profit history is needed before package combinations can be modeled.'));return;}
+      mixes.forEach((mix,index)=>{
+        const row=document.createElement('article');row.className='rounded-lg border border-white/10 bg-black/10 p-3';
+        const labels=mix.counts.map((count,i)=>count?count+' '+packageLabel(['mobile-oahu','mobile-maui','mobile-big-island'][i]).replace('Mobile Bar · ',''):'').filter(Boolean);
+        row.append(text('p','text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-amber-light)]',index===0?'Fewest bookings':'Alternative mix'),text('strong','mt-1 block text-sm text-white',labels.join(' + ')),text('p','mt-1 text-[.58rem] text-white/45',mix.count+' booking'+(mix.count===1?'':'s')+' · about '+money(mix.profit)+' gross profit'));
+        bookingSimResults.appendChild(row);
+      });
+    }
+
+    function renderScenarioForecast(allMobile,ranges) {
+      if(!mobileScenarioCards||!mobileScenarioDetail)return;
+      const active=String(mobileForecastScenario?.value||'expected');
+      const range=ranges.annual;
+      const rows=recordsInRange(allMobile,range);
+      mobileScenarioCards.innerHTML='';
+      ['conservative','expected','aggressive'].forEach((scenario)=>{
+        const projection=mobileProfitProjection(rows,scenario);
+        const card=document.createElement('button');card.type='button';card.className='text-left rounded-xl border p-3 '+(scenario===active?'border-[var(--koa-amber-light)] bg-white/10':'border-white/10 bg-black/10');
+        card.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',scenario),text('strong','display mt-1 block text-2xl text-white',money(projection.projectedProfit)),text('p','mt-1 text-[.58rem] text-white/40',money(projection.bookedProfit)+' booked + weighted pipeline'));
+        card.addEventListener('click',()=>{if(mobileForecastScenario)mobileForecastScenario.value=scenario;renderMobileProfitGoalProjection();});
+        mobileScenarioCards.appendChild(card);
+      });
+      const w=profitScenarioWeights[active]||profitScenarioWeights.expected;
+      mobileScenarioDetail.textContent='Active '+active+' weights · Inquiry '+Math.round(w.inquiry*100)+'% · Lead '+Math.round(w.lead*100)+'% · Proposal '+Math.round(w.proposal*100)+'% · Sent '+Math.round(w.sent*100)+'% · Viewed '+Math.round(w.viewed*100)+'% · Accepted '+Math.round(w.accepted*100)+'%.';
     }
 
     function renderMobileProfitGoalProjection() {
       const allMobile=(payload.records||[])
         .filter(isMobileBarRecord)
         .filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
-      const now=new Date();
-      const currentMonth=localDateKey(new Date(now.getFullYear(),now.getMonth(),1)).slice(0,7);
-      const monthRows=allMobile.filter((record)=>mobileEventMonth(record)===currentMonth);
-      const bookedRows=monthRows.filter((record)=>record.stage==='booked');
-      const openRows=monthRows.filter((record)=>record.stage!=='booked');
-      const bookedProfit=bookedRows.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
-      const projectedOpenProfit=openRows.reduce((sum,record)=>{
-        const profit=Number(profitValues(record).profit||0);
-        return sum+(profit*mobileProfitProbability(record));
-      },0);
-      const projectedProfit=bookedProfit+projectedOpenProfit;
-      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0));
+      const activeScenario=String(mobileForecastScenario?.value||'expected');
+      const ranges=currentGoalRanges();
+      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
       const avgBookedProfit=historicalBooked.length?historicalBooked.reduce((sum,value)=>sum+value,0)/historicalBooked.length:0;
-      const target=Math.max(0,Number(payload.mobileBarProfitSettings?.monthlyGrossProfitTarget||0));
-      const delta=projectedProfit-target;
-      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
-
-      if(mobileProfitGoalTitle)mobileProfitGoalTitle.textContent=monthLabel(currentMonth)+' gross-profit goal';
-      if(mobileProfitGoalInput&&document.activeElement!==mobileProfitGoalInput)mobileProfitGoalInput.value=target?String(Math.round(target*100)/100):'';
-      if(mobileGoalTarget)mobileGoalTarget.textContent=target?money(target):'Not set';
-      if(mobileGoalBooked)mobileGoalBooked.textContent=money(bookedProfit);
-      if(mobileGoalProjected)mobileGoalProjected.textContent=money(projectedProfit);
-      if(mobileGoalAverage)mobileGoalAverage.textContent=historicalBooked.length?money(avgBookedProfit):'—';
-      if(mobileGoalGap){
-        mobileGoalGap.textContent=target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—';
-      }
-      if(mobileGoalGapCopy){
-        mobileGoalGapCopy.textContent=!target?'Set a monthly goal to compare.':delta>=0?'Projected ahead of target.':'Projected below target.';
-      }
-      if(mobileGoalGapCard){
-        mobileGoalGapCard.className='rounded-lg border p-3 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
-      }
-      if(mobileGoalBookings)mobileGoalBookings.textContent=bookingsNeeded==null?'—':String(bookingsNeeded);
-      if(mobileGoalBookingsCopy){
-        mobileGoalBookingsCopy.textContent=!target
-          ? 'Set a goal first.'
-          : bookingsNeeded===0
-            ? 'Projected target reached.'
-            : avgBookedProfit>0
-              ? 'At '+money(avgBookedProfit)+' average booked profit.'
-              : 'More booked history is needed.';
-      }
-      if(mobileGoalProgress){
-        const pct=target>0?Math.max(0,Math.min(100,(projectedProfit/target)*100)):0;
-        mobileGoalProgress.style.width=pct+'%';
-        mobileGoalProgress.className='h-full rounded-full '+(target>0&&projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
-      }
+      const settings=payload.mobileBarProfitSettings||{};
+      mobileProfitGoalInputs.forEach((input)=>{
+        const key=input.getAttribute('data-goal-input');
+        const prop=key==='monthly'?'monthlyGrossProfitTarget':key==='quarterly'?'quarterlyGrossProfitTarget':'annualGrossProfitTarget';
+        if(document.activeElement!==input)input.value=Number(settings[prop]||0)?String(Math.round(Number(settings[prop])*100)/100):'';
+      });
+      mobileGoalCards.forEach((card)=>{
+        const key=card.getAttribute('data-goal-card');
+        const range=ranges[key]; if(!range)return;
+        const projection=mobileProfitProjection(recordsInRange(allMobile,range),activeScenario);
+        renderGoalCard(card,range,projection,Math.max(0,Number(settings[range.targetKey]||0)),avgBookedProfit);
+      });
+      renderBookingSimulator(allMobile);
+      renderScenarioForecast(allMobile,ranges);
     }
 
     function weightedMargin(rows) {
@@ -2778,17 +2916,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     [mobileProfitFrom,mobileProfitTo].forEach((control)=>control?.addEventListener('change',renderProfitabilityDashboard));
     mobileProfitGoalForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
-      const target=Math.max(0,Number(mobileProfitGoalInput?.value||0));
-      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving monthly gross-profit target…';
+      const settings={
+        monthlyGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.monthlyGrossProfitTarget?.value||0)),
+        quarterlyGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.quarterlyGrossProfitTarget?.value||0)),
+        annualGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.annualGrossProfitTarget?.value||0)),
+      };
+      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving gross-profit targets…';
       try{
-        const result=await api({action:'update-mobile-bar-profit-settings',settings:{monthlyGrossProfitTarget:target}});
-        payload.mobileBarProfitSettings=result.settings||{monthlyGrossProfitTarget:target};
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly gross-profit target saved.';
+        const result=await api({action:'update-mobile-bar-profit-settings',settings});
+        payload.mobileBarProfitSettings=result.settings||settings;
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly, quarterly, and annual gross-profit targets saved.';
         renderMobileProfitGoalProjection();
       }catch(error){
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goal.';
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goals.';
       }
     });
+    bookingSimTarget?.addEventListener('input',renderMobileProfitGoalProjection);
+    mobileForecastScenario?.addEventListener('change',renderMobileProfitGoalProjection);
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
