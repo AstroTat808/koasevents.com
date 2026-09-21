@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { requireAdmin } from './_shared/admin';
 import {
   getQuickBooksConnection,
   qboGet,
@@ -364,8 +365,10 @@ async function diagnostics(context: Context) {
 
 export default async (req: Request, context: Context) => {
   if (req.method === 'GET') {
+    const auth = await requireAdmin();
+    if (auth.response) return auth.response;
     return Response.json(await diagnostics(context), {
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'private, no-store' },
     });
   }
 
