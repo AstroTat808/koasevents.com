@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
+import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
   analyzeInquirySecurity,
   applyAutomaticBlocks,
@@ -610,6 +611,13 @@ export default async (req: Request, context: Context) => {
   }
 
   const current = (await store.get('records/index', { type: 'json' })) || [];
+  try {
+    const staff = await listOperationalStaff();
+    const assignee = leastLoadedStaff(staff, current);
+    if (assignee) (record as any).assignment = assignmentFor(assignee, 'automatic-round-robin');
+  } catch (error) {
+    console.error('Automatic lead assignment failed', error);
+  }
   await store.setJSON('records/' + id, record);
   await store.setJSON('records/index', [record, ...current].slice(0, 1500));
 
