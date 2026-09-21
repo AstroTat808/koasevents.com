@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { requireOperations } from './_shared/admin';
 import { appendCleanupAudit, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 
 type QuoteItem = {
@@ -1051,7 +1051,7 @@ function mobileBarAnalytics(records: SalesRecord[]) {
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireAdmin();
+  const auth = await requireOperations();
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
