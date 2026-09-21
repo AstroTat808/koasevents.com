@@ -22,6 +22,12 @@ function salesStoreFor(context: Context) {
     : getDeployStore({ name: 'koa-sales' });
 }
 
+function integrationStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-integrations' });
+}
+
 function clean(value: unknown, max = 1200) {
   return String(value || '').trim().slice(0, max);
 }
@@ -328,9 +334,11 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings] = await Promise.all([
+    const [connection, settings, webhookReceipt, smokeTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
+      integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
     ]);
     return Response.json({
       configuration: quickBooksConfiguration(),
@@ -342,6 +350,8 @@ export default async (req: Request, context: Context) => {
         refreshExpiresAt: connection.refreshExpiresAt || '',
       } : { connected: false },
       settings,
+      webhookReceipt: webhookReceipt || null,
+      smokeTest: smokeTest || null,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
@@ -374,6 +384,99 @@ export default async (req: Request, context: Context) => {
     if (!itemId) return Response.json({ error: 'Select a QuickBooks service item.' }, { status: 400 });
     const settings = await saveQuickBooksSettings(context, { serviceItemId: itemId, serviceItemName: itemName });
     return Response.json({ ok: true, settings });
+  }
+
+  if (action === 'sandbox-smoke-test') {
+    const configuration = quickBooksConfiguration();
+    if (configuration.environment !== 'sandbox') {
+      return Response.json({ error: 'Sandbox smoke test is disabled outside the QuickBooks sandbox environment.' }, { status: 409 });
+    }
+
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    if (!itemId) {
+      return Response.json({ error: 'Save a QuickBooks Service or Non-Inventory item mapping first.' }, { status: 409 });
+    }
+
+    const suffix = idSuffix();
+    const amount = 25;
+    const startedAt = new Date().toISOString();
+    const customerCreated: any = await qboCreate(context, 'customer', {
+      DisplayName: 'Koa CRM Sandbox Test ' + suffix,
+      Notes: 'Automated Koa’s Events CRM sandbox integration test. Safe to delete.',
+    });
+    const customer = customerCreated?.Customer;
+    if (!customer?.Id) throw new Error('Sandbox test customer creation failed.');
+
+    const estimateCreated: any = await qboCreate(context, 'estimate', {
+      CustomerRef: { value: String(customer.Id) },
+      TxnDate: today(),
+      CustomerMemo: { value: 'Koa CRM sandbox integration test' },
+      PrivateNote: 'Automated sandbox test ' + suffix,
+      Line: [{
+        Amount: amount,
+        DetailType: 'SalesItemLineDetail',
+        Description: 'Koa CRM sandbox test service',
+        SalesItemLineDetail: {
+          ItemRef: { value: itemId },
+          Qty: 1,
+          UnitPrice: amount,
+        },
+      }],
+    });
+    const estimate = estimateCreated?.Estimate;
+    if (!estimate?.Id) throw new Error('Sandbox test estimate creation failed.');
+
+    const invoiceCreated: any = await qboCreate(context, 'invoice', {
+      CustomerRef: { value: String(customer.Id) },
+      TxnDate: today(),
+      DueDate: today(),
+      CustomerMemo: { value: 'Koa CRM sandbox integration test' },
+      PrivateNote: 'Automated sandbox test ' + suffix,
+      Line: [{
+        Amount: amount,
+        DetailType: 'SalesItemLineDetail',
+        Description: 'Koa CRM sandbox test service',
+        SalesItemLineDetail: {
+          ItemRef: { value: itemId },
+          Qty: 1,
+          UnitPrice: amount,
+        },
+      }],
+    });
+    const invoice = invoiceCreated?.Invoice;
+    if (!invoice?.Id) throw new Error('Sandbox test invoice creation failed.');
+
+    const paymentCreated: any = await qboCreate(context, 'payment', {
+      CustomerRef: { value: String(customer.Id) },
+      TotalAmt: amount,
+      Line: [{
+        Amount: amount,
+        LinkedTxn: [{ TxnId: String(invoice.Id), TxnType: 'Invoice' }],
+      }],
+    });
+    const payment = paymentCreated?.Payment;
+    if (!payment?.Id) throw new Error('Sandbox test payment creation failed.');
+
+    const invoiceAfterPaymentData: any = await qboGet(context, 'invoice', String(invoice.Id));
+    const invoiceAfterPayment = invoiceAfterPaymentData?.Invoice;
+    const result = {
+      status: Number(invoiceAfterPayment?.Balance ?? amount) === 0 ? 'passed' : 'partial',
+      startedAt,
+      completedAt: new Date().toISOString(),
+      customerId: String(customer.Id),
+      customerName: String(customer.DisplayName || ''),
+      estimateId: String(estimate.Id),
+      estimateDocNumber: String(estimate.DocNumber || ''),
+      invoiceId: String(invoice.Id),
+      invoiceDocNumber: String(invoice.DocNumber || ''),
+      paymentId: String(payment.Id),
+      amount,
+      invoiceBalanceAfterPayment: Number(invoiceAfterPayment?.Balance ?? amount),
+      webhookPending: true,
+    };
+    await integrationStoreFor(context).setJSON('quickbooks/sandbox-smoke-test', result);
+    return Response.json({ ok: true, test: result });
   }
 
   let records = await readRecords(context);
