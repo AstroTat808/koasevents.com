@@ -373,6 +373,10 @@ export default async (req:Request, context:Context) => {
   const managerOnlyActions = new Set([
     'save-cleanup-settings',
     'clear-cleanup-review',
+    'trash-client-chain',
+    'bulk-trash-client-chains',
+    'restore-client-chain',
+    'permanent-delete-client-chain',
     'save-workflow',
     'save-template',
   ]);
