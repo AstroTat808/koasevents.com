@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { isApprovedManager, requireOperations } from './_shared/admin';
+import { hasCapability, requireOperations } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
 type BlogPost = {
@@ -75,12 +75,12 @@ export default async (req: Request, context: Context) => {
     const payload = await req.json();
     const action = payload.action || 'save';
     const posts = await readPosts(context);
-    const isManager = isApprovedManager(auth.user);
+    const canManageBlog = hasCapability(auth.user, 'blog.manage');
 
-    if (['delete','restore-legacy'].includes(action) && !isManager) {
+    if (['delete','restore-legacy'].includes(action) && !canManageBlog) {
       return Response.json({ error: 'Manager permission required for this action.' }, { status: 403 });
     }
-    if (action === 'save' && payload.status === 'published' && !isManager) {
+    if (action === 'save' && payload.status === 'published' && !canManageBlog) {
       return Response.json({ error: 'Only managers can publish blog posts. Save this entry as a draft.' }, { status: 403 });
     }
 
@@ -112,7 +112,7 @@ export default async (req: Request, context: Context) => {
 
     const now = new Date().toISOString();
     const existing = posts.find((post) => post.slug === slug);
-    if (!isManager && existing?.status === 'published') {
+    if (!canManageBlog && existing?.status === 'published') {
       return Response.json({ error: 'Manager permission required to edit a published blog post.' }, { status: 403 });
     }
     const post: BlogPost = {
