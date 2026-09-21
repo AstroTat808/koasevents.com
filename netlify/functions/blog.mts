@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { requireOperations } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
 type BlogPost = {
@@ -56,7 +56,7 @@ export default async (req: Request, context: Context) => {
     const admin = url.searchParams.get('admin') === '1';
 
     if (admin) {
-      const auth = await requireAdmin();
+      const auth = await requireOperations();
       if (auth.response) return auth.response;
       return Response.json({ posts: posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) });
     }
@@ -68,7 +68,7 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const auth = await requireAdmin();
+  const auth = await requireOperations();
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
