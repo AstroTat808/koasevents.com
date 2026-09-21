@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
+import { appendCleanupAudit } from './_shared/crm-cleanup-audit';
 
 type QuoteItem = {
   id: string;
@@ -1143,6 +1144,7 @@ export default async (req: Request, context: Context) => {
       packageId: record.packageId || '',
       detail: 'Administrator moved a ' + record.kind + ' record to Trash for 30 days.',
     });
+    await appendCleanupAudit(context,{recordId:record.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved CRM record to 30-day Trash.',chainIds:[record.id]});
 
     return Response.json({
       ok: true,
@@ -1197,6 +1199,7 @@ export default async (req: Request, context: Context) => {
       detail: 'Administrator moved a bogus/test client chain to Trash for 30 days. ' + moved.length + ' CRM record(s) removed from the active pipeline.',
       reference: moved.join(','),
     });
+    await appendCleanupAudit(context,{recordId:root.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved related client chain to 30-day Trash.',chainIds:moved});
 
     return Response.json({
       ok: true,
@@ -1218,6 +1221,7 @@ export default async (req: Request, context: Context) => {
         detail: 'Administrator restored an entire related inquiry/lead chain from Trash.',
         reference: restored.restored.map((record) => record.id).join(','),
       });
+      await appendCleanupAudit(context,{recordId,action:'restored',actor:cleanText(auth.user?.email,240)||'admin',detail:'Restored entire related inquiry/lead chain from Trash.',chainIds:restored.restored.map((record)=>record.id)});
       return Response.json({ ok: true, restored: restored.restored.map((record) => record.id), count: restored.restored.length }, { headers: { 'Cache-Control': 'private, no-store' } });
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : 'Unable to restore client chain.' }, { status: 400 });
@@ -1234,6 +1238,7 @@ export default async (req: Request, context: Context) => {
       detail: 'Administrator permanently deleted an entire related client chain from Trash.',
       reference: removed.join(','),
     });
+    await appendCleanupAudit(context,{recordId,action:'permanently_deleted',actor:cleanText(auth.user?.email,240)||'admin',detail:'Permanently deleted entire client chain from Trash.',chainIds:removed});
     return Response.json({ ok: true, deleted: removed, count: removed.length }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
@@ -1249,6 +1254,7 @@ export default async (req: Request, context: Context) => {
         packageId: restored.record.packageId || '',
         detail: 'Administrator restored a CRM record from Trash.',
       });
+      await appendCleanupAudit(context,{recordId:restored.record.id,action:'restored',actor:cleanText(auth.user?.email,240)||'admin',detail:'Restored CRM record from Trash.',chainIds:[restored.record.id]});
       return Response.json({ ok: true, record: restored.record }, { headers: { 'Cache-Control': 'private, no-store' } });
     } catch (error) {
       return Response.json({ error: error instanceof Error ? error.message : 'Unable to restore CRM record.' }, { status: 400 });
@@ -1264,6 +1270,7 @@ export default async (req: Request, context: Context) => {
       recordId,
       detail: 'Administrator permanently deleted a CRM record from Trash.',
     });
+    await appendCleanupAudit(context,{recordId,action:'permanently_deleted',actor:cleanText(auth.user?.email,240)||'admin',detail:'Permanently deleted CRM record from Trash.',chainIds:[recordId]});
     return Response.json({ ok: true, deletedId: recordId }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
@@ -1369,6 +1376,7 @@ export default async (req: Request, context: Context) => {
         packageId: root.packageId || '',
         detail: 'Administrator bulk-moved a client chain to Trash for 30 days.',
       });
+      await appendCleanupAudit(context,{recordId:root.id,action:'bulk_moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Bulk cleanup moved related client chain to 30-day Trash.',chainIds:movable.map((entry)=>entry.id)});
     }
 
     return Response.json({ ok: true, moved: [...moved], skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
