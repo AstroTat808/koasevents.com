@@ -2,7 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireOperations } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
-import { appendCleanupAudit, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
+import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -302,7 +302,7 @@ export default async (req:Request, context:Context) => {
       approved.push(record.id);
       await sales.setJSON('records/'+record.id,record);
       await appendActivity(crm,record.id,'cleanup_approved','Marked legitimate by '+actor+' through bulk review.');
-      await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate through bulk Needs Review action.',score:before.score,reasons:before.reasons,dimensions:cleanupDimensionsFromRecord(record)});
+      await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate through bulk Needs Review action.',score:before.score,reasons:before.reasons,dimensions:cleanupDimensionsFromRecord(record),client:cleanupClientSnapshotFromRecord(record)});
     }
 
     if(approved.length){
@@ -325,7 +325,7 @@ export default async (req:Request, context:Context) => {
     await sales.setJSON('records/'+record.id,record);
     await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
     await appendActivity(crm,record.id,'cleanup_approved','Marked legitimate by '+actor);
-    await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate.',score:before.score,reasons:before.reasons,dimensions:cleanupDimensionsFromRecord(record)});
+    await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate.',score:before.score,reasons:before.reasons,dimensions:cleanupDimensionsFromRecord(record),client:cleanupClientSnapshotFromRecord(record)});
     return Response.json({ok:true,recordId:record.id,cleanup:assessCrmRecord(record)});
   }
 
@@ -366,7 +366,7 @@ export default async (req:Request, context:Context) => {
     await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
     const assessment=assessCrmRecord(record);
     await appendActivity(crm,record.id,'cleanup_flagged','Manually flagged for review by '+actor);
-    await appendCleanupAudit(context,{recordId:record.id,action:'manual_flagged',actor,detail:record.cleanupManualFlag.note||'Client manually flagged for review.',score:assessment.score,reasons:assessment.reasons,dimensions:cleanupDimensionsFromRecord(record)});
+    await appendCleanupAudit(context,{recordId:record.id,action:'manual_flagged',actor,detail:record.cleanupManualFlag.note||'Client manually flagged for review.',score:assessment.score,reasons:assessment.reasons,dimensions:cleanupDimensionsFromRecord(record),client:cleanupClientSnapshotFromRecord(record)});
     return Response.json({ok:true,recordId:record.id,cleanup:assessment});
   }
 
