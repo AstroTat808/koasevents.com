@@ -32,8 +32,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <p class="font-semibold text-[var(--koa-ink)]">Intuit app credentials are not configured on Netlify yet.</p>
             <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/60">Add the two Intuit app credentials below, then return here and connect Koa’s QuickBooks company. The client secret is never entered into the browser.</p>
             <div class="mt-4 grid gap-2 font-mono text-xs text-[var(--koa-forest)]">
-              <code>INTUIT_CLIENT_ID</code>
-              <code>INTUIT_CLIENT_SECRET</code>
+              <code>QUICKBOOKS_CLIENT_ID</code>
+              <code>QUICKBOOKS_CLIENT_SECRET</code>
             </div>
             <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/50">Registered Intuit redirect URI: <code data-redirect-uri></code></p>
           </div>
@@ -103,7 +103,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const configured=Boolean(state?.configuration?.configured);
       const connected=Boolean(state?.connection?.connected);
       warning.classList.toggle('hidden',configured);
-      warning.querySelector('[data-redirect-uri]').textContent=window.location.origin+'/api/admin/quickbooks/callback';
+      warning.querySelector('[data-redirect-uri]').textContent=state?.configuration?.redirectUri||window.location.origin+'/.netlify/functions/quickbooks-callback';
       connect.classList.toggle('hidden',!configured||connected);
       disconnect.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
