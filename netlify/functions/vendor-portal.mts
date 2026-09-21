@@ -21,9 +21,6 @@ export default async(req:Request,context:Context)=>{
     vendor.legalName=clean(body?.legalName,180);vendor.headline=clean(body?.headline,240);vendor.description=clean(body?.description,6000);vendor.specialties=arr(body?.specialties);vendor.styles=arr(body?.styles);vendor.serviceAreas=arr(body?.serviceAreas);vendor.contactName=clean(body?.contactName,180);vendor.email=clean(body?.email,240);vendor.phone=clean(body?.phone,80);vendor.website=clean(body?.website,600);vendor.instagram=clean(body?.instagram,600);vendor.facebook=clean(body?.facebook,600);vendor.startingPrice=clean(body?.startingPrice,120);vendor.priceNotes=clean(body?.priceNotes,800);vendor.travelFees=clean(body?.travelFees,500);vendor.responseTime=clean(body?.responseTime,120);vendor.logoUrl=clean(body?.logoUrl,1000);vendor.coverImage=clean(body?.coverImage,1000);vendor.updatedAt=new Date().toISOString();
     await store.setJSON('vendors/index',vendors);return Response.json({ok:true});
   }
-  if(action==='save-insurance'){
-    const current=vendor.insurance||{};vendor.insurance={...current,status:'received',carrier:clean(body?.carrier,180),policyNumber:clean(body?.policyNumber,180),expiresAt:clean(body?.expiresAt,40),additionalInsured:Boolean(body?.additionalInsured),certificateUrl:clean(body?.certificateUrl,1000),submittedAt:new Date().toISOString()};vendor.updatedAt=new Date().toISOString();await store.setJSON('vendors/index',vendors);return Response.json({ok:true,insurance:vendor.insurance});
-  }
   if(action==='respond-availability'){
     const requestId=clean(body?.requestId,100);const status=clean(body?.status,40);const allowed=new Set(['available','possibly_available','unavailable']);
     const row=requests.find(r=>r.id===requestId&&r.vendorId===vendor.id&&r.type==='availability');if(!row)return Response.json({error:'Availability request not found.'},{status:404});if(!allowed.has(status))return Response.json({error:'Invalid availability response.'},{status:400});
