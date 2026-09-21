@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
+import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -11,6 +12,11 @@ function opsStoreFor(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
     : getDeployStore({ name: 'koa-event-ops' });
+}
+function vendorStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-vendors' });
 }
 function clean(value: unknown, max = 1200) {
   return String(value || '').trim().slice(0, max);
@@ -193,7 +199,8 @@ export default async (req:Request,context:Context)=>{
     ops.finalGuestCount=Math.round(num(payload?.finalGuestCount,0,1000));
     if(ops.vendorRequirementsMode!=='manual'){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}
   } else if(action==='save-vendors') {
-    ops.vendors=sanitizeClientVendors(payload?.vendors,ops.vendors||[]);
+    const masterVendors:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+    ops.vendors=applyMasterInsuranceToAssignments(sanitizeClientVendors(payload?.vendors,ops.vendors||[]),masterVendors,record.customer?.eventDate);
   } else if(action==='save-questionnaire') {
     ops.questionnaire=sanitizeClientQuestionnaire(payload?.questionnaire,ops.questionnaire||[]);
     if(ops.vendorRequirementsMode!=='manual'){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}
