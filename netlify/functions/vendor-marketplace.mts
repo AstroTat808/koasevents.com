@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore,getStore } from '@netlify/blobs';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
+import { masterInsuranceForEvent } from './_shared/vendor-insurance-sync.ts';
 
 function sales(c:Context){return c.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
 function ops(c:Context){return c.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
@@ -77,7 +78,7 @@ export default async(req:Request,context:Context)=>{
   const body:any=await req.json().catch(()=>null);const action=clean(body?.action,50),vendorId=clean(body?.vendorId,100),vendor=all.find(v=>v.id===vendorId);
   if(['toggle-favorite','select-vendor','remove-vendor','submit-review','request-availability','request-introduction'].includes(action)&&!vendor)return Response.json({error:'Vendor not found.'},{status:404});
   if(action==='toggle-favorite'){const current=await list(vs,'favorites/'+record.id);const next=current.includes(vendorId)?current.filter(x=>x!==vendorId):[vendorId,...current].slice(0,200);await vs.setJSON('favorites/'+record.id,next);return Response.json({ok:true,favorites:next});}
-  if(action==='select-vendor'){const existing=(event.vendors||[]).find((v:any)=>v.marketplaceVendorId===vendorId);if(!existing)(event.vendors||=[]).push({id:id('V'),marketplaceVendorId:vendor.id,company:vendor.name,contact:vendor.contactName||'',role:vendor.category,email:vendor.email||'',phone:vendor.phone||'',arrivalTime:'',insuranceStatus:vendor.insurance?.status==='approved'?'approved':'not_requested',notes:'Selected through Koa’s Vendor Marketplace'});event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
+  if(action==='select-vendor'){const existing=(event.vendors||[]).find((v:any)=>v.marketplaceVendorId===vendorId);if(!existing){const insurance=masterInsuranceForEvent(vendor,record.customer?.eventDate);(event.vendors||=[]).push({id:id('V'),marketplaceVendorId:vendor.id,company:vendor.name,contact:vendor.contactName||'',role:vendor.category,email:vendor.email||'',phone:vendor.phone||'',arrivalTime:'',insuranceStatus:insurance.status,insuranceSource:'vendor_master',insuranceExpiresAt:insurance.expiresAt,insuranceVerifiedAt:insurance.verifiedAt,insuranceIssue:insurance.issue,insuranceDocumentId:insurance.documentId,insuranceSyncedAt:new Date().toISOString(),notes:'Selected through Koa’s Vendor Marketplace'});}event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
   if(action==='remove-vendor'){event.vendors=(event.vendors||[]).filter((v:any)=>v.marketplaceVendorId!==vendorId);event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
   if(action==='request-availability'||action==='request-introduction'){
     const type=action==='request-availability'?'availability':'introduction';
