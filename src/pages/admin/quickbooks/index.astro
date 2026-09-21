@@ -78,7 +78,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-run-sandbox-test type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Run sandbox test</button>
             </div>
             <p data-sandbox-test-message class="mt-3 text-sm text-[var(--koa-ink)]/58"></p>
+
+            <div class="mt-6 border-t border-[var(--koa-line)] pt-6">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="font-semibold text-[var(--koa-ink)]">CRM-linked booking test</p>
+                  <p class="mt-1 text-sm text-[var(--koa-ink)]/58">Creates a clearly labeled test proposal in the CRM, issues its deposit invoice in QuickBooks, records a $25 payment, and waits for the webhook to move the CRM record to Booked with Deposit Paid.</p>
+                </div>
+                <button data-run-linked-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run linked test</button>
+              </div>
+              <p data-linked-test-message class="mt-3 text-sm text-[var(--koa-ink)]/58"></p>
+            </div>
           </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Production readiness</p>
+          <h2 class="display mt-3 text-4xl">Switch Koa’s real company safely</h2>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Production credentials</p><strong data-prod-creds class="mt-2 block text-base text-[var(--koa-forest)]">Checking…</strong></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Production webhook</p><strong data-prod-webhook class="mt-2 block text-base text-[var(--koa-forest)]">Checking…</strong></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Production redirect</p><strong data-prod-redirect class="mt-2 block text-base text-[var(--koa-forest)]">Checking…</strong></article>
+            <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Current environment</p><strong data-prod-environment class="mt-2 block text-base text-[var(--koa-forest)]">Checking…</strong></article>
+          </div>
+          <p class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/50">Production credentials are stored separately so sandbox credentials can remain available for future testing.</p>
         </section>
 
         <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-7 text-white shadow-[var(--shadow-soft)]">
@@ -113,6 +136,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const sandboxTest=document.querySelector('[data-sandbox-test]');
     const runSandboxTest=document.querySelector('[data-run-sandbox-test]');
     const sandboxTestMessage=document.querySelector('[data-sandbox-test-message]');
+    const runLinkedTest=document.querySelector('[data-run-linked-test]');
+    const linkedTestMessage=document.querySelector('[data-linked-test-message]');
+    const prodCreds=document.querySelector('[data-prod-creds]');
+    const prodWebhook=document.querySelector('[data-prod-webhook]');
+    const prodRedirect=document.querySelector('[data-prod-redirect]');
+    const prodEnvironment=document.querySelector('[data-prod-environment]');
     const refreshDiagnostics=document.querySelector('[data-refresh-diagnostics]');
     const diagConnection=document.querySelector('[data-diag-connection]');
     const diagCompany=document.querySelector('[data-diag-company]');
@@ -191,6 +220,71 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         : connected
           ? 'Connected to realm '+state.connection.realmId+(state.connection.connectedAt?' · connected '+new Date(state.connection.connectedAt).toLocaleString():'')
           : 'Ready to connect Koa’s QuickBooks Online company.';
+      if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
+      if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
+      if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
+      if(prodEnvironment)prodEnvironment.textContent=String(state?.configuration?.environment||'unknown').toUpperCase();
+      if(linkedTestMessage){
+        const linked=state?.linkedTest;
+        linkedTestMessage.textContent=!linked
+          ? 'No CRM-linked sandbox booking test has been run yet.'
+          : linked.verified
+            ? 'Verified: '+linked.recordId+' moved to '+linked.actualStage+', Deposit Paid is '+(linked.depositPaid?'Yes':'No')+', and QuickBooks balance is 
+    }
+
+    async function load(){
+      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      app.classList.remove('hidden');
+      const res=await fetch('/api/admin/quickbooks',{cache:'no-store'});
+      if(!res.ok)return;state=await res.json();render();
+      const params=new URLSearchParams(location.search);
+      if(params.get('connected')==='1')status.textContent='QuickBooks connection completed.';
+      if(params.get('qbo')==='error')status.textContent='QuickBooks connection did not complete. Check the Intuit app redirect URI and credentials.';
+    }
+
+    connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
+    disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
+    refreshItems?.addEventListener('click',loadItems);
+    refreshDiagnostics?.addEventListener('click',load);
+    runLinkedTest?.addEventListener('click',async()=>{
+      if(!linkedTestMessage)return;
+      linkedTestMessage.textContent='Creating CRM-linked sandbox booking, deposit invoice and payment…';
+      runLinkedTest.disabled=true;
+      try{
+        const data=await api({action:'sandbox-linked-booking-test'});
+        const t=data.test||{};
+        linkedTestMessage.textContent='Created '+(t.recordId||'CRM test record')+' · invoice '+(t.invoiceDocNumber||t.invoiceId||'')+' · payment '+(t.paymentId||'')+'. Waiting for Intuit webhook to update Deposit Paid and booking status.';
+        setTimeout(()=>load(),4000);
+      }catch(err){
+        linkedTestMessage.textContent=err.message||'CRM-linked sandbox test failed.';
+      }finally{
+        runLinkedTest.disabled=false;
+      }
+    });
+
+    runSandboxTest?.addEventListener('click',async()=>{
+      if(!sandboxTestMessage)return;
+      sandboxTestMessage.textContent='Running customer → estimate → invoice → payment test…';
+      runSandboxTest.disabled=true;
+      try{
+        const data=await api({action:'sandbox-smoke-test'});
+        const t=data.test||{};
+        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance $'+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
+        await load();
+      }catch(err){
+        sandboxTestMessage.textContent=err.message||'Sandbox test failed.';
+      }finally{
+        runSandboxTest.disabled=false;
+      }
+    });
+    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemSelect?.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
+
+    load();
+  </script>
+</BaseLayout>
++Number(linked.balanceDue||0).toFixed(2)+'.'
+            : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
+      }
       renderDiagnostics();
       if(connected)loadItems();
     }
