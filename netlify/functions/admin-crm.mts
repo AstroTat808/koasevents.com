@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
+import { assessCrmRecord } from './_shared/crm-cleanup';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -72,7 +73,7 @@ export default async (req:Request, context:Context) => {
 
   if (req.method === 'GET') {
     const salesRecords = await readIndex<any>(sales,'records/index');
-    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages] = await Promise.all([
+    const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages, trash] = await Promise.all([
       readIndex<Task>(crm,'tasks/index'),
       readIndex<Appointment>(crm,'appointments/index'),
       readIndex<Note>(crm,'notes/index'),
@@ -82,6 +83,7 @@ export default async (req:Request, context:Context) => {
       readIndex<ProjectMeta>(crm,'projects/index'),
       readIndex<Activity>(crm,'activity/index'),
       readIndex<any>(crm,'client-messages/index'),
+      readIndex<any>(sales,'trash/index'),
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
     const projects = salesRecords.filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test').slice(0,1500).map(r => normalizeProject(r, metaMap.get(r.id) || null));
