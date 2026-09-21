@@ -42,7 +42,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-          <div><p class="eyebrow text-[var(--koa-clay)]">History</p><h2 class="display mt-2 text-4xl">Recent health checks</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly and manual snapshots. Email notifications are sent only when the failure set changes or all services recover.</p></div>
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Reliability</p>
+            <h2 class="display mt-2 text-4xl">Uptime by service</h2>
+            <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Calculated only from completed hourly monitor samples. New monitoring periods build coverage over time; percentages are not backfilled from before the monitor existed.</p>
+          </div>
+          <div class="mt-5 overflow-x-auto">
+            <table class="w-full min-w-[820px] border-collapse text-sm">
+              <thead>
+                <tr class="border-b border-[var(--koa-line)] text-left text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">
+                  <th class="py-3 pr-4">Service</th>
+                  <th class="py-3 pr-4">Type</th>
+                  <th class="py-3 pr-4">24 hours</th>
+                  <th class="py-3 pr-4">7 days</th>
+                  <th class="py-3 pr-4">30 days</th>
+                  <th class="py-3">90 days</th>
+                </tr>
+              </thead>
+              <tbody data-uptime-body></tbody>
+            </table>
+          </div>
+          <p data-uptime-samples class="mt-4 text-xs text-[var(--koa-ink)]/48"></p>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div><p class="eyebrow text-[var(--koa-clay)]">History</p><h2 class="display mt-2 text-4xl">Recent health checks</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly and manual snapshots. Email, Slack, and SMS notifications use the same transition-only logic when those channels are configured.</p></div>
           <div data-health-history class="mt-5 grid gap-3"></div>
         </section>
       </div>
@@ -58,6 +82,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const results=document.querySelector('[data-results]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
+    const uptimeBody=document.querySelector('[data-uptime-body]');
+    const uptimeSamples=document.querySelector('[data-uptime-samples]');
     const overall=document.querySelector('[data-overall]');
     const passed=document.querySelector('[data-passed]');
     const failed=document.querySelector('[data-failed]');
@@ -118,6 +144,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         deployHistory.appendChild(card);
       });
       if(!rows.length) deployHistory.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Deployment QA history is not available yet.</p>';
+
+      const uptime=data.uptime||{};
+      uptimeBody.innerHTML='';
+      const pct=(period)=>{
+        if(!period||period.uptime==null)return '—';
+        return period.uptime.toFixed(2)+'%';
+      };
+      const coverage=(period)=>{
+        if(!period)return '';
+        return period.samples+' / '+period.expected+' hourly samples';
+      };
+      (uptime.rows||[]).forEach((row)=>{
+        const tr=document.createElement('tr');
+        tr.className='border-b border-[var(--koa-line)] align-top';
+        const service=document.createElement('td');service.className='py-4 pr-4';service.innerHTML='<strong class="text-[var(--koa-forest)]"></strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/45"></span>';service.querySelector('strong').textContent=row.name;service.querySelector('span').textContent=row.path;
+        const kind=document.createElement('td');kind.className='py-4 pr-4 text-xs font-semibold uppercase tracking-[.06em] text-[var(--koa-clay)]';kind.textContent=row.kind;
+        tr.append(service,kind);
+        ['24h','7d','30d','90d'].forEach((key)=>{
+          const period=row.periods?.[key];
+          const td=document.createElement('td');td.className='py-4 pr-4';
+          const value=document.createElement('strong');value.className='block text-[var(--koa-forest)]';value.textContent=pct(period);
+          const samples=document.createElement('span');samples.className='mt-1 block text-[.68rem] text-[var(--koa-ink)]/42';samples.textContent=coverage(period);
+          td.append(value,samples);tr.appendChild(td);
+        });
+        uptimeBody.appendChild(tr);
+      });
+      if(!(uptime.rows||[]).length){
+        const tr=document.createElement('tr');const td=document.createElement('td');td.colSpan=6;td.className='py-6 text-sm text-[var(--koa-ink)]/45';td.textContent='Hourly uptime data will appear after the scheduled monitor records its first run.';tr.appendChild(td);uptimeBody.appendChild(tr);
+      }
+      uptimeSamples.textContent=(uptime.hourlySamples||0)+' total hourly snapshot'+((uptime.hourlySamples||0)===1?'':'s')+' currently retained.';
     }
 
     async function load(){
