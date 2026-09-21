@@ -109,6 +109,52 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </section>
           </div>
 
+          <section class="mt-4 rounded-[1.2rem] border border-white/10 bg-black/10 p-5" data-mobile-profitability-dashboard>
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]">Profitability dashboard</p>
+                <h3 class="display mt-2 text-3xl">Revenue, profit + margin performance</h3>
+                <p class="mt-2 max-w-3xl text-[.7rem] leading-5 text-white/50">Booked-only is the default operating view. Switch to all priced opportunities to model pipeline profitability using the same saved or automatic direct-cost assumptions.</p>
+              </div>
+              <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">
+                Scope
+                <select data-mobile-profit-scope class="min-w-[220px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                  <option value="booked">Booked only</option>
+                  <option value="all">All priced opportunities</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Revenue</p><strong data-mobile-profit-revenue class="display mt-2 block text-3xl text-white">$0</strong><p data-mobile-profit-revenue-meta class="mt-1 text-[.62rem] text-white/42">0 priced records</p></article>
+              <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Gross profit</p><strong data-mobile-profit-gross class="display mt-2 block text-3xl text-white">$0</strong><p class="mt-1 text-[.62rem] text-white/42">Revenue less modeled direct costs</p></article>
+              <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Weighted margin</p><strong data-mobile-profit-margin class="display mt-2 block text-3xl text-white">0%</strong><p class="mt-1 text-[.62rem] text-white/42">Gross profit ÷ revenue</p></article>
+              <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Direct cost / guest</p><strong data-mobile-profit-cost-guest class="display mt-2 block text-3xl text-white">$0</strong><p data-mobile-profit-cost-guest-meta class="mt-1 text-[.62rem] text-white/42">0 guests represented</p></article>
+            </div>
+
+            <div class="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
+              <section class="rounded-xl border border-white/10 bg-white/[.04] p-4">
+                <div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Monthly performance</p><h4 class="mt-1 text-lg font-semibold text-white">Revenue + gross profit by event month</h4></div>
+                <div data-mobile-profit-monthly class="mt-4 grid gap-2"></div>
+              </section>
+              <section class="rounded-xl border border-white/10 bg-white/[.04] p-4">
+                <div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Margin trend</p><h4 class="mt-1 text-lg font-semibold text-white">Weighted margin by event month</h4></div>
+                <div data-mobile-profit-trend class="mt-4 grid gap-3"></div>
+              </section>
+            </div>
+
+            <div class="mt-4 grid gap-4 xl:grid-cols-2">
+              <section class="rounded-xl border border-white/10 bg-white/[.04] p-4">
+                <div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Most profitable packages</p><h4 class="mt-1 text-lg font-semibold text-white">Ranked by gross profit</h4></div>
+                <div data-mobile-profit-packages class="mt-4 grid gap-3"></div>
+              </section>
+              <section class="rounded-xl border border-white/10 bg-white/[.04] p-4">
+                <div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Most profitable add-ons</p><h4 class="mt-1 text-lg font-semibold text-white">Contribution profit from priced enhancements</h4></div>
+                <div data-mobile-profit-addons class="mt-4 grid gap-3"></div>
+              </section>
+            </div>
+          </section>
+
           <div data-mobile-margin-health-summary class="mt-4 grid gap-3 sm:grid-cols-3"></div>
 
           <div class="mt-6 grid gap-3 rounded-[1.2rem] border border-white/10 bg-black/10 p-4 md:grid-cols-2 xl:grid-cols-6">
@@ -400,6 +446,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <article data-profit-health-card class="rounded-xl border p-4"><p class="text-[.62rem] font-black uppercase tracking-[.09em]">Health</p><strong data-profit-health class="mt-2 block text-xl">—</strong><p data-profit-health-copy class="mt-1 text-xs leading-5"></p></article>
       </div>
 
+      <section data-profit-price-recommendations class="mt-5 hidden rounded-xl border border-red-200 bg-red-50 p-4"></section>
+
       <div class="mt-7 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
         <label class="grid gap-2 text-sm font-semibold sm:max-w-sm">Cost model
           <select name="costMode" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3">
@@ -483,6 +531,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileFilterMargin = document.querySelector('[data-mobile-filter-margin]');
     const mobileSort = document.querySelector('[data-mobile-sort]');
     const mobileMarginHealthSummary = document.querySelector('[data-mobile-margin-health-summary]');
+    const mobileProfitScope = document.querySelector('[data-mobile-profit-scope]');
+    const mobileProfitRevenue = document.querySelector('[data-mobile-profit-revenue]');
+    const mobileProfitRevenueMeta = document.querySelector('[data-mobile-profit-revenue-meta]');
+    const mobileProfitGross = document.querySelector('[data-mobile-profit-gross]');
+    const mobileProfitMargin = document.querySelector('[data-mobile-profit-margin]');
+    const mobileProfitCostGuest = document.querySelector('[data-mobile-profit-cost-guest]');
+    const mobileProfitCostGuestMeta = document.querySelector('[data-mobile-profit-cost-guest-meta]');
+    const mobileProfitMonthly = document.querySelector('[data-mobile-profit-monthly]');
+    const mobileProfitTrend = document.querySelector('[data-mobile-profit-trend]');
+    const mobileProfitPackages = document.querySelector('[data-mobile-profit-packages]');
+    const mobileProfitAddons = document.querySelector('[data-mobile-profit-addons]');
     const mobileForecast = document.querySelector('[data-mobile-forecast]');
     const mobileConversion = document.querySelector('[data-mobile-conversion]');
     const mobilePackagePopularity = document.querySelector('[data-mobile-package-popularity]');
@@ -505,6 +564,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const profitBartenderWages = document.querySelector('[data-profit-bartender-wages]');
     const profitLaborMeta = document.querySelector('[data-profit-labor-meta]');
     const profitBreakdown = document.querySelector('[data-profit-breakdown]');
+    const profitPriceRecommendations = document.querySelector('[data-profit-price-recommendations]');
     const profitMessage = document.querySelector('[data-profit-message]');
 
     const convertDialog = document.querySelector('[data-convert-dialog]');
@@ -1455,6 +1515,206 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return {key:'red',label:'Low margin',copy:'Under 35% margin',box:'border-red-200 bg-red-50 text-red-800',pill:'bg-red-100 text-red-800'};
     }
 
+    function recommendedPriceForValues(values,targetMarginPercent) {
+      const target=Math.max(0,Math.min(.9,Number(targetMarginPercent||0)/100));
+      if(!values||!Number.isFinite(values.directCosts)||target<=0)return null;
+      let price=0;
+      if(values.costMode==='auto'){
+        const fixedCosts=Math.max(0,Number(values.directCosts||0)-Number(values.otherDirectCosts||0));
+        const minReservePrice=(fixedCosts+25)/(1-target);
+        price=(minReservePrice*.02<=25+.0001)
+          ? minReservePrice
+          : fixedCosts/(.98-target);
+      } else {
+        price=Number(values.directCosts||0)/(1-target);
+      }
+      price=Math.max(Number(values.revenue||0),price);
+      price=Math.ceil(price*100)/100;
+      const reserve=values.costMode==='auto'?Math.max(25,price*.02):Number(values.otherDirectCosts||0);
+      const targetCosts=values.costMode==='auto'
+        ? Math.max(0,Number(values.directCosts||0)-Number(values.otherDirectCosts||0))+reserve
+        : Number(values.directCosts||0);
+      const targetProfit=price-targetCosts;
+      return {
+        targetMargin:targetMarginPercent,
+        price,
+        increase:Math.max(0,price-Number(values.revenue||0)),
+        targetCosts,
+        targetProfit
+      };
+    }
+
+    function renderPriceRecommendations(container,values,{compact=false}={}) {
+      if(!container)return;
+      container.innerHTML='';
+      const lowMargin=Number(values?.margin||0)<marginThresholds.yellow;
+      container.classList.toggle('hidden',!lowMargin);
+      if(!lowMargin)return;
+
+      const title=text('p',compact?'text-[.56rem] font-black uppercase tracking-[.09em]':'text-[.62rem] font-black uppercase tracking-[.09em] text-red-800','Recommended price');
+      const copy=text('p',compact?'mt-1 text-[.64rem] leading-5 opacity-70':'mt-1 text-xs leading-5 text-red-700','Minimum selling price on the current cost basis to reach each target margin.');
+      container.append(title,copy);
+
+      const grid=document.createElement('div');
+      grid.className=compact?'mt-3 grid grid-cols-3 gap-2':'mt-4 grid gap-3 sm:grid-cols-3';
+      [40,50,60].forEach((target)=>{
+        const rec=recommendedPriceForValues(values,target);
+        if(!rec)return;
+        const card=document.createElement('div');
+        card.className=compact
+          ? 'rounded-lg border border-red-200/80 bg-white/65 p-2.5 text-[var(--koa-ink)]'
+          : 'rounded-xl border border-red-200 bg-white p-3 text-[var(--koa-ink)]';
+        card.append(
+          text('p','text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]',target+'% margin'),
+          text('strong',compact?'mt-1 block text-base text-[var(--koa-forest)]':'display mt-1 block text-2xl text-[var(--koa-forest)]',money(rec.price)),
+          text('p','mt-1 text-[.58rem] leading-4 text-[var(--koa-ink)]/48','+'+money(rec.increase)+' vs. current')
+        );
+        grid.appendChild(card);
+      });
+      container.appendChild(grid);
+    }
+
+    function profitabilityRecords() {
+      const scope=String(mobileProfitScope?.value||'booked');
+      return (payload.records||[])
+        .filter(isMobileBarRecord)
+        .filter((record)=>record.stage!=='lost'&&mobileRevenue(record)>0)
+        .filter((record)=>scope==='all'||record.stage==='booked');
+    }
+
+    function mobileEventMonth(record) {
+      const raw=String(record?.customer?.eventDate||record?.inquiry?.eventDate||'').trim();
+      return /^\d{4}-\d{2}/.test(raw)?raw.slice(0,7):'';
+    }
+
+    function weightedMargin(rows) {
+      const revenue=rows.reduce((sum,row)=>sum+Number(row.values.revenue||0),0);
+      const profit=rows.reduce((sum,row)=>sum+Number(row.values.profit||0),0);
+      return revenue>0?(profit/revenue)*100:0;
+    }
+
+    function profitHealthBarClass(margin) {
+      const key=marginHealth(margin).key;
+      return key==='green'?'bg-emerald-300':key==='yellow'?'bg-amber-300':'bg-red-300';
+    }
+
+    function renderProfitabilityDashboard() {
+      const records=profitabilityRecords();
+      const rows=records.map((record)=>({record,values:profitValues(record)}));
+      const revenue=rows.reduce((sum,row)=>sum+Number(row.values.revenue||0),0);
+      const grossProfit=rows.reduce((sum,row)=>sum+Number(row.values.profit||0),0);
+      const directCosts=rows.reduce((sum,row)=>sum+Number(row.values.directCosts||0),0);
+      const guests=rows.reduce((sum,row)=>sum+Math.max(0,Number(row.record?.inquiry?.guestCount||0)),0);
+      const margin=revenue>0?(grossProfit/revenue)*100:0;
+      if(mobileProfitRevenue)mobileProfitRevenue.textContent=money(revenue);
+      if(mobileProfitRevenueMeta)mobileProfitRevenueMeta.textContent=rows.length+' priced record'+(rows.length===1?'':'s');
+      if(mobileProfitGross)mobileProfitGross.textContent=money(grossProfit);
+      if(mobileProfitMargin)mobileProfitMargin.textContent=(Number.isFinite(margin)?margin:0).toFixed(1)+'%';
+      if(mobileProfitCostGuest)mobileProfitCostGuest.textContent=money(guests>0?directCosts/guests:0);
+      if(mobileProfitCostGuestMeta)mobileProfitCostGuestMeta.textContent=guests+' guest'+(guests===1?'':'s')+' represented';
+
+      const monthlyMap=new Map();
+      rows.forEach((row)=>{
+        const month=mobileEventMonth(row.record);
+        if(!month)return;
+        const existing=monthlyMap.get(month)||{month,rows:[],revenue:0,profit:0,costs:0,guests:0};
+        existing.rows.push(row);
+        existing.revenue+=Number(row.values.revenue||0);
+        existing.profit+=Number(row.values.profit||0);
+        existing.costs+=Number(row.values.directCosts||0);
+        existing.guests+=Math.max(0,Number(row.record?.inquiry?.guestCount||0));
+        monthlyMap.set(month,existing);
+      });
+      const months=[...monthlyMap.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-18);
+      months.forEach((month)=>{month.margin=month.revenue>0?(month.profit/month.revenue)*100:0;});
+
+      if(mobileProfitMonthly){
+        mobileProfitMonthly.innerHTML='';
+        const maxRevenue=Math.max(1,...months.map((month)=>month.revenue));
+        months.forEach((month)=>{
+          const item=document.createElement('article');item.className='rounded-lg border border-white/10 bg-black/10 p-3';
+          const head=document.createElement('div');head.className='flex items-start justify-between gap-4';
+          const left=document.createElement('div');left.append(text('strong','text-sm text-white',monthLabel(month.month)),text('p','mt-1 text-[.6rem] text-white/42',month.rows.length+' priced event'+(month.rows.length===1?'':'s')));
+          const right=document.createElement('div');right.className='text-right';right.append(text('strong','text-sm text-white',money(month.revenue)),text('p','mt-1 text-[.6rem] text-emerald-200',money(month.profit)+' profit'));
+          head.append(left,right);
+          const track=document.createElement('div');track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+          const bar=document.createElement('div');bar.className='h-full rounded-full bg-[var(--koa-amber-light)]';bar.style.width=Math.max(2,(month.revenue/maxRevenue)*100)+'%';track.appendChild(bar);
+          item.append(head,track,text('p','mt-2 text-[.6rem] text-white/45',month.margin.toFixed(1)+'% margin · '+money(month.guests?month.costs/month.guests:0)+' cost/guest'));
+          mobileProfitMonthly.appendChild(item);
+        });
+        if(!months.length)mobileProfitMonthly.appendChild(text('p','text-sm text-white/45','No dated priced Mobile Bar records in this scope yet.'));
+      }
+
+      if(mobileProfitTrend){
+        mobileProfitTrend.innerHTML='';
+        const maxMargin=Math.max(60,...months.map((month)=>month.margin));
+        months.forEach((month)=>{
+          const item=document.createElement('div');item.className='grid gap-2';
+          const head=document.createElement('div');head.className='flex items-center justify-between gap-3 text-xs';
+          head.append(text('span','font-semibold text-white/75',monthLabel(month.month)),text('strong','text-white',month.margin.toFixed(1)+'%'));
+          const track=document.createElement('div');track.className='h-2 overflow-hidden rounded-full bg-black/20';
+          const bar=document.createElement('div');bar.className='h-full rounded-full '+profitHealthBarClass(month.margin);bar.style.width=Math.max(2,Math.min(100,(month.margin/maxMargin)*100))+'%';track.appendChild(bar);
+          item.append(head,track);mobileProfitTrend.appendChild(item);
+        });
+        if(!months.length)mobileProfitTrend.appendChild(text('p','text-sm text-white/45','Margin trend will appear once dated priced events are available.'));
+      }
+
+      const packageMap=new Map();
+      rows.forEach((row)=>{
+        const id=recordPackage(row.record)||'mobile-custom';
+        const group=packageMap.get(id)||{id,count:0,revenue:0,profit:0,costs:0};
+        group.count+=1;group.revenue+=row.values.revenue;group.profit+=row.values.profit;group.costs+=row.values.directCosts;
+        packageMap.set(id,group);
+      });
+      const packages=[...packageMap.values()].map((group)=>({...group,margin:group.revenue>0?(group.profit/group.revenue)*100:0})).sort((a,b)=>b.profit-a.profit);
+      if(mobileProfitPackages){
+        mobileProfitPackages.innerHTML='';
+        const maxProfit=Math.max(1,...packages.map((group)=>Math.max(0,group.profit)));
+        packages.forEach((group,index)=>{
+          const item=document.createElement('div');item.className='grid gap-2';
+          const head=document.createElement('div');head.className='flex items-start justify-between gap-4';
+          const left=document.createElement('div');left.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-amber-light)]','#'+(index+1)),text('strong','mt-1 block text-sm text-white',packageLabel(group.id)));
+          const right=document.createElement('div');right.className='text-right';right.append(text('strong','text-sm text-white',money(group.profit)),text('p','mt-1 text-[.6rem] text-white/45',group.margin.toFixed(1)+'% · '+group.count+' record'+(group.count===1?'':'s')));
+          head.append(left,right);
+          const track=document.createElement('div');track.className='h-2 overflow-hidden rounded-full bg-black/20';
+          const bar=document.createElement('div');bar.className='h-full rounded-full bg-emerald-300';bar.style.width=Math.max(2,(Math.max(0,group.profit)/maxProfit)*100)+'%';track.appendChild(bar);
+          item.append(head,track);mobileProfitPackages.appendChild(item);
+        });
+        if(!packages.length)mobileProfitPackages.appendChild(text('p','text-sm text-white/45','Package profitability will populate from priced records.'));
+      }
+
+      const addonMap=new Map();
+      rows.forEach((row)=>{
+        quoteLines(row.record).forEach((line)=>{
+          const id=String(line?.id||'');
+          if(!(id in addOnCostRatios))return;
+          const amount=Math.max(0,Number(line?.amount||0));
+          if(amount<=0)return;
+          const ratio=Number(addOnCostRatios[id]||0);
+          const group=addonMap.get(id)||{id,label:String(line?.description||id),count:0,revenue:0,cost:0,profit:0};
+          group.count+=1;group.revenue+=amount;group.cost+=amount*ratio;group.profit+=amount*(1-ratio);
+          if(line?.description)group.label=String(line.description);
+          addonMap.set(id,group);
+        });
+      });
+      const addons=[...addonMap.values()].map((group)=>({...group,margin:group.revenue>0?(group.profit/group.revenue)*100:0})).sort((a,b)=>b.profit-a.profit);
+      if(mobileProfitAddons){
+        mobileProfitAddons.innerHTML='';
+        const maxProfit=Math.max(1,...addons.map((group)=>group.profit));
+        addons.slice(0,10).forEach((group,index)=>{
+          const item=document.createElement('div');item.className='grid gap-2';
+          const head=document.createElement('div');head.className='flex items-start justify-between gap-4';
+          const left=document.createElement('div');left.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-amber-light)]','#'+(index+1)),text('strong','mt-1 block text-sm text-white',group.label));
+          const right=document.createElement('div');right.className='text-right';right.append(text('strong','text-sm text-white',money(group.profit)),text('p','mt-1 text-[.6rem] text-white/45',money(group.revenue)+' revenue · '+group.count+' sale'+(group.count===1?'':'s')));
+          head.append(left,right);
+          const track=document.createElement('div');track.className='h-2 overflow-hidden rounded-full bg-black/20';
+          const bar=document.createElement('div');bar.className='h-full rounded-full bg-[var(--koa-amber-light)]';bar.style.width=Math.max(2,(group.profit/maxProfit)*100)+'%';track.appendChild(bar);
+          item.append(head,track);mobileProfitAddons.appendChild(item);
+        });
+        if(!addons.length)mobileProfitAddons.appendChild(text('p','text-sm text-white/45','Priced enhancements with configured direct-cost ratios will appear here.'));
+      }
+    }
+
     function formProfitOverrides() {
       if(!profitForm)return {};
       return {
@@ -1507,6 +1767,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(profitHealthCard)profitHealthCard.className='rounded-xl border p-4 '+health.box;
       if(profitHealth)profitHealth.textContent=health.label;
       if(profitHealthCopy)profitHealthCopy.textContent=health.copy;
+      renderPriceRecommendations(profitPriceRecommendations,values);
       if(profitBartenderWages)profitBartenderWages.textContent=money(values.bartenderWages);
       if(profitLaborMeta)profitLaborMeta.textContent=values.bartenders+' bartender'+(values.bartenders===1?'':'s')+' × '+values.hours+' hr × '+money(values.bartenderWageRate)+'/hr';
       if(profitBreakdown){
@@ -1610,6 +1871,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const right=document.createElement('div');right.className='text-right';right.append(text('span','inline-flex rounded-full px-2.5 py-1 text-[.58rem] font-black uppercase tracking-[.08em] '+health.pill,health.label),text('strong','display mt-2 block text-2xl',(Number.isFinite(p.margin)?p.margin:0).toFixed(1)+'%'));
         head.append(left,right);marginBox.appendChild(head);
         marginBox.appendChild(text('p','mt-2 text-[.68rem] leading-5','Revenue '+money(p.revenue)+' · direct costs '+money(p.directCosts)+' · '+(p.costMode==='auto'?'automatic cost model':'manual actual costs')));
+        if(health.key==='red'){
+          const recommendations=document.createElement('div');
+          recommendations.className='mt-3 border-t border-red-200 pt-3';
+          renderPriceRecommendations(recommendations,p,{compact:true});
+          marginBox.appendChild(recommendations);
+        }
         article.appendChild(marginBox);
       }
 
@@ -1805,6 +2072,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
 
       renderMobileAnalytics();
+      renderProfitabilityDashboard();
 
       if(mobileReport){
         mobileReport.innerHTML='';
@@ -2028,6 +2296,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
+    mobileProfitScope?.addEventListener('change',renderProfitabilityDashboard);
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
