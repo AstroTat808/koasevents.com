@@ -85,7 +85,7 @@ async function encryptionBytes() {
   if (c.encryptionKey) {
     const bytes = Buffer.from(c.encryptionKey, 'base64');
     if (bytes.length !== 32) {
-      throw new Error('QBO_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key when provided.');
+      throw new Error('QUICKBOOKS_TOKEN_ENCRYPTION_KEY must be a base64-encoded 32-byte key.');
     }
     return bytes;
   }
@@ -96,14 +96,19 @@ async function encryptionBytes() {
   return new Uint8Array(digest);
 }
 
+async function keyFromBytes(bytes: Uint8Array, usages: KeyUsage[]) {
+  return crypto.subtle.importKey('raw', bytes, { name: 'AES-GCM' }, false, usages);
+}
+
 async function encryptionKey(usages: KeyUsage[]) {
-  return crypto.subtle.importKey(
-    'raw',
-    await encryptionBytes(),
-    { name: 'AES-GCM' },
-    false,
-    usages,
-  );
+  return keyFromBytes(await encryptionBytes(), usages);
+}
+
+async function legacyEncryptionKey(usages: KeyUsage[]) {
+  const c = config();
+  if (!c.clientSecret) return null;
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(c.clientSecret));
+  return keyFromBytes(new Uint8Array(digest), usages);
 }
 
 async function encryptTokens(tokens: { accessToken: string; refreshToken: string }) {
@@ -118,15 +123,27 @@ async function encryptTokens(tokens: { accessToken: string; refreshToken: string
 }
 
 async function decryptTokens(connection: StoredConnection) {
-  const key = await encryptionKey(['decrypt']);
   const iv = Buffer.from(connection.encrypted.iv, 'base64');
   const cipher = Buffer.from(connection.encrypted.data, 'base64');
-  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
-  const parsed = JSON.parse(new TextDecoder().decode(plain));
-  return {
-    accessToken: String(parsed.accessToken || ''),
-    refreshToken: String(parsed.refreshToken || ''),
+
+  const decryptWith = async (key: CryptoKey) => {
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+    const parsed = JSON.parse(new TextDecoder().decode(plain));
+    return {
+      accessToken: String(parsed.accessToken || ''),
+      refreshToken: String(parsed.refreshToken || ''),
+    };
   };
+
+  try {
+    return await decryptWith(await encryptionKey(['decrypt']));
+  } catch (error) {
+    const c = config();
+    if (!c.encryptionKey) throw error;
+    const legacyKey = await legacyEncryptionKey(['decrypt']);
+    if (!legacyKey) throw error;
+    return await decryptWith(legacyKey);
+  }
 }
 
 function tokenEndpoint() {
@@ -181,6 +198,10 @@ async function exchange(params: URLSearchParams): Promise<TokenSet> {
   return data as TokenSet;
 }
 
+function connectionKey() {
+  return 'quickbooks/connection/' + config().environment;
+}
+
 async function saveConnection(context: Context, realmId: string, tokenSet: TokenSet, companyName = '') {
   const now = Date.now();
   const encrypted = await encryptTokens({
@@ -197,12 +218,21 @@ async function saveConnection(context: Context, realmId: string, tokenSet: Token
       ? new Date(now + Number(tokenSet.x_refresh_token_expires_in) * 1000).toISOString()
       : undefined,
   };
-  await integrationStore(context).setJSON('quickbooks/connection', connection);
+  await integrationStore(context).setJSON(connectionKey(), connection);
   return connection;
 }
 
 export async function getQuickBooksConnection(context: Context) {
-  return await integrationStore(context).get('quickbooks/connection', { type: 'json' }) as StoredConnection | null;
+  const store = integrationStore(context);
+  const environmentSpecific = await store.get(connectionKey(), { type: 'json' }) as StoredConnection | null;
+  if (environmentSpecific) return environmentSpecific;
+
+  // Backward compatibility: the original sandbox connection used the legacy shared key.
+  // Never reuse that legacy connection while production is active.
+  if (config().environment === 'sandbox') {
+    return await store.get('quickbooks/connection', { type: 'json' }) as StoredConnection | null;
+  }
+  return null;
 }
 
 export async function disconnectQuickBooks(context: Context) {
@@ -210,9 +240,15 @@ export async function disconnectQuickBooks(context: Context) {
   const connection = await getQuickBooksConnection(context);
   if (!connection) return;
 
-  const tokens = await decryptTokens(connection);
-  await revokeToken(tokens.refreshToken || tokens.accessToken);
-  await store.delete('quickbooks/connection');
+  try {
+    const tokens = await decryptTokens(connection);
+    await revokeToken(tokens.refreshToken || tokens.accessToken);
+  } finally {
+    await store.delete(connectionKey());
+    if (config().environment === 'sandbox') {
+      await store.delete('quickbooks/connection');
+    }
+  }
 }
 
 function settingsKey() {
@@ -258,6 +294,7 @@ export async function createOAuthState(context: Context, requestUrl: string) {
   await integrationStore(context).setJSON('quickbooks/oauth-state/' + state, {
     createdAt: new Date().toISOString(),
     redirectUri,
+    environment: c.environment,
   });
 
   const params = new URLSearchParams({
@@ -288,6 +325,9 @@ export async function completeOAuth(context: Context, requestUrl: string) {
   const created = new Date(stateRecord.createdAt || '').getTime();
   if (!created || Date.now() - created > 20 * 60 * 1000) {
     throw new Error('QuickBooks authorization state expired.');
+  }
+  if (String(stateRecord.environment || '') && String(stateRecord.environment) !== config().environment) {
+    throw new Error('QuickBooks environment changed during authorization. Start the connection again.');
   }
 
   const redirectUri = String(stateRecord.redirectUri || '');
