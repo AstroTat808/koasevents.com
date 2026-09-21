@@ -383,7 +383,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function saveSection(action,data){
-      const result=await api({action,recordId:selected.record.id,...data});selected.ops=result.ops;renderSummary();return result;
+      const result=await api({action,recordId:selected.record.id,...data});selected.ops=result.ops;if(Array.isArray(result.vendorSuggestions))selected.vendorSuggestions=result.vendorSuggestions;renderSummary();return result;
     }
 
     async function load(q=''){
