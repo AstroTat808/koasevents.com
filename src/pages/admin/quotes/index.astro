@@ -452,6 +452,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </div>
       </section>
 
+      <section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">Tracks when QuickBooks and CRM balances went out of sync, changed, or were corrected.</p></div>
+        <div data-proposal-reconciliation-history class="mt-4 grid gap-3"></div>
+      </section>
+
       <div data-acceptance-info class="mt-6 hidden rounded-xl bg-[var(--koa-sand)] p-5 text-sm text-[var(--koa-ink)]/65"></div>
       <div class="mt-7 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save proposal</button><button type="button" data-copy-client-link class="hidden rounded-full bg-[var(--koa-clay)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Copy client link</button><button type="button" data-print-proposal class="rounded-full bg-[var(--koa-ink)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Print / PDF</button><button type="button" data-close-proposal class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Close</button></div>
       <p data-proposal-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
@@ -505,6 +510,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Payments Received</p><p data-booking-payments-received class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
           <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Remaining Balance</p><p data-booking-remaining class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
         </div>
+      </section>
+      <section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">State changes from automatic hourly reconciliation and manual rechecks.</p></div>
+        <div data-booking-reconciliation-history class="mt-4 grid gap-3"></div>
       </section>
       <div class="mt-6 flex flex-wrap gap-2">
         <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
@@ -803,6 +812,62 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function text(tag,className,content) { const el=document.createElement(tag); if(className)el.className=className; el.textContent=content; return el; }
     function packageLabel(id) { return packageNames[id] || id || 'Custom / not selected'; }
     function percent(value) { return value == null ? '—' : Math.round(value*100) + '%'; }
+
+    function renderReconciliationHistory(container,record) {
+      if(!container)return;
+      container.innerHTML='';
+      const qbo=record?.accounting?.quickbooks||{};
+      const history=Array.isArray(qbo.reconciliationHistory)?qbo.reconciliationHistory:[];
+      const current=qbo.reconciliationState||null;
+      if(current){
+        const status=document.createElement('div');
+        status.className='rounded-xl '+(current.open?'border border-red-200 bg-red-50':'border border-emerald-200 bg-emerald-50')+' p-3 text-xs '+(current.open?'text-red-900':'text-emerald-900');
+        status.textContent=current.open
+          ? 'Current status: mismatch open · '+(Array.isArray(current.issues)?current.issues.length:0)+' issue'+((current.issues||[]).length===1?'':'s')
+          : 'Current status: reconciled';
+        container.appendChild(status);
+      }
+      if(!history.length){
+        container.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No reconciliation transitions recorded yet.'));
+        return;
+      }
+      history.slice(0,20).forEach((entry)=>{
+        const card=document.createElement('article');
+        const resolved=entry.type==='resolved';
+        const changed=entry.type==='mismatch_changed';
+        card.className='rounded-xl border p-4 '+(resolved?'border-emerald-200 bg-emerald-50/55':changed?'border-amber-200 bg-amber-50/55':'border-red-200 bg-red-50/55');
+        const label=resolved?'Resolved':changed?'Mismatch changed':'Mismatch detected';
+        const top=document.createElement('div');top.className='flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between';
+        top.append(
+          text('strong','text-sm '+(resolved?'text-emerald-900':changed?'text-amber-900':'text-red-900'),label),
+          text('span','text-xs text-[var(--koa-ink)]/45',dateTime(entry.createdAt)+(entry.source?' · '+entry.source:''))
+        );
+        card.appendChild(top);
+        const before=Array.isArray(entry.before)?entry.before:[];
+        const after=Array.isArray(entry.after)?entry.after:[];
+        const issues=resolved?before:after;
+        if(issues.length){
+          const list=document.createElement('div');list.className='mt-3 grid gap-2';
+          issues.forEach((issue)=>{
+            const row=document.createElement('div');row.className='rounded-lg bg-white px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/70';
+            const expected=issue.expected==null?'—':money(issue.expected);
+            const actual=issue.actual==null?'—':money(issue.actual);
+            const delta=issue.delta==null?'':' · difference '+money(issue.delta);
+            row.textContent=(issue.label||issue.code||'Accounting value')+': expected '+expected+', actual '+actual+delta;
+            list.appendChild(row);
+          });
+          card.appendChild(list);
+        }
+        if(changed&&before.length){
+          const prior=document.createElement('details');prior.className='mt-3 text-xs text-[var(--koa-ink)]/55';
+          const summary=document.createElement('summary');summary.className='cursor-pointer font-semibold';summary.textContent='Show previous mismatch state';
+          prior.appendChild(summary);
+          before.forEach((issue)=>prior.appendChild(text('p','mt-2 pl-3',(issue.label||issue.code||'Accounting value')+' · expected '+(issue.expected==null?'—':money(issue.expected))+' · actual '+(issue.actual==null?'—':money(issue.actual)))));
+          card.appendChild(prior);
+        }
+        container.appendChild(card);
+      });
+    }
 
     function renderAccountingAlert() {
       const audit=qboState?.accountingAudit;
@@ -1693,6 +1758,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(bookingMessage) bookingMessage.textContent=!qboState?.connection?.connected
         ? 'QuickBooks is not connected. Use QBO Setup before issuing invoices.'
         : 'Invoice balances shown here come from the last QuickBooks synchronization.';
+      renderReconciliationHistory(document.querySelector('[data-booking-reconciliation-history]'),record);
 
       const clientSigned = summary.contractStatus === 'signed';
       const koaSigned = Boolean(summary.koaSignedAt);
@@ -2802,6 +2868,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       acceptanceInfo.classList.toggle('hidden',!accepted);
       if(accepted) acceptanceInfo.textContent='Accepted by '+accepted.name+' on '+dateTime(accepted.acceptedAt)+'.';
       renderQboProposal(record);
+      renderReconciliationHistory(document.querySelector('[data-proposal-reconciliation-history]'),record);
       proposalMessage.textContent=''; recalcEditor(); proposalDialog.showModal();
     }
 
