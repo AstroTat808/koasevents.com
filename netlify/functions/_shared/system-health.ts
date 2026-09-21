@@ -128,11 +128,25 @@ export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
   const store=healthStore(context);
   const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
   await store.setJSON('latest',snapshot);
-  await store.setJSON('history',[snapshot,...history].slice(0,5000));
+  await store.setJSON('history',[snapshot,...history].slice(0,500));
+
+  if(snapshot.source==='hourly'){
+    const uptimeRows=((await store.get('uptime/hourly',{type:'json'})) || []) as any[];
+    const compact={
+      checkedAt:snapshot.checkedAt,
+      checks:(snapshot.checks||[]).map(check=>({id:check.id,name:check.name,kind:check.kind,path:check.path,ok:check.ok})),
+    };
+    await store.setJSON('uptime/hourly',[compact,...uptimeRows].slice(0,2300));
+  }
 }
 
-export function calculateUptime(history:HealthSnapshot[]) {
-  const hourly=(history||[]).filter(row=>row?.source==='hourly' && Number.isFinite(Date.parse(String(row.checkedAt||''))));
+export async function readUptimeHistory(context:Context,limit=2300) {
+  const rows=((await healthStore(context).get('uptime/hourly',{type:'json'})) || []) as any[];
+  return rows.slice(0,Math.max(1,Math.min(2300,limit)));
+}
+
+export function calculateUptime(history:any[]) {
+  const hourly=(history||[]).filter(row=>Number.isFinite(Date.parse(String(row.checkedAt||''))));
   const windows=[
     {id:'24h',label:'24 hours',hours:24,expected:24},
     {id:'7d',label:'7 days',hours:24*7,expected:24*7},
