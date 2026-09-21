@@ -1,9 +1,18 @@
+export type CleanupMode = 'auto_trash' | 'review_first' | 'flag_only';
+
+export type CleanupReview = {
+  verdict: 'legitimate';
+  reviewedAt: string;
+  reviewedBy: string;
+};
+
 export type CleanupAssessment = {
   score:number;
   disposition:'clean'|'review'|'auto_trash';
   reasons:string[];
   reasonCodes:string[];
   autoTrash:boolean;
+  approvedLegitimate:boolean;
 };
 
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
@@ -37,7 +46,22 @@ function syntheticNameSignals(name:string){
   return signals;
 }
 
+export function normalizeCleanupMode(value:unknown):CleanupMode{
+  return value==='review_first'||value==='flag_only'?'review_first'===value?'review_first':'flag_only':'auto_trash';
+}
+
 export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
+  if(record?.cleanupReview?.verdict==='legitimate'){
+    return {
+      score:0,
+      disposition:'clean',
+      reasons:['Approved as legitimate by an administrator'],
+      reasonCodes:['admin_approved_legitimate'],
+      autoTrash:false,
+      approvedLegitimate:true,
+    };
+  }
+
   const signals:Array<{code:string;reason:string;score:number}>=[];
   const kind=clean(record?.kind,30);
   const stage=clean(record?.stage,30);
@@ -97,5 +121,6 @@ export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
     reasons:signals.map(s=>s.reason),
     reasonCodes:signals.map(s=>s.code),
     autoTrash,
+    approvedLegitimate:false,
   };
 }
