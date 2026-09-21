@@ -154,18 +154,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <h2 class="display mt-3 text-4xl">Reservation deposit percentages</h2>
           <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the default reservation-deposit percentage used when a new proposal is created. Staff can still change the percentage on an individual proposal before invoicing.</p>
           <form data-deposit-form class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <label class="grid gap-2 text-sm font-semibold">Venue wedding %
-              <input name="venueWeddingPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
-            </label>
-            <label class="grid gap-2 text-sm font-semibold">Mobile Bar %
-              <input name="mobileBarPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
-            </label>
-            <label class="grid gap-2 text-sm font-semibold">Private event %
-              <input name="privateEventPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
-            </label>
-            <label class="grid gap-2 text-sm font-semibold">General fallback %
-              <input name="defaultPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
-            </label>
+            <label class="grid gap-2 text-sm font-semibold">Venue wedding %<input name="venueWeddingPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Mobile Bar %<input name="mobileBarPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Private event %<input name="privateEventPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">General fallback %<input name="defaultPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <div class="sm:col-span-2 xl:col-span-4 flex flex-wrap items-center gap-3">
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save deposit defaults</button>
               <p data-deposit-message class="text-sm text-[var(--koa-ink)]/52"></p>
@@ -253,7 +245,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
     const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -411,20 +403,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const link=document.createElement('a');link.href='/admin/quotes/?q='+encodeURIComponent(row.recordId);link.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';link.textContent='Open client →';
         actions.appendChild(link);
         if(!row.reconciled){
-          const recheck=document.createElement('button');
-          recheck.type='button';
-          recheck.className='rounded-full border border-red-200 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700';
-          recheck.textContent='Sync & Recheck';
+          const recheck=document.createElement('button');recheck.type='button';recheck.className='rounded-full border border-red-200 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700';recheck.textContent='Sync & Recheck';
           recheck.addEventListener('click',async()=>{
             recheck.disabled=true;recheck.textContent='Syncing…';
-            try{
-              const result=await api({action:'sync-and-recheck',recordId:row.recordId});
-              state.accountingAudit=result.accountingAudit||state.accountingAudit;
-              renderAccountingAudit();
-            }catch(err){
-              recheck.disabled=false;recheck.textContent='Retry Sync & Recheck';
-              alert(err.message||'Unable to sync and recheck this client.');
-            }
+            try{const result=await api({action:'sync-and-recheck',recordId:row.recordId});state.accountingAudit=result.accountingAudit||state.accountingAudit;renderAccountingAudit();}
+            catch(err){recheck.disabled=false;recheck.textContent='Retry Sync & Recheck';alert(err.message||'Unable to sync and recheck this client.');}
           });
           actions.appendChild(recheck);
         }
@@ -567,7 +550,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function load(){
-      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
+      const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
       app.classList.remove('hidden');
       const res=await fetch('/api/admin/quickbooks',{cache:'no-store'});
       if(!res.ok)return;state=await res.json();render();
@@ -614,19 +597,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
     });
     depositForm?.addEventListener('submit',async(event)=>{
-      event.preventDefault();
-      const data=new FormData(depositForm);
-      if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
+      event.preventDefault();const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
       try{
-        const result=await api({
-          action:'save-deposit-settings',
-          venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),
-          mobileBarPercent:Number(data.get('mobileBarPercent')||0),
-          privateEventPercent:Number(data.get('privateEventPercent')||0),
-          defaultPercent:Number(data.get('defaultPercent')||0),
-        });
-        state.depositSettings=result.depositSettings;
-        if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
+        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0)});
+        state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
       }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
     cleanupProductionTest?.addEventListener('click',async()=>{
