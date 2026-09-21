@@ -1610,7 +1610,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       };
     }
 
-    function renderPriceRecommendations(container,values,{compact=false}={}) {
+    function canApplyRecommendedPrice(record) {
+      return Boolean(
+        record?.kind==='proposal' &&
+        record?.proposal &&
+        !['accepted','booked'].includes(String(record.proposal.status||'')) &&
+        record?.stage!=='booked'
+      );
+    }
+
+    async function applyRecommendedPrice(record,target,rec) {
+      if(!canApplyRecommendedPrice(record)||!rec)return;
+      const name=record.customer?.name||record.id;
+      if(!confirm('Apply the '+target+'% margin target to '+name+'?\n\nThis preserves every existing proposal line and adds/updates one Margin target adjustment line. The payment schedule will be rebalanced to the new total of '+money(rec.price)+'.'))return;
+      const reopenProfit=Boolean(profitDialog?.open&&profitRecord?.id===record.id);
+      if(reopenProfit)profitDialog.close();
+      try{
+        if(message)message.textContent='Applying '+target+'% target price to '+record.id+'…';
+        const result=await api({
+          action:'apply-mobile-bar-margin-target',
+          recordId:record.id,
+          targetMargin:target,
+          targetTotal:rec.price
+        });
+        await load(String(searchInput?.value||'').trim());
+        const refreshed=(payload.records||[]).find((entry)=>entry.id===record.id)||result.record;
+        if(reopenProfit&&refreshed){
+          openProfitModel(refreshed);
+          if(profitMessage)profitMessage.textContent='Applied '+target+'% target price. Proposal total is now '+money(result.targetTotal||refreshed.proposal?.total)+'. Sync the QuickBooks estimate if one already exists.';
+        }
+        if(message)message.textContent='Applied '+target+'% target price to '+record.id+' · '+money(result.targetTotal||rec.price)+'.';
+      }catch(error){
+        if(message)message.textContent=error?.message||'Unable to apply recommended price.';
+        if(reopenProfit&&record)openProfitModel(record);
+      }
+    }
+
+    function renderPriceRecommendations(container,values,{compact=false,record=null}={}) {
       if(!container)return;
       container.innerHTML='';
       const lowMargin=Number(values?.margin||0)<marginThresholds.yellow;
@@ -1635,22 +1671,150 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('strong',compact?'mt-1 block text-base text-[var(--koa-forest)]':'display mt-1 block text-2xl text-[var(--koa-forest)]',money(rec.price)),
           text('p','mt-1 text-[.58rem] leading-4 text-[var(--koa-ink)]/48','+'+money(rec.increase)+' vs. current')
         );
+        if(canApplyRecommendedPrice(record)){
+          const button=document.createElement('button');
+          button.type='button';
+          button.className=compact
+            ? 'mt-2 w-full rounded-full bg-[var(--koa-forest)] px-2 py-2 text-[.5rem] font-black uppercase tracking-[.06em] text-white'
+            : 'mt-3 w-full rounded-full bg-[var(--koa-forest)] px-3 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white';
+          button.textContent='Apply '+target+'%';
+          button.addEventListener('click',()=>applyRecommendedPrice(record,target,rec));
+          card.appendChild(button);
+        }
         grid.appendChild(card);
       });
       container.appendChild(grid);
+      if(record?.kind==='proposal'&&!canApplyRecommendedPrice(record)){
+        container.appendChild(text('p',compact?'mt-2 text-[.58rem] leading-4 opacity-65':'mt-3 text-xs leading-5 text-red-700','Accepted and booked proposals are locked from one-click repricing.'));
+      }
+    }
+
+    function localDateKey(date) {
+      const y=date.getFullYear();
+      const m=String(date.getMonth()+1).padStart(2,'0');
+      const d=String(date.getDate()).padStart(2,'0');
+      return y+'-'+m+'-'+d;
+    }
+
+    function formatDateKey(value) {
+      if(!value)return '';
+      const parsed=new Date(value+'T12:00:00');
+      if(Number.isNaN(parsed.getTime()))return value;
+      return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(parsed);
+    }
+
+    function profitabilityDateRange() {
+      const today=new Date();
+      const todayKey=localDateKey(today);
+      const period=String(mobileProfitPeriod?.value||'ytd');
+      if(period==='all')return {period,start:'',end:'',label:'All-time performance'};
+      if(period==='custom'){
+        const start=String(mobileProfitFrom?.value||'');
+        const end=String(mobileProfitTo?.value||'');
+        const label=start&&end?formatDateKey(start)+' – '+formatDateKey(end):'Custom date range';
+        return {period,start,end,label};
+      }
+      if(period==='trailing12'){
+        const startDate=new Date(today.getFullYear()-1,today.getMonth(),today.getDate()+1);
+        const start=localDateKey(startDate);
+        return {period,start,end:todayKey,label:'Trailing 12 months · '+formatDateKey(start)+' – '+formatDateKey(todayKey)};
+      }
+      const start=today.getFullYear()+'-01-01';
+      return {period:'ytd',start,end:todayKey,label:'Year to date · '+formatDateKey(start)+' – '+formatDateKey(todayKey)};
+    }
+
+    function recordEventDate(record) {
+      const raw=String(record?.customer?.eventDate||record?.inquiry?.eventDate||'').trim();
+      return /^\d{4}-\d{2}-\d{2}/.test(raw)?raw.slice(0,10):'';
     }
 
     function profitabilityRecords() {
       const scope=String(mobileProfitScope?.value||'booked');
+      const range=profitabilityDateRange();
       return (payload.records||[])
         .filter(isMobileBarRecord)
         .filter((record)=>record.stage!=='lost'&&mobileRevenue(record)>0)
-        .filter((record)=>scope==='all'||record.stage==='booked');
+        .filter((record)=>scope==='all'||record.stage==='booked')
+        .filter((record)=>{
+          if(!range.start&&!range.end)return true;
+          const eventDate=recordEventDate(record);
+          if(!eventDate)return false;
+          if(range.start&&eventDate<range.start)return false;
+          if(range.end&&eventDate>range.end)return false;
+          return true;
+        });
     }
 
     function mobileEventMonth(record) {
-      const raw=String(record?.customer?.eventDate||record?.inquiry?.eventDate||'').trim();
-      return /^\d{4}-\d{2}/.test(raw)?raw.slice(0,7):'';
+      const raw=recordEventDate(record);
+      return raw?raw.slice(0,7):'';
+    }
+
+    function mobileProfitProbability(record) {
+      if(record.stage==='booked')return 1;
+      if(record.kind==='proposal'){
+        const status=String(record.proposal?.status||record.status||'');
+        if(status==='accepted')return .95;
+        if(status==='viewed')return .75;
+        if(status==='sent')return .65;
+        if(status==='draft')return .50;
+        return .45;
+      }
+      if(record.stage==='lead')return .30;
+      return .15;
+    }
+
+    function renderMobileProfitGoalProjection() {
+      const allMobile=(payload.records||[])
+        .filter(isMobileBarRecord)
+        .filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
+      const now=new Date();
+      const currentMonth=localDateKey(new Date(now.getFullYear(),now.getMonth(),1)).slice(0,7);
+      const monthRows=allMobile.filter((record)=>mobileEventMonth(record)===currentMonth);
+      const bookedRows=monthRows.filter((record)=>record.stage==='booked');
+      const openRows=monthRows.filter((record)=>record.stage!=='booked');
+      const bookedProfit=bookedRows.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const projectedOpenProfit=openRows.reduce((sum,record)=>{
+        const profit=Number(profitValues(record).profit||0);
+        return sum+(profit*mobileProfitProbability(record));
+      },0);
+      const projectedProfit=bookedProfit+projectedOpenProfit;
+      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0));
+      const avgBookedProfit=historicalBooked.length?historicalBooked.reduce((sum,value)=>sum+value,0)/historicalBooked.length:0;
+      const target=Math.max(0,Number(payload.mobileBarProfitSettings?.monthlyGrossProfitTarget||0));
+      const delta=projectedProfit-target;
+      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
+
+      if(mobileProfitGoalTitle)mobileProfitGoalTitle.textContent=monthLabel(currentMonth)+' gross-profit goal';
+      if(mobileProfitGoalInput&&document.activeElement!==mobileProfitGoalInput)mobileProfitGoalInput.value=target?String(Math.round(target*100)/100):'';
+      if(mobileGoalTarget)mobileGoalTarget.textContent=target?money(target):'Not set';
+      if(mobileGoalBooked)mobileGoalBooked.textContent=money(bookedProfit);
+      if(mobileGoalProjected)mobileGoalProjected.textContent=money(projectedProfit);
+      if(mobileGoalAverage)mobileGoalAverage.textContent=historicalBooked.length?money(avgBookedProfit):'—';
+      if(mobileGoalGap){
+        mobileGoalGap.textContent=target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—';
+      }
+      if(mobileGoalGapCopy){
+        mobileGoalGapCopy.textContent=!target?'Set a monthly goal to compare.':delta>=0?'Projected ahead of target.':'Projected below target.';
+      }
+      if(mobileGoalGapCard){
+        mobileGoalGapCard.className='rounded-lg border p-3 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
+      }
+      if(mobileGoalBookings)mobileGoalBookings.textContent=bookingsNeeded==null?'—':String(bookingsNeeded);
+      if(mobileGoalBookingsCopy){
+        mobileGoalBookingsCopy.textContent=!target
+          ? 'Set a goal first.'
+          : bookingsNeeded===0
+            ? 'Projected target reached.'
+            : avgBookedProfit>0
+              ? 'At '+money(avgBookedProfit)+' average booked profit.'
+              : 'More booked history is needed.';
+      }
+      if(mobileGoalProgress){
+        const pct=target>0?Math.max(0,Math.min(100,(projectedProfit/target)*100)):0;
+        mobileGoalProgress.style.width=pct+'%';
+        mobileGoalProgress.className='h-full rounded-full '+(target>0&&projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
+      }
     }
 
     function weightedMargin(rows) {
@@ -1665,6 +1829,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderProfitabilityDashboard() {
+      const range=profitabilityDateRange();
+      if(mobileProfitCustomRange)mobileProfitCustomRange.classList.toggle('hidden',range.period!=='custom');
+      if(mobileProfitPeriodLabel)mobileProfitPeriodLabel.textContent=range.label;
       const records=profitabilityRecords();
       const rows=records.map((record)=>({record,values:profitValues(record)}));
       const revenue=rows.reduce((sum,row)=>sum+Number(row.values.revenue||0),0);
@@ -1691,7 +1858,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         existing.guests+=Math.max(0,Number(row.record?.inquiry?.guestCount||0));
         monthlyMap.set(month,existing);
       });
-      const months=[...monthlyMap.values()].sort((a,b)=>a.month.localeCompare(b.month)).slice(-18);
+      const months=[...monthlyMap.values()].sort((a,b)=>a.month.localeCompare(b.month));
       months.forEach((month)=>{month.margin=month.revenue>0?(month.profit/month.revenue)*100:0;});
 
       if(mobileProfitMonthly){
@@ -1779,6 +1946,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
         if(!addons.length)mobileProfitAddons.appendChild(text('p','text-sm text-white/45','Priced enhancements with configured direct-cost ratios will appear here.'));
       }
+      renderMobileProfitGoalProjection();
     }
 
     function formProfitOverrides() {
@@ -1833,7 +2001,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(profitHealthCard)profitHealthCard.className='rounded-xl border p-4 '+health.box;
       if(profitHealth)profitHealth.textContent=health.label;
       if(profitHealthCopy)profitHealthCopy.textContent=health.copy;
-      renderPriceRecommendations(profitPriceRecommendations,values);
+      renderPriceRecommendations(profitPriceRecommendations,values,{record:profitRecord});
       if(profitBartenderWages)profitBartenderWages.textContent=money(values.bartenderWages);
       if(profitLaborMeta)profitLaborMeta.textContent=values.bartenders+' bartender'+(values.bartenders===1?'':'s')+' × '+values.hours+' hr × '+money(values.bartenderWageRate)+'/hr';
       if(profitBreakdown){
@@ -1940,7 +2108,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(health.key==='red'){
           const recommendations=document.createElement('div');
           recommendations.className='mt-3 border-t border-red-200 pt-3';
-          renderPriceRecommendations(recommendations,p,{compact:true});
+          renderPriceRecommendations(recommendations,p,{compact:true,record});
           marginBox.appendChild(recommendations);
         }
         article.appendChild(marginBox);
@@ -2363,6 +2531,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     mobileProfitScope?.addEventListener('change',renderProfitabilityDashboard);
+    mobileProfitPeriod?.addEventListener('change',()=>{
+      const range=profitabilityDateRange();
+      if(range.period==='custom'){
+        const today=new Date();
+        if(mobileProfitFrom&&!mobileProfitFrom.value)mobileProfitFrom.value=today.getFullYear()+'-01-01';
+        if(mobileProfitTo&&!mobileProfitTo.value)mobileProfitTo.value=localDateKey(today);
+      }
+      renderProfitabilityDashboard();
+    });
+    [mobileProfitFrom,mobileProfitTo].forEach((control)=>control?.addEventListener('change',renderProfitabilityDashboard));
+    mobileProfitGoalForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const target=Math.max(0,Number(mobileProfitGoalInput?.value||0));
+      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving monthly gross-profit target…';
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{monthlyGrossProfitTarget:target}});
+        payload.mobileBarProfitSettings=result.settings||{monthlyGrossProfitTarget:target};
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly gross-profit target saved.';
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goal.';
+      }
+    });
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
