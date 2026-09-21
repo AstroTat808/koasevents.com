@@ -132,7 +132,43 @@ export default async (req:Request, context:Context) => {
       });
     }
 
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupSettings:{
+    const recordSourceMap=new Map<string,string>();
+    for(const record of salesRecords){
+      const source=clean(record?.inquiry?.referralSource||record?.inquiry?.source||record?.source||record?.inquiry?.formName||'Unknown',160)||'Unknown';
+      recordSourceMap.set(record.id,source);
+    }
+    for(const row of trashRows){
+      const record:any=row.record;
+      if(!record) continue;
+      const source=clean(record?.inquiry?.referralSource||record?.inquiry?.source||record?.source||record?.inquiry?.formName||'Unknown',160)||'Unknown';
+      recordSourceMap.set(record.id,source);
+    }
+
+    const analytics:any={};
+    for(const days of [7,30,90]){
+      const cutoff=Date.now()-days*24*60*60*1000;
+      const rows=(cleanupAudit||[]).filter((entry:any)=>Date.parse(entry.createdAt)>=cutoff);
+      const caughtRows=rows.filter((entry:any)=>['auto_flagged','manual_flagged','auto_trashed','moved_to_trash','bulk_moved_to_trash'].includes(entry.action)&&entry.recordId);
+      const caughtIds=[...new Set(caughtRows.map((entry:any)=>entry.recordId))];
+      const falsePositiveIds=[...new Set(rows.filter((entry:any)=>entry.action==='approved_legitimate'&&entry.recordId).map((entry:any)=>entry.recordId))];
+      const autoTrashIds=[...new Set(rows.filter((entry:any)=>entry.action==='auto_trashed'&&entry.recordId).map((entry:any)=>entry.recordId))];
+      const restoreIds=[...new Set(rows.filter((entry:any)=>entry.action==='restored'&&entry.recordId).map((entry:any)=>entry.recordId))];
+      const sources=new Map<string,number>();
+      for(const id of caughtIds){
+        const label=recordSourceMap.get(id)||'Unknown / deleted';
+        sources.set(label,(sources.get(label)||0)+1);
+      }
+      analytics[String(days)]={
+        days,
+        bogusCaught:caughtIds.length,
+        falsePositivesApproved:falsePositiveIds.length,
+        autoTrashed:autoTrashIds.length,
+        restores:restoreIds.length,
+        spamSources:[...sources.entries()].map(([source,count])=>({source,count})).sort((a,b)=>b.count-a.count||a.source.localeCompare(b.source)).slice(0,10),
+      };
+    }
+
+    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
       mode: normalizeCleanupMode(cleanupSettings.mode),
       updatedAt: cleanupSettings.updatedAt || '',
       updatedBy: cleanupSettings.updatedBy || '',
@@ -146,6 +182,37 @@ export default async (req:Request, context:Context) => {
   if (!body) return Response.json({error:'Invalid JSON.'},{status:400});
   const action = clean(body.action,60);
   const actor = clean(auth.user?.email,240) || 'admin';
+
+  if (action === 'bulk-approve-cleanup-review') {
+    const ids=Array.from(new Set((Array.isArray(body.recordIds)?body.recordIds:[]).map((value:any)=>clean(value,100)).filter(Boolean))).slice(0,100);
+    if(!ids.length) return Response.json({error:'Select at least one client to approve.'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const approved:string[]=[];
+    const skipped:Array<{id:string;reason:string}>=[];
+    const now=new Date().toISOString();
+
+    for(const recordId of ids){
+      const record=records.find((x:any)=>x.id===recordId);
+      if(!record){skipped.push({id:recordId,reason:'CRM record not found.'});continue;}
+      const before=assessCrmRecord(record);
+      if(before.approvedLegitimate){skipped.push({id:recordId,reason:'Already approved legitimate.'});continue;}
+      if(!['review','auto_trash'].includes(before.disposition)){
+        skipped.push({id:recordId,reason:'Record no longer needs cleanup review.'});continue;
+      }
+      record.cleanupReview={verdict:'legitimate',reviewedAt:now,reviewedBy:actor};
+      delete record.cleanupManualFlag;
+      record.updatedAt=now;
+      approved.push(record.id);
+      await sales.setJSON('records/'+record.id,record);
+      await appendActivity(crm,record.id,'cleanup_approved','Marked legitimate by '+actor+' through bulk review.');
+      await appendCleanupAudit(context,{recordId:record.id,action:'approved_legitimate',actor,detail:'Client approved as legitimate through bulk Needs Review action.',score:before.score,reasons:before.reasons});
+    }
+
+    if(approved.length){
+      await sales.setJSON('records/index',records.slice(0,1500));
+    }
+    return Response.json({ok:true,approved,skipped,count:approved.length},{headers:{'Cache-Control':'private, no-store'}});
+  }
 
   if (action === 'approve-cleanup-review') {
     const recordId=clean(body.recordId,100);
