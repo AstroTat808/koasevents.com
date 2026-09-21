@@ -280,6 +280,110 @@ export async function saveQuickBooksSettings(context: Context, settings: { servi
   return clean;
 }
 
+export type QuickBooksCatalogItem = {
+  id: string;
+  name: string;
+  description: string;
+  category: 'service' | 'rental' | 'mileage' | 'fee';
+  unitLabel: string;
+  unitPrice: number;
+  active: boolean;
+  quickBooksItemId: string;
+  quickBooksItemName: string;
+  quickBooksType: 'Service' | 'NonInventory';
+  incomeAccountId: string;
+  incomeAccountName: string;
+  updatedAt: string;
+};
+
+export type QuickBooksGetSettings = {
+  enabled: boolean;
+  label: string;
+  statutoryRate: number;
+  customerRate: number;
+  maxPassOnRate: number;
+  quickBooksItemId: string;
+  quickBooksItemName: string;
+};
+
+function catalogKey() {
+  return 'quickbooks/catalog/' + config().environment;
+}
+
+function getSettingsKey() {
+  return 'quickbooks/get-settings/' + config().environment;
+}
+
+export async function getQuickBooksCatalog(context: Context): Promise<QuickBooksCatalogItem[]> {
+  const stored = await integrationStore(context).get(catalogKey(), { type: 'json' }) as any;
+  if (!Array.isArray(stored)) return [];
+  return stored.map((item: any) => ({
+    id: String(item?.id || '').trim().slice(0, 80),
+    name: String(item?.name || '').trim().slice(0, 100),
+    description: String(item?.description || '').trim().slice(0, 1000),
+    category: ['rental','mileage','fee'].includes(String(item?.category || ''))
+      ? String(item.category) as QuickBooksCatalogItem['category']
+      : 'service',
+    unitLabel: String(item?.unitLabel || 'each').trim().slice(0, 40),
+    unitPrice: Math.max(0, Number(item?.unitPrice || 0)),
+    active: item?.active !== false,
+    quickBooksItemId: String(item?.quickBooksItemId || '').trim().slice(0, 80),
+    quickBooksItemName: String(item?.quickBooksItemName || item?.name || '').trim().slice(0, 100),
+    quickBooksType: String(item?.quickBooksType || '') === 'NonInventory' ? 'NonInventory' : 'Service',
+    incomeAccountId: String(item?.incomeAccountId || '').trim().slice(0, 80),
+    incomeAccountName: String(item?.incomeAccountName || '').trim().slice(0, 160),
+    updatedAt: String(item?.updatedAt || ''),
+  })).filter((item: QuickBooksCatalogItem) => item.id && item.name);
+}
+
+export async function saveQuickBooksCatalog(context: Context, catalog: QuickBooksCatalogItem[]) {
+  const cleanCatalog = (Array.isArray(catalog) ? catalog : []).slice(0, 500).map((item) => ({
+    id: String(item.id || '').trim().slice(0, 80),
+    name: String(item.name || '').trim().slice(0, 100),
+    description: String(item.description || '').trim().slice(0, 1000),
+    category: ['service','rental','mileage','fee'].includes(String(item.category || '')) ? item.category : 'service',
+    unitLabel: String(item.unitLabel || 'each').trim().slice(0, 40),
+    unitPrice: Math.max(0, Math.round(Number(item.unitPrice || 0) * 100) / 100),
+    active: item.active !== false,
+    quickBooksItemId: String(item.quickBooksItemId || '').trim().slice(0, 80),
+    quickBooksItemName: String(item.quickBooksItemName || item.name || '').trim().slice(0, 100),
+    quickBooksType: item.quickBooksType === 'NonInventory' ? 'NonInventory' : 'Service',
+    incomeAccountId: String(item.incomeAccountId || '').trim().slice(0, 80),
+    incomeAccountName: String(item.incomeAccountName || '').trim().slice(0, 160),
+    updatedAt: String(item.updatedAt || new Date().toISOString()),
+  })).filter((item) => item.id && item.name);
+  await integrationStore(context).setJSON(catalogKey(), cleanCatalog);
+  return cleanCatalog;
+}
+
+export async function getQuickBooksGetSettings(context: Context): Promise<QuickBooksGetSettings> {
+  const stored = await integrationStore(context).get(getSettingsKey(), { type: 'json' }) as any;
+  return {
+    enabled: stored?.enabled !== false,
+    label: String(stored?.label || 'Hawaiʻi GET').trim().slice(0, 80),
+    statutoryRate: 4.5,
+    customerRate: Math.min(4.712, Math.max(0, Number(stored?.customerRate ?? 4.5))),
+    maxPassOnRate: 4.712,
+    quickBooksItemId: String(stored?.quickBooksItemId || '').trim().slice(0, 80),
+    quickBooksItemName: String(stored?.quickBooksItemName || '').trim().slice(0, 100),
+  };
+}
+
+export async function saveQuickBooksGetSettings(context: Context, settings: Partial<QuickBooksGetSettings>) {
+  const current = await getQuickBooksGetSettings(context);
+  const next: QuickBooksGetSettings = {
+    enabled: settings.enabled == null ? current.enabled : Boolean(settings.enabled),
+    label: String(settings.label ?? current.label ?? 'Hawaiʻi GET').trim().slice(0, 80) || 'Hawaiʻi GET',
+    statutoryRate: 4.5,
+    customerRate: Math.min(4.712, Math.max(0, Number(settings.customerRate ?? current.customerRate ?? 4.5))),
+    maxPassOnRate: 4.712,
+    quickBooksItemId: String(settings.quickBooksItemId ?? current.quickBooksItemId ?? '').trim().slice(0, 80),
+    quickBooksItemName: String(settings.quickBooksItemName ?? current.quickBooksItemName ?? '').trim().slice(0, 100),
+  };
+  await integrationStore(context).setJSON(getSettingsKey(), next);
+  return next;
+}
+
 export async function createOAuthState(context: Context, requestUrl: string) {
   const c = config();
   if (!c.clientId || !c.clientSecret) {
