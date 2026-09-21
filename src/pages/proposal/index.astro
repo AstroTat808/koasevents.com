@@ -130,7 +130,7 @@ import Footer from '../../components/Footer.astro';
             <div class="mt-5 rounded-xl border border-white/12 bg-white/[.06] p-4">
               <p class="text-[.58rem] font-black uppercase tracking-[.11em] text-[var(--koa-amber-light)]">What happens next</p>
               <p class="mt-2 text-sm leading-6 text-white/68">Complete the booking agreement and reservation deposit to reserve your event date.</p>
-              <a data-booking-link class="mt-4 inline-flex rounded-full bg-white px-5 py-3 text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]">Continue to booking agreement</a>
+              <a data-booking-link class="mt-4 inline-flex rounded-full bg-white px-5 py-3 text-[.62rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]">Open your client portal</a>
             </div>
           </section>
         </div>
@@ -314,7 +314,7 @@ import Footer from '../../components/Footer.astro';
       if (isAccepted) {
         text('[data-accepted-copy]', (data.acceptedName ? 'Accepted by ' + data.acceptedName : 'Accepted') + (data.acceptedAt ? ' on ' + new Date(data.acceptedAt).toLocaleString() : '') + '.');
         const bookingLink = document.querySelector('[data-booking-link]');
-        if (bookingLink) bookingLink.href = '/booking/?token=' + encodeURIComponent(token);
+        if (bookingLink) bookingLink.href = '/portal/?token=' + encodeURIComponent(token);
       }
     }
 
