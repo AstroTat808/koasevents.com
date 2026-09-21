@@ -28,13 +28,17 @@ VIEWPORTS=[
 ]
 ADMIN_ROUTES=[
  ("admin-home","/admin/"),
- ("admin-blog","/admin/blog/"),
- ("admin-calendar","/admin/calendar/"),
+ ("admin-business-crm","/admin/crm/"),
+ ("admin-sales-crm","/admin/quotes/"),
  ("admin-events","/admin/events/"),
- ("admin-gallery","/admin/gallery/"),
+ ("admin-calendar","/admin/calendar/"),
+ ("admin-blog","/admin/blog/"),
+ ("admin-staff","/admin/staff/"),
  ("admin-quickbooks","/admin/quickbooks/"),
- ("admin-crm","/admin/quotes/"),
- ("admin-security","/admin/security/")
+ ("admin-gallery","/admin/gallery/"),
+ ("admin-security","/admin/security/"),
+ ("admin-seo","/admin/seo/"),
+ ("admin-health","/admin/health/")
 ]
 
 @dataclass
@@ -139,6 +143,29 @@ def source_mode():
   "margin adjustment line":"margin-target-adjustment",
  }.items():
   if needle not in admin_quotes_api:failures.append("Mobile Bar profitability API missing "+label+": "+needle)
+
+ protected_admin_pages=[
+  SRC/"pages/admin/blog/index.astro",
+  SRC/"pages/admin/calendar/index.astro",
+  SRC/"pages/admin/events/index.astro",
+  SRC/"pages/admin/gallery/index.astro",
+  SRC/"pages/admin/quickbooks/index.astro",
+  SRC/"pages/admin/quotes/index.astro",
+  SRC/"pages/admin/security/index.astro",
+  SRC/"pages/admin/seo/index.astro",
+  SRC/"pages/admin/staff/index.astro",
+ ]
+ for path in protected_admin_pages:
+  text=path.read_text(encoding="utf-8",errors="ignore")
+  if "@netlify/identity" in text:
+   failures.append("Protected admin workspace directly imports @netlify/identity instead of the resilient server-backed session helper: "+str(path.relative_to(ROOT)))
+  if "getAdminSession" not in text:
+   failures.append("Protected admin workspace is missing getAdminSession startup authorization: "+str(path.relative_to(ROOT)))
+ crm_page=(SRC/"pages/admin/crm/index.astro").read_text(encoding="utf-8",errors="ignore")
+ if "@netlify/identity" in crm_page:
+  failures.append("Business CRM must not depend on browser-side Netlify Identity during startup.")
+ if "fetch('/api/admin/crm'" not in crm_page or "data-admin-ui" not in crm_page:
+  failures.append("Business CRM startup contract is missing its protected API boot or visible app container.")
 
  report={"mode":"source","sourceFiles":len(files),"mediaReferences":len(media_refs),"legacyMarketingPages":sorted(set(legacy_marketing_pages)),"missingMedia":missing_media,"failures":failures,"warnings":warnings}
  (OUT/"source-audit.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
@@ -434,6 +461,39 @@ def admin_mode(browser_name):
     "consoleErrors":console_errors,"requestFailed":request_failed,"failure":detail,"screenshot":str(shot)
    })
    page.close()
+
+  # Authorized-style Business CRM boot regression test. The protected API is mocked
+  # so this catches client startup failures without storing production credentials in CI.
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  crm_fixture={
+   "access":{"role":"manager","capabilities":["blog.manage","event_ops.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"],"email":"qa-manager@koasevents.test"},
+   "projects":[],"tasks":[],"appointments":[],"notes":[],"workflows":[],"enrollments":[],"templates":[],"activity":[],"messages":[],
+   "trash":[],"trashGroups":[],"cleanupAudit":[],"cleanupAnalytics":{},"cleanupSettings":{"mode":"auto_trash","updatedAt":"","updatedBy":""}
+  }
+  page.route("**/api/admin/crm",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(crm_fixture)))
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/crm/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-admin-ui]:not(.hidden)",state="visible",timeout=8000)
+   page.wait_for_selector("[data-stat-projects]",state="visible",timeout=3000)
+   visible=page.locator("[data-admin-ui]").is_visible()
+   project_stat=page.locator("[data-stat-projects]").inner_text().strip()
+   if not visible or project_stat!="0":
+    detail="Business CRM did not reach its expected visible initialized state."
+   elif page_errors:
+    detail="Business CRM JavaScript page errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Business CRM startup regression: "+str(exc)
+  shot=root/"business-crm-authorized-startup.png"
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"business-crm-authorized-startup","path":"/admin/crm/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/crm/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
   ctx.close();browser.close()
 
  report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"failures":failures}
