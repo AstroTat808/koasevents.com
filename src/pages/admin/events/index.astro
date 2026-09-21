@@ -13,11 +13,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <div class="flex flex-wrap gap-3">
           <a href="/admin/calendar/" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Master Calendar</a>
           <a href="/admin/quotes/" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sales CRM</a>
-          <a href="/admin/" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Admin home</a>
+          <a href="/staff/" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Staff home</a>
         </div>
       </div>
 
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an authorized staff account at <a class="underline" href="/staff/">Koa’s Staff Workspace</a>.</div>
 
       <div data-app class="hidden grid gap-6 xl:grid-cols-[340px_1fr]">
         <aside class="rounded-[1.5rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)] xl:sticky xl:top-5 xl:self-start">
