@@ -688,6 +688,10 @@ export default async (req: Request, context: Context) => {
       mobileBarFinalDueDaysBefore: payload?.mobileBarFinalDueDaysBefore,
       privateEventFinalDueDaysBefore: payload?.privateEventFinalDueDaysBefore,
       defaultFinalDueDaysBefore: payload?.defaultFinalDueDaysBefore,
+      venueWeddingMilestones: payload?.venueWeddingMilestones,
+      mobileBarMilestones: payload?.mobileBarMilestones,
+      privateEventMilestones: payload?.privateEventMilestones,
+      defaultMilestones: payload?.defaultMilestones,
     });
     return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
