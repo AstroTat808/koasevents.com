@@ -840,7 +840,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const cutoff=dayValue==='all'?null:Date.now()-(Number(dayValue)*86400000);
         const filtered=history.filter((entry)=>{
           if(status==='resolved'&&entry.type!=='resolved')return false;
-          if(status==='unresolved'&&entry.type==='resolved')return false;
+          if(status==='unresolved'&&(!current?.open||entry.type==='resolved'))return false;
           if(cutoff){
             const ts=Date.parse(String(entry.createdAt||''));
             if(!Number.isFinite(ts)||ts<cutoff)return false;
