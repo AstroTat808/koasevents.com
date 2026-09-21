@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { baseVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -30,11 +31,7 @@ function offsetDate(date: string, days: number) {
   return parsed.toISOString().slice(0,10);
 }
 function seedVendorRequirements() {
-  return [
-    ['Wedding Planner','recommended'],['Photographer','recommended'],['Videographer','optional'],['Caterer','recommended'],
-    ['Florist','optional'],['Officiant','recommended'],['DJ','optional'],['Live Musician','optional'],['Entertainment','optional'],
-    ['Hair & Makeup','optional'],['Cake / Dessert','optional'],['Rentals','optional'],['Transportation','optional'],['Bartender / Mobile Bar','optional'],
-  ].map(([category,importance])=>({category,importance,note:''}));
+  return baseVendorRequirements();
 }
 function seedQuestionnaire() {
   const rows = [
@@ -92,11 +89,13 @@ function defaultOps(record:any) {
   const eventDate=clean(record?.customer?.eventDate,40);
   const guestCount=Math.round(num(record?.quote?.state?.guestCount || record?.inquiry?.guestCount,0,1000));
   const now=new Date().toISOString();
-  return {
+  const seeded:any={
     recordId:record.id,createdAt:now,updatedAt:now,status:'planning',
     finalGuestCount:guestCount,setupStart:'',guestArrival:'',eventStart:'',eventEnd:'',teardownEnd:'',venueArea:'Koa’s Events',
     notes:'',vendors:[],vendorRequirements:seedVendorRequirements(),questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
   };
+  seeded.vendorRequirements=suggestVendorRequirements(record,seeded).map((r)=>({category:r.category,importance:r.importance,note:r.note}));
+  return seeded;
 }
 async function appendEvent(context: Context, event: Record<string,unknown>) {
   const store=salesStoreFor(context);
