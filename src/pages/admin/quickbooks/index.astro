@@ -66,6 +66,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div class="flex flex-wrap gap-2">
               <span data-audit-status class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Checking…</span>
+              <button data-test-accounting-alert type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Test Accounting Alert</button>
               <button data-refresh-audit type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Reload audit</button>
             </div>
           </div>
@@ -160,14 +161,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Private event deposit %<input name="privateEventPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">General fallback deposit %<input name="defaultPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             </div>
-            <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 sm:grid-cols-2 xl:grid-cols-5">
-              <label class="grid gap-2 text-sm font-semibold">Wedding 2nd payment · days before event<input name="venueWeddingSecondDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Wedding 2nd payment · % of post-deposit balance<input name="venueWeddingSecondPercentOfRemaining" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Wedding final · days before event<input name="venueWeddingFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Mobile Bar final · days before event<input name="mobileBarFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Private event final · days before event<input name="privateEventFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Fallback final · days before event<input name="defaultFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 xl:grid-cols-2">
+              <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="venueWedding">
+                <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Venue Wedding</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="venueWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
+                <div data-template-list="venueWedding" class="mt-4 grid gap-3"></div>
+              </section>
+              <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="mobileBar">
+                <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Mobile Bar</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="mobileBar" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
+                <div data-template-list="mobileBar" class="mt-4 grid gap-3"></div>
+              </section>
+              <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="privateEvent">
+                <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Private Event</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="privateEvent" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
+                <div data-template-list="privateEvent" class="mt-4 grid gap-3"></div>
+              </section>
+              <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="default">
+                <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">General fallback</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="default" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
+                <div data-template-list="default" class="mt-4 grid gap-3"></div>
+              </section>
             </div>
+            <p class="text-xs leading-5 text-[var(--koa-ink)]/48">Percentages apply to the post-deposit balance. The final milestone automatically receives whatever percentage remains, so the schedule always closes exactly to the proposal total.</p>
             <div class="flex flex-wrap items-center gap-3">
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save deposit + schedule defaults</button>
               <p data-deposit-message class="text-sm text-[var(--koa-ink)]/52"></p>
@@ -280,6 +292,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const depositSection=document.querySelector('[data-deposit-section]');
     const depositForm=document.querySelector('[data-deposit-form]');
     const depositMessage=document.querySelector('[data-deposit-message]');
+    const testAccountingAlert=document.querySelector('[data-test-accounting-alert]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
     const itemMessage=document.querySelector('[data-item-message]');
@@ -492,6 +505,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }catch(err){itemMessage.textContent=err.message||'Unable to load items.';}
     }
 
+    const templateKeys=['venueWedding','mobileBar','privateEvent','default'];
+    function templateList(key){return document.querySelector('[data-template-list="'+key+'"]');}
+    function addTemplateRow(key,item={label:'Payment',dueDaysBefore:30,percentOfRemaining:100}){
+      const list=templateList(key);if(!list)return;
+      const row=document.createElement('div');
+      row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-white p-3 sm:grid-cols-[1.4fr_.8fr_.8fr_auto] sm:items-end';
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Label<input data-template-label class="rounded-lg border border-[var(--koa-line)] px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Days before event<input data-template-days type="number" min="0" max="730" step="1" class="rounded-lg border border-[var(--koa-line)] px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">% of remaining<input data-template-percent type="number" min="0" max="100" step="0.1" class="rounded-lg border border-[var(--koa-line)] px-3 py-2"></label><button type="button" data-remove-template class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Remove</button>';
+      row.querySelector('[data-template-label]').value=item.label||'Payment';
+      row.querySelector('[data-template-days]').value=String(Number(item.dueDaysBefore||0));
+      row.querySelector('[data-template-percent]').value=String(Number(item.percentOfRemaining??100));
+      row.querySelector('[data-remove-template]').addEventListener('click',()=>{
+        if(list.children.length<=1){if(depositMessage)depositMessage.textContent='Each template needs at least one post-deposit milestone.';return;}
+        row.remove();
+      });
+      list.appendChild(row);
+    }
+    function renderTemplate(key,rows){
+      const list=templateList(key);if(!list)return;list.innerHTML='';
+      const source=Array.isArray(rows)&&rows.length?rows:[{label:'Final balance',dueDaysBefore:30,percentOfRemaining:100}];
+      source.forEach((item)=>addTemplateRow(key,item));
+    }
+    function readTemplate(key){
+      const list=templateList(key);
+      return [...(list?.children||[])].map((row)=>({
+        label:String(row.querySelector('[data-template-label]')?.value||'Payment').trim(),
+        dueDaysBefore:Number(row.querySelector('[data-template-days]')?.value||0),
+        percentOfRemaining:Number(row.querySelector('[data-template-percent]')?.value||0),
+      }));
+    }
+
     function render(){
       const configured=Boolean(state?.configuration?.configured);
       const connected=Boolean(state?.connection?.connected);
@@ -552,12 +595,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         depositForm.elements.mobileBarPercent.value=String(state.depositSettings.mobileBarPercent ?? 10);
         depositForm.elements.privateEventPercent.value=String(state.depositSettings.privateEventPercent ?? 10);
         depositForm.elements.defaultPercent.value=String(state.depositSettings.defaultPercent ?? 10);
-        depositForm.elements.venueWeddingSecondDueDaysBefore.value=String(state.depositSettings.venueWeddingSecondDueDaysBefore ?? 90);
-        depositForm.elements.venueWeddingSecondPercentOfRemaining.value=String(state.depositSettings.venueWeddingSecondPercentOfRemaining ?? 50);
-        depositForm.elements.venueWeddingFinalDueDaysBefore.value=String(state.depositSettings.venueWeddingFinalDueDaysBefore ?? 60);
-        depositForm.elements.mobileBarFinalDueDaysBefore.value=String(state.depositSettings.mobileBarFinalDueDaysBefore ?? 14);
-        depositForm.elements.privateEventFinalDueDaysBefore.value=String(state.depositSettings.privateEventFinalDueDaysBefore ?? 30);
-        depositForm.elements.defaultFinalDueDaysBefore.value=String(state.depositSettings.defaultFinalDueDaysBefore ?? 30);
+        renderTemplate('venueWedding',state.depositSettings.venueWeddingMilestones);
+        renderTemplate('mobileBar',state.depositSettings.mobileBarMilestones);
+        renderTemplate('privateEvent',state.depositSettings.privateEventMilestones);
+        renderTemplate('default',state.depositSettings.defaultMilestones);
       }
       renderCatalog();
       renderDiagnostics();
@@ -584,6 +625,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
     refreshDiagnostics?.addEventListener('click',load);
     refreshAudit?.addEventListener('click',load);
+    testAccountingAlert?.addEventListener('click',async()=>{
+      testAccountingAlert.disabled=true;testAccountingAlert.textContent='Sending test…';
+      try{
+        const result=await api({action:'test-accounting-alert'});
+        const channels=result?.result?.channels||[];
+        const summary=channels.map((row)=>row.channel+': '+(row.sent?'sent':row.reason||row.error||('status '+(row.status||'')))).join(' · ');
+        alert('Accounting alert test complete. '+summary);
+      }catch(err){alert(err.message||'Unable to send accounting alert test.');}
+      finally{testAccountingAlert.disabled=false;testAccountingAlert.textContent='Test Accounting Alert';}
+    });
+    document.querySelectorAll('[data-add-template]').forEach((button)=>button.addEventListener('click',()=>addTemplateRow(button.dataset.addTemplate,{label:'Payment',dueDaysBefore:30,percentOfRemaining:0})));
     document.querySelectorAll('[data-close-catalog]').forEach((button)=>button.addEventListener('click',()=>catalogDialog?.close()));
     newCatalog?.addEventListener('click',()=>openCatalogItem());
     importCatalog?.addEventListener('click',async()=>{
@@ -615,7 +667,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     depositForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
       try{
-        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingSecondDueDaysBefore:Number(data.get('venueWeddingSecondDueDaysBefore')||0),venueWeddingSecondPercentOfRemaining:Number(data.get('venueWeddingSecondPercentOfRemaining')||0),venueWeddingFinalDueDaysBefore:Number(data.get('venueWeddingFinalDueDaysBefore')||0),mobileBarFinalDueDaysBefore:Number(data.get('mobileBarFinalDueDaysBefore')||0),privateEventFinalDueDaysBefore:Number(data.get('privateEventFinalDueDaysBefore')||0),defaultFinalDueDaysBefore:Number(data.get('defaultFinalDueDaysBefore')||0)});
+        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingMilestones:readTemplate('venueWedding'),mobileBarMilestones:readTemplate('mobileBar'),privateEventMilestones:readTemplate('privateEvent'),defaultMilestones:readTemplate('default')});
         state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
       }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
