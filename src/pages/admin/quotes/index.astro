@@ -242,8 +242,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
             <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-bartender-performance-analytics>
               <div>
-                <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Bartender performance analytics</p>
-                <h4 class="mt-1 text-lg font-semibold text-white">Workload, reliability, tips, feedback + team chemistry</h4>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Bartender performance analytics</p>
+                    <h4 class="mt-1 text-lg font-semibold text-white">Workload, reliability, tips, feedback + team chemistry</h4>
+                  </div>
+                  <a href="/admin/payroll/" class="w-fit rounded-full border border-white/15 px-4 py-2.5 text-[.52rem] font-black uppercase tracking-[.08em] text-white">Open payroll</a>
+                </div>
                 <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Actual hours, tips, reliability and client feedback come from completed-event performance entries. Assignment history supplies workload and team-pair analytics.</p>
               </div>
               <div data-bartender-performance-summary class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
@@ -2599,12 +2604,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       planningSettings().staffing.bartenders.forEach((bartender)=>addBartenderRow(bartender));
     }
 
-    function addBartenderRow(bartender={name:'',active:true,unavailableDates:[],maxEventsPerWeek:0,maxEventsPerMonth:0}) {
+    function addBartenderRow(bartender={name:'',active:true,unavailableDates:[],maxEventsPerWeek:0,maxEventsPerMonth:0,hourlyRate:40,portalToken:''}) {
       if(!bartenderAvailabilityRows)return;
       const row=document.createElement('div');
-      row.className='grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_1.6fr_.6fr_.6fr_auto]';
+      row.className='grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_1.5fr_.55fr_.55fr_.55fr_auto_auto]';
       row.dataset.bartenderRow='1';
       row.dataset.bartenderId=bartender.id||('bartender-'+Date.now().toString(36)+'-'+(++bartenderDraftCounter));
+      row.dataset.bartenderPortalToken=bartender.portalToken||'';
       const name=document.createElement('input');
       name.dataset.bartenderName='1';
       name.value=bartender.name||'';
@@ -2634,7 +2640,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       monthly.placeholder='Max/month';
       monthly.title='Maximum events per month; 0 means no limit';
       monthly.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
-      row.append(name,dates,weekly,monthly,label);
+      const rate=document.createElement('input');
+      rate.type='number'; rate.min='0'; rate.max='500'; rate.step='.25';
+      rate.dataset.bartenderHourlyRate='1'; rate.value=String(Number(bartender.hourlyRate??40));
+      rate.placeholder='$/hr'; rate.title='Hourly pay rate';
+      rate.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const portal=document.createElement('button');
+      portal.type='button';portal.className='rounded-full border border-white/15 px-3 py-2 text-[.5rem] font-black uppercase text-white';
+      portal.textContent=bartender.portalToken?'Copy portal':'Save for portal';
+      portal.disabled=!bartender.portalToken;
+      portal.classList.toggle('opacity-40',!bartender.portalToken);
+      portal.addEventListener('click',async()=>{
+        const token=row.dataset.bartenderPortalToken||'';
+        if(!token)return;
+        const url=window.location.origin+'/bartender/?token='+encodeURIComponent(token);
+        try{await navigator.clipboard.writeText(url);portal.textContent='Copied ✓';setTimeout(()=>portal.textContent='Copy portal',1200);}
+        catch{window.prompt('Bartender portal link',url);}
+      });
+      row.append(name,dates,weekly,monthly,rate,label,portal);
       bartenderAvailabilityRows.appendChild(row);
     }
 
@@ -4101,6 +4124,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           unavailableDates:row.querySelector('[data-bartender-dates]').value.split(/[\s,]+/).filter(Boolean),
           maxEventsPerWeek:Number(row.querySelector('[data-bartender-max-week]').value||0),
           maxEventsPerMonth:Number(row.querySelector('[data-bartender-max-month]').value||0),
+          hourlyRate:Number(row.querySelector('[data-bartender-hourly-rate]').value||40),
+          portalToken:row.dataset.bartenderPortalToken||'',
         }))
         .filter((bartender)=>bartender.name);
       const staffing={
