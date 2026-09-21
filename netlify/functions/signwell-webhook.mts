@@ -7,9 +7,9 @@ function sales(context:Context){return context.deploy.context==='production'?get
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
 function id(){return 'EVT-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function appendEvent(context:Context,event:any){const s=sales(context);const current:any[]=(await s.get('analytics/events/index',{type:'json'}))||[];await s.setJSON('analytics/events/index',[{id:id(),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));}
-function docId(payload:any){return clean(payload?.data?.document?.id||payload?.document?.id||payload?.data?.id||payload?.document_id||payload?.id,120);}
-function eventName(payload:any){return clean(payload?.event||payload?.event_type||payload?.type||payload?.data?.event,120).toLowerCase();}
-function recipients(payload:any){return payload?.data?.document?.recipients||payload?.document?.recipients||payload?.data?.recipients||[];}
+function docId(payload:any){return clean(payload?.data?.object?.id||payload?.data?.document?.id||payload?.document?.id||payload?.data?.id||payload?.document_id||payload?.id,120);}
+function eventName(payload:any){return clean(payload?.event?.type||payload?.event||payload?.event_type||payload?.type||payload?.data?.event,120).toLowerCase();}
+function recipients(payload:any){return payload?.data?.object?.recipients||payload?.data?.document?.recipients||payload?.document?.recipients||payload?.data?.recipients||[];}
 
 export default async(req:Request,context:Context)=>{
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
