@@ -110,6 +110,13 @@ def source_mode():
   "mixers cost field":"name=\"mixersCost\"",
   "garnishes cost field":"name=\"garnishesCost\"",
   "cups cost field":"name=\"cupsCost\"",
+  "recommended price panel":"data-profit-price-recommendations",
+  "recommended price calculator":"function recommendedPriceForValues",
+  "profitability dashboard":"data-mobile-profitability-dashboard",
+  "profitability scope":"data-mobile-profit-scope",
+  "monthly profitability":"data-mobile-profit-monthly",
+  "package profitability":"data-mobile-profit-packages",
+  "add-on profitability":"data-mobile-profit-addons",
  }
  for label,needle in profit_requirements.items():
   if needle not in admin_quotes:failures.append("Mobile Bar profitability UI missing "+label+": "+needle)
