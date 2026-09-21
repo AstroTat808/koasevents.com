@@ -1329,6 +1329,24 @@ export default async (req: Request, context: Context) => {
 
   if (action === 'sync-and-recheck') {
     const state = await syncAccountingStatus(context, record);
+    if (state.customerId) {
+      try {
+        const paymentData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + escapeQbo(String(state.customerId)) + "' maxresults 1000");
+        const payments = Array.isArray(paymentData?.QueryResponse?.Payment) ? paymentData.QueryResponse.Payment : [];
+        state.paymentSync = {
+          count: payments.length,
+          paymentIds: payments.slice(0, 100).map((payment: any) => String(payment?.Id || '')).filter(Boolean),
+          lastSyncedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        state.paymentSync = {
+          count: null,
+          paymentIds: [],
+          lastSyncedAt: new Date().toISOString(),
+          warning: clean(error instanceof Error ? error.message : 'QuickBooks payment query was unavailable.', 300),
+        };
+      }
+    }
     records = await saveRecord(context, record, records);
     const accountingAudit = buildAccountingAudit(records);
     await appendEvent(context, {
