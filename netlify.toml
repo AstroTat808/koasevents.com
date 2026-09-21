@@ -69,6 +69,11 @@
     X-Robots-Tag = "noindex, nofollow, noarchive"
 
 [[headers]]
+  for = "/staff/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
   for = "/booking/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow, noarchive"
