@@ -341,6 +341,20 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
     ]);
+    const receiptEntities = (webhookReceipt?.notifications || []).flatMap((notification: any) =>
+      Array.isArray(notification?.entities) ? notification.entities : [],
+    );
+    const smokeWebhookMatch = smokeTest ? {
+      invoiceMatched: receiptEntities.some((entity: any) =>
+        String(entity?.name || '').toLowerCase() === 'invoice' &&
+        String(entity?.id || '') === String(smokeTest.invoiceId || ''),
+      ),
+      paymentMatched: receiptEntities.some((entity: any) =>
+        String(entity?.name || '').toLowerCase() === 'payment' &&
+        String(entity?.id || '') === String(smokeTest.paymentId || ''),
+      ),
+    } : null;
+
     return Response.json({
       configuration: quickBooksConfiguration(),
       connection: connection ? {
@@ -354,6 +368,7 @@ export default async (req: Request, context: Context) => {
       webhookReceipt: webhookReceipt || null,
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
+      smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
