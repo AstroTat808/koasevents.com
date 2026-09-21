@@ -24,13 +24,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Saved quote value</p><p data-stat-value class="display mt-3 text-4xl">$0</p></article>
         </section>
         <section data-accounting-alert class="hidden rounded-[1.4rem] border border-red-200 bg-red-50 p-5 shadow-[var(--shadow-soft)]">
-          <button data-accounting-alert-toggle type="button" class="flex w-full flex-col gap-4 text-left sm:flex-row sm:items-center sm:justify-between" aria-expanded="false">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">Accounting reconciliation warning</p><h2 class="display mt-2 text-3xl text-red-900"><span data-accounting-alert-count>0</span> client records need review</h2><p data-accounting-alert-detail class="mt-2 text-sm leading-6 text-red-800/75"></p></div>
-            <span data-accounting-alert-action class="w-fit rounded-full bg-red-700 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Show mismatch details ↓</span>
-          </button>
-          <div data-accounting-alert-panel class="hidden mt-5 border-t border-red-200 pt-5">
-            <div data-accounting-alert-list class="grid gap-3"></div>
-            <div class="mt-4"><a href="/admin/quickbooks/#accounting-audit" class="text-xs font-black uppercase tracking-[.1em] text-red-700">Open full accounting audit →</a></div>
+            <a href="/admin/quickbooks/#accounting-audit" class="w-fit rounded-full bg-red-700 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Review accounting audit</a>
           </div>
         </section>
 
@@ -173,28 +169,95 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
             <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-profit-goals>
               <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-                <div>
-                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goal + projection</p>
-                  <h4 data-mobile-profit-goal-title class="mt-1 text-lg font-semibold text-white">Current month</h4>
-                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Projected profit combines booked profit with probability-weighted profit from open Mobile Bar opportunities dated in the current month.</p>
-                </div>
-                <form data-mobile-profit-goal-form class="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
-                  <label class="grid flex-1 gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly gross-profit target
-                    <input data-mobile-profit-goal-input name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="e.g. 10000" />
-                  </label>
-                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goal</button>
+                <div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goals + projections</p><h4 class="mt-1 text-lg font-semibold text-white">Monthly, quarterly + annual targets</h4><p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">All horizons use the active scenario; booked profit stays at 100%.</p></div>
+                <form data-mobile-profit-goal-form class="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly target<input data-goal-input="monthly" name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[165px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm text-white" /></label>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Quarterly target<input data-goal-input="quarterly" name="quarterlyGrossProfitTarget" type="number" min="0" max="3000000" step="100" class="min-w-[165px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm text-white" /></label>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Annual target<input data-goal-input="annual" name="annualGrossProfitTarget" type="number" min="0" max="12000000" step="100" class="min-w-[165px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm text-white" /></label>
+                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goals</button>
                 </form>
               </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Monthly target</p><strong data-mobile-goal-target class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Booked profit</p><strong data-mobile-goal-booked class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Projected profit</p><strong data-mobile-goal-projected class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article data-mobile-goal-gap-card class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Ahead / behind</p><strong data-mobile-goal-gap class="display mt-1 block text-2xl text-white">$0</strong><p data-mobile-goal-gap-copy class="mt-1 text-[.58rem] text-white/42">Set a goal to compare.</p></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Avg. booked profit</p><strong data-mobile-goal-average class="display mt-1 block text-2xl text-white">—</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Bookings needed</p><strong data-mobile-goal-bookings class="display mt-1 block text-2xl text-white">—</strong><p data-mobile-goal-bookings-copy class="mt-1 text-[.58rem] text-white/42">Based on average booked profit.</p></article>
-              </div>
-              <div class="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><div data-mobile-goal-progress class="h-full rounded-full bg-[var(--koa-amber-light)]" style="width:0%"></div></div>
+              <div class="mt-4 grid gap-3 xl:grid-cols-3"><article data-goal-card="monthly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article><article data-goal-card="quarterly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article><article data-goal-card="annual" class="rounded-xl border border-white/10 bg-black/10 p-4"></article></div>
               <p data-mobile-profit-goal-message aria-live="polite" class="mt-3 text-[.62rem] leading-5 text-white/50"></p>
+            </section>
+
+            <section class="mt-4 grid gap-4 xl:grid-cols-2">
+              <article class="rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-booking-simulator>
+                <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">What do I need to book?</p><h4 class="mt-1 text-lg font-semibold text-white">Availability-aware simulator</h4>
+                <p class="mt-1 text-[.65rem] leading-5 text-white/45">Uses package profit, booked dates, blackout dates, named bartender availability, daily staffing, monthly booking caps, and planning horizon.</p>
+                <label class="mt-4 grid gap-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Additional gross profit goal<input data-booking-sim-target type="number" min="0" max="1000000" step="100" class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm text-white" /></label>
+                <form data-capacity-settings-form class="mt-4 grid gap-2 sm:grid-cols-3">
+                  <label class="grid gap-1 text-[.54rem] font-black uppercase text-white/50">Bartenders/day<input name="bartenderCapacityPerDay" type="number" min="0" max="100" class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white" /></label>
+                  <label class="grid gap-1 text-[.54rem] font-black uppercase text-white/50">Max bookings/month<input name="maxBookingsPerMonth" type="number" min="0" max="100" class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white" /></label>
+                  <label class="grid gap-1 text-[.54rem] font-black uppercase text-white/50">Horizon months<input name="planningHorizonMonths" type="number" min="1" max="24" class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white" /></label>
+                  <button class="sm:col-span-3 rounded-full border border-white/15 px-4 py-2 text-[.54rem] font-black uppercase text-white">Save capacity</button>
+                </form>
+                <form data-staffing-settings-form class="mt-4 rounded-xl border border-white/10 bg-black/10 p-3">
+                  <label class="grid gap-1 text-[.54rem] font-black uppercase text-white/50">Blackout dates <span class="normal-case font-normal text-white/35">(YYYY-MM-DD, comma separated)</span><textarea name="blackoutDates" rows="2" class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-3 py-2 text-sm normal-case text-white"></textarea></label>
+                  <div data-bartender-availability-rows class="mt-3 grid gap-2"></div>
+                  <div class="mt-3 flex flex-wrap gap-2"><button data-add-bartender type="button" class="rounded-full border border-white/15 px-3 py-2 text-[.52rem] font-black uppercase text-white">Add bartender</button><button class="rounded-full bg-[var(--koa-amber-light)] px-3 py-2 text-[.52rem] font-black uppercase text-[var(--koa-forest)]">Save availability</button></div>
+                </form>
+                <div data-booking-sim-averages class="mt-4 grid gap-2 sm:grid-cols-3"></div><div data-booking-sim-results class="mt-4 grid gap-3"></div>
+              </article>
+
+              <article class="rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-forecast-scenarios>
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Forecast intelligence</p><h4 class="mt-1 text-lg font-semibold text-white">Editable + segmented rolling forecast</h4></div><select data-mobile-forecast-scenario class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm text-white"><option value="conservative">Conservative</option><option value="expected" selected>Expected</option><option value="aggressive">Aggressive</option></select></div>
+                <div data-mobile-scenario-cards class="mt-4 grid gap-3 md:grid-cols-3"></div>
+                <form data-forecast-settings-form class="mt-4 grid gap-3"><div data-forecast-settings-grid class="grid gap-3"></div><button class="w-fit rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.54rem] font-black uppercase text-[var(--koa-forest)]">Save probabilities</button></form>
+                <section class="mt-4 rounded-xl border border-white/10 bg-black/10 p-3" data-rolling-forecast><div class="flex items-center justify-between gap-3"><strong class="text-sm text-white">Expected vs actual</strong><button data-apply-forecast-recommendations type="button" class="hidden rounded-full border border-white/15 px-3 py-2 text-[.5rem] font-black uppercase text-white">Apply recommendations</button></div><div data-rolling-forecast-results class="mt-3 grid gap-2"></div></section>
+                <section class="mt-4 rounded-xl border border-white/10 bg-black/10 p-3" data-segmented-conversion><p class="text-[.52rem] font-black uppercase text-[var(--koa-amber-light)]">Segmented conversion</p><div data-segmented-conversion-results class="mt-3 grid gap-3"></div></section>
+                <p data-forecast-settings-message class="mt-3 text-[.62rem] text-white/50"></p>
+              </article>
+            </section>
+
+            <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-staffing-calendar>
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Bartender scheduling calendar</p>
+                  <h4 class="mt-1 text-lg font-semibold text-white">Events, staffing gaps, conflicts + availability</h4>
+                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Booked Mobile Bar events use the same named assignments, blackout dates, individual availability, and capacity rules as the simulator.</p>
+                </div>
+                <div class="flex flex-wrap items-end gap-2">
+                  <label class="grid gap-1 text-[.54rem] font-black uppercase tracking-[.08em] text-white/50">View
+                    <select data-staff-calendar-view class="rounded-lg border border-white/15 bg-[var(--koa-ink)] px-3 py-2 text-sm normal-case tracking-normal text-white">
+                      <option value="month">Month</option>
+                      <option value="week">Week</option>
+                      <option value="day">Day</option>
+                    </select>
+                  </label>
+                  <button data-staff-calendar-prev type="button" class="rounded-full border border-white/15 px-3 py-2 text-[.52rem] font-black uppercase text-white">Previous</button>
+                  <button data-staff-calendar-today type="button" class="rounded-full border border-white/15 px-3 py-2 text-[.52rem] font-black uppercase text-white">Today</button>
+                  <button data-staff-calendar-next type="button" class="rounded-full border border-white/15 px-3 py-2 text-[.52rem] font-black uppercase text-white">Next</button>
+                </div>
+              </div>
+              <div class="mt-4 flex flex-wrap items-center gap-3 text-[.58rem] text-white/55">
+                <span class="rounded-full border border-white/10 px-2 py-1">Assigned / required</span>
+                <span class="rounded-full border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-amber-100">Open staffing slots</span>
+                <span class="rounded-full border border-red-300/25 bg-red-400/10 px-2 py-1 text-red-100">Conflict</span>
+                <span class="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-2 py-1 text-emerald-100">Available crew</span>
+              </div>
+              <p data-staff-calendar-label class="mt-4 text-sm font-semibold text-white"></p>
+              <div data-staff-calendar-grid class="mt-3"></div>
+            </section>
+
+            <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-bartender-performance-analytics>
+              <div>
+                <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Bartender performance analytics</p>
+                <h4 class="mt-1 text-lg font-semibold text-white">Workload, reliability, tips, feedback + team chemistry</h4>
+                <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Actual hours, tips, reliability and client feedback come from completed-event performance entries. Assignment history supplies workload and team-pair analytics.</p>
+              </div>
+              <div data-bartender-performance-summary class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+              <div class="mt-4 grid gap-4 xl:grid-cols-[1.25fr_.75fr]">
+                <div data-bartender-performance-table class="grid gap-3"></div>
+                <div>
+                  <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Best-working pairs</p>
+                  <div data-bartender-pair-analytics class="mt-3 grid gap-2"></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-monthly-sales-plan>
+              <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/48">Recommended monthly sales plan</p><h4 class="mt-1 text-lg font-semibold text-white">Package targets from the annual gross-profit goal</h4><p class="mt-1 text-[.65rem] leading-5 text-white/45">Distributes the remaining annual profit target across the remaining months using historical package mix and average gross profit.</p><div data-monthly-sales-plan-results class="mt-4 grid gap-3"></div>
             </section>
 
             <div class="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
@@ -513,6 +576,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <a data-event-ops-link href="/admin/events/" class="hidden rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open Event Ops</a>
         <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">QBO setup</a>
       </div>
+      <section data-booking-bartender-section class="mt-6 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Mobile Bar staffing</p><h3 class="display mt-2 text-3xl">Assigned bartenders</h3><p data-booking-bartender-status class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50"></p></div>
+        <form data-booking-bartender-form class="mt-4 grid gap-3">
+          <div data-booking-bartender-options class="grid gap-2 sm:grid-cols-2"></div>
+          <div data-booking-staffing-recommendations class="rounded-xl border border-[var(--koa-line)] bg-white p-3">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Automatic staffing recommendation</p><p data-booking-staffing-recommendation-copy class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55"></p></div>
+              <button data-apply-staffing-recommendations type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Use recommendations</button>
+            </div>
+            <div data-booking-staffing-recommendation-list class="mt-3 grid gap-2 sm:grid-cols-2"></div>
+          </div>
+          <button class="w-fit rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Save bartender assignments</button>
+        </form>
+          <section data-booking-performance-section class="rounded-xl border border-[var(--koa-line)] bg-white p-3">
+            <div><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Event performance</p><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">Record actual hours, tips, reliability, rating, and feedback after the event for each assigned bartender.</p></div>
+            <div data-booking-performance-rows class="mt-3 grid gap-3"></div>
+          </section>
+
+      </section>
       <div data-booking-payments class="mt-6 grid gap-3"></div>
       <p data-booking-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
     </div>
@@ -636,19 +718,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileProfitTo = document.querySelector('[data-mobile-profit-to]');
     const mobileProfitPeriodLabel = document.querySelector('[data-mobile-profit-period-label]');
     const mobileProfitGoalForm = document.querySelector('[data-mobile-profit-goal-form]');
-    const mobileProfitGoalInput = document.querySelector('[data-mobile-profit-goal-input]');
-    const mobileProfitGoalTitle = document.querySelector('[data-mobile-profit-goal-title]');
-    const mobileGoalTarget = document.querySelector('[data-mobile-goal-target]');
-    const mobileGoalBooked = document.querySelector('[data-mobile-goal-booked]');
-    const mobileGoalProjected = document.querySelector('[data-mobile-goal-projected]');
-    const mobileGoalGapCard = document.querySelector('[data-mobile-goal-gap-card]');
-    const mobileGoalGap = document.querySelector('[data-mobile-goal-gap]');
-    const mobileGoalGapCopy = document.querySelector('[data-mobile-goal-gap-copy]');
-    const mobileGoalAverage = document.querySelector('[data-mobile-goal-average]');
-    const mobileGoalBookings = document.querySelector('[data-mobile-goal-bookings]');
-    const mobileGoalBookingsCopy = document.querySelector('[data-mobile-goal-bookings-copy]');
-    const mobileGoalProgress = document.querySelector('[data-mobile-goal-progress]');
+    const mobileProfitGoalInputs = [...document.querySelectorAll('[data-goal-input]')];
+    const mobileGoalCards = [...document.querySelectorAll('[data-goal-card]')];
     const mobileProfitGoalMessage = document.querySelector('[data-mobile-profit-goal-message]');
+    const bookingSimTarget = document.querySelector('[data-booking-sim-target]');
+    const bookingSimAverages = document.querySelector('[data-booking-sim-averages]');
+    const bookingSimResults = document.querySelector('[data-booking-sim-results]');
+    const capacitySettingsForm = document.querySelector('[data-capacity-settings-form]');
+    const staffingSettingsForm = document.querySelector('[data-staffing-settings-form]');
+    const bartenderAvailabilityRows = document.querySelector('[data-bartender-availability-rows]');
+    const addBartenderButton = document.querySelector('[data-add-bartender]');
+    const mobileForecastScenario = document.querySelector('[data-mobile-forecast-scenario]');
+    const mobileScenarioCards = document.querySelector('[data-mobile-scenario-cards]');
+    const forecastSettingsForm = document.querySelector('[data-forecast-settings-form]');
+    const forecastSettingsGrid = document.querySelector('[data-forecast-settings-grid]');
+    const forecastSettingsMessage = document.querySelector('[data-forecast-settings-message]');
+    const rollingForecastResults = document.querySelector('[data-rolling-forecast-results]');
+    const applyForecastRecommendations = document.querySelector('[data-apply-forecast-recommendations]');
+    const segmentedConversionResults = document.querySelector('[data-segmented-conversion-results]');
+    const monthlySalesPlanResults = document.querySelector('[data-monthly-sales-plan-results]');
+    const bartenderPerformanceSummary = document.querySelector('[data-bartender-performance-summary]');
+    const bartenderPerformanceTable = document.querySelector('[data-bartender-performance-table]');
+    const bartenderPairAnalytics = document.querySelector('[data-bartender-pair-analytics]');
+    const staffCalendarView = document.querySelector('[data-staff-calendar-view]');
+    const staffCalendarPrev = document.querySelector('[data-staff-calendar-prev]');
+    const staffCalendarToday = document.querySelector('[data-staff-calendar-today]');
+    const staffCalendarNext = document.querySelector('[data-staff-calendar-next]');
+    const staffCalendarLabel = document.querySelector('[data-staff-calendar-label]');
+    const staffCalendarGrid = document.querySelector('[data-staff-calendar-grid]');
     const mobileProfitRevenue = document.querySelector('[data-mobile-profit-revenue]');
     const mobileProfitRevenueMeta = document.querySelector('[data-mobile-profit-revenue-meta]');
     const mobileProfitGross = document.querySelector('[data-mobile-profit-gross]');
@@ -727,10 +824,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const countersignButton = document.querySelector('[data-countersign]');
     const qboSyncStatusButton = document.querySelector('[data-qbo-sync-status]');
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
+    const bookingBartenderSection = document.querySelector('[data-booking-bartender-section]');
+    const bookingBartenderForm = document.querySelector('[data-booking-bartender-form]');
+    const bookingBartenderOptions = document.querySelector('[data-booking-bartender-options]');
+    const bookingBartenderStatus = document.querySelector('[data-booking-bartender-status]');
+    const bookingStaffingRecommendationCopy = document.querySelector('[data-booking-staffing-recommendation-copy]');
+    const bookingStaffingRecommendationList = document.querySelector('[data-booking-staffing-recommendation-list]');
+    const applyStaffingRecommendations = document.querySelector('[data-apply-staffing-recommendations]');
+    const bookingPerformanceRows = document.querySelector('[data-booking-performance-rows]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, mobileBarProfitSettings: {}, conversions: {}, records: [], trash: [] };
     const selectedRecordIds = new Set();
+    let staffingCalendarState = { view:'month', anchor:new Date() };
+    let currentStaffingRecommendationIds = [];
+    let bartenderDraftCounter = 0;
+    let mobileCalibrationCache = null;
     let editingRecord = null;
     let activityRecord = null;
     let bookingRecord = null;
@@ -738,10 +847,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingAlert = document.querySelector('[data-accounting-alert]');
     const accountingAlertCount = document.querySelector('[data-accounting-alert-count]');
     const accountingAlertDetail = document.querySelector('[data-accounting-alert-detail]');
-    const accountingAlertToggle = document.querySelector('[data-accounting-alert-toggle]');
-    const accountingAlertAction = document.querySelector('[data-accounting-alert-action]');
-    const accountingAlertPanel = document.querySelector('[data-accounting-alert-panel]');
-    const accountingAlertList = document.querySelector('[data-accounting-alert-list]');
     let profitRecord = null;
     let managerAccess = false;
     let destructiveAccess = false;
@@ -795,6 +900,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       profitSettingsAccess=managerAccess||permissions.includes('sales.profit_settings');
       if (bulkTrashButton) bulkTrashButton.classList.toggle('hidden', !destructiveAccess);
       mobileProfitGoalForm?.classList.toggle('hidden', !profitSettingsAccess);
+      capacitySettingsForm?.classList.toggle('hidden', !profitSettingsAccess);
+      staffingSettingsForm?.classList.toggle('hidden', !profitSettingsAccess);
+      forecastSettingsForm?.classList.toggle('hidden', !profitSettingsAccess);
       if (profitForm) [...profitForm.elements].forEach((el)=>{ if(el instanceof HTMLInputElement||el instanceof HTMLTextAreaElement||el instanceof HTMLSelectElement||el instanceof HTMLButtonElement) el.disabled=!profitSettingsAccess; });
       document.querySelector('[data-staff-performance-section]')?.classList.toggle('hidden',!managerAccess);
     }
@@ -805,40 +913,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function percent(value) { return value == null ? '—' : Math.round(value*100) + '%'; }
 
     function renderAccountingAlert() {
-      const audit=qboState?.accountingAudit;
-      const rows=Array.isArray(audit?.rows)?audit.rows.filter((row)=>!row.reconciled):[];
-      const flagged=rows.length||Number(audit?.flaggedCount||0);
-      accountingAlert?.classList.toggle('hidden',flagged<=0);
+      const audit=qboState?.accountingAudit;const flagged=Number(audit?.flaggedCount||0);accountingAlert?.classList.toggle('hidden',flagged<=0);
       if(accountingAlertCount)accountingAlertCount.textContent=String(flagged);
-      if(accountingAlertDetail){
-        const names=rows.slice(0,3).map((row)=>row.clientName||row.recordId).filter(Boolean);
-        accountingAlertDetail.textContent=flagged<=0?'CRM and QuickBooks values reconcile.':'Mismatch detected for '+(names.length?names.join(', '):flagged+' client record'+(flagged===1?'':'s'))+(flagged>names.length?' and '+(flagged-names.length)+' more':'')+'. Click to review the exact differences.';
-      }
-      if(accountingAlertList){
-        accountingAlertList.innerHTML='';
-        rows.forEach((row)=>{
-          const card=document.createElement('article');
-          card.className='rounded-xl border border-red-200 bg-white p-4';
-          const header=document.createElement('div');
-          header.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
-          const left=document.createElement('div');
-          const title=document.createElement('strong');title.className='text-sm text-red-900';title.textContent=row.clientName||row.recordId;
-          const meta=document.createElement('p');meta.className='mt-1 text-xs text-red-800/60';meta.textContent=[row.recordId,row.eventDate].filter(Boolean).join(' · ');
-          left.append(title,meta);
-          const link=document.createElement('a');link.href='/admin/quotes/?q='+encodeURIComponent(row.recordId);link.className='text-[.58rem] font-black uppercase tracking-[.08em] text-red-700';link.textContent='Open client →';
-          header.append(left,link);card.appendChild(header);
-          const issues=document.createElement('div');issues.className='mt-3 grid gap-2';
-          (row.issues||[]).forEach((issue)=>{
-            const line=document.createElement('div');line.className='rounded-lg bg-red-50 px-3 py-2 text-xs leading-5 text-red-900';
-            const expected=issue.expected==null?'—':money(issue.expected);
-            const actual=issue.actual==null?'—':money(issue.actual);
-            const delta=issue.delta==null?'':' · difference '+money(issue.delta);
-            line.textContent=issue.label+': expected '+expected+', actual '+actual+delta;
-            issues.appendChild(line);
-          });
-          card.appendChild(issues);accountingAlertList.appendChild(card);
-        });
-      }
+      if(accountingAlertDetail){const rows=Array.isArray(audit?.rows)?audit.rows.filter((row)=>!row.reconciled):[];const names=rows.slice(0,3).map((row)=>row.clientName||row.recordId).filter(Boolean);accountingAlertDetail.textContent=flagged<=0?'CRM and QuickBooks values reconcile.':'Mismatch detected for '+(names.length?names.join(', '):flagged+' client record'+(flagged===1?'':'s'))+(flagged>names.length?' and '+(flagged-names.length)+' more':'')+'.';}
     }
 
     function renderStats() {
@@ -1166,6 +1243,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(record.inquiry.service === 'mobile-bar') {
           if(record.inquiry.estimatedTotal) {
             article.appendChild(text('p','mt-2 text-xs font-bold text-[var(--koa-clay)]','Website estimate · '+money(record.inquiry.estimatedTotal)));
+          }
+          if(!['booked','lost','converted'].includes(record.stage)){
+            const score=personalizedProbability(record,'expected');
+            const explain=document.createElement('details');
+            explain.className='mt-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+            const summary=document.createElement('summary');
+            summary.className='cursor-pointer text-xs font-bold text-[var(--koa-forest)]';
+            summary.textContent='Expected win probability · '+Math.round(score.probability*100)+'% · baseline '+Math.round(score.base*100)+'%';
+            explain.appendChild(summary);
+            const body=document.createElement('div');
+            body.className='mt-3 grid gap-2';
+            if(score.factors?.length){
+              const labels={source:'Lead source',package:'Package',guests:'Guest range',eventType:'Event type'};
+              score.factors.forEach((factor)=>{
+                const impact=Math.round(factor.impact*100);
+                const row=document.createElement('div');
+                row.className='rounded-lg border border-[var(--koa-line)] bg-white p-2';
+                row.append(
+                  text('p','text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]',(labels[factor.key]||factor.key)+' · '+(impact>=0?'+':'')+impact+'% impact'),
+                  text('p','mt-1 text-[.68rem] text-[var(--koa-ink)]/60',factor.label+' · '+factor.booked+'/'+factor.samples+' booked · '+Math.round(factor.rawRate*100)+'% observed · '+factor.samples+' mature samples')
+                );
+                body.appendChild(row);
+              });
+              const combined=Math.round((score.factor-1)*100);
+              body.appendChild(text('p','text-[.66rem] font-semibold text-[var(--koa-forest)]','Combined calibration '+(combined>=0?'+':'')+combined+'% · final '+Math.round(score.probability*100)+'%.'));
+            }else{
+              body.appendChild(text('p','text-[.68rem] text-[var(--koa-ink)]/55','No source/package/guest/event-type segment has the 5 mature samples required to adjust this lead yet, so the stage baseline is used.'));
+            }
+            explain.appendChild(body);
+            article.appendChild(explain);
           }
           const serviceMeta=[
             record.inquiry.serviceHours ? record.inquiry.serviceHours+' service hr' : '',
@@ -1664,11 +1771,120 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length) bookedDashboard.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No booked events yet.'));
     }
 
+    function renderBookingPerformance(record) {
+      if(!bookingPerformanceRows)return;
+      bookingPerformanceRows.innerHTML='';
+      const assignments=record.booking?.bartenderAssignments||[];
+      const existing=record.booking?.bartenderPerformance||[];
+      assignments.forEach((assignment)=>{
+        const performance=existing.find((entry)=>entry.bartenderId===assignment.id)||{};
+        const form=document.createElement('form');
+        form.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+        form.dataset.performanceBartenderId=assignment.id;
+        const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=assignment.name;
+        const grid=document.createElement('div');grid.className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5';
+        const fields=[
+          ['actualHours','Actual hours','number',performance.actualHours??record.inquiry?.serviceHours??''],
+          ['tips','Tips','number',performance.tips??''],
+          ['clientRating','Client rating 0–5','number',performance.clientRating??''],
+        ];
+        fields.forEach(([name,labelText,type,value])=>{
+          const label=document.createElement('label');label.className='grid gap-1 text-[.52rem] font-black uppercase text-[var(--koa-clay)]';label.textContent=labelText;
+          const input=document.createElement('input');input.name=name;input.type=type;input.min='0';input.step=name==='clientRating'?'.1':'.25';if(name==='clientRating')input.max='5';input.value=String(value??'');input.className='rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm normal-case text-[var(--koa-ink)]';label.appendChild(input);grid.appendChild(label);
+        });
+        const reliability=document.createElement('label');reliability.className='grid gap-1 text-[.52rem] font-black uppercase text-[var(--koa-clay)]';reliability.textContent='Reliability';
+        const select=document.createElement('select');select.name='reliability';select.className='rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm normal-case text-[var(--koa-ink)]';
+        [['not-rated','Not rated'],['on-time','On time'],['late','Late'],['cancelled','Cancelled'],['no-show','No-show']].forEach(([value,label])=>{const option=document.createElement('option');option.value=value;option.textContent=label;option.selected=(performance.reliability||'not-rated')===value;select.appendChild(option);});reliability.appendChild(select);grid.appendChild(reliability);
+        const feedback=document.createElement('label');feedback.className='grid gap-1 text-[.52rem] font-black uppercase text-[var(--koa-clay)] sm:col-span-2 lg:col-span-5';feedback.textContent='Client / manager feedback';
+        const textarea=document.createElement('textarea');textarea.name='clientFeedback';textarea.rows=2;textarea.value=performance.clientFeedback||'';textarea.className='rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm normal-case text-[var(--koa-ink)]';feedback.appendChild(textarea);
+        const save=document.createElement('button');save.className='mt-3 rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.52rem] font-black uppercase text-[var(--koa-forest)]';save.textContent='Save performance';
+        form.append(title,grid,feedback,save);
+        form.addEventListener('submit',async(event)=>{
+          event.preventDefault();
+          save.disabled=true;save.textContent='Saving…';
+          const data=new FormData(form);
+          try{
+            const result=await api({action:'update-mobile-bar-bartender-performance',recordId:record.id,bartenderId:assignment.id,performance:{
+              actualHours:Number(data.get('actualHours')||0),tips:Number(data.get('tips')||0),clientRating:Number(data.get('clientRating')||0),reliability:String(data.get('reliability')||'not-rated'),clientFeedback:String(data.get('clientFeedback')||'')
+            }});
+            await load(String(searchInput?.value||'').trim());
+            const refreshed=(payload.records||[]).find((entry)=>entry.id===record.id)||result.record;
+            bookingRecord=refreshed;openBooking(refreshed);
+          }catch(error){save.disabled=false;save.textContent=error?.message||'Save failed';}
+        });
+        bookingPerformanceRows.appendChild(form);
+      });
+      if(!assignments.length)bookingPerformanceRows.appendChild(text('p','text-xs text-[var(--koa-ink)]/50','Assign bartenders first, then event performance can be recorded.'));
+    }
+
+    function renderBookingBartenders(record) {
+      const isMobile=record.stage==='booked'&&isMobileBarRecord(record);
+      bookingBartenderSection?.classList.toggle('hidden',!isMobile);
+      currentStaffingRecommendationIds=[];
+      if(!isMobile||!bookingBartenderOptions)return;
+      const settings=planningSettings();
+      const eventDate=recordEventDate(record);
+      const assigned=new Set((record.booking?.bartenderAssignments||[]).map((entry)=>entry.id));
+      bookingBartenderOptions.innerHTML='';
+      settings.staffing.bartenders.forEach((bartender)=>{
+        const label=document.createElement('label');
+        const unavailable=bartender.active===false||bartender.unavailableDates?.includes(eventDate);
+        const conflict=(payload.records||[]).some((other)=>other.id!==record.id&&other.stage==='booked'&&recordEventDate(other)===eventDate&&(other.booking?.bartenderAssignments||[]).some((entry)=>entry.id===bartender.id));
+        label.className='flex items-start gap-3 rounded-lg border border-[var(--koa-line)] bg-white p-3 text-sm '+((unavailable||conflict)?'opacity-55':'');
+        const input=document.createElement('input');
+        input.type='checkbox';
+        input.name='bartenderId';
+        input.value=bartender.id;
+        input.checked=assigned.has(bartender.id);
+        input.disabled=unavailable||conflict;
+        const copy=document.createElement('span');
+        const workload=bartenderWorkloadWarnings(bartender,eventDate,record.id);
+        const reason=unavailable?(bartender.active===false?'inactive':'unavailable '+eventDate):conflict?'already assigned that date':workload.warnings.length?'available · workload warning: '+workload.warnings.join('; '):'available';
+        copy.textContent=bartender.name+' · '+reason;
+        label.append(input,copy);
+        bookingBartenderOptions.appendChild(label);
+      });
+
+      const recommendation=staffingRecommendations(record);
+      currentStaffingRecommendationIds=recommendation.recommended.map((row)=>row.bartender.id);
+      if(bookingStaffingRecommendationCopy){
+        bookingStaffingRecommendationCopy.textContent=recommendation.rows.length
+          ? recommendation.needed+' bartender'+(recommendation.needed===1?'':'s')+' needed · ranked by availability, workload, recorded experience, and event-size history.'
+          : 'No eligible bartenders are available for this event date.';
+      }
+      if(bookingStaffingRecommendationList){
+        bookingStaffingRecommendationList.innerHTML='';
+        recommendation.rows.slice(0,Math.max(recommendation.needed,4)).forEach((row,index)=>{
+          const card=document.createElement('div');
+          card.className='rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+          card.append(
+            text('p','text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]',(index<recommendation.needed?'Recommended':'Alternate')+' · '+row.score+'/100'),
+            text('strong','mt-1 block text-sm text-[var(--koa-forest)]',row.bartender.name),
+            text('p','mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/55',row.reasons.join(' · '))
+          );
+          bookingStaffingRecommendationList.appendChild(card);
+        });
+      }
+      if(applyStaffingRecommendations){
+        applyStaffingRecommendations.disabled=!currentStaffingRecommendationIds.length;
+        applyStaffingRecommendations.classList.toggle('opacity-40',!currentStaffingRecommendationIds.length);
+      }
+
+      renderBookingPerformance(record);
+      if(bookingBartenderStatus){
+        const names=(record.booking?.bartenderAssignments||[]).map((entry)=>entry.name);
+        bookingBartenderStatus.textContent=settings.staffing.blackoutDates.includes(eventDate)
+          ? 'Warning: this event date is currently configured as a Mobile Bar blackout date.'
+          : names.length?'Currently assigned: '+names.join(', ')+'.':'No bartenders assigned yet.';
+      }
+    }
+
     function openBooking(record) {
       bookingRecord=record;
       const summary=record.bookingSummary||{};
       if(bookingTitle) bookingTitle.textContent=record.customer?.name||record.id;
       if(bookingMeta) bookingMeta.textContent=[record.id,record.customer?.eventDate,packageLabel(recordPackage(record))].filter(Boolean).join(' · ');
+      renderBookingBartenders(record);
       textContent('[data-booking-contract]',summary.contractStatus==='signed'?(summary.signedAt?'Signed '+dateTime(summary.signedAt):'Signed'):'Awaiting signature');
       textContent('[data-booking-paid]',money(summary.paid||0));
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
@@ -2016,71 +2232,984 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return raw?raw.slice(0,7):'';
     }
 
-    function mobileProfitProbability(record) {
+    const fallbackScenarioWeights = {
+      conservative:{ inquiry:.05, lead:.15, draft:.25, proposal:.30, sent:.45, viewed:.55, accepted:.80 },
+      expected:{ inquiry:.15, lead:.30, draft:.50, proposal:.45, sent:.65, viewed:.75, accepted:.95 },
+      aggressive:{ inquiry:.30, lead:.50, draft:.65, proposal:.60, sent:.80, viewed:.90, accepted:.98 },
+    };
+    const forecastStages=['inquiry','lead','draft','proposal','sent','viewed','accepted'];
+    let rollingForecastRecommendations=null;
+
+    function scenarioWeights(scenario='expected') {
+      return payload.mobileBarProfitSettings?.forecastProbabilities?.[scenario] || fallbackScenarioWeights[scenario] || fallbackScenarioWeights.expected;
+    }
+
+    function baseStageProbability(record,scenario='expected') {
       if(record.stage==='booked')return 1;
+      const weights=scenarioWeights(scenario);
       if(record.kind==='proposal'){
         const status=String(record.proposal?.status||record.status||'');
-        if(status==='accepted')return .95;
-        if(status==='viewed')return .75;
-        if(status==='sent')return .65;
-        if(status==='draft')return .50;
-        return .45;
+        return Number(weights[status] ?? weights.proposal ?? 0);
       }
-      if(record.stage==='lead')return .30;
-      return .15;
+      return record.stage==='lead'?Number(weights.lead||0):Number(weights.inquiry||0);
+    }
+
+    function currentGoalRanges() {
+      const now=new Date();
+      const year=now.getFullYear();
+      const month=now.getMonth();
+      const quarterStart=Math.floor(month/3)*3;
+      return {
+        monthly:{key:'monthly',label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(now),start:localDateKey(new Date(year,month,1)),end:localDateKey(new Date(year,month+1,0)),targetKey:'monthlyGrossProfitTarget'},
+        quarterly:{key:'quarterly',label:'Q'+(Math.floor(month/3)+1)+' '+year,start:localDateKey(new Date(year,quarterStart,1)),end:localDateKey(new Date(year,quarterStart+3,0)),targetKey:'quarterlyGrossProfitTarget'},
+        annual:{key:'annual',label:String(year),start:year+'-01-01',end:year+'-12-31',targetKey:'annualGrossProfitTarget'},
+      };
+    }
+
+    function recordsInRange(records,range) {
+      return records.filter((record)=>{
+        const date=recordEventDate(record);
+        return date&&date>=range.start&&date<=range.end;
+      });
+    }
+
+    function opportunityGroups(all) {
+      const byId=new Map(all.map((record)=>[record.id,record]));
+      const groups=new Map();
+      all.forEach((record)=>{
+        let root=record;
+        const seen=new Set();
+        while(root.source&&byId.has(root.source)&&!seen.has(root.id)){
+          seen.add(root.id);
+          root=byId.get(root.source);
+        }
+        const key=record.quoteId?'q:'+record.quoteId:'r:'+root.id;
+        if(!groups.has(key))groups.set(key,[]);
+        groups.get(key).push(record);
+      });
+      return [...groups.values()];
+    }
+
+    function groupBooked(group) {
+      return group.some((record)=>record.stage==='booked'||record.proposal?.status==='booked'||record.booking?.status==='booked');
+    }
+
+    function groupRepresentative(group) {
+      return [...group].sort((a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))[0]||group[0];
+    }
+
+    function recordSegmentValue(record,key) {
+      const inquiry=record?.inquiry||{};
+      if(key==='source') return String(inquiry.leadSource||inquiry.source||inquiry.referrer||'Unknown');
+      if(key==='package') return packageLabel(recordPackage(record));
+      if(key==='guests'){
+        const count=Number(inquiry.guestCount||0);
+        return count<=50?'1–50':count<=100?'51–100':count<=150?'101–150':'151+';
+      }
+      return String(inquiry.eventType||'Unknown');
+    }
+
+    function matureOpportunityGroups(all) {
+      const cutoff=Date.now()-365*86400000;
+      const matureBefore=Date.now()-30*86400000;
+      return opportunityGroups(all).filter((group)=>{
+        const dates=group.map((record)=>Date.parse(record.createdAt)).filter(Number.isFinite);
+        const created=dates.length?Math.min(...dates):NaN;
+        return Number.isFinite(created)&&created>=cutoff&&created<=matureBefore;
+      });
+    }
+
+    function segmentCalibration(all) {
+      if(mobileCalibrationCache)return mobileCalibrationCache;
+      const groups=matureOpportunityGroups(all);
+      const globalBooked=groups.filter(groupBooked).length;
+      const globalRate=groups.length?globalBooked/groups.length:.35;
+      const dimensions={source:new Map(),package:new Map(),guests:new Map(),eventType:new Map()};
+      groups.forEach((group)=>{
+        const representative=groupRepresentative(group);
+        const booked=groupBooked(group)?1:0;
+        Object.keys(dimensions).forEach((key)=>{
+          const label=recordSegmentValue(representative,key);
+          const row=dimensions[key].get(label)||{label,total:0,booked:0};
+          row.total+=1;
+          row.booked+=booked;
+          dimensions[key].set(label,row);
+        });
+      });
+      mobileCalibrationCache={groups,globalRate,dimensions};
+      return mobileCalibrationCache;
+    }
+
+    function personalizedProbability(record,scenario='expected') {
+      if(record.stage==='booked')return {probability:1,base:1,factor:1,factors:[]};
+      const base=baseStageProbability(record,scenario);
+      const all=(payload.records||[]).filter(isMobileBarRecord);
+      const calibration=segmentCalibration(all);
+      const rawFactors=[];
+      ['source','package','guests','eventType'].forEach((key)=>{
+        const label=recordSegmentValue(record,key);
+        const row=calibration.dimensions[key].get(label);
+        if(!row||row.total<5)return;
+        const rawRate=row.total?row.booked/row.total:0;
+        const smoothed=(row.booked+(calibration.globalRate*5))/(row.total+5);
+        const rawRatio=calibration.globalRate>0?smoothed/calibration.globalRate:1;
+        const ratio=Math.max(.75,Math.min(1.25,rawRatio));
+        rawFactors.push({key,label,samples:row.total,booked:row.booked,rawRate,rate:smoothed,ratio});
+      });
+      const factor=rawFactors.length?Math.exp(rawFactors.reduce((sum,item)=>sum+Math.log(item.ratio),0)/rawFactors.length):1;
+      const factors=rawFactors.map((item)=>{
+        const effectiveRatio=Math.pow(item.ratio,1/rawFactors.length);
+        return {...item,effectiveRatio,impact:effectiveRatio-1};
+      });
+      return {probability:Math.max(.02,Math.min(.99,base*factor)),base,factor,factors,globalRate:calibration.globalRate};
+    }
+
+    function mobileProfitProbability(record,scenario='expected') {
+      const scored=personalizedProbability(record,scenario);
+      return typeof scored==='number'?scored:scored.probability;
+    }
+
+    function mobileProfitProjection(records,scenario='expected') {
+      const booked=records.filter((record)=>record.stage==='booked');
+      const open=records.filter((record)=>record.stage!=='booked');
+      const bookedProfit=booked.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const weighted=open.reduce((sum,record)=>sum+Number(profitValues(record).profit||0)*mobileProfitProbability(record,scenario),0);
+      return {bookedProfit,projectedProfit:bookedProfit+weighted};
+    }
+
+    function renderGoalCard(card,range,projection,target,averageBookedProfit) {
+      if(!card)return;
+      const delta=projection.projectedProfit-target;
+      const percentComplete=target>0?Math.max(0,Math.min(100,projection.projectedProfit/target*100)):0;
+      const bookingsNeeded=target>0&&delta<0&&averageBookedProfit>0?Math.ceil(-delta/averageBookedProfit):target>0&&delta>=0?0:null;
+      card.innerHTML='';
+      const heading=document.createElement('div');
+      heading.className='flex items-end justify-between gap-3';
+      heading.append(text('div','',range.label),text('strong','display text-2xl text-white',target?money(target):'Not set'));
+      card.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',range.key+' goal'),heading);
+      const metrics=document.createElement('div');
+      metrics.className='mt-4 grid grid-cols-2 gap-2';
+      [['Booked',money(projection.bookedProfit)],['Projected',money(projection.projectedProfit)],['Ahead / behind',target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—'],['Bookings needed',bookingsNeeded==null?'—':String(bookingsNeeded)]].forEach(([label,value])=>{
+        const item=document.createElement('div');
+        item.className='rounded-lg bg-black/10 p-2';
+        item.append(text('p','text-[.5rem] uppercase text-white/40',label),text('strong','text-sm text-white',value));
+        metrics.appendChild(item);
+      });
+      card.appendChild(metrics);
+      const track=document.createElement('div');
+      track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+      const bar=document.createElement('div');
+      bar.className='h-full rounded-full '+(target&&projection.projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
+      bar.style.width=percentComplete+'%';
+      track.appendChild(bar);
+      card.appendChild(track);
+    }
+
+    function packagePlanningStats(all) {
+      const booked=all.filter((record)=>record.stage==='booked');
+      const overallProfits=booked.map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+      const overallProfit=overallProfits.length?overallProfits.reduce((a,b)=>a+b,0)/overallProfits.length:0;
+      const overallBartenders=booked.length?booked.reduce((sum,record)=>sum+Math.max(1,Number(record.inquiry?.bartenderCount||1)),0)/booked.length:1;
+      const result={};
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        const rows=booked.filter((record)=>recordPackage(record)===packageId);
+        const profits=rows.map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+        const bartenderCounts=rows.map((record)=>Math.max(1,Number(record.inquiry?.bartenderCount||1)));
+        result[packageId]={
+          averageProfit:profits.length?profits.reduce((a,b)=>a+b,0)/profits.length:overallProfit,
+          averageBartenders:bartenderCounts.length?bartenderCounts.reduce((a,b)=>a+b,0)/bartenderCounts.length:overallBartenders,
+          count:rows.length,
+        };
+      });
+      return result;
+    }
+
+    function planningSettings() {
+      const settings=payload.mobileBarProfitSettings||{};
+      return {
+        simulator:{
+          bartenderCapacityPerDay:Number(settings.simulator?.bartenderCapacityPerDay||0),
+          maxBookingsPerMonth:Number(settings.simulator?.maxBookingsPerMonth||0),
+          planningHorizonMonths:Math.max(1,Number(settings.simulator?.planningHorizonMonths||6)),
+        },
+        staffing:{
+          blackoutDates:Array.isArray(settings.staffing?.blackoutDates)?settings.staffing.blackoutDates:[],
+          bartenders:Array.isArray(settings.staffing?.bartenders)?settings.staffing.bartenders:[],
+        },
+      };
+    }
+
+    function availableBartenders(date,staffing,assignedIds=new Set()) {
+      return staffing.bartenders.filter((bartender)=>bartender.active!==false&&!bartender.unavailableDates?.includes(date)&&!assignedIds.has(bartender.id));
+    }
+
+    function scheduleMix(counts,stats,all) {
+      const planning=planningSettings();
+      const today=new Date();
+      today.setHours(0,0,0,0);
+      const end=new Date(today.getFullYear(),today.getMonth()+planning.simulator.planningHorizonMonths+1,0);
+      const booked=all.filter((record)=>record.stage==='booked');
+      const genericUsed=new Map();
+      const assignedIdsByDate=new Map();
+      const monthCounts=new Map();
+
+      booked.forEach((record)=>{
+        const date=recordEventDate(record);
+        if(!date)return;
+        const month=date.slice(0,7);
+        monthCounts.set(month,(monthCounts.get(month)||0)+1);
+        const assigned=Array.isArray(record.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[];
+        if(assigned.length){
+          const set=assignedIdsByDate.get(date)||new Set();
+          assigned.forEach((bartender)=>set.add(bartender.id));
+          assignedIdsByDate.set(date,set);
+        }else{
+          genericUsed.set(date,(genericUsed.get(date)||0)+Math.max(1,Number(record.inquiry?.bartenderCount||1)));
+        }
+      });
+
+      const packageIds=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const events=[];
+      packageIds.forEach((packageId,index)=>{
+        for(let n=0;n<counts[index];n++)events.push({packageId,bartenders:Math.max(1,Math.ceil(stats[packageId].averageBartenders||1))});
+      });
+      events.sort((a,b)=>b.bartenders-a.bartenders);
+
+      const assignments=[];
+      const simulatedUsed=new Map();
+      for(const event of events){
+        let placed=false;
+        for(let cursor=new Date(today.getTime()+86400000);cursor<=end;cursor.setDate(cursor.getDate()+1)){
+          const date=localDateKey(cursor);
+          const month=date.slice(0,7);
+          if(planning.staffing.blackoutDates.includes(date))continue;
+          if(planning.simulator.maxBookingsPerMonth&&(monthCounts.get(month)||0)+1>planning.simulator.maxBookingsPerMonth)continue;
+
+          const hardCap=planning.simulator.bartenderCapacityPerDay||Infinity;
+          const assignedIds=assignedIdsByDate.get(date)||new Set();
+          const namedAvailable=planning.staffing.bartenders.length?availableBartenders(date,planning.staffing,assignedIds).length:Infinity;
+          const generic=(genericUsed.get(date)||0)+(simulatedUsed.get(date)||0);
+          const available=Math.max(0,Math.min(hardCap,namedAvailable)-generic);
+          if(event.bartenders>available)continue;
+
+          simulatedUsed.set(date,(simulatedUsed.get(date)||0)+event.bartenders);
+          monthCounts.set(month,(monthCounts.get(month)||0)+1);
+          assignments.push({...event,date});
+          placed=true;
+          break;
+        }
+        if(!placed)return null;
+      }
+      return assignments;
+    }
+
+    function feasibleMixes(target,stats,all) {
+      if(!(target>0))return[];
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const profits=ids.map((id)=>Math.max(0,stats[id].averageProfit||0));
+      if(!profits.some(Boolean))return[];
+      const minProfit=Math.min(...profits.filter(Boolean));
+      const maxCount=Math.min(36,Math.ceil(target/minProfit)+4);
+      const output=[];
+      for(let oahu=0;oahu<=maxCount;oahu++){
+        for(let maui=0;maui<=maxCount-oahu;maui++){
+          for(let big=0;big<=maxCount-oahu-maui;big++){
+            const counts=[oahu,maui,big];
+            const count=oahu+maui+big;
+            if(!count)continue;
+            const profit=oahu*profits[0]+maui*profits[1]+big*profits[2];
+            if(profit<target)continue;
+            const schedule=scheduleMix(counts,stats,all);
+            if(schedule)output.push({counts,count,profit,schedule});
+          }
+        }
+      }
+      return output.sort((a,b)=>a.count-b.count||a.profit-b.profit).slice(0,5);
+    }
+
+    function renderBartenderRows() {
+      if(!bartenderAvailabilityRows)return;
+      bartenderAvailabilityRows.innerHTML='';
+      planningSettings().staffing.bartenders.forEach((bartender)=>addBartenderRow(bartender));
+    }
+
+    function addBartenderRow(bartender={name:'',active:true,unavailableDates:[],maxEventsPerWeek:0,maxEventsPerMonth:0}) {
+      if(!bartenderAvailabilityRows)return;
+      const row=document.createElement('div');
+      row.className='grid gap-2 sm:grid-cols-2 xl:grid-cols-[1fr_1.6fr_.6fr_.6fr_auto]';
+      row.dataset.bartenderRow='1';
+      row.dataset.bartenderId=bartender.id||('bartender-'+Date.now().toString(36)+'-'+(++bartenderDraftCounter));
+      const name=document.createElement('input');
+      name.dataset.bartenderName='1';
+      name.value=bartender.name||'';
+      name.placeholder='Bartender name';
+      name.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const dates=document.createElement('input');
+      dates.dataset.bartenderDates='1';
+      dates.value=(bartender.unavailableDates||[]).join(', ');
+      dates.placeholder='Unavailable: 2026-10-03, 2026-10-04';
+      dates.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const label=document.createElement('label');
+      label.className='flex items-center gap-2 text-xs text-white/60';
+      const active=document.createElement('input');
+      active.type='checkbox';
+      active.dataset.bartenderActive='1';
+      active.checked=bartender.active!==false;
+      label.append(active,document.createTextNode(' Active'));
+      const weekly=document.createElement('input');
+      weekly.type='number'; weekly.min='0'; weekly.max='31'; weekly.step='1';
+      weekly.dataset.bartenderMaxWeek='1'; weekly.value=String(Number(bartender.maxEventsPerWeek||0));
+      weekly.placeholder='Max/week';
+      weekly.title='Maximum events per week; 0 means no limit';
+      weekly.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      const monthly=document.createElement('input');
+      monthly.type='number'; monthly.min='0'; monthly.max='100'; monthly.step='1';
+      monthly.dataset.bartenderMaxMonth='1'; monthly.value=String(Number(bartender.maxEventsPerMonth||0));
+      monthly.placeholder='Max/month';
+      monthly.title='Maximum events per month; 0 means no limit';
+      monthly.className='rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-sm text-white';
+      row.append(name,dates,weekly,monthly,label);
+      bartenderAvailabilityRows.appendChild(row);
+    }
+
+    function requiredBartenderCount(record) {
+      const explicit=Math.ceil(Math.max(0,Number(record?.inquiry?.bartenderCount||0)));
+      if(explicit>0)return explicit;
+      const guests=Math.max(0,Number(record?.inquiry?.guestCount||0));
+      if(guests<=50)return 1;
+      if(guests<=100)return 2;
+      if(guests<=150)return 3;
+      return 4;
+    }
+
+    function mobileBookedRecords() {
+      return (payload.records||[]).filter((record)=>isMobileBarRecord(record)&&record.stage==='booked'&&recordEventDate(record));
+    }
+
+    function staffingDateSnapshot(date) {
+      const settings=planningSettings();
+      const events=mobileBookedRecords().filter((record)=>recordEventDate(record)===date);
+      const roster=new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+      const activeAvailable=settings.staffing.bartenders.filter((bartender)=>bartender.active!==false&&!bartender.unavailableDates?.includes(date));
+      const assignmentUses=new Map();
+      let required=0;
+      let assigned=0;
+      let openSlots=0;
+      const eventRows=events.map((record)=>{
+        const needed=requiredBartenderCount(record);
+        const assignments=Array.isArray(record.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[];
+        required+=needed;
+        assigned+=assignments.length;
+        openSlots+=Math.max(0,needed-assignments.length);
+        assignments.forEach((entry)=>assignmentUses.set(entry.id,(assignmentUses.get(entry.id)||0)+1));
+        return {record,needed,assignments,open:Math.max(0,needed-assignments.length)};
+      });
+      const conflicts=[];
+      if(settings.staffing.blackoutDates.includes(date)&&events.length)conflicts.push('Booked event on blackout date');
+      assignmentUses.forEach((count,id)=>{
+        const bartender=roster.get(id);
+        if(count>1)conflicts.push((bartender?.name||id)+' is assigned to '+count+' events');
+        if(!bartender)conflicts.push((id||'Unknown bartender')+' is no longer in the roster');
+        else if(bartender.active===false)conflicts.push(bartender.name+' is inactive');
+        else if(bartender.unavailableDates?.includes(date))conflicts.push(bartender.name+' is marked unavailable');
+      });
+      const configuredCap=Number(settings.simulator.bartenderCapacityPerDay||0);
+      if(configuredCap>0&&required>configuredCap)conflicts.push('Required staffing exceeds daily capacity');
+      assignmentUses.forEach((count,id)=>{
+        const bartender=roster.get(id);
+        if(!bartender)return;
+        const workload=bartenderWorkloadWarnings(bartender,date,'');
+        workload.warnings.forEach((warning)=>conflicts.push(bartender.name+' workload: '+warning));
+      });
+      const assignedIds=new Set(assignmentUses.keys());
+      const availableCrew=activeAvailable.filter((bartender)=>!assignedIds.has(bartender.id));
+      return {date,events:eventRows,required,assigned,openSlots,conflicts:Array.from(new Set(conflicts)),availableCrew,blackout:settings.staffing.blackoutDates.includes(date)};
+    }
+
+    function calendarStartOfWeek(date) {
+      const result=new Date(date.getFullYear(),date.getMonth(),date.getDate());
+      result.setDate(result.getDate()-result.getDay());
+      return result;
+    }
+
+    function staffingCalendarDates() {
+      const anchor=staffingCalendarState.anchor;
+      if(staffingCalendarState.view==='day')return [new Date(anchor.getFullYear(),anchor.getMonth(),anchor.getDate())];
+      if(staffingCalendarState.view==='week'){
+        const start=calendarStartOfWeek(anchor);
+        return Array.from({length:7},(_,index)=>new Date(start.getFullYear(),start.getMonth(),start.getDate()+index));
+      }
+      const first=new Date(anchor.getFullYear(),anchor.getMonth(),1);
+      const start=calendarStartOfWeek(first);
+      return Array.from({length:42},(_,index)=>new Date(start.getFullYear(),start.getMonth(),start.getDate()+index));
+    }
+
+    function staffingCalendarTitle() {
+      const anchor=staffingCalendarState.anchor;
+      if(staffingCalendarState.view==='day')return new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}).format(anchor);
+      if(staffingCalendarState.view==='week'){
+        const start=calendarStartOfWeek(anchor);
+        const end=new Date(start.getFullYear(),start.getMonth(),start.getDate()+6);
+        return new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(start)+' – '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(end);
+      }
+      return new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(anchor);
+    }
+
+    function staffingDayCard(dateObj,compact=false) {
+      const date=localDateKey(dateObj);
+      const snapshot=staffingDateSnapshot(date);
+      const card=document.createElement('button');
+      card.type='button';
+      card.className='min-w-0 rounded-xl border p-3 text-left '+(snapshot.conflicts.length?'border-red-300/30 bg-red-400/10':snapshot.openSlots?'border-amber-300/25 bg-amber-400/10':'border-white/10 bg-black/10');
+      card.addEventListener('click',()=>{
+        staffingCalendarState={view:'day',anchor:new Date(dateObj.getFullYear(),dateObj.getMonth(),dateObj.getDate())};
+        if(staffCalendarView)staffCalendarView.value='day';
+        renderStaffingCalendar();
+      });
+      const top=document.createElement('div');
+      top.className='flex items-start justify-between gap-2';
+      const dayLabel=staffingCalendarState.view==='month'?String(dateObj.getDate()):new Intl.DateTimeFormat('en-US',{weekday:'short',month:'short',day:'numeric'}).format(dateObj);
+      top.append(text('strong','text-sm text-white',dayLabel),text('span','text-[.52rem] text-white/45',snapshot.events.length+' event'+(snapshot.events.length===1?'':'s')));
+      card.appendChild(top);
+      if(snapshot.blackout)card.appendChild(text('p','mt-2 text-[.52rem] font-black uppercase text-red-200','Blackout date'));
+      if(snapshot.events.length){
+        card.appendChild(text('p','mt-2 text-[.62rem] text-white/70',snapshot.assigned+'/'+snapshot.required+' assigned'));
+        if(snapshot.openSlots)card.appendChild(text('p','mt-1 text-[.58rem] font-bold text-amber-100',snapshot.openSlots+' open staffing slot'+(snapshot.openSlots===1?'':'s')));
+        if(snapshot.conflicts.length)card.appendChild(text('p','mt-1 text-[.58rem] font-bold text-red-100',snapshot.conflicts.length+' conflict'+(snapshot.conflicts.length===1?'':'s')));
+      }else if(!compact){
+        card.appendChild(text('p','mt-2 text-[.6rem] text-white/40','No Mobile Bar bookings'));
+      }
+      card.appendChild(text('p','mt-2 text-[.56rem] text-emerald-100/80',snapshot.availableCrew.length+' unassigned bartender'+(snapshot.availableCrew.length===1?'':'s')+' available'));
+      return card;
+    }
+
+    async function saveCalendarAssignments(record,bartenderIds,statusNode=null) {
+      if(statusNode)statusNode.textContent='Saving staffing…';
+      try{
+        const result=await api({action:'update-mobile-bar-bartender-assignments',recordId:record.id,bartenderIds});
+        await load(String(searchInput?.value||'').trim());
+        const warning=(result.workloadWarnings||[]).join(' ');
+        if(statusNode)statusNode.textContent=warning||'Staffing saved.';
+        renderStaffingCalendar();
+        return result;
+      }catch(error){
+        if(statusNode)statusNode.textContent=error?.message||'Unable to save staffing.';
+        return null;
+      }
+    }
+
+    function makeBartenderDragChip(bartender,record=null) {
+      const chip=document.createElement('button');
+      chip.type='button';
+      chip.draggable=true;
+      chip.className='rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-[.58rem] font-semibold text-emerald-100';
+      chip.textContent=bartender.name;
+      chip.dataset.dragBartenderId=bartender.id;
+      chip.addEventListener('dragstart',(event)=>{
+        event.dataTransfer?.setData('text/plain',JSON.stringify({bartenderId:bartender.id,sourceRecordId:record?.id||''}));
+        if(event.dataTransfer)event.dataTransfer.effectAllowed='move';
+      });
+      return chip;
+    }
+
+    function enableEventDropZone(node,record,statusNode) {
+      node.addEventListener('dragover',(event)=>{event.preventDefault();node.classList.add('ring-2','ring-amber-300/60');});
+      node.addEventListener('dragleave',()=>node.classList.remove('ring-2','ring-amber-300/60'));
+      node.addEventListener('drop',async(event)=>{
+        event.preventDefault();node.classList.remove('ring-2','ring-amber-300/60');
+        let data=null;try{data=JSON.parse(event.dataTransfer?.getData('text/plain')||'{}');}catch{}
+        const bartenderId=String(data?.bartenderId||'');
+        if(!bartenderId)return;
+        if(data?.sourceRecordId&&data.sourceRecordId!==record.id){
+          const source=(payload.records||[]).find((entry)=>entry.id===data.sourceRecordId);
+          if(source){
+            const sourceIds=(source.booking?.bartenderAssignments||[]).map((entry)=>entry.id).filter((id)=>id!==bartenderId);
+            const removed=await saveCalendarAssignments(source,sourceIds,statusNode);
+            if(!removed)return;
+          }
+        }
+        const ids=Array.from(new Set([...(record.booking?.bartenderAssignments||[]).map((entry)=>entry.id),bartenderId]));
+        await saveCalendarAssignments(record,ids,statusNode);
+      });
+    }
+
+    function renderStaffingDayDetail(dateObj) {
+      const date=localDateKey(dateObj);
+      const snapshot=staffingDateSnapshot(date);
+      const wrap=document.createElement('div');
+      wrap.className='grid gap-3';
+      const status=text('p','text-xs text-white/55','Drag an available bartender onto an event, or drag an assigned bartender to Available crew to remove them. Manage staffing remains the touch/keyboard alternative.');
+      status.setAttribute('aria-live','polite');
+      wrap.appendChild(status);
+      if(snapshot.conflicts.length){
+        const warning=document.createElement('div');
+        warning.className='rounded-xl border border-red-300/25 bg-red-400/10 p-3';
+        warning.appendChild(text('strong','text-sm text-red-100','Staffing / workload warnings'));
+        snapshot.conflicts.forEach((item)=>warning.appendChild(text('p','mt-1 text-xs text-red-100/80',item)));
+        wrap.appendChild(warning);
+      }
+      snapshot.events.forEach(({record,needed,assignments,open})=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-white/10 bg-black/10 p-4';
+        card.append(
+          text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',packageLabel(recordPackage(record))),
+          text('strong','mt-1 block text-sm text-white',record.customer?.name||record.id),
+          text('p','mt-1 text-xs text-white/55',(record.inquiry?.guestCount||0)+' guests · '+needed+' bartender'+(needed===1?'':'s')+' needed')
+        );
+        const assignedWrap=document.createElement('div');assignedWrap.className='mt-3 flex flex-wrap gap-2';
+        assignments.forEach((entry)=>assignedWrap.appendChild(makeBartenderDragChip({id:entry.id,name:entry.name},record)));
+        if(!assignments.length)assignedWrap.appendChild(text('span','text-xs text-white/40','None assigned'));
+        card.appendChild(assignedWrap);
+        if(open)card.appendChild(text('p','mt-2 text-xs font-bold text-amber-100',open+' open staffing slot'+(open===1?'':'s')));
+        const manage=document.createElement('button');
+        manage.type='button';
+        manage.className='mt-3 rounded-full border border-white/15 px-3 py-2 text-[.52rem] font-black uppercase text-white';
+        manage.textContent='Manage staffing';
+        manage.addEventListener('click',()=>openBooking(record));
+        card.appendChild(manage);
+        enableEventDropZone(card,record,status);
+        wrap.appendChild(card);
+      });
+      if(!snapshot.events.length)wrap.appendChild(text('p','rounded-xl border border-white/10 bg-black/10 p-4 text-sm text-white/45','No booked Mobile Bar events on this date.'));
+
+      const availability=document.createElement('div');
+      availability.className='rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-4';
+      availability.appendChild(text('strong','text-sm text-emerald-100','Available crew / unassign drop zone'));
+      const crew=document.createElement('div');crew.className='mt-3 flex flex-wrap gap-2';
+      snapshot.availableCrew.forEach((bartender)=>crew.appendChild(makeBartenderDragChip(bartender)));
+      if(!snapshot.availableCrew.length)crew.appendChild(text('span','text-xs text-emerald-100/70','No unassigned active bartenders are available.'));
+      availability.appendChild(crew);
+      availability.addEventListener('dragover',(event)=>{event.preventDefault();availability.classList.add('ring-2','ring-emerald-300/60');});
+      availability.addEventListener('dragleave',()=>availability.classList.remove('ring-2','ring-emerald-300/60'));
+      availability.addEventListener('drop',async(event)=>{
+        event.preventDefault();availability.classList.remove('ring-2','ring-emerald-300/60');
+        let data=null;try{data=JSON.parse(event.dataTransfer?.getData('text/plain')||'{}');}catch{}
+        if(!data?.bartenderId||!data?.sourceRecordId)return;
+        const source=(payload.records||[]).find((entry)=>entry.id===data.sourceRecordId);
+        if(!source)return;
+        const ids=(source.booking?.bartenderAssignments||[]).map((entry)=>entry.id).filter((id)=>id!==data.bartenderId);
+        await saveCalendarAssignments(source,ids,status);
+      });
+      wrap.appendChild(availability);
+      return wrap;
+    }
+
+    function renderStaffingCalendar() {
+      if(!staffCalendarGrid)return;
+      if(staffCalendarView)staffCalendarView.value=staffingCalendarState.view;
+      if(staffCalendarLabel)staffCalendarLabel.textContent=staffingCalendarTitle();
+      staffCalendarGrid.innerHTML='';
+      const dates=staffingCalendarDates();
+      if(staffingCalendarState.view==='day'){
+        staffCalendarGrid.appendChild(renderStaffingDayDetail(dates[0]));
+        return;
+      }
+      const grid=document.createElement('div');
+      grid.className=staffingCalendarState.view==='month'?'grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7':'grid gap-2 sm:grid-cols-2 xl:grid-cols-7';
+      if(staffingCalendarState.view==='month'&&window.matchMedia?.('(min-width:1280px)').matches){
+        ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach((day)=>grid.appendChild(text('div','px-2 text-[.5rem] font-black uppercase tracking-[.08em] text-white/35',day)));
+      }
+      dates.forEach((dateObj)=>{
+        const cell=staffingDayCard(dateObj,staffingCalendarState.view==='month');
+        if(staffingCalendarState.view==='month'&&dateObj.getMonth()!==staffingCalendarState.anchor.getMonth())cell.classList.add('opacity-40');
+        grid.appendChild(cell);
+      });
+      staffCalendarGrid.appendChild(grid);
+    }
+
+    function bartenderAssignmentHistory(bartenderId,excludeRecordId='') {
+      return mobileBookedRecords().filter((record)=>record.id!==excludeRecordId&&(record.booking?.bartenderAssignments||[]).some((entry)=>entry.id===bartenderId));
+    }
+
+    function frontendWeekKey(date) {
+      if(!date)return '';
+      const parsed=new Date(date+'T12:00:00');
+      if(Number.isNaN(parsed.getTime()))return '';
+      parsed.setDate(parsed.getDate()-parsed.getDay());
+      return localDateKey(parsed);
+    }
+
+    function bartenderWorkloadForDate(bartenderId,eventDate,excludeRecordId='') {
+      const history=bartenderAssignmentHistory(bartenderId,excludeRecordId);
+      const week=frontendWeekKey(eventDate);
+      const month=String(eventDate||'').slice(0,7);
+      return {
+        week:history.filter((record)=>frontendWeekKey(recordEventDate(record))===week).length,
+        month:history.filter((record)=>recordEventDate(record).slice(0,7)===month).length,
+      };
+    }
+
+    function bartenderWorkloadWarnings(bartender,eventDate,excludeRecordId='') {
+      const load=bartenderWorkloadForDate(bartender.id,eventDate,excludeRecordId);
+      const warnings=[];
+      const projectedWeek=load.week+1;
+      const projectedMonth=load.month+1;
+      if(Number(bartender.maxEventsPerWeek||0)>0&&projectedWeek>Number(bartender.maxEventsPerWeek))warnings.push(projectedWeek+'/'+bartender.maxEventsPerWeek+' events this week');
+      if(Number(bartender.maxEventsPerMonth||0)>0&&projectedMonth>Number(bartender.maxEventsPerMonth))warnings.push(projectedMonth+'/'+bartender.maxEventsPerMonth+' events this month');
+      return {load,projectedWeek,projectedMonth,warnings};
+    }
+
+    function bartenderPerformanceEntries() {
+      const rows=[];
+      mobileBookedRecords().forEach((record)=>{
+        const assignments=Array.isArray(record.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[];
+        const performance=Array.isArray(record.booking?.bartenderPerformance)?record.booking.bartenderPerformance:[];
+        assignments.forEach((assignment)=>{
+          const actual=performance.find((entry)=>entry.bartenderId===assignment.id)||null;
+          rows.push({record,assignment,performance:actual});
+        });
+      });
+      return rows;
+    }
+
+    function bartenderPerformanceStats() {
+      const roster=planningSettings().staffing.bartenders;
+      const entries=bartenderPerformanceEntries();
+      return roster.map((bartender)=>{
+        const rows=entries.filter((entry)=>entry.assignment.id===bartender.id);
+        const completed=rows.filter((entry)=>entry.performance);
+        const guests=rows.reduce((sum,entry)=>sum+Math.max(0,Number(entry.record.inquiry?.guestCount||0)),0);
+        const actualHours=completed.reduce((sum,entry)=>sum+Math.max(0,Number(entry.performance.actualHours||0)),0);
+        const fallbackHours=rows.reduce((sum,entry)=>sum+Math.max(0,Number(entry.record.inquiry?.serviceHours||0)),0);
+        const tips=completed.reduce((sum,entry)=>sum+Math.max(0,Number(entry.performance.tips||0)),0);
+        const ratings=completed.map((entry)=>Number(entry.performance.clientRating||0)).filter((value)=>value>0);
+        const reliabilityRated=completed.filter((entry)=>entry.performance.reliability&&entry.performance.reliability!=='not-rated');
+        const reliable=reliabilityRated.filter((entry)=>entry.performance.reliability==='on-time').length;
+        return {
+          bartender,
+          events:rows.length,
+          hours:actualHours||fallbackHours,
+          averageGuests:rows.length?guests/rows.length:0,
+          tips,
+          averageRating:ratings.length?ratings.reduce((a,b)=>a+b,0)/ratings.length:0,
+          ratingCount:ratings.length,
+          reliability:reliabilityRated.length?reliable/reliabilityRated.length:null,
+          reliabilityRated:reliabilityRated.length,
+          feedback:completed.map((entry)=>entry.performance.clientFeedback).filter(Boolean),
+        };
+      });
+    }
+
+    function bartenderPairStats() {
+      const pairs=new Map();
+      mobileBookedRecords().forEach((record)=>{
+        const ids=(record.booking?.bartenderAssignments||[]).map((entry)=>entry.id).sort();
+        for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+          const key=ids[i]+'|'+ids[j];
+          const row=pairs.get(key)||{ids:[ids[i],ids[j]],events:0,ratings:[],onTime:0,reliabilityRated:0};
+          row.events+=1;
+          const perf=record.booking?.bartenderPerformance||[];
+          [ids[i],ids[j]].forEach((id)=>{
+            const p=perf.find((entry)=>entry.bartenderId===id);
+            if(!p)return;
+            if(Number(p.clientRating||0)>0)row.ratings.push(Number(p.clientRating));
+            if(p.reliability&&p.reliability!=='not-rated'){row.reliabilityRated+=1;if(p.reliability==='on-time')row.onTime+=1;}
+          });
+          pairs.set(key,row);
+        }
+      });
+      const roster=new Map(planningSettings().staffing.bartenders.map((bartender)=>[bartender.id,bartender.name]));
+      return [...pairs.values()].map((row)=>({
+        ...row,
+        names:row.ids.map((id)=>roster.get(id)||id),
+        averageRating:row.ratings.length?row.ratings.reduce((a,b)=>a+b,0)/row.ratings.length:0,
+        reliability:row.reliabilityRated?row.onTime/row.reliabilityRated:null,
+      })).sort((a,b)=>b.events-a.events||b.averageRating-a.averageRating).slice(0,8);
+    }
+
+    function renderBartenderPerformanceAnalytics() {
+      if(!bartenderPerformanceTable||!bartenderPerformanceSummary)return;
+      const stats=bartenderPerformanceStats();
+      const totalEvents=new Set(bartenderPerformanceEntries().map((entry)=>entry.record.id)).size;
+      const totalHours=stats.reduce((sum,row)=>sum+row.hours,0);
+      const totalTips=stats.reduce((sum,row)=>sum+row.tips,0);
+      const rated=stats.filter((row)=>row.averageRating>0);
+      const averageRating=rated.length?rated.reduce((sum,row)=>sum+row.averageRating,0)/rated.length:0;
+      bartenderPerformanceSummary.innerHTML='';
+      [['Events staffed',String(totalEvents)],['Recorded / estimated hours',totalHours.toFixed(1)],['Recorded tips',money(totalTips)],['Avg client rating',averageRating?averageRating.toFixed(1)+'/5':'—']].forEach(([label,value])=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-white/10 bg-black/10 p-3';
+        card.append(text('p','text-[.5rem] font-black uppercase tracking-[.08em] text-white/40',label),text('strong','display mt-1 block text-2xl text-white',value));
+        bartenderPerformanceSummary.appendChild(card);
+      });
+      bartenderPerformanceTable.innerHTML='';
+      stats.sort((a,b)=>b.events-a.events||b.tips-a.tips).forEach((row)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-white/10 bg-black/10 p-4';
+        const reliability=row.reliability==null?'—':Math.round(row.reliability*100)+'% on-time';
+        card.append(
+          text('strong','text-sm text-white',row.bartender.name),
+          text('p','mt-1 text-[.6rem] text-white/50',row.events+' events · '+row.hours.toFixed(1)+' hr · '+Math.round(row.averageGuests)+' avg guests · '+money(row.tips)+' tips'),
+          text('p','mt-1 text-[.6rem] text-white/50',reliability+' · '+(row.averageRating?row.averageRating.toFixed(1)+'/5 from '+row.ratingCount+' rating'+(row.ratingCount===1?'':'s'):'no client ratings'))
+        );
+        if(row.feedback.length)card.appendChild(text('p','mt-2 text-[.58rem] italic text-white/40','Latest feedback: “'+row.feedback[row.feedback.length-1].slice(0,180)+'”'));
+        bartenderPerformanceTable.appendChild(card);
+      });
+      if(!stats.length)bartenderPerformanceTable.appendChild(text('p','text-sm text-white/45','Add bartenders to the roster to begin performance tracking.'));
+      if(bartenderPairAnalytics){
+        bartenderPairAnalytics.innerHTML='';
+        const pairs=bartenderPairStats();
+        pairs.forEach((row)=>{
+          const detail=row.events+' event'+(row.events===1?'':'s')+' together'+(row.averageRating?' · '+row.averageRating.toFixed(1)+'/5':'')+(row.reliability!=null?' · '+Math.round(row.reliability*100)+'% on-time':'');
+          bartenderPairAnalytics.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-xs text-white/60',row.names.join(' + ')+' · '+detail));
+        });
+        if(!pairs.length)bartenderPairAnalytics.appendChild(text('p','text-sm text-white/45','Pair analytics will populate after multiple bartenders are assigned together.'));
+      }
+    }
+
+    function staffingRecommendationForBartender(record,bartender) {
+      const eventDate=recordEventDate(record);
+      if(!eventDate||bartender.active===false||bartender.unavailableDates?.includes(eventDate))return null;
+      const conflict=mobileBookedRecords().some((other)=>other.id!==record.id&&recordEventDate(other)===eventDate&&(other.booking?.bartenderAssignments||[]).some((entry)=>entry.id===bartender.id));
+      if(conflict)return null;
+      const history=bartenderAssignmentHistory(bartender.id,record.id);
+      const eventMonth=eventDate.slice(0,7);
+      const eventTime=Date.parse(eventDate+'T12:00:00');
+      const monthLoad=history.filter((item)=>recordEventDate(item).slice(0,7)===eventMonth).length;
+      const workload=bartenderWorkloadWarnings(bartender,eventDate,record.id);
+      const nearbyLoad=history.filter((item)=>{
+        const other=Date.parse(recordEventDate(item)+'T12:00:00');
+        return Number.isFinite(other)&&Math.abs(other-eventTime)<=7*86400000;
+      }).length;
+      const prior=history.filter((item)=>recordEventDate(item)<eventDate);
+      const guests=Math.max(0,Number(record.inquiry?.guestCount||0));
+      const guestBucket=guests<=50?0:guests<=100?1:guests<=150?2:3;
+      const similarSize=prior.filter((item)=>{
+        const other=Math.max(0,Number(item.inquiry?.guestCount||0));
+        return (other<=50?0:other<=100?1:other<=150?2:3)===guestBucket;
+      }).length;
+      const samePackage=prior.filter((item)=>recordPackage(item)===recordPackage(record)).length;
+      const overloadPenalty=workload.warnings.length*20;
+      const workloadPoints=Math.max(-20,20-(monthLoad*4)-(nearbyLoad*3)-overloadPenalty);
+      const experiencePoints=Math.min(15,prior.length*2);
+      const sizePoints=Math.min(7,similarSize*1.5);
+      const packagePoints=Math.min(3,samePackage);
+      const score=Math.round(Math.max(0,Math.min(100,55+workloadPoints+experiencePoints+sizePoints+packagePoints)));
+      return {
+        bartender,
+        score,
+        monthLoad,
+        nearbyLoad,
+        priorAssignments:prior.length,
+        similarSize,
+        samePackage,
+        workloadWarnings:workload.warnings,
+        reasons:[
+          workload.warnings.length?'Workload warning: '+workload.warnings.join('; '):(monthLoad?monthLoad+' assignment'+(monthLoad===1?'':'s')+' this month':'light monthly workload'),
+          prior.length?prior.length+' prior Mobile Bar assignment'+(prior.length===1?'':'s'):'new to recorded assignments',
+          similarSize?similarSize+' similar-size event'+(similarSize===1?'':'s'):'no similar-size history yet',
+        ],
+      };
+    }
+
+    function staffingRecommendations(record) {
+      const needed=requiredBartenderCount(record);
+      const rows=planningSettings().staffing.bartenders
+        .map((bartender)=>staffingRecommendationForBartender(record,bartender))
+        .filter(Boolean)
+        .sort((a,b)=>b.score-a.score||a.monthLoad-b.monthLoad||a.bartender.name.localeCompare(b.bartender.name));
+      return {needed,rows,recommended:rows.slice(0,needed)};
+    }
+
+    function renderBookingSimulator(all) {
+      if(!bookingSimResults||!bookingSimAverages)return;
+      const stats=packagePlanningStats(all);
+      const target=Math.max(0,Number(bookingSimTarget?.value||0));
+      const settings=planningSettings();
+      if(capacitySettingsForm){
+        capacitySettingsForm.elements.bartenderCapacityPerDay.value=String(settings.simulator.bartenderCapacityPerDay);
+        capacitySettingsForm.elements.maxBookingsPerMonth.value=String(settings.simulator.maxBookingsPerMonth);
+        capacitySettingsForm.elements.planningHorizonMonths.value=String(settings.simulator.planningHorizonMonths);
+      }
+      if(staffingSettingsForm&&document.activeElement!==staffingSettingsForm.elements.blackoutDates)staffingSettingsForm.elements.blackoutDates.value=settings.staffing.blackoutDates.join(', ');
+      bookingSimAverages.innerHTML='';
+      ['mobile-oahu','mobile-maui','mobile-big-island'].forEach((packageId)=>{
+        bookingSimAverages.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',packageLabel(packageId)+' · '+(stats[packageId].averageProfit?money(stats[packageId].averageProfit):'—')+' avg profit'));
+      });
+      bookingSimResults.innerHTML='';
+      if(!target){
+        bookingSimResults.appendChild(text('p','text-sm text-white/45','Enter a gross-profit goal to model feasible bookings.'));
+        return;
+      }
+      const mixes=feasibleMixes(target,stats,all);
+      if(!mixes.length){
+        bookingSimResults.appendChild(text('p','text-sm text-red-200','No feasible mix fits the current blackout, bartender, monthly-capacity, and planning-horizon rules.'));
+        return;
+      }
+      mixes.forEach((mix,index)=>{
+        const names=mix.counts.map((count,i)=>count?count+' '+['Oahu','Maui','Big Island'][i]:'').filter(Boolean).join(' + ');
+        const dates=mix.schedule.map((entry)=>formatDateKey(entry.date)).slice(0,6).join(', ');
+        bookingSimResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',(index?'Alternative: ':'Best feasible: ')+names+' · '+money(mix.profit)+' · earliest dates '+dates));
+      });
+    }
+
+    function reachedStage(group,stage) {
+      if(stage==='inquiry')return true;
+      if(stage==='lead')return group.some((record)=>['lead','proposal','booked'].includes(record.stage));
+      if(stage==='draft'||stage==='proposal')return group.some((record)=>record.kind==='proposal');
+      const acceptable=stage==='sent'?['sent','viewed','accepted','booked']:stage==='viewed'?['viewed','accepted','booked']:[stage,'booked'];
+      return group.some((record)=>record.kind==='proposal'&&acceptable.includes(String(record.proposal?.status||record.status||'')));
+    }
+
+    function rollingModel(all) {
+      const groups=matureOpportunityGroups(all);
+      const current=scenarioWeights('expected');
+      const suggested={...current};
+      const rows=[];
+      forecastStages.forEach((stage)=>{
+        const eligible=groups.filter((group)=>reachedStage(group,stage));
+        const booked=eligible.filter(groupBooked).length;
+        const actual=eligible.length?booked/eligible.length:null;
+        const enough=eligible.length>=10;
+        if(enough&&actual!=null)suggested[stage]=Math.max(0,Math.min(.99,Math.round(actual*20)/20));
+        rows.push({stage,samples:eligible.length,booked,actual,current:Number(current[stage]||0),suggested:Number(suggested[stage]||0),enough});
+      });
+      return {groups,rows,suggested,hasRecommendations:rows.some((row)=>row.enough&&Math.abs(row.suggested-row.current)>=.049)};
+    }
+
+    function segmentedConversions(all) {
+      const calibration=segmentCalibration(all);
+      return Object.entries(calibration.dimensions).map(([key,map])=>({
+        key,
+        rows:[...map.values()].filter((row)=>row.total>=3).sort((a,b)=>b.total-a.total).slice(0,8),
+      }));
+    }
+
+    function renderForecast(all,ranges) {
+      if(mobileScenarioCards){
+        mobileScenarioCards.innerHTML='';
+        ['conservative','expected','aggressive'].forEach((scenario)=>{
+          const projection=mobileProfitProjection(recordsInRange(all,ranges.annual),scenario);
+          const button=text('button','text-left rounded-xl border border-white/10 bg-black/10 p-3 text-white',scenario+' · '+money(projection.projectedProfit));
+          button.type='button';
+          button.addEventListener('click',()=>{mobileForecastScenario.value=scenario;renderMobileProfitGoalProjection();});
+          mobileScenarioCards.appendChild(button);
+        });
+      }
+      if(forecastSettingsGrid){
+        forecastSettingsGrid.innerHTML='';
+        ['conservative','expected','aggressive'].forEach((scenario)=>{
+          const box=document.createElement('div');
+          box.className='rounded-xl border border-white/10 p-3';
+          box.appendChild(text('strong','capitalize text-white',scenario));
+          const grid=document.createElement('div');
+          grid.className='mt-2 grid gap-2 sm:grid-cols-4';
+          forecastStages.forEach((stage)=>{
+            const label=document.createElement('label');
+            label.className='text-[.5rem] uppercase text-white/45';
+            label.textContent=stage;
+            const input=document.createElement('input');
+            input.name=scenario+'_'+stage;
+            input.type='number';
+            input.min='0';
+            input.max='100';
+            input.value=String(Math.round(Number(scenarioWeights(scenario)[stage]||0)*100));
+            input.className='mt-1 w-full rounded-lg border border-white/15 bg-[var(--koa-ink)] px-2 py-2 text-white';
+            label.appendChild(input);
+            grid.appendChild(label);
+          });
+          box.appendChild(grid);
+          forecastSettingsGrid.appendChild(box);
+        });
+      }
+
+      const model=rollingModel(all);
+      rollingForecastRecommendations=model;
+      if(rollingForecastResults){
+        rollingForecastResults.innerHTML='';
+        model.rows.forEach((row)=>{
+          rollingForecastResults.appendChild(text('div','rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60',row.stage+': '+row.samples+' mature · '+(row.actual==null?'—':Math.round(row.actual*100)+'% actual')+' · '+Math.round(row.current*100)+'% expected'+(row.enough?' · '+Math.round(row.suggested*100)+'% recommended':' · need 10 samples')));
+        });
+      }
+      applyForecastRecommendations?.classList.toggle('hidden',!model.hasRecommendations||!profitSettingsAccess);
+
+      if(segmentedConversionResults){
+        segmentedConversionResults.innerHTML='';
+        segmentedConversions(all).forEach((segment)=>{
+          const box=document.createElement('div');
+          box.className='rounded-lg border border-white/10 p-3';
+          box.appendChild(text('strong','capitalize text-white',segment.key==='guests'?'Guest count':segment.key));
+          segment.rows.forEach((row)=>box.appendChild(text('p','mt-1 text-[.58rem] text-white/50',row.label+' · '+row.booked+'/'+row.total+' booked · '+Math.round(row.booked/row.total*100)+'%')));
+          segmentedConversionResults.appendChild(box);
+        });
+      }
+    }
+
+    function seasonalityProfile(all) {
+      const counts=Array(12).fill(1);
+      const booked=all.filter((record)=>record.stage==='booked'&&recordEventDate(record));
+      booked.forEach((record)=>{
+        const month=Number(recordEventDate(record).slice(5,7))-1;
+        if(month>=0&&month<12)counts[month]+=1;
+      });
+      const average=counts.reduce((sum,value)=>sum+value,0)/12;
+      return counts.map((value)=>({count:value,index:average>0?value/average:1}));
+    }
+
+    function historicalPackageMixForMonth(all,monthIndex) {
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const counts=ids.map(()=>1);
+      all.filter((record)=>record.stage==='booked'&&recordEventDate(record)).forEach((record)=>{
+        const month=Number(recordEventDate(record).slice(5,7))-1;
+        if(month!==monthIndex)return;
+        const index=ids.indexOf(recordPackage(record));
+        if(index>=0)counts[index]+=1;
+      });
+      const total=counts.reduce((sum,value)=>sum+value,0);
+      return counts.map((value)=>value/total);
+    }
+
+    function renderMonthlySalesPlan(all) {
+      if(!monthlySalesPlanResults)return;
+      const settings=payload.mobileBarProfitSettings||{};
+      const target=Number(settings.annualGrossProfitTarget||0);
+      const ranges=currentGoalRanges();
+      const bookedYtd=recordsInRange(all,ranges.annual).filter((record)=>record.stage==='booked').reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const remaining=Math.max(0,target-bookedYtd);
+      const now=new Date();
+      const stats=packagePlanningStats(all);
+      const ids=['mobile-oahu','mobile-maui','mobile-big-island'];
+      const seasonality=seasonalityProfile(all);
+      monthlySalesPlanResults.innerHTML='';
+      if(!target){
+        monthlySalesPlanResults.appendChild(text('p','text-sm text-white/45','Set an annual gross-profit target to generate a seasonality-weighted monthly package plan.'));
+        return;
+      }
+      const remainingMonths=[];
+      for(let month=now.getMonth();month<12;month++)remainingMonths.push(month);
+      const seasonalityTotal=remainingMonths.reduce((sum,month)=>sum+seasonality[month].index,0)||remainingMonths.length;
+      remainingMonths.forEach((month)=>{
+        const monthWeight=seasonality[month].index/seasonalityTotal;
+        const monthTarget=remaining*monthWeight;
+        const packageMix=historicalPackageMixForMonth(all,month);
+        const plan=ids.map((id,index)=>({
+          id,
+          count:stats[id].averageProfit>0?Math.ceil((monthTarget*packageMix[index])/stats[id].averageProfit):0,
+        }));
+        const label=new Intl.DateTimeFormat('en-US',{month:'long'}).format(new Date(now.getFullYear(),month,1));
+        const demandLabel=seasonality[month].index>=1.15?'high demand':seasonality[month].index<=.85?'slower month':'typical demand';
+        monthlySalesPlanResults.appendChild(text('div','rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-white',label+' · '+demandLabel+' ('+seasonality[month].index.toFixed(2)+'×) · '+plan.map((entry,index)=>entry.count+' '+['Oahu','Maui','Big Island'][index]).join(' · ')+' · target '+money(monthTarget)+' profit'));
+      });
     }
 
     function renderMobileProfitGoalProjection() {
-      const allMobile=(payload.records||[])
-        .filter(isMobileBarRecord)
-        .filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
-      const now=new Date();
-      const currentMonth=localDateKey(new Date(now.getFullYear(),now.getMonth(),1)).slice(0,7);
-      const monthRows=allMobile.filter((record)=>mobileEventMonth(record)===currentMonth);
-      const bookedRows=monthRows.filter((record)=>record.stage==='booked');
-      const openRows=monthRows.filter((record)=>record.stage!=='booked');
-      const bookedProfit=bookedRows.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
-      const projectedOpenProfit=openRows.reduce((sum,record)=>{
-        const profit=Number(profitValues(record).profit||0);
-        return sum+(profit*mobileProfitProbability(record));
-      },0);
-      const projectedProfit=bookedProfit+projectedOpenProfit;
-      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0));
-      const avgBookedProfit=historicalBooked.length?historicalBooked.reduce((sum,value)=>sum+value,0)/historicalBooked.length:0;
-      const target=Math.max(0,Number(payload.mobileBarProfitSettings?.monthlyGrossProfitTarget||0));
-      const delta=projectedProfit-target;
-      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
-
-      if(mobileProfitGoalTitle)mobileProfitGoalTitle.textContent=monthLabel(currentMonth)+' gross-profit goal';
-      if(mobileProfitGoalInput&&document.activeElement!==mobileProfitGoalInput)mobileProfitGoalInput.value=target?String(Math.round(target*100)/100):'';
-      if(mobileGoalTarget)mobileGoalTarget.textContent=target?money(target):'Not set';
-      if(mobileGoalBooked)mobileGoalBooked.textContent=money(bookedProfit);
-      if(mobileGoalProjected)mobileGoalProjected.textContent=money(projectedProfit);
-      if(mobileGoalAverage)mobileGoalAverage.textContent=historicalBooked.length?money(avgBookedProfit):'—';
-      if(mobileGoalGap){
-        mobileGoalGap.textContent=target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—';
-      }
-      if(mobileGoalGapCopy){
-        mobileGoalGapCopy.textContent=!target?'Set a monthly goal to compare.':delta>=0?'Projected ahead of target.':'Projected below target.';
-      }
-      if(mobileGoalGapCard){
-        mobileGoalGapCard.className='rounded-lg border p-3 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
-      }
-      if(mobileGoalBookings)mobileGoalBookings.textContent=bookingsNeeded==null?'—':String(bookingsNeeded);
-      if(mobileGoalBookingsCopy){
-        mobileGoalBookingsCopy.textContent=!target
-          ? 'Set a goal first.'
-          : bookingsNeeded===0
-            ? 'Projected target reached.'
-            : avgBookedProfit>0
-              ? 'At '+money(avgBookedProfit)+' average booked profit.'
-              : 'More booked history is needed.';
-      }
-      if(mobileGoalProgress){
-        const pct=target>0?Math.max(0,Math.min(100,(projectedProfit/target)*100)):0;
-        mobileGoalProgress.style.width=pct+'%';
-        mobileGoalProgress.className='h-full rounded-full '+(target>0&&projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
-      }
+      const all=(payload.records||[]).filter(isMobileBarRecord).filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
+      const activeScenario=String(mobileForecastScenario?.value||'expected');
+      const ranges=currentGoalRanges();
+      const historical=all.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
+      const averageBookedProfit=historical.length?historical.reduce((a,b)=>a+b,0)/historical.length:0;
+      const settings=payload.mobileBarProfitSettings||{};
+      mobileProfitGoalInputs.forEach((input)=>{
+        const key=input.dataset.goalInput;
+        const property=key==='monthly'?'monthlyGrossProfitTarget':key==='quarterly'?'quarterlyGrossProfitTarget':'annualGrossProfitTarget';
+        if(document.activeElement!==input)input.value=String(Number(settings[property]||0)||'');
+      });
+      mobileGoalCards.forEach((card)=>{
+        const range=ranges[card.dataset.goalCard];
+        if(range)renderGoalCard(card,range,mobileProfitProjection(recordsInRange(all,range),activeScenario),Number(settings[range.targetKey]||0),averageBookedProfit);
+      });
+      renderBartenderRows();
+      renderBookingSimulator(all);
+      renderForecast((payload.records||[]).filter(isMobileBarRecord),ranges);
+      renderMonthlySalesPlan(all);
     }
 
     function weightedMargin(rows) {
@@ -2534,6 +3663,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderMobileBar() {
+      mobileCalibrationCache=null;
       const all=(payload.records||[]).filter(isMobileBarRecord);
       const shown=filteredMobileRecords();
       if(mobileCount) mobileCount.textContent=shown.length+' of '+all.length+' records';
@@ -2573,6 +3703,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       renderMobileAnalytics();
       renderProfitabilityDashboard();
+      renderStaffingCalendar();
+      renderBartenderPerformanceAnalytics();
 
       if(mobileReport){
         mobileReport.innerHTML='';
@@ -2846,13 +3978,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderAccountingAlert();renderStats();renderPerformance();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderPaymentDashboard();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
     }
 
-    accountingAlertToggle?.addEventListener('click',()=>{
-      const expanded=accountingAlertToggle.getAttribute('aria-expanded')==='true';
-      accountingAlertToggle.setAttribute('aria-expanded',String(!expanded));
-      accountingAlertPanel?.classList.toggle('hidden',expanded);
-      if(accountingAlertAction)accountingAlertAction.textContent=expanded?'Show mismatch details ↓':'Hide mismatch details ↑';
-    });
-        searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
+    searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
     document.querySelector('[data-performance-period]')?.addEventListener('change',renderPerformance);
     [mobileFilterStage,mobileFilterPackage,mobileFilterQuote,mobileFilterFollowup,mobileFilterMargin,mobileSort].forEach((control)=>control?.addEventListener('change',renderMobileBar));
     mobileProfitScope?.addEventListener('change',renderProfitabilityDashboard);
@@ -2868,16 +3994,123 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     [mobileProfitFrom,mobileProfitTo].forEach((control)=>control?.addEventListener('change',renderProfitabilityDashboard));
     mobileProfitGoalForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
-      const target=Math.max(0,Number(mobileProfitGoalInput?.value||0));
-      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving monthly gross-profit target…';
+      const settings={
+        monthlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.monthlyGrossProfitTarget?.value||0),
+        quarterlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.quarterlyGrossProfitTarget?.value||0),
+        annualGrossProfitTarget:Number(mobileProfitGoalForm.elements.annualGrossProfitTarget?.value||0),
+      };
       try{
-        const result=await api({action:'update-mobile-bar-profit-settings',settings:{monthlyGrossProfitTarget:target}});
-        payload.mobileBarProfitSettings=result.settings||{monthlyGrossProfitTarget:target};
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly gross-profit target saved.';
+        const result=await api({action:'update-mobile-bar-profit-settings',settings});
+        payload.mobileBarProfitSettings=result.settings;
         renderMobileProfitGoalProjection();
       }catch(error){
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goal.';
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save goals.';
       }
+    });
+
+    capacitySettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const simulator={
+        bartenderCapacityPerDay:Number(capacitySettingsForm.elements.bartenderCapacityPerDay?.value||0),
+        maxBookingsPerMonth:Number(capacitySettingsForm.elements.maxBookingsPerMonth?.value||0),
+        planningHorizonMonths:Number(capacitySettingsForm.elements.planningHorizonMonths?.value||6),
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{simulator}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save capacity settings.';
+      }
+    });
+
+    staffingSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const bartenders=[...bartenderAvailabilityRows.querySelectorAll('[data-bartender-row]')]
+        .map((row)=>({
+          id:row.dataset.bartenderId||('bartender-'+Date.now().toString(36)+'-'+(++bartenderDraftCounter)),
+          name:row.querySelector('[data-bartender-name]').value.trim(),
+          active:row.querySelector('[data-bartender-active]').checked,
+          unavailableDates:row.querySelector('[data-bartender-dates]').value.split(/[\s,]+/).filter(Boolean),
+          maxEventsPerWeek:Number(row.querySelector('[data-bartender-max-week]').value||0),
+          maxEventsPerMonth:Number(row.querySelector('[data-bartender-max-month]').value||0),
+        }))
+        .filter((bartender)=>bartender.name);
+      const staffing={
+        blackoutDates:String(staffingSettingsForm.elements.blackoutDates.value||'').split(/[\s,]+/).filter(Boolean),
+        bartenders,
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{staffing}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save staffing availability.';
+      }
+    });
+
+    addBartenderButton?.addEventListener('click',()=>addBartenderRow());
+
+    forecastSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(forecastSettingsForm);
+      const forecastProbabilities={};
+      ['conservative','expected','aggressive'].forEach((scenario)=>{
+        forecastProbabilities[scenario]={};
+        forecastStages.forEach((stage)=>{
+          const percentValue=Number(data.get(scenario+'_'+stage)||0);
+          forecastProbabilities[scenario][stage]=Math.max(0,Math.min(1,percentValue/100));
+        });
+      });
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save forecast probabilities.';
+      }
+    });
+
+    applyForecastRecommendations?.addEventListener('click',async()=>{
+      if(!rollingForecastRecommendations?.hasRecommendations)return;
+      const forecastProbabilities={
+        ...(payload.mobileBarProfitSettings?.forecastProbabilities||fallbackScenarioWeights),
+        expected:rollingForecastRecommendations.suggested,
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to apply forecast recommendations.';
+      }
+    });
+
+    bookingSimTarget?.addEventListener('input',renderMobileProfitGoalProjection);
+    mobileForecastScenario?.addEventListener('change',renderMobileProfitGoalProjection);
+    staffCalendarView?.addEventListener('change',()=>{
+      staffingCalendarState.view=staffCalendarView.value||'month';
+      renderStaffingCalendar();
+    });
+    staffCalendarToday?.addEventListener('click',()=>{
+      staffingCalendarState.anchor=new Date();
+      renderStaffingCalendar();
+    });
+    staffCalendarPrev?.addEventListener('click',()=>{
+      const anchor=new Date(staffingCalendarState.anchor);
+      if(staffingCalendarState.view==='month')anchor.setMonth(anchor.getMonth()-1);
+      else if(staffingCalendarState.view==='week')anchor.setDate(anchor.getDate()-7);
+      else anchor.setDate(anchor.getDate()-1);
+      staffingCalendarState.anchor=anchor;
+      renderStaffingCalendar();
+    });
+    staffCalendarNext?.addEventListener('click',()=>{
+      const anchor=new Date(staffingCalendarState.anchor);
+      if(staffingCalendarState.view==='month')anchor.setMonth(anchor.getMonth()+1);
+      else if(staffingCalendarState.view==='week')anchor.setDate(anchor.getDate()+7);
+      else anchor.setDate(anchor.getDate()+1);
+      staffingCalendarState.anchor=anchor;
+      renderStaffingCalendar();
     });
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
@@ -2927,6 +4160,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelectorAll('[data-close-activity]').forEach((button)=>button.addEventListener('click',()=>activityDialog?.close()));
     document.querySelectorAll('[data-close-booking]').forEach((button)=>button.addEventListener('click',()=>bookingDialog?.close()));
+    applyStaffingRecommendations?.addEventListener('click',()=>{
+      if(!bookingBartenderForm||!currentStaffingRecommendationIds.length)return;
+      bookingBartenderForm.querySelectorAll('input[name="bartenderId"]').forEach((input)=>{
+        if(!input.disabled)input.checked=currentStaffingRecommendationIds.includes(input.value);
+      });
+      if(bookingBartenderStatus)bookingBartenderStatus.textContent='Recommended crew selected. Save bartender assignments to confirm.';
+    });
+    bookingBartenderForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      if(!bookingRecord)return;
+      const bartenderIds=[...bookingBartenderForm.querySelectorAll('input[name="bartenderId"]:checked')].map((input)=>input.value);
+      if(bookingBartenderStatus)bookingBartenderStatus.textContent='Saving bartender assignments…';
+      try{
+        const result=await api({action:'update-mobile-bar-bartender-assignments',recordId:bookingRecord.id,bartenderIds});
+        bookingRecord=result.record||bookingRecord;
+        await load(String(searchInput?.value||'').trim());
+        const refreshed=(payload.records||[]).find((entry)=>entry.id===bookingRecord.id)||bookingRecord;
+        bookingRecord=refreshed;
+        openBooking(refreshed);
+        if(bookingBartenderStatus)bookingBartenderStatus.textContent=(result.workloadWarnings||[]).length?'Saved with workload warning: '+result.workloadWarnings.join(' '):'Bartender assignments saved.';
+      }catch(error){
+        if(bookingBartenderStatus)bookingBartenderStatus.textContent=error?.message||'Unable to save bartender assignments.';
+      }
+    });
 
     qboSyncEstimateButton?.addEventListener('click',async()=>{
       if(!editingRecord||!quickBooksReady())return;
