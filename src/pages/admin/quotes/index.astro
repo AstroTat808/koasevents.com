@@ -3359,13 +3359,100 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderProfitabilityDashboard();
     });
     [mobileProfitFrom,mobileProfitTo].forEach((control)=>control?.addEventListener('change',renderProfitabilityDashboard));
-    mobileProfitGoalForm?.addEventListener('submit',async(event)=>{event.preventDefault();const settings={monthlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.monthlyGrossProfitTarget?.value||0),quarterlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.quarterlyGrossProfitTarget?.value||0),annualGrossProfitTarget:Number(mobileProfitGoalForm.elements.annualGrossProfitTarget?.value||0)};try{const r=await api({action:'update-mobile-bar-profit-settings',settings});payload.mobileBarProfitSettings=r.settings;renderMobileProfitGoalProjection();}catch(e){if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=e.message||'Unable to save goals.';}});
-    capacitySettingsForm?.addEventListener('submit',async(event)=>{event.preventDefault();const simulator={bartenderCapacityPerDay:Number(capacitySettingsForm.elements.bartenderCapacityPerDay?.value||0),maxBookingsPerMonth:Number(capacitySettingsForm.elements.maxBookingsPerMonth?.value||0),planningHorizonMonths:Number(capacitySettingsForm.elements.planningHorizonMonths?.value||6)};const r=await api({action:'update-mobile-bar-profit-settings',settings:{simulator}});payload.mobileBarProfitSettings=r.settings;renderMobileProfitGoalProjection();});
-    staffingSettingsForm?.addEventListener('submit',async(event)=>{event.preventDefault();const bartenders=[...bartenderAvailabilityRows.querySelectorAll('[data-bartender-row]')].map((row,i)=>({id:'bartender-'+(i+1),name:row.querySelector('[data-bartender-name]').value.trim(),active:row.querySelector('[data-bartender-active]').checked,unavailableDates:row.querySelector('[data-bartender-dates]').value.split(/[\s,]+/).filter(Boolean)})).filter(b=>b.name);const staffing={blackoutDates:String(staffingSettingsForm.elements.blackoutDates.value||'').split(/[\s,]+/).filter(Boolean),bartenders};const r=await api({action:'update-mobile-bar-profit-settings',settings:{staffing}});payload.mobileBarProfitSettings=r.settings;renderMobileProfitGoalProjection();});
+    mobileProfitGoalForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const settings={
+        monthlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.monthlyGrossProfitTarget?.value||0),
+        quarterlyGrossProfitTarget:Number(mobileProfitGoalForm.elements.quarterlyGrossProfitTarget?.value||0),
+        annualGrossProfitTarget:Number(mobileProfitGoalForm.elements.annualGrossProfitTarget?.value||0),
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save goals.';
+      }
+    });
+
+    capacitySettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const simulator={
+        bartenderCapacityPerDay:Number(capacitySettingsForm.elements.bartenderCapacityPerDay?.value||0),
+        maxBookingsPerMonth:Number(capacitySettingsForm.elements.maxBookingsPerMonth?.value||0),
+        planningHorizonMonths:Number(capacitySettingsForm.elements.planningHorizonMonths?.value||6),
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{simulator}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save capacity settings.';
+      }
+    });
+
+    staffingSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const bartenders=[...bartenderAvailabilityRows.querySelectorAll('[data-bartender-row]')]
+        .map((row,index)=>({
+          id:'bartender-'+(index+1),
+          name:row.querySelector('[data-bartender-name]').value.trim(),
+          active:row.querySelector('[data-bartender-active]').checked,
+          unavailableDates:row.querySelector('[data-bartender-dates]').value.split(/[\s,]+/).filter(Boolean),
+        }))
+        .filter((bartender)=>bartender.name);
+      const staffing={
+        blackoutDates:String(staffingSettingsForm.elements.blackoutDates.value||'').split(/[\s,]+/).filter(Boolean),
+        bartenders,
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{staffing}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save staffing availability.';
+      }
+    });
+
     addBartenderButton?.addEventListener('click',()=>addBartenderRow());
-    forecastSettingsForm?.addEventListener('submit',async(event)=>{event.preventDefault();const data=new FormData(forecastSettingsForm),forecastProbabilities={};['conservative','expected','aggressive'].forEach(s=>{forecastProbabilities[s]={};forecastStages.forEach(stage=>forecastProbabilities[s][stage]=Math.max(0,Math.min(1,Number(data.get(s+'_'+stage)||0)/100));});const r=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});payload.mobileBarProfitSettings=r.settings;renderMobileProfitGoalProjection();});
-    applyForecastRecommendations?.addEventListener('click',async()=>{if(!rollingForecastRecommendations?.hasRecommendations)return;const forecastProbabilities={...(payload.mobileBarProfitSettings?.forecastProbabilities||fallbackScenarioWeights),expected:rollingForecastRecommendations.suggested};const r=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});payload.mobileBarProfitSettings=r.settings;renderMobileProfitGoalProjection();});
-    bookingSimTarget?.addEventListener('input',renderMobileProfitGoalProjection);mobileForecastScenario?.addEventListener('change',renderMobileProfitGoalProjection);
+
+    forecastSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(forecastSettingsForm);
+      const forecastProbabilities={};
+      ['conservative','expected','aggressive'].forEach((scenario)=>{
+        forecastProbabilities[scenario]={};
+        forecastStages.forEach((stage)=>{
+          const percentValue=Number(data.get(scenario+'_'+stage)||0);
+          forecastProbabilities[scenario][stage]=Math.max(0,Math.min(1,percentValue/100));
+        });
+      });
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to save forecast probabilities.';
+      }
+    });
+
+    applyForecastRecommendations?.addEventListener('click',async()=>{
+      if(!rollingForecastRecommendations?.hasRecommendations)return;
+      const forecastProbabilities={
+        ...(payload.mobileBarProfitSettings?.forecastProbabilities||fallbackScenarioWeights),
+        expected:rollingForecastRecommendations.suggested,
+      };
+      try{
+        const result=await api({action:'update-mobile-bar-profit-settings',settings:{forecastProbabilities}});
+        payload.mobileBarProfitSettings=result.settings;
+        renderMobileProfitGoalProjection();
+      }catch(error){
+        if(forecastSettingsMessage)forecastSettingsMessage.textContent=error?.message||'Unable to apply forecast recommendations.';
+      }
+    });
+
+    bookingSimTarget?.addEventListener('input',renderMobileProfitGoalProjection);
+    mobileForecastScenario?.addEventListener('change',renderMobileProfitGoalProjection);
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
     document.querySelectorAll('[data-close-proposal]').forEach((button)=>button.addEventListener('click',()=>proposalDialog.close()));
     document.querySelectorAll('[data-close-profit]').forEach((button)=>button.addEventListener('click',()=>profitDialog?.close()));
