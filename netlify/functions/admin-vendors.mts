@@ -95,6 +95,17 @@ export default async(req:Request,context:Context)=>{
     vendor.status='paused';vendor.updatedAt=new Date().toISOString();
     await store.setJSON('vendors/index',vendors);return Response.json({ok:true,vendor});
   }
+  if(action==='review-insurance'){
+    const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
+    const decision=clean(body?.decision,20);if(!['approve','reject'].includes(decision))return Response.json({error:'Insurance decision must be approve or reject.'},{status:400});
+    vendor.insurance={...(vendor.insurance||{}),status:decision==='approve'?'approved':'received',reviewedAt:new Date().toISOString(),verifiedAt:decision==='approve'?new Date().toISOString():'',rejectionReason:decision==='reject'?clean(body?.reason,1200):''};
+    vendor.updatedAt=new Date().toISOString();
+    await store.setJSON('vendors/index',vendors);
+    if(String(vendor.email||'').includes('@')){
+      await sendVendorEmail({to:[vendor.email],subject:decision==='approve'?'Koa’s insurance certificate approved':'Koa’s insurance certificate needs an update',title:decision==='approve'?'Your insurance certificate is approved.':'Your insurance certificate needs an update.',body:decision==='approve'?'Koa’s has reviewed and approved your current insurance certificate.':'Koa’s reviewed your insurance certificate and needs an updated submission before it can be approved.',detail:decision==='approve'?(vendor.insurance.expiresAt?'Expiration: '+vendor.insurance.expiresAt:'Approved'):vendor.insurance.rejectionReason,actionLabel:'Open Vendor Portal',actionUrl:'https://koasevents.com/vendor-portal/?token='+encodeURIComponent(vendor.portalToken),idempotencyKey:'koa-insurance-review-'+vendor.id+'-'+vendor.insurance.reviewedAt});
+    }
+    return Response.json({ok:true,vendor});
+  }
   if(action==='send-portal-invite'){
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
     if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending a portal invite.'},{status:400});
