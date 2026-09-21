@@ -143,8 +143,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const test=state?.smokeTest;
       diagTest.textContent=test?.completedAt?when(test.completedAt):'Not run';
       diagTestMeta.textContent=test?.completedAt?'Status: '+String(test.status||'unknown')+' · Invoice '+String(test.invoiceDocNumber||test.invoiceId||'')+' · Payment '+String(test.paymentId||''):'Run the sandbox end-to-end test after mapping a service item.';
-      const invoiceMatched=Boolean(test?.webhook?.invoiceMatched);
-      const paymentMatched=Boolean(test?.webhook?.paymentMatched);
+      const invoiceMatched=Boolean(test?.webhook?.invoiceMatched||state?.smokeWebhookMatch?.invoiceMatched);
+      const paymentMatched=Boolean(test?.webhook?.paymentMatched||state?.smokeWebhookMatch?.paymentMatched);
       const verified=Boolean(test?.webhook?.verified);
       diagWebhookCheck.textContent=!test?.completedAt
         ? 'Sandbox webhook verification has not been attempted yet.'
