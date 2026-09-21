@@ -314,6 +314,7 @@ export type QuickBooksDepositSettings = {
   privateEventPercent: number;
   venueWeddingSecondDueDaysBefore: number;
   venueWeddingFinalDueDaysBefore: number;
+  venueWeddingSecondPercentOfRemaining: number;
   mobileBarFinalDueDaysBefore: number;
   privateEventFinalDueDaysBefore: number;
   defaultFinalDueDaysBefore: number;
@@ -353,6 +354,7 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     privateEventPercent: cleanDepositPercent(stored?.privateEventPercent, 10),
     venueWeddingSecondDueDaysBefore: cleanDueDays(stored?.venueWeddingSecondDueDaysBefore, 90),
     venueWeddingFinalDueDaysBefore: cleanDueDays(stored?.venueWeddingFinalDueDaysBefore, 60),
+    venueWeddingSecondPercentOfRemaining: cleanDepositPercent(stored?.venueWeddingSecondPercentOfRemaining, 50),
     mobileBarFinalDueDaysBefore: cleanDueDays(stored?.mobileBarFinalDueDaysBefore, 14),
     privateEventFinalDueDaysBefore: cleanDueDays(stored?.privateEventFinalDueDaysBefore, 30),
     defaultFinalDueDaysBefore: cleanDueDays(stored?.defaultFinalDueDaysBefore, 30),
@@ -369,6 +371,7 @@ export async function saveQuickBooksDepositSettings(context: Context, settings: 
     privateEventPercent: cleanDepositPercent(settings.privateEventPercent, current.privateEventPercent),
     venueWeddingSecondDueDaysBefore: cleanDueDays(settings.venueWeddingSecondDueDaysBefore, current.venueWeddingSecondDueDaysBefore),
     venueWeddingFinalDueDaysBefore: cleanDueDays(settings.venueWeddingFinalDueDaysBefore, current.venueWeddingFinalDueDaysBefore),
+    venueWeddingSecondPercentOfRemaining: cleanDepositPercent(settings.venueWeddingSecondPercentOfRemaining, current.venueWeddingSecondPercentOfRemaining),
     mobileBarFinalDueDaysBefore: cleanDueDays(settings.mobileBarFinalDueDaysBefore, current.mobileBarFinalDueDaysBefore),
     privateEventFinalDueDaysBefore: cleanDueDays(settings.privateEventFinalDueDaysBefore, current.privateEventFinalDueDaysBefore),
     defaultFinalDueDaysBefore: cleanDueDays(settings.defaultFinalDueDaysBefore, current.defaultFinalDueDaysBefore),
