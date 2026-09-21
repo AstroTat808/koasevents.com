@@ -57,6 +57,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-diag-webhook-check class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4 text-sm text-[var(--koa-ink)]/60"></div>
         </section>
 
+        <section data-accounting-audit class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Accounting reconciliation</p>
+              <h2 class="display mt-3 text-4xl">CRM ↔ QuickBooks audit</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Flags clients only when the CRM proposal, QuickBooks estimate, milestone invoices, payments received, or remaining balances do not mathematically reconcile.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <span data-audit-status class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Checking…</span>
+              <button data-refresh-audit type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Refresh audit</button>
+            </div>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Clients checked</p><strong data-audit-clients class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Flagged</p><strong data-audit-flagged class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Payments received</p><strong data-audit-paid class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Remaining balance</p><strong data-audit-remaining class="display mt-2 block text-3xl text-[var(--koa-forest)]">$0</strong></article>
+          </div>
+          <div data-audit-list class="mt-5 grid gap-3"></div>
+          <p data-audit-generated class="mt-3 text-xs text-[var(--koa-ink)]/45"></p>
+        </section>
+
         <section data-item-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Accounting mapping</p><h2 class="display mt-3 text-4xl">Default Koa’s service item</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the QuickBooks Service or Non-Inventory item used on synchronized Koa’s estimate and invoice lines. Revenue account treatment stays controlled by that QuickBooks item.</p></div>
@@ -261,6 +283,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const diagTest=document.querySelector('[data-diag-test]');
     const diagTestMeta=document.querySelector('[data-diag-test-meta]');
     const diagWebhookCheck=document.querySelector('[data-diag-webhook-check]');
+    const auditStatus=document.querySelector('[data-audit-status]');
+    const auditClients=document.querySelector('[data-audit-clients]');
+    const auditFlagged=document.querySelector('[data-audit-flagged]');
+    const auditPaid=document.querySelector('[data-audit-paid]');
+    const auditRemaining=document.querySelector('[data-audit-remaining]');
+    const auditList=document.querySelector('[data-audit-list]');
+    const auditGenerated=document.querySelector('[data-audit-generated]');
+    const refreshAudit=document.querySelector('[data-refresh-audit]');
     let state=null;
     let items=[];
 
@@ -318,6 +348,61 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
         catalogList.appendChild(row);
       });
+    }
+
+    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function auditValue(value){return value==null?'—':money(value);}
+    function renderAccountingAudit(){
+      const audit=state?.accountingAudit||{};
+      const rows=Array.isArray(audit.rows)?audit.rows:[];
+      const flagged=rows.filter((row)=>!row.reconciled);
+      if(auditClients)auditClients.textContent=String(Number(audit.clientCount||0));
+      if(auditFlagged)auditFlagged.textContent=String(Number(audit.flaggedCount||0));
+      if(auditPaid)auditPaid.textContent=money(audit.totalPaymentsReceived||0);
+      if(auditRemaining)auditRemaining.textContent=money(audit.totalRemainingBalance||0);
+      if(auditStatus){
+        auditStatus.textContent=flagged.length?flagged.length+' need review':'Reconciled';
+        auditStatus.className='rounded-full px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] '+(flagged.length?'bg-red-50 text-red-700 border border-red-200':'bg-[var(--koa-sand)] text-[var(--koa-forest)]');
+      }
+      if(auditGenerated)auditGenerated.textContent=audit.generatedAt?'Audit generated '+when(audit.generatedAt)+'. Values reflect the latest CRM-stored QuickBooks synchronization.':'';
+      if(!auditList)return;
+      auditList.innerHTML='';
+      if(!rows.length){
+        auditList.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/55">No accepted/booked or QuickBooks-linked proposals are available to audit yet.</div>';
+        return;
+      }
+      const visible=flagged.length?flagged:rows.slice(0,8);
+      visible.forEach((row)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border '+(row.reconciled?'border-[var(--koa-line)] bg-[var(--koa-ivory)]':'border-red-200 bg-red-50/55')+' p-4';
+        const top=document.createElement('div');top.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+        const left=document.createElement('div');
+        const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=row.clientName||row.recordId;
+        const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';meta.textContent=[row.recordId,row.eventDate,row.estimateDocNumber?'Estimate #'+row.estimateDocNumber:'No QBO estimate'].filter(Boolean).join(' · ');
+        left.append(title,meta);
+        const link=document.createElement('a');link.href='/admin/quotes/?q='+encodeURIComponent(row.recordId);link.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';link.textContent='Open client →';
+        top.append(left,link);card.appendChild(top);
+        const totals=document.createElement('p');totals.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/58';
+        totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(row.estimateTotal)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
+        card.appendChild(totals);
+        if(row.reconciled){
+          const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-[var(--koa-forest)]';ok.textContent='All stored accounting values reconcile.';
+          card.appendChild(ok);
+        }else{
+          const issues=document.createElement('div');issues.className='mt-3 grid gap-2';
+          (row.issues||[]).forEach((issue)=>{
+            const item=document.createElement('div');item.className='rounded-lg border border-red-200 bg-white px-3 py-2 text-xs leading-5 text-red-800';
+            item.textContent=issue.label+': expected '+auditValue(issue.expected)+', actual '+auditValue(issue.actual)+(issue.delta==null?'':' · difference '+money(issue.delta));
+            issues.appendChild(item);
+          });
+          card.appendChild(issues);
+        }
+        auditList.appendChild(card);
+      });
+      if(!flagged.length&&rows.length>visible.length){
+        const note=document.createElement('p');note.className='text-xs text-[var(--koa-ink)]/45';note.textContent='Showing the first '+visible.length+' reconciled clients.';
+        auditList.appendChild(note);
+      }
     }
 
     function renderDiagnostics(){
@@ -423,6 +508,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       renderCatalog();
       renderDiagnostics();
+      renderAccountingAudit();
       if(connected)loadItems();
     }
 
@@ -444,6 +530,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(itemAccount)itemAccount.textContent=selected?.incomeAccountName?'Income account: '+selected.incomeAccountName:'';
     });
     refreshDiagnostics?.addEventListener('click',load);
+    refreshAudit?.addEventListener('click',load);
     document.querySelectorAll('[data-close-catalog]').forEach((button)=>button.addEventListener('click',()=>catalogDialog?.close()));
     newCatalog?.addEventListener('click',()=>openCatalogItem());
     importCatalog?.addEventListener('click',async()=>{
