@@ -95,6 +95,8 @@ type ProfitModel = {
 };
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
+  quarterlyGrossProfitTarget: number;
+  annualGrossProfitTarget: number;
   updatedAt: string;
 };
 
@@ -243,9 +245,11 @@ async function writeSalesIndex(context: Context, records: SalesRecord[]) {
   await store.setJSON('records/index', records.slice(0, 1500));
 }
 async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
-  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as MobileBarProfitSettings | null;
+  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
   return {
     monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(saved?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(saved?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
     updatedAt: cleanText(saved?.updatedAt || '', 60),
   };
 }
@@ -253,6 +257,8 @@ async function readMobileBarProfitSettings(context: Context): Promise<MobileBarP
 async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
   const settings: MobileBarProfitSettings = {
     monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(input?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(input?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
     updatedAt: new Date().toISOString(),
   };
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
