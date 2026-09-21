@@ -93,6 +93,64 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+
+        <section data-catalog-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">CRM catalog</p>
+              <h2 class="display mt-3 text-4xl">Rentals, services, mileage + fees</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Manage client-facing catalog items here. Saving an item also creates or updates its matching QuickBooks Service or Non-Inventory item.</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button data-import-catalog type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Import QBO items</button>
+              <button data-new-catalog type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Add item</button>
+            </div>
+          </div>
+          <div data-catalog-list class="mt-6 grid gap-3"></div>
+          <p data-catalog-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
+        </section>
+
+        <section data-get-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Hawaiʻi tax setting</p>
+          <h2 class="display mt-3 text-4xl">General Excise Tax (GET)</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Hawaiʻi County GET is 4.5%. If Koa’s passes GET on to the client, the maximum permitted pass-on rate is 4.712%. This setting controls the CRM proposal calculation; it is not labeled as sales tax.</p>
+          <form data-get-form class="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
+            <label class="grid gap-2 text-sm font-semibold">Client GET rate %
+              <input name="customerRate" type="number" min="0" max="4.712" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">Label
+              <input name="label" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" value="Hawaiʻi GET" />
+            </label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save GET setting</button>
+          </form>
+          <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/48">Statutory Hawaiʻi County rate: 4.5% · Maximum pass-through setting allowed here: 4.712%</p>
+          <p data-get-message class="mt-2 text-sm text-[var(--koa-ink)]/52"></p>
+        </section>
+
+        <dialog data-catalog-dialog class="w-[min(94vw,760px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+          <form data-catalog-form class="p-7 sm:p-8">
+            <input type="hidden" name="id" />
+            <input type="hidden" name="quickBooksItemId" />
+            <div class="flex items-start justify-between gap-4">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Catalog item</p><h3 data-catalog-title class="display mt-3 text-4xl">Add item</h3></div>
+              <button type="button" data-close-catalog class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-sm">×</button>
+            </div>
+            <div class="mt-6 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Name<input name="name" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Category<select name="category" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="service">Service</option><option value="rental">Rental</option><option value="mileage">Mileage</option><option value="fee">Fee</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Unit label<input name="unitLabel" value="each" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Unit price<input name="unitPrice" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">QuickBooks type<select name="quickBooksType" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="Service">Service</option><option value="NonInventory">Non-Inventory</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Description<textarea name="description" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+            </div>
+            <div class="mt-6 flex flex-wrap gap-3">
+              <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save item</button>
+              <button type="button" data-close-catalog class="rounded-full border border-[var(--koa-line)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">Cancel</button>
+            </div>
+            <p data-catalog-form-message class="mt-4 text-sm text-[var(--koa-ink)]/58"></p>
+          </form>
+        </dialog>
+
         <section data-production-test class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <p class="eyebrow text-[var(--koa-clay)]">Controlled production test</p>
           <h2 class="display mt-3 text-4xl">Verify the real QuickBooks company safely</h2>
@@ -158,6 +216,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const status=document.querySelector('[data-status]');
     const warning=document.querySelector('[data-config-warning]');
     const itemSection=document.querySelector('[data-item-section]');
+    const catalogSection=document.querySelector('[data-catalog-section]');
+    const catalogList=document.querySelector('[data-catalog-list]');
+    const catalogMessage=document.querySelector('[data-catalog-message]');
+    const importCatalog=document.querySelector('[data-import-catalog]');
+    const newCatalog=document.querySelector('[data-new-catalog]');
+    const catalogDialog=document.querySelector('[data-catalog-dialog]');
+    const catalogForm=document.querySelector('[data-catalog-form]');
+    const catalogTitle=document.querySelector('[data-catalog-title]');
+    const catalogFormMessage=document.querySelector('[data-catalog-form-message]');
+    const getSection=document.querySelector('[data-get-section]');
+    const getForm=document.querySelector('[data-get-form]');
+    const getMessage=document.querySelector('[data-get-message]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
     const itemMessage=document.querySelector('[data-item-message]');
@@ -197,6 +267,56 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function when(value){if(!value)return 'None yet';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();}
     function webhookEntities(receipt){return (receipt?.notifications||[]).flatMap((notification)=>notification?.entities||[]);}
     async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'QuickBooks request failed.');return data;}
+
+
+    function openCatalogItem(item=null){
+      if(!catalogForm||!catalogDialog)return;
+      catalogForm.reset();
+      catalogForm.elements.id.value=item?.id||'';
+      catalogForm.elements.quickBooksItemId.value=item?.quickBooksItemId||'';
+      catalogForm.elements.name.value=item?.name||'';
+      catalogForm.elements.category.value=item?.category||'service';
+      catalogForm.elements.unitLabel.value=item?.unitLabel||(item?.category==='mileage'?'mile':'each');
+      catalogForm.elements.unitPrice.value=String(item?.unitPrice||0);
+      catalogForm.elements.quickBooksType.value=item?.quickBooksType||(item?.category==='rental'?'NonInventory':'Service');
+      catalogForm.elements.description.value=item?.description||'';
+      if(catalogTitle)catalogTitle.textContent=item?'Edit '+item.name:'Add catalog item';
+      if(catalogFormMessage)catalogFormMessage.textContent=item?.quickBooksItemId?'QuickBooks item '+item.quickBooksItemId+' is linked.':'A matching QuickBooks item will be created when saved.';
+      catalogDialog.showModal();
+    }
+
+    function renderCatalog(){
+      if(!catalogList)return;
+      catalogList.innerHTML='';
+      const catalog=Array.isArray(state?.catalog)?state.catalog:[];
+      if(!catalog.length){
+        catalogList.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/55">No CRM catalog items yet. Import current QuickBooks items or add the first rental, service, mileage charge, or fee.</div>';
+        return;
+      }
+      catalog.forEach((item)=>{
+        const row=document.createElement('article');
+        row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        row.innerHTML='<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/52"></p><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><button type="button" data-edit class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Edit</button><button type="button" data-archive class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Archive</button></div></div>';
+        row.querySelector('strong').textContent=item.name+(item.active===false?' · archived':'');
+        row.querySelectorAll('p')[0].textContent=(item.category||'service')+' · $'+Number(item.unitPrice||0).toFixed(2)+' / '+(item.unitLabel||'each');
+        row.querySelectorAll('p')[1].textContent='QBO '+(item.quickBooksType||'Service')+' #'+(item.quickBooksItemId||'not linked')+(item.incomeAccountName?' · '+item.incomeAccountName:'');
+        row.querySelector('[data-edit]').addEventListener('click',()=>openCatalogItem(item));
+        row.querySelector('[data-archive]').disabled=item.active===false;
+        row.querySelector('[data-archive]').addEventListener('click',async()=>{
+          if(!confirm('Archive '+item.name+' in the CRM? Its existing QuickBooks item and transactions will not be changed.'))return;
+          if(catalogMessage)catalogMessage.textContent='Archiving '+item.name+'…';
+          try{
+            const data=await api({action:'archive-catalog-item',id:item.id});
+            state.catalog=data.catalog||[];
+            renderCatalog();
+            if(catalogMessage)catalogMessage.textContent=item.name+' archived.';
+          }catch(err){
+            if(catalogMessage)catalogMessage.textContent=err.message||'Unable to archive item.';
+          }
+        });
+        catalogList.appendChild(row);
+      });
+    }
 
     function renderDiagnostics(){
       const connected=Boolean(state?.connection?.connected);
@@ -253,6 +373,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       connect.classList.toggle('hidden',!configured||connected);
       disconnect.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
+      catalogSection?.classList.toggle('hidden',!connected);
+      getSection?.classList.toggle('hidden',!connected);
       sandboxTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='sandbox');
       productionTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='production');
       company.textContent=connected?(state.connection.companyName||'QuickBooks company connected'):'Not connected';
@@ -293,6 +415,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             ? 'Verified: '+linked.recordId+' moved to '+linked.actualStage+', Deposit Paid is '+(linked.depositPaid?'Yes':'No')+', and QuickBooks balance is $'+Number(linked.balanceDue||0).toFixed(2)+'.'
             : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
       }
+      if(getForm&&state?.getSettings){
+        getForm.elements.customerRate.value=String(state.getSettings.customerRate ?? 4.5);
+        getForm.elements.label.value=state.getSettings.label||'Hawaiʻi GET';
+      }
+      renderCatalog();
       renderDiagnostics();
       if(connected)loadItems();
     }
@@ -315,6 +442,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(itemAccount)itemAccount.textContent=selected?.incomeAccountName?'Income account: '+selected.incomeAccountName:'';
     });
     refreshDiagnostics?.addEventListener('click',load);
+    document.querySelectorAll('[data-close-catalog]').forEach((button)=>button.addEventListener('click',()=>catalogDialog?.close()));
+    newCatalog?.addEventListener('click',()=>openCatalogItem());
+    importCatalog?.addEventListener('click',async()=>{
+      if(catalogMessage)catalogMessage.textContent='Importing active Service and Non-Inventory items from QuickBooks…';
+      try{const data=await api({action:'import-qbo-items'});state.catalog=data.catalog||[];renderCatalog();if(catalogMessage)catalogMessage.textContent='Imported '+Number(data.importedCount||0)+' QuickBooks items.';}catch(err){if(catalogMessage)catalogMessage.textContent=err.message||'Unable to import QuickBooks items.';}
+    });
+    catalogForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(catalogForm);
+      if(catalogFormMessage)catalogFormMessage.textContent='Saving to CRM and QuickBooks…';
+      try{
+        const result=await api({action:'save-catalog-item',item:{id:data.get('id'),quickBooksItemId:data.get('quickBooksItemId'),name:data.get('name'),category:data.get('category'),unitLabel:data.get('unitLabel'),unitPrice:Number(data.get('unitPrice')||0),quickBooksType:data.get('quickBooksType'),description:data.get('description'),active:true}});
+        state.catalog=result.catalog||[];
+        renderCatalog();
+        if(catalogFormMessage)catalogFormMessage.textContent='Saved and synchronized with QuickBooks.';
+        setTimeout(()=>catalogDialog?.close(),500);
+      }catch(err){if(catalogFormMessage)catalogFormMessage.textContent=err.message||'Unable to save catalog item.';}
+    });
+    getForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(getForm);
+      if(getMessage)getMessage.textContent='Saving Hawaiʻi GET setting…';
+      try{
+        const result=await api({action:'save-get-settings',enabled:true,label:data.get('label'),customerRate:Number(data.get('customerRate')||0)});
+        state.getSettings=result.getSettings;
+        if(getMessage)getMessage.textContent='Saved. New CRM proposals can use '+Number(result.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'% '+String(result.getSettings.label||'Hawaiʻi GET')+'.';
+      }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
+    });
     cleanupProductionTest?.addEventListener('click',async()=>{
       if(!productionTestStatus)return;
       productionTestStatus.textContent='Validating and cleaning the previous controlled production test…';
