@@ -730,24 +730,30 @@ function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId
 function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>): PaymentItem[] {
   const category = proposalCategory(packageId, inquiry);
   const remaining = Math.max(0, roundMoney(total - depositAmount));
-  if (category === 'venue-wedding') {
-    const secondPercent = Math.min(100, Math.max(0, Number(settings.venueWeddingSecondPercentOfRemaining ?? 50)));
-    const second = roundMoney(remaining * secondPercent / 100);
-    return [
-      { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-      { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingSecondDueDaysBefore) : '', amount: second },
-      { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingFinalDueDaysBefore) : '', amount: roundMoney(remaining - second) },
-    ];
-  }
-  const dueDays = category === 'mobile-bar'
-    ? settings.mobileBarFinalDueDaysBefore
-    : category === 'private-event'
-      ? settings.privateEventFinalDueDaysBefore
-      : settings.defaultFinalDueDaysBefore;
-  return [
-    { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-    { label: 'Final balance', dueDate: eventDate ? offsetDate(eventDate, -dueDays) : '', amount: remaining },
-  ];
+  const template = category === 'venue-wedding'
+    ? settings.venueWeddingMilestones
+    : category === 'mobile-bar'
+      ? settings.mobileBarMilestones
+      : category === 'private-event'
+        ? settings.privateEventMilestones
+        : settings.defaultMilestones;
+  const rows = Array.isArray(template) && template.length
+    ? template
+    : [{ label:'Final balance', dueDaysBefore:0, percentOfRemaining:100 }];
+  let allocated = 0;
+  const milestones = rows.map((item, index) => {
+    const last = index === rows.length - 1;
+    const amount = last
+      ? Math.max(0, roundMoney(remaining - allocated))
+      : Math.max(0, roundMoney(remaining * Math.min(100, Math.max(0, Number(item.percentOfRemaining || 0))) / 100));
+    allocated = roundMoney(allocated + amount);
+    return {
+      label: cleanText(item.label || (last ? 'Final balance' : 'Payment'), 160),
+      dueDate: eventDate ? offsetDate(eventDate, -Math.max(0, Math.round(Number(item.dueDaysBefore || 0)))) : '',
+      amount,
+    };
+  });
+  return [{ label:'Reservation deposit', dueDate:'', amount:depositAmount }, ...milestones];
 }
 
 function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings) {
