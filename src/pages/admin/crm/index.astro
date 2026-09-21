@@ -325,13 +325,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   let visibleProjectIds=[];
 
   function userRoles(user){ const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles]; return (sources.find(Array.isArray)||[]).map((r)=>String(r||'').toLowerCase()); }
+  function userPermissions(user){ const meta=user?.appMetadata||user?.app_metadata||{}; return (Array.isArray(meta.permissions)?meta.permissions:[]).map((p)=>String(p||'').toLowerCase()); }
   function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.some((role)=>['admin','manager','sales','staff'].includes(role)); }
   function manager(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager'); }
+  function can(user,permission){ return manager(user)||userPermissions(user).includes(permission); }
   function applyRoleUi(user){
-    if(manager(user)) return;
-    ['[data-cleanup-settings]','[data-bulk-trash]','[data-toggle-trash]','[data-trash-client]'].forEach((selector)=>$(selector)?.classList.add('hidden'));
-    $('[data-workflow-form]')?.closest('section')?.classList.add('hidden');
-    $('[data-template-form]')?.closest('section')?.classList.add('hidden');
+    if(!can(user,'crm.cleanup_policy')) $('[data-cleanup-settings]')?.classList.add('hidden');
+    if(!can(user,'crm.destructive')) ['[data-bulk-trash]','[data-toggle-trash]','[data-trash-client]'].forEach((selector)=>$(selector)?.classList.add('hidden'));
+    if(!can(user,'crm.workflows')) $('[data-workflow-form]')?.closest('section')?.classList.add('hidden');
+    if(!can(user,'crm.templates')) $('[data-template-form]')?.closest('section')?.classList.add('hidden');
   }
   const money=(n)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n)||0);
   const esc=(s)=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
