@@ -23,14 +23,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Booked</p><p data-stat-booked class="display mt-3 text-4xl">0</p></article>
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Saved quote value</p><p data-stat-value class="display mt-3 text-4xl">$0</p></article>
         </section>
-
         <section data-accounting-alert class="hidden rounded-[1.4rem] border border-red-200 bg-red-50 p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">Accounting reconciliation warning</p>
-              <h2 class="display mt-2 text-3xl text-red-900"><span data-accounting-alert-count>0</span> client records need review</h2>
-              <p data-accounting-alert-detail class="mt-2 text-sm leading-6 text-red-800/75">CRM and QuickBooks values do not fully reconcile.</p>
-            </div>
+            <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">Accounting reconciliation warning</p><h2 class="display mt-2 text-3xl text-red-900"><span data-accounting-alert-count>0</span> client records need review</h2><p data-accounting-alert-detail class="mt-2 text-sm leading-6 text-red-800/75"></p></div>
             <a href="/admin/quickbooks/#accounting-audit" class="w-fit rounded-full bg-red-700 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Review accounting audit</a>
           </div>
         </section>
@@ -583,7 +578,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </form>
   </dialog>
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
 
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
@@ -802,17 +797,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function percent(value) { return value == null ? '—' : Math.round(value*100) + '%'; }
 
     function renderAccountingAlert() {
-      const audit = qboState?.accountingAudit;
-      const flagged = Number(audit?.flaggedCount || 0);
-      accountingAlert?.classList.toggle('hidden', flagged <= 0);
-      if (accountingAlertCount) accountingAlertCount.textContent = String(flagged);
-      if (accountingAlertDetail) {
-        const rows = Array.isArray(audit?.rows) ? audit.rows.filter((row) => !row.reconciled) : [];
-        const names = rows.slice(0, 3).map((row) => row.clientName || row.recordId).filter(Boolean);
-        accountingAlertDetail.textContent = flagged <= 0
-          ? 'CRM and QuickBooks values reconcile.'
-          : 'Mismatch detected for ' + (names.length ? names.join(', ') : flagged + ' client record' + (flagged === 1 ? '' : 's')) + (flagged > names.length ? ' and ' + (flagged - names.length) + ' more' : '') + '.';
-      }
+      const audit=qboState?.accountingAudit;const flagged=Number(audit?.flaggedCount||0);accountingAlert?.classList.toggle('hidden',flagged<=0);
+      if(accountingAlertCount)accountingAlertCount.textContent=String(flagged);
+      if(accountingAlertDetail){const rows=Array.isArray(audit?.rows)?audit.rows.filter((row)=>!row.reconciled):[];const names=rows.slice(0,3).map((row)=>row.clientName||row.recordId).filter(Boolean);accountingAlertDetail.textContent=flagged<=0?'CRM and QuickBooks values reconcile.':'Mismatch detected for '+(names.length?names.join(', '):flagged+' client record'+(flagged===1?'':'s'))+(flagged>names.length?' and '+(flagged-names.length)+' more':'')+'.';}
     }
 
     function renderStats() {
@@ -2791,7 +2778,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 
     async function load(query='') {
-      const user=await getUser(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      const user=await getAdminSession(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       managerAccess=hasManagerAccess(user); applyRoleUi(user);
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
       const [response,qboResponse]=await Promise.all([
