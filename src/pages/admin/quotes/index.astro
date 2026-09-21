@@ -1365,6 +1365,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderReviewBucket(reviewFailed,failed,'failed','No failed or bounced review requests.');
     }
 
+    function qboInvoiceDueIndicator(payments) {
+      const today=dayNumber(hawaiiToday());
+      if(today===null)return null;
+      const rows=(payments||[])
+        .filter((item)=>item.invoiceId&&item.status!=='paid'&&item.dueDate&&Number(item.balance||0)>0)
+        .map((item)=>({item,due:dayNumber(item.dueDate)}))
+        .filter((entry)=>entry.due!==null)
+        .map((entry)=>({...entry,days:entry.due-today}))
+        .sort((a,b)=>a.days-b.days);
+      if(!rows.length)return null;
+
+      const next=rows[0];
+      if(next.days<0) {
+        const late=Math.abs(next.days);
+        return {
+          kind:'overdue',
+          label:'Overdue · '+late+' day'+(late===1?'':'s'),
+          detail:(next.item.docNumber?'Invoice #'+next.item.docNumber:'QuickBooks invoice')+' · '+money(next.item.balance)+' remaining · due '+next.item.dueDate
+        };
+      }
+      if(next.days===0) {
+        return {
+          kind:'today',
+          label:'Due today',
+          detail:(next.item.docNumber?'Invoice #'+next.item.docNumber:'QuickBooks invoice')+' · '+money(next.item.balance)+' remaining'
+        };
+      }
+      if(next.days<=14) {
+        return {
+          kind:'soon',
+          label:'Due soon · '+next.days+' day'+(next.days===1?'':'s'),
+          detail:(next.item.docNumber?'Invoice #'+next.item.docNumber:'QuickBooks invoice')+' · '+money(next.item.balance)+' remaining · due '+next.item.dueDate
+        };
+      }
+      return null;
+    }
+
     function renderBookedDashboard() {
       if(!bookedDashboard)return;
       bookedDashboard.innerHTML='';
@@ -1398,7 +1435,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('span','rounded-full px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em] '+statusClass,paymentStatus),
           text('span','text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/42',summary.depositPaid?'Deposit paid':'Deposit pending')
         );
+        const dueIndicator=qboInvoiceDueIndicator(payments);
+        if(dueIndicator) {
+          const dueClass=dueIndicator.kind==='overdue'
+            ? 'bg-red-100 text-red-800'
+            : dueIndicator.kind==='today'
+              ? 'bg-orange-100 text-orange-800'
+              : 'bg-[var(--koa-amber-light)] text-[var(--koa-forest)]';
+          statusWrap.appendChild(text('span','rounded-full px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em] '+dueClass,dueIndicator.label));
+        }
         card.appendChild(statusWrap);
+        if(dueIndicator) {
+          card.appendChild(text('p','mt-2 text-xs font-semibold leading-5 '+(dueIndicator.kind==='overdue'?'text-red-700':'text-[var(--koa-clay)]'),dueIndicator.detail));
+        }
 
         const finances=document.createElement('div'); finances.className='mt-3 grid grid-cols-3 gap-3';
         const paidBox=document.createElement('div'); paidBox.className='rounded-xl bg-white p-3'; paidBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Paid'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.paid||0)));
