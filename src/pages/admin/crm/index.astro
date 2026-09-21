@@ -30,7 +30,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
-          <div class="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+          <div class="grid gap-4 lg:grid-cols-[1fr_180px_180px_190px]">
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Search projects
               <input data-search type="search" placeholder="Client, email, phone, event date, package, tag…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal text-[var(--koa-ink)]" />
             </label>
@@ -44,6 +44,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <option value="all">All projects</option><option value="due">Has open tasks</option><option value="clear">No open tasks</option>
               </select>
             </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Review status
+              <select data-review-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All clients</option><option value="needs-review">Needs Review</option><option value="approved">Approved legitimate</option><option value="clean">Clean</option>
+              </select>
+            </label>
+          </div>
+          <div class="mt-4 flex flex-col gap-3 rounded-xl bg-[var(--koa-sand)] p-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Bogus-client cleanup policy</p>
+              <p class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Choose whether high-confidence bogus/test clients are automatically moved to 30-day Trash, held in Needs Review, or only flagged.</p>
+            </div>
+            <form data-cleanup-settings class="flex flex-wrap items-end gap-2">
+              <select name="mode" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-2.5 text-sm">
+                <option value="auto_trash">Auto-trash high confidence</option>
+                <option value="review_first">Hold for review first</option>
+                <option value="flag_only">Flag only — never auto-trash</option>
+              </select>
+              <button class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.09em] text-white">Save policy</button>
+              <span data-cleanup-policy-meta class="text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-ink)]/40"></span>
+            </form>
           </div>
         </section>
 
@@ -76,6 +96,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <div><p data-detail-stage class="eyebrow text-[var(--koa-amber-light)]">Project</p><h2 data-detail-name class="display mt-2 text-4xl"></h2><p data-detail-contact class="mt-2 text-sm text-white/58"></p></div>
                 <div class="flex flex-wrap gap-2">
                   <div data-detail-links class="flex flex-wrap gap-2"></div>
+                  <button type="button" data-approve-client class="hidden rounded-full border border-emerald-200/35 bg-emerald-900/35 px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-emerald-100">Approve legitimate</button>
                   <button type="button" data-trash-client class="rounded-full border border-red-300/35 bg-red-950/25 px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-red-100">Move to Trash</button>
                 </div>
               </div>
@@ -201,7 +222,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
-  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[]};
+  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],cleanupSettings:{mode:'auto_trash'}};
   let selectedId='';
   const selectedProjects=new Set();
   let visibleProjectIds=[];
@@ -225,7 +246,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-stat-workflows]').textContent=data.workflows.filter(w=>w.active).length;
     $('[data-stat-templates]').textContent=data.templates.filter(t=>t.active).length;
     $('[data-stat-booked-value]').textContent=money(data.projects.filter(p=>p.stage==='booked').reduce((s,p)=>s+Number(p.proposal?.total||0),0));
-    $('[data-trash-count]').textContent=data.trash.length; renderProjects(); renderTrash(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
+    $('[data-trash-count]').textContent=(data.trashGroups||[]).length || data.trash.length;
+    const settings=$('[data-cleanup-settings]'); if(settings) settings.mode.value=data.cleanupSettings?.mode||'auto_trash';
+    const meta=$('[data-cleanup-policy-meta]'); if(meta) meta.textContent=data.cleanupSettings?.updatedAt?('Updated '+fmt(data.cleanupSettings.updatedAt)):'';
+    renderProjects(); renderTrash(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
   }
   function updateBulkUi(){
     const n=selectedProjects.size, b=$('[data-bulk-trash]');
@@ -234,8 +258,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   }
   function renderProjects(){
     const q=String($('[data-search]')?.value||'').trim().toLowerCase();
-    const stage=$('[data-stage-filter]')?.value||'all', tf=$('[data-task-filter]')?.value||'all';
-    const rows=data.projects.filter(p=>(!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0)));
+    const stage=$('[data-stage-filter]')?.value||'all', tf=$('[data-task-filter]')?.value||'all', rf=$('[data-review-filter]')?.value||'all';
+    const rows=data.projects.filter(p=>{
+      const cleanup=p.cleanup||{disposition:'clean',approvedLegitimate:false};
+      const reviewMatch=rf==='all' || (rf==='needs-review'&&(cleanup.disposition==='review'||cleanup.disposition==='auto_trash')) || (rf==='approved'&&cleanup.approvedLegitimate) || (rf==='clean'&&cleanup.disposition==='clean'&&!cleanup.approvedLegitimate);
+      return (!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0))&&reviewMatch;
+    });
     visibleProjectIds=rows.map(p=>p.id);
     $('[data-project-count]').textContent=rows.length+' shown';
     $('[data-project-list]').innerHTML=rows.length?rows.map(p=>{
@@ -250,15 +278,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     updateBulkUi();
   }
   function renderTrash(){
-    const rows=[...(data.trash||[])].sort((a,b)=>String(b.deletedAt).localeCompare(String(a.deletedAt)));
-    $('[data-trash-list]').innerHTML=rows.length?rows.map(t=>'<div class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong>'+esc(t.customerName||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(t.customerEmail||'No email')+' · '+esc(t.eventDate||'No date')+' · '+esc(t.kind||'record')+'</p><p class="mt-2 text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">Deleted '+fmt(t.deletedAt)+' · expires '+fmt(t.expiresAt)+'</p></div><div class="flex gap-2"><button data-restore="'+esc(t.id)+'" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Restore</button><button data-permadelete="'+esc(t.id)+'" class="rounded-full border border-red-300 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-800">Delete forever</button></div></div></div>').join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50">Trash is empty.</p>';
-    $$('[data-restore]').forEach(b=>b.addEventListener('click',async()=>{const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'restore-record',recordId:b.dataset.restore})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Restore failed.');return;}await load();}));
-    $$('[data-permadelete]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Permanently delete this trashed record? This cannot be undone.'))return;const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'permanent-delete-record',recordId:b.dataset.permadelete})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Permanent delete failed.');return;}await load();}));
+    const groups=[...(data.trashGroups||[])].sort((a,b)=>String(b.deletedAt).localeCompare(String(a.deletedAt)));
+    $('[data-trash-list]').innerHTML=groups.length?groups.map(g=>'<div class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong>'+esc(g.customerName||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(g.customerEmail||'No email')+' · '+esc(g.eventDate||'No date')+' · '+g.count+' related record'+(g.count===1?'':'s')+'</p><p class="mt-2 text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">Deleted '+fmt(g.deletedAt)+' · expires '+fmt(g.expiresAt)+'</p></div><div class="flex gap-2"><button data-restore-chain="'+esc(g.rootId)+'" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Restore client</button><button data-permadelete-chain="'+esc(g.rootId)+'" class="rounded-full border border-red-300 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-800">Delete forever</button></div></div></div>').join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50">Trash is empty.</p>';
+    $$('[data-restore-chain]').forEach(b=>b.addEventListener('click',async()=>{const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'restore-client-chain',recordId:b.dataset.restoreChain})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Restore failed.');return;}await load();}));
+    $$('[data-permadelete-chain]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Permanently delete this entire trashed client chain? This cannot be undone.'))return;const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'permanent-delete-client-chain',recordId:b.dataset.permadeleteChain})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Permanent delete failed.');return;}await load();}));
   }
   function renderDetail(){
     const p=data.projects.find(x=>x.id===selectedId); if(!p)return;
     $('[data-detail-empty]').classList.add('hidden'); $('[data-detail]').classList.remove('hidden');
     $('[data-detail-stage]').textContent=(p.meta?.projectStatus||p.stage||'Project').toUpperCase();
+    const approve=$('[data-approve-client]'); if(approve) approve.classList.toggle('hidden',!(p.cleanup&&(p.cleanup.disposition==='review'||p.cleanup.disposition==='auto_trash')));
     $('[data-detail-name]').textContent=p.customer?.name||'Unnamed client';
     $('[data-detail-contact]').textContent=[p.customer?.email,p.customer?.phone].filter(Boolean).join(' · ')||'No contact details';
     $('[data-detail-date]').textContent=p.customer?.eventDate||'—'; $('[data-detail-package]').textContent=p.packageId||'—';
@@ -290,7 +319,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-templates]').innerHTML=data.templates.length?data.templates.map(t=>'<button data-edit-template="'+esc(t.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(t.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(t.type)+'</span></div><p class="mt-2 line-clamp-2 text-sm text-[var(--koa-ink)]/55">'+esc(t.subject||t.body)+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No templates saved yet.</p>';
     $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>{const t=data.templates.find(x=>x.id===b.dataset.editTemplate);const f=$('[data-template-form]');f.id.value=t.id;f.type.value=t.type;f.name.value=t.name;f.subject.value=t.subject;f.body.value=t.body;f.active.checked=t.active;f.scrollIntoView({behavior:'smooth',block:'center'});}));
   }
-  $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects);
+  $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
+  $('[data-cleanup-settings]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const result=await post({action:'save-cleanup-settings',mode:f.mode.value});data.cleanupSettings=result.settings;render();});
+  $('[data-approve-client]')?.addEventListener('click',async()=>{const p=data.projects.find(x=>x.id===selectedId);if(!p)return;if(!confirm('Mark '+(p.customer?.name||'this client')+' as legitimate?\n\nThis suppresses future bogus-client cleanup flags for this CRM record.'))return;await post({action:'approve-cleanup-review',recordId:selectedId});await load();});
   $('[data-toggle-trash]')?.addEventListener('click',()=>{$('[data-trash-panel]').classList.remove('hidden');$('[data-project-list]').classList.add('hidden');});
   $('[data-close-trash]')?.addEventListener('click',()=>{$('[data-trash-panel]').classList.add('hidden');$('[data-project-list]').classList.remove('hidden');});
   $('[data-select-visible]')?.addEventListener('click',()=>{visibleProjectIds.forEach(id=>selectedProjects.add(id));renderProjects();});
