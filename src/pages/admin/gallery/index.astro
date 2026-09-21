@@ -68,6 +68,20 @@ const allCategories = [...categories, 'Legacy Archive'];
     </div>
   </main>
 
+  <dialog data-vendor-dialog class="m-auto w-[94vw] max-w-3xl overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-0 backdrop:bg-black/60">
+    <div class="border-b border-[var(--koa-line)] p-5 sm:p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Vendor attribution</p><h2 data-vendor-title class="display mt-2 text-3xl">Assign vendors to photo</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Select every vendor whose work appears in this image. The photo will automatically appear on each selected vendor profile.</p></div>
+        <button type="button" data-vendor-close class="grid size-10 place-items-center rounded-full border border-[var(--koa-line)] text-xl">×</button>
+      </div>
+    </div>
+    <div class="p-5 sm:p-6">
+      <input data-vendor-search class="w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" placeholder="Search photographer, florist, DJ, Mobile Bar…">
+      <div data-vendor-options class="mt-4 grid max-h-[48vh] gap-2 overflow-auto sm:grid-cols-2"></div>
+      <div class="mt-5 flex items-center gap-3"><p data-vendor-message class="mr-auto text-xs text-[var(--koa-ink)]/50"></p><button type="button" data-vendor-cancel class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Cancel</button><button type="button" data-vendor-save class="rounded-full bg-[var(--koa-forest)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button></div>
+    </div>
+  </dialog>
+
   <dialog data-crop-dialog class="m-auto w-[94vw] max-w-5xl overflow-hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-0 backdrop:bg-black/60">
     <div class="border-b border-[var(--koa-line)] p-5 sm:p-6">
       <div class="flex items-start justify-between gap-4">
@@ -128,11 +142,17 @@ const allCategories = [...categories, 'Legacy Archive'];
     const cropPosition = document.querySelector('[data-crop-position]');
     const cropTitle = document.querySelector('[data-crop-title]');
     const previewShell = document.querySelector('[data-preview-shell]');
+    const vendorDialog = document.querySelector('[data-vendor-dialog]');
+    const vendorOptions = document.querySelector('[data-vendor-options]');
+    const vendorSearch = document.querySelector('[data-vendor-search]');
+    const vendorMessage = document.querySelector('[data-vendor-message]');
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
 
     let state = { uploads: [], hiddenCurated: [], hiddenUploads: [], curatedEdits: {}, categoryOrder: {} };
     let selected = new Set();
     let cropSession = null;
+    let vendors = [];
+    let vendorSession = null;
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
@@ -184,6 +204,7 @@ const allCategories = [...categories, 'Legacy Archive'];
           focalX: edit.focalX ?? 50,
           focalY: edit.focalY ?? 50,
           hidden: state.hiddenCurated.includes(item.src),
+          vendorIds: Array.isArray(edit.vendorIds) ? edit.vendorIds : [],
         };
       });
       return [...builtIn, ...uploaded];
@@ -211,6 +232,40 @@ const allCategories = [...categories, 'Legacy Archive'];
           ? { kind:'upload', id:item.id }
           : { kind:'curated', src:item.src }
       );
+    }
+
+    function vendorLabel(vendor) {
+      return [vendor.name, vendor.category].filter(Boolean).join(' · ');
+    }
+
+    function renderVendorOptions() {
+      if (!vendorSession) return;
+      const query = String(vendorSearch?.value || '').trim().toLowerCase();
+      vendorOptions.innerHTML = '';
+      vendors.filter((vendor) => vendor.status !== 'paused').filter((vendor) => vendorLabel(vendor).toLowerCase().includes(query)).forEach((vendor) => {
+        const label = document.createElement('label');
+        label.className = 'flex cursor-pointer items-start gap-3 rounded-xl border border-[var(--koa-line)] p-3 hover:bg-[var(--koa-ivory)]';
+        const check = document.createElement('input');
+        check.type = 'checkbox';
+        check.value = vendor.id;
+        check.checked = vendorSession.vendorIds.has(vendor.id);
+        check.className = 'mt-1 size-4 accent-[var(--koa-forest)]';
+        check.addEventListener('change', () => check.checked ? vendorSession.vendorIds.add(vendor.id) : vendorSession.vendorIds.delete(vendor.id));
+        const copy = document.createElement('span');
+        copy.innerHTML = '<strong class="block text-sm">' + vendor.name + '</strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/50">' + vendor.category + ' · ' + String(vendor.tier || 'community').replaceAll('_',' ') + '</span>';
+        label.append(check, copy);
+        vendorOptions.append(label);
+      });
+      if (!vendorOptions.children.length) vendorOptions.textContent = 'No vendors match this search.';
+    }
+
+    function openVendorEditor(item) {
+      vendorSession = { item, vendorIds: new Set(Array.isArray(item.vendorIds) ? item.vendorIds : []) };
+      document.querySelector('[data-vendor-title]').textContent = item.alt || 'Assign vendors to photo';
+      if (vendorSearch) vendorSearch.value = '';
+      if (vendorMessage) vendorMessage.textContent = '';
+      renderVendorOptions();
+      vendorDialog?.showModal();
     }
 
     function openCrop(item) {
@@ -243,7 +298,27 @@ const allCategories = [...categories, 'Legacy Archive'];
       const mobile = mode === 'mobile';
       previewShell.style.maxWidth = mobile ? '390px' : '760px';
       cropFrame.style.height = mobile ? '520px' : '430px';
-      document.querySelectorAll('[data-preview-mode]').forEach((button) => {
+      vendorSearch?.addEventListener('input', renderVendorOptions);
+    document.querySelector('[data-vendor-close]')?.addEventListener('click', () => vendorDialog?.close());
+    document.querySelector('[data-vendor-cancel]')?.addEventListener('click', () => vendorDialog?.close());
+    document.querySelector('[data-vendor-save]')?.addEventListener('click', async () => {
+      if (!vendorSession) return;
+      if (vendorMessage) vendorMessage.textContent = 'Saving…';
+      const item = vendorSession.item;
+      await post({
+        action:'assign-vendors',
+        kind:item.kind,
+        id:item.kind === 'upload' ? item.id : undefined,
+        src:item.kind === 'curated' ? item.src : undefined,
+        vendorIds:[...vendorSession.vendorIds],
+      });
+      vendorDialog?.close();
+      vendorSession = null;
+      await load();
+    });
+    vendorDialog?.addEventListener('close', () => { vendorSession = null; });
+
+    document.querySelectorAll('[data-preview-mode]').forEach((button) => {
         const active = button.dataset.previewMode === mode;
         button.className = active
           ? 'rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white'
@@ -330,6 +405,12 @@ const allCategories = [...categories, 'Legacy Archive'];
       crop.textContent = 'Edit crop';
       crop.addEventListener('click', () => openCrop(item));
 
+      const vendorAssign = document.createElement('button');
+      vendorAssign.type = 'button';
+      vendorAssign.className = 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]';
+      vendorAssign.textContent = (item.vendorIds?.length || 0) ? 'Vendors (' + item.vendorIds.length + ')' : 'Assign vendors';
+      vendorAssign.addEventListener('click', () => openVendorEditor(item));
+
       const visibility = document.createElement('button');
       visibility.type = 'button';
       visibility.className = 'text-xs font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/55';
@@ -355,7 +436,7 @@ const allCategories = [...categories, 'Legacy Archive'];
         await load();
       });
 
-      actions.append(crop, visibility, remove);
+      actions.append(crop, vendorAssign, visibility, remove);
       body.append(alt, select, actions);
       article.append(imageWrap, body);
 
@@ -438,8 +519,10 @@ const allCategories = [...categories, 'Legacy Archive'];
         return;
       }
       ui?.classList.remove('hidden');
-      const response = await fetch('/api/gallery');
+      const [response, vendorResponse] = await Promise.all([fetch('/api/gallery'), fetch('/api/admin/vendors', { cache:'no-store' })]);
       state = await response.json();
+      const vendorPayload = vendorResponse.ok ? await vendorResponse.json() : { vendors: [] };
+      vendors = Array.isArray(vendorPayload.vendors) ? vendorPayload.vendors : [];
       const validKeys = new Set(allItems().map(itemKey));
       selected = new Set([...selected].filter((key) => validKeys.has(key)));
       render();
