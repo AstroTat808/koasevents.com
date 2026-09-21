@@ -116,14 +116,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <h3 class="display mt-2 text-3xl">Revenue, profit + margin performance</h3>
                 <p class="mt-2 max-w-3xl text-[.7rem] leading-5 text-white/50">Booked-only is the default operating view. Switch to all priced opportunities to model pipeline profitability using the same saved or automatic direct-cost assumptions.</p>
               </div>
-              <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">
-                Scope
-                <select data-mobile-profit-scope class="min-w-[220px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
-                  <option value="booked">Booked only</option>
-                  <option value="all">All priced opportunities</option>
-                </select>
+              <div class="grid w-full gap-3 sm:grid-cols-2 lg:w-auto lg:grid-cols-2">
+                <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">
+                  Scope
+                  <select data-mobile-profit-scope class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                    <option value="booked">Booked only</option>
+                    <option value="all">All priced opportunities</option>
+                  </select>
+                </label>
+                <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">
+                  Date range
+                  <select data-mobile-profit-period class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white">
+                    <option value="ytd">Year to date</option>
+                    <option value="trailing12">Trailing 12 months</option>
+                    <option value="custom">Custom range</option>
+                    <option value="all">All time</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div data-mobile-profit-custom-range class="mt-4 hidden grid gap-3 rounded-xl border border-white/10 bg-white/[.04] p-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">From
+                <input data-mobile-profit-from type="date" class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" />
+              </label>
+              <label class="grid gap-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white/58">Through
+                <input data-mobile-profit-to type="date" class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" />
               </label>
             </div>
+            <p data-mobile-profit-period-label class="mt-3 text-[.65rem] leading-5 text-white/45">Year-to-date performance</p>
 
             <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Revenue</p><strong data-mobile-profit-revenue class="display mt-2 block text-3xl text-white">$0</strong><p data-mobile-profit-revenue-meta class="mt-1 text-[.62rem] text-white/42">0 priced records</p></article>
@@ -131,6 +152,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Average margin</p><strong data-mobile-profit-margin class="display mt-2 block text-3xl text-white">0%</strong><p class="mt-1 text-[.62rem] text-white/42">Revenue-weighted portfolio margin</p></article>
               <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/50">Direct cost / guest</p><strong data-mobile-profit-cost-guest class="display mt-2 block text-3xl text-white">$0</strong><p data-mobile-profit-cost-guest-meta class="mt-1 text-[.62rem] text-white/42">0 guests represented</p></article>
             </div>
+
+            <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-profit-goals>
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goal + projection</p>
+                  <h4 data-mobile-profit-goal-title class="mt-1 text-lg font-semibold text-white">Current month</h4>
+                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Projected profit combines booked profit with probability-weighted profit from open Mobile Bar opportunities dated in the current month.</p>
+                </div>
+                <form data-mobile-profit-goal-form class="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
+                  <label class="grid flex-1 gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly gross-profit target
+                    <input data-mobile-profit-goal-input name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="e.g. 10000" />
+                  </label>
+                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goal</button>
+                </form>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Monthly target</p><strong data-mobile-goal-target class="display mt-1 block text-2xl text-white">$0</strong></article>
+                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Booked profit</p><strong data-mobile-goal-booked class="display mt-1 block text-2xl text-white">$0</strong></article>
+                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Projected profit</p><strong data-mobile-goal-projected class="display mt-1 block text-2xl text-white">$0</strong></article>
+                <article data-mobile-goal-gap-card class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Ahead / behind</p><strong data-mobile-goal-gap class="display mt-1 block text-2xl text-white">$0</strong><p data-mobile-goal-gap-copy class="mt-1 text-[.58rem] text-white/42">Set a goal to compare.</p></article>
+                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Avg. booked profit</p><strong data-mobile-goal-average class="display mt-1 block text-2xl text-white">—</strong></article>
+                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Bookings needed</p><strong data-mobile-goal-bookings class="display mt-1 block text-2xl text-white">—</strong><p data-mobile-goal-bookings-copy class="mt-1 text-[.58rem] text-white/42">Based on average booked profit.</p></article>
+              </div>
+              <div class="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><div data-mobile-goal-progress class="h-full rounded-full bg-[var(--koa-amber-light)]" style="width:0%"></div></div>
+              <p data-mobile-profit-goal-message class="mt-3 text-[.62rem] leading-5 text-white/50"></p>
+            </section>
 
             <div class="mt-4 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
               <section class="rounded-xl border border-white/10 bg-white/[.04] p-4">
@@ -532,6 +579,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileSort = document.querySelector('[data-mobile-sort]');
     const mobileMarginHealthSummary = document.querySelector('[data-mobile-margin-health-summary]');
     const mobileProfitScope = document.querySelector('[data-mobile-profit-scope]');
+    const mobileProfitPeriod = document.querySelector('[data-mobile-profit-period]');
+    const mobileProfitCustomRange = document.querySelector('[data-mobile-profit-custom-range]');
+    const mobileProfitFrom = document.querySelector('[data-mobile-profit-from]');
+    const mobileProfitTo = document.querySelector('[data-mobile-profit-to]');
+    const mobileProfitPeriodLabel = document.querySelector('[data-mobile-profit-period-label]');
+    const mobileProfitGoalForm = document.querySelector('[data-mobile-profit-goal-form]');
+    const mobileProfitGoalInput = document.querySelector('[data-mobile-profit-goal-input]');
+    const mobileProfitGoalTitle = document.querySelector('[data-mobile-profit-goal-title]');
+    const mobileGoalTarget = document.querySelector('[data-mobile-goal-target]');
+    const mobileGoalBooked = document.querySelector('[data-mobile-goal-booked]');
+    const mobileGoalProjected = document.querySelector('[data-mobile-goal-projected]');
+    const mobileGoalGapCard = document.querySelector('[data-mobile-goal-gap-card]');
+    const mobileGoalGap = document.querySelector('[data-mobile-goal-gap]');
+    const mobileGoalGapCopy = document.querySelector('[data-mobile-goal-gap-copy]');
+    const mobileGoalAverage = document.querySelector('[data-mobile-goal-average]');
+    const mobileGoalBookings = document.querySelector('[data-mobile-goal-bookings]');
+    const mobileGoalBookingsCopy = document.querySelector('[data-mobile-goal-bookings-copy]');
+    const mobileGoalProgress = document.querySelector('[data-mobile-goal-progress]');
+    const mobileProfitGoalMessage = document.querySelector('[data-mobile-profit-goal-message]');
     const mobileProfitRevenue = document.querySelector('[data-mobile-profit-revenue]');
     const mobileProfitRevenueMeta = document.querySelector('[data-mobile-profit-revenue-meta]');
     const mobileProfitGross = document.querySelector('[data-mobile-profit-gross]');
@@ -611,7 +677,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, conversions: {}, records: [], trash: [] };
+    let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, mobileBarProfitSettings: {}, conversions: {}, records: [], trash: [] };
     const selectedRecordIds = new Set();
     let editingRecord = null;
     let activityRecord = null;
