@@ -59,6 +59,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <label class="label">Carrier<input name="carrier" class="field"></label><label class="label">Policy number<input name="policyNumber" class="field"></label><label class="label">Expiration<input name="expiresAt" type="date" class="field"></label>
                 </div>
                 <label class="mt-3 flex items-center gap-2 text-sm font-semibold"><input name="additionalInsured" type="checkbox"> Koa’s listed as additional insured</label>
+                <div data-insurance-review class="mt-4 hidden rounded-xl border border-[var(--koa-line)] bg-white p-4">
+                  <div class="flex flex-wrap items-center gap-2"><button data-open-insurance type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open certificate</button><button data-approve-insurance type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white">Approve</button><button data-reject-insurance type="button" class="rounded-full border border-red-200 px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-red-700">Reject</button><span data-insurance-review-msg class="text-xs text-[var(--koa-ink)]/50"></span></div>
+                  <p data-insurance-rejection class="mt-2 text-xs text-red-700"></p>
+                </div>
               </div>
 
               <div class="rounded-xl bg-[var(--koa-ivory)] p-5">
@@ -105,6 +109,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       put('serviceAreas',(v.serviceAreas||[]).join(', '));put('specialties',(v.specialties||[]).join(', '));put('styles',(v.styles||[]).join(', '));
       put('insuranceStatus',v.insurance?.status||'not_requested');put('carrier',v.insurance?.carrier);put('policyNumber',v.insurance?.policyNumber);put('expiresAt',v.insurance?.expiresAt);form.elements.additionalInsured.checked=Boolean(v.insurance?.additionalInsured);
       put('staffRating',v.internal?.staffRating);put('punctuality',v.internal?.punctuality);put('communication',v.internal?.communication);put('venueCompliance',v.internal?.venueCompliance);put('cleanliness',v.internal?.cleanliness);put('internalNotes',v.internal?.notes);
+      document.querySelector('[data-insurance-review]')?.classList.toggle('hidden',!v.insurance?.document?.id);
+      const rejection=document.querySelector('[data-insurance-rejection]');if(rejection)rejection.textContent=v.insurance?.rejectionReason?('Last rejection: '+v.insurance.rejectionReason):'';
       galleryEl.innerHTML='';(v.gallery||[]).forEach(g=>galleryEl.appendChild(galleryRow(g)));
       document.querySelector('[data-portal-tools]')?.classList.toggle('hidden',!v.id);
       const pm=document.querySelector('[data-portal-msg]');if(pm)pm.textContent='';
@@ -132,6 +138,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-pause]').onclick=async()=>{if(!selected)return;await api({action:'archive-vendor',vendorId:selected.id});await load()};
     document.querySelector('[data-copy-portal]')?.addEventListener('click',async()=>{if(!selected?.portalToken)return;const url='https://koasevents.com/vendor-portal/?token='+encodeURIComponent(selected.portalToken);await navigator.clipboard.writeText(url);document.querySelector('[data-portal-msg]').textContent='Portal link copied.'});
     document.querySelector('[data-email-portal]')?.addEventListener('click',async()=>{if(!selected)return;const msg=document.querySelector('[data-portal-msg]');msg.textContent='Sending…';try{const d=await api({action:'send-portal-invite',vendorId:selected.id});msg.textContent=d.sent?'Portal invite sent.':'Portal link created, but email was not sent.'}catch(err){msg.textContent=err.message}});
+    document.querySelector('[data-open-insurance]')?.addEventListener('click',async()=>{if(!selected?.insurance?.document?.id)return;const r=await fetch('/api/admin/vendors/insurance/'+encodeURIComponent(selected.id));if(!r.ok)return;const blob=await r.blob();const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener,noreferrer');setTimeout(()=>URL.revokeObjectURL(url),60000)});
+    document.querySelector('[data-approve-insurance]')?.addEventListener('click',async()=>{if(!selected)return;const msg=document.querySelector('[data-insurance-review-msg]');msg.textContent='Approving…';try{await api({action:'review-insurance',vendorId:selected.id,decision:'approve'});msg.textContent='Approved.';await load()}catch(err){msg.textContent=err.message}});
+    document.querySelector('[data-reject-insurance]')?.addEventListener('click',async()=>{if(!selected)return;const reason=prompt('Why is this certificate being rejected?','');if(reason===null)return;const msg=document.querySelector('[data-insurance-review-msg]');msg.textContent='Rejecting…';try{await api({action:'review-insurance',vendorId:selected.id,decision:'reject',reason});msg.textContent='Rejected and vendor notified.';await load()}catch(err){msg.textContent=err.message}});
     load();
   </script>
 </BaseLayout>
