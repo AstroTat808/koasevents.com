@@ -2899,7 +2899,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const row=pairs.get(key)||{ids:[ids[i],ids[j]],events:0,ratings:[],onTime:0,reliabilityRated:0};
           row.events+=1;
           const perf=record.booking?.bartenderPerformance||[];
-          ids.slice(i,j+1).forEach((id)=>{
+          [ids[i],ids[j]].forEach((id)=>{
             const p=perf.find((entry)=>entry.bartenderId===id);
             if(!p)return;
             if(Number(p.clientRating||0)>0)row.ratings.push(Number(p.clientRating));
