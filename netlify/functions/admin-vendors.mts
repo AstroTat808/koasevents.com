@@ -19,6 +19,7 @@ function sanitize(body:any,current:any={}){
   const now=new Date().toISOString();
   return {
     id:clean(current.id||body?.id,80)||id(),
+    portalToken:clean(current.portalToken||body?.portalToken,100)||('vnd_'+crypto.randomUUID().replaceAll('-','')),
     name:clean(body?.name,180),
     legalName:clean(body?.legalName,180),
     category:clean(body?.category,100),
@@ -74,9 +75,9 @@ export default async(req:Request,context:Context)=>{
   const store=storeFor(context);
   const vendors=await list(store,'vendors/index');
   if(req.method==='GET'){
-    const reviews=await list(store,'reviews/index');
+    const [reviews,requests]=await Promise.all([list(store,'reviews/index'),list(store,'requests/index')]);
     const enriched=vendors.map(v=>{const rows=reviews.filter(r=>r.vendorId===v.id&&r.status==='published');const avg=rows.length?rows.reduce((s,r)=>s+Number(r.overall||0),0)/rows.length:0;return {...v,reviewSummary:{count:rows.length,average:Number(avg.toFixed(1))}};});
-    return Response.json({vendors:enriched,reviews},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({vendors:enriched,reviews,requests},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null); const action=clean(body?.action,40);
