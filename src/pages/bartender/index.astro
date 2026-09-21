@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Mobile Bar Bartender Portal" description="Private bartender scheduling, timeclock, availability and pay portal." canonical="https://koasevents.com/bartender/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-6 sm:py-10">
+    <div class="container-shell max-w-4xl">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+        <h1 class="display mt-3 text-5xl">Loading your bartender portal…</h1>
+      </section>
+      <section data-error class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Bartender portal</p>
+        <h1 class="display mt-3 text-4xl text-[var(--koa-forest)]">This private link is unavailable.</h1>
+        <p data-error-copy class="mt-3 text-sm text-[var(--koa-ink)]/55"></p>
+      </section>
+      <div data-app class="hidden grid gap-5">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-8">
+          <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Mobile Bar · Crew</p>
+          <h1 data-name class="display mt-3 text-5xl"></h1>
+          <p data-rate class="mt-2 text-sm text-white/60"></p>
+          <p class="mt-4 max-w-2xl text-sm leading-6 text-white/65">Confirm your shifts, update unavailable dates, clock in and out from your phone, and review recorded hours and pay.</p>
+        </header>
+
+        <section data-pay-summary class="grid gap-3 grid-cols-2 sm:grid-cols-4"></section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+          <p class="eyebrow text-[var(--koa-clay)]">Availability</p>
+          <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Unavailable dates</h2>
+          <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">Add dates you cannot work. Koa’s scheduling recommendations will treat you as unavailable on those dates.</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <input data-availability-date type="date" class="rounded-xl border border-[var(--koa-line)] px-3 py-2 text-sm" />
+            <button data-add-unavailable type="button" class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add date</button>
+          </div>
+          <div data-unavailable-list class="mt-4 flex flex-wrap gap-2"></div>
+          <button data-save-availability class="mt-4 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save availability</button>
+          <p data-availability-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+          <p class="eyebrow text-[var(--koa-clay)]">Assignments</p>
+          <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Your Mobile Bar shifts</h2>
+          <div data-shifts class="mt-5 grid gap-4"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    const params=new URLSearchParams(window.location.search);
+    const token=String(params.get('token')||'').trim();
+    const loading=document.querySelector('[data-loading]');
+    const error=document.querySelector('[data-error]');
+    const errorCopy=document.querySelector('[data-error-copy]');
+    const app=document.querySelector('[data-app]');
+    const nameEl=document.querySelector('[data-name]');
+    const rateEl=document.querySelector('[data-rate]');
+    const summary=document.querySelector('[data-pay-summary]');
+    const shiftsEl=document.querySelector('[data-shifts]');
+    const availabilityDate=document.querySelector('[data-availability-date]');
+    const unavailableList=document.querySelector('[data-unavailable-list]');
+    const availabilityMessage=document.querySelector('[data-availability-message]');
+    let state=null;
+    let unavailableDates=[];
+
+    const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
+    const date=(value)=>value?new Intl.DateTimeFormat('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(value+'T12:00:00')):'';
+    const dateTime=(value)=>value?new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'Pacific/Honolulu'}).format(new Date(value)):'';
+
+    async function api(body=null){
+      const response=await fetch('/api/bartender/'+encodeURIComponent(token),body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Unable to update bartender portal.');
+      return data;
+    }
+    function stat(label,value){
+      const el=document.createElement('article');el.className='rounded-xl bg-white p-4 shadow-[var(--shadow-soft)]';
+      el.innerHTML='<p class="text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+label+'</p><strong class="display mt-1 block text-2xl text-[var(--koa-forest)]">'+value+'</strong>';
+      return el;
+    }
+    function renderAvailability(){
+      unavailableList.innerHTML='';
+      unavailableDates.forEach((value)=>{
+        const chip=document.createElement('button');chip.type='button';chip.className='rounded-full bg-[var(--koa-ivory)] px-3 py-2 text-xs text-[var(--koa-forest)]';chip.textContent=date(value)+' ×';
+        chip.addEventListener('click',()=>{unavailableDates=unavailableDates.filter((entry)=>entry!==value);renderAvailability();});
+        unavailableList.appendChild(chip);
+      });
+      if(!unavailableDates.length)unavailableList.innerHTML='<p class="text-xs text-[var(--koa-ink)]/40">No unavailable dates saved.</p>';
+    }
+    function shiftCard(shift){
+      const card=document.createElement('article');card.className='rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+      const top=document.createElement('div');top.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
+      const left=document.createElement('div');left.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+shift.packageName+'</p><h3 class="display mt-1 text-2xl text-[var(--koa-forest)]">'+date(shift.eventDate)+'</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+shift.clientName+' · '+shift.guestCount+' guests · '+shift.serviceHours+' service hr</p>';
+      const badge=document.createElement('span');badge.className='w-fit rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';badge.textContent=shift.responseStatus||'pending';top.append(left,badge);card.appendChild(top);
+
+      const pay=document.createElement('div');pay.className='mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4';
+      [['Hours',Number(shift.pay.hours||0).toFixed(2)],['Wages',money(shift.pay.wages)],['Tips',money(shift.pay.tips)],['Total',money(shift.pay.total)]].forEach(([label,value])=>pay.appendChild(stat(label,value)));
+      card.appendChild(pay);
+
+      const status=document.createElement('p');status.className='mt-3 text-xs text-[var(--koa-ink)]/50';status.setAttribute('aria-live','polite');
+      status.textContent=shift.clockedIn?'Clocked in '+dateTime(shift.clockInAt):shift.clockOutAt?'Clocked out '+dateTime(shift.clockOutAt):'Not clocked in.';
+      card.appendChild(status);
+      const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
+      if(shift.responseStatus!=='confirmed'){
+        const confirm=document.createElement('button');confirm.type='button';confirm.className='rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white';confirm.textContent='Confirm shift';
+        confirm.onclick=()=>updateShift({action:'respond-shift',recordId:shift.recordId,response:'confirmed'},status);
+        actions.appendChild(confirm);
+      }
+      const decline=document.createElement('button');decline.type='button';decline.className='rounded-full border border-red-200 px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-red-700';decline.textContent='Decline shift';
+      decline.onclick=async()=>{if(confirm('Decline this shift? Koa’s will need to restaff it.'))await updateShift({action:'respond-shift',recordId:shift.recordId,response:'declined'},status);};
+      actions.appendChild(decline);
+
+      const clock=document.createElement('button');clock.type='button';clock.className='rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white';
+      clock.textContent=shift.clockedIn?'Clock out':'Clock in';
+      clock.onclick=()=>updateShift({action:shift.clockedIn?'clock-out':'clock-in',recordId:shift.recordId},status);
+      actions.appendChild(clock);card.appendChild(actions);
+      return card;
+    }
+    function render(){
+      nameEl.textContent=state.bartender.name;
+      rateEl.textContent=money(state.bartender.hourlyRate)+'/hr';
+      summary.innerHTML='';
+      summary.append(stat('Hours',Number(state.payroll.hours||0).toFixed(2)),stat('Wages',money(state.payroll.wages)),stat('Tips',money(state.payroll.tips)),stat('Total pay',money(state.payroll.total)));
+      unavailableDates=[...(state.bartender.unavailableDates||[])];renderAvailability();
+      shiftsEl.innerHTML='';
+      const nowKey=new Date().toLocaleDateString('en-CA',{timeZone:'Pacific/Honolulu'});
+      const upcoming=(state.shifts||[]).filter((shift)=>shift.eventDate>=nowKey);
+      const past=(state.shifts||[]).filter((shift)=>shift.eventDate<nowKey).sort((a,b)=>String(b.eventDate).localeCompare(String(a.eventDate)));
+      if(upcoming.length){
+        shiftsEl.appendChild(Object.assign(document.createElement('h3'),{className:'text-sm font-bold text-[var(--koa-forest)]',textContent:'Upcoming'}));
+        upcoming.forEach((shift)=>shiftsEl.appendChild(shiftCard(shift)));
+      }
+      if(past.length){
+        shiftsEl.appendChild(Object.assign(document.createElement('h3'),{className:'mt-3 text-sm font-bold text-[var(--koa-forest)]',textContent:'Past shifts'}));
+        past.slice(0,12).forEach((shift)=>shiftsEl.appendChild(shiftCard(shift)));
+      }
+      if(!(state.shifts||[]).length)shiftsEl.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No Mobile Bar shifts are currently assigned to you.</p>';
+    }
+    async function reload(){
+      state=await api();render();
+    }
+    async function updateShift(body,status){
+      status.textContent='Saving…';
+      try{await api(body);await reload();}catch(err){status.textContent=err.message||'Unable to update shift.';}
+    }
+    document.querySelector('[data-add-unavailable]')?.addEventListener('click',()=>{
+      const value=availabilityDate.value;if(!value)return;
+      if(!unavailableDates.includes(value))unavailableDates.push(value);unavailableDates.sort();availabilityDate.value='';renderAvailability();
+    });
+    document.querySelector('[data-save-availability]')?.addEventListener('click',async()=>{
+      availabilityMessage.textContent='Saving availability…';
+      try{await api({action:'save-availability',unavailableDates});availabilityMessage.textContent='Availability saved.';await reload();}catch(err){availabilityMessage.textContent=err.message||'Unable to save availability.';}
+    });
+    (async()=>{
+      if(!token){loading.classList.add('hidden');error.classList.remove('hidden');errorCopy.textContent='The portal token is missing.';return;}
+      try{await reload();loading.classList.add('hidden');app.classList.remove('hidden');}
+      catch(err){loading.classList.add('hidden');error.classList.remove('hidden');errorCopy.textContent=err.message||'This portal link could not be loaded.';}
+    })();
+  </script>
+</BaseLayout>
