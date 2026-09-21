@@ -152,13 +152,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       try{
         const data=await api({action:'sandbox-smoke-test'});
         const t=data.test||{};
-        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance 
-    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemSelect?.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
-
-    load();
-  </script>
-</BaseLayout>
-+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
+        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance $'+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
       }catch(err){
         sandboxTestMessage.textContent=err.message||'Sandbox test failed.';
       }finally{
