@@ -349,6 +349,9 @@ export default async (req: Request, context: Context) => {
         ops = defaultOps(record);
         await opsStore.setJSON('events/' + record.id, ops);
       }
+      const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+      const refreshedVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
+      if(JSON.stringify(refreshedVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       if (!Array.isArray((ops as any).vendorRequirements)) {
         (ops as any).vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
         (ops as any).vendorRequirementsMode = 'auto';
