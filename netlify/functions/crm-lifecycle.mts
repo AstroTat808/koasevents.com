@@ -1,7 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 import { ensureLifecycle, markLifecycleEvent } from './_shared/lifecycle';
-import { assessCrmRecord } from './_shared/crm-cleanup';
+import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 
 const HST=-10*60*60*1000;
 function hstDate(){return new Date(Date.now()+HST).toISOString().slice(0,10);}
@@ -13,11 +13,13 @@ async function autoTrashChain(context:Context,root:any,records:any[]){const stor
 export default async(_req:Request,context:Context)=>{
   if(context.deploy.context!=='production')return;
   const store=sales();let records:any[]=(await store.get('records/index',{type:'json'}))||[];
+  const settings:any=(await store.get('settings/crm-cleanup',{type:'json'}))||{mode:'auto_trash'};
+  const cleanupMode=normalizeCleanupMode(settings.mode);
   const today=hstDate();
   for(const record of [...records].slice(0,1500)){
     if(!record?.id || !records.some(r=>r.id===record.id))continue;
     const cleanup=assessCrmRecord(record);
-    if(cleanup.autoTrash){
+    if(cleanup.autoTrash && cleanupMode==='auto_trash'){
       records=await autoTrashChain(context,record,records);
       continue;
     }
