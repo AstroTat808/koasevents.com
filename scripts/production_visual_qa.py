@@ -184,6 +184,10 @@ def source_mode():
   "workload warning validation":"mobileBarWorkloadWarnings",
   "bartender performance storage":"bartenderPerformance?:",
   "bartender performance action":"update-mobile-bar-bartender-performance",
+  "bartender hourly rate persistence":"hourlyRate: number",
+  "bartender portal token persistence":"portalToken: string",
+  "bartender timecard storage":"bartenderTimecards?:",
+  "assignment response state":"responseStatus?:'pending'|'confirmed'|'declined'",
   "profit settings storage":"settings/mobile-bar-profitability",
   "profit settings action":"update-mobile-bar-profit-settings",
   "margin target action":"apply-mobile-bar-margin-target",
@@ -202,7 +206,62 @@ def source_mode():
   SRC/"pages/admin/seo/index.astro",
   SRC/"pages/admin/staff/index.astro",
   SRC/"pages/admin/health/index.astro",
+  SRC/"pages/admin/payroll/index.astro",
  ]
+ bartender_portal_api=(ROOT/"netlify/functions/bartender-portal.mts")
+ payroll_api=(ROOT/"netlify/functions/admin-payroll.mts")
+ bartender_portal_page=(SRC/"pages/bartender/index.astro")
+ payroll_page=(SRC/"pages/admin/payroll/index.astro")
+ workforce_files=[
+  ("bartender portal API",bartender_portal_api),
+  ("payroll API",payroll_api),
+  ("bartender portal page",bartender_portal_page),
+  ("payroll admin page",payroll_page),
+ ]
+ for label,path in workforce_files:
+  if not path.is_file(): failures.append("Missing Mobile Bar workforce file: "+label+" · "+str(path.relative_to(ROOT)))
+ if bartender_portal_api.is_file():
+  text=bartender_portal_api.read_text(encoding="utf-8",errors="ignore")
+  for label,needle in {
+   "private bartender route":"path:'/api/bartender/:token'",
+   "shift response":"respond-shift",
+   "clock in":"clock-in",
+   "clock out":"clock-out",
+   "availability update":"save-availability",
+   "Hawaii clock validation":"Pacific/Honolulu",
+   "automatic actual-hour sync":"upsertPerformanceHours",
+  }.items():
+   if needle not in text: failures.append("Bartender portal API missing "+label+": "+needle)
+ if payroll_api.is_file():
+  text=payroll_api.read_text(encoding="utf-8",errors="ignore")
+  for label,needle in {
+   "admin protection":"requireOperations",
+   "pay period start":"searchParams.get('start')",
+   "pay period end":"searchParams.get('end')",
+   "hourly wage calculation":"hours*rate",
+   "tips reporting":"tips",
+   "total compensation":"total",
+  }.items():
+   if needle not in text: failures.append("Payroll API missing "+label+": "+needle)
+ if bartender_portal_page.is_file():
+  text=bartender_portal_page.read_text(encoding="utf-8",errors="ignore")
+  for label,needle in {
+   "shift confirmation":"Confirm shift",
+   "shift decline":"Decline shift",
+   "clock control":"Clock in",
+   "availability editor":"data-save-availability",
+   "personal pay summary":"Total pay",
+  }.items():
+   if needle not in text: failures.append("Bartender portal page missing "+label+": "+needle)
+ if payroll_page.is_file():
+  text=payroll_page.read_text(encoding="utf-8",errors="ignore")
+  for label,needle in {
+   "pay period form":"data-period-form",
+   "payroll summary":"data-summary",
+   "payroll rows":"data-payroll-rows",
+  }.items():
+   if needle not in text: failures.append("Payroll admin page missing "+label+": "+needle)
+
  for path in protected_admin_pages:
   text=path.read_text(encoding="utf-8",errors="ignore")
   if "@netlify/identity" in text:
