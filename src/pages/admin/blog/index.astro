@@ -55,7 +55,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function hasManagerAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
       const roles = userRoles(user);
-      return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager');
+      const meta=user?.appMetadata||user?.app_metadata||{};
+      const permissions=Array.isArray(meta.permissions)?meta.permissions.map((p)=>String(p||'').toLowerCase()):[];
+      return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager') || permissions.includes('blog.manage');
     }
     function applyRoleUi() {
       const publishedOption=form?.elements?.status?.querySelector?.('option[value="published"]');
