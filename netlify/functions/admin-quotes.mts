@@ -94,8 +94,39 @@ type ProfitModel = {
   notes: string;
   updatedAt: string;
 };
+type ForecastWeights = {
+  inquiry: number;
+  lead: number;
+  draft: number;
+  proposal: number;
+  sent: number;
+  viewed: number;
+  accepted: number;
+};
+type MobileBarBartenderAvailability = {
+  id: string;
+  name: string;
+  active: boolean;
+  unavailableDates: string[];
+};
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
+  quarterlyGrossProfitTarget: number;
+  annualGrossProfitTarget: number;
+  forecastProbabilities: {
+    conservative: ForecastWeights;
+    expected: ForecastWeights;
+    aggressive: ForecastWeights;
+  };
+  simulator: {
+    bartenderCapacityPerDay: number;
+    maxBookingsPerMonth: number;
+    planningHorizonMonths: number;
+  };
+  staffing: {
+    blackoutDates: string[];
+    bartenders: MobileBarBartenderAvailability[];
+  };
   updatedAt: string;
 };
 
@@ -244,17 +275,90 @@ async function writeSalesIndex(context: Context, records: SalesRecord[]) {
   const store = salesStoreFor(context);
   await store.setJSON('records/index', records.slice(0, 1500));
 }
+const defaultForecastProbabilities: MobileBarProfitSettings['forecastProbabilities'] = {
+  conservative: { inquiry:.05, lead:.15, draft:.25, proposal:.30, sent:.45, viewed:.55, accepted:.80 },
+  expected: { inquiry:.15, lead:.30, draft:.50, proposal:.45, sent:.65, viewed:.75, accepted:.95 },
+  aggressive: { inquiry:.30, lead:.50, draft:.65, proposal:.60, sent:.80, viewed:.90, accepted:.98 },
+};
+
+function forecastWeights(input:any, fallback:ForecastWeights): ForecastWeights {
+  return {
+    inquiry: finite(input?.inquiry ?? fallback.inquiry, 0, 1),
+    lead: finite(input?.lead ?? fallback.lead, 0, 1),
+    draft: finite(input?.draft ?? fallback.draft, 0, 1),
+    proposal: finite(input?.proposal ?? fallback.proposal, 0, 1),
+    sent: finite(input?.sent ?? fallback.sent, 0, 1),
+    viewed: finite(input?.viewed ?? fallback.viewed, 0, 1),
+    accepted: finite(input?.accepted ?? fallback.accepted, 0, 1),
+  };
+}
+
+function isoDateList(input:unknown, limit=366) {
+  const raw = Array.isArray(input) ? input : String(input || '').split(/[\s,]+/);
+  return Array.from(new Set(raw
+    .map((value:any)=>cleanText(value, 20))
+    .filter((value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value))))
+    .sort()
+    .slice(0, limit);
+}
+
+function bartenderAvailabilityList(input:unknown): MobileBarBartenderAvailability[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 60).map((entry:any, index:number) => ({
+    id: cleanText(entry?.id || ('bartender-' + (index + 1)), 80) || ('bartender-' + (index + 1)),
+    name: cleanText(entry?.name || '', 120),
+    active: entry?.active !== false,
+    unavailableDates: isoDateList(entry?.unavailableDates, 366),
+  })).filter((entry)=>entry.name);
+}
+
 async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
-  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as MobileBarProfitSettings | null;
+  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
   return {
     monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(saved?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(saved?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
+    forecastProbabilities: {
+      conservative: forecastWeights(saved?.forecastProbabilities?.conservative, defaultForecastProbabilities.conservative),
+      expected: forecastWeights(saved?.forecastProbabilities?.expected, defaultForecastProbabilities.expected),
+      aggressive: forecastWeights(saved?.forecastProbabilities?.aggressive, defaultForecastProbabilities.aggressive),
+    },
+    simulator: {
+      bartenderCapacityPerDay: finite(saved?.simulator?.bartenderCapacityPerDay ?? 0, 0, 100),
+      maxBookingsPerMonth: finite(saved?.simulator?.maxBookingsPerMonth ?? 0, 0, 100),
+      planningHorizonMonths: finite(saved?.simulator?.planningHorizonMonths ?? 6, 1, 24),
+    },
+    staffing: {
+      blackoutDates: isoDateList(saved?.staffing?.blackoutDates, 730),
+      bartenders: bartenderAvailabilityList(saved?.staffing?.bartenders),
+    },
     updatedAt: cleanText(saved?.updatedAt || '', 60),
   };
 }
 
 async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
+  const current = await readMobileBarProfitSettings(context);
+  const requestedForecast = input?.forecastProbabilities || {};
+  const requestedSimulator = input?.simulator || {};
+  const requestedStaffing = input?.staffing || {};
   const settings: MobileBarProfitSettings = {
-    monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? current.monthlyGrossProfitTarget, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(input?.quarterlyGrossProfitTarget ?? current.quarterlyGrossProfitTarget, 0, 3_000_000),
+    annualGrossProfitTarget: finite(input?.annualGrossProfitTarget ?? current.annualGrossProfitTarget, 0, 12_000_000),
+    forecastProbabilities: {
+      conservative: forecastWeights(requestedForecast.conservative, current.forecastProbabilities.conservative),
+      expected: forecastWeights(requestedForecast.expected, current.forecastProbabilities.expected),
+      aggressive: forecastWeights(requestedForecast.aggressive, current.forecastProbabilities.aggressive),
+    },
+    simulator: {
+      bartenderCapacityPerDay: finite(requestedSimulator.bartenderCapacityPerDay ?? current.simulator.bartenderCapacityPerDay, 0, 100),
+      maxBookingsPerMonth: finite(requestedSimulator.maxBookingsPerMonth ?? current.simulator.maxBookingsPerMonth, 0, 100),
+      planningHorizonMonths: finite(requestedSimulator.planningHorizonMonths ?? current.simulator.planningHorizonMonths, 1, 24),
+    },
+    staffing: {
+      blackoutDates: input?.staffing ? isoDateList(requestedStaffing.blackoutDates, 730) : current.staffing.blackoutDates,
+      bartenders: input?.staffing ? bartenderAvailabilityList(requestedStaffing.bartenders) : current.staffing.bartenders,
+    },
     updatedAt: new Date().toISOString(),
   };
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
@@ -1833,7 +1937,7 @@ export default async (req: Request, context: Context) => {
     const settings = await writeMobileBarProfitSettings(context, payload.settings || {});
     await appendEvent(context, {
       type: 'mobile_bar_profit_settings_updated',
-      detail: 'Mobile Bar monthly gross-profit target updated to ' + settings.monthlyGrossProfitTarget.toFixed(2) + '.',
+      detail: 'Mobile Bar profitability planning settings updated: monthly ' + settings.monthlyGrossProfitTarget.toFixed(2) + ', quarterly ' + settings.quarterlyGrossProfitTarget.toFixed(2) + ', annual ' + settings.annualGrossProfitTarget.toFixed(2) + '.',
     });
     await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly gross-profit target.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget}});
     return Response.json({ ok: true, settings }, { headers: { 'Cache-Control':'private, no-store' } });
