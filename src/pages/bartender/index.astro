@@ -100,12 +100,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       card.appendChild(status);
       const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
       if(shift.responseStatus!=='confirmed'){
-        const confirm=document.createElement('button');confirm.type='button';confirm.className='rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white';confirm.textContent='Confirm shift';
-        confirm.onclick=()=>updateShift({action:'respond-shift',recordId:shift.recordId,response:'confirmed'},status);
-        actions.appendChild(confirm);
+        const confirmButton=document.createElement('button');confirmButton.type='button';confirmButton.className='rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white';confirmButton.textContent='Confirm shift';
+        confirmButton.onclick=()=>updateShift({action:'respond-shift',recordId:shift.recordId,response:'confirmed'},status);
+        actions.appendChild(confirmButton);
       }
       const decline=document.createElement('button');decline.type='button';decline.className='rounded-full border border-red-200 px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-red-700';decline.textContent='Decline shift';
-      decline.onclick=async()=>{if(confirm('Decline this shift? Koa’s will need to restaff it.'))await updateShift({action:'respond-shift',recordId:shift.recordId,response:'declined'},status);};
+      decline.onclick=async()=>{if(window.confirm('Decline this shift? Koa’s will need to restaff it.'))await updateShift({action:'respond-shift',recordId:shift.recordId,response:'declined'},status);};
       actions.appendChild(decline);
 
       const clock=document.createElement('button');clock.type='button';clock.className='rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white';
