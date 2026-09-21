@@ -63,7 +63,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div><p data-detail-stage class="eyebrow text-[var(--koa-amber-light)]">Project</p><h2 data-detail-name class="display mt-2 text-4xl"></h2><p data-detail-contact class="mt-2 text-sm text-white/58"></p></div>
-                <div data-detail-links class="flex flex-wrap gap-2"></div>
+                <div class="flex flex-wrap gap-2">
+                  <div data-detail-links class="flex flex-wrap gap-2"></div>
+                  <button type="button" data-trash-client class="rounded-full border border-red-300/35 bg-red-950/25 px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-red-100">Move to Trash</button>
+                </div>
               </div>
               <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Event date</p><p data-detail-date class="mt-1 font-semibold"></p></div>
@@ -257,6 +260,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>{const t=data.templates.find(x=>x.id===b.dataset.editTemplate);const f=$('[data-template-form]');f.id.value=t.id;f.type.value=t.type;f.name.value=t.name;f.subject.value=t.subject;f.body.value=t.body;f.active.checked=t.active;f.scrollIntoView({behavior:'smooth',block:'center'});}));
   }
   $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects);
+  $('[data-trash-client]')?.addEventListener('click',async()=>{
+    const p=data.projects.find(x=>x.id===selectedId); if(!p)return;
+    const name=p.customer?.name||'this client';
+    if(!confirm('Move '+name+' to Trash?\n\nThis removes the related inquiry/lead chain from the active pipeline for 30 days. Proposals, bookings, contracts, invoices, and payment-linked records are automatically protected.'))return;
+    const button=$('[data-trash-client]'); const original=button.textContent; button.disabled=true; button.textContent='Moving…';
+    try{
+      const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'trash-client-chain',recordId:selectedId})});
+      const j=await r.json().catch(()=>({})); if(!r.ok)throw new Error(j.error||'Unable to move client to Trash.');
+      selectedId=''; $('[data-detail]').classList.add('hidden'); $('[data-detail-empty]').classList.remove('hidden');
+      await load();
+    }catch(err){alert(err.message||'Unable to move client to Trash.');}
+    finally{button.disabled=false;button.textContent=original;}
+  });
   $('[data-project-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-project',recordId:selectedId,projectStatus:f.projectStatus.value,owner:f.owner.value,company:f.company.value,address:f.address.value,partnerName:f.partnerName.value,sourceDetail:f.sourceDetail.value,tags:f.tags.value.split(',').map(x=>x.trim()).filter(Boolean)});await load();});
   $('[data-note-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-note',recordId:selectedId,body:f.body.value});f.reset();await load();});
   $('[data-task-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-task',recordId:selectedId,title:f.title.value,dueDate:f.dueDate.value,assignee:f.assignee.value,priority:f.priority.value});f.reset();await load();});
