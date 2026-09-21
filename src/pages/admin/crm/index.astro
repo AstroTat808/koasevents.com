@@ -311,8 +311,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
 <script>
-  import { getUser } from '@netlify/identity';
-  const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
   let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],cleanupAudit:[],cleanupAnalytics:{},cleanupSettings:{mode:'auto_trash'}};
@@ -324,24 +323,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   const selectedProjects=new Set();
   let visibleProjectIds=[];
 
-  function userRoles(user){ const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles]; return (sources.find(Array.isArray)||[]).map((r)=>String(r||'').toLowerCase()); }
-  function userPermissions(user){ const meta=user?.appMetadata||user?.app_metadata||{}; return (Array.isArray(meta.permissions)?meta.permissions:[]).map((p)=>String(p||'').toLowerCase()); }
-  function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.some((role)=>['admin','manager','sales','staff'].includes(role)); }
-  function manager(user){ const email=String(user?.email||'').toLowerCase(); const roles=userRoles(user); return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager'); }
-  function can(user,permission){ return manager(user)||userPermissions(user).includes(permission); }
-  function applyRoleUi(user){
-    if(!can(user,'crm.cleanup_policy')) $('[data-cleanup-settings]')?.classList.add('hidden');
-    if(!can(user,'crm.destructive')) ['[data-bulk-trash]','[data-toggle-trash]','[data-trash-client]'].forEach((selector)=>$(selector)?.classList.add('hidden'));
-    if(!can(user,'crm.workflows')) $('[data-workflow-form]')?.closest('section')?.classList.add('hidden');
-    if(!can(user,'crm.templates')) $('[data-template-form]')?.closest('section')?.classList.add('hidden');
+  function can(permission){ return Array.isArray(data.access?.capabilities) && data.access.capabilities.includes(permission); }
+  function applyRoleUi(){
+    if(!can('crm.cleanup_policy')) $('[data-cleanup-settings]')?.classList.add('hidden');
+    if(!can('crm.destructive')) ['[data-bulk-trash]','[data-toggle-trash]','[data-trash-client]'].forEach((selector)=>$(selector)?.classList.add('hidden'));
+    if(!can('crm.workflows')) $('[data-workflow-form]')?.closest('section')?.classList.add('hidden');
+    if(!can('crm.templates')) $('[data-template-form]')?.closest('section')?.classList.add('hidden');
   }
   const money=(n)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n)||0);
   const esc=(s)=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const fmt=(s)=>{ if(!s)return '—'; const d=new Date(s); return Number.isNaN(d.getTime())?s:d.toLocaleString('en-US',{dateStyle:'medium',timeStyle:s.includes('T')?'short':undefined}); };
   async function post(payload){ const r=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Request failed'); return j; }
   async function load(){
-    const r=await fetch('/api/admin/crm',{cache:'no-store'}); if(!r.ok) throw new Error('Unable to load CRM');
-    data=await r.json(); render();
+    const r=await fetch('/api/admin/crm',{cache:'no-store'});
+    if(r.status===401||r.status===403){
+      $('[data-admin-ui]')?.classList.add('hidden');
+      $('[data-unauthorized]')?.classList.remove('hidden');
+      return false;
+    }
+    if(!r.ok) throw new Error('Unable to load CRM');
+    data=await r.json();
+    $('[data-unauthorized]')?.classList.add('hidden');
+    $('[data-admin-ui]')?.classList.remove('hidden');
+    applyRoleUi();
+    render();
+    return true;
   }
   function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName].join(' ').toLowerCase(); }
   function openTasks(recordId){ return data.tasks.filter(t=>t.recordId===recordId&&t.status!=='done'); }
@@ -571,6 +577,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   $('[data-workflow-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const steps=f.steps.value.split('\n').map((line,i)=>{const [days,...rest]=line.split('|');return{id:'',label:'Step '+(i+1),offsetDays:Number(days)||0,taskTitle:rest.join('|').trim()}}).filter(x=>x.taskTitle);await post({action:'save-workflow',id:f.id.value,name:f.name.value,description:f.description.value,trigger:f.trigger.value,steps,active:f.active.checked});f.reset();f.active.checked=true;await load();});
   $('[data-template-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-template',id:f.id.value,type:f.type.value,name:f.name.value,subject:f.subject.value,body:f.body.value,active:f.active.checked});f.reset();f.active.checked=true;await load();});
 
-  (async()=>{const user=await getUser();const ok=admin(user);$('[data-unauthorized]').classList.toggle('hidden',ok);$('[data-admin-ui]').classList.toggle('hidden',!ok);if(ok){applyRoleUi(user);await load();}})();
+  (async()=>{try{await load();}catch(error){console.error('Business CRM startup failed',error);$('[data-admin-ui]')?.classList.add('hidden');$('[data-unauthorized]')?.classList.remove('hidden');const box=$('[data-unauthorized]');if(box) box.textContent='Business CRM could not initialize. Refresh the page or sign in again from Staff Home.';}})();
 </script>
 </BaseLayout>
