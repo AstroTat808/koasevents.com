@@ -561,6 +561,7 @@ function remindersForRecord(record: SalesRecord) {
 function bookingSummary(record: SalesRecord) {
   if (!record.proposal || !['accepted','booked'].includes(record.proposal.status)) return null;
   const booking = record.booking;
+  const quickbooks = (record as any)?.accounting?.quickbooks || null;
   const invoices = quickBooksInvoiceMap(record);
   const schedule = booking?.payments?.length
     ? booking.payments
@@ -568,18 +569,19 @@ function bookingSummary(record: SalesRecord) {
 
   const payments = schedule.map((item:any,index:number) => {
     const invoice = invoices.find((row:any) => row.paymentId === item.id);
-    const balance = invoice?.invoiceId ? Number(invoice.balance ?? invoice.amount ?? item.amount ?? 0) : Number(item.amount || 0);
+    const activeInvoice = invoice?.invoiceId && !['void','deleted'].includes(String(invoice?.status || '').toLowerCase());
+    const balance = activeInvoice ? Number(invoice.balance ?? invoice.amount ?? item.amount ?? 0) : Number(item.amount || 0);
     return {
       id: item.id || 'pay-'+(index+1),
       label: item.label,
       dueDate: item.dueDate,
       amount: Number(item.amount || 0),
-      status: !invoice?.invoiceId ? 'not_invoiced' : balance <= 0 ? 'paid' : 'open',
-      invoiceId: invoice?.invoiceId || '',
-      docNumber: invoice?.docNumber || '',
+      status: !activeInvoice ? 'not_invoiced' : balance <= 0 ? 'paid' : 'open',
+      invoiceId: activeInvoice ? (invoice?.invoiceId || '') : '',
+      docNumber: activeInvoice ? (invoice?.docNumber || '') : '',
       balance,
-      emailStatus: invoice?.emailStatus || '',
-      lastSyncedAt: invoice?.lastSyncedAt || '',
+      emailStatus: activeInvoice ? (invoice?.emailStatus || '') : '',
+      lastSyncedAt: activeInvoice ? (invoice?.lastSyncedAt || '') : '',
     };
   });
 
@@ -587,6 +589,18 @@ function bookingSummary(record: SalesRecord) {
     if (!item.invoiceId) return sum;
     return sum + Math.max(0, Number(item.amount || 0) - Number(item.balance || 0));
   }, 0);
+  const outstanding = Math.max(0, Number(record.proposal.total || 0)-paid);
+  const qboBalanceDue = quickbooks?.balanceDue != null
+    ? Math.max(0, Number(quickbooks.balanceDue || 0))
+    : payments.filter((item:any)=>item.invoiceId).reduce((sum:number,item:any)=>sum+Math.max(0,Number(item.balance||0)),0);
+  const hasInvoices = payments.some((item:any)=>Boolean(item.invoiceId));
+  const depositPaid = Boolean(quickbooks?.depositPaid || payments[0]?.status === 'paid');
+
+  let paymentStatus = 'Balance Due';
+  if (outstanding <= 0 && Number(record.proposal.total || 0) > 0) paymentStatus = 'Paid in Full';
+  else if (paid > 0 && qboBalanceDue > 0) paymentStatus = 'Partially Paid';
+  else if (paid > 0 && qboBalanceDue <= 0) paymentStatus = 'Paid';
+  else if (!hasInvoices && outstanding > 0) paymentStatus = 'Balance Due';
 
   return {
     status: booking?.status || 'contract_pending',
@@ -596,9 +610,13 @@ function bookingSummary(record: SalesRecord) {
     koaSigner: booking?.contract?.koaSignature?.name || '',
     payments,
     paid,
-    outstanding: Math.max(0, Number(record.proposal.total || 0)-paid),
+    outstanding,
+    qboBalanceDue,
+    hasInvoices,
+    depositPaid,
+    paymentStatus,
     bookingUrl: record.proposal.publicToken ? '/booking/?token='+record.proposal.publicToken : '',
-    quickbooks: (record as any)?.accounting?.quickbooks || null,
+    quickbooks,
   };
 }
 
