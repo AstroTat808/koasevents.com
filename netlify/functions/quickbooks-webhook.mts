@@ -328,6 +328,34 @@ async function updateSmokeTestWebhookStatus(context: Context, receipt: any) {
   return smoke.webhook;
 }
 
+async function updateLinkedBookingTestStatus(context: Context, processed: any) {
+  const store = integrationStore(context);
+  const test: any = await store.get('quickbooks/sandbox-linked-booking-test', { type: 'json' });
+  if (!test?.recordId) return null;
+
+  const sales = salesStore(context);
+  const record: any = await sales.get('records/' + test.recordId, { type: 'json' });
+  const state = record?.accounting?.quickbooks || {};
+  const affected = Array.isArray(processed?.affectedRecords) && processed.affectedRecords.includes(test.recordId);
+  const verified = Boolean(
+    record &&
+    affected &&
+    record.stage === test.expectedStage &&
+    state.depositPaid === test.expectedDepositPaid &&
+    Number(state.balanceDue || 0) === Number(test.expectedBalanceDue || 0)
+  );
+
+  test.lastCheckedAt = new Date().toISOString();
+  test.crmAffected = affected;
+  test.actualStage = String(record?.stage || '');
+  test.depositPaid = Boolean(state.depositPaid);
+  test.balanceDue = Number(state.balanceDue || 0);
+  test.verified = verified;
+  test.webhookPending = !verified;
+  await store.setJSON('quickbooks/sandbox-linked-booking-test', test);
+  return test;
+}
+
 async function diagnostics(context: Context) {
   const store = integrationStore(context);
   const [receipt, processed, smoke] = await Promise.all([
@@ -431,6 +459,7 @@ export default async (req: Request, context: Context) => {
     console.error('QuickBooks webhook processing failed', error);
   }
   await store.setJSON('quickbooks/webhook-last-processed', processed);
+  await updateLinkedBookingTestStatus(context, processed);
 
   return new Response(null, { status: 200 });
 };
