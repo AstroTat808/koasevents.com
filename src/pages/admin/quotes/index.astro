@@ -278,6 +278,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-lost-list class="mt-6 grid gap-4 lg:grid-cols-2"></div>
         </section>
 
+        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+          <div>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Payments</p>
+            <h2 class="display mt-3 text-4xl">QuickBooks receivables dashboard</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-white/60">Live CRM summary of issued QuickBooks invoice balances and payment timing across booked clients.</p>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/48">Total outstanding</p><strong data-pay-total-outstanding class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-red-200/20 bg-red-950/20 p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-red-100/65">Overdue balance</p><strong data-pay-overdue class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/48">Due in 7 days</p><strong data-pay-due7 class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-white/10 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-white/48">Due in 30 days</p><strong data-pay-due30 class="display mt-2 block text-3xl">$0</strong></article>
+            <article class="rounded-xl border border-emerald-200/15 bg-white/[.06] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-emerald-100/70">Paid this month</p><strong data-pay-paid-month class="display mt-2 block text-3xl">$0</strong></article>
+          </div>
+          <p data-pay-dashboard-meta class="mt-4 text-xs leading-5 text-white/45"></p>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Booked events</p><h2 class="display mt-3 text-4xl">Contracts, payments + upcoming events</h2></div>
@@ -548,6 +564,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const unansweredCount = document.querySelector('[data-unanswered-count]');
     const quoteList = document.querySelector('[data-quote-list]');
     const bookedDashboard = document.querySelector('[data-booked-dashboard]');
+    const payTotalOutstanding = document.querySelector('[data-pay-total-outstanding]');
+    const payOverdue = document.querySelector('[data-pay-overdue]');
+    const payDue7 = document.querySelector('[data-pay-due7]');
+    const payDue30 = document.querySelector('[data-pay-due30]');
+    const payPaidMonth = document.querySelector('[data-pay-paid-month]');
+    const payDashboardMeta = document.querySelector('[data-pay-dashboard-meta]');
     const reviewUpcoming = document.querySelector('[data-review-upcoming]');
     const reviewEligible = document.querySelector('[data-review-eligible]');
     const reviewDelivered = document.querySelector('[data-review-delivered]');
@@ -1400,6 +1422,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         };
       }
       return null;
+    }
+
+    function renderPaymentDashboard() {
+      const booked=(payload.records||[]).filter((record)=>record.stage==='booked'&&record.bookingSummary);
+      const today=dayNumber(hawaiiToday());
+      const month=hawaiiToday().slice(0,7);
+      let totalOutstanding=0;
+      let overdue=0;
+      let due7=0;
+      let due30=0;
+      let paidMonth=0;
+      let invoiceCount=0;
+
+      booked.forEach((record)=>{
+        const payments=record.bookingSummary?.payments||[];
+        payments.forEach((payment)=>{
+          if(!payment.invoiceId)return;
+          invoiceCount+=1;
+          const balance=Math.max(0,Number(payment.balance||0));
+          totalOutstanding+=balance;
+          const due=dayNumber(payment.dueDate);
+          if(balance>0&&today!==null&&due!==null){
+            const days=due-today;
+            if(days<0)overdue+=balance;
+            else if(days<=7)due7+=balance;
+            if(days>=0&&days<=30)due30+=balance;
+          }
+          const paidAt=String(payment.paidAt||'');
+          if(payment.status==='paid'&&paidAt.slice(0,7)===month){
+            paidMonth+=Math.max(0,Number(payment.amount||0));
+          }
+        });
+      });
+
+      if(payTotalOutstanding)payTotalOutstanding.textContent=money(totalOutstanding);
+      if(payOverdue)payOverdue.textContent=money(overdue);
+      if(payDue7)payDue7.textContent=money(due7);
+      if(payDue30)payDue30.textContent=money(due30);
+      if(payPaidMonth)payPaidMonth.textContent=money(paidMonth);
+      if(payDashboardMeta)payDashboardMeta.textContent=invoiceCount+' issued QuickBooks invoice'+(invoiceCount===1?'':'s')+' represented across '+booked.length+' booked client'+(booked.length===1?'':'s')+'.';
     }
 
     function renderBookedDashboard() {
@@ -2603,7 +2665,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
       if(message)message.textContent=(payload.records||[]).length+' CRM records · '+(payload.quotes||[]).length+' saved quotes shown.';
-      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
+      renderStats();renderWorkQueue();renderUnansweredLeads();renderFunnel();renderMobileBar();renderPipeline();renderLostLeads();renderPaymentDashboard();renderBookedDashboard();renderReviewDashboard();renderQuotes();renderTrash();
     }
 
     searchForm?.addEventListener('submit',(event)=>{event.preventDefault();load(String(searchInput?.value||'').trim());});
