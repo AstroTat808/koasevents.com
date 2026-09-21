@@ -83,7 +83,7 @@ export default async (req:Request, context:Context) => {
       readIndex<Activity>(crm,'activity/index'),
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
-    const projects = salesRecords.filter(Boolean).slice(0,1500).map(r => normalizeProject(r, metaMap.get(r.id) || null));
+    const projects = salesRecords.filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test').slice(0,1500).map(r => normalizeProject(r, metaMap.get(r.id) || null));
     return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity},{
       headers:{'Cache-Control':'private, no-store'}
     });
