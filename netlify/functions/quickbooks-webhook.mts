@@ -3,6 +3,8 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { quickBooksWebhookVerifierToken } from './_shared/quickbooks';
 
+// Environment changes are activated by a fresh production deploy.
+
 function integrationStore(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name: 'koa-integrations', consistency: 'strong' })
