@@ -160,3 +160,13 @@ export function suggestVendorRequirements(record:any,ops:any):VendorSuggestion[]
 export function baseVendorRequirements(){
   return BASE.map(([category,importance])=>({category,importance,note:''}));
 }
+
+
+export function isBaselineVendorRequirements(input:unknown){
+  if(!Array.isArray(input)||input.length!==BASE.length)return false;
+  const rows=input as any[];
+  return BASE.every(([category,importance])=>{
+    const row=rows.find((entry:any)=>String(entry?.category||'')===category);
+    return Boolean(row)&&String(row.importance||'')===importance&&!String(row.note||'').trim();
+  });
+}
