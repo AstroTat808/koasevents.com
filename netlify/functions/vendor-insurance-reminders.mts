@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
+import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
 
 const DAY=86_400_000;
 function daysUntil(date:unknown){
@@ -15,7 +16,7 @@ export default async(_req:Request,context:Context)=>{
   let changed=false;const now=new Date().toISOString();
   for(const vendor of vendors){
     const insurance=vendor.insurance||{};const days=daysUntil(insurance.expiresAt);if(days===null)continue;
-    if(days<0&&insurance.status!=='expired'){insurance.status='expired';insurance.expiredAt=now;changed=true;}
+    if(days<0&&insurance.status!=='expired'){insurance.status='expired';insurance.expiredAt=now;changed=true;await syncVendorInsuranceToUpcomingEvents(context,vendor);}
     const checkpoints=[30,14,7,0];
     if(!checkpoints.includes(days))continue;
     const key=String(days);const sent=insurance.reminders||{};if(sent[key])continue;
