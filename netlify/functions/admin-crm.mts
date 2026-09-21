@@ -2,7 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
-import { appendCleanupAudit, readCleanupAudit } from './_shared/crm-cleanup-audit';
+import { appendCleanupAudit, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -132,39 +132,132 @@ export default async (req:Request, context:Context) => {
       });
     }
 
-    const recordSourceMap=new Map<string,string>();
-    for(const record of salesRecords){
-      const source=clean(record?.inquiry?.referralSource||record?.inquiry?.source||record?.source||record?.inquiry?.formName||'Unknown',160)||'Unknown';
-      recordSourceMap.set(record.id,source);
-    }
+    const recordDimensions=new Map<string,any>();
+    for(const record of salesRecords) recordDimensions.set(record.id,cleanupDimensionsFromRecord(record));
     for(const row of trashRows){
-      const record:any=row.record;
-      if(!record) continue;
-      const source=clean(record?.inquiry?.referralSource||record?.inquiry?.source||record?.source||record?.inquiry?.formName||'Unknown',160)||'Unknown';
-      recordSourceMap.set(record.id,source);
+      if(row.record) recordDimensions.set(row.entry.id,cleanupDimensionsFromRecord(row.record));
     }
+
+    const effectiveDimensions=(entry:any)=>{
+      const stored=entry?.dimensions;
+      if(stored?.websiteForm||stored?.referralSource||stored?.emailDomain||stored?.brand||stored?.securityReasons?.length) return stored;
+      return recordDimensions.get(entry?.recordId)||{
+        websiteForm:'Unknown',
+        referralSource:'Unknown',
+        emailDomain:'Unknown',
+        brand:'Unknown',
+        securityReasons:[],
+      };
+    };
+    const addCount=(map:Map<string,number>,label:unknown,amount=1)=>{
+      const key=clean(label||'Unknown',180)||'Unknown';
+      map.set(key,(map.get(key)||0)+amount);
+    };
+    const sortedBreakdown=(map:Map<string,number>)=>[...map.entries()]
+      .map(([label,count])=>({label,count}))
+      .sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label))
+      .slice(0,15);
+    const localDateKey=(iso:string)=>{
+      const d=new Date(iso);
+      if(Number.isNaN(d.getTime())) return '';
+      return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    };
+    const weekStartKey=(dateKey:string)=>{
+      if(!dateKey) return '';
+      const d=new Date(dateKey+'T12:00:00-10:00');
+      const day=d.getDay();
+      const offset=day===0?-6:1-day;
+      d.setDate(d.getDate()+offset);
+      return new Intl.DateTimeFormat('en-CA',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    };
+    const labelDate=(key:string)=>{
+      const d=new Date(key+'T12:00:00-10:00');
+      return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric'}).format(d);
+    };
 
     const analytics:any={};
     for(const days of [7,30,90]){
       const cutoff=Date.now()-days*24*60*60*1000;
       const rows=(cleanupAudit||[]).filter((entry:any)=>Date.parse(entry.createdAt)>=cutoff);
-      const caughtRows=rows.filter((entry:any)=>['auto_flagged','manual_flagged','auto_trashed','moved_to_trash','bulk_moved_to_trash'].includes(entry.action)&&entry.recordId);
+      const caughtActions=new Set(['auto_flagged','manual_flagged','auto_trashed','moved_to_trash','bulk_moved_to_trash']);
+      const caughtRows=rows.filter((entry:any)=>caughtActions.has(entry.action)&&entry.recordId);
       const caughtIds=[...new Set(caughtRows.map((entry:any)=>entry.recordId))];
-      const falsePositiveIds=[...new Set(rows.filter((entry:any)=>entry.action==='approved_legitimate'&&entry.recordId).map((entry:any)=>entry.recordId))];
+      const falsePositiveRows=rows.filter((entry:any)=>entry.action==='approved_legitimate'&&entry.recordId);
+      const falsePositiveIds=[...new Set(falsePositiveRows.map((entry:any)=>entry.recordId))];
       const autoTrashIds=[...new Set(rows.filter((entry:any)=>entry.action==='auto_trashed'&&entry.recordId).map((entry:any)=>entry.recordId))];
       const restoreIds=[...new Set(rows.filter((entry:any)=>entry.action==='restored'&&entry.recordId).map((entry:any)=>entry.recordId))];
-      const sources=new Map<string,number>();
-      for(const id of caughtIds){
-        const label=recordSourceMap.get(id)||'Unknown / deleted';
-        sources.set(label,(sources.get(label)||0)+1);
+
+      const firstCaughtById=new Map<string,any>();
+      for(const entry of [...caughtRows].sort((a:any,b:any)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))){
+        if(!firstCaughtById.has(entry.recordId)) firstCaughtById.set(entry.recordId,entry);
       }
+
+      const websiteForms=new Map<string,number>();
+      const referralSources=new Map<string,number>();
+      const emailDomains=new Map<string,number>();
+      const brands=new Map<string,number>();
+      const securityReasons=new Map<string,number>();
+      for(const [recordId,entry] of firstCaughtById){
+        const dims=effectiveDimensions(entry);
+        addCount(websiteForms,dims.websiteForm);
+        addCount(referralSources,dims.referralSource);
+        addCount(emailDomains,dims.emailDomain);
+        addCount(brands,dims.brand);
+        const reasons=Array.isArray(dims.securityReasons)&&dims.securityReasons.length?dims.securityReasons:['No security reason'];
+        for(const reason of new Set(reasons)) addCount(securityReasons,reason);
+      }
+
+      const buildTrend=(granularity:'day'|'week')=>{
+        const bucket=new Map<string,{period:string;bogusCaught:number;falsePositivesApproved:number}>();
+        const add=(iso:string,key:'bogusCaught'|'falsePositivesApproved')=>{
+          const day=localDateKey(iso); if(!day) return;
+          const period=granularity==='day'?day:weekStartKey(day);
+          const row=bucket.get(period)||{period,bogusCaught:0,falsePositivesApproved:0};
+          row[key]+=1; bucket.set(period,row);
+        };
+        for(const entry of firstCaughtById.values()) add(entry.createdAt,'bogusCaught');
+        const firstApprovalById=new Map<string,any>();
+        for(const entry of [...falsePositiveRows].sort((a:any,b:any)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))){
+          if(!firstApprovalById.has(entry.recordId)) firstApprovalById.set(entry.recordId,entry);
+        }
+        for(const entry of firstApprovalById.values()) add(entry.createdAt,'falsePositivesApproved');
+
+        const start=new Date(Date.now()-(days-1)*24*60*60*1000);
+        const startKey=localDateKey(start.toISOString());
+        const finalStart=granularity==='day'?startKey:weekStartKey(startKey);
+        const endKey=localDateKey(new Date().toISOString());
+        const finalEnd=granularity==='day'?endKey:weekStartKey(endKey);
+        const cursor=new Date(finalStart+'T12:00:00-10:00');
+        const endDate=new Date(finalEnd+'T12:00:00-10:00');
+        const result:any[]=[];
+        while(cursor<=endDate){
+          const key=localDateKey(cursor.toISOString());
+          const stored=bucket.get(key)||{period:key,bogusCaught:0,falsePositivesApproved:0};
+          result.push({
+            period:key,
+            label:granularity==='day'?labelDate(key):'Week of '+labelDate(key),
+            bogusCaught:stored.bogusCaught,
+            falsePositivesApproved:stored.falsePositivesApproved,
+          });
+          cursor.setDate(cursor.getDate()+(granularity==='day'?1:7));
+        }
+        return result;
+      };
+
       analytics[String(days)]={
         days,
         bogusCaught:caughtIds.length,
         falsePositivesApproved:falsePositiveIds.length,
         autoTrashed:autoTrashIds.length,
         restores:restoreIds.length,
-        spamSources:[...sources.entries()].map(([source,count])=>({source,count})).sort((a,b)=>b.count-a.count||a.source.localeCompare(b.source)).slice(0,10),
+        trends:{day:buildTrend('day'),week:buildTrend('week')},
+        breakdowns:{
+          websiteForm:sortedBreakdown(websiteForms),
+          referralSource:sortedBreakdown(referralSources),
+          emailDomain:sortedBreakdown(emailDomains),
+          securityReason:sortedBreakdown(securityReasons),
+          brand:sortedBreakdown(brands),
+        },
       };
     }
 
