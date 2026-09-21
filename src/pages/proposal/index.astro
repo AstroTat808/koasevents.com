@@ -95,12 +95,16 @@ import Footer from '../../components/Footer.astro';
               <div class="grid gap-2 text-sm">
                 <div class="flex justify-between gap-4"><span class="text-white/52">Subtotal</span><strong data-subtotal></strong></div>
                 <div class="flex justify-between gap-4"><span class="text-white/52">Discount</span><strong data-discount></strong></div>
-                <div class="flex justify-between gap-4"><span data-tax-label class="text-white/52">Tax</span><strong data-tax></strong></div>
+                <div class="flex justify-between gap-4"><span data-tax-label class="text-white/52">Hawaiʻi GET</span><strong data-tax></strong></div>
               </div>
               <div class="mt-5 border-t border-white/12 pt-5">
                 <p class="text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-amber-light)]">Proposal total</p>
                 <p data-total class="display mt-2 text-4xl"></p>
-                <p data-deposit class="mt-3 text-xs leading-5 text-white/60"></p>
+                <div class="mt-4 grid gap-2 border-t border-white/12 pt-4 text-sm">
+                  <div class="flex justify-between gap-4"><span class="text-white/52">Deposit</span><strong data-deposit></strong></div>
+                  <div class="flex justify-between gap-4"><span class="text-white/52">Payments Received</span><strong data-payments-received></strong></div>
+                  <div class="flex justify-between gap-4"><span class="text-white/52">Remaining Balance</span><strong data-remaining-balance></strong></div>
+                </div>
               </div>
             </aside>
           </section>
@@ -227,7 +231,7 @@ import Footer from '../../components/Footer.astro';
         notes.push('The finalized discount is ' + money(finalDiscount) + (originalSavings > 0 ? ', compared with ' + money(originalSavings) + ' estimated in the builder.' : '.'));
       }
       if (Number(data.taxAmount || 0) > 0) {
-        notes.push('Final pricing includes ' + money(data.taxAmount) + ' in tax.');
+        notes.push('Final pricing includes ' + money(data.taxAmount) + ' in Hawaiʻi GET.');
       }
 
       const remainingTbd = (data.lineItems || []).filter((line) => line.custom && !Number(line.amount || 0)).length;
@@ -270,7 +274,7 @@ import Footer from '../../components/Footer.astro';
         const tr = document.createElement('tr');
         tr.className = 'border-b border-[var(--koa-line)]';
         const cells = [
-          line.description,
+          line.description + (line.getExempt ? ' (GET exempt)' : ''),
           String(line.quantity || 1),
           line.custom && !line.unitPrice ? 'Custom / included in total when finalized' : money(line.unitPrice),
           line.custom && !line.amount ? 'TBD' : money(line.amount),
@@ -297,10 +301,12 @@ import Footer from '../../components/Footer.astro';
 
       text('[data-subtotal]', money(data.subtotal));
       text('[data-discount]', data.discountAmount ? '−' + money(data.discountAmount) : money(0));
-      text('[data-tax-label]', 'Tax (' + Number(data.taxRate || 0).toFixed(2).replace(/\.00$/,'') + '%)');
+      text('[data-tax-label]', 'Hawaiʻi GET (' + Number(data.taxRate ?? 4.712).toFixed(3).replace(/0+$/,'').replace(/\.$/,'') + '%)');
       text('[data-tax]', money(data.taxAmount));
       text('[data-total]', money(data.total));
-      text('[data-deposit]', 'Deposit amount: ' + money(data.depositAmount));
+      text('[data-deposit]', money(data.depositAmount));
+      text('[data-payments-received]', money(data.paymentsReceived || 0));
+      text('[data-remaining-balance]', money(data.remainingBalance ?? data.total ?? 0));
       renderQuoteComparison(data);
 
       const notesWrap = document.querySelector('[data-client-notes-wrap]');
