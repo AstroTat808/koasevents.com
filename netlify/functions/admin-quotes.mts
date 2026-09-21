@@ -1,7 +1,9 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { isApprovedManager, requireOperations } from './_shared/admin';
+import { hasCapability, isApprovedManager, requireOperations } from './_shared/admin';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
+import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
+import { appendStaffAudit } from './_shared/staff-audit';
 
 type QuoteItem = {
   id: string;
@@ -144,6 +146,13 @@ type SalesRecord = {
   };
   booking?: BookingState;
   profitModel?: ProfitModel;
+  assignment?: {
+    userId: string;
+    email: string;
+    name: string;
+    assignedAt: string;
+    assignedBy: string;
+  };
 };
 
 type TrashEntry = {
@@ -1080,6 +1089,126 @@ function mobileBarAnalytics(records: SalesRecord[]) {
     leadSources,
     upcomingEvents,
   };
+}
+
+
+function chainRootId(record:SalesRecord, byId:Map<string,SalesRecord>) {
+  let current=record;
+  const seen=new Set<string>();
+  while(current?.source && byId.has(current.source) && !seen.has(current.id)){
+    seen.add(current.id);
+    current=byId.get(current.source)!;
+  }
+  return current?.id || record.id;
+}
+
+function chainKey(record:SalesRecord, byId:Map<string,SalesRecord>) {
+  return record.quoteId ? 'quote:'+record.quoteId : 'root:'+chainRootId(record,byId);
+}
+
+async function ensureAssignments(context:Context, records:SalesRecord[], staff:OperationalStaff[]) {
+  if(!staff.length) return records;
+  const valid=new Map(staff.map(member=>[member.id,member]));
+  const byId=new Map(records.map(record=>[record.id,record]));
+  const groups=new Map<string,SalesRecord[]>();
+  for(const record of records){
+    const key=chainKey(record,byId);
+    groups.set(key,[...(groups.get(key)||[]),record]);
+  }
+  const counts=new Map(staff.map(member=>[member.id,0]));
+  const owners=new Map<string,OperationalStaff>();
+  for(const [key,group] of groups){
+    const existing=group.map(row=>row.assignment?.userId).find(id=>id&&valid.has(id));
+    if(existing){
+      const member=valid.get(existing)!;
+      owners.set(key,member);
+      counts.set(member.id,(counts.get(member.id)||0)+1);
+    }
+  }
+  for(const [key] of groups){
+    if(owners.has(key)) continue;
+    const member=[...staff].sort((a,b)=>(counts.get(a.id)||0)-(counts.get(b.id)||0)||a.name.localeCompare(b.name))[0];
+    if(!member) continue;
+    owners.set(key,member);
+    counts.set(member.id,(counts.get(member.id)||0)+1);
+  }
+  const changed:SalesRecord[]=[];
+  for(const [key,group] of groups){
+    const owner=owners.get(key); if(!owner) continue;
+    const existingAssignment=group.find(row=>row.assignment?.userId===owner.id)?.assignment;
+    const assignment=existingAssignment || assignmentFor(owner,'automatic-backfill');
+    for(const record of group){
+      if(record.assignment?.userId===owner.id && record.assignment?.email===owner.email) continue;
+      record.assignment={...assignment};
+      changed.push(record);
+    }
+  }
+  if(changed.length){
+    const store=salesStoreFor(context);
+    await Promise.all(changed.map(record=>store.setJSON('records/'+record.id,record)));
+    await writeSalesIndex(context,records);
+  }
+  return records;
+}
+
+function staffPerformance(records:SalesRecord[], events:any[], staff:OperationalStaff[], days:number|null) {
+  const byId=new Map(records.map(record=>[record.id,record]));
+  const groups=new Map<string,SalesRecord[]>();
+  for(const record of records){
+    const key=chainKey(record,byId);
+    groups.set(key,[...(groups.get(key)||[]),record]);
+  }
+  const cutoff=days?Date.now()-days*86400000:0;
+  const responseTypes=new Set(['call','email','meeting','responded','proposal_sent','quickbooks_estimate_sent']);
+  const stats=new Map(staff.map(member=>[member.id,{
+    userId:member.id,name:member.name,email:member.email,role:member.role,
+    opportunities:0,responded:0,responseHoursTotal:0,proposalsSent:0,booked:0,bookedRevenue:0,followUpsOverdue:0,
+  }]));
+
+  for(const group of groups.values()){
+    const created=Math.min(...group.map(r=>Date.parse(r.createdAt)).filter(Number.isFinite));
+    if(days && (!Number.isFinite(created)||created<cutoff)) continue;
+    const ownerId=group.map(r=>r.assignment?.userId).find(Boolean);
+    const stat=ownerId?stats.get(ownerId):null;
+    if(!stat) continue;
+    stat.opportunities+=1;
+    const ids=new Set(group.map(r=>r.id));
+    const quoteIds=new Set(group.map(r=>r.quoteId).filter(Boolean));
+    const groupEvents=events.filter((event:any)=>ids.has(String(event.recordId||''))||ids.has(String(event.sourceRecordId||''))||quoteIds.has(String(event.quoteId||'')));
+    const firstResponse=groupEvents
+      .filter((event:any)=>responseTypes.has(String(event.type||''))&&Date.parse(event.createdAt)>=created)
+      .sort((a:any,b:any)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))[0];
+    if(firstResponse){
+      const hours=Math.max(0,(Date.parse(firstResponse.createdAt)-created)/3600000);
+      stat.responded+=1; stat.responseHoursTotal+=hours;
+    }
+    const proposal=group.filter(r=>r.kind==='proposal').sort((a,b)=>Date.parse(b.updatedAt||b.createdAt)-Date.parse(a.updatedAt||a.createdAt))[0];
+    const sent=Boolean(groupEvents.some((event:any)=>String(event.type)==='proposal_sent')) || Boolean(proposal?.proposal && ['sent','viewed','accepted','booked'].includes(proposal.proposal.status));
+    if(sent) stat.proposalsSent+=1;
+    const booked=group.some(r=>r.stage==='booked'||r.proposal?.status==='booked'||r.booking?.status==='booked');
+    if(booked){
+      stat.booked+=1;
+      const value=Math.max(0,...group.map(r=>Number(r.proposal?.total||0)));
+      stat.bookedRevenue+=value;
+    }
+    const latest=[...group].sort((a,b)=>Date.parse(b.updatedAt||b.createdAt)-Date.parse(a.updatedAt||a.createdAt))[0];
+    if(latest && !booked && latest.stage!=='lost' && latest.stage!=='converted'){
+      const overdue=remindersForRecord(latest).some(rem=>['follow_up','proposal'].includes(rem.type));
+      if(overdue) stat.followUpsOverdue+=1;
+    }
+  }
+
+  return [...stats.values()].map((row:any)=>({
+    userId:row.userId,name:row.name,email:row.email,role:row.role,
+    opportunities:row.opportunities,
+    averageResponseHours:row.responded?Math.round((row.responseHoursTotal/row.responded)*10)/10:null,
+    responseCoverage:row.opportunities?Math.round((row.responded/row.opportunities)*1000)/10:null,
+    proposalsSent:row.proposalsSent,
+    booked:row.booked,
+    conversionRate:row.opportunities?Math.round((row.booked/row.opportunities)*1000)/10:null,
+    bookedRevenue:Math.round(row.bookedRevenue*100)/100,
+    followUpsOverdue:row.followUpsOverdue,
+  })).sort((a,b)=>b.bookedRevenue-a.bookedRevenue||a.name.localeCompare(b.name));
 }
 
 export default async (req: Request, context: Context) => {
