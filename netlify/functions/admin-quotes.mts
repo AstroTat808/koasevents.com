@@ -77,6 +77,18 @@ type BookingState = {
     koaSignature?: { name: string; signedAt: string } | null;
   };
   payments: BookingPayment[];
+  bartenderAssignments?: Array<{ id:string; name:string; assignedAt:string; assignedBy:string }>;
+  bartenderPerformance?: Array<{
+    bartenderId:string;
+    name:string;
+    actualHours:number;
+    tips:number;
+    reliability:'not-rated'|'on-time'|'late'|'cancelled'|'no-show';
+    clientRating:number;
+    clientFeedback:string;
+    updatedAt:string;
+    updatedBy:string;
+  }>;
 };
 
 type ProfitModel = {
@@ -94,8 +106,41 @@ type ProfitModel = {
   notes: string;
   updatedAt: string;
 };
+type ForecastWeights = {
+  inquiry: number;
+  lead: number;
+  draft: number;
+  proposal: number;
+  sent: number;
+  viewed: number;
+  accepted: number;
+};
+type MobileBarBartenderAvailability = {
+  id: string;
+  name: string;
+  active: boolean;
+  unavailableDates: string[];
+  maxEventsPerWeek: number;
+  maxEventsPerMonth: number;
+};
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
+  quarterlyGrossProfitTarget: number;
+  annualGrossProfitTarget: number;
+  forecastProbabilities: {
+    conservative: ForecastWeights;
+    expected: ForecastWeights;
+    aggressive: ForecastWeights;
+  };
+  simulator: {
+    bartenderCapacityPerDay: number;
+    maxBookingsPerMonth: number;
+    planningHorizonMonths: number;
+  };
+  staffing: {
+    blackoutDates: string[];
+    bartenders: MobileBarBartenderAvailability[];
+  };
   updatedAt: string;
 };
 
@@ -244,22 +289,160 @@ async function writeSalesIndex(context: Context, records: SalesRecord[]) {
   const store = salesStoreFor(context);
   await store.setJSON('records/index', records.slice(0, 1500));
 }
+const defaultForecastProbabilities: MobileBarProfitSettings['forecastProbabilities'] = {
+  conservative: { inquiry:.05, lead:.15, draft:.25, proposal:.30, sent:.45, viewed:.55, accepted:.80 },
+  expected: { inquiry:.15, lead:.30, draft:.50, proposal:.45, sent:.65, viewed:.75, accepted:.95 },
+  aggressive: { inquiry:.30, lead:.50, draft:.65, proposal:.60, sent:.80, viewed:.90, accepted:.98 },
+};
+
+function forecastWeights(input:any, fallback:ForecastWeights): ForecastWeights {
+  return {
+    inquiry: finite(input?.inquiry ?? fallback.inquiry, 0, 1),
+    lead: finite(input?.lead ?? fallback.lead, 0, 1),
+    draft: finite(input?.draft ?? fallback.draft, 0, 1),
+    proposal: finite(input?.proposal ?? fallback.proposal, 0, 1),
+    sent: finite(input?.sent ?? fallback.sent, 0, 1),
+    viewed: finite(input?.viewed ?? fallback.viewed, 0, 1),
+    accepted: finite(input?.accepted ?? fallback.accepted, 0, 1),
+  };
+}
+
+function isoDateList(input:unknown, limit=366) {
+  const raw = Array.isArray(input) ? input : String(input || '').split(/[\s,]+/);
+  return Array.from(new Set(raw
+    .map((value:any)=>cleanText(value, 20))
+    .filter((value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value))))
+    .sort()
+    .slice(0, limit);
+}
+
+function bartenderAvailabilityList(input:unknown): MobileBarBartenderAvailability[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 60).map((entry:any, index:number) => ({
+    id: cleanText(entry?.id || ('bartender-' + (index + 1)), 80) || ('bartender-' + (index + 1)),
+    name: cleanText(entry?.name || '', 120),
+    active: entry?.active !== false,
+    unavailableDates: isoDateList(entry?.unavailableDates, 366),
+    maxEventsPerWeek: Math.round(finite(entry?.maxEventsPerWeek ?? 0, 0, 31)),
+    maxEventsPerMonth: Math.round(finite(entry?.maxEventsPerMonth ?? 0, 0, 100)),
+  })).filter((entry)=>entry.name);
+}
+
 async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
-  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as MobileBarProfitSettings | null;
+  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
   return {
     monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(saved?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(saved?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
+    forecastProbabilities: {
+      conservative: forecastWeights(saved?.forecastProbabilities?.conservative, defaultForecastProbabilities.conservative),
+      expected: forecastWeights(saved?.forecastProbabilities?.expected, defaultForecastProbabilities.expected),
+      aggressive: forecastWeights(saved?.forecastProbabilities?.aggressive, defaultForecastProbabilities.aggressive),
+    },
+    simulator: {
+      bartenderCapacityPerDay: finite(saved?.simulator?.bartenderCapacityPerDay ?? 0, 0, 100),
+      maxBookingsPerMonth: finite(saved?.simulator?.maxBookingsPerMonth ?? 0, 0, 100),
+      planningHorizonMonths: finite(saved?.simulator?.planningHorizonMonths ?? 6, 1, 24),
+    },
+    staffing: {
+      blackoutDates: isoDateList(saved?.staffing?.blackoutDates, 730),
+      bartenders: bartenderAvailabilityList(saved?.staffing?.bartenders),
+    },
     updatedAt: cleanText(saved?.updatedAt || '', 60),
   };
 }
 
 async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
+  const current = await readMobileBarProfitSettings(context);
+  const requestedForecast = input?.forecastProbabilities || {};
+  const requestedSimulator = input?.simulator || {};
+  const requestedStaffing = input?.staffing || {};
   const settings: MobileBarProfitSettings = {
-    monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? current.monthlyGrossProfitTarget, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(input?.quarterlyGrossProfitTarget ?? current.quarterlyGrossProfitTarget, 0, 3_000_000),
+    annualGrossProfitTarget: finite(input?.annualGrossProfitTarget ?? current.annualGrossProfitTarget, 0, 12_000_000),
+    forecastProbabilities: {
+      conservative: forecastWeights(requestedForecast.conservative, current.forecastProbabilities.conservative),
+      expected: forecastWeights(requestedForecast.expected, current.forecastProbabilities.expected),
+      aggressive: forecastWeights(requestedForecast.aggressive, current.forecastProbabilities.aggressive),
+    },
+    simulator: {
+      bartenderCapacityPerDay: finite(requestedSimulator.bartenderCapacityPerDay ?? current.simulator.bartenderCapacityPerDay, 0, 100),
+      maxBookingsPerMonth: finite(requestedSimulator.maxBookingsPerMonth ?? current.simulator.maxBookingsPerMonth, 0, 100),
+      planningHorizonMonths: finite(requestedSimulator.planningHorizonMonths ?? current.simulator.planningHorizonMonths, 1, 24),
+    },
+    staffing: {
+      blackoutDates: input?.staffing ? isoDateList(requestedStaffing.blackoutDates, 730) : current.staffing.blackoutDates,
+      bartenders: input?.staffing ? bartenderAvailabilityList(requestedStaffing.bartenders) : current.staffing.bartenders,
+    },
     updatedAt: new Date().toISOString(),
   };
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
   return settings;
 }
+function dateWeekKey(value:string) {
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+  const [year,month,day]=value.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1,day));
+  const weekday=date.getUTCDay();
+  date.setUTCDate(date.getUTCDate()-weekday);
+  return date.toISOString().slice(0,10);
+}
+
+function mobileBarWorkloadWarnings(record:SalesRecord, bartenderIds:string[], records:SalesRecord[], settings:MobileBarProfitSettings) {
+  const eventDate=cleanText(record.customer?.eventDate,20);
+  const weekKey=dateWeekKey(eventDate);
+  const monthKey=eventDate.slice(0,7);
+  const roster=new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+  const warnings:string[]=[];
+  for(const id of bartenderIds){
+    const bartender=roster.get(id);
+    if(!bartender) continue;
+    let weekCount=0;
+    let monthCount=0;
+    for(const other of records){
+      if(other.id===record.id || other.stage!=='booked') continue;
+      const otherDate=cleanText(other.customer?.eventDate,20);
+      const assigned=Array.isArray(other.booking?.bartenderAssignments)?other.booking!.bartenderAssignments!:[];
+      if(!assigned.some((entry)=>entry.id===id)) continue;
+      if(dateWeekKey(otherDate)===weekKey) weekCount+=1;
+      if(otherDate.slice(0,7)===monthKey) monthCount+=1;
+    }
+    const projectedWeek=weekCount+1;
+    const projectedMonth=monthCount+1;
+    if(bartender.maxEventsPerWeek>0 && projectedWeek>bartender.maxEventsPerWeek){
+      warnings.push(bartender.name+' would be at '+projectedWeek+' events this week (limit '+bartender.maxEventsPerWeek+').');
+    }
+    if(bartender.maxEventsPerMonth>0 && projectedMonth>bartender.maxEventsPerMonth){
+      warnings.push(bartender.name+' would be at '+projectedMonth+' events this month (limit '+bartender.maxEventsPerMonth+').');
+    }
+  }
+  return Array.from(new Set(warnings));
+}
+
+function mobileBarStaffingConflicts(record:SalesRecord, bartenderIds:string[], records:SalesRecord[], settings:MobileBarProfitSettings) {
+  const eventDate=cleanText(record.customer?.eventDate,20);
+  const requested=new Set(bartenderIds);
+  const conflicts:string[]=[];
+  if(!eventDate) conflicts.push('Event date is required before assigning bartenders.');
+  if(settings.staffing.blackoutDates.includes(eventDate)) conflicts.push('This event date is a Mobile Bar blackout date.');
+  const roster=new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+  for(const id of requested){
+    const bartender=roster.get(id);
+    if(!bartender) conflicts.push('Bartender '+id+' is not in the Mobile Bar roster.');
+    else if(bartender.active===false) conflicts.push(bartender.name+' is inactive.');
+    else if(bartender.unavailableDates.includes(eventDate)) conflicts.push(bartender.name+' is unavailable on '+eventDate+'.');
+  }
+  for(const other of records){
+    if(other.id===record.id || other.stage!=='booked' || cleanText(other.customer?.eventDate,20)!==eventDate) continue;
+    const assigned=Array.isArray(other.booking?.bartenderAssignments)?other.booking!.bartenderAssignments!:[];
+    assigned.forEach((bartender)=>{
+      if(requested.has(bartender.id)) conflicts.push(bartender.name+' is already assigned to '+(other.customer?.name||other.id)+' on '+eventDate+'.');
+    });
+  }
+  return Array.from(new Set(conflicts));
+}
+
 
 async function saveRecord(context: Context, record: SalesRecord, records: SalesRecord[]) {
   const store = salesStoreFor(context);
@@ -497,6 +680,8 @@ function ensureBooking(record: SalesRecord) {
         signature: null,
         koaSignature: null,
       },
+      bartenderAssignments: [],
+      bartenderPerformance: [],
       payments: (record.proposal.paymentSchedule || []).map((item, index) => ({
         id: 'pay-' + (index + 1),
         label: item.label,
@@ -709,47 +894,17 @@ function bookingSummary(record: SalesRecord) {
   };
 }
 
-function proposalCategory(packageId = '', inquiry?: Record<string, unknown>) {
+function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
   const normalizedPackage = normalizePackage(packageId);
   const eventType = cleanText((inquiry as any)?.eventType, 120).toLowerCase();
   const service = cleanText((inquiry as any)?.service, 80).toLowerCase();
-  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return 'mobile-bar';
-  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return 'venue-wedding';
-  if (eventType || service) return 'private-event';
-  return 'default';
-}
-
-function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
-  const category = proposalCategory(packageId, inquiry);
-  if (category === 'mobile-bar') return settings.mobileBarPercent;
-  if (category === 'venue-wedding') return settings.venueWeddingPercent;
-  if (category === 'private-event') return settings.privateEventPercent;
+  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return settings.mobileBarPercent;
+  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return settings.venueWeddingPercent;
+  if (eventType || service) return settings.privateEventPercent;
   return settings.defaultPercent;
 }
 
-function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>): PaymentItem[] {
-  const category = proposalCategory(packageId, inquiry);
-  const remaining = Math.max(0, roundMoney(total - depositAmount));
-  if (category === 'venue-wedding') {
-    const second = roundMoney(remaining / 2);
-    return [
-      { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-      { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingSecondDueDaysBefore) : '', amount: second },
-      { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingFinalDueDaysBefore) : '', amount: roundMoney(remaining - second) },
-    ];
-  }
-  const dueDays = category === 'mobile-bar'
-    ? settings.mobileBarFinalDueDaysBefore
-    : category === 'private-event'
-      ? settings.privateEventFinalDueDaysBefore
-      : settings.defaultFinalDueDaysBefore;
-  return [
-    { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
-    { label: 'Final balance', dueDate: eventDate ? offsetDate(eventDate, -dueDays) : '', amount: remaining },
-  ];
-}
-
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings) {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
@@ -826,9 +981,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
   const depositPercent = Math.min(100, Math.max(0, finite(configuredPercent, 0, 100)));
   const depositAmount = Math.round(total * depositPercent) / 100;
-  const schedule = scheduleSettings
-    ? configuredPaymentSchedule(scheduleSettings, total, depositAmount, eventDate, packageId, inquiry)
-    : rebalancePaymentSchedule([], total, depositAmount, eventDate);
+  const schedule = rebalancePaymentSchedule([], total, depositAmount, eventDate);
 
   return {
     publicToken: publicToken(),
@@ -1426,6 +1579,8 @@ export default async (req: Request, context: Context) => {
     'bulk-trash':'crm.destructive',
     'bulk-trash-client-chains':'crm.destructive',
     'update-mobile-bar-profit-settings':'sales.profit_settings',
+    'update-mobile-bar-bartender-assignments':'sales.profit_settings',
+    'update-mobile-bar-bartender-performance':'sales.profit_settings',
     'update-profit-model':'sales.profit_settings',
   };
   const requestedCapability=capabilityByAction[String(payload.action)];
@@ -1788,7 +1943,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent, depositSettings || undefined) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -1850,7 +2005,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
@@ -1865,11 +2020,89 @@ export default async (req: Request, context: Context) => {
     const settings = await writeMobileBarProfitSettings(context, payload.settings || {});
     await appendEvent(context, {
       type: 'mobile_bar_profit_settings_updated',
-      detail: 'Mobile Bar monthly gross-profit target updated to ' + settings.monthlyGrossProfitTarget.toFixed(2) + '.',
+      detail: 'Mobile Bar profitability planning settings updated: monthly ' + settings.monthlyGrossProfitTarget.toFixed(2) + ', quarterly ' + settings.quarterlyGrossProfitTarget.toFixed(2) + ', annual ' + settings.annualGrossProfitTarget.toFixed(2) + '.',
     });
     await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly gross-profit target.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget}});
     return Response.json({ ok: true, settings }, { headers: { 'Cache-Control':'private, no-store' } });
   }
+  if (payload.action === 'update-mobile-bar-bartender-assignments') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record || record.stage !== 'booked' || !normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.mobileBarPackage).startsWith('mobile-')) {
+      return Response.json({ error: 'Booked Mobile Bar event not found.' }, { status: 404 });
+    }
+    const settings = await readMobileBarProfitSettings(context);
+    const requestedIds = Array.from(new Set((Array.isArray(payload.bartenderIds) ? payload.bartenderIds : [])
+      .map((value:unknown)=>cleanText(value,80))
+      .filter(Boolean))).slice(0,20);
+    const conflicts = mobileBarStaffingConflicts(record, requestedIds, records, settings);
+    if (conflicts.length) return Response.json({ error: conflicts[0], conflicts }, { status: 409 });
+    const workloadWarnings = mobileBarWorkloadWarnings(record, requestedIds, records, settings);
+
+    const roster = new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+    const now = new Date().toISOString();
+    const booking = ensureBooking(record);
+    if (!booking) return Response.json({ error: 'Booking state is unavailable.' }, { status: 400 });
+    booking.bartenderAssignments = requestedIds.map((id)=>({
+      id,
+      name: roster.get(id)?.name || id,
+      assignedAt: now,
+      assignedBy: cleanText(auth.user?.email,240) || 'admin',
+    }));
+    booking.updatedAt = now;
+    record.updatedAt = now;
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'mobile_bar_bartenders_assigned',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: booking.bartenderAssignments.length
+        ? 'Assigned Mobile Bar bartenders: ' + booking.bartenderAssignments.map((entry)=>entry.name).join(', ')
+        : 'Cleared Mobile Bar bartender assignments.',
+    });
+    return Response.json({ ok: true, record, conflicts: [], workloadWarnings }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'update-mobile-bar-bartender-performance') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record || record.stage !== 'booked' || !normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.mobileBarPackage).startsWith('mobile-')) {
+      return Response.json({ error: 'Booked Mobile Bar event not found.' }, { status: 404 });
+    }
+    const booking = ensureBooking(record);
+    if (!booking) return Response.json({ error: 'Booking state is unavailable.' }, { status: 400 });
+    const assigned = new Map((booking.bartenderAssignments || []).map((entry)=>[entry.id,entry.name]));
+    const bartenderId = cleanText(payload.bartenderId,80);
+    if(!assigned.has(bartenderId)) return Response.json({ error: 'Bartender must be assigned to this event before performance can be recorded.' }, { status: 409 });
+
+    const reliabilityRaw=cleanText(payload.performance?.reliability,30);
+    const reliability = (['on-time','late','cancelled','no-show'].includes(reliabilityRaw) ? reliabilityRaw : 'not-rated') as 'not-rated'|'on-time'|'late'|'cancelled'|'no-show';
+    const now=new Date().toISOString();
+    const performance={
+      bartenderId,
+      name: assigned.get(bartenderId) || bartenderId,
+      actualHours: Math.round(finite(payload.performance?.actualHours ?? 0,0,24)*100)/100,
+      tips: Math.round(finite(payload.performance?.tips ?? 0,0,100000)*100)/100,
+      reliability,
+      clientRating: Math.round(finite(payload.performance?.clientRating ?? 0,0,5)*10)/10,
+      clientFeedback: cleanText(payload.performance?.clientFeedback || '',1000),
+      updatedAt: now,
+      updatedBy: cleanText(auth.user?.email,240) || 'admin',
+    };
+    const current=Array.isArray(booking.bartenderPerformance)?booking.bartenderPerformance:[];
+    booking.bartenderPerformance=[...current.filter((entry)=>entry.bartenderId!==bartenderId),performance];
+    booking.updatedAt=now;
+    record.updatedAt=now;
+    records=await saveRecord(context,record,records);
+    await appendEvent(context,{
+      type:'mobile_bar_bartender_performance_updated',
+      recordId:record.id,
+      quoteId:record.quoteId||'',
+      packageId:record.packageId||'',
+      detail:'Updated Mobile Bar performance for '+performance.name+'.',
+    });
+    return Response.json({ok:true,record,performance},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
   if (payload.action === 'update-profit-model') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
     if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
