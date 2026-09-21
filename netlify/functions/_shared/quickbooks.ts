@@ -27,13 +27,24 @@ function integrationStore(context: Context) {
     : getDeployStore({ name: 'koa-integrations' });
 }
 
+function env(...names: string[]) {
+  for (const name of names) {
+    const value = String(Netlify.env.get(name) || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
 function config() {
-  const clientId = String(process.env.INTUIT_CLIENT_ID || '').trim();
-  const clientSecret = String(process.env.INTUIT_CLIENT_SECRET || '').trim();
-  const encryptionKey = String(process.env.QBO_TOKEN_ENCRYPTION_KEY || '').trim();
-  const environment = String(process.env.QBO_ENVIRONMENT || 'production').trim().toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
-  const itemId = String(process.env.QBO_SERVICE_ITEM_ID || '').trim();
-  return { clientId, clientSecret, encryptionKey, environment, itemId };
+  const clientId = env('QUICKBOOKS_CLIENT_ID', 'INTUIT_CLIENT_ID');
+  const clientSecret = env('QUICKBOOKS_CLIENT_SECRET', 'INTUIT_CLIENT_SECRET');
+  const encryptionKey = env('QUICKBOOKS_TOKEN_ENCRYPTION_KEY', 'QBO_TOKEN_ENCRYPTION_KEY');
+  const rawEnvironment = env('QUICKBOOKS_ENVIRONMENT', 'QBO_ENVIRONMENT') || 'production';
+  const environment = rawEnvironment.toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+  const itemId = env('QUICKBOOKS_SERVICE_ITEM_ID', 'QBO_SERVICE_ITEM_ID');
+  const redirectUri = env('QUICKBOOKS_REDIRECT_URI', 'QBO_REDIRECT_URI');
+  const webhookVerifierToken = env('QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN', 'INTUIT_WEBHOOK_VERIFIER_TOKEN');
+  return { clientId, clientSecret, encryptionKey, environment, itemId, redirectUri, webhookVerifierToken };
 }
 
 export function quickBooksConfiguration() {
@@ -44,6 +55,9 @@ export function quickBooksConfiguration() {
     clientSecretConfigured: Boolean(c.clientSecret),
     encryptionKeyConfigured: Boolean(c.encryptionKey || c.clientSecret),
     serviceItemConfigured: Boolean(c.itemId),
+    webhookVerifierConfigured: Boolean(c.webhookVerifierToken),
+    redirectUriConfigured: Boolean(c.redirectUri),
+    redirectUri: c.redirectUri,
     environment: c.environment,
   };
 }
@@ -58,7 +72,7 @@ async function encryptionBytes() {
     return bytes;
   }
   if (!c.clientSecret) {
-    throw new Error('INTUIT_CLIENT_SECRET is required for QuickBooks token encryption.');
+    throw new Error('QUICKBOOKS_CLIENT_SECRET is required for QuickBooks token encryption.');
   }
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(c.clientSecret));
   return new Uint8Array(digest);
@@ -208,7 +222,7 @@ export async function createOAuthState(context: Context, requestUrl: string) {
   crypto.getRandomValues(bytes);
   const state = Buffer.from(bytes).toString('base64url');
   const origin = new URL(requestUrl).origin;
-  const redirectUri = String(process.env.QBO_REDIRECT_URI || '').trim() || origin + '/api/admin/quickbooks/callback';
+  const redirectUri = c.redirectUri || origin + '/.netlify/functions/quickbooks-callback';
 
   await integrationStore(context).setJSON('quickbooks/oauth-state/' + state, {
     createdAt: new Date().toISOString(),
@@ -390,4 +404,9 @@ export async function qboSend(context: Context, entity: 'invoice' | 'estimate', 
 
 export function configuredServiceItemId() {
   return config().itemId;
+}
+
+
+export function quickBooksWebhookVerifierToken() {
+  return config().webhookVerifierToken;
 }
