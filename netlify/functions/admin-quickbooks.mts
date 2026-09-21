@@ -440,7 +440,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'save-get-settings') {
-    const customerRate = Number(payload?.customerRate ?? 4.5);
+    const customerRate = Number(payload?.customerRate ?? 4.712);
     if (!Number.isFinite(customerRate) || customerRate < 0 || customerRate > 4.712) {
       return Response.json({ error: 'Hawaiʻi GET customer rate must be between 0% and 4.712%.' }, { status: 400 });
     }
