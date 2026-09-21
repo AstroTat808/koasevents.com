@@ -218,9 +218,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName].join(' ').toLowerCase(); }
   function openTasks(recordId){ return data.tasks.filter(t=>t.recordId===recordId&&t.status!=='done'); }
   function render(){
+    const activeIds=new Set(data.projects.map(p=>p.id));
     $('[data-stat-projects]').textContent=data.projects.length;
-    $('[data-stat-tasks]').textContent=data.tasks.filter(t=>t.status!=='done').length;
-    $('[data-stat-appointments]').textContent=data.appointments.filter(a=>a.status==='scheduled').length;
+    $('[data-stat-tasks]').textContent=data.tasks.filter(t=>activeIds.has(t.recordId)&&t.status!=='done').length;
+    $('[data-stat-appointments]').textContent=data.appointments.filter(a=>activeIds.has(a.recordId)&&a.status==='scheduled').length;
     $('[data-stat-workflows]').textContent=data.workflows.filter(w=>w.active).length;
     $('[data-stat-templates]').textContent=data.templates.filter(t=>t.active).length;
     $('[data-stat-booked-value]').textContent=money(data.projects.filter(p=>p.stage==='booked').reduce((s,p)=>s+Number(p.proposal?.total||0),0));
