@@ -33,7 +33,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { getUser } from '@netlify/identity';
+    import { getAdminSession } from '../../../lib/admin-session';
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
     const form = document.querySelector('[data-post-form]');
@@ -98,7 +98,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function load() {
-      const user=await getUser();
+      const user=await getAdminSession();
       if(!hasAdminAccess(user)){ unauthorized?.classList.remove('hidden'); return; }
       managerAccess=hasManagerAccess(user); applyRoleUi();
       ui?.classList.remove('hidden');
