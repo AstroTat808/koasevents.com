@@ -45,6 +45,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           <p data-guests-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
         </section>
 
+        <section class="rounded-[1.5rem] bg-[var(--koa-ivory)] p-6 shadow-[var(--shadow-soft)] sm:p-7">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Your Event Team checklist</p><h2 class="display mt-2 text-4xl">What you still need to book</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/56">This list is customized by Koa’s for your specific event.</p></div>
+          <div data-vendor-needs class="mt-5 grid gap-2 md:grid-cols-2"></div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h2 class="display mt-2 text-4xl">Build your event team</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/56">Shop Koa’s preferred and verified partners, save favorites and add selections directly to this event. You can still add an outside vendor manually.</p></div>
@@ -129,6 +134,15 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       row.querySelector('[data-insurance]').textContent='Insurance: '+String(v.insuranceStatus||'not requested').replaceAll('_',' ');
       row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
     }
+    function renderVendorNeeds(){
+      const box=document.querySelector('[data-vendor-needs]');box.innerHTML='';
+      (data?.planning?.vendorRequirements||[]).filter((r)=>r.importance!=='not_needed').forEach((r)=>{
+        const row=document.createElement('article');const tone=r.booked?'border-emerald-200 bg-emerald-50':r.importance==='required'?'border-red-200 bg-red-50':r.importance==='recommended'?'border-[var(--koa-amber-light)] bg-white':'border-[var(--koa-line)] bg-white';
+        row.className='rounded-xl border p-4 '+tone;
+        row.innerHTML='<div class="flex items-start justify-between gap-3"><strong class="text-sm">'+r.category+'</strong><span class="text-[.55rem] font-black uppercase tracking-[.08em]">'+(r.booked?'Booked':String(r.importance).replace('_',' '))+'</span></div>'+(r.note?'<p class="mt-2 text-xs text-[var(--koa-ink)]/55">'+r.note+'</p>':'');
+        box.appendChild(row);
+      });
+    }
     function renderVendors(){
       vendorsEl.innerHTML='';
       (data?.planning?.vendors||[]).forEach((v)=>vendorsEl.appendChild(vendorRow(v)));
@@ -179,7 +193,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       guestsForm.elements.finalGuestCount.value=String(data.planning.finalGuestCount||0);
       document.querySelector('[data-booking-link]').href='/booking/?token='+encodeURIComponent(token);
       document.querySelector('[data-marketplace-link]').href='/vendors/?token='+encodeURIComponent(token);
-      renderVendors();renderQuestionnaire();renderDocuments();renderSummary();
+      renderVendorNeeds();renderVendors();renderQuestionnaire();renderDocuments();renderSummary();
     }
 
     async function load(){
