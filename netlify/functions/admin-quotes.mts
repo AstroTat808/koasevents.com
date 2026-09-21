@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireOperations } from './_shared/admin';
+import { isApprovedManager, requireOperations } from './_shared/admin';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 
 type QuoteItem = {
@@ -1126,6 +1126,23 @@ export default async (req: Request, context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const payload: any = await req.json().catch(() => null);
   if (!payload?.action) return Response.json({ error: 'Missing action.' }, { status: 400 });
+
+  const managerOnlyActions = new Set([
+    'delete-record',
+    'trash-client-chain',
+    'restore-client-chain',
+    'permanent-delete-client-chain',
+    'restore-record',
+    'permanent-delete-record',
+    'delete-quote',
+    'bulk-trash',
+    'bulk-trash-client-chains',
+    'update-mobile-bar-profit-settings',
+    'update-profit-model',
+  ]);
+  if (managerOnlyActions.has(String(payload.action)) && !isApprovedManager(auth.user)) {
+    return Response.json({ error: 'Manager permission required for this action.' }, { status: 403 });
+  }
 
   let records = await readSalesIndex(context);
 
