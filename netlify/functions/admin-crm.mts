@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { requireOperations } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 
@@ -66,7 +66,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 }
 
 export default async (req:Request, context:Context) => {
-  const auth = await requireAdmin();
+  const auth = await requireOperations();
   if (auth.response) return auth.response;
 
   const crm = crmStoreFor(context);
