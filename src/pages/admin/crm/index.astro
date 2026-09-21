@@ -1,0 +1,266 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Business CRM" description="Unified client, project, workflow, task, scheduling, communication and template management." canonical="https://koasevents.com/admin/crm/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell">
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin</p>
+          <h1 class="display mt-3 text-5xl">Business CRM</h1>
+          <p class="mt-3 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">A unified client workspace inspired by the strongest HoneyBook and Dubsado patterns: project records, contacts, tasks, appointments, workflows, reusable templates, client links and activity history.</p>
+        </div>
+        <div class="flex flex-wrap gap-3 text-xs font-black uppercase tracking-[.1em]">
+          <a href="/admin/quotes/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[var(--koa-forest)]">Sales CRM</a>
+          <a href="/admin/events/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[var(--koa-forest)]">Event Ops</a>
+          <a href="/admin/" class="rounded-full bg-[var(--koa-ink)] px-4 py-2 text-white">Admin home</a>
+        </div>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an administrator account at <a class="underline" href="/admin/">Koa’s Admin</a>.</div>
+
+      <div data-admin-ui class="hidden grid gap-6">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Projects</p><p data-stat-projects class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Open tasks</p><p data-stat-tasks class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Appointments</p><p data-stat-appointments class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Workflows</p><p data-stat-workflows class="display mt-3 text-4xl">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Booked value</p><p data-stat-booked-value class="display mt-3 text-4xl">$0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-clay)] p-5 text-white"><p class="eyebrow text-white/70">Templates</p><p data-stat-templates class="display mt-3 text-4xl">0</p></article>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Search projects
+              <input data-search type="search" placeholder="Client, email, phone, event date, package, tag…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal text-[var(--koa-ink)]" />
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Stage
+              <select data-stage-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option><option value="lost">Lost</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Task status
+              <select data-task-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All projects</option><option value="due">Has open tasks</option><option value="clear">No open tasks</option>
+              </select>
+            </label>
+          </div>
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-[.78fr_1.22fr]">
+          <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Projects + contacts</p><h2 class="display mt-2 text-3xl">Client pipeline</h2></div><span data-project-count class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">0 shown</span></div>
+            <div data-project-list class="mt-5 grid max-h-[900px] gap-3 overflow-y-auto pr-1"></div>
+          </div>
+
+          <div data-detail-empty class="rounded-[1.5rem] bg-[var(--koa-ink)] p-8 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Client workspace</p>
+            <h2 class="display mt-3 text-4xl">Select a project</h2>
+            <p class="mt-3 max-w-xl text-sm leading-6 text-white/60">Open any client to manage notes, tasks, appointments, tags, workflows, project metadata, client-facing links, payments and activity in one place.</p>
+          </div>
+
+          <div data-detail class="hidden grid gap-5">
+            <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div><p data-detail-stage class="eyebrow text-[var(--koa-amber-light)]">Project</p><h2 data-detail-name class="display mt-2 text-4xl"></h2><p data-detail-contact class="mt-2 text-sm text-white/58"></p></div>
+                <div data-detail-links class="flex flex-wrap gap-2"></div>
+              </div>
+              <div class="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Event date</p><p data-detail-date class="mt-1 font-semibold"></p></div>
+                <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Package</p><p data-detail-package class="mt-1 font-semibold"></p></div>
+                <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Proposal</p><p data-detail-proposal class="mt-1 font-semibold"></p></div>
+                <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Payments</p><p data-detail-payments class="mt-1 font-semibold"></p></div>
+              </div>
+            </section>
+
+            <section class="grid gap-5 lg:grid-cols-2">
+              <form data-project-form class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-[var(--koa-clay)]">Project details</p><h3 class="display mt-2 text-3xl">Contact + organization</h3>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-1 text-xs font-bold">Status<input name="projectStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Planning / VIP / On hold" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Owner<input name="owner" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Chris / Shaun" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Company<input name="company" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Partner / co-client<input name="partnerName" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                  <label class="grid gap-1 text-xs font-bold sm:col-span-2">Address<input name="address" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Source detail<input name="sourceDetail" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Planner referral, Google, venue tour…" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Tags<input name="tags" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="wedding, vip, repeat-client" /></label>
+                </div>
+                <button class="mt-4 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save project</button>
+              </form>
+
+              <form data-note-form class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-[var(--koa-clay)]">Internal notes</p><h3 class="display mt-2 text-3xl">Add a note</h3>
+                <textarea name="body" rows="5" required class="mt-4 w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" placeholder="Client preferences, decisions, call notes, risks, special handling…"></textarea>
+                <button class="mt-3 rounded-full bg-[var(--koa-ink)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Add note</button>
+                <div data-notes class="mt-5 grid gap-3"></div>
+              </form>
+            </section>
+
+            <section class="grid gap-5 lg:grid-cols-2">
+              <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-[var(--koa-clay)]">Tasks</p><h3 class="display mt-2 text-3xl">Next actions</h3>
+                <form data-task-form class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <input name="title" required class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm sm:col-span-2" placeholder="Task title" />
+                  <input name="dueDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" />
+                  <input name="assignee" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Assignee" />
+                  <select name="priority" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="normal">Normal priority</option><option value="high">High priority</option><option value="low">Low priority</option></select>
+                  <button class="rounded-xl bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.09em] text-white">Add task</button>
+                </form>
+                <div data-tasks class="mt-5 grid gap-2"></div>
+              </div>
+
+              <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-[var(--koa-clay)]">Scheduling</p><h3 class="display mt-2 text-3xl">Appointments</h3>
+                <form data-appointment-form class="mt-4 grid gap-3 sm:grid-cols-2">
+                  <input name="title" required class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm sm:col-span-2" placeholder="Venue tour, planning call, final walkthrough…" />
+                  <input name="startsAt" type="datetime-local" required class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" />
+                  <input name="durationMinutes" type="number" min="15" max="480" value="60" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" />
+                  <input name="location" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm sm:col-span-2" placeholder="Koa’s Events / phone / video / offsite" />
+                  <button class="rounded-xl bg-[var(--koa-clay)] px-4 py-2.5 text-xs font-black uppercase tracking-[.09em] text-white sm:col-span-2">Schedule appointment</button>
+                </form>
+                <div data-appointments class="mt-5 grid gap-2"></div>
+              </div>
+            </section>
+
+            <section class="grid gap-5 lg:grid-cols-2">
+              <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Automation</p><h3 class="display mt-2 text-3xl">Enroll workflow</h3></div><a href="#workflow-builder" class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Manage workflows ↓</a></div>
+                <div data-workflow-enrollments class="mt-4 grid gap-2"></div>
+                <form data-enroll-form class="mt-4 flex gap-2">
+                  <select name="workflowId" required class="min-w-0 flex-1 rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"></select>
+                  <button class="rounded-xl bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.09em] text-white">Enroll</button>
+                </form>
+              </div>
+
+              <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-[var(--koa-clay)]">History</p><h3 class="display mt-2 text-3xl">Activity feed</h3>
+                <div data-activity class="mt-4 grid max-h-[420px] gap-2 overflow-y-auto"></div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="workflow-builder" class="grid gap-5 xl:grid-cols-2">
+          <div class="rounded-[1.5rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Workflow builder</p><h2 class="display mt-2 text-4xl">Reusable process templates</h2>
+            <p class="mt-2 text-sm leading-6 text-white/60">Build repeatable sequences. Enrolling a client creates dated tasks from each workflow step, giving Koa’s the same operational discipline as Dubsado/HoneyBook-style automations while keeping staff control.</p>
+            <form data-workflow-form class="mt-5 grid gap-3">
+              <input name="id" type="hidden" />
+              <input name="name" required class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 text-sm text-white placeholder:text-white/35" placeholder="Wedding booking workflow" />
+              <textarea name="description" rows="2" class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 text-sm text-white placeholder:text-white/35" placeholder="What this workflow does"></textarea>
+              <select name="trigger" class="rounded-xl border border-white/15 bg-[var(--koa-ink)] px-4 py-3 text-sm text-white"><option value="manual">Manual</option><option value="new-inquiry">New inquiry</option><option value="proposal-sent">Proposal sent</option><option value="booked">Booked</option></select>
+              <textarea name="steps" rows="6" required class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 font-mono text-xs text-white placeholder:text-white/35" placeholder="0|Review inquiry and assign owner&#10;1|Send personalized follow-up&#10;3|Call if no reply&#10;7|Close loop or advance proposal"></textarea>
+              <label class="flex items-center gap-2 text-sm"><input name="active" type="checkbox" checked /> Active</label>
+              <button class="rounded-full bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Save workflow</button>
+            </form>
+          </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Saved workflows</p><h2 class="display mt-2 text-4xl">Automation library</h2>
+            <div data-workflows class="mt-5 grid gap-3"></div>
+          </div>
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-2">
+          <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Templates</p><h2 class="display mt-2 text-4xl">Reusable client content</h2>
+            <form data-template-form class="mt-5 grid gap-3">
+              <input name="id" type="hidden" />
+              <select name="type" class="rounded-xl border border-white/15 bg-[var(--koa-forest)] px-4 py-3 text-sm text-white"><option value="email">Email</option><option value="form">Form</option><option value="questionnaire">Questionnaire</option><option value="proposal-note">Proposal note</option></select>
+              <input name="name" required class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 text-sm text-white placeholder:text-white/35" placeholder="Template name" />
+              <input name="subject" class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 text-sm text-white placeholder:text-white/35" placeholder="Email subject / internal label" />
+              <textarea name="body" rows="8" required class="rounded-xl border border-white/15 bg-white/[.07] px-4 py-3 text-sm text-white placeholder:text-white/35" placeholder="Reusable content"></textarea>
+              <label class="flex items-center gap-2 text-sm"><input name="active" type="checkbox" checked /> Active</label>
+              <button class="rounded-full bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-ink)]">Save template</button>
+            </form>
+          </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Template library</p><h2 class="display mt-2 text-4xl">Messages + forms</h2>
+            <div data-templates class="mt-5 grid gap-3"></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+<script>
+  import { getUser } from '@netlify/identity';
+  const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+  const $=(s)=>document.querySelector(s);
+  const $$=(s)=>[...document.querySelectorAll(s)];
+  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[]};
+  let selectedId='';
+
+  function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=user?.app_metadata?.roles||[]; return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin')); }
+  const money=(n)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(n)||0);
+  const esc=(s)=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const fmt=(s)=>{ if(!s)return '—'; const d=new Date(s); return Number.isNaN(d.getTime())?s:d.toLocaleString('en-US',{dateStyle:'medium',timeStyle:s.includes('T')?'short':undefined}); };
+  async function post(payload){ const r=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Request failed'); return j; }
+  async function load(){
+    const r=await fetch('/api/admin/crm',{cache:'no-store'}); if(!r.ok) throw new Error('Unable to load CRM');
+    data=await r.json(); render();
+  }
+  function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName].join(' ').toLowerCase(); }
+  function openTasks(recordId){ return data.tasks.filter(t=>t.recordId===recordId&&t.status!=='done'); }
+  function render(){
+    $('[data-stat-projects]').textContent=data.projects.length;
+    $('[data-stat-tasks]').textContent=data.tasks.filter(t=>t.status!=='done').length;
+    $('[data-stat-appointments]').textContent=data.appointments.filter(a=>a.status==='scheduled').length;
+    $('[data-stat-workflows]').textContent=data.workflows.filter(w=>w.active).length;
+    $('[data-stat-templates]').textContent=data.templates.filter(t=>t.active).length;
+    $('[data-stat-booked-value]').textContent=money(data.projects.filter(p=>p.stage==='booked').reduce((s,p)=>s+Number(p.proposal?.total||0),0));
+    renderProjects(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
+  }
+  function renderProjects(){
+    const q=String($('[data-search]')?.value||'').trim().toLowerCase();
+    const stage=$('[data-stage-filter]')?.value||'all', tf=$('[data-task-filter]')?.value||'all';
+    const rows=data.projects.filter(p=>(!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0)));
+    $('[data-project-count]').textContent=rows.length+' shown';
+    $('[data-project-list]').innerHTML=rows.length?rows.map(p=>{
+      const tasks=openTasks(p.id).length; const tag=(p.meta?.tags||[]).slice(0,3).map(t=>'<span class="rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.58rem] font-black uppercase tracking-[.06em]">'+esc(t)+'</span>').join('');
+      return '<button data-project="'+esc(p.id)+'" class="rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 text-left transition hover:border-[var(--koa-clay)]"><div class="flex items-start justify-between gap-3"><div><strong class="text-base text-[var(--koa-ink)]">'+esc(p.customer?.name||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p></div><span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div><div class="mt-3 flex flex-wrap gap-1.5">'+tag+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></button>';
+    }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No projects match these filters.</p>';
+    $$('[data-project]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.project;renderProjects();renderDetail();}));
+  }
+  function renderDetail(){
+    const p=data.projects.find(x=>x.id===selectedId); if(!p)return;
+    $('[data-detail-empty]').classList.add('hidden'); $('[data-detail]').classList.remove('hidden');
+    $('[data-detail-stage]').textContent=(p.meta?.projectStatus||p.stage||'Project').toUpperCase();
+    $('[data-detail-name]').textContent=p.customer?.name||'Unnamed client';
+    $('[data-detail-contact]').textContent=[p.customer?.email,p.customer?.phone].filter(Boolean).join(' · ')||'No contact details';
+    $('[data-detail-date]').textContent=p.customer?.eventDate||'—'; $('[data-detail-package]').textContent=p.packageId||'—';
+    $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
+    const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);
+    $('[data-detail-payments]').textContent=payments.length?money(paid)+' / '+money(total):'—';
+    const links=[]; if(p.proposal?.publicToken)links.push('<a target="_blank" href="/proposal/?token='+encodeURIComponent(p.proposal.publicToken)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Proposal</a>');
+    if(p.stage==='booked')links.push('<a href="/admin/events/?recordId='+encodeURIComponent(p.id)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Event Ops</a>');
+    links.push('<a href="/planning/?record='+encodeURIComponent(p.id)+'" target="_blank" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Client planning</a>');
+    $('[data-detail-links]').innerHTML=links.join('');
+    const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; f.owner.value=p.meta?.owner||''; f.company.value=p.meta?.company||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
+    $('[data-notes]').innerHTML=data.notes.filter(n=>n.recordId===p.id).slice(0,12).map(n=>'<div class="rounded-xl bg-[var(--koa-sand)] p-3"><p class="text-sm leading-6">'+esc(n.body)+'</p><p class="mt-2 text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-ink)]/42">'+esc(n.createdBy)+' · '+fmt(n.createdAt)+'</p></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No notes yet.</p>';
+    $('[data-tasks]').innerHTML=data.tasks.filter(t=>t.recordId===p.id).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).map(t=>'<button data-task-toggle="'+esc(t.id)+'" class="flex items-start justify-between gap-3 rounded-xl border border-[var(--koa-line)] p-3 text-left '+(t.status==='done'?'opacity-50':'')+'"><div><strong class="text-sm">'+esc(t.title)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(t.dueDate||'No due date')+(t.assignee?' · '+esc(t.assignee):'')+' · '+esc(t.priority)+'</p></div><span class="text-xs font-black uppercase text-[var(--koa-clay)]">'+(t.status==='done'?'Done':'Open')+'</span></button>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No tasks yet.</p>';
+    $$('[data-task-toggle]').forEach(b=>b.addEventListener('click',async()=>{await post({action:'toggle-task',taskId:b.dataset.taskToggle});await load();}));
+    $('[data-appointments]').innerHTML=data.appointments.filter(a=>a.recordId===p.id).sort((a,b)=>String(a.startsAt).localeCompare(String(b.startsAt))).map(a=>'<div class="rounded-xl border border-[var(--koa-line)] p-3"><div class="flex justify-between gap-3"><div><strong class="text-sm">'+esc(a.title)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+fmt(a.startsAt)+' · '+a.durationMinutes+' min'+(a.location?' · '+esc(a.location):'')+'</p></div><span class="text-[.6rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(a.status)+'</span></div></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No appointments yet.</p>';
+    const options=data.workflows.filter(w=>w.active).map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join(''); $('[data-enroll-form] select').innerHTML='<option value="">Choose workflow…</option>'+options;
+    $('[data-workflow-enrollments]').innerHTML=data.enrollments.filter(e=>e.recordId===p.id).slice(0,8).map(e=>{const w=data.workflows.find(x=>x.id===e.workflowId);return '<div class="rounded-xl bg-[var(--koa-sand)] p-3 text-sm"><strong>'+esc(w?.name||'Workflow')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+fmt(e.startedAt)+' · '+e.createdTaskIds.length+' tasks</p></div>'}).join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No workflows enrolled.</p>';
+    $('[data-activity]').innerHTML=data.activity.filter(a=>a.recordId===p.id).slice(0,30).map(a=>'<div class="rounded-xl bg-[var(--koa-sand)] p-3"><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(a.type.replaceAll('_',' '))+'</p><p class="mt-1 text-sm">'+esc(a.detail)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/40">'+fmt(a.createdAt)+'</p></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No CRM activity yet.</p>';
+  }
+  function renderWorkflows(){
+    $('[data-workflows]').innerHTML=data.workflows.length?data.workflows.map(w=>'<button data-edit-workflow="'+esc(w.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(w.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(w.trigger)+'</span></div><p class="mt-2 text-sm text-[var(--koa-ink)]/55">'+esc(w.description||'No description')+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/42">'+w.steps.length+' step'+(w.steps.length===1?'':'s')+' · '+(w.active?'Active':'Paused')+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No workflows saved yet.</p>';
+    $$('[data-edit-workflow]').forEach(b=>b.addEventListener('click',()=>{const w=data.workflows.find(x=>x.id===b.dataset.editWorkflow);const f=$('[data-workflow-form]');f.id.value=w.id;f.name.value=w.name;f.description.value=w.description;f.trigger.value=w.trigger;f.active.checked=w.active;f.steps.value=w.steps.map(s=>s.offsetDays+'|'+s.taskTitle).join('\n');f.scrollIntoView({behavior:'smooth',block:'center'});}));
+  }
+  function renderTemplates(){
+    $('[data-templates]').innerHTML=data.templates.length?data.templates.map(t=>'<button data-edit-template="'+esc(t.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(t.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(t.type)+'</span></div><p class="mt-2 line-clamp-2 text-sm text-[var(--koa-ink)]/55">'+esc(t.subject||t.body)+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No templates saved yet.</p>';
+    $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>{const t=data.templates.find(x=>x.id===b.dataset.editTemplate);const f=$('[data-template-form]');f.id.value=t.id;f.type.value=t.type;f.name.value=t.name;f.subject.value=t.subject;f.body.value=t.body;f.active.checked=t.active;f.scrollIntoView({behavior:'smooth',block:'center'});}));
+  }
+  $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects);
+  $('[data-project-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-project',recordId:selectedId,projectStatus:f.projectStatus.value,owner:f.owner.value,company:f.company.value,address:f.address.value,partnerName:f.partnerName.value,sourceDetail:f.sourceDetail.value,tags:f.tags.value.split(',').map(x=>x.trim()).filter(Boolean)});await load();});
+  $('[data-note-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-note',recordId:selectedId,body:f.body.value});f.reset();await load();});
+  $('[data-task-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-task',recordId:selectedId,title:f.title.value,dueDate:f.dueDate.value,assignee:f.assignee.value,priority:f.priority.value});f.reset();await load();});
+  $('[data-appointment-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'schedule-appointment',recordId:selectedId,title:f.title.value,startsAt:f.startsAt.value,durationMinutes:f.durationMinutes.value,location:f.location.value});f.reset();await load();});
+  $('[data-enroll-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;if(!f.workflowId.value)return;await post({action:'enroll-workflow',recordId:selectedId,workflowId:f.workflowId.value});await load();});
+  $('[data-workflow-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const steps=f.steps.value.split('\n').map((line,i)=>{const [days,...rest]=line.split('|');return{id:'',label:'Step '+(i+1),offsetDays:Number(days)||0,taskTitle:rest.join('|').trim()}}).filter(x=>x.taskTitle);await post({action:'save-workflow',id:f.id.value,name:f.name.value,description:f.description.value,trigger:f.trigger.value,steps,active:f.active.checked});f.reset();f.active.checked=true;await load();});
+  $('[data-template-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-template',id:f.id.value,type:f.type.value,name:f.name.value,subject:f.subject.value,body:f.body.value,active:f.active.checked});f.reset();f.active.checked=true;await load();});
+
+  (async()=>{const user=await getUser();const ok=admin(user);$('[data-unauthorized]').classList.toggle('hidden',ok);$('[data-admin-ui]').classList.toggle('hidden',!ok);if(ok)await load();})();
+</script>
+</BaseLayout>
