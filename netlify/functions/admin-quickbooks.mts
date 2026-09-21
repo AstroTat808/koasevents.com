@@ -420,6 +420,11 @@ function buildAccountingAudit(records: any[]) {
       const openInvoiceBalance = Math.round(activeInvoices.reduce((sum: number, entry: any) => sum + Math.max(0, Number(entry.balance ?? entry.total ?? entry.amount ?? 0)), 0) * 100) / 100;
       const remainingBalance = Math.max(0, Math.round((proposalTotal - paymentsReceived) * 100) / 100);
       const expectedOpenInvoiceBalance = Math.max(0, Math.round((issuedTotal - paymentsReceived) * 100) / 100);
+      const accountedRemainingBalance = Math.round((openInvoiceBalance + uninvoicedTotal) * 100) / 100;
+
+      if (Math.abs(moneyDelta(accountedRemainingBalance, remainingBalance)) >= 0.01) {
+        issues.push({ code:'remaining_balance', label:'Remaining balance (open invoices + uninvoiced milestones)', expected:remainingBalance, actual:accountedRemainingBalance, delta:moneyDelta(accountedRemainingBalance, remainingBalance) });
+      }
 
       if (Math.abs(moneyDelta(openInvoiceBalance, expectedOpenInvoiceBalance)) >= 0.01) {
         issues.push({ code:'invoice_balance', label:'QuickBooks open invoice balance', expected:expectedOpenInvoiceBalance, actual:openInvoiceBalance, delta:moneyDelta(openInvoiceBalance, expectedOpenInvoiceBalance) });
