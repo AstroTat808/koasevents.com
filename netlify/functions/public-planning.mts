@@ -184,7 +184,10 @@ export default async (req:Request,context:Context)=>{
 
   let ops:any=await opsStore.get('events/'+record.id,{type:'json'});
   if(!ops){ops=defaultOps(record);await opsStore.setJSON('events/'+record.id,ops);}
-  else if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';await opsStore.setJSON('events/'+record.id,ops);}
+  const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+  const refreshedInsuranceVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
+  if(JSON.stringify(refreshedInsuranceVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedInsuranceVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
+  if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';await opsStore.setJSON('events/'+record.id,ops);}
   else if(!['auto','manual'].includes(String(ops.vendorRequirementsMode||''))){if(isBaselineVendorRequirements(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}else{ops.vendorRequirementsMode='manual';}await opsStore.setJSON('events/'+record.id,ops);}
 
   if(req.method==='GET') {
