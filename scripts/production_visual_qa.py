@@ -149,7 +149,7 @@ def source_mode():
   "staffing recommendation engine":"function staffingRecommendations",
   "staffing recommendation UI":"data-booking-staffing-recommendations",
   "apply staffing recommendation":"data-apply-staffing-recommendations",
-  "stable bartender IDs":"data-bartender-id",
+  "stable bartender IDs":"dataset.bartenderId",
   "recommended price apply action":"apply-mobile-bar-margin-target",
  }
  for label,needle in profit_requirements.items():
