@@ -1,0 +1,122 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Vendor CRM | Koa’s Events" description="Manage Koa’s vendor marketplace profiles, compliance, reviews and gallery attribution." canonical="https://koasevents.com/admin/vendors/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10">
+    <div class="container-shell max-w-7xl">
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]"><h1 class="display text-5xl">Vendor CRM</h1><p class="mt-3 text-sm text-[var(--koa-ink)]/60">Administrator access required.</p></section>
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)] sm:p-9">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Events</p><h1 class="display mt-3 text-5xl">Vendor CRM</h1><p class="mt-3 max-w-3xl text-sm leading-6 text-white/65">Manage the marketplace, preferred partners, insurance, internal performance, client reviews and portfolio attribution from one master vendor record.</p></div>
+            <button data-new class="rounded-full bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">New vendor</button>
+          </div>
+        </header>
+
+        <section class="grid gap-4 md:grid-cols-4">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Published</p><p data-kpi-published class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Preferred</p><p data-kpi-preferred class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Insurance approved</p><p data-kpi-insurance class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Pending reviews</p><p data-kpi-reviews class="display mt-2 text-4xl text-[var(--koa-forest)]">0</p></article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[22rem_1fr]">
+          <aside class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <input data-search class="field" placeholder="Search vendors…">
+            <div data-list class="mt-4 grid gap-2"></div>
+          </aside>
+
+          <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <form data-form class="grid gap-6">
+              <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Vendor profile</p><h2 data-editor-title class="display mt-2 text-4xl">New vendor</h2></div><p data-message class="text-xs text-[var(--koa-ink)]/50"></p></div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="label">Display name<input name="name" class="field" required></label>
+                <label class="label">Legal name<input name="legalName" class="field"></label>
+                <label class="label">Primary category<select name="category" class="field" required><option></option><option>Wedding Planner</option><option>Photographer</option><option>Videographer</option><option>Caterer</option><option>Florist</option><option>Officiant</option><option>DJ</option><option>Live Musician</option><option>Entertainment</option><option>Hair & Makeup</option><option>Cake / Dessert</option><option>Rentals</option><option>Transportation</option><option>Bartender / Mobile Bar</option><option>Lodging</option><option>Other</option></select></label>
+                <label class="label">Marketplace status<select name="status" class="field"><option value="draft">Draft</option><option value="published">Published</option><option value="paused">Paused</option></select></label>
+                <label class="label">Partner tier<select name="tier" class="field"><option value="community">Community Vendor</option><option value="verified">Verified Vendor</option><option value="preferred">Koa’s Preferred Partner</option></select></label>
+                <label class="label">Starting price<input name="startingPrice" class="field" placeholder="$2,500 or From $185/person"></label>
+              </div>
+              <div class="grid gap-3 md:grid-cols-2">
+                <label class="label">Headline<input name="headline" class="field" placeholder="Romantic documentary wedding photography"></label>
+                <label class="label">Service areas<input name="serviceAreas" class="field" placeholder="Hilo, Volcano, Kona"></label>
+                <label class="label">Specialties<input name="specialties" class="field" placeholder="Micro weddings, elopements, tropical florals"></label>
+                <label class="label">Styles<input name="styles" class="field" placeholder="Editorial, documentary, tropical"></label>
+              </div>
+              <label class="label">Description<textarea name="description" rows="5" class="field"></textarea></label>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="label">Contact name<input name="contactName" class="field"></label><label class="label">Email<input name="email" type="email" class="field"></label><label class="label">Phone<input name="phone" class="field"></label>
+                <label class="label">Website<input name="website" class="field"></label><label class="label">Instagram<input name="instagram" class="field"></label><label class="label">Response time<input name="responseTime" class="field" placeholder="Usually within 24 hours"></label>
+              </div>
+              <div class="grid gap-3 md:grid-cols-3">
+                <label class="label">Price notes<textarea name="priceNotes" rows="3" class="field"></textarea></label><label class="label">Travel fees<textarea name="travelFees" rows="3" class="field"></textarea></label><label class="label">Cover image URL<input name="coverImage" class="field" placeholder="/api/gallery/image/... or /media/..."></label>
+              </div>
+
+              <div class="rounded-xl bg-[var(--koa-sand)] p-5">
+                <p class="eyebrow text-[var(--koa-clay)]">Insurance + verification</p>
+                <div class="mt-4 grid gap-3 md:grid-cols-4">
+                  <label class="label">Status<select name="insuranceStatus" class="field"><option value="not_requested">Not requested</option><option value="requested">Requested</option><option value="received">Received</option><option value="approved">Approved</option><option value="expired">Expired</option></select></label>
+                  <label class="label">Carrier<input name="carrier" class="field"></label><label class="label">Policy number<input name="policyNumber" class="field"></label><label class="label">Expiration<input name="expiresAt" type="date" class="field"></label>
+                </div>
+                <label class="mt-3 flex items-center gap-2 text-sm font-semibold"><input name="additionalInsured" type="checkbox"> Koa’s listed as additional insured</label>
+              </div>
+
+              <div class="rounded-xl bg-[var(--koa-ivory)] p-5">
+                <p class="eyebrow text-[var(--koa-clay)]">Internal performance</p>
+                <div class="mt-4 grid gap-3 md:grid-cols-5">
+                  <label class="label">Staff rating<input name="staffRating" type="number" min="0" max="5" step=".1" class="field"></label><label class="label">Punctuality<input name="punctuality" type="number" min="0" max="5" step=".1" class="field"></label><label class="label">Communication<input name="communication" type="number" min="0" max="5" step=".1" class="field"></label><label class="label">Compliance<input name="venueCompliance" type="number" min="0" max="5" step=".1" class="field"></label><label class="label">Cleanliness<input name="cleanliness" type="number" min="0" max="5" step=".1" class="field"></label>
+                </div>
+                <label class="label mt-3">Internal notes<textarea name="internalNotes" rows="3" class="field"></textarea></label>
+              </div>
+
+              <div>
+                <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Actual work at Koa’s</p><h3 class="display mt-2 text-3xl">Gallery attribution</h3></div><button data-add-photo type="button" class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add photo reference</button></div>
+                <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Reference an existing Koa’s gallery/media URL. The photo remains managed by Gallery Admin; no duplicate image is created.</p>
+                <div data-gallery class="mt-4 grid gap-3"></div>
+              </div>
+
+              <div class="flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-6 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendor</button><button data-pause type="button" class="rounded-full border border-[var(--koa-line)] px-6 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Pause listing</button></div>
+            </form>
+          </section>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Client reviews</p><h2 class="display mt-2 text-4xl">Moderation queue</h2><div data-reviews class="mt-5 grid gap-3"></div></section>
+      </div>
+    </div>
+  </main>
+  <style>.field{min-height:2.7rem;width:100%;border:1px solid var(--koa-line);border-radius:.7rem;background:white;padding:.7rem .8rem;font-size:.82rem}.label{display:grid;gap:.4rem;font-size:.75rem;font-weight:700}</style>
+  <script>
+    import { getUser } from '@netlify/identity';
+    let payload={vendors:[],reviews:[]},selected=null;
+    const app=document.querySelector('[data-app]'),unauth=document.querySelector('[data-unauthorized]'),form=document.querySelector('[data-form]'),list=document.querySelector('[data-list]'),reviewsEl=document.querySelector('[data-reviews]'),galleryEl=document.querySelector('[data-gallery]');
+    const approved=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    function access(u){const roles=[u?.roles,u?.appMetadata?.roles,u?.app_metadata?.roles].find(Array.isArray)||[];return approved.has(String(u?.email||'').toLowerCase())||roles.map(x=>String(x).toLowerCase()).includes('admin')}
+    function split(v){return String(v||'').split(',').map(x=>x.trim()).filter(Boolean)}
+    function galleryRow(g={}){const row=document.createElement('div');row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] p-3 md:grid-cols-[1.4fr_1fr_1fr_auto]';row.innerHTML='<input data-src class="field" placeholder="/api/gallery/image/..."><input data-caption class="field" placeholder="Caption"><input data-event class="field" placeholder="Event label"><button type="button" data-remove class="px-3">×</button>';row.querySelector('[data-src]').value=g.src||'';row.querySelector('[data-caption]').value=g.caption||'';row.querySelector('[data-event]').value=g.eventLabel||'';row.querySelector('[data-remove]').onclick=()=>row.remove();return row}
+    function setForm(v={}){
+      selected=v.id?v:null;form.reset();document.querySelector('[data-editor-title]').textContent=v.name||'New vendor';
+      const put=(n,val)=>{if(form.elements[n])form.elements[n].value=val??''};
+      ['name','legalName','category','status','tier','startingPrice','headline','contactName','email','phone','website','instagram','responseTime','priceNotes','travelFees','coverImage','description'].forEach(n=>put(n,v[n]));
+      put('serviceAreas',(v.serviceAreas||[]).join(', '));put('specialties',(v.specialties||[]).join(', '));put('styles',(v.styles||[]).join(', '));
+      put('insuranceStatus',v.insurance?.status||'not_requested');put('carrier',v.insurance?.carrier);put('policyNumber',v.insurance?.policyNumber);put('expiresAt',v.insurance?.expiresAt);form.elements.additionalInsured.checked=Boolean(v.insurance?.additionalInsured);
+      put('staffRating',v.internal?.staffRating);put('punctuality',v.internal?.punctuality);put('communication',v.internal?.communication);put('venueCompliance',v.internal?.venueCompliance);put('cleanliness',v.internal?.cleanliness);put('internalNotes',v.internal?.notes);
+      galleryEl.innerHTML='';(v.gallery||[]).forEach(g=>galleryEl.appendChild(galleryRow(g)));
+    }
+    function collect(){
+      const f=form.elements;return {id:selected?.id,name:f.name.value,legalName:f.legalName.value,category:f.category.value,status:f.status.value,tier:f.tier.value,startingPrice:f.startingPrice.value,headline:f.headline.value,description:f.description.value,serviceAreas:split(f.serviceAreas.value),specialties:split(f.specialties.value),styles:split(f.styles.value),contactName:f.contactName.value,email:f.email.value,phone:f.phone.value,website:f.website.value,instagram:f.instagram.value,responseTime:f.responseTime.value,priceNotes:f.priceNotes.value,travelFees:f.travelFees.value,coverImage:f.coverImage.value,insurance:{status:f.insuranceStatus.value,carrier:f.carrier.value,policyNumber:f.policyNumber.value,expiresAt:f.expiresAt.value,additionalInsured:f.additionalInsured.checked},internal:{staffRating:Number(f.staffRating.value||0),punctuality:Number(f.punctuality.value||0),communication:Number(f.communication.value||0),venueCompliance:Number(f.venueCompliance.value||0),cleanliness:Number(f.cleanliness.value||0),notes:f.internalNotes.value},gallery:[...galleryEl.children].map(r=>({src:r.querySelector('[data-src]').value,caption:r.querySelector('[data-caption]').value,eventLabel:r.querySelector('[data-event]').value})).filter(x=>x.src)}}
+    async function api(body){const r=await fetch('/api/admin/vendors',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to save.');return d}
+    function renderList(){
+      const q=String(document.querySelector('[data-search]').value||'').toLowerCase();list.innerHTML='';
+      payload.vendors.filter(v=>[v.name,v.category,v.tier].join(' ').toLowerCase().includes(q)).forEach(v=>{const b=document.createElement('button');b.type='button';b.className='rounded-xl border border-[var(--koa-line)] p-3 text-left hover:bg-[var(--koa-ivory)]';b.innerHTML='<strong class="block text-sm">'+v.name+'</strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/50">'+v.category+' · '+String(v.tier).replaceAll('_',' ')+' · '+v.status+'</span>';b.onclick=()=>setForm(v);list.appendChild(b)});
+    }
+    function renderReviews(){
+      reviewsEl.innerHTML='';const pending=payload.reviews.filter(r=>r.status==='pending');pending.forEach(r=>{const v=payload.vendors.find(v=>v.id===r.vendorId);const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] p-4';card.innerHTML='<strong>'+String(v?.name||'Vendor')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+r.clientName+' · '+r.eventDate+' · '+r.overall+'/5</p><p class="mt-3 text-sm">'+(r.comment||'No written comment.')+'</p>';const a=document.createElement('div');a.className='mt-3 flex gap-2';for(const [status,label] of [['published','Publish'],['hidden','Hide']]){const b=document.createElement('button');b.type='button';b.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs';b.textContent=label;b.onclick=async()=>{await api({action:'moderate-review',reviewId:r.id,status});await load()};a.appendChild(b)}card.appendChild(a);reviewsEl.appendChild(card)});if(!pending.length)reviewsEl.textContent='No reviews awaiting moderation.';
+    }
+    function kpis(){document.querySelector('[data-kpi-published]').textContent=payload.vendors.filter(v=>v.status==='published').length;document.querySelector('[data-kpi-preferred]').textContent=payload.vendors.filter(v=>v.tier==='preferred').length;document.querySelector('[data-kpi-insurance]').textContent=payload.vendors.filter(v=>v.insurance?.status==='approved').length;document.querySelector('[data-kpi-reviews]').textContent=payload.reviews.filter(r=>r.status==='pending').length}
+    async function load(){const u=await getUser();if(!access(u)){unauth.classList.remove('hidden');return}app.classList.remove('hidden');const r=await fetch('/api/admin/vendors',{cache:'no-store'});payload=await r.json();renderList();renderReviews();kpis();if(selected){const v=payload.vendors.find(x=>x.id===selected.id);if(v)setForm(v)}}
+    form.addEventListener('submit',async e=>{e.preventDefault();const m=document.querySelector('[data-message]');m.textContent='Saving…';try{const d=await api({action:'save-vendor',vendor:collect()});selected=d.vendor;m.textContent='Saved.';await load()}catch(err){m.textContent=err.message}});
+    document.querySelector('[data-new]').onclick=()=>setForm({status:'draft',tier:'community'});document.querySelector('[data-add-photo]').onclick=()=>galleryEl.appendChild(galleryRow());document.querySelector('[data-search]').oninput=renderList;
+    document.querySelector('[data-pause]').onclick=async()=>{if(!selected)return;await api({action:'archive-vendor',vendorId:selected.id});await load()};
+    load();
+  </script>
+</BaseLayout>
