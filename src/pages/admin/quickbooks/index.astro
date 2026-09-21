@@ -102,7 +102,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p data-production-test-status class="text-sm font-semibold text-[var(--koa-ink)]">Ready after a production service item is mapped.</p>
               <p data-production-test-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50"></p>
             </div>
-            <button data-run-production-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run $1 production test</button>
+            <div class="flex flex-wrap gap-2">
+              <button data-cleanup-production-test type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Clean previous test</button>
+              <button data-run-production-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run $1 production test</button>
+            </div>
+          </div>
+
+          <div class="mt-6 border-t border-[var(--koa-line)] pt-6">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="font-semibold text-[var(--koa-ink)]">CRM-linked production booking test</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/58">Creates a clearly labeled CRM proposal, QuickBooks estimate, $1 deposit invoice and matching QuickBooks payment. Nothing is emailed. The webhook must move the CRM record to Booked and Deposit Paid.</p>
+              </div>
+              <button data-run-production-linked-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run linked production test</button>
+            </div>
+            <p data-production-linked-status class="mt-3 text-sm font-semibold text-[var(--koa-ink)]"></p>
+            <p data-production-linked-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50"></p>
           </div>
         </section>
 
@@ -159,8 +174,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const prodEnvironment=document.querySelector('[data-prod-environment]');
     const productionTest=document.querySelector('[data-production-test]');
     const runProductionTest=document.querySelector('[data-run-production-test]');
+    const cleanupProductionTest=document.querySelector('[data-cleanup-production-test]');
     const productionTestStatus=document.querySelector('[data-production-test-status]');
     const productionTestDetail=document.querySelector('[data-production-test-detail]');
+    const runProductionLinkedTest=document.querySelector('[data-run-production-linked-test]');
+    const productionLinkedStatus=document.querySelector('[data-production-linked-status]');
+    const productionLinkedDetail=document.querySelector('[data-production-linked-detail]');
     const refreshDiagnostics=document.querySelector('[data-refresh-diagnostics]');
     const diagConnection=document.querySelector('[data-diag-connection]');
     const diagCompany=document.querySelector('[data-diag-company]');
@@ -252,7 +271,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Ready after a production service item is mapped.'
           : 'Last test: '+String(ptest.status||'unknown')+' · '+(ptest.completedAt?when(ptest.completedAt):'');
         if(productionTestDetail)productionTestDetail.textContent=ptest
-          ? 'Customer '+(ptest.customerName||ptest.customerId||'')+' · Estimate '+(ptest.estimateDocNumber||ptest.estimateId||'')+' · Invoice '+(ptest.invoiceDocNumber||ptest.invoiceId||'')+' · $'+Number(ptest.invoiceBalance||0).toFixed(2)+' open · emailed: '+(ptest.emailed?'Yes':'No')
+          ? 'Customer '+(ptest.customerName||ptest.customerId||'')+' · Estimate '+(ptest.estimateDocNumber||ptest.estimateId||'')+' · Invoice '+(ptest.invoiceDocNumber||ptest.invoiceId||'')+' · $'+Number(ptest.invoiceBalance||0).toFixed(2)+' open · emailed: '+(ptest.emailed?'Yes':'No')+(ptest.cleanup?.completedAt?' · cleanup completed '+when(ptest.cleanup.completedAt):'')
+          : '';
+      }
+      if(productionLinkedStatus){
+        const linked=state?.productionLinkedTest;
+        productionLinkedStatus.textContent=!linked
+          ? 'No CRM-linked production test has been run yet.'
+          : linked.verified
+            ? 'Verified: CRM record affected, Deposit Paid = Yes, balance $'+Number(linked.balanceDue||0).toFixed(2)+', stage '+String(linked.actualStage||'')+'.'
+            : 'Waiting for production webhook verification.';
+        if(productionLinkedDetail)productionLinkedDetail.textContent=linked
+          ? 'CRM '+String(linked.recordId||'')+' · Estimate '+String(linked.estimateDocNumber||linked.estimateId||'')+' · Invoice '+String(linked.invoiceDocNumber||linked.invoiceId||'')+' · Payment '+String(linked.paymentId||'')+' · payment $'+Number(linked.paymentAmount||0).toFixed(2)+(linked.crmAffected?' · CRM affected':'')
           : '';
       }
       if(linkedTestMessage){
@@ -285,6 +315,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(itemAccount)itemAccount.textContent=selected?.incomeAccountName?'Income account: '+selected.incomeAccountName:'';
     });
     refreshDiagnostics?.addEventListener('click',load);
+    cleanupProductionTest?.addEventListener('click',async()=>{
+      if(!productionTestStatus)return;
+      productionTestStatus.textContent='Validating and cleaning the previous controlled production test…';
+      cleanupProductionTest.disabled=true;
+      try{
+        const data=await api({action:'cleanup-production-smoke-test'});
+        const cleanup=data.cleanup||{};
+        productionTestStatus.textContent='Cleanup complete: invoice '+String(cleanup.invoice||'')+', estimate '+String(cleanup.estimate||'')+', customer '+String(cleanup.customer||'')+'.';
+        await load();
+      }catch(err){
+        productionTestStatus.textContent=err.message||'Production test cleanup failed.';
+      }finally{
+        cleanupProductionTest.disabled=false;
+      }
+    });
+
+    runProductionLinkedTest?.addEventListener('click',async()=>{
+      if(!productionLinkedStatus)return;
+      productionLinkedStatus.textContent='Creating controlled CRM-linked production booking…';
+      runProductionLinkedTest.disabled=true;
+      try{
+        const data=await api({action:'production-linked-booking-test'});
+        const t=data.test||{};
+        productionLinkedStatus.textContent='Created CRM '+String(t.recordId||'')+'. Waiting for Invoice/Payment webhooks…';
+        if(productionLinkedDetail)productionLinkedDetail.textContent='Estimate '+String(t.estimateDocNumber||t.estimateId||'')+' · Invoice '+String(t.invoiceDocNumber||t.invoiceId||'')+' · Payment '+String(t.paymentId||'')+' · payment $'+Number(t.paymentAmount||0).toFixed(2)+' · nothing emailed.';
+        setTimeout(()=>load(),5000);
+      }catch(err){
+        productionLinkedStatus.textContent=err.message||'CRM-linked production test failed.';
+      }finally{
+        runProductionLinkedTest.disabled=false;
+      }
+    });
+
     runProductionTest?.addEventListener('click',async()=>{
       if(!productionTestStatus)return;
       productionTestStatus.textContent='Creating controlled $1 production customer, estimate and invoice…';
