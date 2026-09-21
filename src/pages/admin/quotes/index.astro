@@ -1581,7 +1581,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-booking-get]',money(summary.taxAmount||record.proposal?.taxAmount||0));
       textContent('[data-booking-deposit]',money(summary.depositAmount||record.proposal?.depositAmount||0));
       textContent('[data-booking-payments-received]',money(summary.paymentsReceived||summary.paid||0));
-      textContent('[data-booking-remaining]',money(summary.remainingBalance??summary.outstanding??record.proposal?.total||0));
+      textContent('[data-booking-remaining]',money(summary.remainingBalance ?? summary.outstanding ?? record.proposal?.total ?? 0));
       if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
       if(planningClientLink) {
         planningClientLink.href=record.proposal?.publicToken?'/planning/?token='+encodeURIComponent(record.proposal.publicToken):'#';
