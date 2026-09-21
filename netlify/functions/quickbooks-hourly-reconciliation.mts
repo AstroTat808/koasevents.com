@@ -19,120 +19,8 @@ function esc(value: unknown) {
 
 function issueSummary(issues: any[]) {
   return (Array.isArray(issues) ? issues : []).slice(0, 6).map((issue: any) => {
-    const expected = issue?.expected == null ? '—' : '
-  if (!record || record.kind !== 'proposal' || !record.proposal) return false;
-  const qbo = record?.accounting?.quickbooks || {};
-  return Boolean(
-    qbo.customerId ||
-    qbo.estimateId ||
-    (Array.isArray(qbo.invoices) && qbo.invoices.some((entry: any) => entry?.invoiceId))
-  );
-}
-
-export default async (_req: Request, context: Context) => {
-  if (context.deploy.context !== 'production') return;
-
-  let records = await readQuickBooksSalesRecords(context);
-  const candidates = records.filter(isReconciliationCandidate);
-  const errors: Array<{ recordId: string; message: string }> = [];
-
-  for (const record of candidates) {
-    try {
-      await syncQuickBooksAccountingStatus(context, record);
-      await refreshQuickBooksPaymentSnapshot(context, record);
-      record.accounting ||= {};
-      record.accounting.quickbooks ||= {};
-      record.accounting.quickbooks.hourlyReconciledAt = new Date().toISOString();
-      record.accounting.quickbooks.hourlyReconciliationError = '';
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'QuickBooks reconciliation failed.';
-      record.accounting ||= {};
-      record.accounting.quickbooks ||= {};
-      record.accounting.quickbooks.hourlyReconciledAt = new Date().toISOString();
-      record.accounting.quickbooks.hourlyReconciliationError = String(message).slice(0, 500);
-      errors.push({ recordId: String(record.id || ''), message: String(message).slice(0, 500) });
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
-  }
-
-  const audit = buildQuickBooksAccountingAudit(records);
-  const reconciliation = applyQuickBooksReconciliationHistory(records, audit, 'hourly');
-  for (const recordId of reconciliation.changedRecordIds) {
-    const record = records.find((entry: any) => String(entry?.id || '') === String(recordId));
-    if (record) records = await saveQuickBooksSalesRecord(context, record, records);
-  }
-  const runAt = new Date().toISOString();
-  const alertTransitions = reconciliation.transitions.filter((entry: any) => ['mismatch_detected','resolved'].includes(entry.type));
-  const alerts = await sendAccountingTransitionAlerts(alertTransitions, runAt);
-  const store = getStore({ name: 'koa-integrations', consistency: 'strong' });
-  await store.setJSON('quickbooks/accounting-hourly-last', {
-    ...audit,
-    runAt,
-    refreshedClients: candidates.length,
-    errorCount: errors.length,
-    errors: errors.slice(0, 100),
-    transitions: reconciliation.transitions.slice(0, 100),
-    alerts,
-  });
-};
-
-export const config: Config = {
-  schedule: '@hourly',
-};
- + Number(issue.expected || 0).toFixed(2);
-    const actual = issue?.actual == null ? '—' : '
-  if (!record || record.kind !== 'proposal' || !record.proposal) return false;
-  const qbo = record?.accounting?.quickbooks || {};
-  return Boolean(
-    qbo.customerId ||
-    qbo.estimateId ||
-    (Array.isArray(qbo.invoices) && qbo.invoices.some((entry: any) => entry?.invoiceId))
-  );
-}
-
-export default async (_req: Request, context: Context) => {
-  if (context.deploy.context !== 'production') return;
-
-  let records = await readQuickBooksSalesRecords(context);
-  const candidates = records.filter(isReconciliationCandidate);
-  const errors: Array<{ recordId: string; message: string }> = [];
-
-  for (const record of candidates) {
-    try {
-      await syncQuickBooksAccountingStatus(context, record);
-      await refreshQuickBooksPaymentSnapshot(context, record);
-      record.accounting ||= {};
-      record.accounting.quickbooks ||= {};
-      record.accounting.quickbooks.hourlyReconciledAt = new Date().toISOString();
-      record.accounting.quickbooks.hourlyReconciliationError = '';
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'QuickBooks reconciliation failed.';
-      record.accounting ||= {};
-      record.accounting.quickbooks ||= {};
-      record.accounting.quickbooks.hourlyReconciledAt = new Date().toISOString();
-      record.accounting.quickbooks.hourlyReconciliationError = String(message).slice(0, 500);
-      errors.push({ recordId: String(record.id || ''), message: String(message).slice(0, 500) });
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
-  }
-
-  const audit = buildQuickBooksAccountingAudit(records);
-  const store = getStore({ name: 'koa-integrations', consistency: 'strong' });
-  await store.setJSON('quickbooks/accounting-hourly-last', {
-    ...audit,
-    runAt: new Date().toISOString(),
-    refreshedClients: candidates.length,
-    errorCount: errors.length,
-    errors: errors.slice(0, 100),
-  });
-};
-
-export const config: Config = {
-  schedule: '@hourly',
-};
- + Number(issue.actual || 0).toFixed(2);
+    const expected = issue?.expected == null ? '—' : '$' + Number(issue.expected || 0).toFixed(2);
+    const actual = issue?.actual == null ? '—' : '$' + Number(issue.actual || 0).toFixed(2);
     return clean(issue?.label, 160) + ' expected ' + expected + ', actual ' + actual;
   });
 }
@@ -152,18 +40,8 @@ async function sendAccountingTransitionAlerts(transitions: any[], runId: string)
     resolved.length ? resolved.length + ' client reconciliation mismatch' + (resolved.length === 1 ? '' : 'es') + ' resolved.' : '',
   ].filter(Boolean);
   const details = [
-    ...detected.map((entry) => ({
-      heading:'New mismatch',
-      name:entry.clientName || entry.recordId,
-      recordId:entry.recordId,
-      issues:issueSummary(entry.after),
-    })),
-    ...resolved.map((entry) => ({
-      heading:'Resolved',
-      name:entry.clientName || entry.recordId,
-      recordId:entry.recordId,
-      issues:issueSummary(entry.before),
-    })),
+    ...detected.map((entry) => ({ heading:'New mismatch', name:entry.clientName || entry.recordId, issues:issueSummary(entry.after) })),
+    ...resolved.map((entry) => ({ heading:'Resolved', name:entry.clientName || entry.recordId, issues:issueSummary(entry.before) })),
   ];
 
   const channels:any[] = [];
@@ -173,6 +51,7 @@ async function sendAccountingTransitionAlerts(transitions: any[], runId: string)
     || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
     || 'chris@sibel.org';
   const recipients=configuredEmails.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
+
   if(apiKey&&recipients.length){
     const from=clean(Netlify.env.get('KOA_ACCOUNTING_ALERT_FROM'),240)
       || clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
@@ -198,10 +77,15 @@ async function sendAccountingTransitionAlerts(transitions: any[], runId: string)
       });
       const body:any=await response.json().catch(()=>({}));
       channels.push(response.ok?{channel:'email',sent:true,id:clean(body?.id,120)}:{channel:'email',sent:false,status:response.status,error:clean(body?.message,240)});
-    }catch(error){channels.push({channel:'email',sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});}
-  } else channels.push({channel:'email',sent:false,reason:'not-configured'});
+    }catch(error){
+      channels.push({channel:'email',sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});
+    }
+  } else {
+    channels.push({channel:'email',sent:false,reason:'not-configured'});
+  }
 
-  const webhook=clean(Netlify.env.get('KOA_ACCOUNTING_SLACK_WEBHOOK_URL'),1000)||clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
+  const webhook=clean(Netlify.env.get('KOA_ACCOUNTING_SLACK_WEBHOOK_URL'),1000)
+    || clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(webhook){
     const lines=[
       detected.length?'🚨 *Accounting mismatch detected:* '+detected.map((entry)=>entry.clientName||entry.recordId).join(', '):'',
@@ -209,15 +93,25 @@ async function sendAccountingTransitionAlerts(transitions: any[], runId: string)
       '<https://koasevents.com/admin/quotes/|Open Sales CRM>',
     ].filter(Boolean);
     try{
-      const response=await fetch(webhook,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:lines.join('\n')}),signal:AbortSignal.timeout(12_000)});
+      const response=await fetch(webhook,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text:lines.join('\n')}),
+        signal:AbortSignal.timeout(12_000),
+      });
       channels.push({channel:'slack',sent:response.ok,status:response.status});
-    }catch(error){channels.push({channel:'slack',sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});}
-  } else channels.push({channel:'slack',sent:false,reason:'not-configured'});
+    }catch(error){
+      channels.push({channel:'slack',sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});
+    }
+  } else {
+    channels.push({channel:'slack',sent:false,reason:'not-configured'});
+  }
 
   const sid=clean(Netlify.env.get('TWILIO_ACCOUNT_SID'),200);
   const token=clean(Netlify.env.get('TWILIO_AUTH_TOKEN'),300);
   const fromNumber=clean(Netlify.env.get('TWILIO_FROM_NUMBER'),80);
-  const smsRecipients=(clean(Netlify.env.get('KOA_ACCOUNTING_SMS_TO'),500)||clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500)).split(',').map(v=>v.trim()).filter(Boolean);
+  const smsRecipients=(clean(Netlify.env.get('KOA_ACCOUNTING_SMS_TO'),500)||clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500))
+    .split(',').map(v=>v.trim()).filter(Boolean);
   if(sid&&token&&fromNumber&&smsRecipients.length){
     const smsBody=[
       detected.length?'Accounting mismatch: '+detected.map((entry)=>entry.clientName||entry.recordId).join(', ')+'.':'',
@@ -229,12 +123,21 @@ async function sendAccountingTransitionAlerts(transitions: any[], runId: string)
     for(const to of smsRecipients){
       try{
         const form=new URLSearchParams({From:fromNumber,To:to,Body:smsBody});
-        const response=await fetch('https://api.twilio.com/2010-04-01/Accounts/'+encodeURIComponent(sid)+'/Messages.json',{method:'POST',headers:{Authorization:auth,'Content-Type':'application/x-www-form-urlencoded'},body:form.toString(),signal:AbortSignal.timeout(12_000)});
+        const response=await fetch('https://api.twilio.com/2010-04-01/Accounts/'+encodeURIComponent(sid)+'/Messages.json',{
+          method:'POST',
+          headers:{Authorization:auth,'Content-Type':'application/x-www-form-urlencoded'},
+          body:form.toString(),
+          signal:AbortSignal.timeout(12_000),
+        });
         results.push({to,sent:response.ok,status:response.status});
-      }catch(error){results.push({to,sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});}
+      }catch(error){
+        results.push({to,sent:false,error:error instanceof Error?clean(error.message,240):'request-error'});
+      }
     }
     channels.push({channel:'sms',sent:results.some(row=>row.sent),results});
-  } else channels.push({channel:'sms',sent:false,reason:'not-configured'});
+  } else {
+    channels.push({channel:'sms',sent:false,reason:'not-configured'});
+  }
 
   return {changed:true,detected:detected.length,resolved:resolved.length,channels};
 }
@@ -277,13 +180,24 @@ export default async (_req: Request, context: Context) => {
   }
 
   const audit = buildQuickBooksAccountingAudit(records);
+  const reconciliation = applyQuickBooksReconciliationHistory(records, audit, 'hourly');
+  for (const recordId of reconciliation.changedRecordIds) {
+    const record = records.find((entry: any) => String(entry?.id || '') === String(recordId));
+    if (record) records = await saveQuickBooksSalesRecord(context, record, records);
+  }
+
+  const runAt = new Date().toISOString();
+  const alertTransitions = reconciliation.transitions.filter((entry: any) => ['mismatch_detected','resolved'].includes(entry.type));
+  const alerts = await sendAccountingTransitionAlerts(alertTransitions, runAt);
   const store = getStore({ name: 'koa-integrations', consistency: 'strong' });
   await store.setJSON('quickbooks/accounting-hourly-last', {
     ...audit,
-    runAt: new Date().toISOString(),
+    runAt,
     refreshedClients: candidates.length,
     errorCount: errors.length,
     errors: errors.slice(0, 100),
+    transitions: reconciliation.transitions.slice(0, 100),
+    alerts,
   });
 };
 
