@@ -100,33 +100,45 @@ function quickBooksState(record: any) {
 function proposalLines(record: any, itemId: string) {
   const proposal = record.proposal || {};
   const raw = Array.isArray(proposal.lineItems) ? proposal.lineItems : [];
-  if (!raw.length) {
-    return [{
-      Amount: Number(proposal.total || 0),
-      DetailType: 'SalesItemLineDetail',
-      Description: 'Koa’s Events proposal ' + record.id,
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: Number(proposal.total || 0),
-      },
-    }];
-  }
-
-  return raw.map((line: any) => {
+  const lines = raw.length ? raw.map((line: any) => {
     const qty = Math.max(1, Number(line.quantity || 1));
     const amount = Number(line.amount || (qty * Number(line.unitPrice || 0)) || 0);
+    const mappedItemId = clean(line.quickBooksItemId, 80) || itemId;
     return {
       Amount: amount,
       DetailType: 'SalesItemLineDetail',
       Description: clean(line.description, 400),
       SalesItemLineDetail: {
-        ItemRef: { value: itemId },
+        ItemRef: { value: mappedItemId },
         Qty: qty,
         UnitPrice: qty ? Math.round((amount / qty) * 100) / 100 : amount,
       },
     };
-  });
+  }) : [{
+    Amount: Number(proposal.subtotal || proposal.total || 0),
+    DetailType: 'SalesItemLineDetail',
+    Description: 'Koa’s Events proposal ' + record.id,
+    SalesItemLineDetail: {
+      ItemRef: { value: itemId },
+      Qty: 1,
+      UnitPrice: Number(proposal.subtotal || proposal.total || 0),
+    },
+  }];
+
+  const taxAmount = Math.max(0, Number(proposal.taxAmount || 0));
+  if (taxAmount > 0) {
+    lines.push({
+      Amount: taxAmount,
+      DetailType: 'SalesItemLineDetail',
+      Description: clean(proposal.taxLabel || 'Hawaiʻi GET', 400),
+      SalesItemLineDetail: {
+        ItemRef: { value: itemId },
+        Qty: 1,
+        UnitPrice: taxAmount,
+      },
+    });
+  }
+  return lines;
 }
 
 async function ensureCustomer(context: Context, record: any) {
@@ -167,9 +179,6 @@ async function ensureCustomer(context: Context, record: any) {
 
 async function syncEstimate(context: Context, record: any, itemId: string) {
   if (!record.proposal) throw new Error('Proposal not found.');
-  if (Number(record.proposal.taxAmount || 0) !== 0) {
-    throw new Error('This proposal has CRM-calculated tax. To keep QuickBooks as the tax system of record, remove the CRM tax calculation before syncing the estimate.');
-  }
 
   const state = quickBooksState(record);
   const customer = await ensureCustomer(context, record);
