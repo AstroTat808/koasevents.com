@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { hasCapability, requireOperations } from './_shared/admin';
+import { capabilitiesFor, hasCapability, operationsRole, requireOperations } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -357,11 +357,18 @@ export default async (req:Request, context:Context) => {
       };
     }
 
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
-      mode: normalizeCleanupMode(cleanupSettings.mode),
-      updatedAt: cleanupSettings.updatedAt || '',
-      updatedBy: cleanupSettings.updatedBy || '',
-    }},{
+    return Response.json({
+      access:{
+        role:operationsRole(auth.user),
+        capabilities:capabilitiesFor(auth.user),
+        email:clean(auth.user?.email,240).toLowerCase(),
+      },
+      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
+        mode: normalizeCleanupMode(cleanupSettings.mode),
+        updatedAt: cleanupSettings.updatedAt || '',
+        updatedBy: cleanupSettings.updatedBy || '',
+      }
+    },{
       headers:{'Cache-Control':'private, no-store'}
     });
   }
