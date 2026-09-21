@@ -35,6 +35,19 @@ function publicRecord(record: any) {
   const proposal = record?.proposal || {};
   const quoteState = record?.quote?.state || {};
   const originalLines = [];
+  const invoiceRows = Array.isArray(record?.accounting?.quickbooks?.invoices) ? record.accounting.quickbooks.invoices : [];
+  const schedule = record?.booking?.payments?.length
+    ? record.booking.payments
+    : (proposal.paymentSchedule || []).map((item: any, index: number) => ({ id: 'pay-' + (index + 1), ...item }));
+  const paymentsReceived = schedule.reduce((sum: number, item: any, index: number) => {
+    const paymentId = String(item?.id || 'pay-' + (index + 1));
+    const invoice = invoiceRows.find((row: any) => String(row?.paymentId || '') === paymentId);
+    if (!invoice?.invoiceId || ['void','deleted'].includes(String(invoice?.status || '').toLowerCase())) return sum;
+    const amount = Number(item?.amount || 0);
+    const balance = Number(invoice?.balance ?? amount);
+    return sum + Math.max(0, amount - balance);
+  }, 0);
+  const remainingBalance = Math.max(0, Number(proposal.total || 0) - paymentsReceived);
 
   if (Number(quoteState.basePackagePrice || 0) > 0) {
     originalLines.push({
@@ -69,10 +82,12 @@ function publicRecord(record: any) {
     lineItems: proposal.lineItems || [],
     subtotal: Number(proposal.subtotal || 0),
     discountAmount: Number(proposal.discountAmount || 0),
-    taxRate: Number(proposal.taxRate || 0),
+    taxRate: proposal.taxRate == null ? 4.712 : Number(proposal.taxRate),
     taxAmount: Number(proposal.taxAmount || 0),
     total: Number(proposal.total || 0),
     depositAmount: Number(proposal.depositAmount || 0),
+    paymentsReceived,
+    remainingBalance,
     paymentSchedule: proposal.paymentSchedule || [],
     notesToClient: proposal.notesToClient || '',
     acceptedAt: proposal.acceptance?.acceptedAt || '',

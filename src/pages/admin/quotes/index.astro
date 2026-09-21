@@ -403,7 +403,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <label class="grid gap-2 text-sm font-semibold">Discount amount<input name="discountAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Hawaiʻi GET rate %<input name="taxRate" type="number" min="0" max="100" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Hawaiʻi GET rate %<input name="taxRate" type="number" value="4.712" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 text-[var(--koa-forest)]" /></label>
         <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="depositAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Calculated total</p><p data-editor-total class="display mt-2 text-3xl text-[var(--koa-forest)]">$0</p></div>
       </div>
@@ -477,6 +477,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <button type="button" data-countersign class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Countersign agreement</button>
         </div>
       </div>
+      <section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Proposal & invoice totals</p><h3 class="display mt-2 text-3xl">Financial summary</h3></div><p class="text-xs text-[var(--koa-ink)]/45">Payments received come from QuickBooks.</p></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Subtotal</p><p data-booking-subtotal class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Hawaiʻi GET 4.712%</p><p data-booking-get class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deposit</p><p data-booking-deposit class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Payments Received</p><p data-booking-payments-received class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Remaining Balance</p><p data-booking-remaining class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
+        </div>
+      </section>
       <div class="mt-6 flex flex-wrap gap-2">
         <a data-booking-client-link target="_blank" rel="noreferrer" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Open client booking page</a>
         <a data-planning-client-link target="_blank" rel="noreferrer" class="hidden rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Open client planning portal</a>
@@ -1567,6 +1577,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       textContent('[data-booking-contract]',summary.contractStatus==='signed'?(summary.signedAt?'Signed '+dateTime(summary.signedAt):'Signed'):'Awaiting signature');
       textContent('[data-booking-paid]',money(summary.paid||0));
       textContent('[data-booking-outstanding]',money(summary.outstanding||0));
+      textContent('[data-booking-subtotal]',money(summary.subtotal||record.proposal?.subtotal||0));
+      textContent('[data-booking-get]',money(summary.taxAmount||record.proposal?.taxAmount||0));
+      textContent('[data-booking-deposit]',money(summary.depositAmount||record.proposal?.depositAmount||0));
+      textContent('[data-booking-payments-received]',money(summary.paymentsReceived||summary.paid||0));
+      textContent('[data-booking-remaining]',money(summary.remainingBalance ?? summary.outstanding ?? record.proposal?.total ?? 0));
       if(bookingClientLink) bookingClientLink.href=summary.bookingUrl||'#';
       if(planningClientLink) {
         planningClientLink.href=record.proposal?.publicToken?'/planning/?token='+encodeURIComponent(record.proposal.publicToken):'#';
@@ -2589,20 +2604,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
-    function addLine(line={id:'',description:'',quantity:1,unitPrice:0,custom:false,catalogItemId:'',quickBooksItemId:'',category:'',unitLabel:''}) {
-      const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[2fr_.55fr_.8fr_auto] lg:items-end';
-      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Description<input data-line-description class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Qty<input data-line-quantity type="number" min="1" step="1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Unit price<input data-line-price type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><button type="button" data-remove-line class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
+    function addLine(line={id:'',description:'',quantity:1,unitPrice:0,custom:false,catalogItemId:'',quickBooksItemId:'',category:'',unitLabel:'',getExempt:false}) {
+      const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[2fr_.55fr_.8fr_auto_auto] lg:items-end';
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Description<input data-line-description class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Qty<input data-line-quantity type="number" min="1" step="1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Unit price<input data-line-price type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="flex items-center gap-2 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold"><input data-line-get-exempt type="checkbox"> GET exempt</label><button type="button" data-remove-line class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
       row.dataset.lineId=line.id||'line-'+Date.now();
       row.dataset.custom=String(Boolean(line.custom));
       row.dataset.catalogItemId=line.catalogItemId||'';
       row.dataset.quickBooksItemId=line.quickBooksItemId||'';
       row.dataset.category=line.category||'';
       row.dataset.unitLabel=line.unitLabel||'';
+      row.querySelector('[data-line-get-exempt]').checked=line.getExempt===true;
       row.querySelector('[data-line-description]').value=line.description||'';
       row.querySelector('[data-line-quantity]').value=String(line.quantity||1);
       row.querySelector('[data-line-price]').value=String(line.unitPrice||0);
       row.querySelector('[data-remove-line]').addEventListener('click',()=>{row.remove();recalcEditor();});
       row.querySelectorAll('input').forEach((input)=>input.addEventListener('input',recalcEditor));
+      row.querySelector('[data-line-get-exempt]').addEventListener('change',recalcEditor);
       lineItems.appendChild(row);
     }
 
@@ -2619,18 +2636,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function proposalLines() {
       return [...lineItems.children].map((row)=>{
         const unitPrice=Number(row.querySelector('[data-line-price]').value||0);
-        return {id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice,custom:row.dataset.custom==='true' && unitPrice<=0,catalogItemId:row.dataset.catalogItemId||'',quickBooksItemId:row.dataset.quickBooksItemId||'',category:row.dataset.category||'',unitLabel:row.dataset.unitLabel||''};
+        return {id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice,custom:row.dataset.custom==='true' && unitPrice<=0,catalogItemId:row.dataset.catalogItemId||'',quickBooksItemId:row.dataset.quickBooksItemId||'',category:row.dataset.category||'',unitLabel:row.dataset.unitLabel||'',getExempt:row.querySelector('[data-line-get-exempt]').checked};
       });
     }
     function proposalPayments() {
       return [...paymentItems.children].map((row)=>({label:row.querySelector('[data-payment-label]').value,dueDate:row.querySelector('[data-payment-date]').value,amount:Number(row.querySelector('[data-payment-amount]').value||0)}));
     }
     function recalcEditor() {
-      const subtotal=proposalLines().reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
-      const discount=Number(proposalForm.elements.discountAmount.value||0);
-      const taxRate=Number(proposalForm.elements.taxRate.value||0);
-      const taxable=Math.max(0,subtotal-discount);
-      editorTotal.textContent=money(taxable+(taxable*taxRate/100));
+      const lines=proposalLines();
+      const subtotal=lines.reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
+      const discount=Math.min(subtotal,Number(proposalForm.elements.discountAmount.value||0));
+      const taxableGross=lines.filter((line)=>!line.getExempt).reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
+      const taxableAfterDiscount=subtotal>0?Math.max(0,taxableGross-(discount*taxableGross/subtotal)):0;
+      const taxRate=4.712;
+      proposalForm.elements.taxRate.value='4.712';
+      editorTotal.textContent=money((subtotal-discount)+(taxableAfterDiscount*taxRate/100));
     }
 
     function openProposal(record) {
@@ -2644,8 +2664,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       proposalForm.elements.phone.value=record.customer?.phone||'';
       proposalForm.elements.notes.value=record.customer?.notes||'';
       proposalForm.elements.discountAmount.value=String(record.proposal?.discountAmount||0);
-      const configuredGetRate=Number(qboState?.getSettings?.customerRate||0);
-      proposalForm.elements.taxRate.value=String(Number(record.proposal?.taxRate||0) || (record.proposal?.status==='draft' ? configuredGetRate : 0));
+      proposalForm.elements.taxRate.value='4.712';
       proposalForm.elements.depositAmount.value=String(record.proposal?.depositAmount||0);
       proposalForm.elements.notesToClient.value=record.proposal?.notesToClient||'';
       (record.proposal?.lineItems||[]).forEach(addLine); if(!(record.proposal?.lineItems||[]).length)addLine();
@@ -2663,10 +2682,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function printProposal(record) {
-      const p=record.proposal||{}; const lines=(p.lineItems||[]).map((line)=>'<tr><td>'+escapeHtml(line.description)+'</td><td>'+Number(line.quantity||1)+'</td><td>'+money(line.unitPrice)+'</td><td>'+money(line.amount)+'</td></tr>').join('');
+      const p=record.proposal||{}; const lines=(p.lineItems||[]).map((line)=>'<tr><td>'+escapeHtml(line.description)+(line.getExempt?' <small>(GET exempt)</small>':'')+'</td><td>'+Number(line.quantity||1)+'</td><td>'+money(line.unitPrice)+'</td><td>'+money(line.amount)+'</td></tr>').join('');
       const payments=(p.paymentSchedule||[]).map((item)=>'<li>'+escapeHtml(item.label)+' — '+(item.dueDate?escapeHtml(item.dueDate):'Date TBD')+' — '+money(item.amount)+'</li>').join('');
+      const received=Number(record.bookingSummary?.paymentsReceived||record.bookingSummary?.paid||0);
+      const remaining=Math.max(0,Number(p.total||0)-received);
       const w=window.open('','_blank'); if(!w)return; w.opener=null;
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(record.id)+'</title><style>body{font-family:Arial,sans-serif;color:#173D30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #173D30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:28px;font-weight:700}.muted{color:#666}@media print{button{display:none}}</style></head><body><header><p>Koa’s Events · Proposal</p><h1>'+escapeHtml(record.id)+'</h1><p class="muted">Status: '+escapeHtml(p.status||record.status)+'</p></header><section class="meta"><div class="box"><strong>Client</strong><br>'+escapeHtml(record.customer?.name||'TBD')+'<br>'+escapeHtml(record.customer?.email||'')+'<br>'+escapeHtml(record.customer?.phone||'')+'</div><div class="box"><strong>Event</strong><br>'+escapeHtml(record.customer?.eventDate||'Date TBD')+'<br>'+escapeHtml(packageLabel(recordPackage(record)))+'</div></section><h2>Pricing</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead><tbody>'+lines+'</tbody></table><p>Subtotal: '+money(p.subtotal)+'</p><p>Discount: -'+money(p.discountAmount)+'</p><p>Hawaiʻi GET ('+Number(p.taxRate||0)+'%): '+money(p.taxAmount)+'</p><p class="total">Total: '+money(p.total)+'</p><p>Deposit: '+money(p.depositAmount)+'</p><h2>Payment schedule</h2><ul>'+payments+'</ul><h2>Notes</h2><p>'+escapeHtml(p.notesToClient||'')+'</p><button onclick="window.print()">Print / Save PDF</button></body></html>');
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(record.id)+'</title><style>body{font-family:Arial,sans-serif;color:#173D30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #173D30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:28px;font-weight:700}.muted{color:#666}@media print{button{display:none}}</style></head><body><header><p>Koa’s Events · Proposal</p><h1>'+escapeHtml(record.id)+'</h1><p class="muted">Status: '+escapeHtml(p.status||record.status)+'</p></header><section class="meta"><div class="box"><strong>Client</strong><br>'+escapeHtml(record.customer?.name||'TBD')+'<br>'+escapeHtml(record.customer?.email||'')+'<br>'+escapeHtml(record.customer?.phone||'')+'</div><div class="box"><strong>Event</strong><br>'+escapeHtml(record.customer?.eventDate||'Date TBD')+'<br>'+escapeHtml(packageLabel(recordPackage(record)))+'</div></section><h2>Pricing</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead><tbody>'+lines+'</tbody></table><p>Subtotal: '+money(p.subtotal)+'</p><p>Discount: -'+money(p.discountAmount)+'</p><p>Hawaiʻi GET (4.712%): '+money(p.taxAmount)+'</p><p class="total">Total: '+money(p.total)+'</p><p>Deposit: '+money(p.depositAmount)+'</p><p>Payments Received: '+money(received)+'</p><p><strong>Remaining Balance: '+money(remaining)+'</strong></p><h2>Payment schedule</h2><ul>'+payments+'</ul><h2>Notes</h2><p>'+escapeHtml(p.notesToClient||'')+'</p><button onclick="window.print()">Print / Save PDF</button></body></html>');
       w.document.close();
     }
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
@@ -2736,12 +2757,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     catalogPicker?.addEventListener('change',()=>{
       const item=(qboState?.catalog||[]).find((entry)=>entry.id===catalogPicker.value);
       if(!item)return;
-      addLine({id:'catalog-'+item.id+'-'+Date.now(),description:item.description||item.name,quantity:1,unitPrice:Number(item.unitPrice||0),custom:false,catalogItemId:item.id,quickBooksItemId:item.quickBooksItemId||'',category:item.category||'service',unitLabel:item.unitLabel||'each'});
+      addLine({id:'catalog-'+item.id+'-'+Date.now(),description:item.description||item.name,quantity:1,unitPrice:Number(item.unitPrice||0),custom:false,catalogItemId:item.id,quickBooksItemId:item.quickBooksItemId||'',category:item.category||'service',unitLabel:item.unitLabel||'each',getExempt:item.getExempt===true});
       catalogPicker.value='';
       recalcEditor();
     });
     document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
-    proposalForm?.querySelectorAll('[name="discountAmount"],[name="taxRate"]').forEach((input)=>input.addEventListener('input',recalcEditor));
+    proposalForm?.querySelectorAll('[name="discountAmount"]').forEach((input)=>input.addEventListener('input',recalcEditor));
 
     convertForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();const data=new FormData(convertForm);convertMessage.textContent='Creating…';
@@ -2768,7 +2789,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     proposalForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();proposalMessage.textContent='Saving…';const data=new FormData(proposalForm);
       try{
-        const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:Number(data.get('taxRate')||0),depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
+        const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:4.712,depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
         editingRecord=result.record;proposalMessage.textContent='Saved.';await load(String(searchInput?.value||'').trim());openProposal(result.record);
       }catch(error){proposalMessage.textContent=error.message||'Unable to save proposal.';}
     });
