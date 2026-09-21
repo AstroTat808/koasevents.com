@@ -6,13 +6,17 @@ export type CleanupReview = {
   reviewedBy: string;
 };
 
+export type CleanupSignal = { code:string; reason:string; score:number };
+
 export type CleanupAssessment = {
   score:number;
   disposition:'clean'|'review'|'auto_trash';
   reasons:string[];
   reasonCodes:string[];
+  signals:CleanupSignal[];
   autoTrash:boolean;
   approvedLegitimate:boolean;
+  manuallyFlagged:boolean;
 };
 
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
@@ -57,8 +61,10 @@ export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
       disposition:'clean',
       reasons:['Approved as legitimate by an administrator'],
       reasonCodes:['admin_approved_legitimate'],
+      signals:[{code:'admin_approved_legitimate',reason:'Approved as legitimate by an administrator',score:0}],
       autoTrash:false,
       approvedLegitimate:true,
+      manuallyFlagged:false,
     };
   }
 
@@ -96,6 +102,11 @@ export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
     }
   }
 
+  const manualFlag=record?.cleanupManualFlag;
+  if(manualFlag?.flaggedAt){
+    add(signals,'manual_review_flag','Manually flagged for review by '+clean(manualFlag.flaggedBy||'administrator',180),35);
+  }
+
   const sec=record?.security||{};
   const risk=Math.max(0,Math.min(100,Number(sec.riskScore)||0));
   const codes=Array.isArray(sec.reasonCodes)?sec.reasonCodes.map((x:any)=>clean(x,80)):[];
@@ -120,7 +131,9 @@ export function assessCrmRecord(record:any, nowMs=Date.now()):CleanupAssessment{
     disposition:autoTrash?'auto_trash':score>=35?'review':'clean',
     reasons:signals.map(s=>s.reason),
     reasonCodes:signals.map(s=>s.code),
+    signals:signals.map(s=>({code:s.code,reason:s.reason,score:s.score})),
     autoTrash,
     approvedLegitimate:false,
+    manuallyFlagged:Boolean(manualFlag?.flaggedAt),
   };
 }
