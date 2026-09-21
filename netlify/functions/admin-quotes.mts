@@ -78,6 +78,17 @@ type BookingState = {
   };
   payments: BookingPayment[];
   bartenderAssignments?: Array<{ id:string; name:string; assignedAt:string; assignedBy:string }>;
+  bartenderPerformance?: Array<{
+    bartenderId:string;
+    name:string;
+    actualHours:number;
+    tips:number;
+    reliability:'not-rated'|'on-time'|'late'|'cancelled'|'no-show';
+    clientRating:number;
+    clientFeedback:string;
+    updatedAt:string;
+    updatedBy:string;
+  }>;
 };
 
 type ProfitModel = {
@@ -109,6 +120,8 @@ type MobileBarBartenderAvailability = {
   name: string;
   active: boolean;
   unavailableDates: string[];
+  maxEventsPerWeek: number;
+  maxEventsPerMonth: number;
 };
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
@@ -310,6 +323,8 @@ function bartenderAvailabilityList(input:unknown): MobileBarBartenderAvailabilit
     name: cleanText(entry?.name || '', 120),
     active: entry?.active !== false,
     unavailableDates: isoDateList(entry?.unavailableDates, 366),
+    maxEventsPerWeek: Math.round(finite(entry?.maxEventsPerWeek ?? 0, 0, 31)),
+    maxEventsPerMonth: Math.round(finite(entry?.maxEventsPerMonth ?? 0, 0, 100)),
   })).filter((entry)=>entry.name);
 }
 
@@ -365,6 +380,46 @@ async function writeMobileBarProfitSettings(context: Context, input: any): Promi
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
   return settings;
 }
+function dateWeekKey(value:string) {
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value)) return '';
+  const [year,month,day]=value.split('-').map(Number);
+  const date=new Date(Date.UTC(year,month-1,day));
+  const weekday=date.getUTCDay();
+  date.setUTCDate(date.getUTCDate()-weekday);
+  return date.toISOString().slice(0,10);
+}
+
+function mobileBarWorkloadWarnings(record:SalesRecord, bartenderIds:string[], records:SalesRecord[], settings:MobileBarProfitSettings) {
+  const eventDate=cleanText(record.customer?.eventDate,20);
+  const weekKey=dateWeekKey(eventDate);
+  const monthKey=eventDate.slice(0,7);
+  const roster=new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
+  const warnings:string[]=[];
+  for(const id of bartenderIds){
+    const bartender=roster.get(id);
+    if(!bartender) continue;
+    let weekCount=0;
+    let monthCount=0;
+    for(const other of records){
+      if(other.id===record.id || other.stage!=='booked') continue;
+      const otherDate=cleanText(other.customer?.eventDate,20);
+      const assigned=Array.isArray(other.booking?.bartenderAssignments)?other.booking!.bartenderAssignments!:[];
+      if(!assigned.some((entry)=>entry.id===id)) continue;
+      if(dateWeekKey(otherDate)===weekKey) weekCount+=1;
+      if(otherDate.slice(0,7)===monthKey) monthCount+=1;
+    }
+    const projectedWeek=weekCount+1;
+    const projectedMonth=monthCount+1;
+    if(bartender.maxEventsPerWeek>0 && projectedWeek>bartender.maxEventsPerWeek){
+      warnings.push(bartender.name+' would be at '+projectedWeek+' events this week (limit '+bartender.maxEventsPerWeek+').');
+    }
+    if(bartender.maxEventsPerMonth>0 && projectedMonth>bartender.maxEventsPerMonth){
+      warnings.push(bartender.name+' would be at '+projectedMonth+' events this month (limit '+bartender.maxEventsPerMonth+').');
+    }
+  }
+  return Array.from(new Set(warnings));
+}
+
 function mobileBarStaffingConflicts(record:SalesRecord, bartenderIds:string[], records:SalesRecord[], settings:MobileBarProfitSettings) {
   const eventDate=cleanText(record.customer?.eventDate,20);
   const requested=new Set(bartenderIds);
@@ -626,6 +681,7 @@ function ensureBooking(record: SalesRecord) {
         koaSignature: null,
       },
       bartenderAssignments: [],
+      bartenderPerformance: [],
       payments: (record.proposal.paymentSchedule || []).map((item, index) => ({
         id: 'pay-' + (index + 1),
         label: item.label,
@@ -1524,6 +1580,7 @@ export default async (req: Request, context: Context) => {
     'bulk-trash-client-chains':'crm.destructive',
     'update-mobile-bar-profit-settings':'sales.profit_settings',
     'update-mobile-bar-bartender-assignments':'sales.profit_settings',
+    'update-mobile-bar-bartender-performance':'sales.profit_settings',
     'update-profit-model':'sales.profit_settings',
   };
   const requestedCapability=capabilityByAction[String(payload.action)];
@@ -1979,6 +2036,7 @@ export default async (req: Request, context: Context) => {
       .filter(Boolean))).slice(0,20);
     const conflicts = mobileBarStaffingConflicts(record, requestedIds, records, settings);
     if (conflicts.length) return Response.json({ error: conflicts[0], conflicts }, { status: 409 });
+    const workloadWarnings = mobileBarWorkloadWarnings(record, requestedIds, records, settings);
 
     const roster = new Map(settings.staffing.bartenders.map((bartender)=>[bartender.id,bartender]));
     const now = new Date().toISOString();
@@ -2002,7 +2060,47 @@ export default async (req: Request, context: Context) => {
         ? 'Assigned Mobile Bar bartenders: ' + booking.bartenderAssignments.map((entry)=>entry.name).join(', ')
         : 'Cleared Mobile Bar bartender assignments.',
     });
-    return Response.json({ ok: true, record, conflicts: [] }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ ok: true, record, conflicts: [], workloadWarnings }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (payload.action === 'update-mobile-bar-bartender-performance') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record || record.stage !== 'booked' || !normalizePackage(record.packageId || record.quote?.state?.startingPoint || record.inquiry?.mobileBarPackage).startsWith('mobile-')) {
+      return Response.json({ error: 'Booked Mobile Bar event not found.' }, { status: 404 });
+    }
+    const booking = ensureBooking(record);
+    if (!booking) return Response.json({ error: 'Booking state is unavailable.' }, { status: 400 });
+    const assigned = new Map((booking.bartenderAssignments || []).map((entry)=>[entry.id,entry.name]));
+    const bartenderId = cleanText(payload.bartenderId,80);
+    if(!assigned.has(bartenderId)) return Response.json({ error: 'Bartender must be assigned to this event before performance can be recorded.' }, { status: 409 });
+
+    const reliabilityRaw=cleanText(payload.performance?.reliability,30);
+    const reliability = (['on-time','late','cancelled','no-show'].includes(reliabilityRaw) ? reliabilityRaw : 'not-rated') as 'not-rated'|'on-time'|'late'|'cancelled'|'no-show';
+    const now=new Date().toISOString();
+    const performance={
+      bartenderId,
+      name: assigned.get(bartenderId) || bartenderId,
+      actualHours: Math.round(finite(payload.performance?.actualHours ?? 0,0,24)*100)/100,
+      tips: Math.round(finite(payload.performance?.tips ?? 0,0,100000)*100)/100,
+      reliability,
+      clientRating: Math.round(finite(payload.performance?.clientRating ?? 0,0,5)*10)/10,
+      clientFeedback: cleanText(payload.performance?.clientFeedback || '',1000),
+      updatedAt: now,
+      updatedBy: cleanText(auth.user?.email,240) || 'admin',
+    };
+    const current=Array.isArray(booking.bartenderPerformance)?booking.bartenderPerformance:[];
+    booking.bartenderPerformance=[...current.filter((entry)=>entry.bartenderId!==bartenderId),performance];
+    booking.updatedAt=now;
+    record.updatedAt=now;
+    records=await saveRecord(context,record,records);
+    await appendEvent(context,{
+      type:'mobile_bar_bartender_performance_updated',
+      recordId:record.id,
+      quoteId:record.quoteId||'',
+      packageId:record.packageId||'',
+      detail:'Updated Mobile Bar performance for '+performance.name+'.',
+    });
+    return Response.json({ok:true,record,performance},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (payload.action === 'update-profit-model') {
