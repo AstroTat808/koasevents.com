@@ -469,7 +469,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
   const fullyRecovered=(current.alertFailedIds||[]).length===0;
   const subject=fullyRecovered
     ? 'Koa’s System Health recovered'
-    : 'Koa’s System Health alert — '+current.failed+' check'+(current.failed===1?'':'s')+' failing';
+    : 'Koa’s System Health alert — '+failedNames.length+' confirmed check'+(failedNames.length===1?'':'s')+' failing';
   const summary=fullyRecovered
     ? 'All monitored Koa’s admin/staff services are healthy again.'
     : 'The health monitor detected a change in system health.';
@@ -481,7 +481,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     +(brokenNames.length?'<p><strong>Newly failing:</strong> '+brokenNames.map(esc).join(', ')+'</p>':'')
     +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
     +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
-    +'<p style="font-size:12px;color:#78827d">Checked '+esc(current.checkedAt)+' · '+current.passed+' passed · '+current.failed+' failed</p>'
+    +'<p style="font-size:12px;color:#78827d">Checked '+esc(current.checkedAt)+' · '+failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s')+'</p>'
     +'<p><a href="https://koasevents.com/admin/health/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open System Health</a></p>'
     +'</div></body></html>';
   const text=[
@@ -516,7 +516,7 @@ async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recov
     brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
     recoveredNames.length?'*Recovered:* '+recoveredNames.join(', '):'',
     failedNames.length?'*Still failing:* '+failedNames.join(', '):'',
-    current.passed+' passed · '+current.failed+' failed',
+    failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s'),
     '<https://koasevents.com/admin/health/|Open System Health>',
   ].filter(Boolean);
   try{
