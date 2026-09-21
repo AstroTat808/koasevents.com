@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { isApprovedManager, requireOperations } from './_shared/admin';
+import { hasCapability, requireOperations } from './_shared/admin';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -50,7 +50,7 @@ async function bookedRecord(context: Context, recordId: string) {
 export default async (req: Request, context: Context) => {
   const auth = await requireOperations();
   if (auth.response) return auth.response;
-  if (req.method !== 'GET' && !isApprovedManager(auth.user)) {
+  if (req.method !== 'GET' && !hasCapability(auth.user, 'event_ops.manage')) {
     return Response.json({ error: 'Manager permission required to change event documents.' }, { status: 403 });
   }
 
