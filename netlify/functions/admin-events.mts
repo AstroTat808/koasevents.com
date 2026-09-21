@@ -1,7 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
-import { baseVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
+import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 
 type Vendor = {
   id: string;
@@ -348,7 +348,12 @@ export default async (req: Request, context: Context) => {
         (ops as any).vendorRequirementsMode = 'auto';
         await opsStore.setJSON('events/' + record.id, ops);
       } else if (!['auto','manual'].includes(String((ops as any).vendorRequirementsMode || ''))) {
-        (ops as any).vendorRequirementsMode = 'manual';
+        if (isBaselineVendorRequirements((ops as any).vendorRequirements)) {
+          (ops as any).vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+          (ops as any).vendorRequirementsMode = 'auto';
+        } else {
+          (ops as any).vendorRequirementsMode = 'manual';
+        }
         await opsStore.setJSON('events/' + record.id, ops);
       }
       return {
