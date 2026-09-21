@@ -307,12 +307,54 @@ export type QuickBooksGetSettings = {
   quickBooksItemName: string;
 };
 
+export type QuickBooksDepositSettings = {
+  defaultPercent: number;
+  venueWeddingPercent: number;
+  mobileBarPercent: number;
+  privateEventPercent: number;
+  updatedAt: string;
+};
+
 function catalogKey() {
   return 'quickbooks/catalog/' + config().environment;
 }
 
 function getSettingsKey() {
   return 'quickbooks/get-settings/' + config().environment;
+}
+
+function depositSettingsKey() {
+  return 'quickbooks/deposit-settings/' + config().environment;
+}
+
+function cleanDepositPercent(value: unknown, fallback = 10) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(parsed * 1000) / 1000));
+}
+
+export async function getQuickBooksDepositSettings(context: Context): Promise<QuickBooksDepositSettings> {
+  const stored = await integrationStore(context).get(depositSettingsKey(), { type: 'json' }) as any;
+  return {
+    defaultPercent: cleanDepositPercent(stored?.defaultPercent, 10),
+    venueWeddingPercent: cleanDepositPercent(stored?.venueWeddingPercent, 10),
+    mobileBarPercent: cleanDepositPercent(stored?.mobileBarPercent, 10),
+    privateEventPercent: cleanDepositPercent(stored?.privateEventPercent, 10),
+    updatedAt: String(stored?.updatedAt || ''),
+  };
+}
+
+export async function saveQuickBooksDepositSettings(context: Context, settings: Partial<QuickBooksDepositSettings>) {
+  const current = await getQuickBooksDepositSettings(context);
+  const next: QuickBooksDepositSettings = {
+    defaultPercent: cleanDepositPercent(settings.defaultPercent, current.defaultPercent),
+    venueWeddingPercent: cleanDepositPercent(settings.venueWeddingPercent, current.venueWeddingPercent),
+    mobileBarPercent: cleanDepositPercent(settings.mobileBarPercent, current.mobileBarPercent),
+    privateEventPercent: cleanDepositPercent(settings.privateEventPercent, current.privateEventPercent),
+    updatedAt: new Date().toISOString(),
+  };
+  await integrationStore(context).setJSON(depositSettingsKey(), next);
+  return next;
 }
 
 export async function getQuickBooksCatalog(context: Context): Promise<QuickBooksCatalogItem[]> {
