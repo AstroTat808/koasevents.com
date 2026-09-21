@@ -1089,6 +1089,61 @@ export default async (req: Request, context: Context) => {
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
+  if (payload.action === 'trash-client-chain') {
+    const recordId = cleanText(payload.recordId, 80);
+    const root = records.find((entry) => entry.id === recordId);
+    if (!root) return Response.json({ error: 'CRM client record not found.' }, { status: 404 });
+
+    const relatedIds = relatedRecordIds(root, records);
+    const related = records.filter((entry) => relatedIds.has(entry.id));
+    const protectedRecords = related.filter((entry) =>
+      entry.kind === 'proposal' ||
+      entry.stage === 'proposal' ||
+      entry.stage === 'booked' ||
+      Boolean(entry.booking) ||
+      Boolean((entry as any)?.accounting?.quickbooks?.invoices?.length)
+    );
+
+    if (protectedRecords.length) {
+      return Response.json({
+        error: 'This client chain contains a proposal, booking, contract, or accounting record and is protected from client-level Trash. Remove only the bogus inquiry/lead records individually or resolve the protected record first.',
+        protectedIds: protectedRecords.map((entry) => entry.id),
+      }, { status: 409 });
+    }
+
+    const movable = related.filter((entry) => ['inquiry', 'lead'].includes(entry.kind));
+    if (!movable.length) {
+      return Response.json({ error: 'No inquiry or lead records are eligible for Trash.' }, { status: 400 });
+    }
+
+    const moved: string[] = [];
+    const trashEntries: TrashEntry[] = [];
+    for (const target of movable) {
+      if (!records.some((entry) => entry.id === target.id)) continue;
+      const result = await moveRecordToTrash(context, target, records, cleanText(auth.user?.email, 240));
+      records = result.records;
+      moved.push(target.id);
+      trashEntries.push(result.entry);
+    }
+
+    await appendEvent(context, {
+      type: 'client_chain_trashed',
+      recordId: root.id,
+      quoteId: root.quoteId || '',
+      packageId: root.packageId || '',
+      detail: 'Administrator moved a bogus/test client chain to Trash for 30 days. ' + moved.length + ' CRM record(s) removed from the active pipeline.',
+      reference: moved.join(','),
+    });
+
+    return Response.json({
+      ok: true,
+      deletedId: root.id,
+      moved,
+      count: moved.length,
+      expiresAt: trashEntries.map((entry) => entry.expiresAt).sort()[0] || '',
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
   if (payload.action === 'restore-record') {
     const recordId = cleanText(payload.recordId, 80);
     try {
