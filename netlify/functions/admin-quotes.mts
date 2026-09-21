@@ -1,7 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
-import { appendCleanupAudit } from './_shared/crm-cleanup-audit';
+import { appendCleanupAudit, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 
 type QuoteItem = {
   id: string;
@@ -1144,7 +1144,7 @@ export default async (req: Request, context: Context) => {
       packageId: record.packageId || '',
       detail: 'Administrator moved a ' + record.kind + ' record to Trash for 30 days.',
     });
-    await appendCleanupAudit(context,{recordId:record.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved CRM record to 30-day Trash.',chainIds:[record.id]});
+    await appendCleanupAudit(context,{recordId:record.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved CRM record to 30-day Trash.',chainIds:[record.id],dimensions:cleanupDimensionsFromRecord(record)});
 
     return Response.json({
       ok: true,
@@ -1199,7 +1199,7 @@ export default async (req: Request, context: Context) => {
       detail: 'Administrator moved a bogus/test client chain to Trash for 30 days. ' + moved.length + ' CRM record(s) removed from the active pipeline.',
       reference: moved.join(','),
     });
-    await appendCleanupAudit(context,{recordId:root.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved related client chain to 30-day Trash.',chainIds:moved});
+    await appendCleanupAudit(context,{recordId:root.id,action:'moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Moved related client chain to 30-day Trash.',chainIds:moved,dimensions:cleanupDimensionsFromRecord(root)});
 
     return Response.json({
       ok: true,
@@ -1376,7 +1376,7 @@ export default async (req: Request, context: Context) => {
         packageId: root.packageId || '',
         detail: 'Administrator bulk-moved a client chain to Trash for 30 days.',
       });
-      await appendCleanupAudit(context,{recordId:root.id,action:'bulk_moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Bulk cleanup moved related client chain to 30-day Trash.',chainIds:movable.map((entry)=>entry.id)});
+      await appendCleanupAudit(context,{recordId:root.id,action:'bulk_moved_to_trash',actor:cleanText(auth.user?.email,240)||'admin',detail:'Bulk cleanup moved related client chain to 30-day Trash.',chainIds:movable.map((entry)=>entry.id),dimensions:cleanupDimensionsFromRecord(root)});
     }
 
     return Response.json({ ok: true, moved: [...moved], skipped }, { headers: { 'Cache-Control': 'private, no-store' } });
