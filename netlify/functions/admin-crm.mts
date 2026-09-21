@@ -91,7 +91,46 @@ export default async (req:Request, context:Context) => {
       .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test')
       .slice(0,1500)
       .map(r => ({...normalizeProject(r, metaMap.get(r.id) || null), cleanup: assessCrmRecord(r)}));
-    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,cleanupSettings:{
+
+    const trashRows = await Promise.all((trash || []).map(async (entry:any) => ({
+      entry,
+      record: await sales.get('trash/records/' + entry.id,{type:'json'}),
+    })));
+    const groups:any[] = [];
+    const seen = new Set<string>();
+    for (const row of trashRows) {
+      const record:any = row.record;
+      if (!record || seen.has(row.entry.id)) continue;
+      const ids = new Set<string>([row.entry.id]);
+      if (record.quoteId) trashRows.filter((x:any)=>x.record?.quoteId===record.quoteId).forEach((x:any)=>ids.add(x.entry.id));
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const candidate of trashRows) {
+          const r:any = candidate.record;
+          if (!r) continue;
+          if ((r.source && ids.has(r.source)) || (record.source && r.id === record.source)) {
+            if (!ids.has(r.id)) { ids.add(r.id); changed = true; }
+            if (r.source && !ids.has(r.source)) { ids.add(r.source); changed = true; }
+          }
+        }
+      }
+      ids.forEach((id)=>seen.add(id));
+      const members = trashRows.filter((x:any)=>ids.has(x.entry.id)).map((x:any)=>x.entry);
+      groups.push({
+        rootId: row.entry.id,
+        ids:[...ids],
+        count:members.length,
+        customerName: row.entry.customerName || members[0]?.customerName || '',
+        customerEmail: row.entry.customerEmail || members[0]?.customerEmail || '',
+        eventDate: row.entry.eventDate || members[0]?.eventDate || '',
+        deletedAt: members.map((m:any)=>m.deletedAt).sort().slice(-1)[0] || '',
+        expiresAt: members.map((m:any)=>m.expiresAt).sort()[0] || '',
+        members,
+      });
+    }
+
+    return Response.json({projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupSettings:{
       mode: normalizeCleanupMode(cleanupSettings.mode),
       updatedAt: cleanupSettings.updatedAt || '',
       updatedBy: cleanupSettings.updatedBy || '',
