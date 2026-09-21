@@ -16,12 +16,14 @@ type GalleryItem = {
   createdAt: string;
   focalX?: number;
   focalY?: number;
+  vendorIds?: string[];
 };
 
 type CuratedEdit = {
   category?: CuratedCategory;
   focalX?: number;
   focalY?: number;
+  vendorIds?: string[];
   updatedAt?: string;
 };
 
@@ -37,6 +39,15 @@ function storeFor(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name: 'koa-gallery', consistency: 'strong' })
     : getDeployStore({ name: 'koa-gallery' });
+}
+function vendorStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-vendors' });
+}
+function cleanVendorIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))].slice(0, 50);
 }
 
 function clampFocal(value: unknown, fallback = 50) {
@@ -146,6 +157,7 @@ export default async (req: Request, context: Context) => {
         createdAt: new Date().toISOString(),
         focalX: 50,
         focalY: 50,
+        vendorIds: [],
       };
       await store.set('images/' + id, await file.arrayBuffer());
       const next: GalleryState = { ...state, uploads: [item, ...state.uploads] };
@@ -272,6 +284,47 @@ export default async (req: Request, context: Context) => {
       };
       await store.setJSON('gallery/index', next);
       return Response.json({ ok: true });
+    }
+
+    if (payload.action === 'assign-vendors') {
+      const kind = String(payload.kind || '');
+      const vendorIds = cleanVendorIds(payload.vendorIds);
+      const vendorStore = vendorStoreFor(context);
+      const vendors = ((await vendorStore.get('vendors/index', { type: 'json' })) || []) as any[];
+      const validIds = new Set(vendors.map((vendor) => String(vendor.id || '')));
+      const cleaned = vendorIds.filter((vendorId) => validIds.has(vendorId));
+      let src = '';
+
+      if (kind === 'upload') {
+        const id = String(payload.id || '');
+        const existing = state.uploads.find((item) => item.id === id);
+        if (!existing) return Response.json({ error: 'Uploaded image not found.' }, { status: 404 });
+        src = '/api/gallery/image/' + id;
+        state.uploads = state.uploads.map((item) => item.id === id ? { ...item, vendorIds: cleaned } : item);
+      } else if (kind === 'curated') {
+        src = String(payload.src || '');
+        if (!src.startsWith('/')) return Response.json({ error: 'Curated image source is required.' }, { status: 400 });
+        const existing = state.curatedEdits[src] || {};
+        state.curatedEdits = { ...state.curatedEdits, [src]: { ...existing, vendorIds: cleaned, updatedAt: new Date().toISOString() } };
+      } else {
+        return Response.json({ error: 'Unknown gallery item type.' }, { status: 400 });
+      }
+
+      await store.setJSON('gallery/index', state);
+
+      const now = new Date().toISOString();
+      const nextVendors = vendors.map((vendor) => {
+        const gallery = Array.isArray(vendor.gallery) ? vendor.gallery : [];
+        const has = gallery.some((entry: any) => String(entry?.src || '') === src);
+        if (cleaned.includes(String(vendor.id || ''))) {
+          if (has) return vendor;
+          return { ...vendor, gallery: [{ src, caption: '', eventLabel: '' }, ...gallery].slice(0, 80), updatedAt: now };
+        }
+        if (!has) return vendor;
+        return { ...vendor, gallery: gallery.filter((entry: any) => String(entry?.src || '') !== src), updatedAt: now };
+      });
+      await vendorStore.setJSON('vendors/index', nextVendors.slice(0, 2000));
+      return Response.json({ ok: true, vendorIds: cleaned });
     }
 
     if (payload.action === 'reset-curated') {
