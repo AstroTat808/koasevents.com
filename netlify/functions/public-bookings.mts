@@ -1,5 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { createSignWellContract, signWellConfigured } from './_shared/signwell';
+import { markLifecycleEvent } from './_shared/lifecycle';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -106,6 +108,7 @@ function ensureBooking(record: any) {
         sections: contractSections(record),
         signature: null,
         koaSignature: null,
+        signwell: { status: 'not_sent', documentId: '', clientSigningUrl: '', sentAt: '', completedAt: '', signedPdfStored: false },
       },
       payments: schedule,
     };
@@ -155,6 +158,7 @@ function publicBooking(record: any) {
       sections: booking.contract?.sections || [],
       signature: booking.contract?.signature || null,
       koaSignature: booking.contract?.koaSignature || null,
+      signwell: booking.contract?.signwell || { status: 'not_sent', documentId: '', clientSigningUrl: '', signedPdfStored: false },
     },
     payments,
     accountingProvider: 'QuickBooks Online',
@@ -198,6 +202,25 @@ export default async (req: Request, context: Context) => {
         detail: 'Client opened the booking agreement.',
       });
     }
+    booking.contract.signwell ||= { status: 'not_sent', documentId: '', clientSigningUrl: '', sentAt: '', completedAt: '', signedPdfStored: false };
+    if (!booking.contract.signwell.documentId && signWellConfigured()) {
+      try {
+        const created:any = await createSignWellContract(record, new URL(req.url).origin);
+        if (created?.documentId) booking.contract.signwell = {
+          status: created.status || 'sent',
+          documentId: created.documentId,
+          clientSigningUrl: created.embeddedSigningUrl || '',
+          sentAt: new Date().toISOString(),
+          completedAt: '',
+          signedPdfStored: false,
+        };
+      } catch (error) {
+        booking.contract.signwell.status = 'send_failed';
+        booking.contract.signwell.lastError = error instanceof Error ? error.message : 'SignWell request failed';
+      }
+    } else if (!signWellConfigured() && !booking.contract.signwell.documentId) {
+      booking.contract.signwell.status = 'configuration_required';
+    }
     const next = list.map((entry: any) => entry.id === record.id ? record : entry);
     await store.setJSON('records/' + record.id, record);
     await store.setJSON('records/index', next);
@@ -209,41 +232,50 @@ export default async (req: Request, context: Context) => {
     const action = clean(payload?.action, 30);
     if (action !== 'sign') return Response.json({ error: 'Invalid booking action.' }, { status: 400 });
 
+    booking.contract.signwell ||= { status: 'not_sent', documentId: '', clientSigningUrl: '', sentAt: '', completedAt: '', signedPdfStored: false };
     if (booking.contract?.status === 'signed') {
       return Response.json({ ok: true, booking: publicBooking(record), alreadySigned: true }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
-
-    const name = clean(payload?.name, 180);
-    if (name.length < 2 || payload?.acknowledged !== true) {
-      return Response.json({ error: 'Enter your full name and confirm the electronic-signature acknowledgement.' }, { status: 400 });
+    if (!signWellConfigured()) {
+      booking.contract.signwell.status = 'configuration_required';
+      return Response.json({ error: 'SignWell is not configured yet.', booking: publicBooking(record) }, { status: 503 });
+    }
+    if (!booking.contract.signwell.documentId) {
+      try {
+        const created:any = await createSignWellContract(record, new URL(req.url).origin);
+        booking.contract.signwell = {
+          status: created.status || 'sent',
+          documentId: created.documentId || '',
+          clientSigningUrl: created.embeddedSigningUrl || '',
+          sentAt: new Date().toISOString(),
+          completedAt: '',
+          signedPdfStored: false,
+        };
+        record.updatedAt = new Date().toISOString();
+        const next = list.map((entry: any) => entry.id === record.id ? record : entry);
+        await store.setJSON('records/' + record.id, record);
+        await store.setJSON('records/index', next);
+        await appendEvent(store, {
+          type: 'signwell_contract_sent',
+          recordId: record.id,
+          quoteId: record.quoteId || '',
+          packageId: record.packageId || '',
+          detail: 'SignWell agreement created and sent for signature.',
+          reference: booking.contract.signwell.documentId,
+        });
+        await markLifecycleEvent(context, record, 'signwell_contract_sent', 'Client agreement sent through SignWell.');
+      } catch (error) {
+        booking.contract.signwell.status = 'send_failed';
+        booking.contract.signwell.lastError = error instanceof Error ? error.message : 'SignWell request failed';
+        return Response.json({ error: booking.contract.signwell.lastError }, { status: 502 });
+      }
     }
 
-    const now = new Date().toISOString();
-    booking.contract.status = 'signed';
-    booking.contract.signature = {
-      name,
-      signedAt: now,
-      acknowledgement: 'I reviewed and agree to the Koa’s Events Venue & Services Agreement and consent to sign electronically.',
-    };
-    booking.status = 'deposit_pending';
-    booking.updatedAt = now;
-
-    const deposit = (booking.payments || []).find((item: any) => /deposit/i.test(item.label)) || booking.payments?.[0];
-    if (deposit && !deposit.dueDate) deposit.dueDate = offsetDate(now, 14);
-
-    record.updatedAt = now;
-    const next = list.map((entry: any) => entry.id === record.id ? record : entry);
-    await store.setJSON('records/' + record.id, record);
-    await store.setJSON('records/index', next);
-    await appendEvent(store, {
-      type: 'contract_signed',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      packageId: record.packageId || '',
-      detail: 'Contract electronically signed by ' + name,
-    });
-
-    return Response.json({ ok: true, booking: publicBooking(record) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({
+      ok: true,
+      signingUrl: booking.contract.signwell.clientSigningUrl || '',
+      booking: publicBooking(record),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   return new Response('Method not allowed', { status: 405 });
