@@ -28,6 +28,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </div>
 
           <div data-staff-ui class="hidden">
+            <a data-health-warning href="/admin/health/" class="mb-5 hidden rounded-[1.2rem] border border-red-300 bg-red-50 p-5 text-red-950">
+              <span class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">System health warning</span>
+              <strong data-health-warning-title class="mt-2 block text-lg">A protected Koa’s service needs attention.</strong>
+              <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Managers/admins can open System Health for details.</span>
+            </a>
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <a href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates, payments and activity.</span></a>
               <a href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups, quote records and conversion reporting.</span></a>
@@ -73,12 +78,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return approvedAdminEmails.has(email) || roles.some((role) => allowedRoles.has(String(role || '').toLowerCase()));
     }
 
+    async function updateHealthWarning(access) {
+      const warning=document.querySelector('[data-health-warning]');
+      if(!warning||!access){warning?.classList.add('hidden');return;}
+      try{
+        const response=await fetch('/api/admin/health',{cache:'no-store'});
+        if(!response.ok)return;
+        const data=await response.json();const current=data.current;
+        const unhealthy=current?.overall==='unhealthy';
+        warning.classList.toggle('hidden',!unhealthy);
+        if(unhealthy){
+          const names=(current.checks||[]).filter((row)=>!row.ok).map((row)=>row.name);
+          document.querySelector('[data-health-warning-title]').textContent=current.failed+' health check'+(current.failed===1?'':'s')+' failing';
+          document.querySelector('[data-health-warning-detail]').textContent=(names.slice(0,4).join(', ')||'Protected system issue detected')+(names.length>4?' +'+(names.length-4)+' more':'')+' · checked '+new Date(current.checkedAt).toLocaleString();
+        }
+      }catch{}
+    }
+
     function show(user) {
       const access = Boolean(user) && hasStaffAccess(user);
       loginForm?.classList.toggle('hidden', Boolean(user));
       staffUi?.classList.toggle('hidden', !access);
       roleWarning?.classList.toggle('hidden', !user || access);
       logoutButton?.classList.toggle('hidden', !user);
+      updateHealthWarning(access);
     }
 
     loginForm?.addEventListener('submit', async (event) => {
