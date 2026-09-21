@@ -549,13 +549,6 @@ export default async (req: Request, context: Context) => {
     const existingCatalog = await getQuickBooksCatalog(context);
     const item = existingCatalog.find((entry: any) => entry.id === id);
     if (!item) return Response.json({ error: 'Catalog item not found.' }, { status: 404 });
-    if (item.quickBooksItemId) {
-      const currentData: any = await qboGet(context, 'item', item.quickBooksItemId);
-      const current = currentData?.Item;
-      if (current?.Id && current?.SyncToken != null) {
-        await qboUpdate(context, 'item', { Id: String(current.Id), SyncToken: String(current.SyncToken), Active: false });
-      }
-    }
     const catalog = existingCatalog.map((entry: any) => entry.id === id ? { ...entry, active: false, updatedAt: new Date().toISOString() } : entry);
     await saveQuickBooksCatalog(context, catalog as any);
     return Response.json({ ok: true, catalog });
