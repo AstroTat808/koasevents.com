@@ -13,6 +13,14 @@ export type CleanupAuditAction =
   | 'permanently_deleted'
   | 'policy_changed';
 
+export type CleanupDimensions = {
+  websiteForm:string;
+  referralSource:string;
+  emailDomain:string;
+  brand:string;
+  securityReasons:string[];
+};
+
 export type CleanupAuditEntry = {
   id:string;
   recordId:string;
@@ -22,11 +30,31 @@ export type CleanupAuditEntry = {
   score:number;
   reasons:string[];
   chainIds:string[];
+  dimensions?:CleanupDimensions;
   createdAt:string;
   dedupeKey:string;
 };
 
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
+export function cleanupDimensionsFromRecord(record:any):CleanupDimensions{
+  const email=clean(record?.customer?.email,240).toLowerCase();
+  const emailDomain=email.includes('@')?email.split('@').pop()||'':'';
+  const websiteForm=clean(record?.inquiry?.formName||record?.source||'Unknown',120)||'Unknown';
+  const referralSource=clean(record?.inquiry?.referralSource||record?.inquiry?.source||'Unknown',160)||'Unknown';
+  const mobile=String(record?.packageId||'').toLowerCase().startsWith('mobile-') ||
+    /mobile[ -]?bar/i.test(String(record?.inquiry?.service||'')) ||
+    /mobile/i.test(websiteForm);
+  const securityReasons=Array.isArray(record?.security?.reasonCodes)
+    ? record.security.reasonCodes.map((x:any)=>clean(x,120)).filter(Boolean).slice(0,20)
+    : [];
+  return {
+    websiteForm,
+    referralSource,
+    emailDomain:emailDomain||'Unknown',
+    brand:mobile?'Koa’s Mobile Bar':'Koa’s Events',
+    securityReasons,
+  };
+}
 function storeFor(context:Context){
   return context.deploy.context==='production'
     ? getStore({name:'koa-crm',consistency:'strong'})
@@ -51,6 +79,7 @@ export async function appendCleanupAudit(
     reasons?:string[];
     chainIds?:string[];
     dedupeKey?:string;
+    dimensions?:CleanupDimensions;
   },
 ){
   const store=storeFor(context);
@@ -67,6 +96,13 @@ export async function appendCleanupAudit(
     score:Math.max(0,Math.min(100,Math.round(Number(input.score)||0))),
     reasons:Array.isArray(input.reasons)?input.reasons.map(x=>clean(x,220)).filter(Boolean).slice(0,16):[],
     chainIds:Array.isArray(input.chainIds)?input.chainIds.map(x=>clean(x,100)).filter(Boolean).slice(0,100):[],
+    dimensions:input.dimensions ? {
+      websiteForm:clean(input.dimensions.websiteForm,120)||'Unknown',
+      referralSource:clean(input.dimensions.referralSource,160)||'Unknown',
+      emailDomain:clean(input.dimensions.emailDomain,160)||'Unknown',
+      brand:clean(input.dimensions.brand,80)||'Unknown',
+      securityReasons:Array.isArray(input.dimensions.securityReasons)?input.dimensions.securityReasons.map(x=>clean(x,120)).filter(Boolean).slice(0,20):[],
+    } : undefined,
     createdAt:new Date().toISOString(),
     dedupeKey,
   };
