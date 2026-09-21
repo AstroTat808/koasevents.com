@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
+import { baseVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 
 type Vendor = {
   id: string;
@@ -122,23 +123,7 @@ function offsetDate(date: string, days: number) {
 }
 
 function seedVendorRequirements(): VendorRequirement[] {
-  const rows: Array<[string, VendorRequirement['importance']]> = [
-    ['Wedding Planner','recommended'],
-    ['Photographer','recommended'],
-    ['Videographer','optional'],
-    ['Caterer','recommended'],
-    ['Florist','optional'],
-    ['Officiant','recommended'],
-    ['DJ','optional'],
-    ['Live Musician','optional'],
-    ['Entertainment','optional'],
-    ['Hair & Makeup','optional'],
-    ['Cake / Dessert','optional'],
-    ['Rentals','optional'],
-    ['Transportation','optional'],
-    ['Bartender / Mobile Bar','optional'],
-  ];
-  return rows.map(([category, importance]) => ({ category, importance, note: '' }));
+  return baseVendorRequirements() as VendorRequirement[];
 }
 
 function seedQuestionnaire(): QuestionAnswer[] {
@@ -213,7 +198,7 @@ function defaultOps(record: any): EventOps {
   const eventDate = clean(record?.customer?.eventDate, 40);
   const guestCount = Math.round(num(record?.quote?.state?.guestCount || record?.inquiry?.guestCount, 0, 1000));
   const now = new Date().toISOString();
-  return {
+  const seeded:any = {
     recordId: record.id,
     createdAt: now,
     updatedAt: now,
@@ -234,6 +219,8 @@ function defaultOps(record: any): EventOps {
     tasks: seedTasks(),
     documents: [],
   };
+  seeded.vendorRequirements = suggestVendorRequirements(record, seeded).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
+  return seeded as EventOps;
 }
 
 function sanitizeVendors(input: unknown): Vendor[] {
@@ -370,6 +357,7 @@ export default async (req: Request, context: Context) => {
           communications: record.communications || {},
         },
         ops,
+        vendorSuggestions: suggestVendorRequirements(record, ops),
       };
     }));
 
@@ -405,6 +393,8 @@ export default async (req: Request, context: Context) => {
     ops.vendors = sanitizeVendors(payload?.vendors);
   } else if (action === 'save-vendor-requirements') {
     ops.vendorRequirements = sanitizeVendorRequirements(payload?.vendorRequirements);
+  } else if (action === 'apply-vendor-suggestions') {
+    ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
   } else if (action === 'save-questionnaire') {
     ops.questionnaire = sanitizeQuestionnaire(payload?.questionnaire);
   } else if (action === 'save-timeline') {
