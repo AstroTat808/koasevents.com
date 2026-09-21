@@ -84,6 +84,11 @@
     X-Robots-Tag = "noindex, nofollow, noarchive"
 
 [[headers]]
+  for = "/portal/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
   for = "/thank-you/*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow, noarchive"
