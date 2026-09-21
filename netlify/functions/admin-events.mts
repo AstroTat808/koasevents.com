@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
+import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
 
 type Vendor = {
   id: string;
@@ -99,6 +100,11 @@ function opsStoreFor(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
     : getDeployStore({ name: 'koa-event-ops' });
+}
+function vendorStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
+    : getDeployStore({ name: 'koa-vendors' });
 }
 
 function clean(value: unknown, max = 1200) {
@@ -405,7 +411,8 @@ export default async (req: Request, context: Context) => {
       (ops as any).vendorRequirementsMode = 'auto';
     }
   } else if (action === 'save-vendors') {
-    ops.vendors = sanitizeVendors(payload?.vendors);
+    const masterVendors:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+    ops.vendors = applyMasterInsuranceToAssignments(sanitizeVendors(payload?.vendors), masterVendors, record.customer?.eventDate);
   } else if (action === 'save-vendor-requirements') {
     ops.vendorRequirements = sanitizeVendorRequirements(payload?.vendorRequirements);
     (ops as any).vendorRequirementsMode = 'manual';
