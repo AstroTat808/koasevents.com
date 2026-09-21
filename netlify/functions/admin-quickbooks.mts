@@ -7,6 +7,7 @@ import {
   disconnectQuickBooks,
   getQuickBooksCatalog,
   getQuickBooksConnection,
+  getQuickBooksDepositSettings,
   getQuickBooksGetSettings,
   getQuickBooksSettings,
   qboCreate,
@@ -17,6 +18,7 @@ import {
   qboOperation,
   quickBooksConfiguration,
   saveQuickBooksCatalog,
+  saveQuickBooksDepositSettings,
   saveQuickBooksGetSettings,
   saveQuickBooksSettings,
 } from './_shared/quickbooks';
@@ -490,11 +492,12 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, catalog, getSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
+    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
       getQuickBooksGetSettings(context),
+      getQuickBooksDepositSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
@@ -536,6 +539,7 @@ export default async (req: Request, context: Context) => {
       settings,
       catalog,
       getSettings,
+      depositSettings,
       webhookReceipt: webhookReceipt || null,
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
@@ -550,6 +554,16 @@ export default async (req: Request, context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
+
+  if (action === 'save-deposit-settings') {
+    const depositSettings = await saveQuickBooksDepositSettings(context, {
+      defaultPercent: payload?.defaultPercent,
+      venueWeddingPercent: payload?.venueWeddingPercent,
+      mobileBarPercent: payload?.mobileBarPercent,
+      privateEventPercent: payload?.privateEventPercent,
+    });
+    return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
 
   if (action === 'connect') {
     const authFlow = await createOAuthState(context, req.url);
@@ -1311,6 +1325,37 @@ export default async (req: Request, context: Context) => {
       detail: 'QuickBooks invoice emailed to ' + record.customer.email,
     });
     return Response.json({ ok: true, record });
+  }
+
+  if (action === 'sync-and-recheck') {
+    const state = await syncAccountingStatus(context, record);
+    if (state.customerId) {
+      try {
+        const paymentData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + escapeQbo(String(state.customerId)) + "' maxresults 1000");
+        const payments = Array.isArray(paymentData?.QueryResponse?.Payment) ? paymentData.QueryResponse.Payment : [];
+        state.paymentSync = {
+          count: payments.length,
+          paymentIds: payments.slice(0, 100).map((payment: any) => String(payment?.Id || '')).filter(Boolean),
+          lastSyncedAt: new Date().toISOString(),
+        };
+      } catch (error) {
+        state.paymentSync = {
+          count: null,
+          paymentIds: [],
+          lastSyncedAt: new Date().toISOString(),
+          warning: clean(error instanceof Error ? error.message : 'QuickBooks payment query was unavailable.', 300),
+        };
+      }
+    }
+    records = await saveRecord(context, record, records);
+    const accountingAudit = buildAccountingAudit(records);
+    await appendEvent(context, {
+      type: 'quickbooks_accounting_recheck',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
+    });
+    return Response.json({ ok: true, record, quickbooks: state, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (action === 'sync-status') {
