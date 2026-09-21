@@ -1,0 +1,52 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Vendor Marketplace | Koa’s Events" description="Shop Koa’s preferred and verified event vendors." canonical="https://koasevents.com/vendors/">
+<main class="min-h-screen bg-[var(--koa-sand)] py-10"><div class="container-shell max-w-7xl">
+<section data-loading class="rounded-[1.6rem] bg-white p-8"><h1 class="display text-5xl">Loading your Vendor Marketplace…</h1></section>
+<section data-error class="hidden rounded-[1.6rem] bg-white p-8"><h1 class="display text-5xl">Marketplace unavailable</h1><p data-error-copy class="mt-3 text-sm"></p></section>
+<div data-app class="hidden grid gap-6">
+<header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-8 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Plan your event</p><h1 class="display mt-3 text-5xl">Koa’s Vendor Marketplace</h1><p data-meta class="mt-3 text-sm text-white/65"></p><p class="mt-4 max-w-3xl text-sm leading-6 text-white/65">Browse trusted local professionals, save favorites, see verified Koa’s client feedback, and add vendors directly to your event team.</p></header>
+<section class="rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]"><div class="grid gap-3 md:grid-cols-[1fr_15rem_12rem]"><input data-search class="field" placeholder="Search photographers, florists, DJs…"><select data-category class="field"><option value="">All categories</option></select><select data-view class="field"><option value="all">All vendors</option><option value="favorites">My favorites</option><option value="team">My event team</option></select></div></section>
+<section><div data-grid class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"></div></section>
+</div></div></main>
+<dialog data-dialog class="w-[min(58rem,92vw)] rounded-[1.5rem] border-0 p-0 backdrop:bg-black/50"><div data-dialog-body class="max-h-[85vh] overflow-auto bg-white p-6 sm:p-8"></div></dialog>
+<style>.field{min-height:2.8rem;width:100%;border:1px solid var(--koa-line);border-radius:.7rem;background:white;padding:.7rem .8rem;font-size:.82rem}</style>
+<script>
+ const token=new URLSearchParams(location.search).get('token')||'';let data=null;
+ const grid=document.querySelector('[data-grid]'),dialog=document.querySelector('[data-dialog]'),body=document.querySelector('[data-dialog-body]');
+ function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+ function date(v){return v?new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(v+'T12:00:00')):''}
+ function tier(v){return v==='preferred'?'Koa’s Preferred Partner':v==='verified'?'Koa’s Verified Vendor':'Community Vendor'}
+ async function api(body){const r=await fetch('/api/vendor-marketplace/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to update.');return d}
+ async function refresh(){const r=await fetch('/api/vendor-marketplace/'+encodeURIComponent(token),{cache:'no-store'});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Unable to load marketplace.');data=d;render()}
+ function card(v){
+  const fav=data.favorites.includes(v.id),onTeam=data.eventTeam.some(x=>x.marketplaceVendorId===v.id);
+  const el=document.createElement('article');el.className='overflow-hidden rounded-[1.4rem] bg-white shadow-[var(--shadow-soft)]';
+  el.innerHTML=(v.coverImage?'<img src="'+esc(v.coverImage)+'" class="h-52 w-full object-cover" alt="">':'<div class="h-24 bg-[var(--koa-forest)]"></div>')+'<div class="p-5"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+esc(tier(v.tier))+'</p><h2 class="display mt-2 text-3xl">'+esc(v.name)+'</h2><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(v.category)+(v.startingPrice?' · '+esc(v.startingPrice):'')+'</p><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/65">'+esc(v.headline||v.description||'')+'</p><p class="mt-3 text-xs font-semibold">'+(v.rating.count?'★ '+v.rating.average+' · '+v.rating.count+' verified review'+(v.rating.count===1?'':'s'):'New to Koa’s reviews')+'</p><div class="mt-5 flex flex-wrap gap-2"><button data-view class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">View profile</button><button data-fav class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">'+(fav?'♥ Saved':'♡ Save')+'</button><button data-team class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-xs font-bold text-white">'+(onTeam?'Remove from team':'Add to my event')+'</button></div></div>';
+  el.querySelector('[data-fav]').onclick=async()=>{await api({action:'toggle-favorite',vendorId:v.id});await refresh()};
+  el.querySelector('[data-team]').onclick=async()=>{await api({action:onTeam?'remove-vendor':'select-vendor',vendorId:v.id});await refresh()};
+  el.querySelector('[data-view]').onclick=()=>openProfile(v);return el
+ }
+ function openProfile(v){
+  const onTeam=data.eventTeam.some(x=>x.marketplaceVendorId===v.id);const eventPassed=data.record.eventDate&&data.record.eventDate<=new Date().toISOString().slice(0,10);
+  body.innerHTML='<button data-close class="float-right text-2xl">×</button><p class="eyebrow text-[var(--koa-clay)]">'+esc(tier(v.tier))+'</p><h2 class="display mt-2 text-5xl">'+esc(v.name)+'</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">'+esc(v.category)+(v.startingPrice?' · '+esc(v.startingPrice):'')+'</p><p class="mt-5 whitespace-pre-line text-sm leading-7">'+esc(v.description||v.headline)+'</p><div data-photos class="mt-6 grid gap-3 sm:grid-cols-2"></div><div data-reviews class="mt-6"></div>'+(eventPassed&&onTeam?'<form data-review class="mt-6 rounded-xl bg-[var(--koa-sand)] p-5"><h3 class="display text-3xl">Rate this vendor</h3><div class="mt-3 grid gap-3 sm:grid-cols-5">'+['overall','communication','professionalism','quality','value'].map(n=>'<label class="text-xs font-semibold">'+n.replace(/^./,x=>x.toUpperCase())+'<select name="'+n+'" class="field mt-1">'+[5,4,3,2,1].map(x=>'<option>'+x+'</option>').join('')+'</select></label>').join('')+'</div><label class="mt-3 flex gap-2 text-sm"><input type="checkbox" name="wouldHireAgain"> I would hire them again</label><textarea name="comment" rows="4" class="field mt-3" placeholder="What should future Koa’s clients know?"></textarea><button class="mt-3 rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-bold text-white">Submit verified review</button><p data-review-msg class="mt-2 text-xs"></p></form>':'');
+  const photos=body.querySelector('[data-photos]');(v.gallery||[]).forEach(g=>{const f=document.createElement('figure');f.innerHTML='<img src="'+esc(g.src)+'" class="h-56 w-full rounded-xl object-cover"><figcaption class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(g.caption||g.eventLabel||'Work at Koa’s')+'</figcaption>';photos.appendChild(f)});
+  const re=body.querySelector('[data-reviews]');re.innerHTML='<h3 class="display text-3xl">Verified Koa’s client reviews</h3>';(v.reviews||[]).forEach(r=>{const a=document.createElement('article');a.className='mt-3 rounded-xl border border-[var(--koa-line)] p-4';a.innerHTML='<strong>★ '+r.overall+'/5</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(r.clientName)+' · '+esc(date(r.eventDate))+'</p><p class="mt-2 text-sm">'+esc(r.comment||'')+'</p>';re.appendChild(a)});if(!v.reviews?.length)re.insertAdjacentHTML('beforeend','<p class="mt-2 text-sm text-[var(--koa-ink)]/50">No published client reviews yet.</p>');
+  body.querySelector('[data-close]').onclick=()=>dialog.close();
+  const rf=body.querySelector('[data-review]');if(rf)rf.onsubmit=async e=>{e.preventDefault();const f=new FormData(rf),msg=rf.querySelector('[data-review-msg]');try{await api({action:'submit-review',vendorId:v.id,overall:f.get('overall'),communication:f.get('communication'),professionalism:f.get('professionalism'),quality:f.get('quality'),value:f.get('value'),wouldHireAgain:f.get('wouldHireAgain')==='on',comment:f.get('comment')});msg.textContent='Review submitted for moderation.'}catch(err){msg.textContent=err.message}};
+  dialog.showModal()
+ }
+ function render(){
+  document.querySelector('[data-meta]').textContent=[data.record.customerName,date(data.record.eventDate)].filter(Boolean).join(' · ');
+  const categories=[...new Set(data.vendors.map(v=>v.category))].sort(),sel=document.querySelector('[data-category]');const prev=sel.value;sel.innerHTML='<option value="">All categories</option>'+categories.map(x=>'<option>'+esc(x)+'</option>').join('');sel.value=prev;
+  const q=String(document.querySelector('[data-search]').value||'').toLowerCase(),cat=sel.value,view=document.querySelector('[data-view]').value;
+  let rows=data.vendors.filter(v=>!cat||v.category===cat).filter(v=>[v.name,v.category,v.headline,...(v.specialties||[])].join(' ').toLowerCase().includes(q));
+  if(view==='favorites')rows=rows.filter(v=>data.favorites.includes(v.id));if(view==='team')rows=rows.filter(v=>data.eventTeam.some(x=>x.marketplaceVendorId===v.id));
+  rows.sort((a,b)=>(b.featured-a.featured)||(['preferred','verified','community'].indexOf(a.tier)-['preferred','verified','community'].indexOf(b.tier))||a.name.localeCompare(b.name));
+  grid.innerHTML='';rows.forEach(v=>grid.appendChild(card(v)));if(!rows.length)grid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No vendors match this view yet.</p>'
+ }
+ async function load(){if(!token){document.querySelector('[data-loading]').classList.add('hidden');document.querySelector('[data-error]').classList.remove('hidden');document.querySelector('[data-error-copy]').textContent='This link is missing its secure booking token.';return}try{await refresh();document.querySelector('[data-loading]').classList.add('hidden');document.querySelector('[data-app]').classList.remove('hidden')}catch(e){document.querySelector('[data-loading]').classList.add('hidden');document.querySelector('[data-error]').classList.remove('hidden');document.querySelector('[data-error-copy]').textContent=e.message}}
+ document.querySelector('[data-search]').oninput=render;document.querySelector('[data-category]').onchange=render;document.querySelector('[data-view]').onchange=render;load();
+</script>
+</BaseLayout>
