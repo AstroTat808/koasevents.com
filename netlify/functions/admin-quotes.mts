@@ -4,6 +4,7 @@ import { hasCapability, isApprovedManager, requireOperations } from './_shared/a
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
 import { appendStaffAudit } from './_shared/staff-audit';
+import { getQuickBooksDepositSettings, type QuickBooksDepositSettings } from './_shared/quickbooks';
 
 type QuoteItem = {
   id: string;
@@ -708,7 +709,17 @@ function bookingSummary(record: SalesRecord) {
   };
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>) {
+function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
+  const normalizedPackage = normalizePackage(packageId);
+  const eventType = cleanText((inquiry as any)?.eventType, 120).toLowerCase();
+  const service = cleanText((inquiry as any)?.service, 80).toLowerCase();
+  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return settings.mobileBarPercent;
+  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return settings.venueWeddingPercent;
+  if (eventType || service) return settings.privateEventPercent;
+  return settings.defaultPercent;
+}
+
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
@@ -783,7 +794,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const taxRate = 4.712;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
-  const depositPercent = 10;
+  const depositPercent = Math.min(100, Math.max(0, finite(configuredPercent, 0, 100)));
   const depositAmount = Math.round(total * depositPercent) / 100;
   const schedule = rebalancePaymentSchedule([], total, depositAmount, eventDate);
 
@@ -1726,6 +1737,8 @@ export default async (req: Request, context: Context) => {
 
     const now = new Date().toISOString();
     const packageId = normalizePackage(quote.state?.startingPoint);
+    const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
+    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId) : 10;
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -1743,7 +1756,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -1779,6 +1792,8 @@ export default async (req: Request, context: Context) => {
     const quote = source.quote || await getQuote(context, source.quoteId || '');
     const now = new Date().toISOString();
     const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage || source.inquiry?.mobileBarPackage);
+    const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
+    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, source.inquiry) : 10;
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -1803,7 +1818,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
