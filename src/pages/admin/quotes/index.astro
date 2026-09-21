@@ -1407,7 +1407,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       bookedDashboard.innerHTML='';
       const rows=(payload.records||[])
         .filter((record)=>record.stage==='booked')
-        .sort((a,b)=>String(a.customer?.eventDate||'9999').localeCompare(String(b.customer?.eventDate||'9999')));
+        .sort((a,b)=>{
+          const aIndicator=qboInvoiceDueIndicator(a.bookingSummary?.payments||[]);
+          const bIndicator=qboInvoiceDueIndicator(b.bookingSummary?.payments||[]);
+          const rank=(indicator)=>{
+            if(!indicator)return 3;
+            if(indicator.kind==='overdue')return 0;
+            if(indicator.kind==='today')return 1;
+            if(indicator.kind==='soon')return 2;
+            return 3;
+          };
+          const priority=rank(aIndicator)-rank(bIndicator);
+          if(priority!==0)return priority;
+          return String(a.customer?.eventDate||'9999').localeCompare(String(b.customer?.eventDate||'9999'));
+        });
 
       rows.forEach((record)=>{
         const summary=record.bookingSummary||{};
