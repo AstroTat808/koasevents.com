@@ -12,6 +12,7 @@ import {
   qboQuery,
   qboSend,
   qboUpdate,
+  qboOperation,
   quickBooksConfiguration,
   saveQuickBooksSettings,
 } from './_shared/quickbooks';
@@ -334,7 +335,7 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest] = await Promise.all([
+    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
@@ -343,6 +344,7 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-linked-booking-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
     ]);
     const receipts = Array.isArray(webhookHistory) && webhookHistory.length
       ? webhookHistory
@@ -378,6 +380,7 @@ export default async (req: Request, context: Context) => {
       smokeTest: smokeTest || null,
       linkedTest: linkedTest || null,
       productionTest: productionTest || null,
+      productionLinkedTest: productionLinkedTest || null,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -417,6 +420,209 @@ export default async (req: Request, context: Context) => {
     if (!itemId) return Response.json({ error: 'Select a QuickBooks service item.' }, { status: 400 });
     const settings = await saveQuickBooksSettings(context, { serviceItemId: itemId, serviceItemName: itemName });
     return Response.json({ ok: true, settings });
+  }
+
+  if (action === 'cleanup-production-smoke-test') {
+    const configuration = quickBooksConfiguration();
+    if (configuration.environment !== 'production') {
+      return Response.json({ error: 'Production cleanup is available only in the production QuickBooks environment.' }, { status: 409 });
+    }
+
+    const store = integrationStoreFor(context);
+    const test: any = await store.get('quickbooks/production-smoke-test', { type: 'json' });
+    if (!test?.customerId || !test?.estimateId || !test?.invoiceId) {
+      return Response.json({ error: 'No stored production smoke test is available to clean up.' }, { status: 404 });
+    }
+
+    const cleaned: any = {
+      startedAt: new Date().toISOString(),
+      invoice: 'not_checked',
+      estimate: 'not_checked',
+      customer: 'not_checked',
+    };
+
+    const invoiceData: any = await qboGet(context, 'invoice', String(test.invoiceId));
+    const invoice = invoiceData?.Invoice;
+    const invoiceMarker = String(invoice?.PrivateNote || '').includes('Koa CRM production integration test') ||
+      String(invoice?.CustomerMemo?.value || '').includes('CONTROLLED TEST');
+    if (!invoice?.Id || !invoiceMarker) {
+      throw new Error('Cleanup stopped: stored invoice does not match the controlled production-test marker.');
+    }
+    if (Number(invoice.Balance || 0) <= 0 && Number(invoice.TotalAmt || 0) > 0) {
+      throw new Error('Cleanup stopped: the controlled production invoice has a payment or zero balance. Review it manually before cleanup.');
+    }
+    if (invoice.SyncToken == null) throw new Error('Cleanup stopped: production test invoice SyncToken is missing.');
+    await qboOperation(context, 'invoice', String(invoice.Id), String(invoice.SyncToken), 'void');
+    cleaned.invoice = 'voided';
+
+    const estimateData: any = await qboGet(context, 'estimate', String(test.estimateId));
+    const estimate = estimateData?.Estimate;
+    const estimateMarker = String(estimate?.PrivateNote || '').includes('Koa CRM production integration test') ||
+      String(estimate?.CustomerMemo?.value || '').includes('CONTROLLED TEST');
+    if (!estimate?.Id || !estimateMarker) {
+      throw new Error('Cleanup stopped: stored estimate does not match the controlled production-test marker.');
+    }
+    if (estimate.SyncToken == null) throw new Error('Cleanup stopped: production test estimate SyncToken is missing.');
+    await qboOperation(context, 'estimate', String(estimate.Id), String(estimate.SyncToken), 'delete');
+    cleaned.estimate = 'deleted';
+
+    const customerData: any = await qboGet(context, 'customer', String(test.customerId));
+    const customer = customerData?.Customer;
+    if (!customer?.Id || !String(customer.DisplayName || '').startsWith('Koa CRM Production Test ')) {
+      throw new Error('Cleanup stopped: stored customer does not match the controlled production-test marker.');
+    }
+    if (customer.SyncToken == null) throw new Error('Cleanup stopped: production test customer SyncToken is missing.');
+    await qboUpdate(context, 'customer', {
+      Id: String(customer.Id),
+      SyncToken: String(customer.SyncToken),
+      Active: false,
+    });
+    cleaned.customer = 'made_inactive';
+
+    cleaned.completedAt = new Date().toISOString();
+    test.cleanup = cleaned;
+    test.status = 'cleaned';
+    await store.setJSON('quickbooks/production-smoke-test', test);
+    return Response.json({ ok: true, cleanup: cleaned, test });
+  }
+
+  if (action === 'production-linked-booking-test') {
+    const configuration = quickBooksConfiguration();
+    if (configuration.environment !== 'production') {
+      return Response.json({ error: 'Production CRM-linked testing is available only in the production QuickBooks environment.' }, { status: 409 });
+    }
+
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    if (!itemId) {
+      return Response.json({ error: 'Save a production QuickBooks Service or Non-Inventory item mapping first.' }, { status: 409 });
+    }
+
+    const suffix = idSuffix();
+    const recordId = 'QBP-' + suffix;
+    const depositAmount = 1;
+    const total = 20;
+    const now = new Date().toISOString();
+    const eventDate = new Date(Date.now() + 180 * 86400000).toISOString().slice(0, 10);
+    const secondDue = new Date(Date.now() + 60 * 86400000).toISOString().slice(0, 10);
+    const finalDue = new Date(Date.now() + 120 * 86400000).toISOString().slice(0, 10);
+
+    let records = await readRecords(context);
+    const record: any = {
+      id: recordId,
+      kind: 'proposal',
+      stage: 'proposal',
+      createdAt: now,
+      updatedAt: now,
+      status: 'accepted',
+      source: 'quickbooks-production-linked-test',
+      customer: {
+        name: 'QBO Production Linked Test ' + suffix,
+        email: '',
+        phone: '',
+        eventDate,
+        notes: 'CONTROLLED TEST RECORD. Created to verify Koa’s CRM ↔ QuickBooks production synchronization.',
+      },
+      proposal: {
+        publicToken: '',
+        status: 'accepted',
+        expirationDate: '',
+        lineItems: [{
+          id: 'production-linked-service',
+          description: 'CONTROLLED TEST - Koa CRM production linked booking',
+          quantity: 1,
+          unitPrice: total,
+          amount: total,
+          custom: false,
+        }],
+        subtotal: total,
+        discountAmount: 0,
+        taxRate: 0,
+        taxAmount: 0,
+        total,
+        depositAmount,
+        paymentSchedule: [
+          { label: 'Reservation deposit', dueDate: today(), amount: depositAmount },
+          { label: 'Second payment', dueDate: secondDue, amount: 9.50 },
+          { label: 'Final payment', dueDate: finalDue, amount: 9.50 },
+        ],
+        notesToClient: 'CONTROLLED TEST - no client communication.',
+        acceptance: { name: 'Production Test Client', acceptedAt: now },
+      },
+      booking: {
+        status: 'deposit_pending',
+        createdAt: now,
+        updatedAt: now,
+        contract: {
+          version: 1,
+          title: 'Controlled Production Test Agreement',
+          generatedAt: now,
+          status: 'signed',
+          sections: [],
+          signature: { name: 'Production Test Client', signedAt: now, acknowledgement: 'Controlled production test signature' },
+          koaSignature: { name: 'Koa’s Events Test', signedAt: now },
+        },
+        payments: [
+          { id: 'pay-1', label: 'Reservation deposit', dueDate: today(), amount: depositAmount, status: 'pending' },
+          { id: 'pay-2', label: 'Second payment', dueDate: secondDue, amount: 9.50, status: 'pending' },
+          { id: 'pay-3', label: 'Final payment', dueDate: finalDue, amount: 9.50, status: 'pending' },
+        ],
+      },
+    };
+
+    records = [record, ...records.filter((entry) => entry.id !== recordId)].slice(0, 1500);
+    const sales = salesStoreFor(context);
+    await sales.setJSON('records/' + recordId, record);
+    await sales.setJSON('records/index', records);
+
+    const customer = await ensureCustomer(context, record);
+    const estimate = await syncEstimate(context, record, itemId);
+    const invoice = await createMilestoneInvoice(context, record, itemId, 'pay-1');
+    await saveRecord(context, record, records);
+
+    const paymentAmount = Number(invoice?.Balance ?? invoice?.TotalAmt ?? depositAmount);
+    if (!(paymentAmount > 0 && paymentAmount <= 5)) {
+      throw new Error('Production linked test stopped: generated deposit invoice balance was outside the expected $0-$5 safety range.');
+    }
+
+    const paymentCreated: any = await qboCreate(context, 'payment', {
+      CustomerRef: { value: String(customer.Id) },
+      TotalAmt: paymentAmount,
+      PrivateNote: 'CONTROLLED TEST - Koa CRM production linked booking ' + recordId,
+      Line: [{
+        Amount: paymentAmount,
+        LinkedTxn: [{ TxnId: String(invoice.Id), TxnType: 'Invoice' }],
+      }],
+    });
+    const payment = paymentCreated?.Payment;
+    if (!payment?.Id) throw new Error('Production CRM-linked payment creation failed.');
+
+    const test = {
+      status: 'payment_created',
+      createdAt: now,
+      recordId,
+      customerId: String(customer.Id),
+      estimateId: String(estimate?.Id || ''),
+      estimateDocNumber: String(estimate?.DocNumber || ''),
+      invoiceId: String(invoice.Id),
+      invoiceDocNumber: String(invoice.DocNumber || ''),
+      paymentId: String(payment.Id),
+      paymentAmount,
+      expectedStage: 'booked',
+      expectedDepositPaid: true,
+      expectedBalanceDue: 0,
+      webhookPending: true,
+      emailed: false,
+    };
+    await integrationStoreFor(context).setJSON('quickbooks/production-linked-booking-test', test);
+    await appendEvent(context, {
+      type: 'quickbooks_linked_production_test_started',
+      recordId,
+      detail: 'Controlled production test created QuickBooks estimate ' + (estimate?.DocNumber || estimate?.Id || '') +
+        ', deposit invoice ' + (invoice.DocNumber || invoice.Id) + ', and payment ' + payment.Id + '.',
+    });
+
+    return Response.json({ ok: true, test });
   }
 
   if (action === 'production-smoke-test') {
