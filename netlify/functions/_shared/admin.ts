@@ -22,3 +22,20 @@ export async function requireAdmin() {
   }
   return { user, response: null };
 }
+
+const OPERATIONS_ROLES = new Set(['staff', 'sales', 'manager']);
+
+export function isApprovedOperationsUser(user: any) {
+  if (!user) return false;
+  if (isApprovedAdmin(user)) return true;
+  const roles = user?.app_metadata?.roles || [];
+  return Array.isArray(roles) && roles.some((role: unknown) => OPERATIONS_ROLES.has(String(role || '').trim().toLowerCase()));
+}
+
+export async function requireOperations() {
+  const user = await getUser();
+  if (!isApprovedOperationsUser(user)) {
+    return { user: null, response: new Response('Unauthorized', { status: 401 }) };
+  }
+  return { user, response: null };
+}
