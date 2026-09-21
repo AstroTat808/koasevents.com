@@ -162,6 +162,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 sm:grid-cols-2 xl:grid-cols-5">
               <label class="grid gap-2 text-sm font-semibold">Wedding 2nd payment · days before event<input name="venueWeddingSecondDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Wedding 2nd payment · % of post-deposit balance<input name="venueWeddingSecondPercentOfRemaining" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">Wedding final · days before event<input name="venueWeddingFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">Mobile Bar final · days before event<input name="mobileBarFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">Private event final · days before event<input name="privateEventFinalDueDaysBefore" type="number" min="0" max="730" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
@@ -552,6 +553,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         depositForm.elements.privateEventPercent.value=String(state.depositSettings.privateEventPercent ?? 10);
         depositForm.elements.defaultPercent.value=String(state.depositSettings.defaultPercent ?? 10);
         depositForm.elements.venueWeddingSecondDueDaysBefore.value=String(state.depositSettings.venueWeddingSecondDueDaysBefore ?? 90);
+        depositForm.elements.venueWeddingSecondPercentOfRemaining.value=String(state.depositSettings.venueWeddingSecondPercentOfRemaining ?? 50);
         depositForm.elements.venueWeddingFinalDueDaysBefore.value=String(state.depositSettings.venueWeddingFinalDueDaysBefore ?? 60);
         depositForm.elements.mobileBarFinalDueDaysBefore.value=String(state.depositSettings.mobileBarFinalDueDaysBefore ?? 14);
         depositForm.elements.privateEventFinalDueDaysBefore.value=String(state.depositSettings.privateEventFinalDueDaysBefore ?? 30);
@@ -613,7 +615,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     depositForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
       try{
-        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingSecondDueDaysBefore:Number(data.get('venueWeddingSecondDueDaysBefore')||0),venueWeddingFinalDueDaysBefore:Number(data.get('venueWeddingFinalDueDaysBefore')||0),mobileBarFinalDueDaysBefore:Number(data.get('mobileBarFinalDueDaysBefore')||0),privateEventFinalDueDaysBefore:Number(data.get('privateEventFinalDueDaysBefore')||0),defaultFinalDueDaysBefore:Number(data.get('defaultFinalDueDaysBefore')||0)});
+        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingSecondDueDaysBefore:Number(data.get('venueWeddingSecondDueDaysBefore')||0),venueWeddingSecondPercentOfRemaining:Number(data.get('venueWeddingSecondPercentOfRemaining')||0),venueWeddingFinalDueDaysBefore:Number(data.get('venueWeddingFinalDueDaysBefore')||0),mobileBarFinalDueDaysBefore:Number(data.get('mobileBarFinalDueDaysBefore')||0),privateEventFinalDueDaysBefore:Number(data.get('privateEventFinalDueDaysBefore')||0),defaultFinalDueDaysBefore:Number(data.get('defaultFinalDueDaysBefore')||0)});
         state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
       }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
