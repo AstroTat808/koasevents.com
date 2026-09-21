@@ -709,17 +709,47 @@ function bookingSummary(record: SalesRecord) {
   };
 }
 
-function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
+function proposalCategory(packageId = '', inquiry?: Record<string, unknown>) {
   const normalizedPackage = normalizePackage(packageId);
   const eventType = cleanText((inquiry as any)?.eventType, 120).toLowerCase();
   const service = cleanText((inquiry as any)?.service, 80).toLowerCase();
-  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return settings.mobileBarPercent;
-  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return settings.venueWeddingPercent;
-  if (eventType || service) return settings.privateEventPercent;
+  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return 'mobile-bar';
+  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return 'venue-wedding';
+  if (eventType || service) return 'private-event';
+  return 'default';
+}
+
+function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
+  const category = proposalCategory(packageId, inquiry);
+  if (category === 'mobile-bar') return settings.mobileBarPercent;
+  if (category === 'venue-wedding') return settings.venueWeddingPercent;
+  if (category === 'private-event') return settings.privateEventPercent;
   return settings.defaultPercent;
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10) {
+function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>): PaymentItem[] {
+  const category = proposalCategory(packageId, inquiry);
+  const remaining = Math.max(0, roundMoney(total - depositAmount));
+  if (category === 'venue-wedding') {
+    const second = roundMoney(remaining / 2);
+    return [
+      { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
+      { label: 'Second payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingSecondDueDaysBefore) : '', amount: second },
+      { label: 'Final payment', dueDate: eventDate ? offsetDate(eventDate, -settings.venueWeddingFinalDueDaysBefore) : '', amount: roundMoney(remaining - second) },
+    ];
+  }
+  const dueDays = category === 'mobile-bar'
+    ? settings.mobileBarFinalDueDaysBefore
+    : category === 'private-event'
+      ? settings.privateEventFinalDueDaysBefore
+      : settings.defaultFinalDueDaysBefore;
+  return [
+    { label: 'Reservation deposit', dueDate: '', amount: depositAmount },
+    { label: 'Final balance', dueDate: eventDate ? offsetDate(eventDate, -dueDays) : '', amount: remaining },
+  ];
+}
+
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
@@ -796,7 +826,9 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
   const depositPercent = Math.min(100, Math.max(0, finite(configuredPercent, 0, 100)));
   const depositAmount = Math.round(total * depositPercent) / 100;
-  const schedule = rebalancePaymentSchedule([], total, depositAmount, eventDate);
+  const schedule = scheduleSettings
+    ? configuredPaymentSchedule(scheduleSettings, total, depositAmount, eventDate, packageId, inquiry)
+    : rebalancePaymentSchedule([], total, depositAmount, eventDate);
 
   return {
     publicToken: publicToken(),
@@ -1756,7 +1788,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent, depositSettings || undefined) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -1818,7 +1850,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
