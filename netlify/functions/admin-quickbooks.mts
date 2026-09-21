@@ -334,15 +334,21 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, webhookProcessed, smokeTest] = await Promise.all([
+    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
     ]);
-    const receiptEntities = (webhookReceipt?.notifications || []).flatMap((notification: any) =>
-      Array.isArray(notification?.entities) ? notification.entities : [],
+    const receipts = Array.isArray(webhookHistory) && webhookHistory.length
+      ? webhookHistory
+      : (webhookReceipt ? [webhookReceipt] : []);
+    const receiptEntities = receipts.flatMap((receipt: any) =>
+      (receipt?.notifications || []).flatMap((notification: any) =>
+        Array.isArray(notification?.entities) ? notification.entities : [],
+      ),
     );
     const smokeWebhookMatch = smokeTest ? {
       invoiceMatched: receiptEntities.some((entity: any) =>
