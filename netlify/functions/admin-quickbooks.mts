@@ -386,6 +386,93 @@ function moneyDelta(a: unknown, b: unknown) {
   return Math.round((Number(a || 0) - Number(b || 0)) * 100) / 100;
 }
 
+function reconciliationIssueSnapshot(row: any) {
+  return (Array.isArray(row?.issues) ? row.issues : []).map((issue: any) => ({
+    code: String(issue?.code || ''),
+    label: clean(issue?.label, 220),
+    expected: issue?.expected == null ? null : Math.round(Number(issue.expected || 0) * 100) / 100,
+    actual: issue?.actual == null ? null : Math.round(Number(issue.actual || 0) * 100) / 100,
+    delta: issue?.delta == null ? null : Math.round(Number(issue.delta || 0) * 100) / 100,
+  })).sort((a: any, b: any) => (a.code + a.label).localeCompare(b.code + b.label));
+}
+
+function reconciliationFingerprint(issues: any[]) {
+  return JSON.stringify(issues.map((issue: any) => [issue.code, issue.expected, issue.actual, issue.delta]));
+}
+
+export function applyQuickBooksReconciliationHistory(
+  records: any[],
+  audit: any,
+  source = 'manual',
+  recordIds?: string[],
+) {
+  const allowed = recordIds?.length ? new Set(recordIds.map(String)) : null;
+  const rows = Array.isArray(audit?.rows) ? audit.rows : [];
+  const transitions: any[] = [];
+  const changedRecordIds: string[] = [];
+  const now = new Date().toISOString();
+
+  for (const row of rows) {
+    const recordId = String(row?.recordId || '');
+    if (!recordId || (allowed && !allowed.has(recordId))) continue;
+    const record = records.find((entry: any) => String(entry?.id || '') === recordId);
+    if (!record) continue;
+
+    record.accounting ||= {};
+    record.accounting.quickbooks ||= {};
+    const qbo = record.accounting.quickbooks;
+    const currentIssues = reconciliationIssueSnapshot(row);
+    const currentOpen = currentIssues.length > 0;
+    const currentFingerprint = reconciliationFingerprint(currentIssues);
+    const previous = qbo.reconciliationState || null;
+    const previousOpen = Boolean(previous?.open);
+    const previousFingerprint = String(previous?.fingerprint || '');
+    const previousIssues = Array.isArray(previous?.issues) ? previous.issues : [];
+
+    let type = '';
+    if (!previous && currentOpen) type = 'mismatch_detected';
+    else if (previousOpen && !currentOpen) type = 'resolved';
+    else if (!previousOpen && currentOpen) type = 'mismatch_detected';
+    else if (previousOpen && currentOpen && previousFingerprint !== currentFingerprint) type = 'mismatch_changed';
+
+    qbo.reconciliationState = {
+      open: currentOpen,
+      fingerprint: currentFingerprint,
+      issues: currentIssues,
+      checkedAt: now,
+      source,
+    };
+
+    if (!type) continue;
+
+    const entry = {
+      id: 'REC-' + crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase(),
+      type,
+      createdAt: now,
+      source,
+      before: previousIssues,
+      after: currentIssues,
+      proposalTotal: Number(row?.proposalTotal || 0),
+      paymentsReceived: Number(row?.paymentsReceived || 0),
+      remainingBalance: Number(row?.remainingBalance || 0),
+    };
+    qbo.reconciliationHistory = [entry, ...(Array.isArray(qbo.reconciliationHistory) ? qbo.reconciliationHistory : [])].slice(0, 100);
+    transitions.push({
+      recordId,
+      clientName: clean(row?.clientName || record?.customer?.name || recordId, 180),
+      eventDate: isoDate(row?.eventDate || record?.customer?.eventDate),
+      type,
+      before: previousIssues,
+      after: currentIssues,
+      proposalTotal: Number(row?.proposalTotal || 0),
+      remainingBalance: Number(row?.remainingBalance || 0),
+    });
+    changedRecordIds.push(recordId);
+  }
+
+  return { records, transitions, changedRecordIds };
+}
+
 export function buildQuickBooksAccountingAudit(records: any[]) {
   const rows = (Array.isArray(records) ? records : [])
     .filter((record: any) => record?.kind === 'proposal' && record?.proposal)
@@ -585,6 +672,7 @@ export default async (req: Request, context: Context) => {
       privateEventPercent: payload?.privateEventPercent,
       venueWeddingSecondDueDaysBefore: payload?.venueWeddingSecondDueDaysBefore,
       venueWeddingFinalDueDaysBefore: payload?.venueWeddingFinalDueDaysBefore,
+      venueWeddingSecondPercentOfRemaining: payload?.venueWeddingSecondPercentOfRemaining,
       mobileBarFinalDueDaysBefore: payload?.mobileBarFinalDueDaysBefore,
       privateEventFinalDueDaysBefore: payload?.privateEventFinalDueDaysBefore,
       defaultFinalDueDaysBefore: payload?.defaultFinalDueDaysBefore,
@@ -1359,6 +1447,10 @@ export default async (req: Request, context: Context) => {
     await refreshQuickBooksPaymentSnapshot(context, record);
     records = await saveQuickBooksSalesRecord(context, record, records);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
+    const reconciliation = applyQuickBooksReconciliationHistory(records, accountingAudit, 'manual', [record.id]);
+    if (reconciliation.changedRecordIds.includes(record.id)) {
+      records = await saveQuickBooksSalesRecord(context, record, records);
+    }
     await appendEvent(context, {
       type: 'quickbooks_accounting_recheck',
       recordId: record.id,
