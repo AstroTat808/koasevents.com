@@ -34,6 +34,7 @@ export type HealthAlertRule = {
 export type HealthAlertPolicy = {
   updatedAt: string;
   updatedBy: string;
+  publicStatusEnabled: boolean;
   rules: HealthAlertRule[];
 };
 
@@ -94,6 +95,7 @@ export function defaultHealthAlertPolicy():HealthAlertPolicy {
   return {
     updatedAt:'',
     updatedBy:'',
+    publicStatusEnabled:false,
     rules:healthComponents().map(component=>({
       id:component.id,
       alertAfter:defaultAlertAfter(component.id),
@@ -111,6 +113,7 @@ export async function readHealthAlertPolicy(context:Context):Promise<HealthAlert
   return {
     updatedAt:clean(stored.updatedAt,80),
     updatedBy:clean(stored.updatedBy,240),
+    publicStatusEnabled:Boolean(stored.publicStatusEnabled),
     rules:defaults.rules.map(rule=>{
       const saved:any=byId.get(rule.id);
       return {
@@ -130,6 +133,7 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
   const policy:HealthAlertPolicy={
     updatedAt:new Date().toISOString(),
     updatedBy:clean(actor,240)||'admin',
+    publicStatusEnabled:Boolean(input?.publicStatusEnabled),
     rules:defaults.rules.map(rule=>{
       const saved:any=byId.get(rule.id);
       return {
@@ -225,10 +229,12 @@ export async function applyHealthAlertPolicy(context:Context,current:HealthSnaps
   const policy=await readHealthAlertPolicy(context);
   const ruleById=new Map(policy.rules.map(rule=>[rule.id,rule]));
   const previousFailed=new Set(previousHourly?.failedIds||[]);
+  const previousConfirmed=new Set(previousHourly?.alertFailedIds||[]);
   current.alertFailedIds=current.failedIds.filter(id=>{
     const rule=ruleById.get(id);
     if(!rule||rule.alertAfter===1) return true;
-    return previousFailed.has(id);
+    if(current.source==='hourly') return previousFailed.has(id);
+    return previousConfirmed.has(id);
   }).sort();
   return {snapshot:current,policy};
 }
@@ -350,6 +356,84 @@ export function calculateIncidents(history:any[]) {
   const allIncidents=rows.flatMap(row=>row.recentIncidents.map(incident=>({componentId:row.id,componentName:row.name,...incident})))
     .sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt));
   return {generatedAt:new Date().toISOString(),rows,recentIncidents:allIncidents.slice(0,50)};
+}
+
+export function buildPublicStatus(
+  latest:HealthSnapshot|null,
+  incidents:any,
+  uptime:any,
+  policy:HealthAlertPolicy,
+) {
+  if(!policy.publicStatusEnabled){
+    return {
+      enabled:false,
+      overall:'not-published',
+      checkedAt:latest?.checkedAt||'',
+      services:[],
+      incidents:[],
+    };
+  }
+
+  const ruleById=new Map(policy.rules.map(rule=>[rule.id,rule]));
+  const latestById=new Map((latest?.checks||[]).map(check=>[check.id,check]));
+  const uptimeById=new Map((uptime?.rows||[]).map((row:any)=>[row.id,row]));
+  const incidentById=new Map((incidents?.rows||[]).map((row:any)=>[row.id,row]));
+  const groups=new Map<string,any[]>();
+
+  for(const rule of policy.rules){
+    if(!rule.publicVisible) continue;
+    const name=clean(rule.publicName,120)||'Koa’s Events service';
+    const item={
+      id:rule.id,
+      check:latestById.get(rule.id),
+      uptime:uptimeById.get(rule.id),
+      incidents:incidentById.get(rule.id),
+    };
+    groups.set(name,[...(groups.get(name)||[]),item]);
+  }
+
+  const services=[...groups.entries()].map(([name,items])=>{
+    const degraded=items.some(item=>item.check && !item.check.ok);
+    const uptime90=items
+      .map(item=>item.uptime?.periods?.['90d']?.uptime)
+      .filter((value:any)=>typeof value==='number');
+    const uptime90d=uptime90.length
+      ? Math.round((Math.min(...uptime90))*100)/100
+      : null;
+    return {name,status:degraded?'degraded':'operational',uptime90d};
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+
+  const publicIncidents:any[]=[];
+  for(const [name,items] of groups){
+    for(const item of items){
+      for(const incident of item.incidents?.recentIncidents||[]){
+        publicIncidents.push({
+          service:name,
+          startedAt:incident.startedAt,
+          endedAt:incident.endedAt||null,
+          ongoing:Boolean(incident.ongoing),
+          durationMinutes:Number(incident.durationMinutes||0),
+        });
+      }
+    }
+  }
+
+  const dedup=new Map<string,any>();
+  for(const incident of publicIncidents){
+    const key=[incident.service,incident.startedAt,incident.endedAt||'ongoing'].join('|');
+    if(!dedup.has(key)) dedup.set(key,incident);
+  }
+  const recent=[...dedup.values()]
+    .sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt))
+    .slice(0,20);
+
+  return {
+    enabled:true,
+    overall:services.some(service=>service.status==='degraded')?'degraded':'operational',
+    checkedAt:latest?.checkedAt||'',
+    services,
+    incidents:recent,
+  };
 }
 
 export function healthTransition(previous:HealthSnapshot|null,current:HealthSnapshot) {
