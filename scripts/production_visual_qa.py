@@ -117,6 +117,12 @@ def source_mode():
   "monthly profitability":"data-mobile-profit-monthly",
   "package profitability":"data-mobile-profit-packages",
   "add-on profitability":"data-mobile-profit-addons",
+  "profit date range preset":"data-mobile-profit-period",
+  "profit custom date start":"data-mobile-profit-from",
+  "profit custom date end":"data-mobile-profit-to",
+  "monthly profit goal form":"data-mobile-profit-goal-form",
+  "profit goal projection":"data-mobile-goal-projected",
+  "recommended price apply action":"apply-mobile-bar-margin-target",
  }
  for label,needle in profit_requirements.items():
   if needle not in admin_quotes:failures.append("Mobile Bar profitability UI missing "+label+": "+needle)
@@ -126,6 +132,11 @@ def source_mode():
   "persisted mixers cost":"mixersCost: number",
   "persisted garnishes cost":"garnishesCost: number",
   "persisted cups cost":"cupsCost: number",
+  "profit settings type":"type MobileBarProfitSettings",
+  "profit settings storage":"settings/mobile-bar-profitability",
+  "profit settings action":"update-mobile-bar-profit-settings",
+  "margin target action":"apply-mobile-bar-margin-target",
+  "margin adjustment line":"margin-target-adjustment",
  }.items():
   if needle not in admin_quotes_api:failures.append("Mobile Bar profitability API missing "+label+": "+needle)
 

@@ -85,6 +85,10 @@ type ProfitModel = {
   notes: string;
   updatedAt: string;
 };
+type MobileBarProfitSettings = {
+  monthlyGrossProfitTarget: number;
+  updatedAt: string;
+};
 
 type SalesRecord = {
   id: string;
@@ -222,6 +226,22 @@ async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
 async function writeSalesIndex(context: Context, records: SalesRecord[]) {
   const store = salesStoreFor(context);
   await store.setJSON('records/index', records.slice(0, 1500));
+}
+async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
+  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as MobileBarProfitSettings | null;
+  return {
+    monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    updatedAt: cleanText(saved?.updatedAt || '', 60),
+  };
+}
+
+async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
+  const settings: MobileBarProfitSettings = {
+    monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    updatedAt: new Date().toISOString(),
+  };
+  await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
+  return settings;
 }
 
 async function saveRecord(context: Context, record: SalesRecord, records: SalesRecord[]) {
@@ -954,7 +974,13 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'GET') {
     const url = new URL(req.url);
     const q = cleanText(url.searchParams.get('q'), 120).toLowerCase();
-    const [allQuotes, records, events, trashRaw] = await Promise.all([listQuotes(context), readSalesIndex(context), readEvents(context), readTrashIndex(context)]);
+    const [allQuotes, records, events, trashRaw, mobileBarProfitSettings] = await Promise.all([
+      listQuotes(context),
+      readSalesIndex(context),
+      readEvents(context),
+      readTrashIndex(context),
+      readMobileBarProfitSettings(context),
+    ]);
     const trash = await purgeExpiredTrash(context, trashRaw);
 
     const filteredQuotes = q ? allQuotes.filter((quote) => [
@@ -994,6 +1020,7 @@ export default async (req: Request, context: Context) => {
       analytics: quoteAnalytics(allQuotes),
       funnel: funnelAnalytics(events, records),
       mobileBarAnalytics: mobileBarAnalytics(records),
+      mobileBarProfitSettings,
       conversions,
       reminders,
       records: enrichedRecords,
@@ -1249,6 +1276,14 @@ export default async (req: Request, context: Context) => {
     return Response.json({ ok: true, record, convertedSourceId: source.id });
   }
 
+  if (payload.action === 'update-mobile-bar-profit-settings') {
+    const settings = await writeMobileBarProfitSettings(context, payload.settings || {});
+    await appendEvent(context, {
+      type: 'mobile_bar_profit_settings_updated',
+      detail: 'Mobile Bar monthly gross-profit target updated to ' + settings.monthlyGrossProfitTarget.toFixed(2) + '.',
+    });
+    return Response.json({ ok: true, settings }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
   if (payload.action === 'update-profit-model') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
     if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
@@ -1269,6 +1304,99 @@ export default async (req: Request, context: Context) => {
     return Response.json({ ok: true, record });
   }
 
+  if (payload.action === 'apply-mobile-bar-margin-target') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
+    if (!record?.proposal) return Response.json({ error: 'Proposal not found.' }, { status: 404 });
+    if (['accepted','booked'].includes(record.proposal.status) || record.stage === 'booked') {
+      return Response.json({ error: 'Accepted or booked proposals are locked from one-click repricing.' }, { status: 409 });
+    }
+
+    const targetMargin = Math.round(finite(payload.targetMargin, 0, 100));
+    if (![40,50,60].includes(targetMargin)) {
+      return Response.json({ error: 'Target margin must be 40%, 50%, or 60%.' }, { status: 400 });
+    }
+    const targetTotal = Math.round(finite(payload.targetTotal, 0, 10_000_000) * 100) / 100;
+    if (targetTotal <= 0) return Response.json({ error: 'Valid target total required.' }, { status: 400 });
+
+    const current = record.proposal;
+    const currentTotal = Math.max(0, finite(current.total));
+    if (targetTotal + 0.01 < currentTotal) {
+      return Response.json({ error: 'One-click margin pricing cannot reduce the existing proposal total.' }, { status: 400 });
+    }
+
+    const preserved = (current.lineItems || []).filter((line) => line.id !== 'margin-target-adjustment');
+    const baseSubtotal = preserved.reduce((sum, line) => sum + finite(line.amount), 0);
+    const discount = Math.min(baseSubtotal, finite(current.discountAmount));
+    const taxRate = finite(current.taxRate, 0, 100);
+    const taxMultiplier = 1 + taxRate / 100;
+    const requiredTaxable = taxMultiplier > 0 ? targetTotal / taxMultiplier : targetTotal;
+    const requiredSubtotal = Math.max(0, requiredTaxable + discount);
+    const adjustment = Math.max(0, Math.round((requiredSubtotal - baseSubtotal) * 100) / 100);
+    const lineItems = [...preserved];
+    if (adjustment > 0.004) {
+      lineItems.push({
+        id: 'margin-target-adjustment',
+        description: 'Margin target adjustment (' + targetMargin + '% gross margin)',
+        quantity: 1,
+        unitPrice: adjustment,
+        amount: adjustment,
+        custom: false,
+      });
+    }
+
+    const subtotal = Math.round(lineItems.reduce((sum, line) => sum + finite(line.amount), 0) * 100) / 100;
+    const discountAmount = Math.min(subtotal, finite(current.discountAmount));
+    const taxable = Math.max(0, subtotal - discountAmount);
+    const taxAmount = Math.round(taxable * taxRate) / 100;
+    const total = Math.round((taxable + taxAmount) * 100) / 100;
+
+    const oldSchedule = Array.isArray(current.paymentSchedule) ? current.paymentSchedule : [];
+    const oldScheduleTotal = oldSchedule.reduce((sum, item) => sum + finite(item.amount), 0);
+    let paymentSchedule: PaymentItem[] = [];
+    if (oldSchedule.length && oldScheduleTotal > 0) {
+      let allocated = 0;
+      paymentSchedule = oldSchedule.map((item, index) => {
+        const amount = index === oldSchedule.length - 1
+          ? Math.max(0, Math.round((total - allocated) * 100) / 100)
+          : Math.max(0, Math.round((finite(item.amount) / oldScheduleTotal) * total * 100) / 100);
+        allocated += amount;
+        return { ...item, amount };
+      });
+    } else {
+      const deposit = Math.round(total * 0.10 * 100) / 100;
+      const remaining = Math.max(0, total - deposit);
+      const second = Math.round((remaining / 2) * 100) / 100;
+      paymentSchedule = [
+        { label: 'Reservation deposit', dueDate: '', amount: deposit },
+        { label: 'Second payment', dueDate: record.customer?.eventDate ? offsetDate(record.customer.eventDate, -90) : '', amount: second },
+        { label: 'Final payment', dueDate: record.customer?.eventDate ? offsetDate(record.customer.eventDate, -60) : '', amount: Math.round((remaining - second) * 100) / 100 },
+      ];
+    }
+
+    record.proposal = {
+      ...current,
+      lineItems,
+      subtotal,
+      discountAmount,
+      taxRate,
+      taxAmount,
+      total,
+      depositAmount: currentTotal > 0
+        ? Math.min(total, Math.round((finite(current.depositAmount) / currentTotal) * total * 100) / 100)
+        : Math.round(total * 0.10 * 100) / 100,
+      paymentSchedule,
+    };
+    record.updatedAt = new Date().toISOString();
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'mobile_bar_margin_price_applied',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: 'Applied ' + targetMargin + '% Mobile Bar target price: ' + total.toFixed(2) + '.',
+    });
+    return Response.json({ ok: true, record, targetMargin, targetTotal: total }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
   if (payload.action === 'update-proposal') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
     if (!record) return Response.json({ error: 'Proposal not found.' }, { status: 404 });
