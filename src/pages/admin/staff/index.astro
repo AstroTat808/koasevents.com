@@ -1,0 +1,146 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Staff Management" description="Manage Koa’s Events staff accounts and operational roles." canonical="https://koasevents.com/admin/staff/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell max-w-6xl">
+      <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Access Control</p>
+          <h1 class="display mt-3 text-5xl">Staff Management</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Invite employees, assign Sales Rep or Manager access, deactivate accounts, and review the permission boundary without opening Netlify.</p>
+        </div>
+        <a href="/admin/" class="rounded-full bg-[var(--koa-ink)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white">Admin home</a>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">This page requires a Koa’s administrator account.</div>
+
+      <div data-app class="hidden grid gap-6">
+        <section class="grid gap-4 lg:grid-cols-3">
+          <article class="rounded-[1.4rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Sales Rep</p>
+            <h2 class="display mt-2 text-3xl">Sales work</h2>
+            <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58">Can work leads, quotes, proposals, notes, tasks and appointments. Cannot delete clients, alter workflows, publish blog posts, or change Event Ops.</p>
+          </article>
+          <article class="rounded-[1.4rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Manager</p>
+            <h2 class="display mt-2 text-3xl">Operations control</h2>
+            <p class="mt-3 text-sm leading-6 text-white/68">Includes Sales Rep access plus client cleanup/deletion, workflow/template changes, blog publishing, and Event Ops changes.</p>
+          </article>
+          <article class="rounded-[1.4rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-amber-light)]">Administrator</p>
+            <h2 class="display mt-2 text-3xl">Technical control</h2>
+            <p class="mt-3 text-sm leading-6 text-white/68">Adds Staff Management, QuickBooks connection/settings, Gallery, SEO, Security + Spam, and other technical administration.</p>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
+          <form data-invite-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">New employee</p>
+            <h2 class="display mt-2 text-4xl">Invite staff member</h2>
+            <div class="mt-5 grid gap-4">
+              <label class="grid gap-2 text-sm font-semibold">Name<input name="name" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Role<select name="role" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="sales">Sales Rep</option><option value="manager">Manager</option></select></label>
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Create + send invite</button>
+              <p data-invite-message class="text-sm leading-6 text-[var(--koa-ink)]/58"></p>
+            </div>
+          </form>
+
+          <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <div class="flex flex-wrap items-end justify-between gap-3">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Identity accounts</p><h2 class="display mt-2 text-4xl">Team access</h2></div>
+              <button data-refresh type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Refresh</button>
+            </div>
+            <p data-list-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
+            <div data-user-list class="mt-5 grid gap-3"></div>
+          </section>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getUser } from '@netlify/identity';
+    const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const app=document.querySelector('[data-app]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const list=document.querySelector('[data-user-list]');
+    const listMessage=document.querySelector('[data-list-message]');
+    const inviteForm=document.querySelector('[data-invite-form]');
+    const inviteMessage=document.querySelector('[data-invite-message]');
+
+    function roles(user){
+      const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
+      return sources.find(Array.isArray)||[];
+    }
+    function isAdmin(user){
+      const email=String(user?.email||'').trim().toLowerCase();
+      return approvedAdminEmails.has(email)||roles(user).map((r)=>String(r).toLowerCase()).includes('admin');
+    }
+    async function api(body){
+      const options=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'};
+      const response=await fetch('/api/admin/staff',options);
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok) throw new Error(data.error||'Staff management request failed.');
+      return data;
+    }
+    function roleLabel(role){return role==='manager'?'Manager':role==='sales'?'Sales Rep':role==='admin'?'Administrator':role==='deactivated'?'Deactivated':'No staff access';}
+    function button(label,classes,handler){
+      const b=document.createElement('button');b.type='button';b.className=classes;b.textContent=label;b.addEventListener('click',handler);return b;
+    }
+    function render(users){
+      list.innerHTML='';
+      if(!users.length){list.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No Identity users found.</p>';return;}
+      users.forEach((user)=>{
+        const card=document.createElement('article');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        const head=document.createElement('div');head.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+        const info=document.createElement('div');
+        info.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role)+'</p><h3 class="mt-1 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        info.querySelector('h3').textContent=user.name||user.email||'Unnamed user';
+        info.querySelector('p:last-child').textContent=[user.email,user.lastSignInAt?'Last sign-in '+new Date(user.lastSignInAt).toLocaleString():'Never signed in'].filter(Boolean).join(' · ');
+        const controls=document.createElement('div');controls.className='flex flex-wrap items-center gap-2';
+        if(user.protected||user.role==='admin'){
+          const badge=document.createElement('span');badge.className='rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';badge.textContent='Protected admin';controls.appendChild(badge);
+        }else{
+          const select=document.createElement('select');select.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
+          select.innerHTML='<option value="sales">Sales Rep</option><option value="manager">Manager</option>';
+          select.value=user.role==='manager'?'manager':'sales';
+          controls.appendChild(select);
+          controls.appendChild(button('Save role','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{
+            try{listMessage.textContent='Saving role…';await api({action:user.role==='deactivated'?'reactivate':'set-role',userId:user.id,role:select.value});await load();listMessage.textContent='Role updated.';}catch(err){listMessage.textContent=err.message;}
+          }));
+          if(user.role==='deactivated'){
+            controls.appendChild(button('Reactivate','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800',async()=>{try{await api({action:'reactivate',userId:user.id,role:select.value});await load();}catch(err){listMessage.textContent=err.message;}}));
+          }else{
+            controls.appendChild(button('Deactivate','rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-amber-800',async()=>{if(!confirm('Deactivate '+user.email+'? They will lose staff access.'))return;try{await api({action:'deactivate',userId:user.id});await load();}catch(err){listMessage.textContent=err.message;}}));
+          }
+          controls.appendChild(button('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{if(!confirm('Permanently delete '+user.email+' from Koa’s Identity?'))return;if(!confirm('Final confirmation: this removes the account, not just access.'))return;try{await api({action:'delete',userId:user.id});await load();}catch(err){listMessage.textContent=err.message;}}));
+        }
+        head.append(info,controls);card.appendChild(head);list.appendChild(card);
+      });
+    }
+    async function load(){
+      try{listMessage.textContent='Loading staff…';const data=await api();render(data.users||[]);listMessage.textContent=(data.users||[]).length+' account'+((data.users||[]).length===1?'':'s')+'.';}
+      catch(err){listMessage.textContent=err.message;}
+    }
+
+    inviteForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();const data=new FormData(inviteForm);inviteMessage.textContent='Creating staff account…';
+      try{
+        const result=await api({action:'invite',name:data.get('name'),email:data.get('email'),role:data.get('role')});
+        if(result.inviteEmailSent) inviteMessage.textContent='Account created and invitation email sent.';
+        else inviteMessage.textContent='Account created, but the email could not be sent. Temporary password: '+result.temporaryPassword;
+        inviteForm.reset();await load();
+      }catch(err){inviteMessage.textContent=err.message;}
+    });
+    document.querySelector('[data-refresh]')?.addEventListener('click',load);
+
+    const user=await getUser();
+    const ok=isAdmin(user);
+    app?.classList.toggle('hidden',!ok);
+    unauthorized?.classList.toggle('hidden',ok);
+    if(ok) await load();
+  </script>
+</BaseLayout>
