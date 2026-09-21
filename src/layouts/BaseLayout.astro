@@ -41,6 +41,8 @@ const robotsContent = noindex
   ? 'noindex, nofollow, noarchive'
   : 'index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1';
 const buildCommit = String(process.env.COMMIT_REF || '').trim();
+const deployId = String(process.env.DEPLOY_ID || '').trim();
+const buildTime = new Date().toISOString();
 
 const breadcrumbLabelMap: Record<string, string> = {
   about: 'About',
@@ -255,6 +257,8 @@ const seoSchema = {
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
     {buildCommit && <meta name="koa-build-commit" content={buildCommit} />}
+    {deployId && <meta name="koa-deploy-id" content={deployId} />}
+    <meta name="koa-build-time" content={buildTime} />
     <title>{title}</title>
     <meta name="description" content={description} />
     <meta name="robots" content={robotsContent} />
