@@ -1385,10 +1385,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('h3','display mt-2 text-3xl text-[var(--koa-forest)]',record.customer?.name||'Client name TBD'),
           text('p','mt-2 text-sm text-[var(--koa-ink)]/55',[record.customer?.eventDate?new Date(record.customer.eventDate+'T12:00:00').toLocaleDateString():'' ,packageLabel(recordPackage(record))].filter(Boolean).join(' · '))
         );
-        const finances=document.createElement('div'); finances.className='mt-4 grid grid-cols-2 gap-3';
+        const statusWrap=document.createElement('div'); statusWrap.className='mt-4 flex flex-wrap items-center gap-2';
+        const paymentStatus=String(summary.paymentStatus||'Balance Due');
+        const statusClass=paymentStatus==='Paid in Full'
+          ? 'bg-[var(--koa-forest)] text-white'
+          : paymentStatus==='Paid'
+            ? 'bg-[var(--koa-sand)] text-[var(--koa-forest)]'
+            : paymentStatus==='Partially Paid'
+              ? 'bg-[var(--koa-amber-light)] text-[var(--koa-forest)]'
+              : 'border border-[var(--koa-line)] text-[var(--koa-clay)]';
+        statusWrap.append(
+          text('span','rounded-full px-3 py-2 text-[.55rem] font-black uppercase tracking-[.09em] '+statusClass,paymentStatus),
+          text('span','text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/42',summary.depositPaid?'Deposit paid':'Deposit pending')
+        );
+        card.appendChild(statusWrap);
+
+        const finances=document.createElement('div'); finances.className='mt-3 grid grid-cols-3 gap-3';
         const paidBox=document.createElement('div'); paidBox.className='rounded-xl bg-white p-3'; paidBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Paid'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.paid||0)));
-        const dueBox=document.createElement('div'); dueBox.className='rounded-xl bg-white p-3'; dueBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Outstanding'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.outstanding||0)));
-        finances.append(paidBox,dueBox); card.appendChild(finances);
+        const qboDueBox=document.createElement('div'); qboDueBox.className='rounded-xl bg-white p-3'; qboDueBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','QBO balance'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.qboBalanceDue||0)));
+        const dueBox=document.createElement('div'); dueBox.className='rounded-xl bg-white p-3'; dueBox.append(text('p','text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]','Contract balance'),text('p','mt-1 font-bold text-[var(--koa-forest)]',money(summary.outstanding||0)));
+        finances.append(paidBox,qboDueBox,dueBox); card.appendChild(finances);
         if(nextPayment) card.appendChild(text('p','mt-3 text-xs leading-5 text-[var(--koa-ink)]/55','Next: '+nextPayment.label+' · '+money(nextPayment.amount)+(nextPayment.dueDate?' · due '+nextPayment.dueDate:'')));
 
         const actions=document.createElement('div'); actions.className='mt-4 flex flex-wrap gap-2';
