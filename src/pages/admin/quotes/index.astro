@@ -520,8 +520,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </div>
       </section>
 
-      <section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
-        <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">Tracks when QuickBooks and CRM balances went out of sync, changed, or were corrected.</p></div>
+      <section data-reconciliation-history-block="proposal" class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">Tracks when QuickBooks and CRM balances went out of sync, changed, or were corrected.</p></div>
+          <div class="flex flex-wrap gap-2">
+            <select data-history-status class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold"><option value="all">All statuses</option><option value="unresolved">Unresolved issues</option><option value="resolved">Resolved issues</option></select>
+            <select data-history-days class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold"><option value="all">All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
+          </div>
+        </div>
         <div data-proposal-reconciliation-history class="mt-4 grid gap-3"></div>
       </section>
 
@@ -579,8 +585,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Remaining Balance</p><p data-booking-remaining class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
         </div>
       </section>
-      <section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
-        <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">State changes from automatic hourly reconciliation and manual rechecks.</p></div>
+      <section data-reconciliation-history-block="booking" class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">State changes from automatic hourly reconciliation and manual rechecks.</p></div>
+          <div class="flex flex-wrap gap-2">
+            <select data-history-status class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold"><option value="all">All statuses</option><option value="unresolved">Unresolved issues</option><option value="resolved">Resolved issues</option></select>
+            <select data-history-days class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold"><option value="all">All time</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option></select>
+          </div>
+        </div>
         <div data-booking-reconciliation-history class="mt-4 grid gap-3"></div>
       </section>
       <div class="mt-6 flex flex-wrap gap-2">
@@ -928,58 +940,78 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderReconciliationHistory(container,record) {
       if(!container)return;
-      container.innerHTML='';
-      const qbo=record?.accounting?.quickbooks||{};
-      const history=Array.isArray(qbo.reconciliationHistory)?qbo.reconciliationHistory:[];
-      const current=qbo.reconciliationState||null;
-      if(current){
-        const status=document.createElement('div');
-        status.className='rounded-xl '+(current.open?'border border-red-200 bg-red-50':'border border-emerald-200 bg-emerald-50')+' p-3 text-xs '+(current.open?'text-red-900':'text-emerald-900');
-        status.textContent=current.open
-          ? 'Current status: mismatch open · '+(Array.isArray(current.issues)?current.issues.length:0)+' issue'+((current.issues||[]).length===1?'':'s')
-          : 'Current status: reconciled';
-        container.appendChild(status);
-      }
-      if(!history.length){
-        container.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No reconciliation transitions recorded yet.'));
-        return;
-      }
-      history.slice(0,20).forEach((entry)=>{
-        const card=document.createElement('article');
-        const resolved=entry.type==='resolved';
-        const changed=entry.type==='mismatch_changed';
-        card.className='rounded-xl border p-4 '+(resolved?'border-emerald-200 bg-emerald-50/55':changed?'border-amber-200 bg-amber-50/55':'border-red-200 bg-red-50/55');
-        const label=resolved?'Resolved':changed?'Mismatch changed':'Mismatch detected';
-        const top=document.createElement('div');top.className='flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between';
-        top.append(
-          text('strong','text-sm '+(resolved?'text-emerald-900':changed?'text-amber-900':'text-red-900'),label),
-          text('span','text-xs text-[var(--koa-ink)]/45',dateTime(entry.createdAt)+(entry.source?' · '+entry.source:''))
-        );
-        card.appendChild(top);
-        const before=Array.isArray(entry.before)?entry.before:[];
-        const after=Array.isArray(entry.after)?entry.after:[];
-        const issues=resolved?before:after;
-        if(issues.length){
-          const list=document.createElement('div');list.className='mt-3 grid gap-2';
-          issues.forEach((issue)=>{
-            const row=document.createElement('div');row.className='rounded-lg bg-white px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/70';
-            const expected=issue.expected==null?'—':money(issue.expected);
-            const actual=issue.actual==null?'—':money(issue.actual);
-            const delta=issue.delta==null?'':' · difference '+money(issue.delta);
-            row.textContent=(issue.label||issue.code||'Accounting value')+': expected '+expected+', actual '+actual+delta;
-            list.appendChild(row);
-          });
-          card.appendChild(list);
+      const block=container.closest('[data-reconciliation-history-block]');
+      const statusFilter=block?.querySelector('[data-history-status]');
+      const daysFilter=block?.querySelector('[data-history-days]');
+      const renderRows=()=>{
+        container.innerHTML='';
+        const qbo=record?.accounting?.quickbooks||{};
+        const history=Array.isArray(qbo.reconciliationHistory)?qbo.reconciliationHistory:[];
+        const current=qbo.reconciliationState||null;
+        const status=String(statusFilter?.value||'all');
+        const dayValue=String(daysFilter?.value||'all');
+        const cutoff=dayValue==='all'?null:Date.now()-(Number(dayValue)*86400000);
+        const filtered=history.filter((entry)=>{
+          if(status==='resolved'&&entry.type!=='resolved')return false;
+          if(status==='unresolved'&&(!current?.open||entry.type==='resolved'))return false;
+          if(cutoff){
+            const ts=Date.parse(String(entry.createdAt||''));
+            if(!Number.isFinite(ts)||ts<cutoff)return false;
+          }
+          return true;
+        });
+        if(current){
+          const statusCard=document.createElement('div');
+          statusCard.className='rounded-xl '+(current.open?'border border-red-200 bg-red-50':'border border-emerald-200 bg-emerald-50')+' p-3 text-xs '+(current.open?'text-red-900':'text-emerald-900');
+          statusCard.textContent=current.open
+            ? 'Current status: mismatch open · '+(Array.isArray(current.issues)?current.issues.length:0)+' issue'+((current.issues||[]).length===1?'':'s')
+            : 'Current status: reconciled';
+          container.appendChild(statusCard);
         }
-        if(changed&&before.length){
-          const prior=document.createElement('details');prior.className='mt-3 text-xs text-[var(--koa-ink)]/55';
-          const summary=document.createElement('summary');summary.className='cursor-pointer font-semibold';summary.textContent='Show previous mismatch state';
-          prior.appendChild(summary);
-          before.forEach((issue)=>prior.appendChild(text('p','mt-2 pl-3',(issue.label||issue.code||'Accounting value')+' · expected '+(issue.expected==null?'—':money(issue.expected))+' · actual '+(issue.actual==null?'—':money(issue.actual)))));
-          card.appendChild(prior);
+        if(!filtered.length){
+          container.appendChild(text('p','text-sm text-[var(--koa-ink)]/45',history.length?'No reconciliation history matches these filters.':'No reconciliation transitions recorded yet.'));
+          return;
         }
-        container.appendChild(card);
-      });
+        filtered.slice(0,50).forEach((entry)=>{
+          const card=document.createElement('article');
+          const resolved=entry.type==='resolved';
+          const changed=entry.type==='mismatch_changed';
+          card.className='rounded-xl border p-4 '+(resolved?'border-emerald-200 bg-emerald-50/55':changed?'border-amber-200 bg-amber-50/55':'border-red-200 bg-red-50/55');
+          const label=resolved?'Resolved':changed?'Mismatch changed':'Mismatch detected';
+          const top=document.createElement('div');top.className='flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between';
+          top.append(
+            text('strong','text-sm '+(resolved?'text-emerald-900':changed?'text-amber-900':'text-red-900'),label),
+            text('span','text-xs text-[var(--koa-ink)]/45',dateTime(entry.createdAt)+(entry.source?' · '+entry.source:''))
+          );
+          card.appendChild(top);
+          const before=Array.isArray(entry.before)?entry.before:[];
+          const after=Array.isArray(entry.after)?entry.after:[];
+          const issues=resolved?before:after;
+          if(issues.length){
+            const list=document.createElement('div');list.className='mt-3 grid gap-2';
+            issues.forEach((issue)=>{
+              const row=document.createElement('div');row.className='rounded-lg bg-white px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/70';
+              const expected=issue.expected==null?'—':money(issue.expected);
+              const actual=issue.actual==null?'—':money(issue.actual);
+              const delta=issue.delta==null?'':' · difference '+money(issue.delta);
+              row.textContent=(issue.label||issue.code||'Accounting value')+': expected '+expected+', actual '+actual+delta;
+              list.appendChild(row);
+            });
+            card.appendChild(list);
+          }
+          if(changed&&before.length){
+            const prior=document.createElement('details');prior.className='mt-3 text-xs text-[var(--koa-ink)]/55';
+            const summary=document.createElement('summary');summary.className='cursor-pointer font-semibold';summary.textContent='Show previous mismatch state';
+            prior.appendChild(summary);
+            before.forEach((issue)=>prior.appendChild(text('p','mt-2 pl-3',(issue.label||issue.code||'Accounting value')+' · expected '+(issue.expected==null?'—':money(issue.expected))+' · actual '+(issue.actual==null?'—':money(issue.actual)))));
+            card.appendChild(prior);
+          }
+          container.appendChild(card);
+        });
+      };
+      if(statusFilter)statusFilter.onchange=renderRows;
+      if(daysFilter)daysFilter.onchange=renderRows;
+      renderRows();
     }
 
     function renderAccountingAlert() {
