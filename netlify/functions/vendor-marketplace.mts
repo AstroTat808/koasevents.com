@@ -21,12 +21,32 @@ function score(v:any,record:any,event:any){
   if(/wedding/.test(kind)&&/wedding|bridal|elopement/.test(specialties))n+=5;
   return Math.min(100,Math.round(n));
 }
+function defaultRequirements(){
+  return [
+    ['Wedding Planner','recommended'],['Photographer','recommended'],['Videographer','optional'],['Caterer','recommended'],
+    ['Florist','optional'],['Officiant','recommended'],['DJ','optional'],['Live Musician','optional'],['Entertainment','optional'],
+    ['Hair & Makeup','optional'],['Cake / Dessert','optional'],['Rentals','optional'],['Transportation','optional'],['Bartender / Mobile Bar','optional'],
+  ].map(([category,importance])=>({category,importance,note:''}));
+}
 function coreProgress(event:any){
-  const core=['Wedding Planner','Photographer','Caterer','Florist','Officiant','DJ'];
   const selected=new Set((event.vendors||[]).map((v:any)=>String(v.role||'')));
-  const rows=core.map(category=>({category,complete:selected.has(category)}));
-  const done=rows.filter(x=>x.complete).length;
-  return {rows,complete:done,total:rows.length,percent:Math.round(done/rows.length*100)};
+  const requirements=Array.isArray(event.vendorRequirements)?event.vendorRequirements:defaultRequirements();
+  const rows=requirements.map((r:any)=>({category:String(r.category||''),importance:String(r.importance||'optional'),note:String(r.note||''),complete:selected.has(String(r.category||''))}));
+  const active=rows.filter((r:any)=>r.importance!=='not_needed');
+  const required=active.filter((r:any)=>r.importance==='required');
+  const recommended=active.filter((r:any)=>r.importance==='recommended');
+  const requiredDone=required.filter((r:any)=>r.complete).length;
+  const recommendedDone=recommended.filter((r:any)=>r.complete).length;
+  const weightedTotal=required.length*2+recommended.length;
+  const weightedDone=requiredDone*2+recommendedDone;
+  return {
+    rows,
+    requiredMissing:required.filter((r:any)=>!r.complete),
+    recommendedMissing:recommended.filter((r:any)=>!r.complete),
+    complete:requiredDone+recommendedDone,
+    total:required.length+recommended.length,
+    percent:weightedTotal?Math.round(weightedDone/weightedTotal*100):100,
+  };
 }
 function publicVendor(v:any,reviews:any[],record:any,event:any){
   const rows=reviews.filter(r=>r.vendorId===v.id&&r.status==='published');
