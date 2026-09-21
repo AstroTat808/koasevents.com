@@ -86,3 +86,26 @@ export async function syncVendorInsuranceToUpcomingEvents(context:Context,vendor
   }
   return updated;
 }
+
+
+export function applyMasterInsuranceToAssignments(assignments:any[],vendors:any[],eventDateValue:unknown){
+  const byId=new Map((Array.isArray(vendors)?vendors:[]).map((vendor:any)=>[String(vendor?.id||''),vendor]));
+  const now=new Date().toISOString();
+  return (Array.isArray(assignments)?assignments:[]).map((row:any)=>{
+    const vendorId=String(row?.marketplaceVendorId||'');
+    if(!vendorId)return row;
+    const vendor=byId.get(vendorId);
+    if(!vendor)return row;
+    const result=masterInsuranceForEvent(vendor,eventDateValue);
+    return {
+      ...row,
+      insuranceStatus:result.status,
+      insuranceSource:'vendor_master',
+      insuranceExpiresAt:result.expiresAt,
+      insuranceVerifiedAt:result.verifiedAt,
+      insuranceIssue:result.issue,
+      insuranceDocumentId:result.documentId,
+      insuranceSyncedAt:now,
+    };
+  });
+}
