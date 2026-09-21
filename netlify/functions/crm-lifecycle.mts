@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 import { ensureLifecycle, markLifecycleEvent } from './_shared/lifecycle';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
+import { appendCleanupAudit } from './_shared/crm-cleanup-audit';
 
 const HST=-10*60*60*1000;
 function hstDate(){return new Date(Date.now()+HST).toISOString().slice(0,10);}
@@ -19,9 +20,31 @@ export default async(_req:Request,context:Context)=>{
   for(const record of [...records].slice(0,1500)){
     if(!record?.id || !records.some(r=>r.id===record.id))continue;
     const cleanup=assessCrmRecord(record);
+    const classificationKey=[record.id,cleanup.disposition,cleanup.score,...cleanup.reasonCodes].join('|');
     if(cleanup.autoTrash && cleanupMode==='auto_trash'){
+      await appendCleanupAudit(context,{
+        recordId:record.id,
+        action:'auto_trashed',
+        actor:'system',
+        detail:'High-confidence bogus/test client automatically moved to 30-day Trash.',
+        score:cleanup.score,
+        reasons:cleanup.reasons,
+        chainIds:[record.id],
+        dedupeKey:'auto-trash|'+classificationKey,
+      });
       records=await autoTrashChain(context,record,records);
       continue;
+    }
+    if((cleanup.disposition==='review'||cleanup.disposition==='auto_trash') && !cleanup.approvedLegitimate){
+      await appendCleanupAudit(context,{
+        recordId:record.id,
+        action:'auto_flagged',
+        actor:'system',
+        detail:'Client automatically flagged for review under cleanup policy '+cleanupMode+'.',
+        score:cleanup.score,
+        reasons:cleanup.reasons,
+        dedupeKey:'auto-flag|'+classificationKey+'|'+cleanupMode,
+      });
     }
     await ensureLifecycle(context,record);
     if(record.stage==='booked'&&record.customer?.eventDate&&String(record.customer.eventDate)<today){
