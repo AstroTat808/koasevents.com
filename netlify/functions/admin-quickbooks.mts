@@ -5,7 +5,9 @@ import {
   completeOAuth,
   createOAuthState,
   disconnectQuickBooks,
+  getQuickBooksCatalog,
   getQuickBooksConnection,
+  getQuickBooksGetSettings,
   getQuickBooksSettings,
   qboCreate,
   qboGet,
@@ -14,6 +16,8 @@ import {
   qboUpdate,
   qboOperation,
   quickBooksConfiguration,
+  saveQuickBooksCatalog,
+  saveQuickBooksGetSettings,
   saveQuickBooksSettings,
 } from './_shared/quickbooks';
 
@@ -335,9 +339,11 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
+    const [connection, settings, catalog, getSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
+      getQuickBooksCatalog(context),
+      getQuickBooksGetSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
@@ -375,6 +381,8 @@ export default async (req: Request, context: Context) => {
         refreshExpiresAt: connection.refreshExpiresAt || '',
       } : { connected: false },
       settings,
+      catalog,
+      getSettings,
       webhookReceipt: webhookReceipt || null,
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
@@ -420,6 +428,159 @@ export default async (req: Request, context: Context) => {
     if (!itemId) return Response.json({ error: 'Select a QuickBooks service item.' }, { status: 400 });
     const settings = await saveQuickBooksSettings(context, { serviceItemId: itemId, serviceItemName: itemName });
     return Response.json({ ok: true, settings });
+  }
+
+  if (action === 'save-get-settings') {
+    const customerRate = Number(payload?.customerRate ?? 4.5);
+    if (!Number.isFinite(customerRate) || customerRate < 0 || customerRate > 4.712) {
+      return Response.json({ error: 'Hawaiʻi GET customer rate must be between 0% and 4.712%.' }, { status: 400 });
+    }
+    const getSettings = await saveQuickBooksGetSettings(context, {
+      enabled: payload?.enabled !== false,
+      label: clean(payload?.label || 'Hawaiʻi GET', 80),
+      customerRate,
+      quickBooksItemId: clean(payload?.quickBooksItemId, 80),
+      quickBooksItemName: clean(payload?.quickBooksItemName, 100),
+    });
+    return Response.json({ ok: true, getSettings });
+  }
+
+  if (action === 'save-catalog-item') {
+    const existingCatalog = await getQuickBooksCatalog(context);
+    const requestedId = clean(payload?.item?.id, 80);
+    const id = requestedId || ('catalog-' + idSuffix().toLowerCase());
+    const name = clean(payload?.item?.name, 100);
+    const description = clean(payload?.item?.description, 1000);
+    const category = ['service','rental','mileage','fee'].includes(String(payload?.item?.category || ''))
+      ? String(payload.item.category)
+      : 'service';
+    const unitLabel = clean(payload?.item?.unitLabel || (category === 'mileage' ? 'mile' : 'each'), 40);
+    const unitPrice = Math.max(0, Math.round(Number(payload?.item?.unitPrice || 0) * 100) / 100);
+    const active = payload?.item?.active !== false;
+    if (!name) return Response.json({ error: 'Catalog item name is required.' }, { status: 400 });
+
+    const previous = existingCatalog.find((entry: any) => entry.id === id);
+    const defaultSettings = await getQuickBooksSettings(context);
+    const fallbackItemId = clean(defaultSettings?.serviceItemId, 80);
+    let incomeAccountId = clean(payload?.item?.incomeAccountId || previous?.incomeAccountId, 80);
+    let incomeAccountName = clean(payload?.item?.incomeAccountName || previous?.incomeAccountName, 160);
+    let quickBooksType = String(payload?.item?.quickBooksType || previous?.quickBooksType || (category === 'rental' ? 'NonInventory' : 'Service')) === 'NonInventory'
+      ? 'NonInventory'
+      : 'Service';
+
+    if ((!incomeAccountId || !incomeAccountName) && fallbackItemId) {
+      try {
+        const fallbackData: any = await qboGet(context, 'item', fallbackItemId);
+        const fallback = fallbackData?.Item;
+        if (fallback) {
+          incomeAccountId ||= String(fallback?.IncomeAccountRef?.value || '');
+          incomeAccountName ||= String(fallback?.IncomeAccountRef?.name || '');
+        }
+      } catch {}
+    }
+    if (!incomeAccountId) {
+      return Response.json({ error: 'Choose an income account by first mapping a default QuickBooks service item, or select an existing QuickBooks item.' }, { status: 409 });
+    }
+
+    let qboItem: any = null;
+    const quickBooksItemId = clean(payload?.item?.quickBooksItemId || previous?.quickBooksItemId, 80);
+    if (quickBooksItemId) {
+      const currentData: any = await qboGet(context, 'item', quickBooksItemId);
+      const current = currentData?.Item;
+      if (current?.Id && current?.SyncToken != null) {
+        const updated: any = await qboUpdate(context, 'item', {
+          Id: String(current.Id),
+          SyncToken: String(current.SyncToken),
+          Name: name,
+          Description: description || undefined,
+          Active: active,
+          Type: quickBooksType,
+          UnitPrice: unitPrice,
+          IncomeAccountRef: { value: incomeAccountId, name: incomeAccountName || undefined },
+        });
+        qboItem = updated?.Item;
+      }
+    }
+    if (!qboItem) {
+      const created: any = await qboCreate(context, 'item', {
+        Name: name,
+        Description: description || undefined,
+        Active: active,
+        Type: quickBooksType,
+        UnitPrice: unitPrice,
+        IncomeAccountRef: { value: incomeAccountId, name: incomeAccountName || undefined },
+      });
+      qboItem = created?.Item;
+    }
+    if (!qboItem?.Id) throw new Error('QuickBooks catalog item could not be saved.');
+
+    const item = {
+      id,
+      name,
+      description,
+      category,
+      unitLabel,
+      unitPrice,
+      active,
+      quickBooksItemId: String(qboItem.Id),
+      quickBooksItemName: String(qboItem.Name || name),
+      quickBooksType: String(qboItem.Type || quickBooksType) === 'NonInventory' ? 'NonInventory' : 'Service',
+      incomeAccountId: String(qboItem?.IncomeAccountRef?.value || incomeAccountId),
+      incomeAccountName: String(qboItem?.IncomeAccountRef?.name || incomeAccountName),
+      updatedAt: new Date().toISOString(),
+    };
+    const catalog = [item, ...existingCatalog.filter((entry: any) => entry.id !== id)]
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+    await saveQuickBooksCatalog(context, catalog as any);
+    return Response.json({ ok: true, item, catalog });
+  }
+
+  if (action === 'archive-catalog-item') {
+    const id = clean(payload?.id, 80);
+    const existingCatalog = await getQuickBooksCatalog(context);
+    const item = existingCatalog.find((entry: any) => entry.id === id);
+    if (!item) return Response.json({ error: 'Catalog item not found.' }, { status: 404 });
+    if (item.quickBooksItemId) {
+      const currentData: any = await qboGet(context, 'item', item.quickBooksItemId);
+      const current = currentData?.Item;
+      if (current?.Id && current?.SyncToken != null) {
+        await qboUpdate(context, 'item', { Id: String(current.Id), SyncToken: String(current.SyncToken), Active: false });
+      }
+    }
+    const catalog = existingCatalog.map((entry: any) => entry.id === id ? { ...entry, active: false, updatedAt: new Date().toISOString() } : entry);
+    await saveQuickBooksCatalog(context, catalog as any);
+    return Response.json({ ok: true, catalog });
+  }
+
+  if (action === 'import-qbo-items') {
+    const data: any = await qboQuery(context, 'select * from Item where Active = true maxresults 1000');
+    const existing = await getQuickBooksCatalog(context);
+    const byQboId = new Map(existing.map((entry: any) => [entry.quickBooksItemId, entry]));
+    const imported = (data?.QueryResponse?.Item || [])
+      .filter((item: any) => ['Service','NonInventory'].includes(String(item.Type || '')))
+      .map((item: any) => {
+        const prior: any = byQboId.get(String(item.Id));
+        return {
+          id: prior?.id || ('qbo-' + String(item.Id)),
+          name: String(item.Name || ''),
+          description: String(item.Description || ''),
+          category: prior?.category || (String(item.Type || '') === 'NonInventory' ? 'rental' : 'service'),
+          unitLabel: prior?.unitLabel || 'each',
+          unitPrice: Math.max(0, Number(item.UnitPrice || 0)),
+          active: item.Active !== false,
+          quickBooksItemId: String(item.Id),
+          quickBooksItemName: String(item.Name || ''),
+          quickBooksType: String(item.Type || '') === 'NonInventory' ? 'NonInventory' : 'Service',
+          incomeAccountId: String(item?.IncomeAccountRef?.value || ''),
+          incomeAccountName: String(item?.IncomeAccountRef?.name || ''),
+          updatedAt: new Date().toISOString(),
+        };
+      }).filter((item: any) => item.name);
+    const importedIds = new Set(imported.map((entry: any) => entry.quickBooksItemId));
+    const catalog = [...imported, ...existing.filter((entry: any) => !importedIds.has(entry.quickBooksItemId))]
+      .sort((a: any, b: any) => a.name.localeCompare(b.name));
+    await saveQuickBooksCatalog(context, catalog as any);
+    return Response.json({ ok: true, catalog, importedCount: imported.length });
   }
 
   if (action === 'cleanup-production-smoke-test') {
