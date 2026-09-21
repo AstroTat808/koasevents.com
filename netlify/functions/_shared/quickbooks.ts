@@ -342,7 +342,7 @@ export async function completeOAuth(context: Context, requestUrl: string) {
   const companyName = String(company?.CompanyInfo?.CompanyName || company?.CompanyInfo?.LegalName || '');
   if (companyName) {
     connection.companyName = companyName;
-    await store.setJSON('quickbooks/connection', connection);
+    await store.setJSON(connectionKey(), connection);
   }
   return connection;
 }
@@ -460,6 +460,23 @@ export async function qboGet(context: Context, entity: string, entityId: string)
     '/v3/company/' + encodeURIComponent(connection.realmId) + '/' + entity.toLowerCase() + '/' + encodeURIComponent(entityId),
     { method: 'GET' },
   );
+}
+
+export async function qboOperation(
+  context: Context,
+  entity: string,
+  entityId: string,
+  syncToken: string,
+  operation: 'delete' | 'void',
+) {
+  const connection = await getQuickBooksConnection(context);
+  if (!connection) throw new Error('QuickBooks is not connected.');
+  const path = '/v3/company/' + encodeURIComponent(connection.realmId) + '/' +
+    entity.toLowerCase() + '?operation=' + encodeURIComponent(operation);
+  return qboRequest(context, path, {
+    method: 'POST',
+    body: JSON.stringify({ Id: entityId, SyncToken: syncToken }),
+  });
 }
 
 export async function qboSend(context: Context, entity: 'invoice' | 'estimate', entityId: string, email: string) {
