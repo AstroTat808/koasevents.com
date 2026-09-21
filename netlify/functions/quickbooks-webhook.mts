@@ -8,6 +8,7 @@ import {
   quickBooksConfiguration,
   quickBooksWebhookVerifierToken,
 } from './_shared/quickbooks';
+import { markLifecycleEvent } from './_shared/lifecycle';
 
 function integrationStore(context: Context) {
   return context.deploy.context === 'production'
@@ -273,6 +274,7 @@ async function processWebhook(context: Context, receipt: any) {
   for (const record of records) {
     if (!affected.has(record.id)) continue;
     const beforeDepositPaid = originalDepositState.get(record.id) || false;
+    const beforeStage = String(record.stage || '');
     const state = updateBookingAndTotals(record);
     await store.setJSON('records/' + record.id, record);
     await appendSalesEvent(context, {
@@ -288,6 +290,16 @@ async function processWebhook(context: Context, receipt: any) {
         quoteId: record.quoteId || '',
         detail: 'QuickBooks reservation-deposit invoice is paid in full.',
       });
+      await markLifecycleEvent(context, record, 'deposit_paid', 'Reservation deposit paid in QuickBooks.');
+    }
+    if (beforeStage !== 'booked' && record.stage === 'booked') {
+      await appendSalesEvent(context, {
+        type: 'booked',
+        recordId: record.id,
+        quoteId: record.quoteId || '',
+        detail: 'Event automatically advanced to Booked after completed agreement and paid reservation deposit.',
+      });
+      await markLifecycleEvent(context, record, 'booked', 'Booking completed; planning and event milestone tasks activated.');
     }
   }
 
