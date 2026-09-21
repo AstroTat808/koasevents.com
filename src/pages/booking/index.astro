@@ -58,18 +58,11 @@ import Footer from '../../components/Footer.astro';
 
           <section data-sign-section class="rounded-[1.4rem] border border-[var(--koa-forest)]/20 bg-[var(--koa-ivory)] p-6">
             <p class="eyebrow text-[var(--koa-clay)]">Electronic signature</p>
-            <h2 class="display mt-3 text-4xl">Sign your agreement.</h2>
-            <p class="mt-4 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/62">Your typed name, acknowledgement, and timestamp are recorded with the booking record.</p>
-            <form data-sign-form class="mt-6 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-              <label class="grid gap-2 text-sm font-semibold">Type your full legal name
-                <input name="name" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
-              </label>
-              <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign agreement</button>
-              <label class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/65 sm:col-span-2">
-                <input name="acknowledged" type="checkbox" required class="mt-1" />
-                <span>I reviewed this agreement, agree to its terms, and consent to sign electronically.</span>
-              </label>
-              <p data-sign-message class="text-sm text-[var(--koa-ink)]/58 sm:col-span-2"></p>
+            <h2 class="display mt-3 text-4xl">Sign securely with SignWell.</h2>
+            <p class="mt-4 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/62">Koa’s uses SignWell for the formal agreement signature and audit trail. Your completed agreement is automatically stored with your Koa’s client record.</p>
+            <form data-sign-form class="mt-6">
+              <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Open SignWell agreement</button>
+              <p data-sign-message class="mt-3 text-sm text-[var(--koa-ink)]/58"></p>
             </form>
           </section>
 
@@ -131,7 +124,7 @@ import Footer from '../../components/Footer.astro';
       text('[data-proposal-id]',data.proposalId||'');
       text('[data-total]',money(data.proposalTotal));
       text('[data-contract-title]',data.contract?.title||'Koa’s Events Venue & Services Agreement');
-      text('[data-contract-status]',data.contract?.status==='signed'?'Signed':'Awaiting signature');
+      text('[data-contract-status]',data.contract?.status==='signed'?'Signed':'Awaiting SignWell signature');
 
       const sections=document.querySelector('[data-contract-sections]'); sections.innerHTML='';
       (data.contract?.sections||[]).forEach((section)=>{
@@ -182,7 +175,7 @@ import Footer from '../../components/Footer.astro';
 
       bookedSection?.classList.toggle('hidden',data.status!=='booked');
       const planningLink=document.querySelector('[data-planning-link]');
-      if(planningLink) planningLink.href='/planning/?token='+encodeURIComponent(token);
+      if(planningLink) planningLink.href='/portal/?token='+encodeURIComponent(token);
     }
 
     async function load(){
@@ -194,11 +187,12 @@ import Footer from '../../components/Footer.astro';
     }
 
     signForm?.addEventListener('submit',async(event)=>{
-      event.preventDefault(); const data=new FormData(signForm); if(signMessage)signMessage.textContent='Recording signature…';
-      const response=await fetch('/api/bookings/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sign',name:data.get('name'),acknowledged:data.get('acknowledged')==='on'})});
+      event.preventDefault(); if(signMessage)signMessage.textContent='Opening secure SignWell signing…';
+      const response=await fetch('/api/bookings/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sign'})});
       const result=await response.json().catch(()=>({}));
-      if(!response.ok){if(signMessage)signMessage.textContent=result.error||'Signature could not be recorded.';return;}
-      render(result.booking);
+      if(!response.ok){if(signMessage)signMessage.textContent=result.error||'The SignWell agreement could not be opened.';return;}
+      if(result.signingUrl){window.location.href=result.signingUrl;return;}
+      if(signMessage)signMessage.textContent='SignWell has emailed the agreement to you. Check your inbox to continue.';
     });
 
     load();
