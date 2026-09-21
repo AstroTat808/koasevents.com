@@ -348,8 +348,9 @@ function bartenderAvailabilityList(input:unknown): MobileBarBartenderAvailabilit
 }
 
 async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
-  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
-  return {
+  const store=salesStoreFor(context);
+  const saved = await store.get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
+  const settings:MobileBarProfitSettings = {
     monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
     quarterlyGrossProfitTarget: finite(saved?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
     annualGrossProfitTarget: finite(saved?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
@@ -369,6 +370,13 @@ async function readMobileBarProfitSettings(context: Context): Promise<MobileBarP
     },
     updatedAt: cleanText(saved?.updatedAt || '', 60),
   };
+  const savedBartenders=Array.isArray(saved?.staffing?.bartenders)?saved!.staffing!.bartenders as any[]:[];
+  const needsIdentity=settings.staffing.bartenders.some((bartender,index)=>!cleanText(savedBartenders[index]?.portalToken,120)||!Number.isFinite(Number(savedBartenders[index]?.hourlyRate)));
+  if(needsIdentity&&settings.staffing.bartenders.length){
+    settings.updatedAt=new Date().toISOString();
+    await store.setJSON('settings/mobile-bar-profitability',settings);
+  }
+  return settings;
 }
 
 async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
