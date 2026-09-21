@@ -312,6 +312,11 @@ export type QuickBooksDepositSettings = {
   venueWeddingPercent: number;
   mobileBarPercent: number;
   privateEventPercent: number;
+  venueWeddingSecondDueDaysBefore: number;
+  venueWeddingFinalDueDaysBefore: number;
+  mobileBarFinalDueDaysBefore: number;
+  privateEventFinalDueDaysBefore: number;
+  defaultFinalDueDaysBefore: number;
   updatedAt: string;
 };
 
@@ -333,6 +338,12 @@ function cleanDepositPercent(value: unknown, fallback = 10) {
   return Math.min(100, Math.max(0, Math.round(parsed * 1000) / 1000));
 }
 
+function cleanDueDays(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(730, Math.max(0, Math.round(parsed)));
+}
+
 export async function getQuickBooksDepositSettings(context: Context): Promise<QuickBooksDepositSettings> {
   const stored = await integrationStore(context).get(depositSettingsKey(), { type: 'json' }) as any;
   return {
@@ -340,6 +351,11 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     venueWeddingPercent: cleanDepositPercent(stored?.venueWeddingPercent, 10),
     mobileBarPercent: cleanDepositPercent(stored?.mobileBarPercent, 10),
     privateEventPercent: cleanDepositPercent(stored?.privateEventPercent, 10),
+    venueWeddingSecondDueDaysBefore: cleanDueDays(stored?.venueWeddingSecondDueDaysBefore, 90),
+    venueWeddingFinalDueDaysBefore: cleanDueDays(stored?.venueWeddingFinalDueDaysBefore, 60),
+    mobileBarFinalDueDaysBefore: cleanDueDays(stored?.mobileBarFinalDueDaysBefore, 14),
+    privateEventFinalDueDaysBefore: cleanDueDays(stored?.privateEventFinalDueDaysBefore, 30),
+    defaultFinalDueDaysBefore: cleanDueDays(stored?.defaultFinalDueDaysBefore, 30),
     updatedAt: String(stored?.updatedAt || ''),
   };
 }
@@ -351,6 +367,11 @@ export async function saveQuickBooksDepositSettings(context: Context, settings: 
     venueWeddingPercent: cleanDepositPercent(settings.venueWeddingPercent, current.venueWeddingPercent),
     mobileBarPercent: cleanDepositPercent(settings.mobileBarPercent, current.mobileBarPercent),
     privateEventPercent: cleanDepositPercent(settings.privateEventPercent, current.privateEventPercent),
+    venueWeddingSecondDueDaysBefore: cleanDueDays(settings.venueWeddingSecondDueDaysBefore, current.venueWeddingSecondDueDaysBefore),
+    venueWeddingFinalDueDaysBefore: cleanDueDays(settings.venueWeddingFinalDueDaysBefore, current.venueWeddingFinalDueDaysBefore),
+    mobileBarFinalDueDaysBefore: cleanDueDays(settings.mobileBarFinalDueDaysBefore, current.mobileBarFinalDueDaysBefore),
+    privateEventFinalDueDaysBefore: cleanDueDays(settings.privateEventFinalDueDaysBefore, current.privateEventFinalDueDaysBefore),
+    defaultFinalDueDaysBefore: cleanDueDays(settings.defaultFinalDueDaysBefore, current.defaultFinalDueDaysBefore),
     updatedAt: new Date().toISOString(),
   };
   await integrationStore(context).setJSON(depositSettingsKey(), next);
