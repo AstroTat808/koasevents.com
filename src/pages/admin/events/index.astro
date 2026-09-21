@@ -6,7 +6,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     <div class="container-shell">
       <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p class="eyebrow text-[var(--koa-clay)]">Admin · Operations</p>
+          <p class="eyebrow text-[var(--koa-clay)]">Staff Workspace · Operations</p>
           <h1 class="display mt-3 text-5xl">Event Ops</h1>
           <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Turn booked events into production plans: documents, vendors, questionnaires, layouts, run-of-show, readiness, final guest count and event-day assignments.</p>
         </div>
@@ -194,7 +194,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let selected=null;
     let activeTab='overview';
 
-    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin'));}
+    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
     function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
     function dateLabel(value){if(!value)return 'Date TBD';return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value));}
     function packageLabel(id){return id==='signature-wedding'?'Signature Wedding Experience':id?String(id).replaceAll('-',' ').replace(/\b\w/g,(m)=>m.toUpperCase()):'Custom';}
