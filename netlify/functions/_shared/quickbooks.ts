@@ -307,6 +307,12 @@ export type QuickBooksGetSettings = {
   quickBooksItemName: string;
 };
 
+export type QuickBooksPaymentTemplateItem = {
+  label: string;
+  dueDaysBefore: number;
+  percentOfRemaining: number;
+};
+
 export type QuickBooksDepositSettings = {
   defaultPercent: number;
   venueWeddingPercent: number;
@@ -318,6 +324,10 @@ export type QuickBooksDepositSettings = {
   mobileBarFinalDueDaysBefore: number;
   privateEventFinalDueDaysBefore: number;
   defaultFinalDueDaysBefore: number;
+  venueWeddingMilestones: QuickBooksPaymentTemplateItem[];
+  mobileBarMilestones: QuickBooksPaymentTemplateItem[];
+  privateEventMilestones: QuickBooksPaymentTemplateItem[];
+  defaultMilestones: QuickBooksPaymentTemplateItem[];
   updatedAt: string;
 };
 
@@ -345,8 +355,31 @@ function cleanDueDays(value: unknown, fallback: number) {
   return Math.min(730, Math.max(0, Math.round(parsed)));
 }
 
+function cleanPaymentTemplate(input: unknown, fallback: QuickBooksPaymentTemplateItem[]) {
+  if (!Array.isArray(input) || !input.length) return fallback;
+  const rows = input.slice(0, 12).map((item: any, index) => ({
+    label: String(item?.label || (index === input.length - 1 ? 'Final balance' : 'Payment')).trim().slice(0, 120),
+    dueDaysBefore: cleanDueDays(item?.dueDaysBefore, 0),
+    percentOfRemaining: cleanDepositPercent(item?.percentOfRemaining, index === input.length - 1 ? 100 : 0),
+  })).filter((item) => item.label);
+  return rows.length ? rows : fallback;
+}
+
 export async function getQuickBooksDepositSettings(context: Context): Promise<QuickBooksDepositSettings> {
   const stored = await integrationStore(context).get(depositSettingsKey(), { type: 'json' }) as any;
+  const weddingFallback: QuickBooksPaymentTemplateItem[] = [
+    { label:'Second payment', dueDaysBefore:cleanDueDays(stored?.venueWeddingSecondDueDaysBefore,90), percentOfRemaining:cleanDepositPercent(stored?.venueWeddingSecondPercentOfRemaining,50) },
+    { label:'Final payment', dueDaysBefore:cleanDueDays(stored?.venueWeddingFinalDueDaysBefore,60), percentOfRemaining:100 },
+  ];
+  const mobileFallback: QuickBooksPaymentTemplateItem[] = [
+    { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.mobileBarFinalDueDaysBefore,14), percentOfRemaining:100 },
+  ];
+  const privateFallback: QuickBooksPaymentTemplateItem[] = [
+    { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.privateEventFinalDueDaysBefore,30), percentOfRemaining:100 },
+  ];
+  const defaultFallback: QuickBooksPaymentTemplateItem[] = [
+    { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.defaultFinalDueDaysBefore,30), percentOfRemaining:100 },
+  ];
   return {
     defaultPercent: cleanDepositPercent(stored?.defaultPercent, 10),
     venueWeddingPercent: cleanDepositPercent(stored?.venueWeddingPercent, 10),
@@ -358,6 +391,10 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     mobileBarFinalDueDaysBefore: cleanDueDays(stored?.mobileBarFinalDueDaysBefore, 14),
     privateEventFinalDueDaysBefore: cleanDueDays(stored?.privateEventFinalDueDaysBefore, 30),
     defaultFinalDueDaysBefore: cleanDueDays(stored?.defaultFinalDueDaysBefore, 30),
+    venueWeddingMilestones: cleanPaymentTemplate(stored?.venueWeddingMilestones, weddingFallback),
+    mobileBarMilestones: cleanPaymentTemplate(stored?.mobileBarMilestones, mobileFallback),
+    privateEventMilestones: cleanPaymentTemplate(stored?.privateEventMilestones, privateFallback),
+    defaultMilestones: cleanPaymentTemplate(stored?.defaultMilestones, defaultFallback),
     updatedAt: String(stored?.updatedAt || ''),
   };
 }
@@ -375,6 +412,10 @@ export async function saveQuickBooksDepositSettings(context: Context, settings: 
     mobileBarFinalDueDaysBefore: cleanDueDays(settings.mobileBarFinalDueDaysBefore, current.mobileBarFinalDueDaysBefore),
     privateEventFinalDueDaysBefore: cleanDueDays(settings.privateEventFinalDueDaysBefore, current.privateEventFinalDueDaysBefore),
     defaultFinalDueDaysBefore: cleanDueDays(settings.defaultFinalDueDaysBefore, current.defaultFinalDueDaysBefore),
+    venueWeddingMilestones: cleanPaymentTemplate(settings.venueWeddingMilestones, current.venueWeddingMilestones),
+    mobileBarMilestones: cleanPaymentTemplate(settings.mobileBarMilestones, current.mobileBarMilestones),
+    privateEventMilestones: cleanPaymentTemplate(settings.privateEventMilestones, current.privateEventMilestones),
+    defaultMilestones: cleanPaymentTemplate(settings.defaultMilestones, current.defaultMilestones),
     updatedAt: new Date().toISOString(),
   };
   await integrationStore(context).setJSON(depositSettingsKey(), next);
