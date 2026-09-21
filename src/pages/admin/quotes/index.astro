@@ -409,10 +409,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <div data-line-items class="mt-4 grid gap-3"></div>
       </div>
 
-      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
         <label class="grid gap-2 text-sm font-semibold">Discount amount<input name="discountAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold">Hawaiʻi GET rate %<input name="taxRate" type="number" value="4.712" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 text-[var(--koa-forest)]" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="depositAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Deposit %<input name="depositPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="depositAmount" type="number" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 text-[var(--koa-forest)]" /></label>
         <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Calculated total</p><p data-editor-total class="display mt-2 text-3xl text-[var(--koa-forest)]">$0</p></div>
       </div>
 
@@ -2682,6 +2683,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function proposalPayments() {
       return [...paymentItems.children].map((row)=>({label:row.querySelector('[data-payment-label]').value,dueDate:row.querySelector('[data-payment-date]').value,amount:Number(row.querySelector('[data-payment-amount]').value||0)}));
     }
+    function rebalanceEditorPayments(total,deposit) {
+      const rows=[...paymentItems.children];
+      if(!rows.length)return;
+      rows[0].querySelector('[data-payment-amount]').value=(Math.round(deposit*100)/100).toFixed(2);
+      const remainder=Math.max(0,Math.round((total-deposit)*100)/100);
+      const rest=rows.slice(1);
+      if(!rest.length)return;
+      const weights=rest.map((row)=>Math.max(0,Number(row.querySelector('[data-payment-amount]').value||0)));
+      const weightTotal=weights.reduce((sum,value)=>sum+value,0);
+      let allocated=0;
+      rest.forEach((row,index)=>{
+        const amount=index===rest.length-1
+          ? Math.max(0,Math.round((remainder-allocated)*100)/100)
+          : Math.max(0,Math.round((weightTotal>0?remainder*(weights[index]/weightTotal):remainder/rest.length)*100)/100);
+        allocated=Math.round((allocated+amount)*100)/100;
+        row.querySelector('[data-payment-amount]').value=amount.toFixed(2);
+      });
+    }
     function recalcEditor() {
       const lines=proposalLines();
       const subtotal=lines.reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
@@ -2689,8 +2708,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const taxableGross=lines.filter((line)=>!line.getExempt).reduce((sum,line)=>sum+(line.quantity*line.unitPrice),0);
       const taxableAfterDiscount=subtotal>0?Math.max(0,taxableGross-(discount*taxableGross/subtotal)):0;
       const taxRate=4.712;
+      const total=(subtotal-discount)+(taxableAfterDiscount*taxRate/100);
+      const depositPercent=Math.min(100,Math.max(0,Number(proposalForm.elements.depositPercent.value||0)));
+      const deposit=Math.round(total*depositPercent)/100;
       proposalForm.elements.taxRate.value='4.712';
-      editorTotal.textContent=money((subtotal-discount)+(taxableAfterDiscount*taxRate/100));
+      proposalForm.elements.depositAmount.value=deposit.toFixed(2);
+      editorTotal.textContent=money(total);
+      rebalanceEditorPayments(total,deposit);
     }
 
     function openProposal(record) {
@@ -2705,7 +2729,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       proposalForm.elements.notes.value=record.customer?.notes||'';
       proposalForm.elements.discountAmount.value=String(record.proposal?.discountAmount||0);
       proposalForm.elements.taxRate.value='4.712';
-      proposalForm.elements.depositAmount.value=String(record.proposal?.depositAmount||0);
+      const proposalTotal=Number(record.proposal?.total||0);
+      const savedDeposit=Number(record.proposal?.depositAmount||0);
+      const depositPercent=Number.isFinite(Number(record.proposal?.depositPercent))
+        ? Number(record.proposal.depositPercent)
+        : proposalTotal>0 ? (savedDeposit/proposalTotal)*100 : 10;
+      proposalForm.elements.depositPercent.value=String(Math.round(depositPercent*1000)/1000);
+      proposalForm.elements.depositAmount.value=String(savedDeposit);
       proposalForm.elements.notesToClient.value=record.proposal?.notesToClient||'';
       (record.proposal?.lineItems||[]).forEach(addLine); if(!(record.proposal?.lineItems||[]).length)addLine();
       (record.proposal?.paymentSchedule||[]).forEach(addPayment); if(!(record.proposal?.paymentSchedule||[]).length)addPayment();
@@ -2803,7 +2833,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       recalcEditor();
     });
     document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
-    proposalForm?.querySelectorAll('[name="discountAmount"]').forEach((input)=>input.addEventListener('input',recalcEditor));
+    proposalForm?.querySelectorAll('[name="discountAmount"],[name="depositPercent"]').forEach((input)=>input.addEventListener('input',recalcEditor));
 
     convertForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();const data=new FormData(convertForm);convertMessage.textContent='Creating…';
@@ -2830,7 +2860,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     proposalForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();proposalMessage.textContent='Saving…';const data=new FormData(proposalForm);
       try{
-        const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:4.712,depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
+        const result=await api({action:'update-proposal',recordId:data.get('recordId'),proposal:{status:data.get('status'),expirationDate:data.get('expirationDate'),discountAmount:Number(data.get('discountAmount')||0),taxRate:4.712,depositPercent:Number(data.get('depositPercent')||0),depositAmount:Number(data.get('depositAmount')||0),notesToClient:data.get('notesToClient'),lineItems:proposalLines(),paymentSchedule:proposalPayments(),customer:{name:data.get('name'),email:data.get('email'),phone:data.get('phone'),eventDate:data.get('eventDate'),notes:data.get('notes')}}});
         editingRecord=result.record;proposalMessage.textContent='Saved.';await load(String(searchInput?.value||'').trim());openProposal(result.record);
       }catch(error){proposalMessage.textContent=error.message||'Unable to save proposal.';}
     });
