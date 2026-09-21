@@ -187,7 +187,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
-  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[]};
+  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[]};
   let selectedId='';
 
   function admin(user){ const email=String(user?.email||'').toLowerCase(); const roles=user?.app_metadata?.roles||[]; return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin')); }
@@ -242,7 +242,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-appointments]').innerHTML=data.appointments.filter(a=>a.recordId===p.id).sort((a,b)=>String(a.startsAt).localeCompare(String(b.startsAt))).map(a=>'<div class="rounded-xl border border-[var(--koa-line)] p-3"><div class="flex justify-between gap-3"><div><strong class="text-sm">'+esc(a.title)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+fmt(a.startsAt)+' · '+a.durationMinutes+' min'+(a.location?' · '+esc(a.location):'')+'</p></div><span class="text-[.6rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(a.status)+'</span></div></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No appointments yet.</p>';
     const options=data.workflows.filter(w=>w.active).map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join(''); $('[data-enroll-form] select').innerHTML='<option value="">Choose workflow…</option>'+options;
     $('[data-workflow-enrollments]').innerHTML=data.enrollments.filter(e=>e.recordId===p.id).slice(0,8).map(e=>{const w=data.workflows.find(x=>x.id===e.workflowId);return '<div class="rounded-xl bg-[var(--koa-sand)] p-3 text-sm"><strong>'+esc(w?.name||'Workflow')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+fmt(e.startedAt)+' · '+e.createdTaskIds.length+' tasks</p></div>'}).join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No workflows enrolled.</p>';
-    $('[data-activity]').innerHTML=data.activity.filter(a=>a.recordId===p.id).slice(0,30).map(a=>'<div class="rounded-xl bg-[var(--koa-sand)] p-3"><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(a.type.replaceAll('_',' '))+'</p><p class="mt-1 text-sm">'+esc(a.detail)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/40">'+fmt(a.createdAt)+'</p></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No CRM activity yet.</p>';
+    const timeline=[
+      ...data.activity.filter(a=>a.recordId===p.id).map(a=>({type:a.type,detail:a.detail,createdAt:a.createdAt,kind:'activity'})),
+      ...(data.messages||[]).filter(m=>m.recordId===p.id).map(m=>({type:'client message',detail:(m.senderName||m.sender||'Client')+': '+m.message,createdAt:m.createdAt,kind:'message'}))
+    ].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,40);
+    $('[data-activity]').innerHTML=timeline.map(a=>'<div class="rounded-xl bg-[var(--koa-sand)] p-3"><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(a.type.replaceAll('_',' '))+'</p><p class="mt-1 text-sm">'+esc(a.detail)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/40">'+fmt(a.createdAt)+'</p></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No CRM activity yet.</p>';
   }
   function renderWorkflows(){
     $('[data-workflows]').innerHTML=data.workflows.length?data.workflows.map(w=>'<button data-edit-workflow="'+esc(w.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(w.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(w.trigger)+'</span></div><p class="mt-2 text-sm text-[var(--koa-ink)]/55">'+esc(w.description||'No description')+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/42">'+w.steps.length+' step'+(w.steps.length===1?'':'s')+' · '+(w.active?'Active':'Paused')+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No workflows saved yet.</p>';
