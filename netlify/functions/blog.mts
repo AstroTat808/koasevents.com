@@ -112,6 +112,9 @@ export default async (req: Request, context: Context) => {
 
     const now = new Date().toISOString();
     const existing = posts.find((post) => post.slug === slug);
+    if (!isManager && existing?.status === 'published') {
+      return Response.json({ error: 'Manager permission required to edit a published blog post.' }, { status: 403 });
+    }
     const post: BlogPost = {
       slug,
       originalTitle: existing?.originalTitle,
