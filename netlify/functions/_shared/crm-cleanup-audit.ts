@@ -21,6 +21,13 @@ export type CleanupDimensions = {
   securityReasons:string[];
 };
 
+export type CleanupClientSnapshot = {
+  name:string;
+  email:string;
+  eventDate:string;
+  kind:string;
+};
+
 export type CleanupAuditEntry = {
   id:string;
   recordId:string;
@@ -31,11 +38,20 @@ export type CleanupAuditEntry = {
   reasons:string[];
   chainIds:string[];
   dimensions?:CleanupDimensions;
+  client?:CleanupClientSnapshot;
   createdAt:string;
   dedupeKey:string;
 };
 
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
+export function cleanupClientSnapshotFromRecord(record:any):CleanupClientSnapshot{
+  return {
+    name:clean(record?.customer?.name,180)||'Unnamed client',
+    email:clean(record?.customer?.email,240),
+    eventDate:clean(record?.customer?.eventDate,40),
+    kind:clean(record?.kind,40)||'record',
+  };
+}
 export function cleanupDimensionsFromRecord(record:any):CleanupDimensions{
   const email=clean(record?.customer?.email,240).toLowerCase();
   const emailDomain=email.includes('@')?email.split('@').pop()||'':'';
@@ -80,6 +96,7 @@ export async function appendCleanupAudit(
     chainIds?:string[];
     dedupeKey?:string;
     dimensions?:CleanupDimensions;
+    client?:CleanupClientSnapshot;
   },
 ){
   const store=storeFor(context);
@@ -102,6 +119,12 @@ export async function appendCleanupAudit(
       emailDomain:clean(input.dimensions.emailDomain,160)||'Unknown',
       brand:clean(input.dimensions.brand,80)||'Unknown',
       securityReasons:Array.isArray(input.dimensions.securityReasons)?input.dimensions.securityReasons.map(x=>clean(x,120)).filter(Boolean).slice(0,20):[],
+    } : undefined,
+    client:input.client ? {
+      name:clean(input.client.name,180)||'Unnamed client',
+      email:clean(input.client.email,240),
+      eventDate:clean(input.client.eventDate,40),
+      kind:clean(input.client.kind,40)||'record',
     } : undefined,
     createdAt:new Date().toISOString(),
     dedupeKey,
