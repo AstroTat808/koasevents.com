@@ -334,7 +334,7 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest] = await Promise.all([
+    const [connection, settings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
@@ -342,6 +342,7 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/sandbox-linked-booking-test', { type: 'json' }),
+      integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
     ]);
     const receipts = Array.isArray(webhookHistory) && webhookHistory.length
       ? webhookHistory
@@ -376,6 +377,7 @@ export default async (req: Request, context: Context) => {
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
       linkedTest: linkedTest || null,
+      productionTest: productionTest || null,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -398,7 +400,13 @@ export default async (req: Request, context: Context) => {
     const data: any = await qboQuery(context, 'select * from Item where Active = true maxresults 100');
     const items = (data?.QueryResponse?.Item || [])
       .filter((item: any) => ['Service','NonInventory'].includes(String(item.Type || '')))
-      .map((item: any) => ({ id: String(item.Id), name: String(item.Name || ''), type: String(item.Type || '') }))
+      .map((item: any) => ({
+        id: String(item.Id),
+        name: String(item.Name || ''),
+        type: String(item.Type || ''),
+        incomeAccountId: String(item?.IncomeAccountRef?.value || ''),
+        incomeAccountName: String(item?.IncomeAccountRef?.name || ''),
+      }))
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
     return Response.json({ items });
   }
@@ -409,6 +417,89 @@ export default async (req: Request, context: Context) => {
     if (!itemId) return Response.json({ error: 'Select a QuickBooks service item.' }, { status: 400 });
     const settings = await saveQuickBooksSettings(context, { serviceItemId: itemId, serviceItemName: itemName });
     return Response.json({ ok: true, settings });
+  }
+
+  if (action === 'production-smoke-test') {
+    const configuration = quickBooksConfiguration();
+    if (configuration.environment !== 'production') {
+      return Response.json({ error: 'Production smoke test is available only in the production QuickBooks environment.' }, { status: 409 });
+    }
+
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    if (!itemId) {
+      return Response.json({ error: 'Save a production QuickBooks Service or Non-Inventory item mapping first.' }, { status: 409 });
+    }
+
+    const suffix = idSuffix();
+    const amount = 1;
+    const startedAt = new Date().toISOString();
+    const displayName = 'Koa CRM Production Test ' + suffix;
+
+    const customerCreated: any = await qboCreate(context, 'customer', {
+      DisplayName: displayName,
+      Notes: 'CONTROLLED TEST RECORD from Koa’s Events CRM. Safe to delete after verification.',
+    });
+    const customer = customerCreated?.Customer;
+    if (!customer?.Id) throw new Error('Production test customer creation failed.');
+
+    const estimateCreated: any = await qboCreate(context, 'estimate', {
+      CustomerRef: { value: String(customer.Id) },
+      TxnDate: today(),
+      CustomerMemo: { value: 'CONTROLLED TEST - DO NOT PAY' },
+      PrivateNote: 'Koa CRM production integration test ' + suffix + '. Safe to delete.',
+      Line: [{
+        Amount: amount,
+        DetailType: 'SalesItemLineDetail',
+        Description: 'CONTROLLED TEST - Koa CRM production integration',
+        SalesItemLineDetail: {
+          ItemRef: { value: itemId },
+          Qty: 1,
+          UnitPrice: amount,
+        },
+      }],
+    });
+    const estimate = estimateCreated?.Estimate;
+    if (!estimate?.Id) throw new Error('Production test estimate creation failed.');
+
+    const invoiceCreated: any = await qboCreate(context, 'invoice', {
+      CustomerRef: { value: String(customer.Id) },
+      TxnDate: today(),
+      DueDate: today(),
+      CustomerMemo: { value: 'CONTROLLED TEST - DO NOT PAY' },
+      PrivateNote: 'Koa CRM production integration test ' + suffix + '. Safe to void/delete after verification.',
+      Line: [{
+        Amount: amount,
+        DetailType: 'SalesItemLineDetail',
+        Description: 'CONTROLLED TEST - Koa CRM production integration',
+        SalesItemLineDetail: {
+          ItemRef: { value: itemId },
+          Qty: 1,
+          UnitPrice: amount,
+        },
+      }],
+    });
+    const invoice = invoiceCreated?.Invoice;
+    if (!invoice?.Id) throw new Error('Production test invoice creation failed.');
+
+    const result = {
+      status: 'passed',
+      startedAt,
+      completedAt: new Date().toISOString(),
+      customerId: String(customer.Id),
+      customerName: String(customer.DisplayName || displayName),
+      estimateId: String(estimate.Id),
+      estimateDocNumber: String(estimate.DocNumber || ''),
+      invoiceId: String(invoice.Id),
+      invoiceDocNumber: String(invoice.DocNumber || ''),
+      amount,
+      invoiceBalance: Number(invoice.Balance ?? invoice.TotalAmt ?? amount),
+      serviceItemId: itemId,
+      serviceItemName: String(settings?.serviceItemName || ''),
+      emailed: false,
+    };
+    await integrationStoreFor(context).setJSON('quickbooks/production-smoke-test', result);
+    return Response.json({ ok: true, test: result });
   }
 
   if (action === 'sandbox-linked-booking-test') {
