@@ -19,8 +19,22 @@ export type HealthSnapshot = {
   passed: number;
   failed: number;
   failedIds: string[];
+  alertFailedIds?: string[];
   checks: HealthCheck[];
   source: 'hourly' | 'manual';
+};
+
+export type HealthAlertRule = {
+  id: string;
+  alertAfter: 1 | 2;
+  publicVisible: boolean;
+  publicName: string;
+};
+
+export type HealthAlertPolicy = {
+  updatedAt: string;
+  updatedBy: string;
+  rules: HealthAlertRule[];
 };
 
 const PAGE_CHECKS = [
@@ -51,6 +65,84 @@ const API_CHECKS = [
   ['security-api','Security API','/api/admin/security?days=7'],
   ['seo-api','Local SEO API','/api/admin/local-seo'],
 ] as const;
+
+export function healthComponents() {
+  return [
+    ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
+    ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
+  ];
+}
+
+function defaultAlertAfter(id:string):1|2 {
+  const immediate=new Set([
+    'business-crm','sales-crm','event-ops','master-calendar','staff-home',
+    'admin-session','business-crm-api','sales-crm-api','event-ops-api','calendar-api',
+  ]);
+  return immediate.has(id)?1:2;
+}
+
+function defaultPublicName(id:string,name:string) {
+  if(id==='staff-home'||id==='admin-session') return 'Account access';
+  if(id.includes('sales-crm')||id.includes('business-crm')) return 'Booking and inquiry operations';
+  if(id.includes('calendar')||id.includes('event-ops')) return 'Event planning operations';
+  if(id.includes('blog')) return 'Website content';
+  if(id.includes('gallery')) return 'Website media';
+  return name.replace(/ API$/,'');
+}
+
+export function defaultHealthAlertPolicy():HealthAlertPolicy {
+  return {
+    updatedAt:'',
+    updatedBy:'',
+    rules:healthComponents().map(component=>({
+      id:component.id,
+      alertAfter:defaultAlertAfter(component.id),
+      publicVisible:false,
+      publicName:defaultPublicName(component.id,component.name),
+    })),
+  };
+}
+
+export async function readHealthAlertPolicy(context:Context):Promise<HealthAlertPolicy> {
+  const stored:any=await healthStore(context).get('settings/alert-policy',{type:'json'});
+  const defaults=defaultHealthAlertPolicy();
+  if(!stored||!Array.isArray(stored.rules)) return defaults;
+  const byId=new Map(stored.rules.map((rule:any)=>[String(rule?.id||''),rule]));
+  return {
+    updatedAt:clean(stored.updatedAt,80),
+    updatedBy:clean(stored.updatedBy,240),
+    rules:defaults.rules.map(rule=>{
+      const saved:any=byId.get(rule.id);
+      return {
+        id:rule.id,
+        alertAfter:saved?.alertAfter===1?1:2,
+        publicVisible:Boolean(saved?.publicVisible),
+        publicName:clean(saved?.publicName,120)||rule.publicName,
+      };
+    }),
+  };
+}
+
+export async function saveHealthAlertPolicy(context:Context,input:any,actor:string):Promise<HealthAlertPolicy> {
+  const defaults=defaultHealthAlertPolicy();
+  const incoming=Array.isArray(input?.rules)?input.rules:[];
+  const byId=new Map(incoming.map((rule:any)=>[String(rule?.id||''),rule]));
+  const policy:HealthAlertPolicy={
+    updatedAt:new Date().toISOString(),
+    updatedBy:clean(actor,240)||'admin',
+    rules:defaults.rules.map(rule=>{
+      const saved:any=byId.get(rule.id);
+      return {
+        id:rule.id,
+        alertAfter:saved?.alertAfter===1?1:2,
+        publicVisible:Boolean(saved?.publicVisible),
+        publicName:clean(saved?.publicName,120)||rule.publicName,
+      };
+    }),
+  };
+  await healthStore(context).setJSON('settings/alert-policy',policy);
+  return policy;
+}
 
 function healthStore(context: Context) {
   return context.deploy.context === 'production'
@@ -119,9 +211,26 @@ export async function readLatestHealth(context:Context):Promise<HealthSnapshot|n
   return ((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
 }
 
+export async function readLatestHourlyHealth(context:Context):Promise<HealthSnapshot|null> {
+  const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
+  return rows.find(row=>row?.source==='hourly') || null;
+}
+
 export async function readHealthHistory(context:Context,limit=100):Promise<HealthSnapshot[]> {
   const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
   return rows.slice(0,Math.max(1,Math.min(500,limit)));
+}
+
+export async function applyHealthAlertPolicy(context:Context,current:HealthSnapshot,previousHourly:HealthSnapshot|null) {
+  const policy=await readHealthAlertPolicy(context);
+  const ruleById=new Map(policy.rules.map(rule=>[rule.id,rule]));
+  const previousFailed=new Set(previousHourly?.failedIds||[]);
+  current.alertFailedIds=current.failedIds.filter(id=>{
+    const rule=ruleById.get(id);
+    if(!rule||rule.alertAfter===1) return true;
+    return previousFailed.has(id);
+  }).sort();
+  return {snapshot:current,policy};
 }
 
 export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
@@ -179,20 +288,79 @@ export function calculateUptime(history:any[]) {
   return {generatedAt:new Date().toISOString(),windows,rows,hourlySamples:hourly.length};
 }
 
-export function healthTransition(previous:HealthSnapshot|null,current:HealthSnapshot) {
-  if(!previous){
-    return current.overall==='unhealthy'
-      ? {changed:true,type:'broken' as const,broken:current.failedIds,recovered:[] as string[]}
-      : {changed:false,type:'none' as const,broken:[] as string[],recovered:[] as string[]};
+export function calculateIncidents(history:any[]) {
+  const hourly=(history||[])
+    .filter(row=>Number.isFinite(Date.parse(String(row.checkedAt||''))))
+    .sort((a,b)=>Date.parse(a.checkedAt)-Date.parse(b.checkedAt));
+  const components=new Map<string,{id:string;name:string;kind:string;path:string}>();
+  for(const snapshot of hourly){
+    for(const check of snapshot.checks||[]){
+      if(!components.has(check.id)) components.set(check.id,{id:check.id,name:check.name,kind:check.kind,path:check.path});
+    }
   }
-  const prev=new Set(previous.failedIds||[]);
-  const curr=new Set(current.failedIds||[]);
+  const now=Date.now();
+  const windows=[
+    {id:'7d',days:7},
+    {id:'30d',days:30},
+    {id:'90d',days:90},
+  ];
+  const rows=[...components.values()].map(component=>{
+    const incidents:any[]=[];
+    let active:any=null;
+    for(const snapshot of hourly){
+      const check=(snapshot.checks||[]).find((row:any)=>row.id===component.id);
+      if(!check) continue;
+      const at=Date.parse(snapshot.checkedAt);
+      if(!check.ok && !active){
+        active={startedAt:snapshot.checkedAt,startedMs:at,endedAt:null,endedMs:null,ongoing:true};
+      } else if(check.ok && active){
+        active.endedAt=snapshot.checkedAt;
+        active.endedMs=at;
+        active.ongoing=false;
+        active.durationMinutes=Math.max(0,Math.round((at-active.startedMs)/60000));
+        incidents.push(active);
+        active=null;
+      }
+    }
+    if(active){
+      active.durationMinutes=Math.max(0,Math.round((now-active.startedMs)/60000));
+      incidents.push(active);
+    }
+    const totals:Record<string,{downtimeMinutes:number;incidentCount:number}>={};
+    for(const window of windows){
+      const cutoff=now-window.days*86400000;
+      let downtime=0, count=0;
+      for(const incident of incidents){
+        const start=Math.max(incident.startedMs,cutoff);
+        const end=Math.min(incident.endedMs||now,now);
+        if(end>start){
+          downtime+=end-start;
+          count+=1;
+        }
+      }
+      totals[window.id]={downtimeMinutes:Math.round(downtime/60000),incidentCount:count};
+    }
+    return {
+      ...component,
+      currentIncident:incidents.find(row=>row.ongoing)||null,
+      recentIncidents:[...incidents].reverse().slice(0,20).map(({startedMs,endedMs,...row})=>row),
+      totals,
+    };
+  }).sort((a,b)=>a.kind.localeCompare(b.kind)||a.name.localeCompare(b.name));
+  const allIncidents=rows.flatMap(row=>row.recentIncidents.map(incident=>({componentId:row.id,componentName:row.name,...incident})))
+    .sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt));
+  return {generatedAt:new Date().toISOString(),rows,recentIncidents:allIncidents.slice(0,50)};
+}
+
+export function healthTransition(previous:HealthSnapshot|null,current:HealthSnapshot) {
+  const prev=new Set(previous?.alertFailedIds||[]);
+  const curr=new Set(current.alertFailedIds||[]);
   const broken=[...curr].filter(id=>!prev.has(id));
   const recovered=[...prev].filter(id=>!curr.has(id));
   if(!broken.length&&!recovered.length) return {changed:false,type:'none' as const,broken,recovered};
   return {
     changed:true,
-    type:current.overall==='healthy'?'recovered' as const:broken.length?'broken' as const:'partial-recovery' as const,
+    type:curr.size===0?'recovered' as const:broken.length?'broken' as const:'partial-recovery' as const,
     broken,recovered,
   };
 }
@@ -214,7 +382,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
   const from=clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
     || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
     || 'Koa’s Events <leads@koasevents.com>';
-  const fullyRecovered=current.overall==='healthy';
+  const fullyRecovered=(current.alertFailedIds||[]).length===0;
   const subject=fullyRecovered
     ? 'Koa’s System Health recovered'
     : 'Koa’s System Health alert — '+current.failed+' check'+(current.failed===1?'':'s')+' failing';
@@ -258,7 +426,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
 async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
   const webhook=clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(!webhook) return {channel:'slack',sent:false,reason:'not-configured'};
-  const recovered=current.overall==='healthy';
+  const recovered=(current.alertFailedIds||[]).length===0;
   const lines=[
     recovered?'✅ *Koa’s System Health recovered*':'🚨 *Koa’s System Health changed*',
     brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
@@ -286,7 +454,7 @@ async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recover
   const from=clean(Netlify.env.get('TWILIO_FROM_NUMBER'),80);
   const recipients=clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
   if(!sid||!token||!from||!recipients.length) return {channel:'sms',sent:false,reason:'not-configured'};
-  const recovered=current.overall==='healthy';
+  const recovered=(current.alertFailedIds||[]).length===0;
   const parts=[
     recovered?'Koa’s System Health recovered.':'Koa’s System Health alert.',
     brokenNames.length?'New failing: '+brokenNames.join(', ')+'.':'',
@@ -318,7 +486,8 @@ async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recover
 export async function sendHealthTransitionAlerts(previous:HealthSnapshot|null,current:HealthSnapshot) {
   const transition=healthTransition(previous,current);
   if(!transition.changed) return {changed:false,transition,channels:[]};
-  const failedNames=current.checks.filter(row=>!row.ok).map(row=>row.name);
+  const confirmed=new Set(current.alertFailedIds||[]);
+  const failedNames=current.checks.filter(row=>confirmed.has(row.id)).map(row=>row.name);
   const recoveredNames=(previous?.checks||[]).filter(row=>transition.recovered.includes(row.id)).map(row=>row.name);
   const brokenNames=current.checks.filter(row=>transition.broken.includes(row.id)).map(row=>row.name);
   const channels=await Promise.all([
