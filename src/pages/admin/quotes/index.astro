@@ -2622,7 +2622,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           text('p','mt-2 text-[.66rem] font-bold text-[var(--koa-clay)]','Purges in '+daysLeft+' day'+(daysLeft===1?'':'s'))
         );
         const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
-        if(managerAccess) actions.append(
+        if(destructiveAccess) actions.append(
           actionButton('Restore','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{
             try{
               await api({action:'restore-record',recordId:entry.id});
