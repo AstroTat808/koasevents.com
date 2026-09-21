@@ -33,6 +33,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </div>
 
           <div data-admin-links class="hidden grid gap-4 sm:grid-cols-2">
+            <a data-health-warning href="/admin/health/" class="hidden rounded-[1.3rem] border border-red-300 bg-red-50 p-5 text-red-950 sm:col-span-2">
+              <span class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">System health warning</span>
+              <strong data-health-warning-title class="mt-2 block text-lg">A protected Koa’s service needs attention.</strong>
+              <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Open System Health for details.</span>
+            </a>
             <a href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)] sm:col-span-2"><span class="display text-3xl">Staff Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Invite employees, assign Sales Rep or Manager access, deactivate accounts, and review permissions.</span></a>
             <a href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)] sm:col-span-2"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
             <a href="/admin/crm/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/70">Unified client workspace for contacts, projects, tasks, appointments, workflows, templates, client links, payments and activity history.</span></a>
@@ -70,12 +75,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return approvedAdminEmails.has(email) || roles.map((role) => String(role || '').toLowerCase()).includes('admin');
     }
 
+    async function updateHealthWarning(isAdmin) {
+      const warning=document.querySelector('[data-health-warning]');
+      if(!warning||!isAdmin){warning?.classList.add('hidden');return;}
+      try{
+        const response=await fetch('/api/admin/health',{cache:'no-store'});
+        if(!response.ok)return;
+        const data=await response.json();const current=data.current;
+        const unhealthy=current?.overall==='unhealthy';
+        warning.classList.toggle('hidden',!unhealthy);
+        if(unhealthy){
+          const names=(current.checks||[]).filter((row)=>!row.ok).map((row)=>row.name);
+          document.querySelector('[data-health-warning-title]').textContent=current.failed+' health check'+(current.failed===1?'':'s')+' failing';
+          document.querySelector('[data-health-warning-detail]').textContent=(names.slice(0,4).join(', ')||'Protected system issue detected')+(names.length>4?' +'+(names.length-4)+' more':'')+' · checked '+new Date(current.checkedAt).toLocaleString();
+        }
+      }catch{}
+    }
+
     function showAuthState(user) {
       const isAdmin = Boolean(user) && hasAdminAccess(user);
       loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken));
       inviteForm?.classList.toggle('hidden', !inviteToken);
       links?.classList.toggle('hidden', !isAdmin);
       roleWarning?.classList.toggle('hidden', !user || isAdmin);
+      updateHealthWarning(isAdmin);
     }
 
     async function initialize() {
