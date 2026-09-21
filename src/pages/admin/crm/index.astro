@@ -188,7 +188,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div><p class="eyebrow text-[var(--koa-clay)]">Cleanup intelligence</p><h2 class="display mt-2 text-4xl">Cleanup analytics</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Bogus leads caught, false positives approved, automatic Trash actions, restores, and the most common lead/spam sources.</p></div>
+            <div><p class="eyebrow text-[var(--koa-clay)]">Cleanup intelligence</p><h2 class="display mt-2 text-4xl">Cleanup analytics</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Trend, source, domain, form, brand, and security-reason analysis for bogus leads and false positives.</p></div>
             <div class="flex gap-2">
               <button data-analytics-range="7" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">7 days</button>
               <button data-analytics-range="30" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">30 days</button>
@@ -202,8 +202,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Restores</p><p data-analytics-restores class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p></article>
           </div>
           <div class="mt-5 rounded-xl border border-[var(--koa-line)] p-4">
-            <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Top spam / lead sources</p>
-            <div data-analytics-sources class="mt-3 grid gap-2"></div>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Cleanup trend</p><p class="mt-1 text-xs text-[var(--koa-ink)]/48">Bogus leads caught vs. false positives approved.</p></div>
+              <div class="flex gap-2">
+                <button data-trend-granularity="day" class="rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">By day</button>
+                <button data-trend-granularity="week" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]">By week</button>
+              </div>
+            </div>
+            <div class="mt-4 flex flex-wrap gap-4 text-[.65rem] font-bold text-[var(--koa-ink)]/60"><span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-[var(--koa-forest)]"></span>Bogus caught</span><span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-[var(--koa-clay)]"></span>False positives approved</span></div>
+            <div data-analytics-trend class="mt-4 min-h-[260px]"></div>
+          </div>
+          <div class="mt-5 rounded-xl border border-[var(--koa-line)] p-4">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Spam / lead breakdown</p><p class="mt-1 text-xs text-[var(--koa-ink)]/48">Inspect where flagged leads originate and which security signals are most common.</p></div>
+              <div class="flex flex-wrap gap-2">
+                <button data-breakdown="websiteForm" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Website form</button>
+                <button data-breakdown="referralSource" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Referral source</button>
+                <button data-breakdown="emailDomain" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Email domain</button>
+                <button data-breakdown="securityReason" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Security reason</button>
+                <button data-breakdown="brand" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Koa brand</button>
+              </div>
+            </div>
+            <div data-analytics-breakdown class="mt-4 grid gap-2"></div>
           </div>
         </section>
 
@@ -281,6 +301,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   const $$=(s)=>[...document.querySelectorAll(s)];
   let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],cleanupAudit:[],cleanupAnalytics:{},cleanupSettings:{mode:'auto_trash'}};
   let analyticsRange='7';
+  let trendGranularity='day';
+  let analyticsBreakdown='websiteForm';
   let bulkApproveIds=[];
   let selectedId='';
   const selectedProjects=new Set();
@@ -349,16 +371,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $$('[data-restore-chain]').forEach(b=>b.addEventListener('click',async()=>{const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'restore-client-chain',recordId:b.dataset.restoreChain})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Restore failed.');return;}await load();}));
     $$('[data-permadelete-chain]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm('Permanently delete this entire trashed client chain? This cannot be undone.'))return;const r=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'permanent-delete-client-chain',recordId:b.dataset.permadeleteChain})});const j=await r.json().catch(()=>({}));if(!r.ok){alert(j.error||'Permanent delete failed.');return;}await load();}));
   }
+  function trendSvg(rows){
+    if(!rows?.length || !rows.some(r=>Number(r.bogusCaught||0)>0||Number(r.falsePositivesApproved||0)>0)) return '<div class="flex min-h-[240px] items-center justify-center rounded-xl bg-[var(--koa-sand)]/45 p-6 text-sm text-[var(--koa-ink)]/50">No cleanup trend data in this period yet.</div>';
+    const width=900,height=260,left=44,right=18,top=18,bottom=48;
+    const max=Math.max(1,...rows.flatMap(r=>[Number(r.bogusCaught||0),Number(r.falsePositivesApproved||0)]));
+    const x=i=>left+(rows.length===1?0:(i*(width-left-right)/(rows.length-1)));
+    const y=v=>top+(max-Number(v||0))*(height-top-bottom)/max;
+    const points=key=>rows.map((r,i)=>x(i)+','+y(r[key])).join(' ');
+    const xLabels=rows.map((r,i)=>{
+      const show=rows.length<=12||i===0||i===rows.length-1||i%Math.ceil(rows.length/8)===0;
+      return show?'<text x="'+x(i)+'" y="'+(height-14)+'" text-anchor="middle" font-size="10" fill="currentColor" opacity=".48">'+esc(r.label)+'</text>':'';
+    }).join('');
+    const grid=[0,.25,.5,.75,1].map(f=>{const yy=top+(height-top-bottom)*f;const val=Math.round(max*(1-f));return '<line x1="'+left+'" y1="'+yy+'" x2="'+(width-right)+'" y2="'+yy+'" stroke="currentColor" opacity=".08"/><text x="'+(left-8)+'" y="'+(yy+4)+'" text-anchor="end" font-size="10" fill="currentColor" opacity=".42">'+val+'</text>';}).join('');
+    const dots=(key,fill)=>rows.map((r,i)=>'<circle cx="'+x(i)+'" cy="'+y(r[key])+'" r="3" fill="'+fill+'"><title>'+esc(r.label)+': '+Number(r[key]||0)+'</title></circle>').join('');
+    return '<div class="overflow-x-auto"><svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="Cleanup trend chart" class="min-w-[720px] w-full text-[var(--koa-ink)]">'+grid+'<polyline fill="none" stroke="var(--koa-forest)" stroke-width="3" points="'+points('bogusCaught')+'"/><polyline fill="none" stroke="var(--koa-clay)" stroke-width="3" points="'+points('falsePositivesApproved')+'"/>'+dots('bogusCaught','var(--koa-forest)')+dots('falsePositivesApproved','var(--koa-clay)')+xLabels+'</svg></div>';
+  }
   function renderAnalytics(){
-    const row=data.cleanupAnalytics?.[analyticsRange]||{bogusCaught:0,falsePositivesApproved:0,autoTrashed:0,restores:0,spamSources:[]};
+    const row=data.cleanupAnalytics?.[analyticsRange]||{bogusCaught:0,falsePositivesApproved:0,autoTrashed:0,restores:0,trends:{day:[],week:[]},breakdowns:{}};
     $('[data-analytics-caught]').textContent=row.bogusCaught||0;
     $('[data-analytics-false-positive]').textContent=row.falsePositivesApproved||0;
     $('[data-analytics-auto-trash]').textContent=row.autoTrashed||0;
     $('[data-analytics-restores]').textContent=row.restores||0;
-    $('[data-analytics-sources]').innerHTML=(row.spamSources||[]).length?(row.spamSources||[]).map((s,i)=>'<div class="flex items-center justify-between gap-4 rounded-lg bg-[var(--koa-sand)]/55 px-3 py-2"><div class="min-w-0"><span class="mr-2 text-[.58rem] font-black text-[var(--koa-clay)]">#'+(i+1)+'</span><strong class="text-sm">'+esc(s.source)+'</strong></div><span class="rounded-full bg-white px-2 py-1 text-xs font-black text-[var(--koa-forest)]">'+Number(s.count||0)+'</span></div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No flagged lead sources in this period yet.</p>';
-    $('[data-analytics-range]').forEach(b=>{const active=b.dataset.analyticsRange===analyticsRange;b.classList.toggle('bg-[var(--koa-forest)]',active);b.classList.toggle('text-white',active);b.classList.toggle('border',!active);b.classList.toggle('border-[var(--koa-line)]',!active);b.classList.toggle('text-[var(--koa-forest)]',!active);});
+    $('[data-analytics-trend]').innerHTML=trendSvg(row.trends?.[trendGranularity]||[]);
+    const breakdown=row.breakdowns?.[analyticsBreakdown]||[];
+    const max=Math.max(1,...breakdown.map(x=>Number(x.count||0)));
+    $('[data-analytics-breakdown]').innerHTML=breakdown.length?breakdown.map((s,i)=>'<div class="rounded-lg bg-[var(--koa-sand)]/50 p-3"><div class="flex items-center justify-between gap-4"><div class="min-w-0"><span class="mr-2 text-[.58rem] font-black text-[var(--koa-clay)]">#'+(i+1)+'</span><strong class="text-sm">'+esc(s.label)+'</strong></div><span class="rounded-full bg-white px-2 py-1 text-xs font-black text-[var(--koa-forest)]">'+Number(s.count||0)+'</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-white"><div class="h-full rounded-full bg-[var(--koa-forest)]" style="width:'+Math.max(4,Math.round(Number(s.count||0)/max*100))+'%"></div></div></div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No breakdown data in this period yet.</p>';
+    $$('[data-analytics-range]').forEach(b=>{const active=b.dataset.analyticsRange===analyticsRange;b.classList.toggle('bg-[var(--koa-forest)]',active);b.classList.toggle('text-white',active);b.classList.toggle('border',!active);b.classList.toggle('border-[var(--koa-line)]',!active);b.classList.toggle('text-[var(--koa-forest)]',!active);});
+    $$('[data-trend-granularity]').forEach(b=>{const active=b.dataset.trendGranularity===trendGranularity;b.classList.toggle('bg-[var(--koa-ink)]',active);b.classList.toggle('text-white',active);b.classList.toggle('border',!active);b.classList.toggle('border-[var(--koa-line)]',!active);b.classList.toggle('text-[var(--koa-ink)]',!active);});
+    $$('[data-breakdown]').forEach(b=>{const active=b.dataset.breakdown===analyticsBreakdown;b.classList.toggle('bg-[var(--koa-forest)]',active);b.classList.toggle('text-white',active);b.classList.toggle('border',!active);b.classList.toggle('border-[var(--koa-line)]',!active);b.classList.toggle('text-[var(--koa-forest)]',!active);});
   }
-
   function renderAudit(){
     const mode=$('[data-audit-filter]')?.value||'all';
     const rows=(data.cleanupAudit||[]).filter(a=>mode!=='selected'||(selectedId&&a.recordId===selectedId)).slice(0,250);
@@ -414,6 +455,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   }
   $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
   $('[data-analytics-range]').forEach(b=>b.addEventListener('click',()=>{analyticsRange=b.dataset.analyticsRange||'7';renderAnalytics();}));
+  $('[data-trend-granularity]').forEach(b=>b.addEventListener('click',()=>{trendGranularity=b.dataset.trendGranularity||'day';renderAnalytics();}));
+  $('[data-breakdown]').forEach(b=>b.addEventListener('click',()=>{analyticsBreakdown=b.dataset.breakdown||'websiteForm';renderAnalytics();}));
   $('[data-approve-visible]')?.addEventListener('click',()=>{
     bulkApproveIds=visibleProjectIds.filter(id=>{const p=data.projects.find(x=>x.id===id);return p&&p.cleanup&&!p.cleanup.approvedLegitimate&&['review','auto_trash'].includes(p.cleanup.disposition);});
     if(!bulkApproveIds.length)return;
