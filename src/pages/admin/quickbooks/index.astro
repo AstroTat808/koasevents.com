@@ -229,7 +229,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         linkedTestMessage.textContent=!linked
           ? 'No CRM-linked sandbox booking test has been run yet.'
           : linked.verified
-            ? 'Verified: '+linked.recordId+' moved to '+linked.actualStage+', Deposit Paid is '+(linked.depositPaid?'Yes':'No')+', and QuickBooks balance is 
+            ? 'Verified: '+linked.recordId+' moved to '+linked.actualStage+', Deposit Paid is '+(linked.depositPaid?'Yes':'No')+', and QuickBooks balance is $'+Number(linked.balanceDue||0).toFixed(2)+'.'
+            : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
+      }
+      renderDiagnostics();
+      if(connected)loadItems();
     }
 
     async function load(){
@@ -262,47 +266,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
 
-    runSandboxTest?.addEventListener('click',async()=>{
-      if(!sandboxTestMessage)return;
-      sandboxTestMessage.textContent='Running customer → estimate → invoice → payment test…';
-      runSandboxTest.disabled=true;
-      try{
-        const data=await api({action:'sandbox-smoke-test'});
-        const t=data.test||{};
-        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance $'+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
-        await load();
-      }catch(err){
-        sandboxTestMessage.textContent=err.message||'Sandbox test failed.';
-      }finally{
-        runSandboxTest.disabled=false;
-      }
-    });
-    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemSelect?.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
-
-    load();
-  </script>
-</BaseLayout>
-+Number(linked.balanceDue||0).toFixed(2)+'.'
-            : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
-      }
-      renderDiagnostics();
-      if(connected)loadItems();
-    }
-
-    async function load(){
-      const user=await getUser();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
-      app.classList.remove('hidden');
-      const res=await fetch('/api/admin/quickbooks',{cache:'no-store'});
-      if(!res.ok)return;state=await res.json();render();
-      const params=new URLSearchParams(location.search);
-      if(params.get('connected')==='1')status.textContent='QuickBooks connection completed.';
-      if(params.get('qbo')==='error')status.textContent='QuickBooks connection did not complete. Check the Intuit app redirect URI and credentials.';
-    }
-
-    connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
-    disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
-    refreshItems?.addEventListener('click',loadItems);
-    refreshDiagnostics?.addEventListener('click',load);
     runSandboxTest?.addEventListener('click',async()=>{
       if(!sandboxTestMessage)return;
       sandboxTestMessage.textContent='Running customer → estimate → invoice → payment test…';
