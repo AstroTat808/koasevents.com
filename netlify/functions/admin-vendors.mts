@@ -94,7 +94,8 @@ export default async(req:Request,context:Context)=>{
     if(!vendor.name||!vendor.category)return Response.json({error:'Vendor name and category are required.'},{status:400});
     const next=[vendor,...vendors.filter(v=>v.id!==vendor.id)];
     await store.setJSON('vendors/index',next.slice(0,2000));
-    return Response.json({ok:true,vendor});
+    const affectedEvents=await syncVendorInsuranceToUpcomingEvents(context,vendor);
+    return Response.json({ok:true,vendor,affectedEvents});
   }
   if(action==='archive-vendor'){
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
