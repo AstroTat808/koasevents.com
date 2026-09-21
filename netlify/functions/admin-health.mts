@@ -6,6 +6,7 @@ import {
   readHealthHistory,
   readLatestHealth,
   runSystemHealth,
+  sendHealthTransitionAlert,
 } from './_shared/system-health';
 
 export default async (req:Request,context:Context) => {
@@ -15,8 +16,10 @@ export default async (req:Request,context:Context) => {
 
   if(req.method==='POST'){
     if(!admin) return Response.json({error:'Administrator permission required.'},{status:403});
+    const previous=await readLatestHealth(context);
     const current=await runSystemHealth('manual');
     await persistHealth(context,current);
+    await sendHealthTransitionAlert(previous,current);
     const deployments=await cachedDeploymentHistory(context);
     return Response.json({current,deployments},{headers:{'Cache-Control':'private, no-store'}});
   }
