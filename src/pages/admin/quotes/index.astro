@@ -397,13 +397,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
 
       <div class="mt-8">
-        <div class="flex items-end justify-between gap-4"><div><p class="eyebrow text-[var(--koa-clay)]">Editable pricing</p><h3 class="display mt-2 text-3xl">Proposal line items</h3></div><button type="button" data-add-line class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add line +</button></div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">Editable pricing</p><h3 class="display mt-2 text-3xl">Proposal line items</h3></div><div class="flex flex-wrap gap-2"><select data-catalog-picker class="min-w-[220px] rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-xs font-semibold"><option value="">Add from catalog…</option></select><button type="button" data-add-line class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Custom line +</button></div></div>
         <div data-line-items class="mt-4 grid gap-3"></div>
       </div>
 
       <div class="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <label class="grid gap-2 text-sm font-semibold">Discount amount<input name="discountAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="grid gap-2 text-sm font-semibold">Tax rate %<input name="taxRate" type="number" min="0" max="100" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Hawaiʻi GET rate %<input name="taxRate" type="number" min="0" max="100" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="depositAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="eyebrow text-[var(--koa-clay)]">Calculated total</p><p data-editor-total class="display mt-2 text-3xl text-[var(--koa-forest)]">$0</p></div>
       </div>
@@ -666,6 +666,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const proposalTitle = document.querySelector('[data-proposal-title]');
     const proposalMessage = document.querySelector('[data-proposal-message]');
     const lineItems = document.querySelector('[data-line-items]');
+    const catalogPicker = document.querySelector('[data-catalog-picker]');
     const paymentItems = document.querySelector('[data-payment-items]');
     const editorTotal = document.querySelector('[data-editor-total]');
     const proposalLink = document.querySelector('[data-proposal-link]');
@@ -2573,11 +2574,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
-    function addLine(line={id:'',description:'',quantity:1,unitPrice:0,custom:false}) {
+    function addLine(line={id:'',description:'',quantity:1,unitPrice:0,custom:false,catalogItemId:'',quickBooksItemId:'',category:'',unitLabel:''}) {
       const row=document.createElement('div'); row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[2fr_.55fr_.8fr_auto] lg:items-end';
       row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Description<input data-line-description class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Qty<input data-line-quantity type="number" min="1" step="1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Unit price<input data-line-price type="number" min="0" step="0.01" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><button type="button" data-remove-line class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">Remove</button>';
       row.dataset.lineId=line.id||'line-'+Date.now();
       row.dataset.custom=String(Boolean(line.custom));
+      row.dataset.catalogItemId=line.catalogItemId||'';
+      row.dataset.quickBooksItemId=line.quickBooksItemId||'';
+      row.dataset.category=line.category||'';
+      row.dataset.unitLabel=line.unitLabel||'';
       row.querySelector('[data-line-description]').value=line.description||'';
       row.querySelector('[data-line-quantity]').value=String(line.quantity||1);
       row.querySelector('[data-line-price]').value=String(line.unitPrice||0);
@@ -2599,7 +2604,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function proposalLines() {
       return [...lineItems.children].map((row)=>{
         const unitPrice=Number(row.querySelector('[data-line-price]').value||0);
-        return {id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice,custom:row.dataset.custom==='true' && unitPrice<=0};
+        return {id:row.dataset.lineId||'',description:row.querySelector('[data-line-description]').value,quantity:Number(row.querySelector('[data-line-quantity]').value||1),unitPrice,custom:row.dataset.custom==='true' && unitPrice<=0,catalogItemId:row.dataset.catalogItemId||'',quickBooksItemId:row.dataset.quickBooksItemId||'',category:row.dataset.category||'',unitLabel:row.dataset.unitLabel||''};
       });
     }
     function proposalPayments() {
@@ -2624,7 +2629,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       proposalForm.elements.phone.value=record.customer?.phone||'';
       proposalForm.elements.notes.value=record.customer?.notes||'';
       proposalForm.elements.discountAmount.value=String(record.proposal?.discountAmount||0);
-      proposalForm.elements.taxRate.value=String(record.proposal?.taxRate||0);
+      const configuredGetRate=Number(qboState?.getSettings?.customerRate||0);
+      proposalForm.elements.taxRate.value=String(Number(record.proposal?.taxRate||0) || (record.proposal?.status==='draft' ? configuredGetRate : 0));
       proposalForm.elements.depositAmount.value=String(record.proposal?.depositAmount||0);
       proposalForm.elements.notesToClient.value=record.proposal?.notesToClient||'';
       (record.proposal?.lineItems||[]).forEach(addLine); if(!(record.proposal?.lineItems||[]).length)addLine();
@@ -2645,7 +2651,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const p=record.proposal||{}; const lines=(p.lineItems||[]).map((line)=>'<tr><td>'+escapeHtml(line.description)+'</td><td>'+Number(line.quantity||1)+'</td><td>'+money(line.unitPrice)+'</td><td>'+money(line.amount)+'</td></tr>').join('');
       const payments=(p.paymentSchedule||[]).map((item)=>'<li>'+escapeHtml(item.label)+' — '+(item.dueDate?escapeHtml(item.dueDate):'Date TBD')+' — '+money(item.amount)+'</li>').join('');
       const w=window.open('','_blank'); if(!w)return; w.opener=null;
-      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(record.id)+'</title><style>body{font-family:Arial,sans-serif;color:#173D30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #173D30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:28px;font-weight:700}.muted{color:#666}@media print{button{display:none}}</style></head><body><header><p>Koa’s Events · Proposal</p><h1>'+escapeHtml(record.id)+'</h1><p class="muted">Status: '+escapeHtml(p.status||record.status)+'</p></header><section class="meta"><div class="box"><strong>Client</strong><br>'+escapeHtml(record.customer?.name||'TBD')+'<br>'+escapeHtml(record.customer?.email||'')+'<br>'+escapeHtml(record.customer?.phone||'')+'</div><div class="box"><strong>Event</strong><br>'+escapeHtml(record.customer?.eventDate||'Date TBD')+'<br>'+escapeHtml(packageLabel(recordPackage(record)))+'</div></section><h2>Pricing</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead><tbody>'+lines+'</tbody></table><p>Subtotal: '+money(p.subtotal)+'</p><p>Discount: -'+money(p.discountAmount)+'</p><p>Tax ('+Number(p.taxRate||0)+'%): '+money(p.taxAmount)+'</p><p class="total">Total: '+money(p.total)+'</p><p>Deposit: '+money(p.depositAmount)+'</p><h2>Payment schedule</h2><ul>'+payments+'</ul><h2>Notes</h2><p>'+escapeHtml(p.notesToClient||'')+'</p><button onclick="window.print()">Print / Save PDF</button></body></html>');
+      w.document.write('<!doctype html><html><head><meta charset="utf-8"><title>'+escapeHtml(record.id)+'</title><style>body{font-family:Arial,sans-serif;color:#173D30;margin:48px;line-height:1.5}h1,h2{font-family:Georgia,serif}header{border-bottom:2px solid #173D30;padding-bottom:20px;margin-bottom:28px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:12px}.box{border:1px solid #ddd8cc;border-radius:12px;padding:16px}table{width:100%;border-collapse:collapse;margin-top:16px}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd8cc}.total{font-size:28px;font-weight:700}.muted{color:#666}@media print{button{display:none}}</style></head><body><header><p>Koa’s Events · Proposal</p><h1>'+escapeHtml(record.id)+'</h1><p class="muted">Status: '+escapeHtml(p.status||record.status)+'</p></header><section class="meta"><div class="box"><strong>Client</strong><br>'+escapeHtml(record.customer?.name||'TBD')+'<br>'+escapeHtml(record.customer?.email||'')+'<br>'+escapeHtml(record.customer?.phone||'')+'</div><div class="box"><strong>Event</strong><br>'+escapeHtml(record.customer?.eventDate||'Date TBD')+'<br>'+escapeHtml(packageLabel(recordPackage(record)))+'</div></section><h2>Pricing</h2><table><thead><tr><th>Item</th><th>Qty</th><th>Unit</th><th>Amount</th></tr></thead><tbody>'+lines+'</tbody></table><p>Subtotal: '+money(p.subtotal)+'</p><p>Discount: -'+money(p.discountAmount)+'</p><p>Hawaiʻi GET ('+Number(p.taxRate||0)+'%): '+money(p.taxAmount)+'</p><p class="total">Total: '+money(p.total)+'</p><p>Deposit: '+money(p.depositAmount)+'</p><h2>Payment schedule</h2><ul>'+payments+'</ul><h2>Notes</h2><p>'+escapeHtml(p.notesToClient||'')+'</p><button onclick="window.print()">Print / Save PDF</button></body></html>');
       w.document.close();
     }
     function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
@@ -2661,6 +2667,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
       payload=await response.json();
       qboState=qboResponse.ok?await qboResponse.json():null;
+      if(catalogPicker){
+        const current=catalogPicker.value;
+        catalogPicker.innerHTML='<option value="">Add from catalog…</option>';
+        (qboState?.catalog||[]).filter((item)=>item.active!==false).forEach((item)=>{
+          const option=document.createElement('option');
+          option.value=item.id;
+          option.textContent=item.name+' · '+money(item.unitPrice)+' / '+(item.unitLabel||'each');
+          catalogPicker.appendChild(option);
+        });
+        catalogPicker.value=current;
+      }
       const liveIds=new Set((payload.records||[]).map((record)=>record.id));
       [...selectedRecordIds].forEach((id)=>{if(!liveIds.has(id))selectedRecordIds.delete(id);});
       updateSelectionUi();
@@ -2700,6 +2717,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     profitForm?.querySelectorAll('input,textarea').forEach((input)=>input.addEventListener('input',recalcProfitDialog));
     profitForm?.elements.costMode?.addEventListener('change',recalcProfitDialog);
     document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
+    catalogPicker?.addEventListener('change',()=>{
+      const item=(qboState?.catalog||[]).find((entry)=>entry.id===catalogPicker.value);
+      if(!item)return;
+      addLine({id:'catalog-'+item.id+'-'+Date.now(),description:item.description||item.name,quantity:1,unitPrice:Number(item.unitPrice||0),custom:false,catalogItemId:item.id,quickBooksItemId:item.quickBooksItemId||'',category:item.category||'service',unitLabel:item.unitLabel||'each'});
+      catalogPicker.value='';
+      recalcEditor();
+    });
     document.querySelector('[data-add-payment]')?.addEventListener('click',()=>addPayment());
     proposalForm?.querySelectorAll('[name="discountAmount"],[name="taxRate"]').forEach((input)=>input.addEventListener('input',recalcEditor));
 
