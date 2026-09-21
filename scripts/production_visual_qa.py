@@ -141,6 +141,15 @@ def source_mode():
   "booking bartender section":"data-booking-bartender-section",
   "booking bartender form":"data-booking-bartender-form",
   "booking bartender options":"data-booking-bartender-options",
+  "staffing calendar":"data-mobile-staffing-calendar",
+  "staffing calendar view":"data-staff-calendar-view",
+  "staffing calendar grid":"data-staff-calendar-grid",
+  "staffing calendar renderer":"function renderStaffingCalendar",
+  "explainable win scoring":"mature samples",
+  "staffing recommendation engine":"function staffingRecommendations",
+  "staffing recommendation UI":"data-booking-staffing-recommendations",
+  "apply staffing recommendation":"data-apply-staffing-recommendations",
+  "stable bartender IDs":"data-bartender-id",
   "recommended price apply action":"apply-mobile-bar-margin-target",
  }
  for label,needle in profit_requirements.items():
