@@ -47,8 +47,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h2 class="display mt-2 text-4xl">Share your vendor team</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/56">Add your planner, caterer, photographer, DJ, florist, rental company and other vendors. Koa’s controls insurance approval internally.</p></div>
-            <button type="button" data-add-vendor class="rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add vendor</button>
+            <div><p class="eyebrow text-[var(--koa-clay)]">Vendors</p><h2 class="display mt-2 text-4xl">Build your event team</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/56">Shop Koa’s preferred and verified partners, save favorites and add selections directly to this event. You can still add an outside vendor manually.</p></div>
+            <div class="flex flex-wrap gap-2"><a data-marketplace-link class="rounded-full bg-[var(--koa-clay)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Shop Vendor Marketplace</a><button type="button" data-add-vendor class="rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add outside vendor</button></div>
           </div>
           <div data-vendors class="mt-6 grid gap-3"></div>
           <div class="mt-5 flex flex-wrap items-center gap-3"><button data-save-vendors class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button><span data-vendors-message class="text-xs text-[var(--koa-ink)]/50"></span></div>
@@ -178,6 +178,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       document.querySelector('[data-meta]').textContent=[dateLabel(data.record.eventDate),packageLabel(data.record.packageId)].filter(Boolean).join(' · ');
       guestsForm.elements.finalGuestCount.value=String(data.planning.finalGuestCount||0);
       document.querySelector('[data-booking-link]').href='/booking/?token='+encodeURIComponent(token);
+      document.querySelector('[data-marketplace-link]').href='/vendors/?token='+encodeURIComponent(token);
       renderVendors();renderQuestionnaire();renderDocuments();renderSummary();
     }
 
