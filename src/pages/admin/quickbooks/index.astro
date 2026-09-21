@@ -133,20 +133,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderDiagnostics(){
       const connected=Boolean(state?.connection?.connected);
-      diagConnection.textContent=connected?'Connected':'Not connected';
-      diagCompany.textContent=connected?(state.connection.companyName||'QuickBooks company connected')+' · '+String(state?.configuration?.environment||''):'OAuth connection required';
+      if(diagConnection)diagConnection.textContent=connected?'Connected':'Not connected';
+      if(diagCompany)diagCompany.textContent=connected?(state.connection.companyName||'QuickBooks company connected')+' · '+String(state?.configuration?.environment||''):'OAuth connection required';
+
       const entities=webhookEntities(state?.webhookReceipt);
-      diagWebhook.textContent=when(state?.webhookReceipt?.receivedAt);
-      diagWebhookMeta.textContent=entities.length?entities.map((entity)=>String(entity.name||'')+' '+String(entity.operation||'')).join(' · '):'No verified QuickBooks webhook receipt stored yet.';
-      diagSync.textContent=when(state?.webhookProcessed?.processedAt);
-      diagSyncMeta.textContent=state?.webhookProcessed?.processedAt?String(state.webhookProcessed.status||'processed')+' · '+Number(state.webhookProcessed.affectedRecords?.length||0)+' CRM record(s) affected':'No webhook-driven CRM synchronization recorded yet.';
+      if(diagWebhook)diagWebhook.textContent=when(state?.webhookReceipt?.receivedAt);
+      if(diagWebhookMeta)diagWebhookMeta.textContent=entities.length
+        ? entities.map((entity)=>String(entity.name||'')+' '+String(entity.operation||'')).join(' · ')
+        : 'No verified QuickBooks webhook receipt stored yet.';
+
+      if(diagSync)diagSync.textContent=when(state?.webhookProcessed?.processedAt);
+      if(diagSyncMeta)diagSyncMeta.textContent=state?.webhookProcessed?.processedAt
+        ? String(state.webhookProcessed.status||'processed')+' · '+Number(state.webhookProcessed.affectedRecords?.length||0)+' CRM record(s) affected'
+        : 'No webhook-driven CRM synchronization recorded yet.';
+
       const test=state?.smokeTest;
-      diagTest.textContent=test?.completedAt?when(test.completedAt):'Not run';
-      diagTestMeta.textContent=test?.completedAt?'Status: '+String(test.status||'unknown')+' · Invoice '+String(test.invoiceDocNumber||test.invoiceId||'')+' · Payment '+String(test.paymentId||''):'Run the sandbox end-to-end test after mapping a service item.';
+      if(diagTest)diagTest.textContent=test?.completedAt?when(test.completedAt):'Not run';
+      if(diagTestMeta)diagTestMeta.textContent=test?.completedAt
+        ? 'Status: '+String(test.status||'unknown')+' · Invoice '+String(test.invoiceDocNumber||test.invoiceId||'')+' · Payment '+String(test.paymentId||'')
+        : 'Run the sandbox end-to-end test after mapping a service item.';
+
       const invoiceMatched=Boolean(test?.webhook?.invoiceMatched||state?.smokeWebhookMatch?.invoiceMatched);
       const paymentMatched=Boolean(test?.webhook?.paymentMatched||state?.smokeWebhookMatch?.paymentMatched);
-      const verified=Boolean(test?.webhook?.verified);
-      diagWebhookCheck.textContent=!test?.completedAt
+      const verified=Boolean(test?.webhook?.verified||(invoiceMatched&&paymentMatched));
+      if(diagWebhookCheck)diagWebhookCheck.textContent=!test?.completedAt
         ? 'Sandbox webhook verification has not been attempted yet.'
         : verified
           ? 'Sandbox webhook verified: Intuit delivered matching Invoice and Payment events for the last successful test.'
@@ -206,19 +216,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       try{
         const data=await api({action:'sandbox-smoke-test'});
         const t=data.test||{};
-        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance 
-      }catch(err){
-        sandboxTestMessage.textContent=err.message||'Sandbox test failed.';
-      }finally{
-        runSandboxTest.disabled=false;
-      }
-    });
-    itemForm?.addEventListener('submit',async(e)=>{e.preventDefault();const id=String(itemSelect?.value||'');const item=items.find((entry)=>entry.id===id);if(!item){itemMessage.textContent='Choose a QuickBooks item.';return;}itemMessage.textContent='Saving…';try{const data=await api({action:'set-service-item',itemId:item.id,itemName:item.name});state.settings=data.settings;itemMessage.textContent='Mapped to '+item.name+'.';}catch(err){itemMessage.textContent=err.message||'Unable to save mapping.';}});
-
-    load();
-  </script>
-</BaseLayout>
-+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
+        sandboxTestMessage.textContent='Passed: customer '+(t.customerId||'')+', estimate '+(t.estimateDocNumber||t.estimateId||'')+', invoice '+(t.invoiceDocNumber||t.invoiceId||'')+', payment '+(t.paymentId||'')+', ending invoice balance $'+Number(t.invoiceBalanceAfterPayment||0).toFixed(2)+'. Webhook confirmation may arrive shortly.';
         await load();
       }catch(err){
         sandboxTestMessage.textContent=err.message||'Sandbox test failed.';
