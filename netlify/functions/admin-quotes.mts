@@ -37,6 +37,10 @@ type ProposalLine = {
   unitPrice: number;
   amount: number;
   custom: boolean;
+  catalogItemId?: string;
+  quickBooksItemId?: string;
+  category?: 'service' | 'rental' | 'mileage' | 'fee';
+  unitLabel?: string;
 };
 
 type PaymentItem = {
@@ -667,6 +671,10 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
         unitPrice: amount > 0 ? unitPrice || amount / quantity : 0,
         amount,
         custom: Boolean(item?.custom) || amount <= 0,
+        catalogItemId: cleanText(item?.catalogItemId, 80) || undefined,
+        quickBooksItemId: cleanText(item?.quickBooksItemId, 80) || undefined,
+        category: ['service','rental','mileage','fee'].includes(String(item?.category || '')) ? item.category : undefined,
+        unitLabel: cleanText(item?.unitLabel, 40) || undefined,
       });
     });
   }
@@ -730,6 +738,10 @@ function sanitizeLines(input: unknown): ProposalLine[] {
       unitPrice,
       amount: Math.round(quantity * unitPrice * 100) / 100,
       custom: Boolean(line?.custom),
+      catalogItemId: cleanText(line?.catalogItemId, 80) || undefined,
+      quickBooksItemId: cleanText(line?.quickBooksItemId, 80) || undefined,
+      category: ['service','rental','mileage','fee'].includes(String(line?.category || '')) ? line.category : undefined,
+      unitLabel: cleanText(line?.unitLabel, 40) || undefined,
     };
   }).filter((line) => line.description);
 }
