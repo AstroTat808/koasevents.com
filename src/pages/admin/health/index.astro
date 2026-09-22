@@ -27,6 +27,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Microsoft 365 integration</p>
+              <h2 class="display mt-2 text-4xl">Office 365 calendar sync</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Production synchronization health for the shared Koa’s Events calendar.</p>
+            </div>
+            <a href="/admin/calendar/" class="w-fit rounded-full border border-[var(--koa-line)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open Master Calendar</a>
+          </div>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Authentication</p>
+              <p data-office365-auth class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-office365-auth-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last successful sync</p>
+              <p data-office365-last-success class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Next scheduled sync</p>
+              <p data-office365-next class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unresolved conflicts</p>
+              <p data-office365-conflicts class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Events changed · 24h</p>
+              <p data-office365-changed class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-office365-runs class="mt-1 text-[.68rem] text-[var(--koa-ink)]/45"></p>
+            </article>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div><p class="eyebrow text-[var(--koa-clay)]">Current production</p><h2 class="display mt-2 text-4xl">Deployment</h2></div>
           <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
@@ -269,6 +304,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const publicStatusEnabled=document.querySelector('[data-public-status-enabled]');
     const savePolicy=document.querySelector('[data-save-policy]');
     const policyMessage=document.querySelector('[data-policy-message]');
+    const office365Auth=document.querySelector('[data-office365-auth]');
+    const office365AuthDetail=document.querySelector('[data-office365-auth-detail]');
+    const office365LastSuccess=document.querySelector('[data-office365-last-success]');
+    const office365Next=document.querySelector('[data-office365-next]');
+    const office365Conflicts=document.querySelector('[data-office365-conflicts]');
+    const office365Changed=document.querySelector('[data-office365-changed]');
+    const office365Runs=document.querySelector('[data-office365-runs]');
     const overall=document.querySelector('[data-overall]');
     const creditPanel=document.querySelector('[data-credit-panel]');
     const creditCycle=document.querySelector('[data-credit-cycle]');
@@ -534,6 +576,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         card.innerHTML='<div class="flex items-center justify-between gap-4"><strong class="text-sm text-[var(--koa-forest)]">'+(row.overall==='healthy'?'Healthy':'Attention')+'</strong><span class="text-xs text-[var(--koa-ink)]/48">'+new Date(row.checkedAt).toLocaleString()+'</span></div><p class="mt-2 text-xs text-[var(--koa-ink)]/58">'+row.source+' · '+row.passed+' passed · '+row.failed+' failed'+(row.failedIds?.length?' · '+row.failedIds.join(', '):'')+'</p>';
         historyEl.appendChild(card);
       });
+
+      const office365=data.office365||{};
+      if(office365Auth){
+        const authLabels={
+          connected:'Connected',
+          configured:'Configured · awaiting first sync',
+          authentication_error:'Authentication error',
+          sync_error:'Sync error',
+          not_configured:'Not configured',
+        };
+        const authStatus=String(office365.authenticationStatus||'not_configured');
+        office365Auth.textContent=authLabels[authStatus]||authStatus;
+        office365Auth.className='mt-2 text-sm font-semibold '+(
+          authStatus==='connected'?'text-emerald-800':
+          authStatus==='configured'?'text-amber-800':
+          'text-red-800'
+        );
+        office365AuthDetail.textContent=office365.lastError
+          ? String(office365.lastError)
+          : [office365.calendarName,office365.calendarOwner].filter(Boolean).join(' · ');
+        office365LastSuccess.textContent=office365.lastSuccessAt?new Date(office365.lastSuccessAt).toLocaleString():'No successful sync yet';
+        office365Next.textContent=office365.nextScheduledSyncAt?new Date(office365.nextScheduledSyncAt).toLocaleString():'—';
+        office365Conflicts.textContent=String(office365.unresolvedConflicts||0);
+        office365Conflicts.className='display mt-2 text-3xl '+(Number(office365.unresolvedConflicts||0)>0?'text-red-800':'text-[var(--koa-forest)]');
+        office365Changed.textContent=String(office365.changedLast24Hours||0);
+        office365Runs.textContent=String(office365.runsLast24Hours||0)+' sync run'+(Number(office365.runsLast24Hours||0)===1?'':'s')+' in the last 24 hours';
+      }
 
       const deployments=data.deployments||{};
       const creditUsage=deployments.creditUsage||{};
