@@ -1,6 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin.ts';
+import { hasCapability, requireCapability } from './_shared/admin.ts';
 import {
   applyAutomaticBlocks,
   createBlocklistEntry,
@@ -115,10 +115,11 @@ async function autoTrashConfirmedSpamRecord(
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireAdmin();
+  const auth = await requireCapability('security.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
+    if (!hasCapability(auth.user,'security.manage')) return Response.json({ error:'Security management permission required.' }, { status:403 });
     const payload: any = await req.json().catch(() => null);
     const action = clean(payload?.action, 40);
     const adminEmail = clean(auth.user?.email, 240).toLowerCase();
