@@ -1,25 +1,50 @@
 import type { Config } from '@netlify/functions';
-import { capabilitiesFor, isApprovedAdmin, operationsRole, requireOperations } from './_shared/admin';
+import { getAccessContext, isApprovedAdmin } from './_shared/admin';
 
-function clean(value: unknown, max=240) {
-  return String(value || '').trim().slice(0,max);
+function clean(value: unknown, max = 240) {
+  return String(value || '').trim().slice(0, max);
 }
 
 export default async () => {
-  const auth=await requireOperations();
-  if(auth.response) return auth.response;
-  const role=operationsRole(auth.user);
-  const permissions=capabilitiesFor(auth.user);
-  const email=clean(auth.user?.email,240).toLowerCase();
+  const ctx = await getAccessContext();
+  if (!ctx.sessionUser || !ctx.user) return new Response('Unauthorized', { status:401 });
+
+  const email = clean(ctx.user?.email,240).toLowerCase();
+  const security = ctx.security || {
+    forcePasswordChange:false,
+    passwordChangedAt:'',
+    passwordExpiresAt:'',
+    passwordExpired:false,
+    passwordExpiryDays:0,
+    sessionVersion:0,
+    tokenSessionVersion:0,
+    sessionRevoked:false,
+  };
+
   return Response.json({
     email,
-    role,
-    roles:[role],
-    isAdmin:isApprovedAdmin(auth.user),
-    permissions,
-    app_metadata:{roles:[role],permissions},
-    appMetadata:{roles:[role],permissions},
-  },{headers:{'Cache-Control':'private, no-store'}});
+    role:ctx.role,
+    roles:[ctx.role],
+    isAdmin:isApprovedAdmin(ctx.user),
+    permissions:ctx.capabilities,
+    capabilities:ctx.capabilities,
+    accessBlocked:Boolean(
+      ctx.role === 'none' ||
+      ctx.role === 'deactivated' ||
+      security.sessionRevoked ||
+      security.forcePasswordChange ||
+      security.passwordExpired
+    ),
+    blockReason:
+      ctx.role === 'deactivated' || ctx.role === 'none' ? 'account_disabled'
+      : security.sessionRevoked ? 'session_revoked'
+      : security.passwordExpired ? 'password_expired'
+      : security.forcePasswordChange ? 'password_change_required'
+      : '',
+    security,
+    app_metadata:{roles:[ctx.role],permissions:ctx.capabilities},
+    appMetadata:{roles:[ctx.role],permissions:ctx.capabilities},
+  }, { headers:{'Cache-Control':'private, no-store'} });
 };
 
-export const config:Config={path:'/api/admin/session'};
+export const config: Config = { path:'/api/admin/session' };
