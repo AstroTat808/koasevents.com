@@ -693,6 +693,8 @@ export default async (req: Request, context: Context) => {
       mobileBarMilestones: payload?.mobileBarMilestones,
       privateEventMilestones: payload?.privateEventMilestones,
       defaultMilestones: payload?.defaultMilestones,
+      customPresets: payload?.customPresets,
+      autoRules: payload?.autoRules,
     });
     return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
