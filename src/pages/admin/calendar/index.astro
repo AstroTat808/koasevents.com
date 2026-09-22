@@ -714,6 +714,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             text('strong',issue.severity==='error'?'text-red-800':'text-amber-900',(issue.title||issue.recordId||'Calendar item')+' · '+String(issue.type||'issue').replaceAll('_',' ')),
             text('p','mt-1 text-[var(--koa-ink)]/60',(issue.date?dateLabel(issue.date)+' · ':'')+(issue.detail||'')+fields)
           );
+          const repairs=Array.isArray(issue.repairs)?issue.repairs:[];
+          if(repairs.length){
+            const repairWrap=document.createElement('div');repairWrap.className='mt-3 flex flex-wrap gap-2';
+            repairs.forEach((repair)=>{
+              const button=document.createElement('button');
+              button.type='button';
+              button.className='rounded-full '+(repair.requiresConfirmation?'bg-red-800':'bg-[var(--koa-forest)]')+' px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-white';
+              button.textContent=repair.label||'Repair';
+              button.addEventListener('click',()=>repairOffice365Issue(repair,button));
+              repairWrap.appendChild(button);
+            });
+            row.appendChild(repairWrap);
+          }
           list.appendChild(row);
         });
         if(issues.length>20)list.appendChild(text('p','text-xs text-[var(--koa-ink)]/45','Showing 20 of '+issues.length+' verification issues.'));
@@ -721,6 +734,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(ok){
         office365VerifyResult.appendChild(text('p','mt-3 text-xs text-emerald-800','Every booked Koa event has one linked Office 365 event and the synchronized fields match.'));
       }
+    }
+
+    async function repairOffice365Issue(repair,button){
+      const requiresConfirmation=Boolean(repair?.requiresConfirmation);
+      if(requiresConfirmation){
+        const confirmed=window.confirm('Delete this Office 365 duplicate? This action cannot be undone. The linked Koa event will be kept.');
+        if(!confirmed)return;
+      }
+      const original=button.textContent;
+      button.disabled=true;button.textContent='Repairing…';
+      try{
+        const res=await fetch('/api/admin/calendar-office365',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            action:'repair_verification',
+            repair:{
+              type:repair?.type,
+              recordId:repair?.recordId,
+              eventId:repair?.eventId,
+              confirmed:requiresConfirmation,
+            },
+          }),
+        });
+        const result=await res.json().catch(()=>({}));
+        if(!res.ok||!result.ok)throw new Error(result?.error||'Repair failed');
+        renderOffice365Verification({verification:result.verification});
+        const statusEl=document.querySelector('[data-office365-status]');
+        if(statusEl)statusEl.textContent=result.message||'Office 365 repair completed.';
+        await loadOffice365Status();
+      }catch(error){
+        button.textContent='Repair failed';
+        window.setTimeout(()=>{button.textContent=original;button.disabled=false;},1800);
+        return;
+      }
+      button.disabled=false;button.textContent=original;
     }
 
     async function syncOffice365NowAndVerify(){
