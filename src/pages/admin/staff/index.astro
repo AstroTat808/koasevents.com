@@ -366,7 +366,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'bg-amber-50 text-amber-800 border-amber-200'
           : 'bg-red-50 text-red-700 border-red-200';
 
-        info.innerHTML = '<div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role,user)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        info.innerHTML = '<div class="flex items-start gap-3"><div data-user-avatar class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-sm font-black text-white"></div><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role,user)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p></div></div>';
+        const avatar=info.querySelector('[data-user-avatar]');
+        if(user.photoUrl){avatar.innerHTML='<img src="'+user.photoUrl+'" alt="" class="h-full w-full object-cover" />';}else avatar.textContent=String(user.name||user.email||'K').trim().charAt(0).toUpperCase()||'K';
         info.querySelector('h3').textContent = user.name || user.email || 'Unnamed user';
         if(user.jobTitle){const title=document.createElement('p');title.className='mt-1 text-sm font-semibold text-[var(--koa-clay)]';title.textContent=user.jobTitle;info.querySelector('h3').after(title);}
         info.querySelector('p:last-child').textContent = [
@@ -599,11 +601,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const card = document.createElement('article');
         card.className = 'rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         const action = String(entry.action || 'activity').replaceAll('_',' ');
-        card.append(
+        const actorValue=String(entry.actor||entry.subjectEmail||'').trim().toLowerCase();
+        const actorUser=allUsers.find((user)=>[user.email,user.name].some((value)=>String(value||'').trim().toLowerCase()===actorValue))||allUsers.find((user)=>actorValue.includes(String(user.email||'').toLowerCase()));
+        const row=document.createElement('div');row.className='flex items-start gap-3';
+        const avatar=document.createElement('div');avatar.className='flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-xs font-black text-white';
+        if(actorUser?.photoUrl)avatar.innerHTML='<img src="'+actorUser.photoUrl+'" alt="" class="h-full w-full object-cover" />';else avatar.textContent=String(actorUser?.name||entry.actor||'K').trim().charAt(0).toUpperCase()||'K';
+        const body=document.createElement('div');body.className='min-w-0 flex-1';
+        body.append(
           Object.assign(document.createElement('p'), {className:'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',textContent:action}),
           Object.assign(document.createElement('p'), {className:'mt-1 text-sm font-semibold text-[var(--koa-forest)]',textContent:entry.detail || ''}),
-          Object.assign(document.createElement('p'), {className:'mt-2 text-xs text-[var(--koa-ink)]/48',textContent:[entry.actor,entry.subjectEmail,entry.recordId,new Date(entry.createdAt).toLocaleString()].filter(Boolean).join(' · ')})
+          Object.assign(document.createElement('p'), {className:'mt-2 text-xs text-[var(--koa-ink)]/48',textContent:[actorUser?.name||entry.actor,entry.subjectEmail,entry.recordId,new Date(entry.createdAt).toLocaleString()].filter(Boolean).join(' · ')})
         );
+        row.append(avatar,body);card.appendChild(row);
         auditList.appendChild(card);
       });
 

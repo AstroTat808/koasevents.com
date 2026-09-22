@@ -36,10 +36,19 @@ function personFor(user:any){
   const customTitle=clean(meta?.job_title||meta?.jobTitle,120);
   const role=operationsRole(user);
   const fallback=role&&role!=='custom'&&role in ROLE_LABELS?ROLE_LABELS[role as keyof typeof ROLE_LABELS]:'Koa’s Events Team';
-  return {name,title:customTitle||fallback};
+  return {
+    name,
+    title:customTitle||fallback,
+    pronouns:clean(meta?.pronouns,80),
+    roleDescription:clean(meta?.role_description||meta?.roleDescription,220),
+    showTitle:meta?.signature_show_title!==false,
+    showTeamTitle:meta?.signature_show_team_title!==false,
+    showPronouns:meta?.signature_show_pronouns===true,
+    showRoleDescription:meta?.signature_show_role_description===true,
+  };
 }
 
-function renderTemplate(template:PreviewTemplate,brand:EmailBrandKey,person:{name:string;title:string}){
+function renderTemplate(template:PreviewTemplate,brand:EmailBrandKey,person:ReturnType<typeof personFor>){
   const recipient=template.staff?'Team':'Malia';
   const extra =
     template.id==='client-confirmation'

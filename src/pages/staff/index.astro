@@ -62,25 +62,53 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             </div>
 
             <section class="mb-6 rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 shadow-sm">
-              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <p class="eyebrow text-[var(--koa-clay)]">My profile</p>
-                  <h2 class="display mt-2 text-3xl">Staff signature details</h2>
-                  <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/55">Update your own display name and client-facing Job Title. This does not change your role, permissions, or access.</p>
+              <div class="flex flex-col gap-5 lg:flex-row lg:items-start">
+                <div class="shrink-0">
+                  <div data-profile-photo-preview class="flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-[var(--koa-line)] bg-[var(--koa-sand)] text-3xl font-bold text-[var(--koa-forest)]">K</div>
+                  <form data-profile-photo-form class="mt-3 grid gap-2">
+                    <input name="file" type="file" accept="image/jpeg,image/png,image/webp" class="max-w-[15rem] text-xs" />
+                    <div class="flex flex-wrap gap-2">
+                      <button type="submit" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white">Upload photo</button>
+                      <button data-remove-profile-photo type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Remove</button>
+                    </div>
+                    <p data-profile-photo-message class="text-xs leading-5 text-[var(--koa-ink)]/50">JPG, PNG, or WEBP · max 2 MB · internal use only.</p>
+                  </form>
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div>
+                    <p class="eyebrow text-[var(--koa-clay)]">My profile</p>
+                    <h2 class="display mt-2 text-3xl">Profile + email signature</h2>
+                    <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Your profile photo is shown only inside Koa’s staff tools. Client emails never include it. Signature controls affect personalized staff-sent emails while company email, phone, and website remain standardized.</p>
+                  </div>
+                  <form data-profile-form class="mt-5 grid gap-4 md:grid-cols-2">
+                    <label class="grid gap-2 text-sm font-semibold">Display name
+                      <input name="displayName" required maxlength="180" autocomplete="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                    </label>
+                    <label class="grid gap-2 text-sm font-semibold">Job Title
+                      <input name="jobTitle" maxlength="120" autocomplete="organization-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Wedding & Events Manager" />
+                    </label>
+                    <label class="grid gap-2 text-sm font-semibold">Pronouns
+                      <input name="pronouns" maxlength="80" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="she/her, he/him, they/them" />
+                    </label>
+                    <label class="grid gap-2 text-sm font-semibold">Short role description
+                      <input name="roleDescription" maxlength="220" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Helping couples plan intimate Big Island celebrations." />
+                    </label>
+                    <fieldset class="md:col-span-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/55 p-4">
+                      <legend class="px-1 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Personalized email signature</legend>
+                      <div class="mt-2 grid gap-3 sm:grid-cols-2">
+                        <label class="flex items-start gap-3 text-sm"><input name="showTitle" type="checkbox" class="mt-1" checked /><span><strong class="block">Show direct Job Title</strong><span class="text-xs text-[var(--koa-ink)]/50">Example: Wedding & Events Manager</span></span></label>
+                        <label class="flex items-start gap-3 text-sm"><input name="showTeamTitle" type="checkbox" class="mt-1" checked /><span><strong class="block">Show Koa’s Events Team</strong><span class="text-xs text-[var(--koa-ink)]/50">Keeps the team affiliation under your name.</span></span></label>
+                        <label class="flex items-start gap-3 text-sm"><input name="showPronouns" type="checkbox" class="mt-1" /><span><strong class="block">Show pronouns</strong><span class="text-xs text-[var(--koa-ink)]/50">Only shown when you provide them.</span></span></label>
+                        <label class="flex items-start gap-3 text-sm"><input name="showRoleDescription" type="checkbox" class="mt-1" /><span><strong class="block">Show role description</strong><span class="text-xs text-[var(--koa-ink)]/50">Adds your short description beneath your title.</span></span></label>
+                      </div>
+                    </fieldset>
+                    <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                      <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save profile</button>
+                      <span data-profile-message class="text-sm text-[var(--koa-ink)]/55"></span>
+                    </div>
+                  </form>
                 </div>
               </div>
-              <form data-profile-form class="mt-5 grid gap-4 md:grid-cols-2">
-                <label class="grid gap-2 text-sm font-semibold">Display name
-                  <input name="displayName" required maxlength="180" autocomplete="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
-                </label>
-                <label class="grid gap-2 text-sm font-semibold">Job Title
-                  <input name="jobTitle" maxlength="120" autocomplete="organization-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Wedding & Events Manager" />
-                </label>
-                <div class="md:col-span-2 flex flex-wrap items-center gap-3">
-                  <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save profile</button>
-                  <span data-profile-message class="text-sm text-[var(--koa-ink)]/55"></span>
-                </div>
-              </form>
             </section>
 
             <div data-app-grid class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -137,6 +165,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const roleBadge=document.querySelector('[data-role-badge]');
     const profileForm=document.querySelector('[data-profile-form]');
     const profileMessage=document.querySelector('[data-profile-message]');
+    const profilePhotoForm=document.querySelector('[data-profile-photo-form]');
+    const profilePhotoPreview=document.querySelector('[data-profile-photo-preview]');
+    const profilePhotoMessage=document.querySelector('[data-profile-photo-message]');
 
     async function updateHealthWarning(session){
       const warning=document.querySelector('[data-health-warning]');
@@ -166,7 +197,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if(profileForm&&signedIn){
         profileForm.elements.displayName.value=session?.displayName||'';
         profileForm.elements.jobTitle.value=session?.jobTitle||'';
+        profileForm.elements.pronouns.value=session?.pronouns||'';
+        profileForm.elements.roleDescription.value=session?.roleDescription||'';
+        profileForm.elements.showTitle.checked=session?.signature?.showTitle!==false;
+        profileForm.elements.showTeamTitle.checked=session?.signature?.showTeamTitle!==false;
+        profileForm.elements.showPronouns.checked=session?.signature?.showPronouns===true;
+        profileForm.elements.showRoleDescription.checked=session?.signature?.showRoleDescription===true;
         if(profileMessage)profileMessage.textContent='';
+      }
+      if(profilePhotoPreview&&signedIn){
+        const fallback=String(session?.displayName||session?.email||'K').trim().charAt(0).toUpperCase()||'K';
+        profilePhotoPreview.innerHTML=session?.photoUrl
+          ? '<img src="'+session.photoUrl+'" alt="" class="h-full w-full object-cover" />'
+          : '<span>'+fallback+'</span>';
       }
 
       accessWarning?.classList.add('hidden');
@@ -315,7 +358,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const response=await fetch('/api/account/profile',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({displayName:form.elements.displayName.value,jobTitle:form.elements.jobTitle.value}),
+          body:JSON.stringify({
+            displayName:form.elements.displayName.value,
+            jobTitle:form.elements.jobTitle.value,
+            pronouns:form.elements.pronouns.value,
+            roleDescription:form.elements.roleDescription.value,
+            signature:{
+              showTitle:form.elements.showTitle.checked,
+              showTeamTitle:form.elements.showTeamTitle.checked,
+              showPronouns:form.elements.showPronouns.checked,
+              showRoleDescription:form.elements.showRoleDescription.checked,
+            },
+          }),
         });
         const result=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(result.error||'Unable to update profile.');
@@ -326,6 +380,34 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }finally{
         if(button){button.disabled=false;button.textContent=original;}
       }
+    });
+
+    profilePhotoForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const file=form.elements.file.files?.[0];
+      if(!file){if(profilePhotoMessage)profilePhotoMessage.textContent='Choose an image first.';return;}
+      if(profilePhotoMessage)profilePhotoMessage.textContent='Uploading…';
+      const data=new FormData();data.append('file',file);
+      try{
+        const response=await fetch('/api/account/profile/photo',{method:'POST',body:data});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to upload profile photo.');
+        form.reset();
+        if(profilePhotoMessage)profilePhotoMessage.textContent='Profile photo updated.';
+        await refreshSession();
+      }catch(err){if(profilePhotoMessage)profilePhotoMessage.textContent=err instanceof Error?err.message:'Unable to upload profile photo.';}
+    });
+
+    document.querySelector('[data-remove-profile-photo]')?.addEventListener('click',async()=>{
+      if(profilePhotoMessage)profilePhotoMessage.textContent='Removing…';
+      try{
+        const response=await fetch('/api/account/profile/photo',{method:'DELETE'});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to remove profile photo.');
+        if(profilePhotoMessage)profilePhotoMessage.textContent='Profile photo removed.';
+        await refreshSession();
+      }catch(err){if(profilePhotoMessage)profilePhotoMessage.textContent=err instanceof Error?err.message:'Unable to remove profile photo.';}
     });
 
     logoutButton?.addEventListener('click',async()=>{await logout();renderSession(null);});

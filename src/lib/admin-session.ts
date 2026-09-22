@@ -14,6 +14,16 @@ export type AdminSessionRole =
 export type AdminSession = {
   email: string;
   displayName: string;
+  jobTitle: string;
+  pronouns: string;
+  roleDescription: string;
+  photoUrl: string;
+  signature: {
+    showTitle: boolean;
+    showTeamTitle: boolean;
+    showPronouns: boolean;
+    showRoleDescription: boolean;
+  };
   role: AdminSessionRole;
   roles: string[];
   isAdmin: boolean;
