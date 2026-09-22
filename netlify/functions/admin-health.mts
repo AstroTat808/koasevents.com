@@ -39,12 +39,19 @@ function saverMeasurementInput(baseline:any,targetModes:any,source:string,label:
   const creditUsage=baseline?.creditUsage||{};
   const currentModes=creditUsage?.saverPolicy?.modes||{};
   const controls=Array.isArray(creditUsage?.jobControls)?creditUsage.jobControls:[];
+  const predictedByJob=controls.map((control:any)=>{
+    const fromMode=String(currentModes?.[control.jobId]||'normal');
+    const toMode=String(targetModes?.[control.jobId]||fromMode);
+    return {
+      jobId:String(control?.jobId||''),
+      label:String(control?.label||control?.jobId||'Scheduled job'),
+      fromMode,
+      toMode,
+      predictedSavingsPerDay:Math.max(0,saverModeCredits(control,toMode)-saverModeCredits(control,fromMode)),
+    };
+  }).filter((row:any)=>row.jobId&&row.predictedSavingsPerDay>0);
   const changed=controls.some((control:any)=>String(currentModes?.[control.jobId]||'normal')!==String(targetModes?.[control.jobId]||currentModes?.[control.jobId]||'normal'));
-  const predictedSavingsPerDay=controls.reduce((sum:number,control:any)=>{
-    const from=String(currentModes?.[control.jobId]||'normal');
-    const to=String(targetModes?.[control.jobId]||from);
-    return sum+Math.max(0,saverModeCredits(control,to)-saverModeCredits(control,from));
-  },0);
+  const predictedSavingsPerDay=predictedByJob.reduce((sum:number,row:any)=>sum+Number(row.predictedSavingsPerDay||0),0);
   return {
     source,
     label,
@@ -53,6 +60,7 @@ function saverMeasurementInput(baseline:any,targetModes:any,source:string,label:
     baselineCredits:Number(creditUsage?.totalEstimatedCredits||0),
     baselineDailyBurnRate:Number(creditUsage?.projection?.weightedDailyBurnRate||0),
     predictedSavingsPerDay,
+    predictedByJob,
     productionDeployCount:Number(creditUsage?.productionDeploys||0),
     cycleStart:String(creditUsage?.cycleStart||''),
   };

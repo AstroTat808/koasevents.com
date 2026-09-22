@@ -251,6 +251,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Each preset shows the exact six-job mode changes before you apply it.</p>
                 </div>
               </div>
+              <div data-credit-automation class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">Automatic protection is evaluating the current forecast.</div>
               <div data-credit-presets class="mt-4 grid gap-3 lg:grid-cols-3"></div>
             </div>
 
@@ -284,6 +285,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 </div>
               </div>
               <div data-credit-learning-active class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">No saver-plan measurement is active.</div>
+              <div data-credit-learning-attribution class="mt-3 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3"></div>
               <div data-credit-learning-history class="mt-3 grid gap-2"></div>
             </div>
 
@@ -549,7 +551,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditRecommendations=document.querySelector('[data-credit-recommendations]');
     const creditSaverStatus=document.querySelector('[data-credit-saver-status]');
     const creditSaverClear=document.querySelector('[data-credit-saver-clear]');
-    const creditPresets=document.querySelector('[data-credit-presets]');
+    const creditAutomation=document.querySelector('[data-credit-automation]');
+        const creditPresets=document.querySelector('[data-credit-presets]');
+    const creditLearningAttribution=document.querySelector('[data-credit-learning-attribution]');
     const creditLearningFactor=document.querySelector('[data-credit-learning-factor]');
     const creditLearningCount=document.querySelector('[data-credit-learning-count]');
     const creditLearningActive=document.querySelector('[data-credit-learning-active]');
@@ -1335,6 +1339,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           creditRecommendations.innerHTML='<p class="text-xs leading-5 text-[var(--koa-ink)]/50">No credit-saving intervention is currently recommended. The weighted projection is within the configured allowance.</p>';
         }
       }
+      const creditAutomationState=creditUsage.creditAutomation||{};
+      if(creditAutomation){
+        const autoApplied=Boolean(creditAutomationState.autoAppliedBalanced);
+        const maxSuggested=Boolean(creditAutomationState.maximumSavingsSuggested);
+        creditAutomation.className='mt-4 rounded-xl border p-3 text-xs leading-5 '+(autoApplied?'border-amber-200 bg-amber-50 text-amber-900':maxSuggested?'border-red-200 bg-red-50 text-red-900':'border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-ink)]/58');
+        creditAutomation.textContent=autoApplied
+          ? 'Automatic Protection switched all six safe jobs to Balanced Savings when the projected cycle usage crossed 80%'+(creditAutomationState.autoAppliedAt?' at '+new Date(creditAutomationState.autoAppliedAt).toLocaleString():'')+'. Maximum Savings remains manual.'
+          : maxSuggested
+            ? 'Maximum Savings is recommended because the adjusted projection is still '+String(creditAutomationState.adjustedProjectedPercent??'—')+'% of the monthly allowance. It will not be enabled automatically.'
+            : 'Automatic Protection will switch Normal Operations to Balanced Savings only when projected cycle usage crosses 80%. Maximum Savings is suggestion-only and never automatic.';
+        if(creditAutomationState.skippedReason)creditAutomation.textContent+=' '+String(creditAutomationState.skippedReason);
+      }
+
       if(creditPresets){
         creditPresets.innerHTML='';
         const presets=Array.isArray(creditUsage.presets)?creditUsage.presets:[];
@@ -1368,7 +1385,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           button.type='button';
           button.dataset.creditPreset=String(preset.id||'');
           button.className='mt-3 rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.07em] text-white';
-          button.textContent='Apply '+String(preset.name||'preset');
+          const isMaximum=String(preset.id||'')==='maximum-savings';
+          const suggested=isMaximum&&Boolean(creditAutomationState.maximumSavingsSuggested);
+          if(suggested){
+            const badge=document.createElement('span');
+            badge.className='mt-3 inline-flex rounded-full bg-red-100 px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-red-800';
+            badge.textContent='Suggested now · manual approval required';
+            card.appendChild(badge);
+          }
+          button.textContent=(suggested?'Review & apply ':'Apply ')+String(preset.name||'preset');
           card.append(title,description,list,caution,button);
           creditPresets.appendChild(card);
         });
@@ -1404,6 +1429,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           creditLearningActive.textContent='No saver-plan measurement is active.';
         }
       }
+      if(creditLearningAttribution){
+        const historyRows=Array.isArray(learning.history)?learning.history:[];
+        const completed=historyRows.find((row)=>String(row?.status||'')==='completed'&&Array.isArray(row?.savingsAttribution));
+        if(completed&&completed.savingsAttribution.length){
+          creditLearningAttribution.classList.remove('hidden');
+          creditLearningAttribution.innerHTML='';
+          const title=document.createElement('strong');
+          title.className='block text-sm text-[var(--koa-forest)]';
+          title.textContent='What actually saved credits?';
+          const note=document.createElement('p');
+          note.className='mt-1 text-[.65rem] leading-5 text-[var(--koa-ink)]/45';
+          note.textContent='Realized aggregate savings are apportioned by each changed job’s predicted share; this is an attribution estimate, not a Netlify per-function billing ledger.';
+          const grid=document.createElement('div');
+          grid.className='mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3';
+          completed.savingsAttribution.forEach((row)=>{
+            const item=document.createElement('div');
+            item.className='rounded-lg bg-white p-2.5';
+            const name=document.createElement('p');
+            name.className='text-[.68rem] font-semibold text-[var(--koa-forest)]';
+            name.textContent=String(row.label||row.jobId||'Scheduled job');
+            const value=document.createElement('p');
+            value.className='mt-1 text-sm font-black text-[var(--koa-clay)]';
+            value.textContent='~'+String(row.realizedCreditsDuringWindow??0)+' credits';
+            const meta=document.createElement('p');
+            meta.className='mt-1 text-[.6rem] text-[var(--koa-ink)]/42';
+            meta.textContent=String(row.attributionSharePercent??0)+'% share · '+String(row.fromMode||'normal')+' → '+String(row.toMode||'saver');
+            item.append(name,value,meta);
+            grid.appendChild(item);
+          });
+          creditLearningAttribution.append(title,note,grid);
+        }else{
+          creditLearningAttribution.classList.add('hidden');
+          creditLearningAttribution.innerHTML='';
+        }
+      }
+
       if(creditLearningHistory){
         creditLearningHistory.innerHTML='';
         (Array.isArray(learning.history)?learning.history:[]).slice(0,5).forEach((row)=>{
