@@ -595,6 +595,21 @@
 
   let alertPayload = null;
   let alertTab = 'active';
+  let deployWarningPoll = null;
+
+  function updateDeployWarningPoll(payload) {
+    const hasYellowDeployWarning = (payload?.alerts || []).some((alert) =>
+      alert?.id === 'health:netlify-github-sync' && alert?.severity === 'upcoming'
+    );
+    if (hasYellowDeployWarning && !deployWarningPoll) {
+      deployWarningPoll = window.setInterval(() => {
+        if (document.visibilityState === 'visible') loadAlerts();
+      }, 15000);
+    } else if (!hasYellowDeployWarning && deployWarningPoll) {
+      window.clearInterval(deployWarningPoll);
+      deployWarningPoll = null;
+    }
+  }
 
   function formatAlertTime(value) {
     const ms = Date.parse(String(value || ''));
@@ -881,6 +896,7 @@
     }
 
     renderAlertCenter(payload);
+    updateDeployWarningPoll(payload);
 
     nav?.querySelectorAll('[data-link-alert]').forEach((badge) => {
       if (!(badge instanceof HTMLElement)) return;
@@ -958,6 +974,10 @@
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
     const open = links.dataset.open === 'true';
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && deployWarningPoll) loadAlerts();
   });
 
   nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {

@@ -240,7 +240,7 @@ async function timedFetch(url:string, init:RequestInit={}) {
   }
 }
 
-async function inspectDeploymentSync(context:Context,seed:any={}) {
+export async function inspectDeploymentSync(context:Context,seed:any={}) {
   const started=Date.now();
   const origin=baseUrl().replace(/\/$/,'');
   let liveCommit=clean(seed?.liveCommit,80);
