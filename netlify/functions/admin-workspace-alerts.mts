@@ -193,16 +193,24 @@ async function computeAlerts(context:Context,user:any){
 
   const healthDetails:AlertDetail[]=canHealth&&latestHealth
     ? (Array.isArray(latestHealth?.checks)?latestHealth.checks:[])
-        .filter((check:any)=>!check?.ok)
-        .map((check:any)=>({
-          id:'health:'+clip(check?.id,100),
-          category:'healthWarnings' as AlertCategory,
-          severity:'urgent' as Severity,
-          title:clip(check?.name||check?.id||'System health failure'),
-          context:clip(check?.kind||'Protected service').replaceAll('_',' '),
-          detail:clip(check?.detail||('Status '+String(check?.status||'unknown')),220),
-          href:'/admin/health/',
-        }))
+        .filter((check:any)=>!check?.ok || String(check?.severity||'')==='yellow')
+        .map((check:any)=>{
+          const releaseMeta=[
+            latestHealth?.deployId?'Deploy '+clip(latestHealth.deployId,40):'',
+            latestHealth?.commit?'Commit '+clip(latestHealth.commit,12):'',
+          ].filter(Boolean).join(' · ');
+          const severity:Severity=String(check?.severity||'')==='yellow'?'upcoming':'urgent';
+          const baseDetail=clip(check?.detail||('Status '+String(check?.status||'unknown')),170);
+          return {
+            id:'health:'+clip(check?.id,100),
+            category:'healthWarnings' as AlertCategory,
+            severity,
+            title:clip(check?.name||check?.id||'System health failure'),
+            context:releaseMeta||clip(check?.kind||'Protected service').replaceAll('_',' '),
+            detail:clip(baseDetail+(releaseMeta?' · '+releaseMeta:''),220),
+            href:'/admin/health/',
+          } as AlertDetail;
+        })
     : [];
 
   return {
