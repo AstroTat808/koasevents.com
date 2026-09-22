@@ -247,7 +247,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const hidden=document.createElement('input');hidden.type='hidden';hidden.dataset.owner='';
       const input=document.createElement('input');input.type='search';input.autocomplete='off';input.className='field min-w-0';input.placeholder='Search staff';
       const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.3rem)] z-50 hidden max-h-64 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
-      const initial=staffMatch(value);hidden.value=initial?.email||'';input.value=initial?.name||'';if(value&&!initial)input.placeholder='Previous: '+String(value).slice(0,60);
+      const initial=staffMatch(value);hidden.value=initial?.email||String(value||'').trim();input.value=initial?.name||'';if(value&&!initial)input.placeholder='Previous: '+String(value).slice(0,60);
       const updateAvatar=(staff)=>{
         avatar.innerHTML='';
         if(staff?.photoUrl){const img=document.createElement('img');img.src=staff.photoUrl;img.alt='';img.className='h-full w-full object-cover';avatar.appendChild(img);}
