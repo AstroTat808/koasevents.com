@@ -13,6 +13,7 @@ export type HealthCheck = {
   ms: number;
   detail: string;
   severity?: 'green' | 'yellow' | 'red';
+  deploymentState?: 'synced' | 'deploying' | 'waiting' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
 };
 
 export type HealthSnapshot = {
@@ -252,6 +253,14 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
   let repository='';
   let productionBranch='';
   let connectionDetail='';
+  let mainCommitAt=clean(seed?.mainCommitAt,80);
+  let activeDeployId='';
+  let activeDeployCommit='';
+  let activeDeployState='';
+  let targetDeployId='';
+  let targetDeployState='';
+  let targetDeployError='';
+  let targetDeployCreatedAt='';
 
   if(!liveCommit||!deployId){
     const home=await timedFetch(origin+'/');
@@ -274,7 +283,11 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
         headers:githubHeaders,
         signal:AbortSignal.timeout(12_000),
       });
-      if(response.ok) mainCommit=clean((await response.json())?.sha,80);
+      if(response.ok){
+        const body:any=await response.json();
+        mainCommit=clean(body?.sha,80);
+        mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
+      }
     }catch{}
   }
 
@@ -338,15 +351,81 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
     }
   }
 
+  if(netlifyToken){
+    try{
+      const response=await fetch(
+        'https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=30',
+        {
+          headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+          signal:AbortSignal.timeout(12_000),
+        },
+      );
+      if(response.ok){
+        const rows:any[]=await response.json();
+        const activeStates=new Set(['new','pending_review','accepted','enqueued','building','uploading','processing','preparing']);
+        const productionRows=rows.filter((row:any)=>{
+          const deployContext=clean(row?.context,40);
+          const branch=clean(row?.branch,100);
+          return deployContext==='production' && (!productionBranch||!branch||branch===productionBranch);
+        });
+        const target=mainCommit
+          ? productionRows.find((row:any)=>clean(row?.commit_ref,80)===mainCommit)
+          : null;
+        const active=productionRows.find((row:any)=>activeStates.has(clean(row?.state,40).toLowerCase()));
+        if(target){
+          targetDeployId=clean(target?.id,120);
+          targetDeployState=clean(target?.state,40).toLowerCase();
+          targetDeployError=clean(target?.error_message,240);
+          targetDeployCreatedAt=clean(target?.created_at,80);
+        }
+        if(active){
+          activeDeployId=clean(active?.id,120);
+          activeDeployCommit=clean(active?.commit_ref,80);
+          activeDeployState=clean(active?.state,40).toLowerCase();
+        }
+      }
+    }catch{}
+  }
+
   const lagTooHigh=commitsBehind!=null&&commitsBehind>1;
   const lagUnknown=commitsBehind==null;
   const linked=githubLinked===true;
   const metadataReady=Boolean(liveCommit&&mainCommit);
-  const severity:'green'|'yellow'|'red'=(!linked||lagTooHigh||lagUnknown||!metadataReady)
-    ? 'red'
-    : commitsBehind===1
-      ? 'yellow'
-      : 'green';
+  const activeStates=new Set(['new','pending_review','accepted','enqueued','building','uploading','processing','preparing']);
+  const failedStates=new Set(['error','failed','canceled','cancelled']);
+  const targetDeployActive=Boolean(targetDeployState&&activeStates.has(targetDeployState));
+  const targetDeployFailed=Boolean(targetDeployState&&failedStates.has(targetDeployState));
+  const anyDeployActive=Boolean(activeDeployState&&activeStates.has(activeDeployState));
+  const mainCommitMs=Date.parse(mainCommitAt);
+  const mainAgeMs=Number.isFinite(mainCommitMs)?Math.max(0,Date.now()-mainCommitMs):null;
+  const triggerGraceMs=5*60*1000;
+
+  let deploymentState:'synced'|'deploying'|'waiting'|'auto-deploy-broken'|'deploy-failed'|'unknown'='unknown';
+  let severity:'green'|'yellow'|'red'='red';
+
+  if(!metadataReady||lagUnknown){
+    deploymentState='unknown';
+    severity='red';
+  }else if(commitsBehind===0){
+    deploymentState=linked?'synced':'auto-deploy-broken';
+    severity=linked?'green':'red';
+  }else if(!linked){
+    deploymentState='auto-deploy-broken';
+    severity='red';
+  }else if(targetDeployActive||anyDeployActive){
+    deploymentState='deploying';
+    severity=commitsBehind===1?'yellow':'red';
+  }else if(targetDeployFailed){
+    deploymentState='deploy-failed';
+    severity='red';
+  }else if(mainAgeMs!=null&&mainAgeMs<triggerGraceMs){
+    deploymentState='waiting';
+    severity=commitsBehind===1?'yellow':'red';
+  }else{
+    deploymentState='auto-deploy-broken';
+    severity='red';
+  }
+
   const ok=severity!=='red';
   let detail=connectionDetail;
   if(liveCommit&&mainCommit){
@@ -354,9 +433,29 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
       ? 'Production/main commit lag could not be determined.'
       : commitsBehind===0
         ? 'Production matches main.'
-        : 'Production is '+commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind main'+(commitsBehind===1?' · warning until the next deploy publishes.':'.'));
+        : 'Production is '+commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind main.');
   }else{
     detail+=(detail?' ':'')+'Production or main commit metadata is unavailable.';
+  }
+
+  if(deploymentState==='deploying'){
+    const runningId=targetDeployId||activeDeployId;
+    const runningState=targetDeployActive?targetDeployState:activeDeployState;
+    const runningCommit=targetDeployActive?mainCommit:activeDeployCommit;
+    detail+=(detail?' ':'')+'Netlify is currently '+(runningState||'processing')+
+      (runningId?' deploy '+runningId.slice(0,12):' a production deploy')+
+      (runningCommit?' for commit '+runningCommit.slice(0,12):'')+
+      '; the lag is expected while this deploy finishes.';
+  }else if(deploymentState==='waiting'){
+    const ageMinutes=mainAgeMs==null?null:Math.max(0,Math.floor(mainAgeMs/60000));
+    detail+=(detail?' ':'')+'The main commit is recent'+(ageMinutes==null?'':' ('+ageMinutes+' minute'+(ageMinutes===1?'':'s')+' old')+
+      '; allowing up to 5 minutes for Netlify Git auto-deploy to start.';
+  }else if(deploymentState==='deploy-failed'){
+    detail+=(detail?' ':'')+'The production deploy for main ended in '+targetDeployState+
+      (targetDeployId?' · deploy '+targetDeployId.slice(0,12):'')+
+      (targetDeployError?' · '+targetDeployError:'')+'.';
+  }else if(deploymentState==='auto-deploy-broken'&&linked&&commitsBehind!=null&&commitsBehind>0){
+    detail+=(detail?' ':'')+'No active production deploy for main is visible after the Git trigger grace period; Git auto-deploy appears stalled.';
   }
 
   return {
@@ -366,12 +465,20 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
     productionBranch,
     liveCommit,
     mainCommit,
+    mainCommitAt,
     deployId,
     commitsBehind,
     compareStatus,
     lagTooHigh,
     severity,
-    detail:clean(detail,700),
+    deploymentState,
+    activeDeployId,
+    activeDeployCommit,
+    activeDeployState,
+    targetDeployId,
+    targetDeployState,
+    targetDeployCreatedAt,
+    detail:clean(detail,900),
     ms:Date.now()-started,
   };
 }
@@ -431,8 +538,9 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     ok:Boolean(deploymentSync.ok),
     status:deploymentSync.ok?200:503,
     ms:Number(deploymentSync.ms||0),
-    detail:clean(deploymentSync.detail,700),
+    detail:clean(deploymentSync.detail,900),
     severity:deploymentSync.severity,
+    deploymentState:deploymentSync.deploymentState,
   };
   const checks=[...baseChecks,startupCheck,deploymentSyncCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
@@ -1679,6 +1787,7 @@ export async function cachedDeploymentHistory(context:Context) {
     deployTime:match('koa-build-time'),
     functionCount:null,
     mainCommit:'',
+    mainCommitAt:'',
     behindMain:null,
     commitsBehind:null,
     compareStatus:'',
@@ -1750,6 +1859,7 @@ export async function cachedDeploymentHistory(context:Context) {
     if(response.ok){
       const body:any=await response.json();
       current.mainCommit=clean(body?.sha,80);
+      current.mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
     }
   }catch{}
 
@@ -1794,6 +1904,7 @@ export async function cachedDeploymentHistory(context:Context) {
   const connectionHealth=await inspectDeploymentSync(context,{
     liveCommit:current.commit,
     mainCommit:current.mainCommit,
+    mainCommitAt:current.mainCommitAt,
     commitsBehind:current.commitsBehind,
     compareStatus:current.compareStatus,
     deployId:current.deployId,
