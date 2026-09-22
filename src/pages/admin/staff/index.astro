@@ -19,11 +19,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
 
       <div data-app class="hidden grid gap-6">
-        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Total accounts</p><p data-summary-total class="display mt-2 text-4xl">—</p></article>
           <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Active</p><p data-summary-active class="display mt-2 text-4xl">—</p></article>
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Pending setup</p><p data-summary-pending class="display mt-2 text-4xl">—</p></article>
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Deactivated</p><p data-summary-deactivated class="display mt-2 text-4xl">—</p></article>
+          <article class="rounded-[1.3rem] bg-amber-50 p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-amber-800">Password attention</p><p data-summary-password class="display mt-2 text-4xl text-[var(--koa-forest)]">—</p></article>
         </section>
 
         <section class="grid gap-6 xl:grid-cols-[.72fr_1.28fr]">
@@ -41,8 +42,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </label>
               <label class="grid gap-2 text-sm font-semibold">Role
                 <select name="role" class="rounded-xl border border-[var(--koa-line)] px-4 py-3">
-                  <option value="sales">Sales Rep</option>
+<option value="sales">Sales Rep</option>
                   <option value="manager">Manager</option>
+                  <option value="event_coordinator">Event Coordinator</option>
+                  <option value="vendor_manager">Vendor Manager</option>
+                  <option value="content_editor">Content Editor</option>
+                  <option value="accounting">Accounting</option>
+                  <option value="read_only">Read Only</option>
                   <option value="admin">Administrator</option>
                 </select>
               </label>
@@ -89,6 +95,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <option value="admin">Administrators</option>
                 <option value="manager">Managers</option>
                 <option value="sales">Sales Reps</option>
+                <option value="event_coordinator">Event Coordinators</option>
+                <option value="vendor_manager">Vendor Managers</option>
+                <option value="content_editor">Content Editors</option>
+                <option value="accounting">Accounting</option>
+                <option value="read_only">Read Only</option>
                 <option value="deactivated">Deactivated</option>
                 <option value="none">No role</option>
               </select>
@@ -103,6 +114,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <p data-list-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
             <div data-user-list class="mt-5 grid gap-4"></div>
           </section>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+          <div class="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Authentication policy</p>
+              <h2 class="display mt-2 text-4xl">Password + session security</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-white/65">Control password expiration and whether passwords set by an Administrator must be changed by the user at their next sign-in.</p>
+            </div>
+            <form data-security-policy class="grid gap-3 rounded-xl bg-white/10 p-4 sm:grid-cols-[auto_auto_auto] sm:items-end">
+              <label class="grid gap-2 text-xs font-bold uppercase tracking-[.08em] text-white/70">Expire passwords after
+                <select name="passwordExpiryDays" class="rounded-lg border border-white/20 bg-white px-3 py-2 text-sm font-semibold text-[var(--koa-ink)]">
+                  <option value="0">Never</option>
+                  <option value="30">30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                  <option value="180">180 days</option>
+                  <option value="365">365 days</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold"><input name="requireChangeOnAdminSet" type="checkbox" checked /> Require change after admin-set password</label>
+              <button class="rounded-full bg-[var(--koa-amber-light)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-ink)]">Save policy</button>
+              <p data-security-policy-message class="sm:col-span-3 text-xs text-white/70"></p>
+            </form>
+          </div>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
@@ -167,6 +203,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const passwordMessage = document.querySelector('[data-password-message]');
 
     let capabilityDefinitions = [];
+    let roleDefinitions = [];
+    let securityPolicy = null;
     let allUsers = [];
 
     function roles(user) {
@@ -190,11 +228,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function roleLabel(role) {
-      return role === 'manager' ? 'Manager'
-        : role === 'sales' ? 'Sales Rep'
-        : role === 'admin' ? 'Administrator'
-        : role === 'deactivated' ? 'Deactivated'
-        : 'No role';
+      const found=roleDefinitions.find((row)=>row.id===role);
+      if(found)return found.label;
+      return role === 'deactivated' ? 'Deactivated' : role === 'none' ? 'No role' : String(role||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>m.toUpperCase());
+    }
+    function roleOptionsHtml(selected='sales'){
+      return roleDefinitions.map((role)=>'<option value="'+role.id+'"'+(role.id===selected?' selected':'')+'>'+role.label+'</option>').join('');
     }
 
     function statusLabel(status) {
@@ -218,6 +257,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelector('[data-summary-active]').textContent = String(summary.active ?? 0);
       document.querySelector('[data-summary-pending]').textContent = String(summary.pending ?? 0);
       document.querySelector('[data-summary-deactivated]').textContent = String(summary.deactivated ?? 0);
+      document.querySelector('[data-summary-password]').textContent = String(summary.passwordAttention ?? 0);
     }
 
     function filteredUsers() {
@@ -261,8 +301,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         info.querySelector('p:last-child').textContent = [
           user.email,
           user.lastSignInAt ? 'Last sign-in '+new Date(user.lastSignInAt).toLocaleString() : 'Never signed in',
+          user.security?.passwordExpiresAt ? 'Password expires '+new Date(user.security.passwordExpiresAt).toLocaleDateString() : '',
           user.createdAt ? 'Created '+new Date(user.createdAt).toLocaleDateString() : '',
         ].filter(Boolean).join(' · ');
+        const securityFlags=document.createElement('div');securityFlags.className='mt-2 flex flex-wrap gap-2';
+        if(user.security?.forcePasswordChange){securityFlags.innerHTML+='<span class="rounded-full bg-amber-100 px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-amber-900">Change required</span>';}
+        if(user.security?.passwordExpired){securityFlags.innerHTML+='<span class="rounded-full bg-red-100 px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-red-800">Password expired</span>';}
+        if(securityFlags.childNodes.length)info.appendChild(securityFlags);
 
         const controls = document.createElement('div');
         controls.className = 'flex max-w-2xl flex-wrap items-center gap-2';
@@ -277,7 +322,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if (user.status === 'deactivated') {
           const reactivateRole = document.createElement('select');
           reactivateRole.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
-          reactivateRole.innerHTML = '<option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option>';
+          reactivateRole.innerHTML = roleOptionsHtml('sales');
           controls.appendChild(reactivateRole);
           controls.appendChild(button('Reactivate','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800',async()=> {
             try {
@@ -289,8 +334,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         } else if (!user.protected) {
           const roleSelect = document.createElement('select');
           roleSelect.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
-          roleSelect.innerHTML = '<option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option>';
-          roleSelect.value = ['sales','manager','admin'].includes(user.role) ? user.role : 'sales';
+          roleSelect.innerHTML = roleOptionsHtml(user.role);
+          roleSelect.value = roleDefinitions.some((role)=>role.id===user.role) ? user.role : 'sales';
           controls.appendChild(roleSelect);
           controls.appendChild(button('Save role','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=> {
             if (roleSelect.value === 'admin' && user.role !== 'admin' && !confirm('Grant full Administrator access to '+user.email+'?')) return;
@@ -316,6 +361,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           passwordUser.textContent = 'Set a new password for '+user.email+'.';
           passwordMessage.textContent = '';
           passwordDialog.showModal();
+        }));
+
+        controls.appendChild(button(user.security?.forcePasswordChange?'Clear forced change':'Force password change','rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-amber-800',async()=> {
+          try {
+            listMessage.textContent='Updating password requirement…';
+            await api({action:'force-password-change',userId:user.id,force:!user.security?.forcePasswordChange});
+            await load();
+          } catch(error){listMessage.textContent=error.message;}
+        }));
+
+        controls.appendChild(button('Sign out everywhere','rounded-full border border-red-200 bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=> {
+          if(!confirm('Sign '+user.email+' out of all existing Koa’s sessions?'))return;
+          try {
+            listMessage.textContent='Revoking sessions…';
+            const result=await api({action:'revoke-sessions',userId:user.id});
+            listMessage.textContent=result.message||'Sessions revoked.';
+            await load();
+          } catch(error){listMessage.textContent=error.message;}
         }));
 
         controls.appendChild(button('Edit name','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
@@ -359,7 +422,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           permissions.className = 'mt-5 border-t border-[var(--koa-line)] pt-4';
           const title = document.createElement('p');
           title.className = 'text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';
-          title.textContent = user.role === 'manager' ? 'Operational permissions · included by Manager role' : 'Individual permissions';
+          title.textContent = 'Page + action permissions · role defaults are locked';
           permissions.appendChild(title);
 
           const grid = document.createElement('div');
@@ -370,15 +433,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = capability.id;
-            checkbox.checked = user.role === 'manager' || (user.permissions || []).includes(capability.id);
-            checkbox.disabled = user.role === 'manager';
+            const defaults=new Set(roleDefinitions.find((role)=>role.id===user.role)?.capabilities||[]);
+            checkbox.checked = defaults.has(capability.id) || (user.permissions || []).includes(capability.id);
+            checkbox.disabled = defaults.has(capability.id);
             label.append(checkbox, document.createTextNode(capability.label));
             grid.appendChild(label);
           });
           permissions.appendChild(grid);
 
-          if (user.role !== 'manager') {
-            permissions.appendChild(button('Save permissions','mt-3 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
+          if (user.role !== 'admin') {
+            permissions.appendChild(button('Save additional permissions','mt-3 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
               const selected = [...grid.querySelectorAll('input:checked')].map((input) => input.value);
               try {
                 listMessage.textContent = 'Saving permissions…';
@@ -420,8 +484,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         listMessage.textContent = 'Loading accounts…';
         const data = await api();
         capabilityDefinitions = data.capabilities || [];
+        roleDefinitions = data.roles || [];
+        securityPolicy = data.policy || {};
         allUsers = data.users || [];
         setSummary(data.summary || {});
+        const policyForm=document.querySelector('[data-security-policy]');
+        if(policyForm){
+          const days=String(securityPolicy.passwordExpiryDays ?? 180);
+          if([...policyForm.elements.passwordExpiryDays.options].some((option)=>option.value===days))policyForm.elements.passwordExpiryDays.value=days;
+          policyForm.elements.requireChangeOnAdminSet.checked=securityPolicy.requireChangeOnAdminSet!==false;
+        }
         renderUsers();
         renderAudit(data.audit || []);
       } catch (error) {
@@ -469,6 +541,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       } catch (error) {
         createMessage.textContent = error.message;
       }
+    });
+
+    document.querySelector('[data-security-policy]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const message=document.querySelector('[data-security-policy-message]');
+      if(message)message.textContent='Saving…';
+      try{
+        const result=await api({action:'save-security-policy',passwordExpiryDays:Number(form.elements.passwordExpiryDays.value),requireChangeOnAdminSet:Boolean(form.elements.requireChangeOnAdminSet.checked)});
+        securityPolicy=result.policy;
+        if(message)message.textContent='Security policy saved.';
+        await load();
+      }catch(error){if(message)message.textContent=error.message;}
     });
 
     passwordForm?.addEventListener('submit', async (event) => {
