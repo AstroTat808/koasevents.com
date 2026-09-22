@@ -20,9 +20,27 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         <div class="mt-8">
           <form data-login-form class="grid max-w-md gap-4">
             <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-            <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" autocomplete="current-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Password
+              <span class="relative block"><input data-login-password name="password" type="password" autocomplete="current-password" required class="w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 pr-24" /><button data-toggle-login-password type="button" class="absolute inset-y-0 right-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Show</button></span>
+            </label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
             <p data-auth-error class="hidden text-sm text-red-700"></p>
+            <button data-show-recovery-request type="button" class="w-fit text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Forgot password?</button>
+          </form>
+
+          <form data-recovery-request-form class="hidden grid max-w-md gap-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Reset password</p><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Enter your email and Koa’s will send a secure password reset link.</p></div>
+            <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+            <div class="flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Send reset link</button><button data-hide-recovery-request type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Back</button></div>
+            <p data-recovery-request-message class="text-sm leading-6 text-[var(--koa-ink)]/62"></p>
+          </form>
+
+          <form data-recovery-reset-form class="hidden grid max-w-xl gap-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Set a new password</p><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Choose a new password for your Koa’s account.</p></div>
+            <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+            <button class="w-fit rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save new password</button>
+            <p data-recovery-reset-message class="text-sm leading-6 text-[var(--koa-ink)]/62"></p>
           </form>
 
           <div data-access-warning class="hidden rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
@@ -74,7 +92,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { login, logout } from '@netlify/identity';
+    import { handleAuthCallback, login, logout, requestPasswordRecovery, updateUser } from '@netlify/identity';
     import { getAdminSession } from '../../lib/admin-session';
 
     const roleLabels={
@@ -88,7 +106,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const passwordRequired=document.querySelector('[data-password-required]');
     const passwordForm=document.querySelector('[data-password-form]');
     const authError=document.querySelector('[data-auth-error]');
+    const recoveryRequestForm=document.querySelector('[data-recovery-request-form]');
+    const recoveryRequestMessage=document.querySelector('[data-recovery-request-message]');
+    const recoveryResetForm=document.querySelector('[data-recovery-reset-form]');
+    const recoveryResetMessage=document.querySelector('[data-recovery-reset-message]');
     const logoutButton=document.querySelector('[data-logout]');
+    let recoveryMode=false;
     const roleBadge=document.querySelector('[data-role-badge]');
 
     async function updateHealthWarning(session){
@@ -110,7 +133,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     function renderSession(session){
       const signedIn=Boolean(session);
-      loginForm?.classList.toggle('hidden',signedIn);
+      loginForm?.classList.toggle('hidden',signedIn||recoveryMode);
+      if(signedIn||recoveryMode) recoveryRequestForm?.classList.add('hidden');
+      recoveryResetForm?.classList.toggle('hidden',!recoveryMode);
       logoutButton?.classList.toggle('hidden',!signedIn);
       roleBadge?.classList.toggle('hidden',!signedIn);
       if(roleBadge)roleBadge.textContent=roleLabels[session?.role]||String(session?.role||'').replaceAll('_',' ');
@@ -162,6 +187,58 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return session;
     }
 
+    document.querySelector('[data-toggle-login-password]')?.addEventListener('click',()=>{
+      const input=document.querySelector('[data-login-password]');
+      const button=document.querySelector('[data-toggle-login-password]');
+      if(!input||!button)return;
+      const showing=input.type==='text';
+      input.type=showing?'password':'text';
+      button.textContent=showing?'Show':'Hide';
+    });
+
+    document.querySelector('[data-show-recovery-request]')?.addEventListener('click',()=>{
+      loginForm?.classList.add('hidden');
+      recoveryRequestForm?.classList.remove('hidden');
+      recoveryRequestMessage.textContent='';
+    });
+    document.querySelector('[data-hide-recovery-request]')?.addEventListener('click',()=>{
+      recoveryRequestForm?.classList.add('hidden');
+      loginForm?.classList.remove('hidden');
+    });
+    recoveryRequestForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(recoveryRequestForm);
+      const email=String(data.get('email')||'').trim().toLowerCase();
+      recoveryRequestMessage.textContent='Sending reset link…';
+      try{
+        await requestPasswordRecovery(email);
+        recoveryRequestMessage.textContent='If an account exists for that email, a secure password reset link has been sent.';
+      }catch(err){
+        recoveryRequestMessage.textContent=err instanceof Error?err.message:'Unable to send the password reset link.';
+      }
+    });
+
+    recoveryResetForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(recoveryResetForm);
+      const password=String(data.get('password')||'');
+      const confirmPassword=String(data.get('confirmPassword')||'');
+      if(password!==confirmPassword){recoveryResetMessage.textContent='The passwords do not match.';return;}
+      recoveryResetMessage.textContent='Updating password…';
+      try{
+        await updateUser({password});
+        recoveryMode=false;
+        history.replaceState(null,'','/staff/');
+        await logout();
+        recoveryResetForm.reset();
+        recoveryResetForm.classList.add('hidden');
+        loginForm?.classList.remove('hidden');
+        if(authError){authError.textContent='Password updated. Sign in with your new password.';authError.classList.remove('hidden');}
+      }catch(err){
+        recoveryResetMessage.textContent=err instanceof Error?err.message:'Unable to update the password.';
+      }
+    });
+
     loginForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
       const data=new FormData(loginForm);
@@ -199,6 +276,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     });
 
     logoutButton?.addEventListener('click',async()=>{await logout();renderSession(null);});
-    await refreshSession();
+    try{
+      const callback=await handleAuthCallback();
+      if(callback?.type==='recovery'){
+        recoveryMode=true;
+        renderSession(null);
+      }else{
+        await refreshSession();
+      }
+    }catch(err){
+      if(authError){authError.textContent=err instanceof Error?err.message:'Unable to process the sign-in link.';authError.classList.remove('hidden');}
+      await refreshSession();
+    }
   </script>
 </BaseLayout>
