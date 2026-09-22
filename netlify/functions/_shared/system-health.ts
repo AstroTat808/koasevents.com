@@ -861,6 +861,24 @@ export async function recordProductionRelease(context:Context,input:any) {
   return record;
 }
 
+export async function hydrateProductionReleaseMetadata(context:Context,releases:ProductionRelease[],limit=20) {
+  const hydrated:ProductionRelease[]=[];
+  let refreshed=0;
+  for(const release of releases){
+    const missing=!release.summary||!release.authorName||!release.pullRequestUrl;
+    if(missing&&refreshed<Math.max(1,Math.min(25,limit))){
+      try{
+        const row=await recordProductionRelease(context,release);
+        hydrated.push((row||release) as ProductionRelease);
+        refreshed+=1;
+        continue;
+      }catch{}
+    }
+    hydrated.push(release);
+  }
+  return hydrated;
+}
+
 export function releaseTimelineWithIncidents(releases:ProductionRelease[],qaHistory:any[],incidents:any) {
   const sorted=[...(releases||[])].sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt));
   return sorted.map((release,index)=>{
