@@ -515,6 +515,121 @@ def admin_mode(browser_name):
   if detail:failures.append({"route":"/admin/crm/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
+  # Live payment-rule UI regression test. This loads the deployed QuickBooks/Sales CRM
+  # JavaScript but mocks protected API responses so no production records are changed.
+  session_fixture={
+   "email":"qa-admin@koasevents.test","role":"admin","roles":["admin"],"isAdmin":True,
+   "permissions":["quickbooks.view","sales.view"],"capabilities":["quickbooks.view","sales.view"],
+   "accessBlocked":False,
+   "app_metadata":{"roles":["admin"],"permissions":["quickbooks.view","sales.view"]},
+   "appMetadata":{"roles":["admin"],"permissions":["quickbooks.view","sales.view"]}
+  }
+  qbo_fixture={
+   "configuration":{"configured":True,"environment":"production","productionCredentialsConfigured":True,"productionWebhookConfigured":True,"productionRedirectConfigured":True,"redirectUri":"https://koasevents.com/.netlify/functions/quickbooks-callback"},
+   "connection":{"connected":True,"realmId":"qa","companyName":"QA Company","connectedAt":"2026-09-22T00:00:00Z"},
+   "getSettings":{"customerRate":4.712,"label":"Hawaiʻi GET"},
+   "depositSettings":{
+    "venueWeddingPercent":10,"mobileBarPercent":10,"privateEventPercent":10,"defaultPercent":10,
+    "venueWeddingMilestones":[{"label":"Final payment","dueDaysBefore":60,"percentOfRemaining":100}],
+    "mobileBarMilestones":[{"label":"Final balance","dueDaysBefore":14,"percentOfRemaining":100}],
+    "privateEventMilestones":[{"label":"Final balance","dueDaysBefore":30,"percentOfRemaining":100}],
+    "defaultMilestones":[{"label":"Final balance","dueDaysBefore":30,"percentOfRemaining":100}],
+    "customPresets":[],
+    "autoRules":[
+     {"id":"before-premium","name":"Before GET premium","category":"venueWedding","minLeadDays":0,"maxLeadDays":None,"minContractValue":10050,"maxContractValue":None,"contractValueBasis":"beforeGet","presetId":"builtin-extended-wedding","priority":10,"active":True},
+     {"id":"after-premium","name":"After GET premium","category":"venueWedding","minLeadDays":0,"maxLeadDays":None,"minContractValue":10000,"maxContractValue":None,"contractValueBasis":"afterGet","presetId":"builtin-standard-wedding","priority":20,"active":True},
+     {"id":"after-overlap","name":"After GET overlap","category":"venueWedding","minLeadDays":0,"maxLeadDays":None,"minContractValue":9000,"maxContractValue":15000,"contractValueBasis":"afterGet","presetId":"builtin-micro-wedding","priority":30,"active":True}
+    ]
+   },
+   "catalog":[],"items":[],"diagnostics":{},"accountingAudit":{}
+  }
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+  page.route("**/api/admin/quickbooks",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(qbo_fixture)))
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/quickbooks/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-auto-rule]",state="visible",timeout=8000)
+   page.locator("[data-rule-sim-category]").select_option("venueWedding")
+   page.locator("[data-rule-sim-booking]").fill("2026-01-01")
+   page.locator("[data-rule-sim-event]").fill("2026-07-01")
+   page.locator("[data-rule-sim-value]").fill("10471.20")
+   page.locator("[data-run-rule-simulator]").click()
+   simulator=page.locator("[data-rule-simulator-result]").inner_text()
+   conflicts=page.locator("[data-rule-conflicts]").inner_text()
+   if "After GET premium" not in simulator or "after GET" not in simulator:
+    detail="Rule simulator did not honor the after-GET threshold scenario. Result: "+simulator[:500]
+   elif "rules matched" not in simulator:
+    detail="Rule simulator did not report overlapping matches. Result: "+simulator[:500]
+   elif "overlaps" not in conflicts or "Winner" not in conflicts:
+    detail="Rule conflict detector did not identify a winner. Result: "+conflicts[:500]
+   elif page_errors:
+    detail="Payment-rule simulator JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Payment-rule simulator regression: "+str(exc)
+  results.append({"name":"payment-rule-live-simulator","path":"/admin/quickbooks/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":""})
+  if detail:failures.append({"route":"/admin/quickbooks/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
+  proposal_record={
+   "id":"KEP-QA-RULE","kind":"proposal","stage":"proposal","status":"draft","packageId":"signature-wedding",
+   "createdAt":"2026-09-22T00:00:00Z","updatedAt":"2026-09-22T00:00:00Z",
+   "customer":{"name":"QA Rule Client","email":"qa@example.com","phone":"","eventDate":"2027-06-01","notes":""},
+   "proposal":{
+    "publicToken":"qa-token","status":"draft","expirationDate":"2026-10-06",
+    "lineItems":[{"id":"collection","description":"Signature Wedding Experience","quantity":1,"unitPrice":10000,"amount":10000,"custom":False}],
+    "subtotal":10000,"discountAmount":0,"taxRate":4.712,"taxAmount":471.2,"total":10471.2,
+    "depositPercent":10,"depositAmount":1047.12,
+    "paymentSchedule":[{"label":"Reservation deposit","dueDate":"","amount":1047.12},{"label":"Final payment","dueDate":"2027-04-02","amount":9424.08}],
+    "paymentRuleDecision":{
+     "ruleId":"after-premium","ruleName":"After GET premium","presetId":"builtin-standard-wedding","presetName":"Standard Wedding",
+     "priority":20,"category":"venueWedding","leadDays":608,"contractValueBasis":"afterGet","contractValue":10471.2,
+     "beforeGetValue":10000,"afterGetValue":10471.2,
+     "matchedRuleIds":["after-premium","after-overlap"],"matchedRuleNames":["After GET premium","After GET overlap"],
+     "explanation":["Event category matched venueWedding.","Contract-value basis was after Hawaiʻi GET at $10471.20 and was inside this rule’s range.","2 active rules matched; “After GET premium” won because it had the highest priority.","Preset “Standard Wedding” was selected."],
+     "decidedAt":"2026-09-22T00:00:00Z"
+    },
+    "notesToClient":""
+   }
+  }
+  sales_fixture={"quotes":[],"analytics":{},"funnel":[],"mobileBarAnalytics":{},"mobileBarProfitSettings":{},"conversions":{},"records":[proposal_record],"trash":[]}
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+  page.route("**/api/admin/quotes**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(sales_fixture)))
+  page.route("**/api/admin/quickbooks",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"configuration":{"configured":False},"connection":{"connected":False},"catalog":[]})))
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/quotes/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-admin-ui]:not(.hidden)",state="visible",timeout=8000)
+   page.wait_for_function("() => document.body.innerText.includes('KEP-QA-RULE')",timeout=8000)
+   buttons=page.get_by_role("button",name="Proposal",exact=True)
+   if buttons.count()<1:
+    raise RuntimeError("Proposal action button was not rendered for QA record.")
+   buttons.last.click()
+   page.wait_for_selector("[data-rule-decision]:not(.hidden)",state="visible",timeout=5000)
+   title=page.locator("[data-rule-decision-title]").inner_text()
+   summary=page.locator("[data-rule-decision-summary]").inner_text()
+   overlap=page.locator("[data-rule-decision-conflicts]").inner_text()
+   if title!="After GET premium":
+    detail="Proposal rule explanation title was incorrect: "+title
+   elif "after Hawaiʻi GET" not in summary:
+    detail="Proposal rule explanation did not display the GET basis. Summary: "+summary[:500]
+   elif "2 rules matched" not in overlap or "highest priority" not in overlap:
+    detail="Proposal overlap explanation was incomplete. Detail: "+overlap[:500]
+   elif page_errors:
+    detail="Sales CRM proposal explanation JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Sales CRM payment-rule explanation regression: "+str(exc)
+  results.append({"name":"sales-crm-payment-rule-explanation","path":"/admin/quotes/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":""})
+  if detail:failures.append({"route":"/admin/quotes/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
   ctx.close();browser.close()
 
  api_results=[]
