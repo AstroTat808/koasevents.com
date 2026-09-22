@@ -43,7 +43,7 @@
       </div>
     </div>
 
-    <section id="koa-workspace-alert-center" data-workspace-alert-center class="hidden workspace-alert-center" aria-label="Workspace alerts">
+    <section id="koa-workspace-alert-center" data-workspace-alert-center data-open="false" class="workspace-alert-center" aria-label="Workspace alerts">
       <div class="flex items-start justify-between gap-4">
         <div>
           <p class="workspace-group-title">Alert Center</p>
@@ -235,7 +235,24 @@
     border-radius: .85rem;
     background: color-mix(in srgb, var(--koa-sand) 42%, white);
     padding: .65rem;
+    opacity: 0;
+    transform: translateY(-.2rem);
+    transition:
+      opacity 150ms ease,
+      transform 190ms cubic-bezier(.22, 1, .36, 1);
   }
+
+  .workspace-links[data-open="true"] .workspace-group {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .workspace-links[data-open="true"] .workspace-group:nth-child(1) { transition-delay: 20ms; }
+  .workspace-links[data-open="true"] .workspace-group:nth-child(2) { transition-delay: 35ms; }
+  .workspace-links[data-open="true"] .workspace-group:nth-child(3) { transition-delay: 50ms; }
+  .workspace-links[data-open="true"] .workspace-group:nth-child(4) { transition-delay: 65ms; }
+  .workspace-links[data-open="true"] .workspace-group:nth-child(5) { transition-delay: 80ms; }
+  .workspace-links[data-open="true"] .workspace-group:nth-child(6) { transition-delay: 95ms; }
 
   .workspace-group-title {
     padding: 0 .3rem .45rem;
@@ -340,12 +357,50 @@
   }
 
   .workspace-alert-center {
-    margin-top: .7rem;
-    border: 1px solid var(--koa-line);
+    max-height: 0;
+    margin-top: 0;
+    overflow: hidden;
+    border: 0 solid var(--koa-line);
     border-radius: 1rem;
     background: white;
+    padding: 0 1rem;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-.3rem) scale(.997);
+    box-shadow: none;
+    transition:
+      max-height 240ms cubic-bezier(.22, 1, .36, 1),
+      margin-top 220ms ease,
+      padding 220ms ease,
+      border-width 180ms ease,
+      opacity 160ms ease,
+      transform 220ms cubic-bezier(.22, 1, .36, 1),
+      box-shadow 180ms ease,
+      visibility 0s linear 240ms;
+    will-change: max-height, opacity, transform;
+  }
+
+  .workspace-alert-center[data-open="true"] {
+    max-height: 72vh;
+    margin-top: .7rem;
+    overflow-y: auto;
+    border-width: 1px;
     padding: 1rem;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
     box-shadow: var(--shadow-soft);
+    transition:
+      max-height 260ms cubic-bezier(.22, 1, .36, 1),
+      margin-top 220ms ease,
+      padding 220ms ease,
+      border-width 180ms ease,
+      opacity 180ms ease,
+      transform 240ms cubic-bezier(.22, 1, .36, 1),
+      box-shadow 200ms ease,
+      visibility 0s linear 0s;
   }
 
   .workspace-alert-close {
@@ -453,8 +508,13 @@
   @media (prefers-reduced-motion: reduce) {
     .workspace-links,
     .workspace-links[data-open="true"],
+    .workspace-alert-center,
+    .workspace-alert-center[data-open="true"],
+    .workspace-group,
+    .workspace-links[data-open="true"] .workspace-group,
     .workspace-menu-button [data-workspace-chevron] {
       transition: none;
+      transition-delay: 0s;
     }
   }
 </style>
@@ -508,6 +568,14 @@
     if (persist) {
       try { window.localStorage.setItem('koa-workspace-nav-open', open ? '1' : '0'); } catch {}
     }
+  }
+
+  function setAlertCenter(open) {
+    const center = nav?.querySelector('[data-workspace-alert-center]');
+    if (!(center instanceof HTMLElement)) return;
+    center.dataset.open = open ? 'true' : 'false';
+    nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function initializeMenuState() {
@@ -843,16 +911,15 @@
 
   toggle?.addEventListener('click', () => {
     const open = toggle.getAttribute('aria-expanded') !== 'true';
-    nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
+    setAlertCenter(false);
     setMenu(open);
   });
 
   nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.addEventListener('click', () => {
     const center = nav?.querySelector('[data-workspace-alert-center]');
     if (!(center instanceof HTMLElement)) return;
-    const opening = center.classList.contains('hidden');
-    center.classList.toggle('hidden', !opening);
-    nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    const opening = center.dataset.open !== 'true';
+    setAlertCenter(opening);
     if (opening) {
       setMenu(false);
       markVisibleAlertsSeen();
@@ -862,18 +929,15 @@
   nav?.querySelector('[data-workspace-alert-toggle]')?.addEventListener('click', () => {
     const center = nav?.querySelector('[data-workspace-alert-center]');
     if (!(center instanceof HTMLElement)) return;
-    const opening = center.classList.contains('hidden');
-    center.classList.toggle('hidden', !opening);
-    nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    const opening = center.dataset.open !== 'true';
+    setAlertCenter(opening);
     if (opening) {
       markVisibleAlertsSeen();
     }
   });
 
   nav?.querySelector('[data-workspace-alert-close]')?.addEventListener('click', () => {
-    nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
-    nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded','false');
-    nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded','false');
+    setAlertCenter(false);
   });
 
   nav?.querySelectorAll('[data-workspace-link]').forEach((link) => {
