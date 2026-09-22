@@ -1,20 +1,23 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Koa’s Staff Workspace" description="Operational workspace for Koa’s Events sales and event staff." canonical="https://koasevents.com/staff/">
+<BaseLayout noindex title="Koa’s Staff Workspace" description="Protected workspace for Koa’s Events staff." canonical="https://koasevents.com/staff/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-14">
-    <div class="container-shell max-w-5xl">
+    <div class="container-shell max-w-6xl">
       <section class="rounded-[1.8rem] bg-white p-7 shadow-[var(--shadow-soft)] sm:p-10">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
             <h1 class="display mt-3 text-5xl">Staff Workspace</h1>
-            <p class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Sales, client management, content and event operations in one protected workspace. Technical administration is not available here.</p>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Your workspace automatically shows only the systems permitted by your assigned role and individual permissions.</p>
           </div>
-          <button data-logout class="hidden rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Sign out</button>
+          <div class="flex flex-wrap items-center gap-3">
+            <span data-role-badge class="hidden rounded-full bg-[var(--koa-sand)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]"></span>
+            <button data-logout class="hidden rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Sign out</button>
+          </div>
         </div>
 
-        <div data-auth-panel class="mt-8">
+        <div class="mt-8">
           <form data-login-form class="grid max-w-md gap-4">
             <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" autocomplete="current-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
@@ -22,66 +25,75 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <p data-auth-error class="hidden text-sm text-red-700"></p>
           </form>
 
-          <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
-            <p class="font-semibold text-[var(--koa-ink)]">This account does not have staff workspace access.</p>
-            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Assign the account one of these Identity roles: <strong>staff</strong>, <strong>sales</strong>, or <strong>manager</strong>.</p>
+          <div data-access-warning class="hidden rounded-xl border border-red-200 bg-red-50 p-5 text-red-900">
+            <p data-access-warning-title class="font-semibold">This account does not have workspace access.</p>
+            <p data-access-warning-detail class="mt-2 text-sm leading-6"></p>
+          </div>
+
+          <div data-password-required class="hidden rounded-[1.3rem] border border-amber-200 bg-amber-50 p-6">
+            <p class="eyebrow text-amber-800">Account security</p>
+            <h2 data-password-required-title class="display mt-2 text-4xl text-[var(--koa-forest)]">Password change required</h2>
+            <p data-password-required-detail class="mt-3 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/65">Choose a new password before accessing Koa’s systems.</p>
           </div>
 
           <div data-staff-ui class="hidden">
             <div data-health-warning class="mb-5 hidden rounded-[1.2rem] border border-red-300 bg-red-50 p-5 text-red-950">
               <span class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">System health warning</span>
               <strong data-health-warning-title class="mt-2 block text-lg">A protected Koa’s service needs attention.</strong>
-              <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">An administrator can open System Health for the full diagnostic.</span>
-            </div>
-            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <a href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates, payments and activity.</span></a>
-              <a href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups, quote records and conversion reporting.</span></a>
-              <a href="/admin/quotes/#mobile-bar" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/68">Dedicated Mobile Bar pipeline, pricing details, follow-ups and reporting.</span></a>
-              <a href="/admin/blog/" class="rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and manage Koa’s journal content.</span></a>
-              <a href="/admin/events/" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/68">Documents, vendors, questionnaires, timelines, checklists and event-day tasks.</span></a>
-              <a href="/admin/insurance/" class="rounded-[1.35rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">Review missing, awaiting-review, rejected, expiring, and expired vendor coverage across upcoming events.</span></a>
-              <a href="/admin/calendar/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/72">Events, deadlines, staffing assignments, vendor arrivals and conflict detection.</span></a>
+              <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Open System Health for details if your role permits it.</span>
             </div>
 
-            <form data-password-form class="mt-7 grid gap-3 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5 sm:max-w-xl">
-              <div><p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Account security</p><h2 class="display mt-2 text-3xl">Change password</h2></div>
-              <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <button class="w-fit rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Update password</button>
-              <p data-password-message class="text-sm text-[var(--koa-ink)]/58"></p>
-            </form>
-
-            <div class="mt-7 rounded-[1.2rem] bg-[var(--koa-sand)] p-5">
-              <p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Protected technical administration</p>
-              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks connection/settings, Gallery administration, SEO tools, Security + Spam controls, and other technical configuration remain administrator-only.</p>
+            <div data-app-grid class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <a data-capability="crm.view" href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates and activity.</span></a>
+              <a data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups and sales reporting.</span></a>
+              <a data-capability="sales.view" href="/admin/quotes/#mobile-bar" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/68">Mobile Bar pipeline, pricing, follow-ups and reporting.</span></a>
+              <a data-capability="events.view" href="/admin/events/" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/68">Vendors, questionnaires, timelines, checklists and event-day tasks.</span></a>
+              <a data-capability="calendar.view" href="/admin/calendar/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/72">Events, deadlines, staffing, vendor arrivals and conflicts.</span></a>
+              <a data-capability="vendors.view" href="/admin/vendors/" class="rounded-[1.35rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Vendor CRM</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/58">Vendor profiles, preferred partners, requests and performance.</span></a>
+              <a data-capability="insurance.view" href="/admin/insurance/" class="rounded-[1.35rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">Vendor certificate status and affected upcoming events.</span></a>
+              <a data-capability="blog.view" href="/admin/blog/" class="rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit and publish Koa’s journal content.</span></a>
+              <a data-capability="gallery.view" href="/admin/gallery/" class="rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Photography, categories, crop focus and ordering.</span></a>
+              <a data-capability="seo.view" href="/admin/seo/" class="rounded-[1.35rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Local SEO</span><span class="mt-2 block text-sm text-white/68">Search performance, citations and local visibility.</span></a>
+              <a data-capability="quickbooks.view" href="/admin/quickbooks/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">QuickBooks</span><span class="mt-2 block text-sm text-white/68">Accounting connection, reconciliation and payment data.</span></a>
+              <a data-capability="security.view" href="/admin/security/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/68">Inquiry security, blocks and suspicious activity.</span></a>
+              <a data-capability="health.view" href="/admin/health/" class="rounded-[1.35rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)]"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Protected service availability and incidents.</span></a>
+              <a data-capability="users.manage" href="/admin/staff/" class="rounded-[1.35rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/58">Roles, permissions, passwords, sessions and account security.</span></a>
             </div>
           </div>
+
+          <form data-password-form class="mt-7 hidden max-w-xl gap-3 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5">
+            <div><p class="text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Account security</p><h2 class="display mt-2 text-3xl">Change password</h2></div>
+            <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <button class="w-fit rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Update password</button>
+            <p data-password-message class="text-sm text-[var(--koa-ink)]/58"></p>
+          </form>
         </div>
       </section>
     </div>
   </main>
 
   <script>
-    import { getUser, login, logout, updateUser } from '@netlify/identity';
+    import { login, logout } from '@netlify/identity';
+    import { getAdminSession } from '../../lib/admin-session';
 
-    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    const allowedRoles = new Set(['admin','staff','sales','manager']);
-    const loginForm = document.querySelector('[data-login-form]');
-    const staffUi = document.querySelector('[data-staff-ui]');
-    const roleWarning = document.querySelector('[data-role-warning]');
-    const authError = document.querySelector('[data-auth-error]');
-    const logoutButton = document.querySelector('[data-logout]');
+    const roleLabels={
+      admin:'Administrator',manager:'Manager',sales:'Sales Rep',
+      event_coordinator:'Event Coordinator',vendor_manager:'Vendor Manager',
+      content_editor:'Content Editor',accounting:'Accounting',read_only:'Read Only'
+    };
+    const loginForm=document.querySelector('[data-login-form]');
+    const staffUi=document.querySelector('[data-staff-ui]');
+    const accessWarning=document.querySelector('[data-access-warning]');
+    const passwordRequired=document.querySelector('[data-password-required]');
+    const passwordForm=document.querySelector('[data-password-form]');
+    const authError=document.querySelector('[data-auth-error]');
+    const logoutButton=document.querySelector('[data-logout]');
+    const roleBadge=document.querySelector('[data-role-badge]');
 
-    function hasStaffAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roleSources = [user?.roles, user?.appMetadata?.roles, user?.app_metadata?.roles];
-      const roles = roleSources.find(Array.isArray) || [];
-      return approvedAdminEmails.has(email) || roles.some((role) => allowedRoles.has(String(role || '').toLowerCase()));
-    }
-
-    async function updateHealthWarning(access) {
+    async function updateHealthWarning(session){
       const warning=document.querySelector('[data-health-warning]');
-      if(!warning||!access){warning?.classList.add('hidden');return;}
+      if(!warning||!session?.capabilities?.includes('health.view')){warning?.classList.add('hidden');return;}
       try{
         const response=await fetch('/api/admin/health',{cache:'no-store'});
         if(!response.ok)return;
@@ -89,62 +101,101 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const unhealthy=current?.overall==='unhealthy';
         warning.classList.toggle('hidden',!unhealthy);
         if(unhealthy){
-          const names=(current.checks||[]).filter((row)=>!row.ok).map((row)=>row.name);
+          const names=(current.checks||[]).filter(row=>!row.ok).map(row=>row.name);
           document.querySelector('[data-health-warning-title]').textContent=current.failed+' health check'+(current.failed===1?'':'s')+' failing';
-          document.querySelector('[data-health-warning-detail]').textContent=(names.slice(0,4).join(', ')||'Protected system issue detected')+(names.length>4?' +'+(names.length-4)+' more':'')+' · checked '+new Date(current.checkedAt).toLocaleString();
+          document.querySelector('[data-health-warning-detail]').textContent=(names.slice(0,4).join(', ')||'Protected system issue detected')+(names.length>4?' +'+(names.length-4)+' more':'');
         }
       }catch{}
     }
 
-    function show(user) {
-      const access = Boolean(user) && hasStaffAccess(user);
-      loginForm?.classList.toggle('hidden', Boolean(user));
-      staffUi?.classList.toggle('hidden', !access);
-      roleWarning?.classList.toggle('hidden', !user || access);
-      logoutButton?.classList.toggle('hidden', !user);
-      updateHealthWarning(access);
-    }
+    function renderSession(session){
+      const signedIn=Boolean(session);
+      loginForm?.classList.toggle('hidden',signedIn);
+      logoutButton?.classList.toggle('hidden',!signedIn);
+      roleBadge?.classList.toggle('hidden',!signedIn);
+      if(roleBadge)roleBadge.textContent=roleLabels[session?.role]||String(session?.role||'').replaceAll('_',' ');
 
-    loginForm?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const data = new FormData(loginForm);
-      try {
-        const user = await login(String(data.get('email') || ''), String(data.get('password') || ''));
-        authError?.classList.add('hidden');
-        show(user);
-      } catch (err) {
-        if (authError) {
-          authError.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
-          authError.classList.remove('hidden');
-        }
-      }
-    });
+      accessWarning?.classList.add('hidden');
+      passwordRequired?.classList.add('hidden');
+      staffUi?.classList.add('hidden');
+      passwordForm?.classList.toggle('hidden',!signedIn);
 
-    document.querySelector('[data-password-form]')?.addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const data = new FormData(form);
-      const password = String(data.get('password') || '');
-      const confirmPassword = String(data.get('confirmPassword') || '');
-      const message = document.querySelector('[data-password-message]');
-      if (password !== confirmPassword) {
-        if (message) message.textContent = 'The passwords do not match.';
+      if(!session)return;
+
+      if(session.blockReason==='session_revoked'){
+        accessWarning?.classList.remove('hidden');
+        document.querySelector('[data-access-warning-title]').textContent='This session was signed out remotely.';
+        document.querySelector('[data-access-warning-detail]').textContent='Sign out here, then sign in again to start a new authorized session.';
+        passwordForm?.classList.add('hidden');
         return;
       }
-      try {
-        await updateUser({ password });
-        form.reset();
-        if (message) message.textContent = 'Password updated.';
-      } catch (err) {
-        if (message) message.textContent = err instanceof Error ? err.message : 'Unable to update password.';
+
+      if(session.blockReason==='account_disabled'){
+        accessWarning?.classList.remove('hidden');
+        document.querySelector('[data-access-warning-title]').textContent='This account is deactivated.';
+        document.querySelector('[data-access-warning-detail]').textContent='An Administrator must reactivate the account before access can continue.';
+        passwordForm?.classList.add('hidden');
+        return;
+      }
+
+      if(session.blockReason==='password_change_required'||session.blockReason==='password_expired'){
+        passwordRequired?.classList.remove('hidden');
+        document.querySelector('[data-password-required-title]').textContent=session.blockReason==='password_expired'?'Password expired':'Password change required';
+        document.querySelector('[data-password-required-detail]').textContent=session.blockReason==='password_expired'
+          ? 'Your password reached the Koa’s password-expiration limit. Set a new password to continue.'
+          : 'An Administrator requires you to choose a new password before accessing Koa’s systems.';
+        passwordForm?.classList.remove('hidden');
+        return;
+      }
+
+      const capabilities=new Set(session.capabilities||session.permissions||[]);
+      document.querySelectorAll('[data-capability]').forEach(link=>{
+        link.classList.toggle('hidden',!capabilities.has(link.dataset.capability));
+      });
+      staffUi?.classList.remove('hidden');
+      updateHealthWarning(session);
+    }
+
+    async function refreshSession(){
+      const session=await getAdminSession();
+      renderSession(session);
+      return session;
+    }
+
+    loginForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(loginForm);
+      try{
+        await login(String(data.get('email')||''),String(data.get('password')||''));
+        authError?.classList.add('hidden');
+        await refreshSession();
+      }catch(err){
+        if(authError){authError.textContent=err instanceof Error?err.message:'Unable to sign in.';authError.classList.remove('hidden');}
       }
     });
 
-    logoutButton?.addEventListener('click', async () => {
-      await logout();
-      show(null);
+    passwordForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const data=new FormData(form);
+      const password=String(data.get('password')||'');
+      const confirmPassword=String(data.get('confirmPassword')||'');
+      const message=document.querySelector('[data-password-message]');
+      if(password!==confirmPassword){if(message)message.textContent='The passwords do not match.';return;}
+      try{
+        const response=await fetch('/api/account/security',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'change-password',password})});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to update password.');
+        form.reset();
+        if(message)message.textContent=result.message||'Password updated.';
+        await logout();
+        renderSession(null);
+        loginForm?.classList.remove('hidden');
+        if(authError){authError.textContent='Password updated. Sign in again with your new password.';authError.classList.remove('hidden');}
+      }catch(err){if(message)message.textContent=err instanceof Error?err.message:'Unable to update password.';}
     });
 
-    show(await getUser());
+    logoutButton?.addEventListener('click',async()=>{await logout();renderSession(null);});
+    await refreshSession();
   </script>
 </BaseLayout>
