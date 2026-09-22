@@ -24,6 +24,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             <label class="grid gap-2 text-sm font-semibold">Password<input name="password" type="password" autocomplete="current-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Sign in</button>
             <p data-auth-error class="hidden text-sm text-red-700"></p>
+            <button data-show-bootstrap type="button" class="text-left text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Create or repair an approved admin account</button>
+          </form>
+
+          <form data-bootstrap-form class="hidden mt-5 grid gap-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Administrator setup</p><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Use this only for an approved Koa’s administrator email. The account will be created or repaired and a secure password-setup email will be sent.</p></div>
+            <label class="grid gap-2 text-sm font-semibold">Approved admin email<input name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+            <div class="flex flex-wrap gap-3">
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Create / repair account</button>
+              <button data-hide-bootstrap type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Back to sign in</button>
+            </div>
+            <p data-bootstrap-message class="text-sm leading-6 text-[var(--koa-ink)]/62"></p>
+          </form>
+
+          <form data-recovery-form class="hidden grid gap-4">
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="eyebrow text-[var(--koa-clay)]">Set a new password</p>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Enter a new password for your Koa’s administrator account.</p>
+            </div>
+            <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Save new password</button>
+            <p data-recovery-error class="hidden text-sm text-red-700"></p>
           </form>
 
           <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
@@ -58,7 +80,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { acceptInvite, getUser, handleAuthCallback, login, logout } from '@netlify/identity';
+    import { acceptInvite, getUser, handleAuthCallback, login, logout, updateUser } from '@netlify/identity';
 
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
@@ -66,7 +88,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const roleWarning = document.querySelector('[data-role-warning]');
     const authError = document.querySelector('[data-auth-error]');
     const inviteError = document.querySelector('[data-invite-error]');
+    const bootstrapForm = document.querySelector('[data-bootstrap-form]');
+    const bootstrapMessage = document.querySelector('[data-bootstrap-message]');
+    const recoveryForm = document.querySelector('[data-recovery-form]');
+    const recoveryError = document.querySelector('[data-recovery-error]');
     let inviteToken = '';
+    let recoveryMode = false;
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
 
@@ -96,8 +123,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     function showAuthState(user) {
       const isAdmin = Boolean(user) && hasAdminAccess(user);
-      loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken));
+      loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken) || recoveryMode);
       inviteForm?.classList.toggle('hidden', !inviteToken);
+      recoveryForm?.classList.toggle('hidden', !recoveryMode);
+      if (user || inviteToken || recoveryMode) bootstrapForm?.classList.add('hidden');
       links?.classList.toggle('hidden', !isAdmin);
       roleWarning?.classList.toggle('hidden', !user || isAdmin);
       updateHealthWarning(isAdmin);
@@ -110,6 +139,12 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         if (result?.type === 'invite' && result.token) {
           inviteToken = result.token;
           showAuthState(null);
+          return;
+        }
+
+        if (result?.type === 'recovery') {
+          recoveryMode = true;
+          showAuthState(result.user || await getUser());
           return;
         }
 
@@ -161,8 +196,73 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         showAuthState(user);
       } catch (err) {
         if (authError) {
-          authError.textContent = err instanceof Error ? err.message : 'Unable to sign in.';
+          const status = Number(err?.status || err?.cause?.status || 0);
+          const raw = err instanceof Error ? err.message : '';
+          if (status === 404 || /user not found/i.test(raw)) {
+            authError.textContent = 'No account exists for that email. If this should be a Koa’s administrator, use “Create or repair an approved admin account” below.';
+          } else if (status === 401 || /invalid|credentials|password/i.test(raw)) {
+            authError.textContent = 'That account exists, but the email/password combination is incorrect.';
+          } else if (status === 403) {
+            authError.textContent = 'This account cannot sign in here. An administrator may need to enable or repair its access.';
+          } else {
+            authError.textContent = raw || 'Unable to sign in.';
+          }
           authError.classList.remove('hidden');
+        }
+      }
+    });
+
+    document.querySelector('[data-show-bootstrap]')?.addEventListener('click', () => {
+      loginForm?.classList.add('hidden');
+      bootstrapForm?.classList.remove('hidden');
+      if (bootstrapMessage) bootstrapMessage.textContent = '';
+    });
+
+    document.querySelector('[data-hide-bootstrap]')?.addEventListener('click', () => {
+      bootstrapForm?.classList.add('hidden');
+      loginForm?.classList.remove('hidden');
+    });
+
+    bootstrapForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(bootstrapForm);
+      if (bootstrapMessage) bootstrapMessage.textContent = 'Preparing administrator account…';
+      try {
+        const response = await fetch('/api/admin/bootstrap', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: String(data.get('email') || '')}),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.error || 'Administrator setup failed.');
+        if (bootstrapMessage) bootstrapMessage.textContent = result.message || 'Check your email for the password setup link.';
+      } catch (err) {
+        if (bootstrapMessage) bootstrapMessage.textContent = err instanceof Error ? err.message : 'Administrator setup failed.';
+      }
+    });
+
+    recoveryForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(recoveryForm);
+      const password = String(data.get('password') || '');
+      const confirmPassword = String(data.get('confirmPassword') || '');
+      if (password !== confirmPassword) {
+        if (recoveryError) {
+          recoveryError.textContent = 'The passwords do not match.';
+          recoveryError.classList.remove('hidden');
+        }
+        return;
+      }
+      try {
+        await updateUser({ password });
+        recoveryMode = false;
+        history.replaceState(null, '', '/admin/');
+        if (recoveryError) recoveryError.classList.add('hidden');
+        showAuthState(await getUser());
+      } catch (err) {
+        if (recoveryError) {
+          recoveryError.textContent = err instanceof Error ? err.message : 'Unable to update the password.';
+          recoveryError.classList.remove('hidden');
         }
       }
     });
