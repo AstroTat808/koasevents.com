@@ -28,10 +28,13 @@ import {
   readOffice365SyncState,
 } from './_shared/office365-calendar-sync';
 
-function nextHourlySyncIso(now=new Date()){
+function nextOfficeSyncIso(mode:string,now=new Date()){
   const next=new Date(now);
   next.setUTCMinutes(0,0,0);
   next.setUTCHours(next.getUTCHours()+1);
+  if(mode==='saver'){
+    while(next.getUTCHours()%4!==0)next.setUTCHours(next.getUTCHours()+1);
+  }
   return next.toISOString();
 }
 
@@ -128,12 +131,14 @@ async function office365HealthSummary(context:Context,deployments:any=null){
           ? 'schedule_missing'
           : syncPaused
             ? 'paused'
-            : verificationStatus==='caution'||verificationStatus==='catching_up'
+            : syncSaver
+              ? 'saver'
+              : verificationStatus==='caution'||verificationStatus==='catching_up'
               ? 'deployment_catching_up'
               : 'scheduled';
   const operationalSeverity=['production_behind','authentication_failed','not_configured','schedule_missing'].includes(operationalStatus)
     ? 'red'
-    : ['paused','deployment_catching_up'].includes(operationalStatus)
+    : ['paused','saver','deployment_catching_up'].includes(operationalStatus)
       ? 'yellow'
       : 'green';
   const policy=await readHealthAlertPolicy(context);
@@ -182,7 +187,7 @@ async function office365HealthSummary(context:Context,deployments:any=null){
     lastError,
     lastAttemptAt:String(state?.lastAttemptAt||''),
     lastSuccessAt:String(state?.lastSuccessAt||''),
-    nextScheduledSyncAt:syncPaused?'':nextHourlySyncIso(),
+    nextScheduledSyncAt:syncPaused?'':nextOfficeSyncIso(office365Mode),
     operationalStatus,
     operationalSeverity,
     signals:{
