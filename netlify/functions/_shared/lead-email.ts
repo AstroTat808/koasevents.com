@@ -256,21 +256,7 @@ function buildHtml(record: LeadRecord) {
           '<tr>' +
             '<td align="center" style="padding-top:28px;padding-right:12px;padding-bottom:28px;padding-left:12px;">' +
               '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:680px;background-color:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
-                '<tr>' +
-                  '<td bgcolor="#173d30" style="padding-top:24px;padding-right:28px;padding-bottom:24px;padding-left:28px;background-color:#173d30;border-radius:22px 22px 0 0;">' +
-                    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">' +
-                      '<tr>' +
-                        '<td width="56" valign="middle">' +
-                          '<img src="' + esc(emailLogoUrl(emailBrandForRecord(record))) + '" width="88" border="0" alt="' + esc(emailBrandName(emailBrandForRecord(record))) + '" style="display:block;width:88px;max-width:100%;height:auto;border:0;">' +
-                        '</td>' +
-                        '<td valign="middle" style="padding-left:14px;">' +
-                          '<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#e4c48f;">' + esc(emailBrandName(emailBrandForRecord(record))) + '</div>' +
-                          '<div style="padding-top:4px;font-family:Georgia,Times New Roman,serif;font-size:27px;line-height:32px;font-weight:700;color:#ffffff;">' + esc(title) + '</div>' +
-                        '</td>' +
-                      '</tr>' +
-                    '</table>' +
-                  '</td>' +
-                '</tr>' +
+                emailHeader({ brand: emailBrandForRecord(record), eyebrow: emailBrandName(emailBrandForRecord(record)), title }) +
                 '<tr>' +
                   '<td style="padding-top:30px;padding-right:30px;padding-bottom:30px;padding-left:30px;">' +
                     emailGreeting('Team') +
