@@ -21,7 +21,7 @@ export type HealthSnapshot = {
   failedIds: string[];
   alertFailedIds?: string[];
   checks: HealthCheck[];
-  source: 'hourly' | 'manual';
+  source: 'hourly' | 'manual' | 'post-deploy';
 };
 
 export type HealthAlertRule = {
@@ -39,6 +39,7 @@ export type HealthAlertPolicy = {
 };
 
 const PAGE_CHECKS = [
+  ['admin-home','Content Admin','/admin/','data-auth-shell'],
   ['business-crm','Business CRM','/admin/crm/','data-admin-ui'],
   ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
   ['event-ops','Event Ops','/admin/events/','data-app'],
@@ -50,6 +51,8 @@ const PAGE_CHECKS = [
   ['security','Security + Spam','/admin/security/','data-app'],
   ['local-seo','Local SEO','/admin/seo/','data-admin-ui'],
   ['system-health','System Health','/admin/health/','data-app'],
+  ['vendor-crm','Vendor CRM','/admin/vendors/','data-app'],
+  ['insurance','Vendor Insurance','/admin/insurance/','data-app'],
   ['staff-home','Staff Home','/staff/','data-staff-ui'],
 ] as const;
 
@@ -61,10 +64,15 @@ const API_CHECKS = [
   ['calendar-api','Master Calendar API','/api/admin/calendar'],
   ['blog-api','Blog API','/api/blog?admin=1'],
   ['staff-api','Staff Management API','/api/admin/staff'],
+  ['custom-roles-api','Custom Roles API','/api/admin/custom-roles'],
+  ['auth-security-api','Authentication Security API','/api/admin/auth-security'],
   ['quickbooks-api','QuickBooks API','/api/admin/quickbooks'],
   ['gallery-api','Gallery API','/api/gallery'],
   ['security-api','Security API','/api/admin/security?days=7'],
   ['seo-api','Local SEO API','/api/admin/local-seo'],
+  ['vendor-crm-api','Vendor CRM API','/api/admin/vendors'],
+  ['vendor-insurance-api','Vendor Insurance API','/api/admin/vendor-insurance-compliance'],
+  ['system-health-api','System Health API','/api/admin/health'],
 ] as const;
 
 export function healthComponents() {
@@ -176,7 +184,7 @@ async function timedFetch(url:string, init:RequestInit={}) {
   }
 }
 
-export async function runSystemHealth(source:'hourly'|'manual'='hourly'):Promise<HealthSnapshot> {
+export async function runSystemHealth(source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
   const origin=baseUrl().replace(/\/$/,'');
   const pageChecks=PAGE_CHECKS.map(async ([id,name,path,marker]):Promise<HealthCheck>=>{
     const result=await timedFetch(origin+path);
@@ -582,6 +590,16 @@ export async function sendHealthTransitionAlerts(previous:HealthSnapshot|null,cu
   return {changed:true,transition,channels};
 }
 
+
+export async function readPostDeployVerification(context:Context) {
+  return ((await healthStore(context).get('deployments/post-deploy-verification',{type:'json'})) || null) as any;
+}
+
+export async function savePostDeployVerification(context:Context,record:any) {
+  await healthStore(context).setJSON('deployments/post-deploy-verification',record);
+  return record;
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
@@ -702,10 +720,12 @@ export async function cachedDeploymentHistory(context:Context) {
     lastSuccessfulQa &&
     lastSuccessfulQa.commit===current.commit
   );
+  const postDeployVerification=await readPostDeployVerification(context);
   const result={
     generatedAt:new Date().toISOString(),
     current,
     deploymentHealthy,
+    postDeployVerification,
     lastSuccessfulDeployment:current,
     lastSuccessfulQa,
     latestQaForCurrentDeploy,
