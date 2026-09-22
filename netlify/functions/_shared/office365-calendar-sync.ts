@@ -42,11 +42,12 @@ function env(){
     clientSecret:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_SECRET'),500),
     calendarOwner:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_OWNER')||'chris@koas.us',240),
     calendarId:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_ID'),500),
+    calendarName:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_NAME')||"Koa's Events",180),
   };
 }
 export function office365CalendarConfig(){
   const cfg=env();
-  return {...cfg,clientSecret:cfg.clientSecret?'configured':'',configured:Boolean(cfg.tenantId&&cfg.clientId&&cfg.clientSecret&&cfg.calendarOwner&&cfg.calendarId)};
+  return {...cfg,clientSecret:cfg.clientSecret?'configured':'',configured:Boolean(cfg.tenantId&&cfg.clientId&&cfg.clientSecret&&cfg.calendarOwner)};
 }
 
 async function token(){
@@ -78,13 +79,23 @@ async function graph(path:string,accessToken:string,init:RequestInit={}){
   if(!res.ok)throw new Error('Microsoft Graph '+res.status+': '+clean(payload?.error?.message||res.statusText,800));
   return payload;
 }
-function calendarPath(){
+let cachedCalendarPath='';
+async function calendarPath(accessToken:string){
+  if(cachedCalendarPath)return cachedCalendarPath;
   const cfg=env();
-  if(!cfg.calendarOwner||!cfg.calendarId)throw new Error('Microsoft calendar owner/calendar ID are not configured.');
-  return '/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars/'+encodeURIComponent(cfg.calendarId);
+  if(!cfg.calendarOwner)throw new Error('Microsoft calendar owner is not configured.');
+  let calendarId=cfg.calendarId;
+  if(!calendarId){
+    const payload:any=await graph('/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars?$select=id,name&$top=200',accessToken);
+    const target=(payload?.value||[]).find((row:any)=>clean(row?.name,180).toLowerCase()===cfg.calendarName.toLowerCase());
+    if(!target?.id)throw new Error('Microsoft calendar "'+cfg.calendarName+'" was not found for '+cfg.calendarOwner+'.');
+    calendarId=clean(target.id,500);
+  }
+  cachedCalendarPath='/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars/'+encodeURIComponent(calendarId);
+  return cachedCalendarPath;
 }
 async function listEvents(accessToken:string,start:string,end:string){
-  let next=calendarPath()+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
+  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
   const rows:GraphEvent[]=[];
   while(next){
     const payload:any=await graph(next,accessToken);
@@ -148,10 +159,10 @@ function graphPayload(shape:any){
   };
 }
 async function createOutlookEvent(accessToken:string,shape:any){
-  return await graph(calendarPath()+'/events',accessToken,{method:'POST',body:JSON.stringify(graphPayload(shape))}) as GraphEvent;
+  return await graph((await calendarPath(accessToken))+'/events',accessToken,{method:'POST',body:JSON.stringify(graphPayload(shape))}) as GraphEvent;
 }
 async function updateOutlookEvent(accessToken:string,eventId:string,shape:any){
-  return await graph(calendarPath()+'/events/'+encodeURIComponent(eventId),accessToken,{method:'PATCH',body:JSON.stringify(graphPayload(shape))}) as GraphEvent;
+  return await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),accessToken,{method:'PATCH',body:JSON.stringify(graphPayload(shape))}) as GraphEvent;
 }
 async function loadBooked(context:Context){
   const records=((await salesStore(context).get('records/index',{type:'json'}))||[]) as any[];
@@ -225,7 +236,7 @@ export async function syncOffice365Calendar(context:Context){
       const link=((await syncStore(context).get(linkKey,{type:'json'}))||{}) as Partial<LinkState>;
       let event=linkedByRecord.get(shape.recordId);
       if(!event&&link.outlookEventId){
-        try{event=await graph(calendarPath()+'/events/'+encodeURIComponent(link.outlookEventId),accessToken) as GraphEvent;}catch{}
+        try{event=await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(link.outlookEventId),accessToken) as GraphEvent;}catch{}
       }
       if(!event){
         event=await createOutlookEvent(accessToken,shape);
