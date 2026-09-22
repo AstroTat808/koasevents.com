@@ -115,7 +115,7 @@ async function autoTrashConfirmedSpamRecord(
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireCapability('security.view');
+  const auth = await requireCapability('security.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
