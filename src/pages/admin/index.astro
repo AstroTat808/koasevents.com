@@ -93,9 +93,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const recoveryForm = document.querySelector('[data-recovery-form]');
     const recoveryError = document.querySelector('[data-recovery-error]');
     let inviteToken = '';
+    let inviteEmail = '';
     let recoveryMode = false;
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+
+    function canonicalizeAuthUrl() {
+      const hostname = String(window.location.hostname || '').toLowerCase();
+      if (!hostname.endsWith('.netlify.app')) return false;
+      const target = new URL('/admin/', 'https://koasevents.com');
+      target.search = window.location.search;
+      target.hash = window.location.hash;
+      window.location.replace(target.toString());
+      return true;
+    }
+
+    function emailFromToken(token) {
+      try {
+        const payload = String(token || '').split('.')[1] || '';
+        const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const decoded = JSON.parse(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')));
+        return String(decoded?.email || decoded?.user_email || decoded?.sub || '').trim().toLowerCase();
+      } catch {
+        return '';
+      }
+    }
+
+    async function repairApprovedAdminInvite(email) {
+      const normalized = String(email || '').trim().toLowerCase();
+      if (!approvedAdminEmails.has(normalized)) return null;
+      const response = await fetch('/api/admin/bootstrap', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email: normalized}),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'Administrator account repair failed.');
+      return result;
+    }
 
     function hasAdminAccess(user) {
       const email = String(user?.email || '').trim().toLowerCase();
@@ -133,11 +168,13 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     }
 
     async function initialize() {
+      if (canonicalizeAuthUrl()) return;
       try {
         const result = await handleAuthCallback();
 
         if (result?.type === 'invite' && result.token) {
           inviteToken = result.token;
+          inviteEmail = emailFromToken(result.token);
           showAuthState(null);
           return;
         }
@@ -174,15 +211,49 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }
 
       try {
+        const submitButton = inviteForm.querySelector('button[type="submit"], button:not([type])');
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = 'Creating account…';
+        }
         const user = await acceptInvite(inviteToken, password);
         inviteToken = '';
+        inviteEmail = '';
         history.replaceState(null, '', '/admin/');
         if (inviteError) inviteError.classList.add('hidden');
         showAuthState(user);
       } catch (err) {
+        const raw = err instanceof Error ? err.message : '';
+        const status = Number(err?.status || err?.cause?.status || 0);
+        const staleInvite = status === 404 || /user not found|expired|invalid.*token|invite/i.test(raw);
+        const approvedEmail = approvedAdminEmails.has(inviteEmail) ? inviteEmail : '';
+        if (staleInvite && approvedEmail) {
+          try {
+            await repairApprovedAdminInvite(approvedEmail);
+            inviteToken = '';
+            history.replaceState(null, '', '/admin/');
+            if (inviteError) {
+              inviteError.textContent = 'This invitation link was stale. The approved administrator account has been repaired and a new secure password-setup email was sent to ' + approvedEmail + '. Use the newest email link.';
+              inviteError.classList.remove('hidden');
+            }
+            return;
+          } catch (repairError) {
+            if (inviteError) {
+              inviteError.textContent = repairError instanceof Error ? repairError.message : 'Unable to repair this administrator invitation.';
+              inviteError.classList.remove('hidden');
+            }
+            return;
+          }
+        }
         if (inviteError) {
-          inviteError.textContent = err instanceof Error ? err.message : 'Unable to accept the invitation.';
+          inviteError.textContent = raw || 'Unable to accept the invitation.';
           inviteError.classList.remove('hidden');
+        }
+      } finally {
+        const submitButton = inviteForm.querySelector('button[type="submit"], button:not([type])');
+        if (submitButton) {
+          submitButton.disabled = false;
+          submitButton.textContent = 'Create account';
         }
       }
     });
