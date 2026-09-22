@@ -52,6 +52,14 @@
         </div>
         <button data-workspace-alert-close type="button" class="workspace-alert-close">Close</button>
       </div>
+
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button data-alert-tab="active" type="button" class="workspace-alert-tab" aria-pressed="true">Active <span data-alert-tab-count="active"></span></button>
+        <button data-alert-tab="snoozed" type="button" class="workspace-alert-tab" aria-pressed="false">Snoozed <span data-alert-tab-count="snoozed"></span></button>
+        <button data-alert-tab="dismissed" type="button" class="workspace-alert-tab" aria-pressed="false">Dismissed <span data-alert-tab-count="dismissed"></span></button>
+        <button data-alert-tab="history" type="button" class="workspace-alert-tab" aria-pressed="false">History</button>
+      </div>
+
       <div data-workspace-alert-list class="mt-4 grid gap-2"></div>
     </section>
 
@@ -294,6 +302,49 @@
     text-transform: uppercase;
   }
 
+  .workspace-alert-tab,
+  .workspace-alert-action {
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: white;
+    padding: .45rem .65rem;
+    color: var(--koa-forest);
+    font-size: .52rem;
+    font-weight: 900;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+  }
+
+  .workspace-alert-tab[aria-pressed="true"] {
+    border-color: var(--koa-forest);
+    background: var(--koa-forest);
+    color: white;
+  }
+
+  .workspace-alert-new {
+    display: inline-flex;
+    border-radius: 9999px;
+    background: rgb(220 38 38);
+    padding: .25rem .45rem;
+    color: white;
+    font-size: .5rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .workspace-alert-actions {
+    margin-top: .65rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+
+  .workspace-alert-history {
+    border-left: 3px solid var(--koa-line);
+    padding-left: .75rem;
+  }
+
   .workspace-alert-row {
     display: block;
     border: 1px solid var(--koa-line);
@@ -395,62 +446,257 @@
     });
   }
 
+  let alertPayload = null;
+  let alertTab = 'active';
+
+  function formatAlertTime(value) {
+    const ms = Date.parse(String(value || ''));
+    if (!Number.isFinite(ms)) return '';
+    return new Intl.DateTimeFormat('en-US',{
+      timeZone:'Pacific/Honolulu',
+      month:'short',day:'numeric',year:'numeric',
+      hour:'numeric',minute:'2-digit'
+    }).format(new Date(ms));
+  }
+
+  async function alertAction(action, extra = {}) {
+    try {
+      const response = await fetch('/api/admin/workspace-alerts',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action,...extra}),
+      });
+      if (!response.ok) return false;
+      await loadAlerts();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function actionButton(label, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'workspace-alert-action';
+    button.textContent = label;
+    button.addEventListener('click',(event)=>{
+      event.preventDefault();
+      event.stopPropagation();
+      onClick(button);
+    });
+    return button;
+  }
+
+  function activeAlertRow(alert) {
+    const row = document.createElement('article');
+    row.className = 'workspace-alert-row';
+    row.dataset.severity = alert.severity || 'info';
+
+    const top = document.createElement('div');
+    top.className = 'flex flex-wrap items-center justify-between gap-2';
+
+    const left = document.createElement('div');
+    left.className = 'flex flex-wrap items-center gap-2';
+
+    const title = document.createElement('strong');
+    title.className = 'text-sm text-[var(--koa-forest)]';
+    title.textContent = alert.title || 'Workspace alert';
+
+    if (alert.isNew) {
+      const fresh = document.createElement('span');
+      fresh.className = 'workspace-alert-new';
+      fresh.textContent = 'New';
+      left.appendChild(fresh);
+    }
+    left.prepend(title);
+
+    const sev = document.createElement('span');
+    sev.className = 'workspace-alert-severity';
+    sev.dataset.severity = alert.severity || 'info';
+    sev.textContent = alert.severity === 'urgent' ? 'Urgent' : alert.severity === 'upcoming' ? 'Upcoming' : 'Info';
+
+    const context = document.createElement('p');
+    context.className = 'mt-1 text-xs font-semibold text-[var(--koa-ink)]/65';
+    context.textContent = alert.context || '';
+
+    const detail = document.createElement('p');
+    detail.className = 'mt-1 text-xs leading-5 text-[var(--koa-ink)]/52';
+    detail.textContent = alert.detail || '';
+
+    const meta = document.createElement('p');
+    meta.className = 'mt-1 text-[.62rem] text-[var(--koa-ink)]/40';
+    meta.textContent = 'First appeared ' + formatAlertTime(alert.firstAppearedAt);
+
+    const actions = document.createElement('div');
+    actions.className = 'workspace-alert-actions';
+
+    const open = document.createElement('a');
+    open.href = alert.href || '#';
+    open.className = 'workspace-alert-action';
+    open.textContent = 'Open item';
+
+    if (alert.isNew) {
+      actions.appendChild(actionButton('Mark seen', async(button)=>{
+        button.disabled = true;
+        await alertAction('mark-seen',{occurrenceIds:[alert.occurrenceId]});
+      }));
+    }
+
+    actions.appendChild(actionButton('Tomorrow', async(button)=>{
+      button.disabled = true;
+      await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'tomorrow'});
+    }));
+    actions.appendChild(actionButton('Next week', async(button)=>{
+      button.disabled = true;
+      await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'week'});
+    }));
+    actions.appendChild(actionButton('Custom date', async(button)=>{
+      const raw = window.prompt('Snooze until what date? Use YYYY-MM-DD.');
+      if (!raw) return;
+      button.disabled = true;
+      const ok = await alertAction('snooze',{occurrenceId:alert.occurrenceId,date:raw});
+      if (!ok) button.disabled = false;
+    }));
+    actions.appendChild(actionButton('Dismiss', async(button)=>{
+      button.disabled = true;
+      await alertAction('dismiss',{occurrenceId:alert.occurrenceId});
+    }));
+    actions.appendChild(open);
+
+    top.append(left,sev);
+    row.append(top,context,detail,meta,actions);
+    return row;
+  }
+
+  function snoozedAlertRow(alert) {
+    const row = activeAlertRow(alert);
+    const actions = row.querySelector('.workspace-alert-actions');
+    if (actions) {
+      actions.innerHTML = '';
+      actions.appendChild(actionButton('Restore now', async(button)=>{
+        button.disabled = true;
+        await alertAction('unsnooze',{occurrenceId:alert.occurrenceId});
+      }));
+      const until = document.createElement('span');
+      until.className = 'self-center text-xs text-[var(--koa-ink)]/50';
+      until.textContent = 'Snoozed until ' + formatAlertTime(alert.snoozedUntil);
+      actions.appendChild(until);
+    }
+    return row;
+  }
+
+  function dismissedAlertRow(alert) {
+    const row = activeAlertRow(alert);
+    const actions = row.querySelector('.workspace-alert-actions');
+    if (actions) {
+      actions.innerHTML = '';
+      actions.appendChild(actionButton('Restore', async(button)=>{
+        button.disabled = true;
+        await alertAction('restore-dismissed',{occurrenceId:alert.occurrenceId});
+      }));
+      const dismissed = document.createElement('span');
+      dismissed.className = 'self-center text-xs text-[var(--koa-ink)]/50';
+      dismissed.textContent = 'Dismissed ' + formatAlertTime(alert.dismissedAt);
+      actions.appendChild(dismissed);
+    }
+    return row;
+  }
+
+  function historyAlertRow(alert) {
+    const row = document.createElement('article');
+    row.className = 'workspace-alert-row workspace-alert-history';
+    row.dataset.severity = alert.severity || 'info';
+
+    const top = document.createElement('div');
+    top.className = 'flex flex-wrap items-center justify-between gap-2';
+    const title = document.createElement('strong');
+    title.className = 'text-sm text-[var(--koa-forest)]';
+    title.textContent = alert.title || 'Workspace alert';
+
+    const status = document.createElement('span');
+    status.className = 'workspace-alert-severity';
+    status.dataset.severity = alert.status === 'resolved' ? 'info' : alert.severity || 'info';
+    status.textContent = alert.status === 'resolved' ? 'Resolved' : 'Active';
+
+    const detail = document.createElement('p');
+    detail.className = 'mt-2 text-xs leading-5 text-[var(--koa-ink)]/60';
+    const parts = [
+      'First appeared ' + formatAlertTime(alert.firstAppearedAt),
+      alert.resolvedAt ? 'Resolved ' + formatAlertTime(alert.resolvedAt) : 'Last active ' + formatAlertTime(alert.lastSeenAt),
+    ];
+    detail.textContent = parts.join(' · ');
+
+    const changes = document.createElement('div');
+    changes.className = 'mt-2 grid gap-1 text-xs text-[var(--koa-ink)]/50';
+    const rows = Array.isArray(alert.severityChanges) ? alert.severityChanges : [];
+    if (rows.length) {
+      rows.slice().reverse().forEach((change)=>{
+        const line = document.createElement('p');
+        line.textContent = formatAlertTime(change.at) + ' · severity changed ' + change.from + ' → ' + change.to;
+        changes.appendChild(line);
+      });
+    } else {
+      const line = document.createElement('p');
+      line.textContent = 'No severity changes recorded.';
+      changes.appendChild(line);
+    }
+
+    top.append(title,status);
+    row.append(top,detail,changes);
+    return row;
+  }
+
   function renderAlertCenter(payload) {
-    const center = nav?.querySelector('[data-workspace-alert-center]');
+    alertPayload = payload;
     const list = nav?.querySelector('[data-workspace-alert-list]');
     const summary = nav?.querySelector('[data-workspace-alert-summary]');
     if (!(list instanceof HTMLElement)) return;
 
-    const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
-    list.innerHTML = '';
-
+    const counts = payload?.severityCounts || {};
     if (summary instanceof HTMLElement) {
-      const counts = payload?.severityCounts || {};
       summary.textContent = [
+        Number(payload?.newCount || 0) ? Number(payload.newCount) + ' new' : '',
         Number(counts.urgent || 0) ? Number(counts.urgent || 0) + ' urgent' : '',
         Number(counts.upcoming || 0) ? Number(counts.upcoming || 0) + ' upcoming' : '',
         Number(counts.info || 0) ? Number(counts.info || 0) + ' informational' : '',
       ].filter(Boolean).join(' · ') || 'No active alerts.';
     }
 
-    if (!alerts.length) {
+    const tabRows = {
+      active:Array.isArray(payload?.alerts)?payload.alerts:[],
+      snoozed:Array.isArray(payload?.snoozed)?payload.snoozed:[],
+      dismissed:Array.isArray(payload?.dismissed)?payload.dismissed:[],
+      history:Array.isArray(payload?.history)?payload.history:[],
+    };
+    const rows = tabRows[alertTab] || [];
+    list.innerHTML = '';
+
+    nav?.querySelectorAll('[data-alert-tab]').forEach((button)=>{
+      if (!(button instanceof HTMLElement)) return;
+      button.setAttribute('aria-pressed',button.dataset.alertTab===alertTab?'true':'false');
+    });
+    const countMap = {active:payload?.total||0,snoozed:payload?.snoozedCount||0,dismissed:payload?.dismissedCount||0};
+    nav?.querySelectorAll('[data-alert-tab-count]').forEach((node)=>{
+      if (!(node instanceof HTMLElement)) return;
+      const value = Number(countMap[node.dataset.alertTabCount]||0);
+      node.textContent = value ? '('+value+')' : '';
+    });
+
+    if (!rows.length) {
       const empty = document.createElement('p');
       empty.className = 'rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55';
-      empty.textContent = 'No active workspace alerts.';
+      empty.textContent = alertTab==='history' ? 'No alert history yet.' : 'No alerts in this view.';
       list.appendChild(empty);
       return;
     }
 
-    alerts.forEach((alert) => {
-      const row = document.createElement('a');
-      row.href = alert.href || '#';
-      row.className = 'workspace-alert-row';
-      row.dataset.severity = alert.severity || 'info';
-
-      const top = document.createElement('div');
-      top.className = 'flex flex-wrap items-center justify-between gap-2';
-
-      const title = document.createElement('strong');
-      title.className = 'text-sm text-[var(--koa-forest)]';
-      title.textContent = alert.title || 'Workspace alert';
-
-      const sev = document.createElement('span');
-      sev.className = 'workspace-alert-severity';
-      sev.dataset.severity = alert.severity || 'info';
-      sev.textContent = alert.severity === 'urgent' ? 'Urgent' : alert.severity === 'upcoming' ? 'Upcoming' : 'Info';
-
-      const context = document.createElement('p');
-      context.className = 'mt-1 text-xs font-semibold text-[var(--koa-ink)]/65';
-      context.textContent = alert.context || '';
-
-      const detail = document.createElement('p');
-      detail.className = 'mt-1 text-xs leading-5 text-[var(--koa-ink)]/52';
-      detail.textContent = alert.detail || '';
-
-      top.append(title,sev);
-      row.append(top,context,detail);
-      row.addEventListener('click',()=>center?.classList.add('hidden'));
-      list.appendChild(row);
+    rows.forEach((alert)=>{
+      list.appendChild(
+        alertTab==='history' ? historyAlertRow(alert)
+        : alertTab==='snoozed' ? snoozedAlertRow(alert)
+        : alertTab==='dismissed' ? dismissedAlertRow(alert)
+        : activeAlertRow(alert)
+      );
     });
   }
 
@@ -469,7 +715,8 @@
       mobileAlertButton.classList.toggle('inline-flex', total > 0);
     }
     if (desktopBadge instanceof HTMLElement) {
-      desktopBadge.textContent = total > 0 ? badgeText(total) + ' alerts' : '';
+      const newCount = Math.max(0, Number(payload?.newCount || 0));
+      desktopBadge.textContent = total > 0 ? badgeText(total) + ' alerts' + (newCount ? ' · ' + badgeText(newCount) + ' new' : '') : '';
       desktopBadge.classList.toggle('hidden', total <= 0);
       desktopBadge.classList.toggle('md:inline-flex', total > 0);
     }
@@ -496,6 +743,13 @@
     } catch {}
   }
 
+  nav?.querySelectorAll('[data-alert-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      alertTab = button.dataset.alertTab || 'active';
+      if (alertPayload) renderAlertCenter(alertPayload);
+    });
+  });
+
   toggle?.addEventListener('click', () => {
     const open = toggle.getAttribute('aria-expanded') !== 'true';
     nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
@@ -508,7 +762,11 @@
     const opening = center.classList.contains('hidden');
     center.classList.toggle('hidden', !opening);
     nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
-    if (opening) setMenu(false);
+    if (opening) {
+      setMenu(false);
+      const fresh = (alertPayload?.alerts || []).filter((alert)=>alert.isNew).map((alert)=>alert.occurrenceId);
+      if (fresh.length) alertAction('mark-seen',{occurrenceIds:fresh});
+    }
   });
 
   nav?.querySelector('[data-workspace-alert-toggle]')?.addEventListener('click', () => {
@@ -517,6 +775,10 @@
     const opening = center.classList.contains('hidden');
     center.classList.toggle('hidden', !opening);
     nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) {
+      const fresh = (alertPayload?.alerts || []).filter((alert)=>alert.isNew).map((alert)=>alert.occurrenceId);
+      if (fresh.length) alertAction('mark-seen',{occurrenceIds:fresh});
+    }
   });
 
   nav?.querySelector('[data-workspace-alert-close]')?.addEventListener('click', () => {
