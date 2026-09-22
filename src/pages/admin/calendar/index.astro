@@ -51,7 +51,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <span class="legend legend-staff"><span aria-hidden="true">👤</span> Staffing</span>
               <span class="legend legend-task"><span aria-hidden="true">☑</span> Task / run of show</span>
               <span class="legend legend-office"><span aria-hidden="true">📅</span> Office 365</span>
-              <span class="legend legend-outlook"><span aria-hidden="true">📅</span> Outlook</span>
             </div>
           </div>
 
@@ -69,13 +68,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <span data-office365-status class="text-[.6rem] font-bold text-[var(--koa-ink)]/45">Office 365 sync status loading…</span>
               <button data-office365-sync type="button" class="calendar-sync-button">Sync now</button>
             </div>
-          </div>
-          <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3">
-            <div>
-              <p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Office 365 · Koa's Events</p>
-              <p data-sync-status class="mt-1 text-xs text-[var(--koa-ink)]/55">Checking calendar sync…</p>
-            </div>
-            <button data-sync-now type="button" class="calendar-filter">Sync now</button>
           </div>
 
           <div class="mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
@@ -161,7 +153,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .legend-office{background:color-mix(in srgb,var(--koa-amber-light) 24%,white);color:var(--koa-ink);border-color:color-mix(in srgb,var(--koa-amber-light) 45%,var(--koa-line))}
     .calendar-sync-button{border-radius:9999px;background:var(--koa-clay);padding:.55rem .8rem;font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:white}
     .calendar-sync-button:disabled{cursor:wait;opacity:.55}
-    .legend-outlook{background:color-mix(in srgb,var(--koa-amber-light) 24%,white);color:var(--koa-forest)}
     .calendar-view-switch{display:flex;border:1px solid var(--koa-line);border-radius:9999px;background:var(--koa-ivory);padding:.22rem}
     .calendar-view-button{border-radius:9999px;padding:.55rem .85rem;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:color-mix(in srgb,var(--koa-ink) 55%,transparent)}
     .calendar-view-button.is-active{background:var(--koa-forest);color:white;box-shadow:0 4px 14px rgb(0 0 0/.08)}
@@ -194,8 +185,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:white}
     .calendar-item.task,.calendar-item.timeline{background:var(--koa-ink);color:white}
     .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
+    .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 20%,white);color:var(--koa-forest);border:1px dashed color-mix(in srgb,var(--koa-clay) 45%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 22%,white);color:var(--koa-ink);border:1px solid color-mix(in srgb,var(--koa-amber-light) 55%,var(--koa-line))}
-    .calendar-item.outlook{background:color-mix(in srgb,var(--koa-amber-light) 20%,white);color:var(--koa-forest);border:1px dashed color-mix(in srgb,var(--koa-clay) 45%,var(--koa-line))}
     .week-grid{display:grid;grid-template-columns:repeat(7,minmax(9.5rem,1fr));min-height:32rem}
     .week-day-column{border-right:1px solid var(--koa-line)}
     .week-day-column:last-child{border-right:0}
@@ -249,8 +240,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const previewOwner=document.querySelector('[data-preview-owner]');
     const previewOpen=document.querySelector('[data-preview-open]');
     const previewDay=document.querySelector('[data-preview-day]');
-    const syncStatus=document.querySelector('[data-sync-status]');
-    const syncNow=document.querySelector('[data-sync-now]');
     let cursor=new Date();
     cursor=new Date(cursor.getFullYear(),cursor.getMonth(),1);
     let activeView='month';
@@ -287,7 +276,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(item.type==='vendor')return {icon:'🚚',label:'Vendor',className:'vendor'};
       if(item.type==='task'&&item.subtype==='staffing')return {icon:'👤',label:'Staffing',className:'staffing'};
       if(item.type==='timeline')return {icon:'▶',label:'Run of show',className:'timeline'};
-      if(item.type==='external'&&item.subtype==='outlook')return {icon:'📅',label:'Outlook',className:'outlook'};
+      if(item.type==='external'&&item.subtype==='office365')return {icon:'📅',label:'Office 365',className:'office365'};
       return {icon:'☑',label:'Task',className:'task'};
     }
     function filterKey(item){
@@ -310,8 +299,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(item.owner){previewOwner.textContent='Owner: '+item.owner;previewOwner.classList.remove('hidden');}else{previewOwner.textContent='';previewOwner.classList.add('hidden');}
       if(item.recordId){
         previewOpen.href='/admin/events/?record='+encodeURIComponent(item.recordId);previewOpen.textContent='Open Event Ops';previewOpen.removeAttribute('target');
-      }else if(item.outlookWebLink){
-        previewOpen.href=item.outlookWebLink;previewOpen.textContent='Open Outlook';previewOpen.target='_blank';
+      }else if(item.externalUrl){
+        previewOpen.href=item.externalUrl;previewOpen.textContent='Open Outlook';previewOpen.target='_blank';
       }else{
         previewOpen.href='#';previewOpen.textContent='Calendar item';previewOpen.removeAttribute('target');
       }
@@ -478,21 +467,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length)agenda.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No calendar items in this month.'));
     }
 
-    async function refreshSyncStatus(){
-      try{
-        const response=await fetch('/api/admin/calendar-sync',{cache:'no-store'});
-        if(!response.ok)throw new Error('status unavailable');
-        const status=await response.json();
-        const totals=status.totals||{};
-        syncStatus.textContent=status.state==='healthy'
-          ?'Healthy · last synced '+new Date(status.lastRunAt).toLocaleString()+(totals.external?' · '+totals.external+' Outlook-only item'+(totals.external===1?'':'s'):'')
-          :status.state==='conflict'
-            ?'Needs review · '+(status.message||'sync conflict detected')
-            :status.state==='not_configured'
-              ?'Not configured · Microsoft Graph credentials are required in Netlify'
-              :(status.message||'Sync has not run yet.');
-      }catch{syncStatus.textContent='Calendar sync status unavailable.';}
-    }
     async function loadOffice365Status(){
       const statusEl=document.querySelector('[data-office365-status]');
       try{
@@ -520,7 +494,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(){
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
-      app.classList.remove('hidden');refreshSyncStatus();
+      app.classList.remove('hidden');
       const range=rangeForView();
       const res=await fetch('/api/admin/calendar?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'});
       if(!res.ok)return;
@@ -537,16 +511,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-office365-sync]')?.addEventListener('click',syncOffice365Now);
     document.querySelector('[data-preview-backdrop]')?.addEventListener('click',closePreview);
     previewDay?.addEventListener('click',()=>{if(!previewItem)return;const key=previewItem.date;closePreview();openDayPanel(key);});
-    syncNow?.addEventListener('click',async()=>{
-      syncNow.disabled=true;syncNow.textContent='Syncing…';
-      try{
-        const response=await fetch('/api/admin/calendar-sync',{method:'POST'});
-        const json=await response.json();
-        if(!response.ok)throw new Error(json?.status?.message||'Sync failed');
-        await refreshSyncStatus();await load();
-      }catch(error){syncStatus.textContent=String(error?.message||error||'Calendar sync failed.');}
-      finally{syncNow.disabled=false;syncNow.textContent='Sync now';}
-    });
     document.querySelectorAll('[data-filter]').forEach((button)=>button.addEventListener('click',()=>{
       const key=button.dataset.filter;
       if(key==='all'){activeFilters.clear();}
