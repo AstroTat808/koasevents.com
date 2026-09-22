@@ -5,8 +5,8 @@ function clean(value: unknown, max = 240) {
   return String(value || '').trim().slice(0, max);
 }
 
-export default async () => {
-  const ctx = await getAccessContext();
+export default async (req:Request) => {
+  const ctx = await getAccessContext(req);
   if (!ctx.sessionUser || !ctx.user) return new Response('Unauthorized', { status:401 });
 
   const email = clean(ctx.user?.email,240).toLowerCase();
