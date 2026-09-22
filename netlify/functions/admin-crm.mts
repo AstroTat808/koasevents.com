@@ -5,6 +5,7 @@ import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, 
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
+import { recordCrmStartupSignal } from './_shared/system-health';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -426,10 +427,22 @@ export default async (req:Request, context:Context) => {
     'permanent-delete-client-chain':'crm.destructive',
     'save-workflow':'crm.workflows',
     'save-template':'crm.templates',
+    'report-startup-health':'crm.view',
   };
   const requiredCapability=capabilityByAction[action] || 'crm.manage';
   if (!hasCapability(auth.user, requiredCapability)) {
     return Response.json({error:'You do not have permission for this CRM action.'},{status:403});
+  }
+
+  if (action === 'report-startup-health') {
+    const signal=await recordCrmStartupSignal(context,{
+      status:body.status==='failed'?'failed':'healthy',
+      phase:clean(body.phase,80),
+      detail:clean(body.detail,500),
+      deployId:clean(body.deployId,120),
+      commit:clean(body.commit,120),
+    });
+    return Response.json({ok:true,signal},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (action === 'bulk-approve-cleanup-review') {
