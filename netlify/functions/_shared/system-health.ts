@@ -779,6 +779,8 @@ export async function recordProductionRelease(context:Context,input:any) {
   let authorLogin=previous?.authorLogin||'';
   let pullRequestNumber=previous?.pullRequestNumber??null;
   let pullRequestUrl=previous?.pullRequestUrl||'';
+  let displayCommit=commit;
+  let parentCommit='';
   if(commit){
     try{
       const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(commit),{
@@ -788,11 +790,32 @@ export async function recordProductionRelease(context:Context,input:any) {
         const body:any=await response.json();
         commitMessage=clean(body?.commit?.message,2000);
         commitTitle=clean(commitMessage.split('\n')[0],300);
+        parentCommit=clean(body?.parents?.[0]?.sha,80);
         changedFiles=Array.isArray(body?.files)
           ? body.files.map((file:any)=>clean(file?.filename,300)).filter(Boolean).slice(0,300)
           : changedFiles;
         authorName=clean(body?.commit?.author?.name,180)||authorName;
         authorLogin=clean(body?.author?.login,120)||authorLogin;
+
+        if(/^Trigger .*production deploy/i.test(commitTitle)&&parentCommit){
+          try{
+            const parentResponse=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(parentCommit),{
+              headers:githubHeaders,signal:AbortSignal.timeout(12_000),
+            });
+            if(parentResponse.ok){
+              const parentBody:any=await parentResponse.json();
+              const parentMessage=clean(parentBody?.commit?.message,2000);
+              if(parentMessage){
+                displayCommit=parentCommit;
+                commitMessage=parentMessage;
+                commitTitle=clean(parentMessage.split('\n')[0],300);
+                authorName=clean(parentBody?.commit?.author?.name,180)||authorName;
+                authorLogin=clean(parentBody?.author?.login,120)||authorLogin;
+              }
+            }
+          }catch{}
+        }
+
         const titlePr=commitTitle.match(/\(#(\d+)\)\s*$/);
         if(titlePr){
           pullRequestNumber=Number(titlePr[1]);
@@ -802,7 +825,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     }catch{}
     if(!pullRequestNumber){
       try{
-        const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(commit)+'/pulls',{
+        const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(displayCommit||commit)+'/pulls',{
           headers:{...githubHeaders,'Accept':'application/vnd.github+json'},
           signal:AbortSignal.timeout(12_000),
         });
@@ -817,6 +840,26 @@ export async function recordProductionRelease(context:Context,input:any) {
         }
       }catch{}
     }
+  }
+
+  const previousRelease=existing
+    .filter(row=>row.deployId!==deployId&&row.commit&&row.commit!==commit)
+    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))[0];
+  if(previousRelease?.commit&&commit){
+    try{
+      const response=await fetch(
+        'https://api.github.com/repos/AstroTat808/koasevents.com/compare/'+encodeURIComponent(previousRelease.commit)+'...'+encodeURIComponent(commit),
+        {headers:githubHeaders,signal:AbortSignal.timeout(15_000)},
+      );
+      if(response.ok){
+        const body:any=await response.json();
+        const releaseFiles=(Array.isArray(body?.files)?body.files:[])
+          .map((file:any)=>clean(file?.filename,300))
+          .filter(Boolean)
+          .slice(0,500);
+        if(releaseFiles.length) changedFiles=releaseFiles;
+      }
+    }catch{}
   }
 
   let publishedAt=clean(input?.publishedAt,80)||previous?.publishedAt||clean(input?.checkedAt,80);
