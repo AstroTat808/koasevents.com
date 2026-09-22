@@ -46,6 +46,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <a href="/admin/calendar/" class="w-fit rounded-full border border-[var(--koa-line)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open Master Calendar</a>
             </div>
           </div>
+          <div data-office365-operational class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Operational state</p>
+                <h3 data-office365-operational-title class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Checking Office 365 sync…</h3>
+                <p data-office365-operational-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52"></p>
+              </div>
+              <span data-office365-operational-badge class="w-fit rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking</span>
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article data-office365-signal-schedule class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Scheduled function</p>
+                <p data-office365-schedule class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+                <p data-office365-schedule-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+              </article>
+              <article data-office365-signal-pause class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Credit saver</p>
+                <p data-office365-pause class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+                <p data-office365-pause-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+              </article>
+              <article data-office365-signal-auth class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Microsoft Graph</p>
+                <p data-office365-graph-auth class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+                <p data-office365-graph-auth-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+              </article>
+              <article data-office365-signal-verification class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Production verification</p>
+                <p data-office365-verification class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+                <p data-office365-verification-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+              </article>
+            </div>
+          </div>
+
           <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Authentication</p>
@@ -376,6 +409,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const publicStatusEnabled=document.querySelector('[data-public-status-enabled]');
     const savePolicy=document.querySelector('[data-save-policy]');
     const policyMessage=document.querySelector('[data-policy-message]');
+    const office365Operational=document.querySelector('[data-office365-operational]');
+    const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
+    const office365OperationalDetail=document.querySelector('[data-office365-operational-detail]');
+    const office365OperationalBadge=document.querySelector('[data-office365-operational-badge]');
+    const office365Schedule=document.querySelector('[data-office365-schedule]');
+    const office365ScheduleDetail=document.querySelector('[data-office365-schedule-detail]');
+    const office365Pause=document.querySelector('[data-office365-pause]');
+    const office365PauseDetail=document.querySelector('[data-office365-pause-detail]');
+    const office365GraphAuth=document.querySelector('[data-office365-graph-auth]');
+    const office365GraphAuthDetail=document.querySelector('[data-office365-graph-auth-detail]');
+    const office365Verification=document.querySelector('[data-office365-verification]');
+    const office365VerificationDetail=document.querySelector('[data-office365-verification-detail]');
     const office365Auth=document.querySelector('[data-office365-auth]');
     const office365AuthDetail=document.querySelector('[data-office365-auth-detail]');
     const office365LastSuccess=document.querySelector('[data-office365-last-success]');
@@ -734,6 +779,67 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
 
       const office365=data.office365||{};
+      if(office365Operational){
+        const signals=office365.signals||{};
+        const operational=String(office365.operationalStatus||'unknown');
+        const operationalMap={
+          scheduled:['Scheduled function deployed','Office 365 automatic synchronization is deployed and eligible to run on schedule.','Healthy','border-emerald-200 bg-emerald-50','bg-emerald-100 text-emerald-800'],
+          paused:['Sync intentionally paused by credit saver','The Office 365 scheduled function is deployed, but automatic runs are intentionally paused by the active credit-saver policy. Manual Sync now + verify remains available.','Paused','border-amber-200 bg-amber-50','bg-amber-100 text-amber-900'],
+          authentication_failed:['Microsoft Graph authentication failed','The production sync reported an authentication, permission, credential, or tenant-consent failure.','Auth failed','border-red-300 bg-red-50','bg-red-100 text-red-800'],
+          production_behind:['Production too far behind GitHub to verify','Production is more than one commit behind main, so the newest Office 365 code cannot be treated as verified yet.','Verification blocked','border-red-300 bg-red-50','bg-red-100 text-red-800'],
+          schedule_missing:['Office 365 scheduled function missing','The current Netlify production deploy does not report the office365-calendar-sync scheduled function.','Missing','border-red-300 bg-red-50','bg-red-100 text-red-800'],
+          not_configured:['Office 365 Graph configuration incomplete','One or more required Microsoft Graph environment variables are missing.','Not configured','border-red-300 bg-red-50','bg-red-100 text-red-800'],
+          deployment_catching_up:['Production is catching up','Production is one commit behind while deployment is starting or running. Verification is temporarily cautionary, not failed.','Catching up','border-amber-200 bg-amber-50','bg-amber-100 text-amber-900'],
+          unknown:['Office 365 state unavailable','System Health could not determine the current Office 365 operational state.','Unknown','border-slate-200 bg-slate-50','bg-slate-100 text-slate-700'],
+        };
+        const selected=operationalMap[operational]||operationalMap.unknown;
+        office365Operational.className='mt-5 rounded-[1.2rem] border p-5 '+selected[3];
+        office365OperationalTitle.textContent=selected[0];
+        office365OperationalDetail.textContent=selected[1];
+        office365OperationalBadge.textContent=selected[2];
+        office365OperationalBadge.className='w-fit rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+selected[4];
+
+        const schedule=signals.scheduledFunction||{};
+        office365Schedule.textContent=schedule.deployed?'Deployed':'Not deployed';
+        office365Schedule.className='mt-2 text-sm font-semibold '+(schedule.deployed?'text-emerald-800':'text-red-800');
+        office365ScheduleDetail.textContent=schedule.deployed
+          ? 'Netlify schedule '+String(schedule.cron||'detected')
+          : 'Current production deploy does not list office365-calendar-sync.';
+
+        const pause=signals.creditSaver||{};
+        office365Pause.textContent=pause.paused?'Paused intentionally':'Automatic sync active';
+        office365Pause.className='mt-2 text-sm font-semibold '+(pause.paused?'text-amber-800':'text-emerald-800');
+        office365PauseDetail.textContent=pause.paused
+          ? 'Credit saver is suppressing scheduled Office 365 runs'+(pause.expiresAt?' until '+new Date(pause.expiresAt).toLocaleString():'')+'.'
+          : 'Credit saver is not suppressing Office 365 scheduled runs.';
+
+        const graphAuth=signals.authentication||{};
+        const graphLabels={succeeded:'Succeeded',failed:'Failed',awaiting:'Awaiting first confirmed sync',not_configured:'Not configured'};
+        office365GraphAuth.textContent=graphLabels[String(graphAuth.status||'awaiting')]||String(graphAuth.status||'Unknown');
+        office365GraphAuth.className='mt-2 text-sm font-semibold '+(
+          graphAuth.status==='succeeded'?'text-emerald-800':
+          graphAuth.status==='failed'||graphAuth.status==='not_configured'?'text-red-800':'text-amber-800'
+        );
+        office365GraphAuthDetail.textContent=graphAuth.failed
+          ? String(graphAuth.error||'Microsoft Graph authentication failed.')
+          : graphAuth.status==='succeeded'
+            ? 'At least one production sync completed successfully.'
+            : 'No Graph authentication failure is recorded, but a successful production sync has not been confirmed yet.';
+
+        const verification=signals.verification||{};
+        const verificationLabels={ready:'Ready to verify',blocked:'Blocked by production lag',catching_up:'One commit behind · deploying',caution:'One commit behind · investigate',unknown:'Unable to determine'};
+        office365Verification.textContent=verificationLabels[String(verification.status||'unknown')]||String(verification.status||'Unknown');
+        office365Verification.className='mt-2 text-sm font-semibold '+(
+          verification.status==='ready'?'text-emerald-800':
+          verification.status==='blocked'?'text-red-800':'text-amber-800'
+        );
+        const commitsBehind=verification.commitsBehind;
+        office365VerificationDetail.textContent=commitsBehind==null
+          ? 'Production/main commit distance is unavailable.'
+          : commitsBehind===0
+            ? 'Production matches GitHub main.'
+            : 'Production is '+commitsBehind+' commit'+(Number(commitsBehind)===1?'':'s')+' behind main · '+String(verification.deploymentState||'unknown')+'.';
+      }
       if(office365Auth){
         const authLabels={
           connected:'Connected',
@@ -753,7 +859,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? String(office365.lastError)
           : [office365.calendarName,office365.calendarOwner].filter(Boolean).join(' · ');
         office365LastSuccess.textContent=office365.lastSuccessAt?new Date(office365.lastSuccessAt).toLocaleString():'No successful sync yet';
-        office365Next.textContent=office365.nextScheduledSyncAt?new Date(office365.nextScheduledSyncAt).toLocaleString():'—';
+        office365Next.textContent=office365.signals?.creditSaver?.paused
+          ? 'Paused by credit saver'
+          : office365.nextScheduledSyncAt?new Date(office365.nextScheduledSyncAt).toLocaleString():'—';
         office365Conflicts.textContent=String(office365.unresolvedConflicts||0);
         office365Conflicts.className='display mt-2 text-3xl '+(Number(office365.unresolvedConflicts||0)>0?'text-red-800':'text-[var(--koa-forest)]');
         office365Changed.textContent=String(office365.changedLast24Hours||0);
