@@ -1,145 +1,509 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Koa’s Admin Users" description="Manage Koa’s Events staff accounts, permissions, and audit history." canonical="https://koasevents.com/admin/staff/">
+<BaseLayout noindex title="Koa’s User Management" description="Manage Koa’s Events administrator and staff accounts." canonical="https://koasevents.com/admin/staff/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell max-w-7xl">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin · Access Control</p>
-          <h1 class="display mt-3 text-5xl">Admin Users</h1>
-          <p class="mt-3 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Invite users, assign Administrator, Manager, or Sales Rep access, disable accounts, reset passwords, and review access-change history without opening Netlify.</p>
+          <h1 class="display mt-3 text-5xl">User Management</h1>
+          <p class="mt-3 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Create, deactivate, reactivate, remove, reset passwords, set passwords, assign roles, and control permissions without opening Netlify.</p>
         </div>
         <a href="/admin/" class="rounded-full bg-[var(--koa-ink)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white">Admin home</a>
       </div>
 
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">This page requires a Koa’s administrator account.</div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="font-semibold text-[var(--koa-forest)]">Administrator access required.</p>
+        <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Sign in with a Koa’s Administrator account to manage users.</p>
+      </div>
 
       <div data-app class="hidden grid gap-6">
-        <section class="grid gap-4 lg:grid-cols-3">
-          <article class="rounded-[1.4rem] bg-white p-6 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Sales Rep</p><h2 class="display mt-2 text-3xl">Sales work</h2><p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58">Works leads, quotes, proposals, notes, tasks and appointments. Individual permissions can add selected operational powers without changing the base role.</p></article>
-          <article class="rounded-[1.4rem] bg-[var(--koa-forest)] p-6 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Manager</p><h2 class="display mt-2 text-3xl">Operations control</h2><p class="mt-3 text-sm leading-6 text-white/68">Includes all operational permissions plus lead assignment and team performance reporting.</p></article>
-          <article class="rounded-[1.4rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Administrator</p><h2 class="display mt-2 text-3xl">Technical control</h2><p class="mt-3 text-sm leading-6 text-white/68">Adds Staff Management, QuickBooks, Gallery, SEO, Security + Spam, and other technical administration. These powers are not individually delegable.</p></article>
+        <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Total accounts</p><p data-summary-total class="display mt-2 text-4xl">—</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Active</p><p data-summary-active class="display mt-2 text-4xl">—</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Pending setup</p><p data-summary-pending class="display mt-2 text-4xl">—</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Deactivated</p><p data-summary-deactivated class="display mt-2 text-4xl">—</p></article>
         </section>
 
-        <section class="grid gap-6 xl:grid-cols-[.7fr_1.3fr]">
-          <form data-invite-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-            <p class="eyebrow text-[var(--koa-clay)]">New employee</p><h2 class="display mt-2 text-4xl">Invite staff member</h2>
+        <section class="grid gap-6 xl:grid-cols-[.72fr_1.28fr]">
+          <form data-create-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">New user</p>
+            <h2 class="display mt-2 text-4xl">Create account</h2>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">Choose whether the user receives a password-setup email or you set the initial password yourself.</p>
+
             <div class="mt-5 grid gap-4">
-              <label class="grid gap-2 text-sm font-semibold">Name<input name="name" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Role<select name="role" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option></select></label>
-              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Create + send invite</button>
-              <p data-invite-message class="text-sm leading-6 text-[var(--koa-ink)]/58"></p>
+              <label class="grid gap-2 text-sm font-semibold">Name
+                <input name="name" required autocomplete="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Email
+                <input name="email" type="email" required autocomplete="email" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+              </label>
+              <label class="grid gap-2 text-sm font-semibold">Role
+                <select name="role" class="rounded-xl border border-[var(--koa-line)] px-4 py-3">
+                  <option value="sales">Sales Rep</option>
+                  <option value="manager">Manager</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </label>
+
+              <fieldset class="grid gap-2">
+                <legend class="text-sm font-semibold">Account setup</legend>
+                <label class="flex items-start gap-3 rounded-xl border border-[var(--koa-line)] p-3 text-sm">
+                  <input type="radio" name="setupMode" value="email" checked class="mt-1" />
+                  <span><strong class="block text-[var(--koa-forest)]">Send setup email</strong><span class="text-[var(--koa-ink)]/55">User receives a secure link and chooses their own password.</span></span>
+                </label>
+                <label class="flex items-start gap-3 rounded-xl border border-[var(--koa-line)] p-3 text-sm">
+                  <input type="radio" name="setupMode" value="manual" class="mt-1" />
+                  <span><strong class="block text-[var(--koa-forest)]">Set password now</strong><span class="text-[var(--koa-ink)]/55">Administrator chooses the initial password.</span></span>
+                </label>
+              </fieldset>
+
+              <div data-create-password class="hidden grid gap-4">
+                <label class="grid gap-2 text-sm font-semibold">Initial password
+                  <input name="password" type="password" minlength="10" autocomplete="new-password" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                </label>
+                <label class="grid gap-2 text-sm font-semibold">Confirm password
+                  <input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                </label>
+              </div>
+
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Create account</button>
+              <p data-create-message class="min-h-6 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
             </div>
           </form>
 
           <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
             <div class="flex flex-wrap items-end justify-between gap-3">
-              <div><p class="eyebrow text-[var(--koa-clay)]">Identity accounts</p><h2 class="display mt-2 text-4xl">Team access</h2></div>
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Accounts</p>
+                <h2 class="display mt-2 text-4xl">Team access</h2>
+              </div>
               <button data-refresh type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Refresh</button>
             </div>
-            <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/55">Sales Rep permissions below are additive. Managers already receive every operational permission automatically.</p>
+
+            <div class="mt-5 grid gap-3 md:grid-cols-[1fr_auto_auto]">
+              <input data-search type="search" placeholder="Search name or email…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" />
+              <select data-role-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold">
+                <option value="all">All roles</option>
+                <option value="admin">Administrators</option>
+                <option value="manager">Managers</option>
+                <option value="sales">Sales Reps</option>
+                <option value="deactivated">Deactivated</option>
+                <option value="none">No role</option>
+              </select>
+              <select data-status-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold">
+                <option value="all">All statuses</option>
+                <option value="active">Active</option>
+                <option value="pending">Pending setup</option>
+                <option value="deactivated">Deactivated</option>
+              </select>
+            </div>
+
             <p data-list-message class="mt-3 text-sm text-[var(--koa-ink)]/52"></p>
             <div data-user-list class="mt-5 grid gap-4"></div>
           </section>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
-          <div class="flex flex-wrap items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Audit history</p><h2 class="display mt-2 text-4xl">Staff + protected settings</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Role, permission, account-status, lead-owner, workflow/template, cleanup-policy, and profitability changes are recorded here.</p></div><span data-audit-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 entries</span></div>
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Security audit</p>
+              <h2 class="display mt-2 text-4xl">User activity</h2>
+              <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Account creation, role changes, permission edits, password actions, deactivation, reactivation, and deletion are recorded here.</p>
+            </div>
+            <span data-audit-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 entries</span>
+          </div>
           <div data-audit-list class="mt-5 grid max-h-[720px] gap-3 overflow-y-auto"></div>
         </section>
       </div>
     </div>
   </main>
 
+  <dialog data-password-dialog class="w-[min(94vw,34rem)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-password-form class="p-6">
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Administrator action</p><h2 class="display mt-2 text-3xl">Set password</h2></div>
+        <button data-close-password type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40">×</button>
+      </div>
+      <p data-password-user class="mt-3 text-sm text-[var(--koa-ink)]/55"></p>
+      <input name="userId" type="hidden" />
+      <div class="mt-5 grid gap-4">
+        <label class="grid gap-2 text-sm font-semibold">New password
+          <input name="password" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+        </label>
+        <label class="grid gap-2 text-sm font-semibold">Confirm password
+          <input name="confirmPassword" type="password" minlength="10" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+        </label>
+        <p class="text-xs leading-5 text-[var(--koa-ink)]/48">Minimum 10 characters. The password itself is never recorded in the audit log.</p>
+        <p data-password-message class="min-h-5 text-sm text-red-700"></p>
+        <div class="flex flex-wrap gap-3">
+          <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Set password</button>
+          <button data-cancel-password type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </dialog>
+
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
-    const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    const app=document.querySelector('[data-app]');
-    const unauthorized=document.querySelector('[data-unauthorized]');
-    const list=document.querySelector('[data-user-list]');
-    const listMessage=document.querySelector('[data-list-message]');
-    const inviteForm=document.querySelector('[data-invite-form]');
-    const inviteMessage=document.querySelector('[data-invite-message]');
-    const auditList=document.querySelector('[data-audit-list]');
-    const auditCount=document.querySelector('[data-audit-count]');
-    let capabilityDefinitions=[];
 
-    function roles(user){const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];return sources.find(Array.isArray)||[];}
-    function isAdmin(user){const email=String(user?.email||'').trim().toLowerCase();return approvedAdminEmails.has(email)||roles(user).map((r)=>String(r).toLowerCase()).includes('admin');}
-    async function api(body){const options=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'};const response=await fetch('/api/admin/staff',options);const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Staff management request failed.');return data;}
-    function roleLabel(role){return role==='manager'?'Manager':role==='sales'?'Sales Rep':role==='admin'?'Administrator':role==='deactivated'?'Deactivated':'No staff access';}
-    function button(label,classes,handler){const b=document.createElement('button');b.type='button';b.className=classes;b.textContent=label;b.addEventListener('click',handler);return b;}
+    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const app = document.querySelector('[data-app]');
+    const unauthorized = document.querySelector('[data-unauthorized]');
+    const list = document.querySelector('[data-user-list]');
+    const listMessage = document.querySelector('[data-list-message]');
+    const createForm = document.querySelector('[data-create-form]');
+    const createMessage = document.querySelector('[data-create-message]');
+    const createPassword = document.querySelector('[data-create-password]');
+    const auditList = document.querySelector('[data-audit-list]');
+    const auditCount = document.querySelector('[data-audit-count]');
+    const search = document.querySelector('[data-search]');
+    const roleFilter = document.querySelector('[data-role-filter]');
+    const statusFilter = document.querySelector('[data-status-filter]');
+    const passwordDialog = document.querySelector('[data-password-dialog]');
+    const passwordForm = document.querySelector('[data-password-form]');
+    const passwordUser = document.querySelector('[data-password-user]');
+    const passwordMessage = document.querySelector('[data-password-message]');
 
-    function renderUsers(users){
-      list.innerHTML='';
-      if(!users.length){list.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No Identity users found.</p>';return;}
-      users.forEach((user)=>{
-        const card=document.createElement('article');card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
-        const head=document.createElement('div');head.className='flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between';
-        const info=document.createElement('div');
-        info.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role)+'</p><h3 class="mt-1 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
-        info.querySelector('h3').textContent=user.name||user.email||'Unnamed user';
-        info.querySelector('p:last-child').textContent=[user.email,user.lastSignInAt?'Last sign-in '+new Date(user.lastSignInAt).toLocaleString():'Never signed in'].filter(Boolean).join(' · ');
-        const controls=document.createElement('div');controls.className='flex flex-wrap items-center gap-2';
-        if(user.protected){
-          const badge=document.createElement('span');badge.className='rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';badge.textContent='Protected admin';controls.appendChild(badge);
-          controls.appendChild(button('Reset access','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=>{try{listMessage.textContent='Sending password reset…';const result=await api({action:'reset-password',userId:user.id});listMessage.textContent=result.message||'Password reset email sent.';}catch(err){listMessage.textContent=err.message;}}));
-        }else{
-          const select=document.createElement('select');select.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';select.innerHTML='<option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option>';select.value=user.role==='admin'?'admin':user.role==='manager'?'manager':'sales';controls.appendChild(select);
-          controls.appendChild(button('Save role','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=>{if(select.value==='admin'&&!confirm('Grant full Administrator access to '+user.email+'?'))return;try{listMessage.textContent='Saving role…';await api({action:user.role==='deactivated'?'reactivate':'set-role',userId:user.id,role:select.value});await load();}catch(err){listMessage.textContent=err.message;}}));
-          controls.appendChild(button('Reset access','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=>{try{listMessage.textContent='Sending password reset…';const result=await api({action:'reset-password',userId:user.id});listMessage.textContent=result.message||'Password reset email sent.';}catch(err){listMessage.textContent=err.message;}}));
-          if(user.role==='deactivated') controls.appendChild(button('Reactivate','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800',async()=>{try{await api({action:'reactivate',userId:user.id,role:select.value});await load();}catch(err){listMessage.textContent=err.message;}}));
-          else controls.appendChild(button('Deactivate','rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-amber-800',async()=>{if(!confirm('Deactivate '+user.email+'?'))return;try{await api({action:'deactivate',userId:user.id});await load();}catch(err){listMessage.textContent=err.message;}}));
-          controls.appendChild(button('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=>{if(!confirm('Permanently delete '+user.email+'?'))return;if(!confirm('Final confirmation: remove this Identity account?'))return;try{await api({action:'delete',userId:user.id});await load();}catch(err){listMessage.textContent=err.message;}}));
+    let capabilityDefinitions = [];
+    let allUsers = [];
+
+    function roles(user) {
+      const sources = [user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
+      return sources.find(Array.isArray) || [];
+    }
+
+    function isAdmin(user) {
+      const email = String(user?.email || '').trim().toLowerCase();
+      return approvedAdminEmails.has(email) || roles(user).map((role) => String(role).toLowerCase()).includes('admin');
+    }
+
+    async function api(body) {
+      const options = body
+        ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}
+        : {cache:'no-store'};
+      const response = await fetch('/api/admin/staff', options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'User-management request failed.');
+      return data;
+    }
+
+    function roleLabel(role) {
+      return role === 'manager' ? 'Manager'
+        : role === 'sales' ? 'Sales Rep'
+        : role === 'admin' ? 'Administrator'
+        : role === 'deactivated' ? 'Deactivated'
+        : 'No role';
+    }
+
+    function statusLabel(status) {
+      return status === 'active' ? 'Active'
+        : status === 'pending' ? 'Pending setup'
+        : status === 'deactivated' ? 'Deactivated'
+        : status;
+    }
+
+    function button(label, classes, handler) {
+      const element = document.createElement('button');
+      element.type = 'button';
+      element.className = classes;
+      element.textContent = label;
+      element.addEventListener('click', handler);
+      return element;
+    }
+
+    function setSummary(summary = {}) {
+      document.querySelector('[data-summary-total]').textContent = String(summary.total ?? 0);
+      document.querySelector('[data-summary-active]').textContent = String(summary.active ?? 0);
+      document.querySelector('[data-summary-pending]').textContent = String(summary.pending ?? 0);
+      document.querySelector('[data-summary-deactivated]').textContent = String(summary.deactivated ?? 0);
+    }
+
+    function filteredUsers() {
+      const term = String(search?.value || '').trim().toLowerCase();
+      const role = String(roleFilter?.value || 'all');
+      const status = String(statusFilter?.value || 'all');
+      return allUsers.filter((user) => {
+        const matchesTerm = !term || [user.name,user.email,user.role,user.status].some((value) => String(value || '').toLowerCase().includes(term));
+        const matchesRole = role === 'all' || user.role === role;
+        const matchesStatus = status === 'all' || user.status === status;
+        return matchesTerm && matchesRole && matchesStatus;
+      });
+    }
+
+    function renderUsers() {
+      const users = filteredUsers();
+      list.innerHTML = '';
+      listMessage.textContent = users.length + ' account' + (users.length === 1 ? '' : 's') + ' shown.';
+
+      if (!users.length) {
+        list.innerHTML = '<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No accounts match these filters.</p>';
+        return;
+      }
+
+      users.forEach((user) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+
+        const head = document.createElement('div');
+        head.className = 'flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between';
+
+        const info = document.createElement('div');
+        const statusClass = user.status === 'active'
+          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+          : user.status === 'pending'
+          ? 'bg-amber-50 text-amber-800 border-amber-200'
+          : 'bg-red-50 text-red-700 border-red-200';
+
+        info.innerHTML = '<div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        info.querySelector('h3').textContent = user.name || user.email || 'Unnamed user';
+        info.querySelector('p:last-child').textContent = [
+          user.email,
+          user.lastSignInAt ? 'Last sign-in '+new Date(user.lastSignInAt).toLocaleString() : 'Never signed in',
+          user.createdAt ? 'Created '+new Date(user.createdAt).toLocaleDateString() : '',
+        ].filter(Boolean).join(' · ');
+
+        const controls = document.createElement('div');
+        controls.className = 'flex max-w-2xl flex-wrap items-center gap-2';
+
+        if (user.protected) {
+          const badge = document.createElement('span');
+          badge.className = 'rounded-full bg-[var(--koa-ink)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+          badge.textContent = 'Protected admin';
+          controls.appendChild(badge);
         }
-        head.append(info,controls);card.appendChild(head);
 
-        if(!user.protected&&user.role!=='admin'){
-          const permissions=document.createElement('div');permissions.className='mt-5 border-t border-[var(--koa-line)] pt-4';
-          const title=document.createElement('p');title.className='text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';title.textContent=user.role==='manager'?'Operational permissions · included by Manager role':'Individual permissions';
+        if (user.status === 'deactivated') {
+          const reactivateRole = document.createElement('select');
+          reactivateRole.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
+          reactivateRole.innerHTML = '<option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option>';
+          controls.appendChild(reactivateRole);
+          controls.appendChild(button('Reactivate','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800',async()=> {
+            try {
+              listMessage.textContent = 'Reactivating account…';
+              await api({action:'reactivate',userId:user.id,role:reactivateRole.value});
+              await load();
+            } catch (error) { listMessage.textContent = error.message; }
+          }));
+        } else if (!user.protected) {
+          const roleSelect = document.createElement('select');
+          roleSelect.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
+          roleSelect.innerHTML = '<option value="sales">Sales Rep</option><option value="manager">Manager</option><option value="admin">Administrator</option>';
+          roleSelect.value = ['sales','manager','admin'].includes(user.role) ? user.role : 'sales';
+          controls.appendChild(roleSelect);
+          controls.appendChild(button('Save role','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=> {
+            if (roleSelect.value === 'admin' && user.role !== 'admin' && !confirm('Grant full Administrator access to '+user.email+'?')) return;
+            try {
+              listMessage.textContent = 'Saving role…';
+              await api({action:'set-role',userId:user.id,role:roleSelect.value});
+              await load();
+            } catch (error) { listMessage.textContent = error.message; }
+          }));
+        }
+
+        controls.appendChild(button(user.status === 'pending' ? 'Send setup email' : 'Reset password','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
+          try {
+            listMessage.textContent = 'Sending password email…';
+            const result = await api({action:'reset-password',userId:user.id});
+            listMessage.textContent = result.message || 'Password email sent.';
+          } catch (error) { listMessage.textContent = error.message; }
+        }));
+
+        controls.appendChild(button('Set password','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',()=> {
+          passwordForm.reset();
+          passwordForm.elements.userId.value = user.id;
+          passwordUser.textContent = 'Set a new password for '+user.email+'.';
+          passwordMessage.textContent = '';
+          passwordDialog.showModal();
+        }));
+
+        controls.appendChild(button('Edit name','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
+          const name = prompt('Display name for '+user.email, user.name || '');
+          if (name === null) return;
+          try {
+            listMessage.textContent = 'Updating name…';
+            await api({action:'set-name',userId:user.id,name});
+            await load();
+          } catch (error) { listMessage.textContent = error.message; }
+        }));
+
+        if (!user.protected && user.status !== 'deactivated') {
+          controls.appendChild(button('Deactivate','rounded-full border border-amber-200 bg-amber-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-amber-800',async()=> {
+            if (!confirm('Deactivate '+user.email+'? They will lose access until reactivated.')) return;
+            try {
+              listMessage.textContent = 'Deactivating account…';
+              await api({action:'deactivate',userId:user.id});
+              await load();
+            } catch (error) { listMessage.textContent = error.message; }
+          }));
+        }
+
+        if (!user.protected) {
+          controls.appendChild(button('Delete','rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700',async()=> {
+            if (!confirm('Permanently delete '+user.email+'?')) return;
+            if (!confirm('Final confirmation: this removes the Identity account and cannot be undone.')) return;
+            try {
+              listMessage.textContent = 'Deleting account…';
+              await api({action:'delete',userId:user.id});
+              await load();
+            } catch (error) { listMessage.textContent = error.message; }
+          }));
+        }
+
+        head.append(info, controls);
+        card.appendChild(head);
+
+        if (!user.protected && !['admin','deactivated'].includes(user.role)) {
+          const permissions = document.createElement('div');
+          permissions.className = 'mt-5 border-t border-[var(--koa-line)] pt-4';
+          const title = document.createElement('p');
+          title.className = 'text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';
+          title.textContent = user.role === 'manager' ? 'Operational permissions · included by Manager role' : 'Individual permissions';
           permissions.appendChild(title);
-          const grid=document.createElement('div');grid.className='mt-3 grid gap-2 sm:grid-cols-2';
-          capabilityDefinitions.forEach((cap)=>{
-            const label=document.createElement('label');label.className='flex items-center gap-2 rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
-            const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.value=cap.id;checkbox.checked=user.role==='manager'||(user.permissions||[]).includes(cap.id);checkbox.disabled=user.role==='manager'||user.role==='deactivated';
-            label.append(checkbox,document.createTextNode(cap.label));grid.appendChild(label);
+
+          const grid = document.createElement('div');
+          grid.className = 'mt-3 grid gap-2 sm:grid-cols-2';
+          capabilityDefinitions.forEach((capability) => {
+            const label = document.createElement('label');
+            label.className = 'flex items-center gap-2 rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = capability.id;
+            checkbox.checked = user.role === 'manager' || (user.permissions || []).includes(capability.id);
+            checkbox.disabled = user.role === 'manager';
+            label.append(checkbox, document.createTextNode(capability.label));
+            grid.appendChild(label);
           });
           permissions.appendChild(grid);
-          if(user.role!=='manager'&&user.role!=='deactivated') permissions.appendChild(button('Save individual permissions','mt-3 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=>{const selected=[...grid.querySelectorAll('input:checked')].map((input)=>input.value);try{await api({action:'set-permissions',userId:user.id,permissions:selected});await load();}catch(err){listMessage.textContent=err.message;}}));
+
+          if (user.role !== 'manager') {
+            permissions.appendChild(button('Save permissions','mt-3 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
+              const selected = [...grid.querySelectorAll('input:checked')].map((input) => input.value);
+              try {
+                listMessage.textContent = 'Saving permissions…';
+                await api({action:'set-permissions',userId:user.id,permissions:selected});
+                await load();
+              } catch (error) { listMessage.textContent = error.message; }
+            }));
+          }
           card.appendChild(permissions);
         }
+
         list.appendChild(card);
       });
     }
 
-    function renderAudit(rows){
-      auditList.innerHTML='';auditCount.textContent=rows.length+' entr'+(rows.length===1?'y':'ies');
-      rows.forEach((entry)=>{
-        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
-        const action=String(entry.action||'activity').replaceAll('_',' ');
+    function renderAudit(rows) {
+      auditList.innerHTML = '';
+      auditCount.textContent = rows.length+' entr'+(rows.length === 1 ? 'y' : 'ies');
+
+      rows.forEach((entry) => {
+        const card = document.createElement('article');
+        card.className = 'rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const action = String(entry.action || 'activity').replaceAll('_',' ');
         card.append(
-          Object.assign(document.createElement('p'),{className:'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',textContent:action}),
-          Object.assign(document.createElement('p'),{className:'mt-1 text-sm font-semibold text-[var(--koa-forest)]',textContent:entry.detail||''}),
-          Object.assign(document.createElement('p'),{className:'mt-2 text-xs text-[var(--koa-ink)]/48',textContent:[entry.actor,entry.subjectEmail,entry.recordId,new Date(entry.createdAt).toLocaleString()].filter(Boolean).join(' · ')})
+          Object.assign(document.createElement('p'), {className:'text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]',textContent:action}),
+          Object.assign(document.createElement('p'), {className:'mt-1 text-sm font-semibold text-[var(--koa-forest)]',textContent:entry.detail || ''}),
+          Object.assign(document.createElement('p'), {className:'mt-2 text-xs text-[var(--koa-ink)]/48',textContent:[entry.actor,entry.subjectEmail,entry.recordId,new Date(entry.createdAt).toLocaleString()].filter(Boolean).join(' · ')})
         );
         auditList.appendChild(card);
       });
-      if(!rows.length)auditList.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No audited staff or protected-setting changes yet.</p>';
+
+      if (!rows.length) {
+        auditList.innerHTML = '<p class="text-sm text-[var(--koa-ink)]/45">No user-management activity has been recorded yet.</p>';
+      }
     }
 
-    async function load(){
-      try{
-        listMessage.textContent='Loading staff…';
-        const data=await api();capabilityDefinitions=data.capabilities||[];
-        renderUsers(data.users||[]);renderAudit(data.audit||[]);
-        listMessage.textContent=(data.users||[]).length+' account'+((data.users||[]).length===1?'':'s')+'.';
-      }catch(err){listMessage.textContent=err.message;}
+    async function load() {
+      try {
+        listMessage.textContent = 'Loading accounts…';
+        const data = await api();
+        capabilityDefinitions = data.capabilities || [];
+        allUsers = data.users || [];
+        setSummary(data.summary || {});
+        renderUsers();
+        renderAudit(data.audit || []);
+      } catch (error) {
+        listMessage.textContent = error.message;
+      }
     }
 
-    inviteForm?.addEventListener('submit',async(event)=>{event.preventDefault();const data=new FormData(inviteForm);inviteMessage.textContent='Creating staff account…';try{const result=await api({action:'invite',name:data.get('name'),email:data.get('email'),role:data.get('role')});inviteMessage.textContent=result.inviteEmailSent?'Account created and invitation email sent.':'Account created, but email delivery failed. Temporary password: '+result.temporaryPassword;inviteForm.reset();await load();}catch(err){inviteMessage.textContent=err.message;}});
-    document.querySelector('[data-refresh]')?.addEventListener('click',load);
-    const user=await getAdminSession();const ok=isAdmin(user);app?.classList.toggle('hidden',!ok);unauthorized?.classList.toggle('hidden',ok);if(ok)await load();
+    createForm?.querySelectorAll('input[name="setupMode"]').forEach((radio) => {
+      radio.addEventListener('change', () => {
+        const manual = createForm.elements.setupMode.value === 'manual';
+        createPassword.classList.toggle('hidden', !manual);
+        createPassword.querySelectorAll('input').forEach((input) => input.required = manual);
+      });
+    });
+
+    createForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(createForm);
+      const setupMode = String(data.get('setupMode') || 'email');
+      const password = String(data.get('password') || '');
+      const confirmPassword = String(data.get('confirmPassword') || '');
+
+      if (setupMode === 'manual' && password !== confirmPassword) {
+        createMessage.textContent = 'The passwords do not match.';
+        return;
+      }
+
+      if (String(data.get('role')) === 'admin' && !confirm('Create a new account with full Administrator access?')) return;
+
+      createMessage.textContent = 'Creating account…';
+      try {
+        const result = await api({
+          action:'create-user',
+          name:data.get('name'),
+          email:data.get('email'),
+          role:data.get('role'),
+          setupMode,
+          password: setupMode === 'manual' ? password : undefined,
+        });
+        createMessage.textContent = result.message || 'Account created.';
+        createForm.reset();
+        createPassword.classList.add('hidden');
+        createPassword.querySelectorAll('input').forEach((input) => input.required = false);
+        await load();
+      } catch (error) {
+        createMessage.textContent = error.message;
+      }
+    });
+
+    passwordForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(passwordForm);
+      const password = String(data.get('password') || '');
+      const confirmPassword = String(data.get('confirmPassword') || '');
+
+      if (password !== confirmPassword) {
+        passwordMessage.textContent = 'The passwords do not match.';
+        return;
+      }
+
+      passwordMessage.textContent = 'Updating password…';
+      try {
+        await api({action:'set-password',userId:data.get('userId'),password});
+        passwordDialog.close();
+        listMessage.textContent = 'Password updated.';
+        await load();
+      } catch (error) {
+        passwordMessage.textContent = error.message;
+      }
+    });
+
+    document.querySelector('[data-close-password]')?.addEventListener('click', () => passwordDialog.close());
+    document.querySelector('[data-cancel-password]')?.addEventListener('click', () => passwordDialog.close());
+    document.querySelector('[data-refresh]')?.addEventListener('click', load);
+    search?.addEventListener('input', renderUsers);
+    roleFilter?.addEventListener('change', renderUsers);
+    statusFilter?.addEventListener('change', renderUsers);
+
+    const user = await getAdminSession();
+    const ok = isAdmin(user);
+    app?.classList.toggle('hidden', !ok);
+    unauthorized?.classList.toggle('hidden', ok);
+    if (ok) await load();
   </script>
 </BaseLayout>
