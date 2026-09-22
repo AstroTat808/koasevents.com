@@ -77,7 +77,7 @@ function basicChecklist(eventDate:string){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireCapability('calendar.view');if(auth.response)return auth.response;
+  const auth=await requireCapability('calendar.view', req);if(auth.response)return auth.response;
   if(req.method!=='GET')return new Response('Method not allowed',{status:405});
 
   const url=new URL(req.url);
