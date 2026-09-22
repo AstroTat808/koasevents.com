@@ -9,7 +9,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-BASE=os.environ.get("PRODUCTION_BASE_URL","https://koasevents.netlify.app").rstrip("/")
+BASE=os.environ.get("PRODUCTION_BASE_URL","https://koasevents.com").rstrip("/")
 OUT=Path(os.environ.get("VISUAL_RESULTS","visual-results"))
 ROOT=Path(__file__).resolve().parents[1]
 SRC=ROOT/"src"
