@@ -18,6 +18,7 @@ export const ROLE_IDS = [
 ] as const;
 
 export type StaffRole = (typeof ROLE_IDS)[number];
+export type EffectiveStaffRole = StaffRole | 'custom';
 
 export const STAFF_CAPABILITIES = [
   'admin.dashboard.view',
@@ -191,7 +192,7 @@ function normalizedPermissions(user: any) {
   );
 }
 
-function roleFromUser(user: any): StaffRole | 'deactivated' | 'none' {
+function roleFromUser(user: any): EffectiveStaffRole | 'deactivated' | 'none' {
   if (!user) return 'none';
   const email = clean(user?.email, 240).toLowerCase();
   const meta = metadataFor(user);
@@ -205,6 +206,7 @@ function roleFromUser(user: any): StaffRole | 'deactivated' | 'none' {
     if (candidates.includes(role)) return role;
   }
 
+  if (candidates.includes('custom')) return 'custom';
   if (candidates.includes('staff')) return 'sales';
   return 'none';
 }
@@ -227,10 +229,14 @@ export function operationsRole(user: any) {
   return roleFromUser(user);
 }
 
+export function customRoleIdFor(user:any) {
+  return clean(metadataFor(user)?.customRoleId, 100);
+}
+
 export function capabilitiesFor(user: any) {
   const role = roleFromUser(user);
   if (role === 'none' || role === 'deactivated') return [];
-  const defaults = ROLE_CAPABILITIES[role as StaffRole] || [];
+  const defaults = role === 'custom' ? [] : (ROLE_CAPABILITIES[role as StaffRole] || []);
   const explicit = normalizedPermissions(user);
   return [...new Set([...defaults, ...explicit])];
 }
