@@ -1,0 +1,151 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Mobile Bar Workforce" description="Bartender roster, availability, event assignments and payroll tools." canonical="https://koasevents.com/admin/mobile-bar-workforce/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-7xl">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+        <h1 class="display mt-3 text-5xl">Loading workforce…</h1>
+      </section>
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Staff access required</h1>
+      </section>
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Mobile Bar · Operations</p>
+              <h1 class="display mt-3 text-5xl">Bartender workforce</h1>
+              <p class="mt-3 max-w-3xl text-sm leading-6 text-white/65">Manage bartender availability and pay rates, assign crews to booked Mobile Bar events, and open each bartender’s private shift portal.</p>
+            </div>
+            <a href="/admin/payroll/" class="w-fit rounded-full border border-white/25 px-4 py-3 text-xs font-black uppercase tracking-[.09em] text-white">Open payroll</a>
+          </div>
+        </header>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Roster</p><h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Bartenders</h2></div>
+            <button data-add-bartender type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Add bartender</button>
+          </div>
+          <div data-roster class="mt-5 grid gap-3"></div>
+          <label class="mt-5 grid gap-2 text-sm font-semibold">Company blackout dates <textarea data-blackouts rows="2" placeholder="2026-12-25, 2027-01-01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+          <div class="mt-4 flex items-center gap-3">
+            <button data-save-roster type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Save workforce</button>
+            <span data-roster-message class="text-xs text-[var(--koa-ink)]/50"></span>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Bookings</p><h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Crew assignments</h2></div>
+          <div data-bookings class="mt-5 grid gap-4"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+    const loading=document.querySelector('[data-loading]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const app=document.querySelector('[data-app]');
+    const rosterEl=document.querySelector('[data-roster]');
+    const bookingsEl=document.querySelector('[data-bookings]');
+    const blackoutsEl=document.querySelector('[data-blackouts]');
+    const rosterMessage=document.querySelector('[data-roster-message]');
+    let state={staffing:{blackoutDates:[],bartenders:[]},bookings:[]};
+
+    const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const date=(value)=>value?new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value+'T12:00:00')):'Date not set';
+    async function api(body){
+      const res=await fetch('/api/admin/mobile-bar-workforce',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||'Workforce request failed.');
+      return data;
+    }
+    function bartenderRow(b,index){
+      const row=document.createElement('article');row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+      row.dataset.index=String(index);
+      row.innerHTML=`
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <label class="grid gap-1 text-xs font-bold">Name<input data-field="name" value="${esc(b.name||'')}" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" /></label>
+          <label class="grid gap-1 text-xs font-bold">Hourly rate<input data-field="hourlyRate" type="number" min="0" step=".01" value="${Number(b.hourlyRate||40)}" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" /></label>
+          <label class="grid gap-1 text-xs font-bold">Weekly max<input data-field="maxEventsPerWeek" type="number" min="0" value="${Number(b.maxEventsPerWeek||0)}" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" /></label>
+          <label class="grid gap-1 text-xs font-bold">Monthly max<input data-field="maxEventsPerMonth" type="number" min="0" value="${Number(b.maxEventsPerMonth||0)}" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" /></label>
+          <label class="grid gap-1 text-xs font-bold">Unavailable dates<input data-field="unavailableDates" value="${esc((b.unavailableDates||[]).join(', '))}" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" /></label>
+          <div class="flex items-end gap-2"><label class="flex items-center gap-2 text-xs font-bold"><input data-field="active" type="checkbox" ${b.active!==false?'checked':''}/> Active</label><button data-remove type="button" class="ml-auto text-xs font-bold text-red-700">Remove</button></div>
+        </div>
+        <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-[var(--koa-ink)]/45">
+          <span>Private portal:</span>
+          <a href="/bartender/?token=${encodeURIComponent(b.portalToken||'')}" target="_blank" class="font-bold text-[var(--koa-forest)] underline">Open bartender portal</a>
+        </div>`;
+      row.querySelector('[data-remove]')?.addEventListener('click',()=>{state.staffing.bartenders.splice(index,1);renderRoster();renderBookings();});
+      return row;
+    }
+    function renderRoster(){
+      rosterEl.innerHTML='';
+      state.staffing.bartenders.forEach((b,index)=>rosterEl.appendChild(bartenderRow(b,index)));
+      if(!state.staffing.bartenders.length)rosterEl.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No bartenders configured yet.</p>';
+      blackoutsEl.value=(state.staffing.blackoutDates||[]).join(', ');
+    }
+    function readRoster(){
+      const rows=[...rosterEl.querySelectorAll('[data-index]')];
+      return rows.map((row,index)=>{
+        const current=state.staffing.bartenders[index]||{};
+        const value=(field)=>row.querySelector('[data-field="'+field+'"]')?.value;
+        return {
+          id:current.id||'bartender-'+(index+1),
+          name:value('name'),
+          hourlyRate:Number(value('hourlyRate')||0),
+          maxEventsPerWeek:Number(value('maxEventsPerWeek')||0),
+          maxEventsPerMonth:Number(value('maxEventsPerMonth')||0),
+          unavailableDates:String(value('unavailableDates')||'').split(/[\s,]+/).filter(Boolean),
+          active:Boolean(row.querySelector('[data-field="active"]')?.checked),
+        };
+      });
+    }
+    function renderBookings(){
+      bookingsEl.innerHTML='';
+      (state.bookings||[]).forEach((booking)=>{
+        const card=document.createElement('article');card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const assigned=new Set((booking.assignments||[]).map((a)=>a.id));
+        const options=(state.staffing.bartenders||[]).map((b)=>`<label class="flex items-center gap-2 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs"><input type="checkbox" data-bartender-id="${esc(b.id)}" ${assigned.has(b.id)?'checked':''}/> ${esc(b.name)}</label>`).join('');
+        card.innerHTML=`<div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-[var(--koa-forest)]">${esc(booking.clientName||booking.recordId)}</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">${date(booking.eventDate)} · ${esc(booking.packageId||'Mobile Bar')} · ${Number(booking.guestCount||0)} guests</p></div><span class="text-xs font-bold text-[var(--koa-clay)]">${(booking.assignments||[]).length} assigned</span></div><div class="mt-3 flex flex-wrap gap-2">${options||'<span class="text-xs text-[var(--koa-ink)]/45">Add bartenders to the roster first.</span>'}</div><div class="mt-3 flex items-center gap-3"><button data-save-assignment type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Save crew</button><span data-message class="text-xs text-[var(--koa-ink)]/50"></span></div>`;
+        card.querySelector('[data-save-assignment]')?.addEventListener('click',async()=>{
+          const button=card.querySelector('[data-save-assignment]'),message=card.querySelector('[data-message]');
+          button.disabled=true;message.textContent='Saving…';
+          try{
+            const ids=[...card.querySelectorAll('[data-bartender-id]:checked')].map((input)=>input.dataset.bartenderId);
+            const result=await api({action:'assign-bartenders',recordId:booking.recordId,bartenderIds:ids});
+            message.textContent=result.warnings?.length?result.warnings.join(' '):'Crew assignment saved.';
+            await load();
+          }catch(err){message.textContent=err.message||'Unable to save crew.';}
+          finally{button.disabled=false;}
+        });
+        bookingsEl.appendChild(card);
+      });
+      if(!(state.bookings||[]).length)bookingsEl.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No booked Mobile Bar events are currently available.</p>';
+    }
+    async function load(){
+      state=await api();state.staffing ||= {blackoutDates:[],bartenders:[]};renderRoster();renderBookings();
+    }
+    document.querySelector('[data-add-bartender]')?.addEventListener('click',()=>{
+      state.staffing.bartenders.push({id:'bartender-'+crypto.randomUUID().slice(0,8),name:'',active:true,hourlyRate:40,maxEventsPerWeek:0,maxEventsPerMonth:0,unavailableDates:[],portalToken:''});renderRoster();
+    });
+    document.querySelector('[data-save-roster]')?.addEventListener('click',async()=>{
+      const button=document.querySelector('[data-save-roster]');button.disabled=true;rosterMessage.textContent='Saving…';
+      try{
+        const bartenders=readRoster();
+        const blackoutDates=String(blackoutsEl.value||'').split(/[\s,]+/).filter(Boolean);
+        const result=await api({action:'save-roster',bartenders,blackoutDates});
+        state.staffing=result.staffing;rosterMessage.textContent='Workforce saved.';await load();
+      }catch(err){rosterMessage.textContent=err.message||'Unable to save workforce.';}
+      finally{button.disabled=false;}
+    });
+    (async()=>{
+      const session=await getAdminSession();loading.classList.add('hidden');
+      if(!session){unauthorized.classList.remove('hidden');return;}
+      app.classList.remove('hidden');
+      try{await load();}catch(err){rosterMessage.textContent=err.message||'Unable to load workforce.';}
+    })();
+  </script>
+</BaseLayout>
