@@ -1,4 +1,4 @@
-# Deployment trigger check: 2026-09-22 admin repair + build safety + failure grouping
+# Deployment trigger check: 2026-09-22 payment-rule live QA release
 [build]
   command = "python3 scripts/production_visual_qa.py --mode source && npm run build"
   publish = "dist"
