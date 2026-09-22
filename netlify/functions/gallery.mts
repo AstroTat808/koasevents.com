@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 
 const galleryCategories = ['Venue', 'Ceremony', 'Reception', 'Mobile Bar', 'Enhancements', 'Hospitality', 'Stay'] as const;
 const curatedCategories = [...galleryCategories, 'Legacy Archive'] as const;
@@ -128,10 +128,11 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const auth = await requireAdmin();
+  const auth = await requireCapability('gallery.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
+    if (!hasCapability(auth.user,'gallery.manage')) return Response.json({ error:'Gallery management permission required.' }, { status:403 });
     const contentType = req.headers.get('content-type') || '';
     const state = await readState(context);
 
