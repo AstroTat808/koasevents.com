@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireCapability } from './_shared/admin';
+import { readOffice365ExternalItems } from './_shared/office365-calendar-sync';
 import { getExternalOutlookCalendarItems } from './_shared/outlook-calendar-sync';
 
 function salesStoreFor(context: Context) {
@@ -198,6 +199,9 @@ export default async(req:Request,context:Context)=>{
 
   const externalOutlookItems=await getExternalOutlookCalendarItems(context,start,end);
   items.push(...externalOutlookItems);
+
+  const externalItems=await readOffice365ExternalItems(context);
+  externalItems.filter((item:any)=>inRange(isoDate(item?.date),start,end)).forEach((item:any)=>items.push(item));
 
   items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.time).localeCompare(String(b.time))||String(a.title).localeCompare(String(b.title)));
   conflicts.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.severity).localeCompare(String(b.severity)));
