@@ -147,15 +147,19 @@ export async function readHealthAlertPolicy(context:Context):Promise<HealthAlert
 
 export async function saveHealthAlertPolicy(context:Context,input:any,actor:string):Promise<HealthAlertPolicy> {
   const defaults=defaultHealthAlertPolicy();
+  const existing:any=await healthStore(context).get('settings/alert-policy',{type:'json'});
   const incoming=Array.isArray(input?.rules)?input.rules:[];
   const byId=new Map(incoming.map((rule:any)=>[String(rule?.id||''),rule]));
+  const inputThresholds=input?.office365ReliabilityThresholds;
+  const existingThresholds=existing?.office365ReliabilityThresholds;
+  const thresholdSource=inputThresholds&&typeof inputThresholds==='object'?inputThresholds:(existingThresholds&&typeof existingThresholds==='object'?existingThresholds:defaults.office365ReliabilityThresholds);
   const policy:HealthAlertPolicy={
     updatedAt:new Date().toISOString(),
     updatedBy:clean(actor,240)||'admin',
     publicStatusEnabled:Boolean(input?.publicStatusEnabled),
     office365ReliabilityThresholds:{
-      yellowBelow:Number.isFinite(Number(input?.office365ReliabilityThresholds?.yellowBelow))?Math.max(0,Math.min(100,Number(input.office365ReliabilityThresholds.yellowBelow))):defaults.office365ReliabilityThresholds.yellowBelow,
-      redBelow:Number.isFinite(Number(input?.office365ReliabilityThresholds?.redBelow))?Math.max(0,Math.min(100,Number(input.office365ReliabilityThresholds.redBelow))):defaults.office365ReliabilityThresholds.redBelow,
+      yellowBelow:Number.isFinite(Number(thresholdSource?.yellowBelow))?Math.max(0,Math.min(100,Number(thresholdSource.yellowBelow))):defaults.office365ReliabilityThresholds.yellowBelow,
+      redBelow:Number.isFinite(Number(thresholdSource?.redBelow))?Math.max(0,Math.min(100,Number(thresholdSource.redBelow))):defaults.office365ReliabilityThresholds.redBelow,
     },
     rules:defaults.rules.map(rule=>{
       const saved:any=byId.get(rule.id);
