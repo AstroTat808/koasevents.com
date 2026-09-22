@@ -12,7 +12,7 @@
         <button
           data-workspace-toggle
           type="button"
-          class="workspace-menu-button md:hidden"
+          class="workspace-menu-button"
           aria-expanded="false"
           aria-controls="koa-workspace-links"
         >
@@ -66,7 +66,8 @@
     <div
       id="koa-workspace-links"
       data-workspace-links
-      class="mt-2 hidden max-h-[72vh] grid-cols-1 gap-3 overflow-y-auto rounded-[1rem] border border-[var(--koa-line)] bg-white p-3 shadow-[var(--shadow-soft)] md:mt-3 md:grid md:max-h-none md:grid-cols-2 md:overflow-visible lg:grid-cols-6"
+      data-open="false"
+      class="workspace-links grid-cols-1 gap-3 rounded-[1rem] bg-white md:grid-cols-2 lg:grid-cols-6"
     >
       <section data-workspace-group class="workspace-group">
         <p class="workspace-group-title">Home</p>
@@ -119,6 +120,7 @@
       <section data-workspace-group class="workspace-group">
         <p class="workspace-group-title">Administration</p>
         <div class="workspace-group-links">
+          <a data-workspace-link data-capability="crm.view" href="/admin/email-preview/" class="workspace-nav-link">Email Preview</a>
           <a data-workspace-link data-capability="security.view" href="/admin/security/" class="workspace-nav-link">Security</a>
           <a data-workspace-link data-capability="health.view" href="/admin/health/" class="workspace-nav-link">
             <span>System Health</span><span data-link-alert="healthWarnings" class="hidden workspace-link-badge"></span>
@@ -171,6 +173,62 @@
     background: white;
     color: var(--koa-clay);
     padding: .55rem .75rem;
+  }
+
+  .workspace-links {
+    display: grid;
+    max-height: 0;
+    margin-top: 0;
+    overflow: hidden;
+    padding: 0 .75rem;
+    border: 0 solid var(--koa-line);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-.35rem) scale(.995);
+    box-shadow: none;
+    transition:
+      max-height 240ms cubic-bezier(.22, 1, .36, 1),
+      margin-top 220ms ease,
+      padding 220ms ease,
+      border-width 180ms ease,
+      opacity 160ms ease,
+      transform 220ms cubic-bezier(.22, 1, .36, 1),
+      box-shadow 180ms ease,
+      visibility 0s linear 240ms;
+    will-change: max-height, opacity, transform;
+  }
+
+  .workspace-links[data-open="true"] {
+    max-height: 72vh;
+    margin-top: .5rem;
+    overflow-y: auto;
+    padding: .75rem;
+    border-width: 1px;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+    box-shadow: var(--shadow-soft);
+    transition:
+      max-height 260ms cubic-bezier(.22, 1, .36, 1),
+      margin-top 220ms ease,
+      padding 220ms ease,
+      border-width 180ms ease,
+      opacity 180ms ease,
+      transform 240ms cubic-bezier(.22, 1, .36, 1),
+      box-shadow 200ms ease,
+      visibility 0s linear 0s;
+  }
+
+  .workspace-menu-button [data-workspace-chevron] {
+    display: inline-block;
+    transform-origin: center;
+    transition: transform 200ms cubic-bezier(.22, 1, .36, 1);
+  }
+
+  .workspace-menu-button[aria-expanded="true"] [data-workspace-chevron] {
+    transform: rotate(180deg);
   }
 
   .workspace-group {
@@ -383,8 +441,21 @@
   .workspace-alert-severity[data-severity="info"] { background: rgb(219 234 254); color: rgb(29 78 216); }
 
   @media (min-width: 768px) {
+    .workspace-links[data-open="true"] {
+      max-height: 40rem;
+      margin-top: .75rem;
+    }
+
     [data-workspace-nav] > .container-shell > div:first-child {
       min-height: 2.3rem;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-links,
+    .workspace-links[data-open="true"],
+    .workspace-menu-button [data-workspace-chevron] {
+      transition: none;
     }
   }
 </style>
@@ -429,12 +500,21 @@
     return rows.length ? 'info' : '';
   }
 
-  function setMenu(open) {
+  function setMenu(open, persist = true) {
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
-    links.classList.toggle('hidden', !open);
+    links.dataset.open = open ? 'true' : 'false';
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     const chevron = toggle.querySelector('[data-workspace-chevron]');
-    if (chevron) chevron.textContent = open ? '⌃' : '⌄';
+    if (chevron) chevron.textContent = '⌄';
+    if (persist) {
+      try { window.localStorage.setItem('koa-workspace-nav-open', open ? '1' : '0'); } catch {}
+    }
+  }
+
+  function initializeMenuState() {
+    let saved = null;
+    try { saved = window.localStorage.getItem('koa-workspace-nav-open'); } catch {}
+    setMenu(saved == null ? false : saved === '1', false);
   }
 
   function updateGroupVisibility() {
@@ -803,13 +883,18 @@
     });
   });
 
+  document.addEventListener('pointerdown', (event) => {
+    if (!(nav instanceof HTMLElement) || !(links instanceof HTMLElement)) return;
+    if (links.dataset.open !== 'true') return;
+    const target = event.target;
+    if (target instanceof Node && nav.contains(target)) return;
+    setMenu(false);
+  });
+
   window.addEventListener('resize', () => {
-    if (window.innerWidth >= 768 && links instanceof HTMLElement) {
-      links.classList.remove('hidden');
-      toggle?.setAttribute('aria-expanded', 'false');
-    } else if (window.innerWidth < 768) {
-      setMenu(false);
-    }
+    if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
+    const open = links.dataset.open === 'true';
+    toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
 
   nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
@@ -848,10 +933,7 @@
     const user = nav.querySelector('[data-workspace-user]');
     if (user) user.textContent = session.displayName || session.email;
 
-    if (window.innerWidth >= 768 && links instanceof HTMLElement) {
-      links.classList.remove('hidden');
-    }
-
+    initializeMenuState();
     nav.classList.remove('hidden');
     loadAlerts();
   }

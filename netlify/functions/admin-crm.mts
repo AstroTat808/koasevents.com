@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { capabilitiesFor, hasCapability, operationsRole, requireCapability } from './_shared/admin';
+import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
+import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -41,6 +42,44 @@ async function appendActivity(store:any, recordId:string, type:string, detail:st
   const current = await readIndex<Activity>(store,'activity/index');
   await store.setJSON('activity/index',[row,...current].slice(0,5000));
   return row;
+}
+
+function staffIdentity(user:any) {
+  const metadata = user?.user_metadata || user?.userMetadata || {};
+  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Koa’s Events Team', 180);
+  const explicitTitle = clean(metadata?.title || metadata?.job_title || metadata?.jobTitle, 120);
+  const role = operationsRole(user);
+  const roleTitle = role && role !== 'custom' && role in ROLE_LABELS ? ROLE_LABELS[role as keyof typeof ROLE_LABELS] : '';
+  return { name, title: explicitTitle || roleTitle || 'Koa’s Events Team' };
+}
+
+function buildStaffEmail(record:any, subject:string, body:string, person:{name:string;title:string}) {
+  const brand = emailBrandForRecord(record);
+  const brandName = emailBrandName(brand);
+  const clientName = clean(record?.customer?.name,180);
+  const htmlBody = clean(body,16000).split(/\n{2,}/).map((paragraph)=>'<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">'+escHtml(paragraph).replace(/\n/g,'<br>')+'</p>').join('');
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>'
+    +'<body style="margin:0;padding:0;background:#f5f0e7;">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px;">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:22px;">'
+    +emailHeader({brand,eyebrow:brandName,title:subject})
+    +'<tr><td style="padding:32px 30px;">'
+    +emailGreeting(clientName)
+    +'<div style="padding-top:16px;">'+htmlBody+'</div>'
+    +emailSignature(person)
+    +'</td></tr></table></td></tr></table></body></html>';
+  const text = [
+    emailGreetingText(clientName),
+    '',
+    clean(body,16000),
+    '',
+    emailSignatureText(person),
+  ].join('\n');
+  return { html, text, brandName };
+}
+
+function escHtml(value:unknown) {
+  return String(value ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 function normalizeProject(record:any, meta:ProjectMeta|null) {
   const p = record?.proposal || {};
@@ -482,6 +521,51 @@ export default async (req:Request, context:Context) => {
     await appendActivity(crm,record.id,'cleanup_flagged','Manually flagged for review by '+actor);
     await appendCleanupAudit(context,{recordId:record.id,action:'manual_flagged',actor,detail:record.cleanupManualFlag.note||'Client manually flagged for review.',score:assessment.score,reasons:assessment.reasons,dimensions:cleanupDimensionsFromRecord(record),client:cleanupClientSnapshotFromRecord(record)});
     return Response.json({ok:true,recordId:record.id,cleanup:assessment});
+  }
+
+  if (action === 'send-client-email') {
+    const recordId=clean(body.recordId,100);
+    const subject=clean(body.subject,300);
+    const messageBody=clean(body.body,16000);
+    if(!recordId||!subject||!messageBody) return Response.json({error:'recordId, subject and body are required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((x:any)=>x.id===recordId);
+    if(!record) return Response.json({error:'CRM record not found'},{status:404});
+    const email=clean(record?.customer?.email,240);
+    if(!email.includes('@')) return Response.json({error:'Client email address is missing or invalid'},{status:400});
+    const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+    if(!apiKey) return Response.json({error:'Resend is not configured. RESEND_API_KEY is missing.'},{status:503});
+
+    const person=staffIdentity(auth.user);
+    const rendered=buildStaffEmail(record,subject,messageBody,person);
+    const from=clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>';
+    const replyTo=clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com';
+    const sendId='CRM-'+id('EMAIL');
+    let resendId='';
+    try{
+      const response=await fetch('https://api.resend.com/emails',{
+        method:'POST',
+        headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-staff-client-'+recordId+'-'+sendId).slice(0,256)},
+        body:JSON.stringify({from,to:[email],subject,html:rendered.html,text:rendered.text,reply_to:replyTo}),
+        signal:AbortSignal.timeout(12_000),
+      });
+      const result:any=await response.json().catch(()=>({}));
+      if(!response.ok) return Response.json({error:clean(result?.message,500)||'Resend could not send the email.'},{status:502});
+      resendId=clean(result?.id,160);
+    }catch(error){
+      return Response.json({error:error instanceof Error?clean(error.message,500):'Email delivery failed.'},{status:502});
+    }
+
+    const now=new Date().toISOString();
+    record.communications={
+      ...(record.communications||{}),
+      staffResponse:{messageId:resendId,status:'sent',sentAt:now,updatedAt:now,senderName:person.name,senderTitle:person.title,subject}
+    };
+    record.updatedAt=now;
+    await sales.setJSON('records/'+record.id,record);
+    await sales.setJSON('records/index',records.map((x:any)=>x.id===record.id?record:x).slice(0,1500));
+    await appendActivity(crm,record.id,'client_email_sent',person.name+' sent “'+subject+'” via Resend · '+rendered.brandName+(resendId?' · '+resendId:''));
+    return Response.json({ok:true,messageId:resendId,brand:rendered.brandName,sender:person});
   }
 
   if (action === 'save-project') {

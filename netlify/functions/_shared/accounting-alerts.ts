@@ -1,3 +1,4 @@
+import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 type AccountingTransition = {
   recordId?: string;
   clientName?: string;
@@ -62,17 +63,25 @@ export async function sendAccountingTransitionAlerts(
       || clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
       || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
       || 'Koa’s Events <leads@koasevents.com>';
-    const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;padding:28px;font-family:Arial,sans-serif;color:#173d30">'
-      +'<div style="max-width:700px;margin:auto;background:#fff;border:1px solid #e7dfd0;border-radius:20px;padding:28px">'
-      +'<div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a">Koa’s Events · Accounting Reconciliation</div>'
-      +'<h1 style="font-family:Georgia,serif;font-size:30px;margin:10px 0 14px">'+esc(subject)+'</h1>'
+    const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;font-family:Arial,sans-serif;color:#173d30">'
+      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
+      +emailHeader({brand:'events',eyebrow:'Accounting Reconciliation',title:subject})
+      +'<tr><td style="padding:28px">'
+      +emailGreeting('Team')
       +'<p style="line-height:1.6;color:#52635b">'+esc(summaryLines.join(' '))+'</p>'
       +details.map((entry)=>'<div style="margin:14px 0;padding:14px;border:1px solid #e7dfd0;border-radius:12px"><strong>'+esc(entry.heading)+': '+esc(entry.name)+'</strong>'
         +(entry.issues.length?'<ul>'+entry.issues.map((line)=>'<li>'+esc(line)+'</li>').join('')+'</ul>':'')
         +'</div>').join('')
       +'<p><a href="https://koasevents.com/admin/quotes/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open Sales CRM</a></p>'
-      +'</div></body></html>';
-    const textBody=[...summaryLines,...details.flatMap((entry)=>[entry.heading+': '+entry.name,...entry.issues]),'Sales CRM: https://koasevents.com/admin/quotes/'].join('\n');
+      +emailSignature()
+      +'</td></tr></table></td></tr></table></body></html>';
+    const textBody=[emailGreetingText('Team'),'',
+      ...summaryLines,
+      ...details.flatMap((entry)=>[entry.heading+': '+entry.name,...entry.issues]),
+      'Sales CRM: https://koasevents.com/admin/quotes/','',
+      emailSignatureText()
+    ].join('\n');
     try{
       const response=await fetch('https://api.resend.com/emails',{
         method:'POST',

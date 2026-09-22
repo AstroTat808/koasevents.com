@@ -1,0 +1,151 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout noindex title="Koa’s Email Preview" description="Preview Koa’s automated email branding." canonical="https://koasevents.com/admin/email-preview/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell">
+      <section data-email-preview-app class="hidden">
+        <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Administration</p>
+            <h1 class="display mt-3 text-5xl">Email Preview</h1>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Preview the branded appearance of Koa’s automated and staff-sent email families without sending a message. Switch brands and viewport sizes to review desktop and mobile presentation.</p>
+          </div>
+          <a href="/admin/" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Admin Home</a>
+        </div>
+
+        <section class="mt-7 rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Email template
+              <select data-preview-template class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold normal-case tracking-normal text-[var(--koa-ink)]"></select>
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Brand
+              <select data-preview-brand class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold normal-case tracking-normal text-[var(--koa-ink)]">
+                <option value="events">Koa’s Events</option>
+                <option value="mobile">Koa’s Mobile Bar</option>
+              </select>
+            </label>
+            <div class="grid gap-2">
+              <span class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Viewport</span>
+              <div class="flex rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-1">
+                <button data-preview-device="desktop" type="button" class="flex-1 rounded-lg bg-[var(--koa-forest)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Desktop</button>
+                <button data-preview-device="mobile" type="button" class="flex-1 rounded-lg px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Mobile</button>
+              </div>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-3">
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Greeting</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">Always “Aloha”</strong></div>
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delivery</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">Resend transactional email</strong></div>
+            <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Shared contact</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">aloha@koasevents.com · (844) 808-KOAS</strong></div>
+          </div>
+        </section>
+
+        <section class="mt-6 rounded-[1.5rem] bg-[var(--koa-ink)] p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p data-preview-category class="eyebrow text-[var(--koa-amber-light)]"></p>
+              <h2 data-preview-name class="display mt-2 text-3xl text-white"></h2>
+            </div>
+            <span data-preview-subject class="max-w-2xl rounded-full border border-white/15 bg-white/[.06] px-4 py-2 text-xs font-semibold text-white/70"></span>
+          </div>
+          <div class="mt-5 overflow-auto rounded-[1.2rem] bg-[#d8d3ca] p-5">
+            <div data-preview-frame-wrap class="mx-auto w-full max-w-[760px] transition-all">
+              <iframe data-preview-frame title="Email preview" class="h-[860px] w-full rounded-xl border-0 bg-white shadow-xl"></iframe>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section data-email-preview-unauthorized class="hidden rounded-[1.5rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Email Preview</p>
+        <h1 class="display mt-3 text-4xl">Staff access required</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/58">Sign in through the Koa’s Staff Workspace to preview email templates.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const templates = [
+      {id:'lead-notification',category:'CRM intake',name:'Internal lead notification',subject:'New Wedding Inquiry — Sample Client',title:'New Wedding Inquiry',body:'A new inquiry has arrived. The most relevant details are summarized below, with a direct link back to the Sales CRM.',staff:true},
+      {id:'client-confirmation',category:'CRM intake',name:'Immediate client confirmation',subject:'We received your Koa’s wedding inquiry',title:'Mahalo for thinking of Koa’s for your celebration.',body:'We received your inquiry and our team will review the date, guest count, service scope, and details you shared.'},
+      {id:'response-reminder',category:'Follow-up automation',name:'Internal response reminder',subject:'Follow-up due — Sample Client',title:'Sample Client is waiting for a response.',body:'This lead has been open for about 4 business hours with no response activity logged in the Sales CRM.',staff:true},
+      {id:'client-follow-up',category:'Follow-up automation',name:'24-hour client follow-up',subject:'A quick follow-up on your Koa’s inquiry',title:'Just checking in on your plans.',body:'We wanted to make sure your inquiry came through. If anything has changed, reply here and send the latest information.'},
+      {id:'review-request',category:'Post-event',name:'Google review request',subject:'Mahalo from Koa’s — would you share your experience?',title:'Would you share your Koa’s experience?',body:'Thank you for trusting Koa’s with your celebration. If you have a moment, we would be grateful if you shared an honest Google review.'},
+      {id:'vendor-brief',category:'Vendor operations',name:'Vendor Event Brief',subject:'Koa’s Vendor Event Brief — Sample Event',title:'Your event brief is ready.',body:'Please review your event-specific arrival, setup, removal, insurance, and acknowledgment requirements before coming onsite.'},
+      {id:'vendor-insurance',category:'Vendor operations',name:'Vendor insurance reminder',subject:'Your Koa’s vendor insurance expires soon',title:'Insurance update needed.',body:'Your certificate of insurance is approaching expiration. Please provide an updated certificate so upcoming event compliance remains current.'},
+      {id:'accounting-alert',category:'Accounting',name:'Accounting reconciliation alert',subject:'Koa’s accounting mismatch detected',title:'Accounting reconciliation changed.',body:'A CRM and QuickBooks payment or invoice value no longer matches. Open the Sales CRM to review the affected record.',staff:true},
+      {id:'system-health',category:'System operations',name:'System Health alert',subject:'Koa’s System Health alert',title:'Health change detected.',body:'The health monitor detected a change in one or more protected Koa’s services. Open System Health for the current checks and incident history.',staff:true},
+      {id:'security-alert',category:'Security',name:'Suspicious sign-in alert',subject:'Koa’s security alert: suspicious sign-in',title:'Suspicious Koa’s sign-in',body:'A sign-in matched one or more security risk signals. Review the account, device, and active session history in User Management.',staff:true},
+      {id:'staff-response',category:'CRM communication',name:'Staff-sent client response',subject:'Your Koa’s event details',title:'Your Koa’s event details',body:'Thank you for the update. I reviewed your event details and wanted to follow up personally with the next steps for your booking.',personalized:true},
+    ];
+
+    const esc=(value)=>String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    const brandName=(brand)=>brand==='mobile'?'Koa’s Mobile Bar':'Koa’s Events';
+    const logo=(brand)=>brand==='mobile'?'/brand/koa-mobile-bar-email-logo.png':'/brand/koa-events-email-logo.png';
+
+    function signature(personalized=false){
+      return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc"><tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
+        +'<div style="font-size:14px;line-height:22px">Mahalo,</div>'
+        +(personalized?'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Jordan Sample</div><div style="font-size:13px;line-height:20px;color:#66736d">Sales Rep</div><div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Koa’s Events Team</div>')
+        +'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;font:13px/20px Arial,sans-serif"><tr><td width="24" style="color:#a96d4a">✉</td><td>aloha@koasevents.com</td></tr><tr><td style="color:#a96d4a">☎</td><td>(844) 808-KOAS</td></tr><tr><td style="color:#a96d4a">↗</td><td>www.koasevents.com</td></tr></table>'
+        +'</td></tr></table>';
+    }
+
+    function renderEmail(template,brand){
+      const name=brandName(brand);
+      const recipient=template.staff?'Team':'Malia';
+      return '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f0e7">'
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+        +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:22px">'
+        +'<tr><td align="center" style="padding:24px 28px 22px;background:#fbf8f2;border-radius:22px 22px 0 0"><img src="'+logo(brand)+'" width="170" alt="'+esc(name)+'" style="display:block;width:170px;max-width:100%;height:auto;border:0"><div style="padding-top:15px;font:800 10px/15px Arial,sans-serif;letter-spacing:1.8px;text-transform:uppercase;color:#a96d4a">'+esc(template.category)+'</div><div style="padding-top:5px;font:700 27px/33px Georgia,serif;color:#173d30">'+esc(template.title)+'</div></td></tr>'
+        +'<tr><td style="padding:32px 30px"><div style="font:15px/24px Arial,sans-serif;color:#46564f">Aloha '+recipient+',</div>'
+        +'<p style="margin:16px 0 0;font:15px/25px Arial,sans-serif;color:#46564f">'+esc(template.body)+'</p>'
+        +(template.id==='client-confirmation'?'<div style="margin-top:20px;padding:16px 18px;background:#f5f0e7;border-radius:14px;font:700 13px/21px Arial,sans-serif;color:#173d30">Event date: June 12, 2027 · Guest count: 42 · Package interest: Gardenia Wedding Collection</div>':'')
+        +(template.id==='vendor-brief'?'<p style="margin:24px 0 0"><span style="display:inline-block;background:#173d30;color:#fff;border-radius:999px;padding:13px 20px;font:700 12px Arial,sans-serif;text-transform:uppercase">Open event brief →</span></p>':'')
+        +(template.id==='review-request'?'<p style="margin:24px 0 0"><span style="display:inline-block;background:#173d30;color:#fff;border-radius:999px;padding:13px 20px;font:700 12px Arial,sans-serif;text-transform:uppercase">Share a Google review →</span></p>':'')
+        +signature(template.personalized)
+        +'</td></tr></table></td></tr></table></body></html>';
+    }
+
+    const select=document.querySelector('[data-preview-template]');
+    const brand=document.querySelector('[data-preview-brand]');
+    const frame=document.querySelector('[data-preview-frame]');
+    const wrap=document.querySelector('[data-preview-frame-wrap]');
+    let device='desktop';
+
+    function render(){
+      const template=templates.find((row)=>row.id===select.value)||templates[0];
+      document.querySelector('[data-preview-category]').textContent=template.category;
+      document.querySelector('[data-preview-name]').textContent=template.name;
+      document.querySelector('[data-preview-subject]').textContent='Subject: '+template.subject;
+      frame.srcdoc=renderEmail(template,brand.value);
+      wrap.style.maxWidth=device==='mobile'?'390px':'760px';
+      document.querySelectorAll('[data-preview-device]').forEach((button)=>{
+        const active=button.dataset.previewDevice===device;
+        button.classList.toggle('bg-[var(--koa-forest)]',active);
+        button.classList.toggle('text-white',active);
+        button.classList.toggle('text-[var(--koa-forest)]',!active);
+      });
+    }
+
+    async function init(){
+      const session=await getAdminSession();
+      const app=document.querySelector('[data-email-preview-app]');
+      const denied=document.querySelector('[data-email-preview-unauthorized]');
+      if(!session||session.accessBlocked){denied?.classList.remove('hidden');return;}
+      const capabilities=new Set(session.capabilities||session.permissions||[]);
+      if(!capabilities.has('crm.view')&&!session.isAdmin){denied?.classList.remove('hidden');return;}
+      select.innerHTML=templates.map((row)=>'<option value="'+row.id+'">'+row.category+' · '+row.name+'</option>').join('');
+      app?.classList.remove('hidden');
+      render();
+    }
+
+    select?.addEventListener('change',render);
+    brand?.addEventListener('change',render);
+    document.querySelectorAll('[data-preview-device]').forEach((button)=>button.addEventListener('click',()=>{device=button.dataset.previewDevice||'desktop';render();}));
+    init();
+  </script>
+</BaseLayout>

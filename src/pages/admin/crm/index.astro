@@ -137,6 +137,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </form>
             </section>
 
+            <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Client email</p>
+                  <h3 class="display mt-2 text-3xl">Send a branded response</h3>
+                  <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">Sent through Resend with the correct Koa’s Events or Koa’s Mobile Bar branding. Your staff name and role appear above the shared Koa’s contact details.</p>
+                </div>
+                <a href="/admin/email-preview/" class="shrink-0 rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Email previews</a>
+              </div>
+              <form data-client-email-form class="mt-5 grid gap-3">
+                <div class="grid gap-3 md:grid-cols-2">
+                  <label class="grid gap-1 text-xs font-bold">Recipient<input data-client-email-recipient type="email" disabled class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-3 py-2.5 text-sm" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Use saved email template
+                    <select data-client-email-template class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="">Write from scratch</option></select>
+                  </label>
+                </div>
+                <label class="grid gap-1 text-xs font-bold">Subject<input name="subject" required maxlength="300" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Your Koa’s event details" /></label>
+                <label class="grid gap-1 text-xs font-bold">Message<textarea name="body" required rows="7" maxlength="16000" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm leading-6" placeholder="Write the message body. The Aloha greeting, logo, and personalized signature are added automatically."></textarea></label>
+                <div class="flex flex-wrap items-center gap-3">
+                  <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Send branded email</button>
+                  <span data-client-email-status class="text-sm text-[var(--koa-ink)]/55"></span>
+                </div>
+              </form>
+            </section>
+
             <section class="grid gap-5 lg:grid-cols-2">
               <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
                 <p class="eyebrow text-[var(--koa-clay)]">Tasks</p><h3 class="display mt-2 text-3xl">Next actions</h3>
@@ -491,6 +516,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     links.push('<a href="/planning/?record='+encodeURIComponent(p.id)+'" target="_blank" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Client planning</a>');
     $('[data-detail-links]').innerHTML=links.join('');
     const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; f.owner.value=p.meta?.owner||''; f.company.value=p.meta?.company||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
+    const recipient=$('[data-client-email-recipient]'); if(recipient) recipient.value=p.customer?.email||'';
+    const templateSelect=$('[data-client-email-template]');
+    if(templateSelect){
+      const emailTemplates=data.templates.filter(t=>t.type==='email'&&t.active);
+      templateSelect.innerHTML='<option value="">Write from scratch</option>'+emailTemplates.map(t=>'<option value="'+esc(t.id)+'">'+esc(t.name)+'</option>').join('');
+      templateSelect.value='';
+    }
+    const emailForm=$('[data-client-email-form]');
+    if(emailForm){ emailForm.subject.value=''; emailForm.body.value=''; }
+    const emailStatus=$('[data-client-email-status]'); if(emailStatus) emailStatus.textContent='';
     $('[data-notes]').innerHTML=data.notes.filter(n=>n.recordId===p.id).slice(0,12).map(n=>'<div class="rounded-xl bg-[var(--koa-sand)] p-3"><p class="text-sm leading-6">'+esc(n.body)+'</p><p class="mt-2 text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-ink)]/42">'+esc(n.createdBy)+' · '+fmt(n.createdAt)+'</p></div>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No notes yet.</p>';
     $('[data-tasks]').innerHTML=data.tasks.filter(t=>t.recordId===p.id).sort((a,b)=>String(a.dueDate).localeCompare(String(b.dueDate))).map(t=>'<button data-task-toggle="'+esc(t.id)+'" class="flex items-start justify-between gap-3 rounded-xl border border-[var(--koa-line)] p-3 text-left '+(t.status==='done'?'opacity-50':'')+'"><div><strong class="text-sm">'+esc(t.title)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(t.dueDate||'No due date')+(t.assignee?' · '+esc(t.assignee):'')+' · '+esc(t.priority)+'</p></div><span class="text-xs font-black uppercase text-[var(--koa-clay)]">'+(t.status==='done'?'Done':'Open')+'</span></button>').join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No tasks yet.</p>';
     $$('[data-task-toggle]').forEach(b=>b.addEventListener('click',async()=>{await post({action:'toggle-task',taskId:b.dataset.taskToggle});await load();}));
@@ -571,6 +606,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   $('[data-enroll-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;if(!f.workflowId.value)return;await post({action:'enroll-workflow',recordId:selectedId,workflowId:f.workflowId.value});await load();});
   $('[data-workflow-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const steps=f.steps.value.split('\n').map((line,i)=>{const [days,...rest]=line.split('|');return{id:'',label:'Step '+(i+1),offsetDays:Number(days)||0,taskTitle:rest.join('|').trim()}}).filter(x=>x.taskTitle);await post({action:'save-workflow',id:f.id.value,name:f.name.value,description:f.description.value,trigger:f.trigger.value,steps,active:f.active.checked});f.reset();f.active.checked=true;await load();});
   $('[data-template-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-template',id:f.id.value,type:f.type.value,name:f.name.value,subject:f.subject.value,body:f.body.value,active:f.active.checked});f.reset();f.active.checked=true;await load();});
+  $('[data-client-email-template]')?.addEventListener('change',e=>{
+    const template=data.templates.find(t=>t.id===e.currentTarget.value);
+    const form=$('[data-client-email-form]');
+    if(!form||!template)return;
+    form.subject.value=template.subject||template.name||'';
+    form.body.value=template.body||'';
+  });
+  $('[data-client-email-form]')?.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const form=e.currentTarget,status=$('[data-client-email-status]');
+    if(!selectedId)return;
+    const p=data.projects.find(x=>x.id===selectedId);
+    if(!p?.customer?.email){if(status)status.textContent='This client does not have an email address.';return;}
+    const button=form.querySelector('button[type="submit"],button:not([type])');
+    const original=button?.textContent||'Send branded email';
+    if(button){button.disabled=true;button.textContent='Sending…';}
+    if(status)status.textContent='';
+    try{
+      const result=await post({action:'send-client-email',recordId:selectedId,subject:form.subject.value,body:form.body.value});
+      if(status)status.textContent='Email sent via Resend'+(result?.messageId?' · '+result.messageId:'')+'.';
+      form.subject.value='';form.body.value='';const select=$('[data-client-email-template]');if(select)select.value='';
+      await load();
+    }catch(error){
+      if(status)status.textContent=error instanceof Error?error.message:'Email could not be sent.';
+    }finally{
+      if(button){button.disabled=false;button.textContent=original;}
+    }
+  });
 
   (async()=>{try{await load();}catch(error){console.error('Business CRM startup failed',error);$('[data-admin-ui]')?.classList.add('hidden');$('[data-unauthorized]')?.classList.remove('hidden');const box=$('[data-unauthorized]');if(box) box.textContent='Business CRM could not initialize. Refresh the page or sign in again from Staff Home.';}})();
 </script>

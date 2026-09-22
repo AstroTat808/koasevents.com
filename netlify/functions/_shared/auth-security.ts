@@ -1,3 +1,4 @@
+import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
@@ -129,9 +130,31 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
   const recipients=clean(Netlify.env.get('KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
   if(!recipients.length)recipients.push('chris@sibel.org','koasadmin@koasevents.com');
   const from=clean(Netlify.env.get('KOA_FROM_EMAIL'),240)||"Koa's Events <aloha@koasevents.com>";
+  const html='<!doctype html><html><body style="margin:0;background:#f5f0e7">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
+    +emailHeader({brand:'events',eyebrow:'Security',title:'Suspicious Koa’s sign-in'})
+    +'<tr><td style="padding:28px">'
+    +emailGreeting('Team')
+    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Account:</strong> '+input.email+'</p>'
+    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Device:</strong> '+input.device+'</p>'
+    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Time:</strong> '+input.createdAt+'</p>'
+    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Reasons:</strong> '+input.reasons.join('; ')+'</p>'
+    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f">Review User Management → Security activity and active sessions.</p>'
+    +emailSignature()
+    +'</td></tr></table></td></tr></table></body></html>';
+  const text=[
+    emailGreetingText('Team'),'',
+    'Suspicious Koa’s sign-in',
+    'Account: '+input.email,
+    'Device: '+input.device,
+    'Time: '+input.createdAt,
+    'Reasons: '+input.reasons.join('; '),
+    'Review User Management → Security activity and active sessions.','',
+    emailSignatureText(),
+  ].join('\n');
   const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({
-    from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',
-    html:'<div style="font-family:Arial,sans-serif;line-height:1.6"><h2>Suspicious Koa’s sign-in</h2><p><strong>Account:</strong> '+input.email+'</p><p><strong>Device:</strong> '+input.device+'</p><p><strong>Time:</strong> '+input.createdAt+'</p><p><strong>Reasons:</strong> '+input.reasons.join('; ')+'</p><p>Review User Management → Security activity and active sessions.</p></div>'
+    from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',html,text
   })});
   return r.ok?{sent:true}:{sent:false,error:'Alert delivery failed'};
 }
