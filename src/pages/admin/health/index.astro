@@ -38,8 +38,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployment health</p><p data-deploy-health class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Post-deploy verification</p><p data-post-deploy-verification class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
           </div>
+          <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release timeline</p><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Click a release to see its commit message, affected systems, QA result, deploy duration, and incidents that began while that release was live.</p><div data-release-timeline class="mt-3 grid gap-3"></div></div>
           <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Recent deployment QA</p><div data-deploy-history class="mt-3 grid gap-3"></div></div>
         </section>
+
+        <dialog data-release-dialog class="w-[min(94vw,760px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+          <div class="p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Production release</p><h2 data-release-title class="display mt-2 text-3xl">Release details</h2></div>
+              <button data-close-release type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40">×</button>
+            </div>
+            <div data-release-detail class="mt-5 grid gap-5 text-sm"></div>
+          </div>
+        </dialog>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div><p class="eyebrow text-[var(--koa-clay)]">Protected interfaces</p><h2 class="display mt-2 text-4xl">Pages + APIs</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly checks use non-destructive page-shell probes and protected endpoint reachability checks. Manual checks use the same monitor and immediately persist the result.</p></div>
@@ -133,6 +144,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const results=document.querySelector('[data-results]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
+    const releaseTimeline=document.querySelector('[data-release-timeline]');
+    const releaseDialog=document.querySelector('[data-release-dialog]');
+    const releaseTitle=document.querySelector('[data-release-title]');
+    const releaseDetail=document.querySelector('[data-release-detail]');
     const uptimeBody=document.querySelector('[data-uptime-body]');
     const uptimeSamples=document.querySelector('[data-uptime-samples]');
     const incidentBody=document.querySelector('[data-incident-body]');
@@ -172,6 +187,61 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(hours)parts.push(hours+'h');
       if(mins||!parts.length)parts.push(mins+'m');
       return parts.join(' ');
+    }
+
+    function showRelease(release){
+      releaseTitle.textContent=release.commitTitle||'Production release';
+      releaseDetail.innerHTML='';
+
+      const summary=document.createElement('section');
+      summary.className='rounded-xl bg-[var(--koa-sand)] p-4';
+      const commitMessage=String(release.commitMessage||release.commitTitle||'No commit message recorded.');
+      summary.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Commit</p><p class="mt-2 whitespace-pre-wrap font-semibold text-[var(--koa-forest)]"></p><p class="mt-3 break-all text-xs text-[var(--koa-ink)]/48"></p>';
+      summary.querySelector('p.mt-2').textContent=commitMessage;
+      summary.querySelector('p.mt-3').textContent='Commit '+(release.commit||'Unavailable')+' · Deploy '+(release.deployId||'Unavailable');
+      releaseDetail.appendChild(summary);
+
+      const metrics=document.createElement('section');
+      metrics.className='grid gap-3 sm:grid-cols-3';
+      const qa=release.qa;
+      const qaText=qa?.conclusion==='success'?'Passed':qa?.conclusion==='failure'?'Failed':qa?.status||'Unavailable';
+      [
+        ['Published',release.publishedAt?new Date(release.publishedAt).toLocaleString():'Unavailable'],
+        ['Deploy duration',release.deployDurationSeconds==null?'Unavailable':release.deployDurationSeconds+' seconds'],
+        ['QA result',qaText],
+      ].forEach(([label,value])=>{
+        const card=document.createElement('div');card.className='rounded-xl border border-[var(--koa-line)] p-4';
+        card.innerHTML='<p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-2 text-sm font-semibold text-[var(--koa-forest)]"></p>';
+        card.children[0].textContent=label;card.children[1].textContent=value;metrics.appendChild(card);
+      });
+      releaseDetail.appendChild(metrics);
+
+      const features=document.createElement('section');
+      features.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Features changed</p>';
+      const featureList=document.createElement('div');featureList.className='mt-3 flex flex-wrap gap-2';
+      (release.features||[]).forEach((feature)=>{const chip=document.createElement('span');chip.className='rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]';chip.textContent=feature;featureList.appendChild(chip);});
+      if(!(release.features||[]).length)featureList.innerHTML='<span class="text-sm text-[var(--koa-ink)]/48">No categorized feature changes were recorded.</span>';
+      features.appendChild(featureList);releaseDetail.appendChild(features);
+
+      const incidents=document.createElement('section');
+      incidents.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Incidents that began during this release</p>';
+      const incidentList=document.createElement('div');incidentList.className='mt-3 grid gap-2';
+      (release.incidents||[]).forEach((incident)=>{
+        const row=document.createElement('div');row.className='rounded-xl border border-red-100 bg-red-50 p-3';
+        row.innerHTML='<strong class="text-sm text-red-900"></strong><p class="mt-1 text-xs text-red-900/65"></p>';
+        row.querySelector('strong').textContent=incident.componentName||incident.componentId||'System incident';
+        row.querySelector('p').textContent=(incident.startedAt?new Date(incident.startedAt).toLocaleString():'Unknown start')+' · '+formatDuration(incident.durationMinutes||0)+(incident.ongoing?' · ongoing':'');
+        incidentList.appendChild(row);
+      });
+      if(!(release.incidents||[]).length)incidentList.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No monitored incidents began while this release was live.</p>';
+      incidents.appendChild(incidentList);releaseDetail.appendChild(incidents);
+
+      const files=document.createElement('details');
+      files.className='rounded-xl border border-[var(--koa-line)] p-4';
+      files.innerHTML='<summary class="cursor-pointer text-sm font-semibold text-[var(--koa-forest)]">Changed files ('+(release.changedFiles||[]).length+')</summary>';
+      const pre=document.createElement('pre');pre.className='mt-3 max-h-60 overflow-auto whitespace-pre-wrap text-xs text-[var(--koa-ink)]/55';pre.textContent=(release.changedFiles||[]).join('\n')||'No changed-file list recorded.';files.appendChild(pre);releaseDetail.appendChild(files);
+
+      releaseDialog.showModal();
     }
 
     function render(data){
@@ -241,6 +311,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         postDeployEl.textContent='Waiting for the first scheduled verification';
         postDeployEl.className='mt-2 text-sm font-semibold text-amber-800';
       }
+
+      releaseTimeline.innerHTML='';
+      const releases=deployments.releaseTimeline||[];
+      releases.forEach((release,index)=>{
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
+        const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
+        const incidentCount=(release.incidents||[]).length;
+        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span></div><p class="mt-3 text-xs text-[var(--koa-ink)]/55">'+(release.publishedAt?new Date(release.publishedAt).toLocaleString():'Unknown deployment time')+' · '+(release.deployDurationSeconds==null?'duration unavailable':release.deployDurationSeconds+'s deploy')+' · '+incidentCount+' incident'+(incidentCount===1?'':'s')+' began</p>';
+        button.querySelector('strong').textContent=release.commitTitle||'Production release';
+        button.querySelector('p.text-xs').textContent=(release.commit||'').slice(0,12)+' · '+(release.deployId||'');
+        button.addEventListener('click',()=>showRelease(release));
+        releaseTimeline.appendChild(button);
+      });
+      if(!releases.length)releaseTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Release history begins with production deployments recorded by the new post-deploy verifier.</p>';
 
       deployHistory.innerHTML='';
       const rows=deployments.history||[];
@@ -359,6 +445,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         refresh.disabled=false;refresh.textContent='Run checks now';
       }
     });
+
+    document.querySelector('[data-close-release]')?.addEventListener('click',()=>releaseDialog.close());
 
     savePolicy?.addEventListener('click',async()=>{
       savePolicy.disabled=true;policyMessage.textContent='Saving…';
