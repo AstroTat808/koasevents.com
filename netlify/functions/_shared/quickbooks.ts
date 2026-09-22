@@ -444,6 +444,13 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
   const defaultFallback: QuickBooksPaymentTemplateItem[] = [
     { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.defaultFinalDueDaysBefore,30), percentOfRemaining:100 },
   ];
+  const defaultRules: QuickBooksPaymentRule[] = [
+    { id:'rule-wedding-extended', name:'Wedding · 12+ months', category:'venueWedding', minLeadDays:365, maxLeadDays:null, presetId:'builtin-extended-wedding', priority:10, active:true },
+    { id:'rule-wedding-standard', name:'Wedding · 6–12 months', category:'venueWedding', minLeadDays:180, maxLeadDays:364, presetId:'builtin-standard-wedding', priority:20, active:true },
+    { id:'rule-wedding-micro', name:'Wedding · under 6 months', category:'venueWedding', minLeadDays:0, maxLeadDays:179, presetId:'builtin-micro-wedding', priority:30, active:true },
+    { id:'rule-mobile-bar', name:'Mobile Bar', category:'mobileBar', minLeadDays:null, maxLeadDays:null, presetId:'builtin-mobile-bar', priority:40, active:true },
+    { id:'rule-private-event', name:'Private Event', category:'privateEvent', minLeadDays:null, maxLeadDays:null, presetId:'builtin-private-event', priority:50, active:true },
+  ];
   return {
     defaultPercent: cleanDepositPercent(stored?.defaultPercent, 10),
     venueWeddingPercent: cleanDepositPercent(stored?.venueWeddingPercent, 10),
@@ -460,7 +467,7 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     privateEventMilestones: cleanPaymentTemplate(stored?.privateEventMilestones, privateFallback),
     defaultMilestones: cleanPaymentTemplate(stored?.defaultMilestones, defaultFallback),
     customPresets: cleanCustomPresets(stored?.customPresets),
-    autoRules: cleanAutoRules(stored?.autoRules),
+    autoRules: Array.isArray(stored?.autoRules) ? cleanAutoRules(stored.autoRules) : defaultRules,
     updatedAt: String(stored?.updatedAt || ''),
   };
 }
