@@ -381,10 +381,12 @@ export default async (req: Request, context: Context) => {
       const mergedQuestionnaire=ensureQuestionnaire((ops.questionnaire||[]) as QuestionAnswer[]);
       if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+      const beforeVendorState=JSON.stringify(ops.vendors||[]);
       ops.vendors=ensureVendorBriefState(ops.vendors||[]) as any;
       if(!Array.isArray((ops as any).setupItems))(ops as any).setupItems=[];
       const refreshedVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
-      if(JSON.stringify(refreshedVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
+      ops.vendors=refreshedVendors as any;
+      if(JSON.stringify(ops.vendors||[])!==beforeVendorState){ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       if (!Array.isArray((ops as any).vendorRequirements)) {
         (ops as any).vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
         (ops as any).vendorRequirementsMode = 'auto';
@@ -466,7 +468,7 @@ export default async (req: Request, context: Context) => {
     if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending the Event Brief.'},{status:400});
     const url='https://koasevents.com/vendor-brief/?token='+encodeURIComponent(vendor.briefToken);
     const assigned=sanitizeSetupItems((ops as any).setupItems||[]).filter((item:any)=>[item.responsibleVendorId,item.deliveryVendorId,item.setupVendorId,item.removalVendorId].includes(vendor.id));
-    const result=await sendVendorEmail({to:[vendor.email],subject:'Koa’s Event Brief — '+(record.customer?.eventDate||'upcoming event'),title:'Your Koa’s Event Brief is ready.',body:'Please review your arrival, load-in, setup/removal responsibilities, venue instructions, and applicable Koa’s rules, then acknowledge the brief before the event.',detail:[vendor.role,record.customer?.eventDate?'Event: '+record.customer.eventDate:'',vendor.arrivalTime?'Arrival: '+vendor.arrivalTime:'',assigned.length?assigned.length+' setup assignment'+(assigned.length===1?'':'s'):''].filter(Boolean).join(' · '),actionLabel:'Review Event Brief',actionUrl:url,idempotencyKey:'koa-event-brief-'+record.id+'-'+vendor.id+'-'+new Date().toISOString().slice(0,10)});
+    const result=await sendVendorEmail({to:[vendor.email],subject:'Koa’s Event Brief — '+(record.customer?.eventDate||'upcoming event'),title:'Your Koa’s Event Brief is ready.',body:'Please review your arrival, load-in, setup/removal responsibilities, venue instructions, and applicable Koa’s rules, then acknowledge the brief before the event.',detail:[vendor.role,record.customer?.eventDate?'Event: '+record.customer.eventDate:'',vendor.arrivalTime?'Arrival: '+vendor.arrivalTime:'',assigned.length?assigned.length+' setup assignment'+(assigned.length===1?'':'s'):''].filter(Boolean).join(' · '),actionLabel:'Review Event Brief',actionUrl:url,idempotencyKey:'koa-event-brief-'+record.id+'-'+vendor.id+'-'+String(vendor.briefSentAt||'first')});
     vendor.briefSentAt=new Date().toISOString();
     vendor.briefLastMessageId=result.id||'';
   } else if (action === 'save-vendor-requirements') {
