@@ -313,6 +313,27 @@ export type QuickBooksPaymentTemplateItem = {
   percentOfRemaining: number;
 };
 
+export type QuickBooksCustomPaymentPreset = {
+  id: string;
+  name: string;
+  category: 'venueWedding' | 'mobileBar' | 'privateEvent' | 'default';
+  depositPercent: number;
+  milestones: QuickBooksPaymentTemplateItem[];
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type QuickBooksPaymentRule = {
+  id: string;
+  name: string;
+  category: 'venueWedding' | 'mobileBar' | 'privateEvent' | 'default';
+  minLeadDays: number | null;
+  maxLeadDays: number | null;
+  presetId: string;
+  priority: number;
+  active: boolean;
+};
+
 export type QuickBooksDepositSettings = {
   defaultPercent: number;
   venueWeddingPercent: number;
@@ -328,6 +349,8 @@ export type QuickBooksDepositSettings = {
   mobileBarMilestones: QuickBooksPaymentTemplateItem[];
   privateEventMilestones: QuickBooksPaymentTemplateItem[];
   defaultMilestones: QuickBooksPaymentTemplateItem[];
+  customPresets: QuickBooksCustomPaymentPreset[];
+  autoRules: QuickBooksPaymentRule[];
   updatedAt: string;
 };
 
@@ -365,6 +388,47 @@ function cleanPaymentTemplate(input: unknown, fallback: QuickBooksPaymentTemplat
   return rows.length ? rows : fallback;
 }
 
+function cleanCustomPresets(input: unknown): QuickBooksCustomPaymentPreset[] {
+  if (!Array.isArray(input)) return [];
+  const now = new Date().toISOString();
+  return input.slice(0, 50).map((item: any, index) => {
+    const category = ['venueWedding','mobileBar','privateEvent','default'].includes(String(item?.category || ''))
+      ? String(item.category) as QuickBooksCustomPaymentPreset['category']
+      : 'default';
+    return {
+      id: String(item?.id || 'preset-' + (index + 1)).trim().slice(0, 80),
+      name: String(item?.name || 'Custom preset').trim().slice(0, 120),
+      category,
+      depositPercent: cleanDepositPercent(item?.depositPercent, 10),
+      milestones: cleanPaymentTemplate(item?.milestones, [{ label:'Final balance', dueDaysBefore:30, percentOfRemaining:100 }]),
+      createdAt: String(item?.createdAt || now),
+      updatedAt: String(item?.updatedAt || now),
+    };
+  }).filter((item) => item.id && item.name);
+}
+
+function cleanAutoRules(input: unknown): QuickBooksPaymentRule[] {
+  if (!Array.isArray(input)) return [];
+  return input.slice(0, 100).map((item: any, index) => {
+    const category = ['venueWedding','mobileBar','privateEvent','default'].includes(String(item?.category || ''))
+      ? String(item.category) as QuickBooksPaymentRule['category']
+      : 'default';
+    const min = item?.minLeadDays == null || item?.minLeadDays === '' ? null : Math.max(0, Math.round(Number(item.minLeadDays)));
+    const max = item?.maxLeadDays == null || item?.maxLeadDays === '' ? null : Math.max(0, Math.round(Number(item.maxLeadDays)));
+    return {
+      id: String(item?.id || 'rule-' + (index + 1)).trim().slice(0, 80),
+      name: String(item?.name || 'Payment rule').trim().slice(0, 120),
+      category,
+      minLeadDays: min == null || !Number.isFinite(min) ? null : min,
+      maxLeadDays: max == null || !Number.isFinite(max) ? null : max,
+      presetId: String(item?.presetId || '').trim().slice(0, 80),
+      priority: Math.max(0, Math.round(Number(item?.priority ?? index))),
+      active: item?.active !== false,
+    };
+  }).filter((item) => item.id && item.presetId)
+    .sort((a,b) => a.priority - b.priority || a.name.localeCompare(b.name));
+}
+
 export async function getQuickBooksDepositSettings(context: Context): Promise<QuickBooksDepositSettings> {
   const stored = await integrationStore(context).get(depositSettingsKey(), { type: 'json' }) as any;
   const weddingFallback: QuickBooksPaymentTemplateItem[] = [
@@ -379,6 +443,13 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
   ];
   const defaultFallback: QuickBooksPaymentTemplateItem[] = [
     { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.defaultFinalDueDaysBefore,30), percentOfRemaining:100 },
+  ];
+  const defaultRules: QuickBooksPaymentRule[] = [
+    { id:'rule-wedding-extended', name:'Wedding · 12+ months', category:'venueWedding', minLeadDays:365, maxLeadDays:null, presetId:'builtin-extended-wedding', priority:10, active:true },
+    { id:'rule-wedding-standard', name:'Wedding · 6–12 months', category:'venueWedding', minLeadDays:180, maxLeadDays:364, presetId:'builtin-standard-wedding', priority:20, active:true },
+    { id:'rule-wedding-micro', name:'Wedding · under 6 months', category:'venueWedding', minLeadDays:0, maxLeadDays:179, presetId:'builtin-micro-wedding', priority:30, active:true },
+    { id:'rule-mobile-bar', name:'Mobile Bar', category:'mobileBar', minLeadDays:null, maxLeadDays:null, presetId:'builtin-mobile-bar', priority:40, active:true },
+    { id:'rule-private-event', name:'Private Event', category:'privateEvent', minLeadDays:null, maxLeadDays:null, presetId:'builtin-private-event', priority:50, active:true },
   ];
   return {
     defaultPercent: cleanDepositPercent(stored?.defaultPercent, 10),
@@ -395,6 +466,8 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     mobileBarMilestones: cleanPaymentTemplate(stored?.mobileBarMilestones, mobileFallback),
     privateEventMilestones: cleanPaymentTemplate(stored?.privateEventMilestones, privateFallback),
     defaultMilestones: cleanPaymentTemplate(stored?.defaultMilestones, defaultFallback),
+    customPresets: cleanCustomPresets(stored?.customPresets),
+    autoRules: Array.isArray(stored?.autoRules) ? cleanAutoRules(stored.autoRules) : defaultRules,
     updatedAt: String(stored?.updatedAt || ''),
   };
 }
@@ -416,6 +489,8 @@ export async function saveQuickBooksDepositSettings(context: Context, settings: 
     mobileBarMilestones: cleanPaymentTemplate(settings.mobileBarMilestones, current.mobileBarMilestones),
     privateEventMilestones: cleanPaymentTemplate(settings.privateEventMilestones, current.privateEventMilestones),
     defaultMilestones: cleanPaymentTemplate(settings.defaultMilestones, current.defaultMilestones),
+    customPresets: cleanCustomPresets(settings.customPresets ?? current.customPresets),
+    autoRules: cleanAutoRules(settings.autoRules ?? current.autoRules),
     updatedAt: new Date().toISOString(),
   };
   await integrationStore(context).setJSON(depositSettingsKey(), next);
