@@ -3,6 +3,7 @@ import { getStore } from '@netlify/blobs';
 import { ensureLifecycle, markLifecycleEvent } from './_shared/lifecycle';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
+import { shouldRunScheduledJob } from './_shared/credit-saver';
 
 const HST=-10*60*60*1000;
 function hstDate(){return new Date(Date.now()+HST).toISOString().slice(0,10);}
@@ -13,6 +14,7 @@ async function autoTrashChain(context:Context,root:any,records:any[]){const stor
 
 export default async(_req:Request,context:Context)=>{
   if(context.deploy.context!=='production')return;
+  if(!(await shouldRunScheduledJob(context,'crm-lifecycle')))return;
   const store=sales();let records:any[]=(await store.get('records/index',{type:'json'}))||[];
   const settings:any=(await store.get('settings/crm-cleanup',{type:'json'}))||{mode:'auto_trash'};
   const cleanupMode=normalizeCleanupMode(settings.mode);
