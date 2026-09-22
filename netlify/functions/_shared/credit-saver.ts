@@ -32,6 +32,51 @@ export const CREDIT_SAVER_JOBS:CreditSaverJobId[]=[
   'vendor-insurance-reminders',
 ];
 
+export type CreditSaverPresetId='normal-operations'|'balanced-savings'|'maximum-savings';
+
+export type CreditSaverPreset={
+  id:CreditSaverPresetId;
+  name:string;
+  description:string;
+  caution:string;
+  modes:Record<CreditSaverJobId,CreditSaverMode>;
+};
+
+function presetModes(mode:CreditSaverMode):Record<CreditSaverJobId,CreditSaverMode>{
+  return Object.fromEntries(CREDIT_SAVER_JOBS.map(id=>[id,mode])) as Record<CreditSaverJobId,CreditSaverMode>;
+}
+
+export function creditSaverPresets():CreditSaverPreset[]{
+  return [
+    {
+      id:'normal-operations',
+      name:'Normal Operations',
+      description:'Runs all six safe scheduled jobs at their normal cadence.',
+      caution:'Use when credit pressure is low or when you want the fastest background maintenance cadence.',
+      modes:presetModes('normal'),
+    },
+    {
+      id:'balanced-savings',
+      name:'Balanced Savings',
+      description:'Runs all six safe scheduled jobs in Saver mode to reduce background work without fully stopping any of them.',
+      caution:'Core System Health, lead-response protection, webhooks, payments, security, and manual Office 365 sync remain unchanged.',
+      modes:presetModes('saver'),
+    },
+    {
+      id:'maximum-savings',
+      name:'Maximum Savings',
+      description:'Pauses all six optional scheduled jobs until the billing-cycle reset or until you restore another preset.',
+      caution:'Use only during significant credit pressure. Core System Health, lead-response protection, webhooks, payments, security, and client-facing workflows remain active.',
+      modes:presetModes('paused'),
+    },
+  ];
+}
+
+export function creditSaverPreset(id:unknown){
+  const key=String(id||'') as CreditSaverPresetId;
+  return creditSaverPresets().find(preset=>preset.id===key)||null;
+}
+
 const LEGACY_ACTIONS:CreditSaverActionId[]=[
   'post-deploy-verification-half',
   'quickbooks-reconciliation-half',
