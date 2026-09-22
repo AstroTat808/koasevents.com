@@ -101,9 +101,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function signature(personalized=false){
       const name=esc(currentSession?.displayName||currentSession?.email||'Koa’s Events Team');
       const title=esc(currentSession?.jobTitle||roleLabel(currentSession?.role));
+      const pronouns=esc(currentSession?.pronouns||'');
+      const roleDescription=esc(currentSession?.roleDescription||'');
+      const settings=currentSession?.signature||{};
+      const identity=personalized
+        ? '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">'+name+'</div>'
+          +(settings.showPronouns&&pronouns?'<div style="font-size:12px;line-height:18px;color:#7a857f">'+pronouns+'</div>':'')
+          +(settings.showTitle!==false&&title?'<div style="font-size:13px;line-height:20px;color:#66736d">'+title+'</div>':'')
+          +(settings.showRoleDescription&&roleDescription?'<div style="padding-top:2px;font-size:12px;line-height:18px;color:#66736d">'+roleDescription+'</div>':'')
+          +(settings.showTeamTitle!==false?'<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'')
+        : '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Koa’s Events Team</div>';
       return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc"><tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
         +'<div style="font-size:14px;line-height:22px">Mahalo,</div>'
-        +(personalized?'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">'+name+'</div><div style="font-size:13px;line-height:20px;color:#66736d">'+title+'</div><div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Koa’s Events Team</div>')
+        +identity
         +'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;font:13px/20px Arial,sans-serif"><tr><td width="24" style="color:#a96d4a">✉</td><td>aloha@koasevents.com</td></tr><tr><td style="color:#a96d4a">☎</td><td>(844) 808-KOAS</td></tr><tr><td style="color:#a96d4a">↗</td><td>www.koasevents.com</td></tr></table>'
         +'</td></tr></table>';
     }

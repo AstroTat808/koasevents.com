@@ -216,7 +216,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const vendorConflictsEl=document.querySelector('[data-vendor-conflicts]');
     const vendorDeadlinesEl=document.querySelector('[data-vendor-deadlines]');
 
-    let payload={events:[]};
+    let payload={events:[],staff:[]};
     let selected=null;
     let activeTab='overview';
     let managerAccess=false;
@@ -235,6 +235,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function packageLabel(id){return id==='signature-wedding'?'Signature Wedding Experience':id?String(id).replaceAll('-',' ').replace(/\b\w/g,(m)=>m.toUpperCase()):'Custom';}
     function uid(prefix='ROW'){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7);}
     function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+    function staffMatch(value){
+      const raw=String(value||'').trim().toLowerCase();if(!raw)return null;
+      return (payload.staff||[]).find((s)=>[s.name,s.email,s.jobTitle,s.roleLabel].some((v)=>String(v||'').trim().toLowerCase()===raw))
+        || (payload.staff||[]).find((s)=>raw.includes(String(s.email||'').toLowerCase())||raw.includes(String(s.name||'').toLowerCase()));
+    }
+    function ownerControl(value=''){
+      const wrap=document.createElement('div');wrap.className='flex items-center gap-2';wrap.dataset.ownerWrap='';
+      const avatar=document.createElement('span');avatar.className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white';avatar.dataset.ownerAvatar='';
+      const input=document.createElement('input');input.className='field min-w-0';input.dataset.owner='';input.placeholder='Owner';input.value=value||'';
+      const update=()=>{
+        const s=staffMatch(input.value);avatar.innerHTML='';
+        if(s?.photoUrl){const img=document.createElement('img');img.src=s.photoUrl;img.alt='';img.className='h-full w-full object-cover';avatar.appendChild(img);}
+        else avatar.textContent=String(s?.name||input.value||'—').trim().charAt(0).toUpperCase()||'—';
+        avatar.title=s?(s.name+(s.jobTitle?' · '+s.jobTitle:'')):'';
+      };
+      input.addEventListener('input',update);update();wrap.append(avatar,input);return wrap;
+    }
 
     async function api(body){
       const res=await fetch('/api/admin/events',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -383,8 +400,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function timelineRow(v={}){
       const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[8rem_1.3fr_1fr_1fr_auto]';row.dataset.id=v.id||uid('R');
-      row.innerHTML='<input data-time type="time" class="field"><input data-label class="field" placeholder="Moment / activity"><input data-owner class="field" placeholder="Owner"><input data-location class="field" placeholder="Location"><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Cue, dependency, notes…"></textarea>';
-      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-label]').value=v.label||'';row.querySelector('[data-owner]').value=v.owner||'';row.querySelector('[data-location]').value=v.location||'';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+      row.innerHTML='<input data-time type="time" class="field"><input data-label class="field" placeholder="Moment / activity"><span data-owner-slot></span><input data-location class="field" placeholder="Location"><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Cue, dependency, notes…"></textarea>';
+      row.querySelector('[data-owner-slot]').replaceWith(ownerControl(v.owner||''));
+      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-label]').value=v.label||'';row.querySelector('[data-location]').value=v.location||'';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
     }
     function renderTimeline(){timelineEl.innerHTML='';(selected?.ops.timeline||[]).forEach((v)=>timelineEl.appendChild(timelineRow(v)));if(!(selected?.ops.timeline||[]).length)timelineEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No run-of-show items yet.'));}
     function collectTimeline(){return [...timelineEl.children].filter((r)=>r.dataset?.id).map((r)=>({id:r.dataset.id,time:r.querySelector('[data-time]').value,label:r.querySelector('[data-label]').value,owner:r.querySelector('[data-owner]').value,location:r.querySelector('[data-location]').value,notes:r.querySelector('[data-notes]').value}));}
@@ -399,7 +417,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[1fr_10rem_10rem_11rem] lg:items-center';row.dataset.id=item.id;row.dataset.phase=item.phase;row.dataset.text=item.text;
           row.append(text('p','text-sm font-semibold',item.text));
           const due=document.createElement('input');due.type='date';due.className='field';due.dataset.due='';due.value=item.dueDate||'';
-          const owner=document.createElement('input');owner.className='field';owner.dataset.owner='';owner.placeholder='Owner';owner.value=item.owner||'';
+          const owner=ownerControl(item.owner||'');
           const status=document.createElement('select');status.className='field';status.dataset.status='';status.innerHTML='<option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="not_applicable">N/A</option>';status.value=item.status||'not_started';
           row.append(due,owner,status);list.appendChild(row);
         });
@@ -410,8 +428,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function taskRow(v={}){
       const row=document.createElement('div');row.className='grid gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 lg:grid-cols-[8rem_1.3fr_1fr_11rem_auto]';row.dataset.id=v.id||uid('T');
-      row.innerHTML='<input data-time type="time" class="field"><input data-task class="field" placeholder="Task"><input data-owner class="field" placeholder="Owner"><select data-status class="field"><option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="blocked">Blocked</option></select><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Notes"></textarea>';
-      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-task]').value=v.task||'';row.querySelector('[data-owner]').value=v.owner||'';row.querySelector('[data-status]').value=v.status||'not_started';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
+      row.innerHTML='<input data-time type="time" class="field"><input data-task class="field" placeholder="Task"><span data-owner-slot></span><select data-status class="field"><option value="not_started">Not started</option><option value="in_progress">In progress</option><option value="complete">Complete</option><option value="blocked">Blocked</option></select><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs">×</button><textarea data-notes rows="2" class="field lg:col-span-4" placeholder="Notes"></textarea>';
+      row.querySelector('[data-owner-slot]').replaceWith(ownerControl(v.owner||''));
+      row.querySelector('[data-time]').value=v.time||'';row.querySelector('[data-task]').value=v.task||'';row.querySelector('[data-status]').value=v.status||'not_started';row.querySelector('[data-notes]').value=v.notes||'';row.querySelector('[data-remove]').addEventListener('click',()=>row.remove());return row;
     }
     function renderTasks(){tasksEl.innerHTML='';(selected?.ops.tasks||[]).forEach((v)=>tasksEl.appendChild(taskRow(v)));}
     function collectTasks(){return [...tasksEl.children].filter((r)=>r.dataset?.id).map((r)=>({id:r.dataset.id,time:r.querySelector('[data-time]').value,task:r.querySelector('[data-task]').value,owner:r.querySelector('[data-owner]').value,status:r.querySelector('[data-status]').value,notes:r.querySelector('[data-notes]').value}));}
@@ -452,6 +471,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const res=await fetch('/api/admin/events'+(q?'?q='+encodeURIComponent(q):''),{cache:'no-store'});
       if(!res.ok)return;
       payload=await res.json();
+      try{
+        const staffResponse=await fetch('/api/staff/directory',{cache:'no-store'});
+        if(staffResponse.ok){const directory=await staffResponse.json();payload.staff=directory.staff||[];}
+      }catch{}
       if(selected){const refreshed=(payload.events||[]).find((e)=>e.record.id===selected.record.id);if(refreshed)selected=refreshed;else selected=null;}
       if(!selected){
         const requested=new URLSearchParams(window.location.search).get('record')||'';

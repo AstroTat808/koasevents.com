@@ -51,10 +51,19 @@ function staffIdentity(user:any) {
   const explicitTitle = clean(metadata?.title || metadata?.job_title || metadata?.jobTitle, 120);
   const role = operationsRole(user);
   const roleTitle = role && role !== 'custom' && role in ROLE_LABELS ? ROLE_LABELS[role as keyof typeof ROLE_LABELS] : '';
-  return { name, title: explicitTitle || roleTitle || 'Koa’s Events Team' };
+  return {
+    name,
+    title: explicitTitle || roleTitle || 'Koa’s Events Team',
+    pronouns: clean(metadata?.pronouns,80),
+    roleDescription: clean(metadata?.role_description || metadata?.roleDescription,220),
+    showTitle: metadata?.signature_show_title !== false,
+    showTeamTitle: metadata?.signature_show_team_title !== false,
+    showPronouns: metadata?.signature_show_pronouns === true,
+    showRoleDescription: metadata?.signature_show_role_description === true,
+  };
 }
 
-function buildStaffEmail(record:any, subject:string, body:string, person:{name:string;title:string}) {
+function buildStaffEmail(record:any, subject:string, body:string, person:ReturnType<typeof staffIdentity>) {
   const brand = emailBrandForRecord(record);
   const brandName = emailBrandName(brand);
   const clientName = clean(record?.customer?.name,180);

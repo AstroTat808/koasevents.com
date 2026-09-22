@@ -13,6 +13,11 @@ export default async (req:Request) => {
   const metadata = ctx.user?.user_metadata || ctx.user?.userMetadata || {};
   const displayName = clean(metadata?.full_name || metadata?.name || ctx.user?.name || '',120);
   const jobTitle = clean(metadata?.job_title || metadata?.jobTitle || '',120);
+  const pronouns = clean(metadata?.pronouns || '',80);
+  const roleDescription = clean(metadata?.role_description || metadata?.roleDescription || '',220);
+  const photoUrl = metadata?.has_profile_photo===true
+    ? '/api/staff/photo/'+encodeURIComponent(clean(ctx.user?.id,120))+(metadata?.profile_photo_version?'?v='+encodeURIComponent(clean(metadata.profile_photo_version,80)):'')
+    : '';
   const security = ctx.security || {
     forcePasswordChange:false,
     passwordChangedAt:'',
@@ -28,6 +33,15 @@ export default async (req:Request) => {
     email,
     displayName,
     jobTitle,
+    pronouns,
+    roleDescription,
+    photoUrl,
+    signature:{
+      showTitle:metadata?.signature_show_title!==false,
+      showTeamTitle:metadata?.signature_show_team_title!==false,
+      showPronouns:metadata?.signature_show_pronouns===true,
+      showRoleDescription:metadata?.signature_show_role_description===true,
+    },
     role:ctx.role,
     roles:[ctx.role],
     isAdmin:isApprovedAdmin(ctx.user),

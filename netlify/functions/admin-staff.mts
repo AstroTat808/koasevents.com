@@ -90,6 +90,7 @@ async function normalizeUser(user:any,policy:any){
     email:normalizeEmail(user?.email),
     name:normalizedName(user),
     jobTitle:normalizedJobTitle(user),
+    photoUrl:userMetadataFor(user)?.has_profile_photo===true?('/api/staff/photo/'+encodeURIComponent(clean(user?.id,120))+(userMetadataFor(user)?.profile_photo_version?'?v='+encodeURIComponent(clean(userMetadataFor(user).profile_photo_version,80)):'')):'',
     role:effectiveRole(user),
     roleLabel:effectiveRole(user)==='custom'?(clean(metadataFor(user)?.customRoleName,100)||'Custom Role'):publicRoleLabel(effectiveRole(user)),
     customRoleId:clean(metadataFor(user)?.customRoleId,100),
