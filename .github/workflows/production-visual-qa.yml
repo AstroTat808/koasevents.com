@@ -44,7 +44,7 @@ permissions:
   contents: read
 
 env:
-  PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.com' }}
+  PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents-website.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.com' }}
   EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
   VISUAL_RESULTS: visual-results
 
