@@ -240,13 +240,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return (payload.staff||[]).find((s)=>[s.name,s.email,s.jobTitle,s.roleLabel].some((v)=>String(v||'').trim().toLowerCase()===raw))
         || (payload.staff||[]).find((s)=>raw.includes(String(s.email||'').toLowerCase())||raw.includes(String(s.name||'').toLowerCase()));
     }
+    function sameDateLoad(staff,date){
+      if(!staff||!date)return null;
+      return (staff.dateLoad||[]).find((row)=>row.date===String(date).slice(0,10))||null;
+    }
+    function loadWarning(staff,date){
+      const load=sameDateLoad(staff,date);
+      if(!load)return '';
+      if(load.heavy)return staff.name+' already has '+load.responsibilityCount+' responsibilit'+(load.responsibilityCount===1?'y':'ies')+' across '+load.eventCount+' event'+(load.eventCount===1?'':'s')+' on '+date+'.';
+      if(load.responsibilityCount>=3)return staff.name+' already has '+load.responsibilityCount+' responsibilities on '+date+'.';
+      return '';
+    }
     function ownerControl(value=''){
-      const wrap=document.createElement('div');wrap.className='relative flex items-center gap-2';wrap.dataset.ownerWrap='';
-      const avatar=document.createElement('span');avatar.className='flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white';avatar.dataset.ownerAvatar='';
+      const wrap=document.createElement('div');wrap.className='relative flex items-start gap-2';wrap.dataset.ownerWrap='';
+      const avatar=document.createElement('span');avatar.className='mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white';avatar.dataset.ownerAvatar='';
       const fieldWrap=document.createElement('div');fieldWrap.className='relative min-w-0 flex-1';
       const hidden=document.createElement('input');hidden.type='hidden';hidden.dataset.owner='';
       const input=document.createElement('input');input.type='search';input.autocomplete='off';input.className='field min-w-0';input.placeholder='Search staff';
-      const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.3rem)] z-50 hidden max-h-64 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
+      const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.3rem)] z-50 hidden max-h-80 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
+      const warning=document.createElement('p');warning.className='mt-1 hidden rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[.66rem] font-semibold leading-4 text-amber-900';
+      const eventDate=String(selected?.record?.customer?.eventDate||'').slice(0,10);
       const initial=staffMatch(value);hidden.value=initial?.email||String(value||'').trim();input.value=initial?.name||'';if(value&&!initial)input.placeholder='Previous: '+String(value).slice(0,60);
       const updateAvatar=(staff)=>{
         avatar.innerHTML='';
@@ -254,23 +267,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         else avatar.textContent=String(staff?.name||'—').trim().charAt(0).toUpperCase()||'—';
         avatar.title=staff?(staff.name+(staff.jobTitle?' · '+staff.jobTitle:'')):'Unassigned';
       };
+      const showWarning=(staff)=>{
+        const message=loadWarning(staff,eventDate);
+        warning.textContent=message;
+        warning.classList.toggle('hidden',!message);
+        input.classList.toggle('border-amber-400',Boolean(message));
+      };
       const renderOptions=()=>{
         const q=String(input.value||'').trim().toLowerCase();
         const rows=(payload.staff||[]).filter((s)=>!q||[s.name,s.email,s.jobTitle,s.roleLabel].some((v)=>String(v||'').toLowerCase().includes(q))).slice(0,30);
         menu.innerHTML='<button type="button" data-clear class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-bold text-[var(--koa-ink)]/55 hover:bg-[var(--koa-sand)]"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--koa-sand)]">—</span><span>Unassigned</span></button>'
-          +rows.map((s)=>'<button type="button" data-email="'+escapeHtml(s.email)+'" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[var(--koa-sand)]">'+(s.photoUrl?'<img src="'+escapeHtml(s.photoUrl)+'" alt="" class="h-9 w-9 shrink-0 rounded-full object-cover">':'<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white">'+escapeHtml(String(s.name||'K').charAt(0).toUpperCase())+'</span>')+'<span class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+escapeHtml(s.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+escapeHtml(s.jobTitle||s.roleLabel||'Staff')+'</span></span></button>').join('');
+          +rows.map((s)=>{
+            const load=sameDateLoad(s,eventDate);
+            const badge=load&&load.heavy?'<span class="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[.5rem] font-black uppercase tracking-[.05em] text-amber-900">'+load.responsibilityCount+' same-day</span>':load&&load.responsibilityCount>=3?'<span class="ml-auto shrink-0 rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.05em] text-[var(--koa-clay)]">'+load.responsibilityCount+' same-day</span>':'';
+            return '<button type="button" data-email="'+escapeHtml(s.email)+'" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[var(--koa-sand)]">'+(s.photoUrl?'<img src="'+escapeHtml(s.photoUrl)+'" alt="" class="h-9 w-9 shrink-0 rounded-full object-cover">':'<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white">'+escapeHtml(String(s.name||'K').charAt(0).toUpperCase())+'</span>')+'<span class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+escapeHtml(s.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+escapeHtml(s.jobTitle||s.roleLabel||'Staff')+' · '+Number(s.workload?.totalOpenAssignments||0)+' open</span></span>'+badge+'</button>';
+          }).join('');
         menu.classList.remove('hidden');
-        menu.querySelector('[data-clear]')?.addEventListener('click',()=>{hidden.value='';input.value='';updateAvatar(null);menu.classList.add('hidden');});
+        menu.querySelector('[data-clear]')?.addEventListener('click',()=>{hidden.value='';input.value='';updateAvatar(null);showWarning(null);menu.classList.add('hidden');});
         menu.querySelectorAll('[data-email]').forEach((button)=>button.addEventListener('click',()=>{
           const staff=(payload.staff||[]).find((s)=>s.email===button.dataset.email);if(!staff)return;
-          hidden.value=staff.email;input.value=staff.name;updateAvatar(staff);menu.classList.add('hidden');
+          hidden.value=staff.email;input.value=staff.name;updateAvatar(staff);showWarning(staff);menu.classList.add('hidden');
         }));
       };
       input.addEventListener('focus',renderOptions);
-      input.addEventListener('input',()=>{hidden.value='';updateAvatar(null);renderOptions();});
+      input.addEventListener('input',()=>{hidden.value='';updateAvatar(null);showWarning(null);renderOptions();});
       input.addEventListener('keydown',(event)=>{if(event.key==='Escape')menu.classList.add('hidden');});
       input.addEventListener('blur',()=>setTimeout(()=>menu.classList.add('hidden'),160));
-      updateAvatar(initial);fieldWrap.append(hidden,input,menu);wrap.append(avatar,fieldWrap);return wrap;
+      updateAvatar(initial);showWarning(initial);fieldWrap.append(hidden,input,menu,warning);wrap.append(avatar,fieldWrap);return wrap;
     }
 
     async function api(body){
