@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { hasCapability, requireOperations } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
 type BlogPost = {
@@ -56,7 +56,7 @@ export default async (req: Request, context: Context) => {
     const admin = url.searchParams.get('admin') === '1';
 
     if (admin) {
-      const auth = await requireOperations();
+      const auth = await requireCapability('blog.view');
       if (auth.response) return auth.response;
       return Response.json({ posts: posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) });
     }
@@ -68,7 +68,7 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const auth = await requireOperations();
+  const auth = await requireCapability('blog.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
@@ -76,6 +76,7 @@ export default async (req: Request, context: Context) => {
     const action = payload.action || 'save';
     const posts = await readPosts(context);
     const canManageBlog = hasCapability(auth.user, 'blog.manage');
+    if (!canManageBlog) return Response.json({ error:'Blog management permission required.' }, { status:403 });
 
     if (['delete','restore-legacy'].includes(action) && !canManageBlog) {
       return Response.json({ error: 'Manager permission required for this action.' }, { status: 403 });
