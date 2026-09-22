@@ -4,7 +4,7 @@ import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 const requestedPackage=Astro.url.searchParams.get('package') || '';
 const requestedGuests=Astro.url.searchParams.get('guests') || '';
-const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout title="Big Island Wedding Venue Availability | Koa’s Events" description="Tell Koa’s Events about your Hawaiʻi Island wedding date, guest count, budget and vision." canonical="https://koasevents.com/wedding-inquiry/">
 <Header overlay={false}/>

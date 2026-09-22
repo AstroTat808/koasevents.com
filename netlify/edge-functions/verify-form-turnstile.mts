@@ -59,8 +59,7 @@ function blocked(message = 'Security verification failed. Please return to the f
 }
 
 export default async (req: Request, context: Context) => {
-  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
-  if (!secret) return context.next();
+  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || Netlify.env.get('TURNSTILE_SECRET') || '').trim();
 
   const pathname = new URL(req.url).pathname;
   const expectedForms: Record<string, string[]> = {
@@ -69,6 +68,7 @@ export default async (req: Request, context: Context) => {
   };
   const allowedFormNames = expectedForms[pathname];
   if (!allowedFormNames) return context.next();
+  if (!secret) return blocked('Security verification is temporarily unavailable. Please try again shortly.');
 
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.toLowerCase().includes('application/x-www-form-urlencoded')) {

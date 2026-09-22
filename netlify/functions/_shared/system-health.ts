@@ -613,7 +613,7 @@ export async function readProductionReleases(context:Context,limit=50):Promise<P
   return rows.slice(0,Math.max(1,Math.min(100,limit)));
 }
 
-function featureLabelsForFiles(files:string[]) {
+export function featureLabelsForFiles(files:string[]) {
   const labels=new Set<string>();
   for(const path of files){
     if(path.includes('/admin/staff')||path.includes('admin-staff')||path.includes('custom-roles')) labels.add('User Management');
@@ -633,6 +633,69 @@ function featureLabelsForFiles(files:string[]) {
     if(path.startsWith('.github/')||path==='netlify.toml'||path.startsWith('scripts/')) labels.add('Deployment & QA');
   }
   return [...labels];
+}
+
+export async function compareProductionReleaseCommits(baseCommit:string,headCommit:string) {
+  const base=clean(baseCommit,120);
+  const head=clean(headCommit,120);
+  if(!base||!head) throw new Error('Both release commits are required.');
+  if(base===head) return {
+    baseCommit:base,
+    headCommit:head,
+    status:'identical',
+    aheadBy:0,
+    behindBy:0,
+    totalCommits:0,
+    features:[],
+    commits:[],
+    files:[],
+    behaviorChanges:[],
+  };
+
+  const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  const headers:Record<string,string>={
+    'Accept':'application/vnd.github+json',
+    'User-Agent':'KoaEvents-Health/1.0',
+    ...(githubToken?{Authorization:'Bearer '+githubToken}:{}),
+  };
+  const response=await fetch(
+    'https://api.github.com/repos/AstroTat808/koasevents.com/compare/'+encodeURIComponent(base)+'...'+encodeURIComponent(head),
+    {headers,signal:AbortSignal.timeout(15_000)},
+  );
+  if(!response.ok) throw new Error('GitHub release comparison failed with HTTP '+response.status+'.');
+  const body:any=await response.json();
+  const files=(Array.isArray(body?.files)?body.files:[]).map((file:any)=>({
+    filename:clean(file?.filename,400),
+    status:clean(file?.status,40),
+    additions:Number(file?.additions||0),
+    deletions:Number(file?.deletions||0),
+    changes:Number(file?.changes||0),
+    previousFilename:clean(file?.previous_filename,400),
+  })).filter((file:any)=>file.filename);
+  const commits=(Array.isArray(body?.commits)?body.commits:[]).map((commit:any)=>{
+    const message=clean(commit?.commit?.message,3000);
+    return {
+      sha:clean(commit?.sha,80),
+      title:clean(message.split('\n')[0],300),
+      message,
+      authoredAt:clean(commit?.commit?.author?.date,80),
+      committedAt:clean(commit?.commit?.committer?.date,80),
+    };
+  });
+  const features=featureLabelsForFiles(files.map((file:any)=>file.filename));
+  const behaviorChanges=commits.map((commit:any)=>commit.title).filter(Boolean);
+  return {
+    baseCommit:clean(body?.base_commit?.sha,80)||base,
+    headCommit:clean(body?.merge_base_commit?.sha,80)===head?head:(clean(body?.commits?.at?.(-1)?.sha,80)||head),
+    status:clean(body?.status,40),
+    aheadBy:Number(body?.ahead_by||0),
+    behindBy:Number(body?.behind_by||0),
+    totalCommits:Number(body?.total_commits||commits.length),
+    features,
+    commits,
+    files,
+    behaviorChanges,
+  };
 }
 
 export async function recordProductionRelease(context:Context,input:any) {

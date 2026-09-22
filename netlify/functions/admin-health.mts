@@ -3,6 +3,7 @@ import { hasCapability, requireCapability } from './_shared/admin';
 import {
   applyHealthAlertPolicy,
   cachedDeploymentHistory,
+  compareProductionReleaseCommits,
   calculateIncidents,
   calculateUptime,
   healthComponents,
@@ -32,6 +33,15 @@ export default async (req:Request,context:Context) => {
     if(body?.action==='save-policy'){
       const policy=await saveHealthAlertPolicy(context,body.policy||{},actor);
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
+    if(body?.action==='compare-releases'){
+      try{
+        const comparison=await compareProductionReleaseCommits(String(body.baseCommit||''),String(body.headCommit||''));
+        return Response.json({ok:true,comparison},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({error:error instanceof Error?error.message:'Unable to compare releases.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
     }
 
     const [previous,previousHourly]=await Promise.all([

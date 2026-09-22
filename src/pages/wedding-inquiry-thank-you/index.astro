@@ -2,7 +2,7 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
-const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout noindex title="Your Koa’s Wedding Journey Starts Here" description="Next steps after submitting a wedding inquiry to Koa’s Events." canonical="https://www.koasevents.com/wedding-inquiry-thank-you/">
 <Header overlay={false}/>

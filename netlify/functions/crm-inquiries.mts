@@ -56,7 +56,7 @@ function idSuffix() {
 }
 
 function turnstileSecret() {
-  return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
+  return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || Netlify.env.get('TURNSTILE_SECRET') || '').trim();
 }
 
 function mobileIngestSecret() {
@@ -139,7 +139,14 @@ async function createTurnstileProof(formName: string, email: unknown) {
 
 async function verifyTurnstile(req: Request, token: unknown, expectedAction: string) {
   const secret = turnstileSecret();
-  if (!secret) return { ok: true, configured: false };
+  if (!secret) {
+    return {
+      ok: false,
+      configured: false,
+      error: 'Security verification is temporarily unavailable. Please try again shortly.',
+      codes: ['missing-secret'],
+    };
+  }
 
   const responseToken = cleanText(token, 2048);
   if (!responseToken) return { ok: false, configured: true, error: 'Complete the security check and try again.' };
