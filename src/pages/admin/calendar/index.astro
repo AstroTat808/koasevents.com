@@ -140,13 +140,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:white}
     .calendar-item.task,.calendar-item.timeline{background:var(--koa-ink);color:white}
     .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
-    .week-grid{display:grid;grid-template-columns:6rem repeat(7,minmax(9rem,1fr));min-height:42rem}
-    .week-time-column,.week-day-column{border-right:1px solid var(--koa-line)}
+    .week-grid{display:grid;grid-template-columns:repeat(7,minmax(9.5rem,1fr));min-height:32rem}
+    .week-day-column{border-right:1px solid var(--koa-line)}
     .week-day-column:last-child{border-right:0}
     .week-day-head{min-height:4.4rem;border-bottom:1px solid var(--koa-line);padding:.8rem;background:color-mix(in srgb,var(--koa-sand) 45%,white)}
-    .week-day-body{display:grid;gap:.45rem;padding:.65rem}
-    .week-time-column{background:var(--koa-ivory)}
-    .week-time-label{height:4rem;border-bottom:1px dashed color-mix(in srgb,var(--koa-line) 70%,transparent);padding:.45rem .55rem;font-size:.6rem;font-weight:800;color:color-mix(in srgb,var(--koa-ink) 46%,transparent)}
+    .week-day-body{display:grid;align-content:start;gap:.5rem;padding:.7rem}
     .agenda-group{border-bottom:1px solid var(--koa-line);padding:1rem 0}
     .agenda-group:last-child{border-bottom:0}
     .agenda-date{display:flex;min-width:7.5rem;flex-direction:column}
@@ -294,10 +292,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       weekView.innerHTML='';
       const {gridStart}=rangeForWeek(cursor);
       const wrapper=document.createElement('div');wrapper.className='week-grid';
-      const timeCol=document.createElement('div');timeCol.className='week-time-column';
-      const spacer=document.createElement('div');spacer.className='week-day-head';timeCol.appendChild(spacer);
-      for(let h=7;h<=22;h++){const label=text('div','week-time-label',new Intl.DateTimeFormat('en-US',{hour:'numeric'}).format(new Date(2000,0,1,h)));timeCol.appendChild(label);}
-      wrapper.appendChild(timeCol);
       for(let i=0;i<7;i++){
         const date=addDays(gridStart,i),key=ymd(date);const col=document.createElement('div');col.className='week-day-column';
         const head=document.createElement('button');head.type='button';head.className='week-day-head w-full text-left'+(key===today()?' bg-[var(--koa-amber-light)]/20':'');
@@ -313,9 +307,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderAgendaView(){
       agendaView.innerHTML='';
-      const {start,end}=rangeForMonth(cursor);
+      const monthStart=ymd(new Date(cursor.getFullYear(),cursor.getMonth(),1));
+      const monthEnd=ymd(new Date(cursor.getFullYear(),cursor.getMonth()+1,0));
       const grouped=new Map();
-      (data.items||[]).filter((item)=>item.date>=start&&item.date<=end).forEach((item)=>{const rows=grouped.get(item.date)||[];rows.push(item);grouped.set(item.date,rows);});
+      (data.items||[]).filter((item)=>item.date>=monthStart&&item.date<=monthEnd).forEach((item)=>{const rows=grouped.get(item.date)||[];rows.push(item);grouped.set(item.date,rows);});
       const keys=[...grouped.keys()].sort();
       keys.forEach((key)=>{
         const group=document.createElement('section');group.className='agenda-group flex flex-col gap-3 sm:flex-row';
