@@ -307,8 +307,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
-    const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    const app=document.querySelector('[data-app]');
+        const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
     const connect=document.querySelector('[data-connect]');
     const disconnect=document.querySelector('[data-disconnect]');
@@ -375,7 +374,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let state=null;
     let items=[];
 
-    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.includes('admin'));}
+    function hasAdminAccess(user){return Boolean(user?.capabilities?.includes('quickbooks.view')||user?.permissions?.includes('quickbooks.view'));}
     function when(value){if(!value)return 'None yet';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();}
     function webhookEntities(receipt){return (receipt?.notifications||[]).flatMap((notification)=>notification?.entities||[]);}
     async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'QuickBooks request failed.');return data;}
