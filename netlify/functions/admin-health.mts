@@ -2,6 +2,7 @@ import type { Config, Context } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
 import {
   applyHealthAlertPolicy,
+  beginCreditSaverMeasurement,
   cachedDeploymentHistory,
   compareProductionReleaseCommits,
   calculateIncidents,
@@ -20,13 +21,42 @@ import {
   saveHealthAlertPolicy,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
-import { clearCreditSaverPolicy, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
+import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
   readOffice365SyncAudit,
   readOffice365SyncState,
 } from './_shared/office365-calendar-sync';
+
+function saverModeCredits(control:any,mode:string){
+  if(mode==='paused')return Number(control?.pausedSavingsPerDay||0);
+  if(mode==='saver')return Number(control?.saverSavingsPerDay||0);
+  return 0;
+}
+
+function saverMeasurementInput(baseline:any,targetModes:any,source:string,label:string){
+  const creditUsage=baseline?.creditUsage||{};
+  const currentModes=creditUsage?.saverPolicy?.modes||{};
+  const controls=Array.isArray(creditUsage?.jobControls)?creditUsage.jobControls:[];
+  const changed=controls.some((control:any)=>String(currentModes?.[control.jobId]||'normal')!==String(targetModes?.[control.jobId]||currentModes?.[control.jobId]||'normal'));
+  const predictedSavingsPerDay=controls.reduce((sum:number,control:any)=>{
+    const from=String(currentModes?.[control.jobId]||'normal');
+    const to=String(targetModes?.[control.jobId]||from);
+    return sum+Math.max(0,saverModeCredits(control,to)-saverModeCredits(control,from));
+  },0);
+  return {
+    source,
+    label,
+    changed,
+    modes:targetModes,
+    baselineCredits:Number(creditUsage?.totalEstimatedCredits||0),
+    baselineDailyBurnRate:Number(creditUsage?.projection?.weightedDailyBurnRate||0),
+    predictedSavingsPerDay,
+    productionDeployCount:Number(creditUsage?.productionDeploys||0),
+    cycleStart:String(creditUsage?.cycleStart||''),
+  };
+}
 
 function nextOfficeSyncIso(mode:string,now=new Date()){
   const next=new Date(now);
@@ -273,12 +303,14 @@ export default async (req:Request,context:Context) => {
 
     if(body?.action==='set-credit-saver-mode'){
       try{
-        const policy=await setCreditSaverMode(
-          context,
-          String(body.jobId||'') as any,
-          String(body.mode||'normal') as any,
-          actor,
-        );
+        const baseline=await cachedDeploymentHistory(context);
+        const currentModes=baseline?.creditUsage?.saverPolicy?.modes||{};
+        const jobId=String(body.jobId||'');
+        const mode=String(body.mode||'normal');
+        const targetModes={...currentModes,[jobId]:mode};
+        const measurement=saverMeasurementInput(baseline,targetModes,'manual','Manual scheduled-job mode change');
+        const policy=await setCreditSaverMode(context,jobId as any,mode as any,actor);
+        if(measurement.changed)await beginCreditSaverMeasurement(context,{...measurement,modes:policy.modes});
         return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
       }catch(error){
         return Response.json({error:error instanceof Error?error.message:'Unable to update scheduled-job mode.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
@@ -287,22 +319,44 @@ export default async (req:Request,context:Context) => {
 
     if(body?.action==='apply-credit-saver-plan'){
       try{
+        const baseline=await cachedDeploymentHistory(context);
         const changes=body?.modes&&typeof body.modes==='object'?body.modes:{};
+        const currentModes=baseline?.creditUsage?.saverPolicy?.modes||{};
+        const targetModes={...currentModes,...changes};
+        const measurement=saverMeasurementInput(baseline,targetModes,'automatic-plan','Automatic saver plan');
         const policy=await setCreditSaverModes(context,changes,actor);
+        if(measurement.changed)await beginCreditSaverMeasurement(context,{...measurement,modes:policy.modes});
         return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
       }catch(error){
         return Response.json({error:error instanceof Error?error.message:'Unable to apply credit-saver plan.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
       }
     }
 
+    if(body?.action==='apply-credit-saver-preset'){
+      try{
+        const preset=creditSaverPreset(body?.presetId);
+        if(!preset)return Response.json({error:'Unknown credit-saver preset.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+        const baseline=await cachedDeploymentHistory(context);
+        const measurement=saverMeasurementInput(baseline,preset.modes,'preset',preset.name);
+        const policy=await setCreditSaverModes(context,preset.modes,actor);
+        if(measurement.changed)await beginCreditSaverMeasurement(context,{...measurement,modes:policy.modes});
+        return Response.json({ok:true,policy,preset},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({error:error instanceof Error?error.message:'Unable to apply credit-saver preset.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
     if(body?.action==='set-credit-saver'){
       try{
+        const baseline=await cachedDeploymentHistory(context);
         const policy=await setCreditSaverAction(
           context,
           String(body.actionId||'') as any,
           Boolean(body.enabled),
           actor,
         );
+        const measurement=saverMeasurementInput(baseline,policy.modes,'recommendation','Recommended credit-saver action');
+        if(measurement.changed)await beginCreditSaverMeasurement(context,measurement);
         return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
       }catch(error){
         return Response.json({error:error instanceof Error?error.message:'Unable to update credit-saver policy.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
@@ -310,7 +364,10 @@ export default async (req:Request,context:Context) => {
     }
 
     if(body?.action==='clear-credit-saver'){
+      const baseline=await cachedDeploymentHistory(context);
       const policy=await clearCreditSaverPolicy(context,actor);
+      const measurement=saverMeasurementInput(baseline,policy.modes,'restore','Restore normal operations');
+      if(measurement.changed)await beginCreditSaverMeasurement(context,measurement);
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 

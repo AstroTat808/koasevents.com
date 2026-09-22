@@ -1,7 +1,7 @@
 import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { readCreditSaverPolicy } from './credit-saver';
+import { creditSaverPresets, readCreditSaverPolicy } from './credit-saver';
 
 export type HealthCheck = {
   id: string;
@@ -1413,7 +1413,7 @@ async function fetchNetlifyBandwidthUsage(token:string) {
   }
 }
 
-function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[], creditSnapshots:any[]=[]) {
+function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[], creditSnapshots:any[]=[], saverLearning:any=null) {
   const fallbackWindow=billingCycleWindow();
   const cycleStart=bandwidth?.periodStart && Number.isFinite(Date.parse(bandwidth.periodStart))
     ? bandwidth.periodStart
@@ -1578,7 +1578,8 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     return {name:clean(item?.name,120),cron,runsPerDay:runs};
   }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
 
-  const scheduledCreditPerRun=(scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+  const saverCalibrationFactor=Math.min(2,Math.max(.25,Number(saverLearning?.calibrationFactor||1)));
+  const scheduledCreditPerRun=((scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour)*saverCalibrationFactor;
   const jobDefinitions=[
     {jobId:'post-deploy-verification',functionName:'post-deploy-verification',label:'Post-deploy verification',saverLabel:'Every 30 minutes',normalLabel:'Every 15 minutes',normalRuns:96,saverRuns:48,saverRisk:1,pausedRisk:6,protects:'Hourly System Health continues to monitor production.'},
     {jobId:'quickbooks-reconciliation',functionName:'quickbooks-hourly-reconciliation',label:'QuickBooks fallback reconciliation',saverLabel:'Every 8 hours',normalLabel:'Every 4 hours',normalRuns:6,saverRuns:3,saverRisk:1,pausedRisk:5,protects:'QuickBooks webhooks remain immediate.'},
@@ -1609,7 +1610,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
 
   const office365=scheduleRows.find((item:any)=>item.name==='office365-calendar-sync');
   if(office365){
-    const savingsPerDay=(24*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+    const savingsPerDay=24*scheduledCreditPerRun;
     recommendations.push({
       id:'office365-calendar-sync',
       priority:5,
@@ -1628,7 +1629,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'post-deploy-verification',
         priority:6,
@@ -1643,7 +1644,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       });
     }
     if(scheduleRows.some((item:any)=>item.name==='quickbooks-hourly-reconciliation')){
-      const savingsPerDay=(3*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=3*scheduledCreditPerRun;
       recommendations.push({
         id:'quickbooks-reconciliation',
         priority:7,
@@ -1658,7 +1659,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       });
     }
     if(scheduleRows.some((item:any)=>item.name==='crm-lifecycle')){
-      const savingsPerDay=(2*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=2*scheduledCreditPerRun;
       recommendations.push({
         id:'crm-lifecycle',
         priority:8,
@@ -1692,7 +1693,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
-      const computeSavingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const computeSavingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       const verifierCycleSavings=computeSavingsPerDay*remainingDays;
       recommendations.push({
         id:'post-deploy-verification',
@@ -1710,7 +1711,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const qbRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='quickbooks-hourly-reconciliation');
     if(qbRuns){
       const savedRunsPerDay=3;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'quickbooks-reconciliation',
         priority:3,
@@ -1727,7 +1728,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const lifecycleRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='crm-lifecycle');
     if(lifecycleRuns){
       const savedRunsPerDay=2;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'crm-lifecycle',
         priority:4,
@@ -1805,7 +1806,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:7,
+    version:8,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1867,6 +1868,8 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       functionRequestShare:Math.round(functionRequestShare*1000)/10,
       functionAverageMs:Math.round(functionAverageMs),
       scheduledFunctionAverageMs:Math.round(scheduledAverageMs),
+      saverCalibrationFactor:Math.round(saverCalibrationFactor*1000)/1000,
+      saverCalibrationMeasurements:Number(saverLearning?.validMeasurementCount||0),
       functionMemoryGb:Math.round(memoryGb*1000)/1000,
       scheduledRunsPerDay:scheduleRunsDay,
       scheduledInvocations,
@@ -1967,10 +1970,160 @@ function optimizeCreditSaverPlan(creditUsage:any,policy:any){
   };
 }
 
+
+type CreditSaverMeasurementInput={
+  source:string;
+  label:string;
+  modes:Record<string,string>;
+  baselineCredits:number;
+  baselineDailyBurnRate:number;
+  predictedSavingsPerDay:number;
+  productionDeployCount:number;
+  cycleStart:string;
+};
+
+function normalizedSaverLearning(value:any){
+  return {
+    calibrationFactor:Math.min(2,Math.max(.25,Number(value?.calibrationFactor||1))),
+    validMeasurementCount:Math.max(0,Number(value?.validMeasurementCount||0)),
+    updatedAt:clean(value?.updatedAt,80),
+    active:value?.active&&typeof value.active==='object'?value.active:null,
+    history:Array.isArray(value?.history)?value.history.slice(0,30):[],
+  };
+}
+
+async function readCreditSaverLearning(context:Context){
+  const saved:any=await healthStore(context).get('credits/saver-learning',{type:'json'});
+  return normalizedSaverLearning(saved||{});
+}
+
+async function writeCreditSaverLearning(context:Context,value:any){
+  const normalized=normalizedSaverLearning(value);
+  await healthStore(context).setJSON('credits/saver-learning',normalized);
+  return normalized;
+}
+
+export async function beginCreditSaverMeasurement(context:Context,input:CreditSaverMeasurementInput){
+  const learning=await readCreditSaverLearning(context);
+  const now=new Date().toISOString();
+  const history=[...learning.history];
+  if(learning.active){
+    history.unshift({
+      ...learning.active,
+      status:'superseded',
+      endedAt:now,
+      invalidReason:'Saver settings changed before the measurement window completed.',
+    });
+  }
+  const predicted=Math.max(0,Number(input.predictedSavingsPerDay||0));
+  const active=predicted>0?{
+    id:'CSM-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase(),
+    source:clean(input.source,80)||'manual',
+    label:clean(input.label,160)||'Credit saver plan',
+    startedAt:now,
+    cycleStart:clean(input.cycleStart,80),
+    modes:input.modes||{},
+    baselineCredits:Math.max(0,Number(input.baselineCredits||0)),
+    baselineDailyBurnRate:Math.max(0,Number(input.baselineDailyBurnRate||0)),
+    predictedSavingsPerDay:predicted,
+    productionDeployCountAtStart:Math.max(0,Number(input.productionDeployCount||0)),
+    minimumObservationHours:12,
+    targetObservationHours:24,
+    status:'measuring',
+  }:null;
+  return writeCreditSaverLearning(context,{
+    ...learning,
+    active,
+    history:history.slice(0,30),
+    updatedAt:now,
+  });
+}
+
+async function updateCreditSaverLearning(context:Context,creditUsage:any,deployHistory:any[]){
+  const learning=await readCreditSaverLearning(context);
+  const active:any=learning.active;
+  if(!active)return {
+    ...learning,
+    liveMeasurement:null,
+  };
+
+  const startedMs=Date.parse(String(active.startedAt||''));
+  if(!Number.isFinite(startedMs)){
+    return writeCreditSaverLearning(context,{...learning,active:null,updatedAt:new Date().toISOString()});
+  }
+  const nowMs=Date.now();
+  const elapsedHours=Math.max(0,(nowMs-startedMs)/3600000);
+  const productionDeploysSince=(deployHistory||[]).filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return row?.state==='ready'&&Number.isFinite(published)&&published>startedMs;
+  });
+  const baselineCredits=Math.max(0,Number(active.baselineCredits||0));
+  const currentCredits=Math.max(0,Number(creditUsage?.totalEstimatedCredits||0));
+  const observedCredits=Math.max(0,currentCredits-baselineCredits);
+  const elapsedDays=Math.max(1/24,elapsedHours/24);
+  const observedDailyBurnRate=observedCredits/elapsedDays;
+  const baselineDailyBurnRate=Math.max(0,Number(active.baselineDailyBurnRate||0));
+  const realizedSavingsPerDay=Math.max(0,baselineDailyBurnRate-observedDailyBurnRate);
+  const predictedSavingsPerDay=Math.max(0,Number(active.predictedSavingsPerDay||0));
+  const accuracyRatio=predictedSavingsPerDay>0?realizedSavingsPerDay/predictedSavingsPerDay:null;
+  const liveMeasurement={
+    ...active,
+    elapsedHours:Math.round(elapsedHours*10)/10,
+    observedCredits:Math.round(observedCredits*100)/100,
+    observedDailyBurnRate:Math.round(observedDailyBurnRate*100)/100,
+    realizedSavingsPerDay:Math.round(realizedSavingsPerDay*1000)/1000,
+    predictedSavingsPerDay:Math.round(predictedSavingsPerDay*1000)/1000,
+    accuracyPercent:accuracyRatio==null?null:Math.round(accuracyRatio*1000)/10,
+    productionDeploysSinceStart:productionDeploysSince.length,
+    cleanWindow:productionDeploysSince.length===0,
+  };
+
+  if(productionDeploysSince.length){
+    const history=[{
+      ...liveMeasurement,
+      status:'invalid',
+      endedAt:new Date().toISOString(),
+      invalidReason:'A production deploy occurred during the measurement window, so deploy credits would distort scheduled-job savings.',
+    },...learning.history].slice(0,30);
+    const next=await writeCreditSaverLearning(context,{...learning,active:null,history,updatedAt:new Date().toISOString()});
+    return {...next,liveMeasurement:history[0]};
+  }
+
+  if(elapsedHours<24){
+    return {...learning,liveMeasurement};
+  }
+
+  const boundedRatio=accuracyRatio==null?1:Math.min(2,Math.max(.25,accuracyRatio));
+  const completed={
+    ...liveMeasurement,
+    status:'completed',
+    endedAt:new Date().toISOString(),
+    calibrationRatio:Math.round(boundedRatio*1000)/1000,
+  };
+  const history=[completed,...learning.history].slice(0,30);
+  const valid=history.filter((row:any)=>row?.status==='completed'&&Number.isFinite(Number(row?.calibrationRatio))).slice(0,8);
+  const weighted=valid.reduce((acc:any,row:any,index:number)=>{
+    const weight=Math.max(1,8-index);
+    acc.sum+=Number(row.calibrationRatio)*weight;
+    acc.weight+=weight;
+    return acc;
+  },{sum:0,weight:0});
+  const calibrationFactor=weighted.weight?Math.min(2,Math.max(.25,weighted.sum/weighted.weight)):1;
+  const next=await writeCreditSaverLearning(context,{
+    ...learning,
+    active:null,
+    history,
+    calibrationFactor,
+    validMeasurementCount:valid.length,
+    updatedAt:new Date().toISOString(),
+  });
+  return {...next,liveMeasurement:completed};
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===7 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===8 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -2159,18 +2312,39 @@ export async function cachedDeploymentHistory(context:Context) {
   const postDeployVerification=await readPostDeployVerification(context);
   const bandwidthUsage=await fetchNetlifyBandwidthUsage(netlifyToken);
   const creditSnapshots=((await store.get('credits/history',{type:'json'})) || []) as any[];
+  const saverLearningBefore=await readCreditSaverLearning(context);
   const creditUsage=estimateNetlifyCredits(
     netlifyDeployHistory,
     netlifyPreviewHistory,
     bandwidthUsage,
     current.functionSchedules||[],
     creditSnapshots,
+    saverLearningBefore,
   );
   const creditSaverPolicy=await readCreditSaverPolicy(context);
   creditUsage.saverPolicy=creditSaverPolicy;
   creditUsage.jobControls=(creditUsage.jobControls||[]).map((item:any)=>({
     ...item,
     currentMode:String(creditSaverPolicy?.modes?.[item.jobId]||'normal'),
+  }));
+  const controlById=new Map((creditUsage.jobControls||[]).map((item:any)=>[String(item.jobId),item]));
+  creditUsage.presets=creditSaverPresets().map(preset=>({
+    ...preset,
+    changes:Object.entries(preset.modes).map(([jobId,toMode])=>{
+      const control:any=controlById.get(jobId);
+      const fromMode=String(creditSaverPolicy?.modes?.[jobId]||'normal');
+      const savingsFor=(mode:string)=>mode==='paused'?Number(control?.pausedSavingsPerDay||0):mode==='saver'?Number(control?.saverSavingsPerDay||0):0;
+      return {
+        jobId,
+        label:String(control?.label||jobId),
+        normalLabel:String(control?.normalLabel||'Normal'),
+        saverLabel:String(control?.saverLabel||'Saver'),
+        fromMode,
+        toMode,
+        changed:fromMode!==toMode,
+        estimatedSavingsPerDay:Math.round((savingsFor(String(toMode))-savingsFor(fromMode))*100000)/100000,
+      };
+    }),
   }));
   creditUsage.autoSaverPlan=optimizeCreditSaverPlan(creditUsage,creditSaverPolicy);
   creditUsage.recommendations=(creditUsage.recommendations||[]).map((item:any)=>({
@@ -2193,6 +2367,7 @@ export async function cachedDeploymentHistory(context:Context) {
     ? [compactCreditSnapshot,...creditSnapshots.filter((row:any)=>row!==latestCreditSnapshot)]
     : [compactCreditSnapshot,...creditSnapshots];
   await store.setJSON('credits/history',nextCreditSnapshots.slice(0,800));
+  creditUsage.saverLearning=await updateCreditSaverLearning(context,creditUsage,netlifyDeployHistory);
 
   const result={
     generatedAt,
