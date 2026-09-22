@@ -3,7 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
 import { buildQuickBooksAccountingAudit } from './admin-quickbooks.mts';
 import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sync.ts';
-import { readLatestHealth } from './_shared/system-health';
+import { inspectDeploymentSync, readLatestHealth } from './_shared/system-health';
 
 type Severity='urgent'|'upcoming'|'info';
 type AlertCategory='overdueTasks'|'vendorInsurance'|'accountingMismatches'|'healthWarnings';
@@ -103,11 +103,12 @@ async function computeAlerts(context:Context,user:any){
   const vendorsStore=store(context,'koa-vendors');
   const ops=store(context,'koa-event-ops');
 
-  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth]=await Promise.all([
+  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync]=await Promise.all([
     canCrm?crm.get('tasks/index',{type:'json'}):Promise.resolve([]),
     (canInsurance||canQuickBooks||canCrm)?sales.get('records/index',{type:'json'}):Promise.resolve([]),
     canInsurance?vendorsStore.get('vendors/index',{type:'json'}):Promise.resolve([]),
     canHealth?readLatestHealth(context):Promise.resolve(null),
+    canHealth?inspectDeploymentSync(context):Promise.resolve(null),
   ]);
 
   const tasks:Array<any>=Array.isArray(tasksRaw)?tasksRaw:[];
@@ -193,14 +194,22 @@ async function computeAlerts(context:Context,user:any){
 
   const healthDetails:AlertDetail[]=canHealth&&latestHealth
     ? (Array.isArray(latestHealth?.checks)?latestHealth.checks:[])
-        .filter((check:any)=>!check?.ok || String(check?.severity||'')==='yellow')
+        .filter((check:any)=>{
+          if(String(check?.id||'')==='netlify-github-sync'){
+            return Boolean(deploymentSync && (deploymentSync.severity==='yellow' || deploymentSync.severity==='red'));
+          }
+          return !check?.ok || String(check?.severity||'')==='yellow';
+        })
         .map((check:any)=>{
+          const isDeploySync=String(check?.id||'')==='netlify-github-sync';
           const releaseMeta=[
-            latestHealth?.deployId?'Deploy '+clip(latestHealth.deployId,40):'',
-            latestHealth?.commit?'Commit '+clip(latestHealth.commit,12):'',
+            (isDeploySync?deploymentSync?.deployId:latestHealth?.deployId)?'Deploy '+clip(isDeploySync?deploymentSync?.deployId:latestHealth?.deployId,40):'',
+            (isDeploySync?deploymentSync?.liveCommit:latestHealth?.commit)?'Commit '+clip(isDeploySync?deploymentSync?.liveCommit:latestHealth?.commit,12):'',
           ].filter(Boolean).join(' · ');
-          const severity:Severity=String(check?.severity||'')==='yellow'?'upcoming':'urgent';
-          const baseDetail=clip(check?.detail||('Status '+String(check?.status||'unknown')),170);
+          const liveSeverity=isDeploySync?String(deploymentSync?.severity||''):String(check?.severity||'');
+          const severity:Severity=liveSeverity==='yellow'?'upcoming':'urgent';
+          const sourceDetail=isDeploySync?deploymentSync?.detail:check?.detail;
+          const baseDetail=clip(sourceDetail||('Status '+String(check?.status||'unknown')),170);
           return {
             id:'health:'+clip(check?.id,100),
             category:'healthWarnings' as AlertCategory,
