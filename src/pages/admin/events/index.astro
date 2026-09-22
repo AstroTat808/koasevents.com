@@ -241,16 +241,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         || (payload.staff||[]).find((s)=>raw.includes(String(s.email||'').toLowerCase())||raw.includes(String(s.name||'').toLowerCase()));
     }
     function ownerControl(value=''){
-      const wrap=document.createElement('div');wrap.className='flex items-center gap-2';wrap.dataset.ownerWrap='';
-      const avatar=document.createElement('span');avatar.className='flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white';avatar.dataset.ownerAvatar='';
-      const input=document.createElement('input');input.className='field min-w-0';input.dataset.owner='';input.placeholder='Owner';input.value=value||'';
-      const update=()=>{
-        const s=staffMatch(input.value);avatar.innerHTML='';
-        if(s?.photoUrl){const img=document.createElement('img');img.src=s.photoUrl;img.alt='';img.className='h-full w-full object-cover';avatar.appendChild(img);}
-        else avatar.textContent=String(s?.name||input.value||'—').trim().charAt(0).toUpperCase()||'—';
-        avatar.title=s?(s.name+(s.jobTitle?' · '+s.jobTitle:'')):'';
+      const wrap=document.createElement('div');wrap.className='relative flex items-center gap-2';wrap.dataset.ownerWrap='';
+      const avatar=document.createElement('span');avatar.className='flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white';avatar.dataset.ownerAvatar='';
+      const fieldWrap=document.createElement('div');fieldWrap.className='relative min-w-0 flex-1';
+      const hidden=document.createElement('input');hidden.type='hidden';hidden.dataset.owner='';
+      const input=document.createElement('input');input.type='search';input.autocomplete='off';input.className='field min-w-0';input.placeholder='Search staff';
+      const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.3rem)] z-50 hidden max-h-64 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
+      const initial=staffMatch(value);hidden.value=initial?.email||'';input.value=initial?.name||'';if(value&&!initial)input.placeholder='Previous: '+String(value).slice(0,60);
+      const updateAvatar=(staff)=>{
+        avatar.innerHTML='';
+        if(staff?.photoUrl){const img=document.createElement('img');img.src=staff.photoUrl;img.alt='';img.className='h-full w-full object-cover';avatar.appendChild(img);}
+        else avatar.textContent=String(staff?.name||'—').trim().charAt(0).toUpperCase()||'—';
+        avatar.title=staff?(staff.name+(staff.jobTitle?' · '+staff.jobTitle:'')):'Unassigned';
       };
-      input.addEventListener('input',update);update();wrap.append(avatar,input);return wrap;
+      const renderOptions=()=>{
+        const q=String(input.value||'').trim().toLowerCase();
+        const rows=(payload.staff||[]).filter((s)=>!q||[s.name,s.email,s.jobTitle,s.roleLabel].some((v)=>String(v||'').toLowerCase().includes(q))).slice(0,30);
+        menu.innerHTML='<button type="button" data-clear class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-bold text-[var(--koa-ink)]/55 hover:bg-[var(--koa-sand)]"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--koa-sand)]">—</span><span>Unassigned</span></button>'
+          +rows.map((s)=>'<button type="button" data-email="'+escapeHtml(s.email)+'" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[var(--koa-sand)]">'+(s.photoUrl?'<img src="'+escapeHtml(s.photoUrl)+'" alt="" class="h-9 w-9 shrink-0 rounded-full object-cover">':'<span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-[.62rem] font-black text-white">'+escapeHtml(String(s.name||'K').charAt(0).toUpperCase())+'</span>')+'<span class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+escapeHtml(s.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+escapeHtml(s.jobTitle||s.roleLabel||'Staff')+'</span></span></button>').join('');
+        menu.classList.remove('hidden');
+        menu.querySelector('[data-clear]')?.addEventListener('click',()=>{hidden.value='';input.value='';updateAvatar(null);menu.classList.add('hidden');});
+        menu.querySelectorAll('[data-email]').forEach((button)=>button.addEventListener('click',()=>{
+          const staff=(payload.staff||[]).find((s)=>s.email===button.dataset.email);if(!staff)return;
+          hidden.value=staff.email;input.value=staff.name;updateAvatar(staff);menu.classList.add('hidden');
+        }));
+      };
+      input.addEventListener('focus',renderOptions);
+      input.addEventListener('input',()=>{hidden.value='';updateAvatar(null);renderOptions();});
+      input.addEventListener('keydown',(event)=>{if(event.key==='Escape')menu.classList.add('hidden');});
+      input.addEventListener('blur',()=>setTimeout(()=>menu.classList.add('hidden'),160));
+      updateAvatar(initial);fieldWrap.append(hidden,input,menu);wrap.append(avatar,fieldWrap);return wrap;
     }
 
     async function api(body){

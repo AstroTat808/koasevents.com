@@ -111,6 +111,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               </div>
             </section>
 
+            <section class="mb-6 rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-5 shadow-sm">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Team</p>
+                  <h2 class="display mt-2 text-3xl">Staff Directory</h2>
+                  <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">Active Koa’s staff, their working areas, and current CRM or Event Ops assignments.</p>
+                </div>
+                <input data-staff-directory-search type="search" placeholder="Search staff…" class="w-full rounded-xl border border-[var(--koa-line)] px-4 py-2.5 text-sm sm:w-64" />
+              </div>
+              <div data-staff-directory-list class="mt-4 grid gap-3 lg:grid-cols-2"></div>
+              <p data-staff-directory-message class="mt-3 text-xs text-[var(--koa-ink)]/45"></p>
+            </section>
+
             <div data-app-grid class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <a data-capability="crm.view" href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates and activity.</span></a>
               <a data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups and sales reporting.</span></a>
@@ -168,6 +181,42 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const profilePhotoForm=document.querySelector('[data-profile-photo-form]');
     const profilePhotoPreview=document.querySelector('[data-profile-photo-preview]');
     const profilePhotoMessage=document.querySelector('[data-profile-photo-message]');
+    const staffDirectoryList=document.querySelector('[data-staff-directory-list]');
+    const staffDirectorySearch=document.querySelector('[data-staff-directory-search]');
+    const staffDirectoryMessage=document.querySelector('[data-staff-directory-message]');
+    let staffDirectory=[];
+
+    function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+    function renderStaffDirectory(){
+      if(!staffDirectoryList)return;
+      const q=String(staffDirectorySearch?.value||'').trim().toLowerCase();
+      const rows=staffDirectory.filter((staff)=>!q||[staff.name,staff.email,staff.jobTitle,staff.roleLabel,...(staff.areas||[])].some((value)=>String(value||'').toLowerCase().includes(q)));
+      staffDirectoryList.innerHTML=rows.length?rows.map((staff)=>{
+        const avatar=staff.photoUrl
+          ? '<img src="'+esc(staff.photoUrl)+'" alt="" class="h-12 w-12 shrink-0 rounded-full object-cover ring-1 ring-[var(--koa-line)]">'
+          : '<span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-sm font-black text-white">'+esc(String(staff.name||'K').charAt(0).toUpperCase())+'</span>';
+        const areas=(staff.areas||[]).slice(0,4).map((area)=>'<span class="rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.52rem] font-black uppercase tracking-[.05em] text-[var(--koa-forest)]">'+esc(area)+'</span>').join('');
+        const assignments=(staff.assignments||[]).slice(0,3).map((assignment)=>'<a href="'+esc(assignment.href||'#')+'" class="block rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 hover:border-[var(--koa-clay)]"><strong class="block truncate text-xs text-[var(--koa-forest)]">'+esc(assignment.label||'Assignment')+'</strong><span class="mt-0.5 block truncate text-[.62rem] text-[var(--koa-ink)]/48">'+esc(assignment.detail||String(assignment.type||'').replaceAll('_',' '))+'</span></a>').join('');
+        const more=Math.max(0,Number(staff.assignmentCount||0)-3);
+        return '<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><div class="flex items-start gap-3">'+avatar+'<div class="min-w-0 flex-1"><div class="flex flex-wrap items-start justify-between gap-2"><div class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+esc(staff.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+esc(staff.jobTitle||staff.roleLabel||'Staff')+'</span></div><span class="rounded-full border border-[var(--koa-line)] bg-white px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(staff.roleLabel||staff.role||'Staff')+'</span></div><div class="mt-2 flex flex-wrap gap-1.5">'+areas+'</div>'+(assignments?'<div class="mt-3 grid gap-1.5">'+assignments+(more?'<p class="px-1 text-[.6rem] font-bold text-[var(--koa-ink)]/40">+'+more+' more current assignment'+(more===1?'':'s')+'</p>':'')+'</div>':'<p class="mt-3 text-xs text-[var(--koa-ink)]/42">No current CRM or Event Ops assignments.</p>')+'</div></div></article>';
+      }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50 lg:col-span-2">No active staff match this search.</p>';
+      if(staffDirectoryMessage)staffDirectoryMessage.textContent=rows.length+' active staff member'+(rows.length===1?'':'s')+' shown.';
+    }
+    async function loadStaffDirectory(){
+      if(!staffDirectoryList)return;
+      if(staffDirectoryMessage)staffDirectoryMessage.textContent='Loading staff directory…';
+      try{
+        const response=await fetch('/api/staff/directory',{cache:'no-store'});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to load staff directory.');
+        staffDirectory=data.staff||[];
+        renderStaffDirectory();
+      }catch(err){
+        staffDirectoryList.innerHTML='';
+        if(staffDirectoryMessage)staffDirectoryMessage.textContent=err instanceof Error?err.message:'Unable to load staff directory.';
+      }
+    }
+    staffDirectorySearch?.addEventListener('input',renderStaffDirectory);
 
     async function updateHealthWarning(session){
       const warning=document.querySelector('[data-health-warning]');
@@ -251,6 +300,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       });
       staffUi?.classList.remove('hidden');
       updateHealthWarning(session);
+      loadStaffDirectory();
     }
 
     async function refreshSession(){
