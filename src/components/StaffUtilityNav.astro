@@ -1,0 +1,122 @@
+---
+---
+
+<nav
+  data-workspace-nav
+  class="hidden sticky top-0 z-50 border-b border-[var(--koa-line)] bg-white/95 shadow-sm backdrop-blur"
+  aria-label="Koa’s workspace navigation"
+>
+  <div class="container-shell flex items-center gap-2 overflow-x-auto py-2.5">
+    <span
+      data-workspace-role
+      class="mr-1 shrink-0 rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"
+    ></span>
+
+    <a data-workspace-link data-capability="admin.dashboard.view" href="/admin/" class="workspace-nav-link">Admin Home</a>
+    <a data-workspace-link href="/staff/" class="workspace-nav-link workspace-nav-home">Staff Home</a>
+    <a data-workspace-link data-capability="crm.view" href="/admin/crm/" class="workspace-nav-link">Business CRM</a>
+    <a data-workspace-link data-capability="sales.view" href="/admin/quotes/" class="workspace-nav-link">Sales CRM</a>
+    <a data-workspace-link data-capability="events.view" href="/admin/events/" class="workspace-nav-link">Event Ops</a>
+    <a data-workspace-link data-capability="calendar.view" href="/admin/calendar/" class="workspace-nav-link">Master Calendar</a>
+    <a data-workspace-link data-capability="vendors.view" href="/admin/vendors/" class="workspace-nav-link">Vendor CRM</a>
+    <a data-workspace-link data-capability="insurance.view" href="/admin/insurance/" class="workspace-nav-link">Insurance</a>
+    <a data-workspace-link data-capability="quickbooks.view" href="/admin/quickbooks/" class="workspace-nav-link">QuickBooks</a>
+    <a data-workspace-link data-capability="blog.view" href="/admin/blog/" class="workspace-nav-link">Blog</a>
+    <a data-workspace-link data-capability="gallery.view" href="/admin/gallery/" class="workspace-nav-link">Gallery</a>
+    <a data-workspace-link data-capability="seo.view" href="/admin/seo/" class="workspace-nav-link">Local SEO</a>
+    <a data-workspace-link data-capability="security.view" href="/admin/security/" class="workspace-nav-link">Security</a>
+    <a data-workspace-link data-capability="health.view" href="/admin/health/" class="workspace-nav-link">System Health</a>
+    <a data-workspace-link data-capability="users.manage" href="/admin/staff/" class="workspace-nav-link">User Management</a>
+  </div>
+</nav>
+
+<style>
+  .workspace-nav-link {
+    flex: 0 0 auto;
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: white;
+    padding: .55rem .8rem;
+    color: var(--koa-forest);
+    font-size: .6rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    line-height: 1;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .workspace-nav-link:hover {
+    border-color: color-mix(in srgb, var(--koa-forest) 45%, var(--koa-line));
+    background: var(--koa-sand);
+  }
+
+  .workspace-nav-home {
+    background: var(--koa-forest);
+    border-color: var(--koa-forest);
+    color: white;
+  }
+
+  .workspace-nav-link[aria-current="page"] {
+    background: var(--koa-clay);
+    border-color: var(--koa-clay);
+    color: white;
+  }
+</style>
+
+<script>
+  import { getAdminSession } from '../lib/admin-session';
+
+  const nav = document.querySelector('[data-workspace-nav]');
+
+  function normalizedPath(value) {
+    const path = String(value || '/').split('?')[0].split('#')[0];
+    return path.endsWith('/') ? path : path + '/';
+  }
+
+  function roleLabel(role) {
+    const labels = {
+      admin: 'Administrator',
+      manager: 'Manager',
+      sales: 'Sales Rep',
+      event_coordinator: 'Event Coordinator',
+      vendor_manager: 'Vendor Manager',
+      content_editor: 'Content Editor',
+      accounting: 'Accounting',
+      read_only: 'Read Only',
+      custom: 'Custom Role',
+    };
+    return labels[role] || String(role || 'Staff').replaceAll('_', ' ');
+  }
+
+  async function showWorkspaceNav() {
+    if (!(nav instanceof HTMLElement)) return;
+
+    const session = await getAdminSession();
+    if (!session || session.accessBlocked) return;
+
+    const capabilities = new Set(session.capabilities || session.permissions || []);
+    const currentPath = normalizedPath(window.location.pathname);
+
+    nav.querySelectorAll('[data-workspace-link]').forEach((node) => {
+      if (!(node instanceof HTMLAnchorElement)) return;
+
+      const required = node.dataset.capability;
+      const allowed = !required || capabilities.has(required);
+      node.classList.toggle('hidden', !allowed);
+
+      if (allowed && normalizedPath(node.getAttribute('href')) === currentPath) {
+        node.setAttribute('aria-current', 'page');
+      } else {
+        node.removeAttribute('aria-current');
+      }
+    });
+
+    const role = nav.querySelector('[data-workspace-role]');
+    if (role) role.textContent = roleLabel(session.role);
+
+    nav.classList.remove('hidden');
+  }
+
+  showWorkspaceNav();
+</script>
