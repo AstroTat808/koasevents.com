@@ -707,6 +707,32 @@ export async function compareProductionReleaseCommits(baseCommit:string,headComm
     behaviorChanges:[],
   };
 
+  let netlifyDeployHistory:any[]=[];
+  if(netlifyToken){
+    try{
+      const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
+      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=40',{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const rows:any[]=await response.json();
+        netlifyDeployHistory=rows
+          .filter((row:any)=>clean(row?.context,40)==='production')
+          .map((row:any)=>({
+            deployId:clean(row?.id,120),
+            commit:clean(row?.commit_ref,80),
+            state:clean(row?.state,40),
+            title:clean(row?.title,300),
+            createdAt:clean(row?.created_at,80),
+            publishedAt:clean(row?.published_at,80),
+            deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
+            errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
+          }));
+      }
+    }catch{}
+  }
+
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   const headers:Record<string,string>={
     'Accept':'application/vnd.github+json',
@@ -946,6 +972,49 @@ export async function savePostDeployVerification(context:Context,record:any) {
   return record;
 }
 
+function normalizedDeployRootCause(value: unknown) {
+  const raw=clean(value,1000).replace(/\s+/g,' ').trim();
+  if(!raw) return 'Unknown deployment failure';
+  if(/build script returned non-zero exit code:\s*2/i.test(raw)) return 'Build script exited with code 2';
+  if(/build script returned non-zero exit code/i.test(raw)) return raw.replace(/^.*?(Build script returned non-zero exit code[^.]*).*$/i,'$1');
+  if(/build command failed|command failed/i.test(raw)) return 'Build command failed';
+  if(/dependency|npm|package/i.test(raw) && /fail|error/i.test(raw)) return 'Dependency / package installation failure';
+  if(/timeout|timed out/i.test(raw)) return 'Build timed out';
+  return raw.slice(0,220);
+}
+
+function groupConsecutiveDeployFailures(rows:any[]) {
+  const sorted=[...(rows||[])].sort((a,b)=>Date.parse(String(b.createdAt||''))-Date.parse(String(a.createdAt||'')));
+  const groups:any[]=[];
+  let active:any=null;
+  for(const row of sorted){
+    if(row.state!=='error'&&row.state!=='failed'){
+      active=null;
+      continue;
+    }
+    const rootCause=normalizedDeployRootCause(row.errorMessage||row.title||'Unknown deployment failure');
+    if(active&&active.rootCause===rootCause){
+      active.count+=1;
+      active.firstAt=row.createdAt||active.firstAt;
+      active.commits.push(row.commit);
+      active.deployIds.push(row.deployId);
+      active.titles.push(row.title);
+      continue;
+    }
+    active={
+      rootCause,
+      count:1,
+      firstAt:row.createdAt||'',
+      lastAt:row.createdAt||'',
+      commits:[row.commit].filter(Boolean),
+      deployIds:[row.deployId].filter(Boolean),
+      titles:[row.title].filter(Boolean),
+    };
+    groups.push(active);
+  }
+  return groups.slice(0,12);
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
@@ -1075,6 +1144,7 @@ export async function cachedDeploymentHistory(context:Context) {
     row.commit===current.commit && row.event==='push' && row.branch==='main'
   )||null;
   const failedBuilds=history.filter(row=>row.conclusion==='failure');
+  const failedDeployGroups=groupConsecutiveDeployFailures(netlifyDeployHistory);
   const deploymentHealthy=Boolean(
     current.commit &&
     current.deployId &&
@@ -1092,6 +1162,8 @@ export async function cachedDeploymentHistory(context:Context) {
     lastSuccessfulQa,
     latestQaForCurrentDeploy,
     failedBuilds,
+    failedDeployGroups,
+    netlifyDeployHistory,
     history,
   };
   await store.setJSON('deployments/cache',result);

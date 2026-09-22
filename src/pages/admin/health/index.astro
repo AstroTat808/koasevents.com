@@ -65,6 +65,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div data-release-timeline class="mt-3 grid gap-3"></div>
           </div>
+          <div class="mt-6">
+            <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Grouped failed deploys</p>
+            <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Consecutive production failures with the same underlying error are grouped into one incident-style row.</p>
+            <div data-failed-deploy-groups class="mt-3 grid gap-3"></div>
+          </div>
           <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Recent deployment QA</p><div data-deploy-history class="mt-3 grid gap-3"></div></div>
         </section>
 
@@ -180,6 +185,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const results=document.querySelector('[data-results]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
+    const failedDeployGroups=document.querySelector('[data-failed-deploy-groups]');
     const releaseTimeline=document.querySelector('[data-release-timeline]');
     const releaseDialog=document.querySelector('[data-release-dialog]');
     const releaseTitle=document.querySelector('[data-release-title]');
@@ -491,6 +497,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       latestReleases=deployments.releaseTimeline||[];
       renderReleaseTimeline();
       populateCompareSelectors();
+
+      failedDeployGroups.innerHTML='';
+      const deployGroups=deployments.failedDeployGroups||[];
+      deployGroups.forEach((group)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-red-200 bg-red-50 p-4';
+        const commits=(group.commits||[]).filter(Boolean);
+        const titles=(group.titles||[]).filter(Boolean);
+        card.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-red-700">Same root cause</p><strong class="mt-1 block text-sm text-red-950"></strong></div><span class="rounded-full bg-red-700 px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] text-white"></span></div><p data-group-window class="mt-2 text-xs text-red-900/65"></p><details class="mt-3 rounded-lg border border-red-200 bg-white/70 p-3"><summary class="cursor-pointer text-xs font-semibold text-red-900">Affected deploys / commits</summary><pre data-group-details class="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-[.68rem] text-red-900/65"></pre></details>';
+        card.querySelector('strong').textContent=group.rootCause||'Unknown deployment failure';
+        card.querySelector('span').textContent=String(group.count||1)+' failed deploy'+(Number(group.count||1)===1?'':'s');
+        const first=group.firstAt?new Date(group.firstAt).toLocaleString():'';
+        const last=group.lastAt?new Date(group.lastAt).toLocaleString():'';
+        card.querySelector('[data-group-window]').textContent=(first&&last&&first!==last)?('Observed '+first+' through '+last):('Observed '+(last||first||'unknown time'));
+        card.querySelector('[data-group-details]').textContent=[
+          ...commits.map((commit,index)=>String(commit||'').slice(0,12)+(titles[index]?' · '+titles[index]:'')),
+          ...(group.deployIds||[]).map((id)=>'Deploy '+id),
+        ].join('\n');
+        failedDeployGroups.appendChild(card);
+      });
+      if(!deployGroups.length)failedDeployGroups.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No grouped production deploy failures are available.</p>';
 
       deployHistory.innerHTML='';
       const rows=deployments.history||[];

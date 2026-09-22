@@ -7,6 +7,7 @@ on:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
+      - 'scripts/build_safety_check.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -20,6 +21,7 @@ on:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
+      - 'scripts/build_safety_check.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -67,6 +69,8 @@ jobs:
           python-version: '3.12'
       - name: Install site dependencies
         run: npm install --no-audit --no-fund
+      - name: Structural build-safety gate
+        run: npm run build:safety
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules

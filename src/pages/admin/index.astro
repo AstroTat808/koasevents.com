@@ -13,6 +13,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <p class="eyebrow text-[var(--koa-clay)]">Accept your invitation</p>
               <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/62">Create the password you’ll use to sign in to Koa’s Content Admin.</p>
             </div>
+            <label class="grid gap-2 text-sm font-semibold">Administrator email<input data-invite-email name="email" type="email" autocomplete="email" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="chris@sibel.org" /><span class="text-xs font-normal leading-5 text-[var(--koa-ink)]/48">If this is an older invitation, Koa’s will use this email to repair the approved administrator account and send a fresh secure reset link.</span></label>
             <label class="grid gap-2 text-sm font-semibold">New password<input name="password" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <label class="grid gap-2 text-sm font-semibold">Confirm password<input name="confirmPassword" type="password" minlength="8" autocomplete="new-password" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             <button class="rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Create account</button>
@@ -189,6 +190,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         if (result?.type === 'invite' && result.token) {
           inviteToken = result.token;
           inviteEmail = emailFromToken(result.token);
+          const inviteEmailInput = document.querySelector('[data-invite-email]');
+          if (inviteEmailInput && inviteEmail) inviteEmailInput.value = inviteEmail;
           showAuthState(null);
           return;
         }
@@ -213,6 +216,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     inviteForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const data = new FormData(inviteForm);
+      const submittedEmail = String(data.get('email') || inviteEmail || '').trim().toLowerCase();
       const password = String(data.get('password') || '');
       const confirmPassword = String(data.get('confirmPassword') || '');
 
@@ -240,7 +244,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const raw = err instanceof Error ? err.message : '';
         const status = Number(err?.status || err?.cause?.status || 0);
         const staleInvite = status === 404 || /user not found|expired|invalid.*token|invite/i.test(raw);
-        const approvedEmail = approvedAdminEmails.has(inviteEmail) ? inviteEmail : '';
+        const approvedEmail = approvedAdminEmails.has(submittedEmail)
+          ? submittedEmail
+          : (approvedAdminEmails.has(inviteEmail) ? inviteEmail : '');
         if (staleInvite && approvedEmail) {
           try {
             await repairApprovedAdminInvite(approvedEmail);
@@ -260,7 +266,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           }
         }
         if (inviteError) {
-          inviteError.textContent = raw || 'Unable to accept the invitation.';
+          if (staleInvite && !approvedEmail) {
+            inviteError.textContent = 'This invitation is stale. Enter one of the approved administrator emails above (chris@sibel.org or koasadmin@koasevents.com), then press Create account again. Koa’s will repair the account and send a fresh secure password-reset link.';
+          } else {
+            inviteError.textContent = raw || 'Unable to accept the invitation.';
+          }
           inviteError.classList.remove('hidden');
         }
       } finally {

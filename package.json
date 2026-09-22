@@ -7,7 +7,9 @@
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "check": "astro check"
+    "check": "astro check",
+    "build:safety": "node scripts/build_safety_check.mjs",
+    "prebuild": "npm run build:safety"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
