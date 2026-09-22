@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireOperations } from './_shared/admin';
+import { requireCapability } from './_shared/admin';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -77,7 +77,7 @@ function basicChecklist(eventDate:string){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireOperations();if(auth.response)return auth.response;
+  const auth=await requireCapability('calendar.view');if(auth.response)return auth.response;
   if(req.method!=='GET')return new Response('Method not allowed',{status:405});
 
   const url=new URL(req.url);
