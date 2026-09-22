@@ -78,7 +78,7 @@ function sanitize(body:any,current:any={}){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireCapability('vendors.view'); if(auth.response)return auth.response;
+  const auth=await requireCapability('vendors.view', req); if(auth.response)return auth.response;
   const store=storeFor(context);
   const vendors=await list(store,'vendors/index');
   if(req.method==='GET'){
