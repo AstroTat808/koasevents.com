@@ -1129,6 +1129,11 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
   const fullCycleDailyBurnRate=totalCredits/projectionElapsedDays;
 
   const recentCutoff=Math.max(startMs,nowMs-7*86400000);
+  const recentSuccessful=successful.filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return Number.isFinite(published)&&published>=recentCutoff&&published<=nowMs;
+  });
+  const recentWindowDays=Math.max(1,(Math.min(nowMs,endMs)-recentCutoff)/86400000);
   const snapshotRows=(creditSnapshots||[])
     .filter((row:any)=>
       String(row?.cycleStart||'')===String(cycleStart)
@@ -1153,11 +1158,6 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     recentDailyBurnRate=delta/Math.max(0.25,snapshotSpanDays);
     recentRateSource='stored credit snapshots';
   }else{
-    const recentSuccessful=successful.filter((row:any)=>{
-      const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
-      return Number.isFinite(published)&&published>=recentCutoff&&published<=nowMs;
-    });
-    const recentWindowDays=Math.max(1,(Math.min(nowMs,endMs)-recentCutoff)/86400000);
     const recentDeployRate=(recentSuccessful.length*rates.productionDeploy)/recentWindowDays;
     const nonDeployRate=Math.max(0,totalCredits-deployCredits)/projectionElapsedDays;
     recentDailyBurnRate=recentDeployRate+nonDeployRate;
@@ -1181,6 +1181,124 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     ? null
     : new Date(nowMs+daysUntilExhausted*86400000).toISOString();
 
+  const chartWindowStart=Math.max(startMs,nowMs-29*86400000);
+  const actualByDay=new Map<string,any>();
+  for(const row of creditSnapshots||[]){
+    const atMs=Date.parse(String(row?.at||''));
+    const credits=Number(row?.totalEstimatedCredits);
+    if(!Number.isFinite(atMs)||!Number.isFinite(credits)||atMs<chartWindowStart||atMs>nowMs) continue;
+    const day=new Date(atMs).toISOString().slice(0,10);
+    const previous=actualByDay.get(day);
+    if(!previous||Date.parse(String(previous.at))<atMs){
+      actualByDay.set(day,{at:new Date(atMs).toISOString(),credits:Math.round(credits*100)/100});
+    }
+  }
+  const currentDay=new Date(nowMs).toISOString().slice(0,10);
+  actualByDay.set(currentDay,{at:new Date(nowMs).toISOString(),credits:totalCredits});
+  const actualPoints=[...actualByDay.values()].sort((a:any,b:any)=>Date.parse(a.at)-Date.parse(b.at));
+
+  const projectionPoints:any[]=[{at:new Date(nowMs).toISOString(),credits:totalCredits}];
+  const projectionDays=Math.max(0,Math.min(30,Math.ceil(remainingDays)));
+  for(let day=1;day<=projectionDays;day+=1){
+    const atMs=Math.min(endMs,nowMs+day*86400000);
+    const credits=Math.round((totalCredits+weightedDailyBurnRate*((atMs-nowMs)/86400000))*100)/100;
+    projectionPoints.push({at:new Date(atMs).toISOString(),credits});
+    if(atMs>=endMs) break;
+  }
+
+  const projectedOverAllowance=projectedEndOfCycleCredits>monthlyAllowance;
+  const excessCredits=Math.max(0,projectedEndOfCycleCredits-monthlyAllowance);
+  const requiredDailyReduction=projectedOverAllowance&&remainingDays>0
+    ? excessCredits/remainingDays
+    : 0;
+  const recentDeploysPerDay=recentSuccessful.length/recentWindowDays;
+  const recommendations:any[]=[];
+
+  if(projectedOverAllowance){
+    const deploySavingsPerDay=Math.max(0,(recentDeploysPerDay-1)*rates.productionDeploy);
+    recommendations.push({
+      id:'production-deploys',
+      priority:1,
+      title:'Pause nonessential production deploys and batch releases',
+      detail:'Keep development in Deploy Previews and consolidate approved changes into at most one production release per day until the forecast returns below the allowance.',
+      impact:deploySavingsPerDay>0
+        ? 'At the recent release pace, limiting production to one release/day could avoid about '+Math.round(deploySavingsPerDay*100)/100+' credits/day.'
+        : 'Every avoided production release saves '+rates.productionDeploy+' credits.',
+      protects:'Deploy Previews, CRM, QuickBooks webhooks, Turnstile, Resend, and System Health remain available.',
+    });
+
+    const scheduleRows=(schedules||[]).map((item:any)=>{
+      const cron=clean(item?.cron,80);
+      let runs=0;
+      if(cron==='@hourly') runs=24;
+      else {
+        let match=cron.match(/^\*\/(\d+) \* \* \* \*$/);
+        if(match) runs=1440/Math.max(1,Number(match[1]));
+        else {
+          match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
+          if(match) runs=24/Math.max(1,Number(match[1]));
+          else if(/^0 \d{1,2} \* \* \*$/.test(cron)) runs=1;
+        }
+      }
+      return {name:clean(item?.name,120),cron,runsPerDay:runs};
+    }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
+    const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
+    if(verifier&&verifier.runsPerDay>48){
+      const savedRunsPerDay=verifier.runsPerDay/2;
+      const computeSavingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'post-deploy-verification',
+        priority:2,
+        title:'Temporarily reduce post-deploy verification to every 30 minutes',
+        detail:'The verifier is the highest-frequency scheduled job. During a credit-risk period, moving it from every 15 minutes to every 30 minutes cuts its scheduled invocations in half without disabling verification.',
+        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day'+(computeSavingsPerDay>0?' (~'+Math.round(computeSavingsPerDay*1000)/1000+' estimated compute credits/day under current runtime assumptions).':'.'),
+        protects:'Keep hourly System Health, lead-response reminders, QuickBooks webhooks, and the four-hour reconciliation fallback unchanged.',
+      });
+    }
+
+    const componentById=new Map(components.map((item:any)=>[item.id,item]));
+    const bandwidthComponent:any=componentById.get('bandwidth');
+    const requestComponent:any=componentById.get('requests');
+    const computeComponent:any=componentById.get('compute');
+    if(Number(bandwidthComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'bandwidth',
+        priority:3,
+        title:'Reduce high-bandwidth page loads before lowering business automation',
+        detail:'Keep the responsive Image CDN path enabled, lazy-load gallery/blog media, and investigate the highest-transfer public paths before changing CRM or payment workflows.',
+        impact:'Bandwidth is currently a material share of estimated credit use.',
+        protects:'No effect on CRM, QuickBooks, Turnstile, Resend, or client data.',
+      });
+    }else if(Number(computeComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'compute',
+        priority:3,
+        title:'Review nonessential scheduled compute before core integrations',
+        detail:'Start with high-frequency verification/maintenance jobs. Do not disable QuickBooks webhooks, Turnstile validation, Resend webhooks, or the core hourly health monitor.',
+        impact:'Functions compute is currently a material share of estimated credit use.',
+        protects:'Payment, security, email, and core health event processing stay intact.',
+      });
+    }else if(Number(requestComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'requests',
+        priority:3,
+        title:'Reduce repeat requests with caching and on-demand refresh',
+        detail:'Prefer cached dashboard data and user-triggered refreshes over background polling. Keep webhook endpoints event-driven.',
+        impact:'Web requests are currently a material share of estimated credit use.',
+        protects:'Webhook-based CRM, QuickBooks, Resend, and security events remain immediate.',
+      });
+    }
+
+    recommendations.push({
+      id:'reduction-target',
+      priority:4,
+      title:'Hit the daily reduction target',
+      detail:'The current forecast needs roughly '+Math.round(requiredDailyReduction*100)/100+' fewer credits/day for the remainder of this billing cycle to finish at or below the '+monthlyAllowance+'-credit allowance.',
+      impact:'Projected overage: '+Math.round(excessCredits*100)/100+' credits if the weighted burn rate continues.',
+      protects:'Use this as the target when deciding which optional releases or jobs to defer.',
+    });
+  }
+
   const previewFirstEnabledAt=clean(
     Netlify.env.get('KOA_NETLIFY_PREVIEW_FIRST_ENABLED_AT') || '2026-09-22T11:20:44Z',
     80,
@@ -1202,7 +1320,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:4,
+    version:5,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1213,6 +1331,16 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     estimatedRemainingCredits:remaining,
     severity:actualSeverity,
     warningSeverity,
+    chart:{
+      windowDays:30,
+      windowStart:new Date(chartWindowStart).toISOString(),
+      windowEnd:new Date(Math.min(endMs,nowMs+30*86400000)).toISOString(),
+      allowance:monthlyAllowance,
+      actual:actualPoints,
+      projected:projectionPoints,
+      note:'Actual line uses stored estimated-credit snapshots; projected line uses the current recent-weighted daily burn rate.',
+    },
+    recommendations,
     projection:{
       dailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
       weightedDailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
@@ -1262,7 +1390,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===4 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===5 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -1458,7 +1586,7 @@ export async function cachedDeploymentHistory(context:Context) {
   const nextCreditSnapshots=latestAgeMs<60*60*1000
     ? [compactCreditSnapshot,...creditSnapshots.filter((row:any)=>row!==latestCreditSnapshot)]
     : [compactCreditSnapshot,...creditSnapshots];
-  await store.setJSON('credits/history',nextCreditSnapshots.slice(0,240));
+  await store.setJSON('credits/history',nextCreditSnapshots.slice(0,800));
 
   const result={
     generatedAt,
