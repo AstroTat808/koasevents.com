@@ -90,7 +90,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     </div>
   </main>
   <script>
-    import { acceptInvite, getUser, handleAuthCallback, login, logout, requestPasswordRecovery, updateUser } from '@netlify/identity';
+    import { acceptInvite, getUser, handleAuthCallback, login, logout, recoverPassword, requestPasswordRecovery, updateUser } from '@netlify/identity';
 
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
@@ -107,6 +107,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     let inviteToken = '';
     let inviteEmail = '';
     let recoveryMode = false;
+    let recoveryToken = '';
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
 
@@ -184,6 +185,17 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
     async function initialize() {
       if (canonicalizeAuthUrl()) return;
+
+      const hashParams = new URLSearchParams(String(window.location.hash || '').replace(/^#/, ''));
+      const directRecoveryToken = String(hashParams.get('recovery_token') || '').trim();
+      if (directRecoveryToken) {
+        recoveryToken = directRecoveryToken;
+        recoveryMode = true;
+        if (authError) authError.classList.add('hidden');
+        showAuthState(null);
+        return;
+      }
+
       try {
         const result = await handleAuthCallback();
 
@@ -384,11 +396,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         return;
       }
       try {
-        await updateUser({ password });
+        const user = recoveryToken
+          ? await recoverPassword(recoveryToken, password)
+          : await updateUser({ password });
+        recoveryToken = '';
         recoveryMode = false;
         history.replaceState(null, '', '/admin/');
         if (recoveryError) recoveryError.classList.add('hidden');
-        showAuthState(await getUser());
+        showAuthState(user || await getUser());
       } catch (err) {
         if (recoveryError) {
           recoveryError.textContent = err instanceof Error ? err.message : 'Unable to update the password.';
