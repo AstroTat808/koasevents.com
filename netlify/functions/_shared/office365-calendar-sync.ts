@@ -267,27 +267,10 @@ export async function syncOffice365Calendar(context:Context){
         entry.shape=crmShape(records.find((row)=>row?.id===shape.recordId)||entry.record,nextOps);
         pulled++;
       }else if(crmChanged&&outlookChanged){
-        const crmUpdated=Math.max(Date.parse(shape.recordUpdatedAt||'')||0,Date.parse(shape.opsUpdatedAt||'')||0);
-        const outlookUpdated=Date.parse(clean(event.lastModifiedDateTime,80))||0;
-        if(outlookUpdated>crmUpdated){
-          const parts=localParts(event);
-          const recordIndex=records.findIndex((row)=>row?.id===shape.recordId);
-          if(recordIndex>=0&&parts.date){
-            records[recordIndex]={...records[recordIndex],customer:{...(records[recordIndex].customer||{}),eventDate:parts.date},updatedAt:new Date().toISOString()};
-            recordsChanged=true;
-          }
-          const nextOps={...(entry.ops||{})};
-          if(parts.startTime)nextOps.eventStart=parts.startTime;
-          if(parts.endTime)nextOps.eventEnd=parts.endTime;
-          const location=clean(event.location?.displayName,180);if(location)nextOps.venueArea=location;
-          nextOps.updatedAt=new Date().toISOString();
-          await saveOps(context,shape.recordId,nextOps);
-          entry.ops=nextOps;
-          entry.shape=crmShape(records.find((row)=>row?.id===shape.recordId)||entry.record,nextOps);
-          pulled++;conflicts++;
-        }else{
-          event=await updateOutlookEvent(accessToken,event.id,shape);pushed++;conflicts++;
-        }
+        // Never guess when both systems changed independently. Preserve both values and
+        // surface a conflict so staff can choose which side should become authoritative.
+        conflicts++;
+        continue;
       }else if(crmChanged||!link.lastCrmHash){
         event=await updateOutlookEvent(accessToken,event.id,shape);pushed++;
       }
