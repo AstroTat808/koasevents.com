@@ -13,6 +13,7 @@ export type AdminSessionRole =
 
 export type AdminSession = {
   email: string;
+  displayName: string;
   role: AdminSessionRole;
   roles: string[];
   isAdmin: boolean;
