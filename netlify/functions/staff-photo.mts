@@ -28,7 +28,7 @@ export default async(req:Request,context:Context)=>{
   const data=await storeFor(context).get('profile-photos/'+userId,{type:'arrayBuffer'});
   if(!data)return Response.json({error:'Profile photo not found.'},{status:404});
   const type=clean(meta?.profile_photo_type,80)||'image/jpeg';
-  return new Response(data,{headers:{'Content-Type':type,'Cache-Control':'private, max-age=300'}});
+  return new Response(data,{headers:{'Content-Type':type,'Cache-Control':'private, max-age=86400, immutable'}});
 };
 
 export const config:Config={path:'/api/staff/photo/:userId'};
