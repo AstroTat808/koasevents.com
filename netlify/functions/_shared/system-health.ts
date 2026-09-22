@@ -1,7 +1,7 @@
 import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { creditSaverPresets, readCreditSaverPolicy } from './credit-saver';
+import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 
 export type HealthCheck = {
   id: string;
@@ -1806,7 +1806,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:8,
+    version:9,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1978,6 +1978,13 @@ type CreditSaverMeasurementInput={
   baselineCredits:number;
   baselineDailyBurnRate:number;
   predictedSavingsPerDay:number;
+  predictedByJob?:Array<{
+    jobId:string;
+    label:string;
+    fromMode:string;
+    toMode:string;
+    predictedSavingsPerDay:number;
+  }>;
   productionDeployCount:number;
   cycleStart:string;
 };
@@ -2026,6 +2033,17 @@ export async function beginCreditSaverMeasurement(context:Context,input:CreditSa
     baselineCredits:Math.max(0,Number(input.baselineCredits||0)),
     baselineDailyBurnRate:Math.max(0,Number(input.baselineDailyBurnRate||0)),
     predictedSavingsPerDay:predicted,
+    predictedByJob:Array.isArray(input.predictedByJob)
+      ? input.predictedByJob
+          .filter(row=>Number(row?.predictedSavingsPerDay)>0)
+          .map(row=>({
+            jobId:clean(row.jobId,100),
+            label:clean(row.label,160),
+            fromMode:clean(row.fromMode,30),
+            toMode:clean(row.toMode,30),
+            predictedSavingsPerDay:Math.max(0,Number(row.predictedSavingsPerDay||0)),
+          }))
+      : [],
     productionDeployCountAtStart:Math.max(0,Number(input.productionDeployCount||0)),
     minimumObservationHours:12,
     targetObservationHours:24,
@@ -2066,16 +2084,37 @@ async function updateCreditSaverLearning(context:Context,creditUsage:any,deployH
   const realizedSavingsPerDay=Math.max(0,baselineDailyBurnRate-observedDailyBurnRate);
   const predictedSavingsPerDay=Math.max(0,Number(active.predictedSavingsPerDay||0));
   const accuracyRatio=predictedSavingsPerDay>0?realizedSavingsPerDay/predictedSavingsPerDay:null;
+  const attributionRows=Array.isArray(active.predictedByJob)?active.predictedByJob:[];
+  const attributionPredictedTotal=attributionRows.reduce((sum:number,row:any)=>sum+Math.max(0,Number(row?.predictedSavingsPerDay||0)),0);
+  const savingsAttribution=attributionRows.map((row:any)=>{
+    const predictedPerDay=Math.max(0,Number(row?.predictedSavingsPerDay||0));
+    const share=attributionPredictedTotal>0?predictedPerDay/attributionPredictedTotal:0;
+    const realizedPerDay=realizedSavingsPerDay*share;
+    return {
+      jobId:clean(row?.jobId,100),
+      label:clean(row?.label,160),
+      fromMode:clean(row?.fromMode,30),
+      toMode:clean(row?.toMode,30),
+      predictedSavingsPerDay:Math.round(predictedPerDay*1000)/1000,
+      predictedCreditsDuringWindow:Math.round(predictedPerDay*elapsedDays*1000)/1000,
+      realizedSavingsPerDay:Math.round(realizedPerDay*1000)/1000,
+      realizedCreditsDuringWindow:Math.round(realizedPerDay*elapsedDays*1000)/1000,
+      attributionSharePercent:Math.round(share*1000)/10,
+    };
+  });
   const liveMeasurement={
     ...active,
     elapsedHours:Math.round(elapsedHours*10)/10,
     observedCredits:Math.round(observedCredits*100)/100,
     observedDailyBurnRate:Math.round(observedDailyBurnRate*100)/100,
     realizedSavingsPerDay:Math.round(realizedSavingsPerDay*1000)/1000,
+    realizedCreditsDuringWindow:Math.round(realizedSavingsPerDay*elapsedDays*1000)/1000,
     predictedSavingsPerDay:Math.round(predictedSavingsPerDay*1000)/1000,
     accuracyPercent:accuracyRatio==null?null:Math.round(accuracyRatio*1000)/10,
     productionDeploysSinceStart:productionDeploysSince.length,
     cleanWindow:productionDeploysSince.length===0,
+    savingsAttribution,
+    attributionMethod:'Observed aggregate burn reduction apportioned across changed jobs by each job’s predicted share of scheduled-job savings.',
   };
 
   if(productionDeploysSince.length){
@@ -2120,10 +2159,124 @@ async function updateCreditSaverLearning(context:Context,creditUsage:any,deployH
   return {...next,liveMeasurement:completed};
 }
 
+
+function creditSaverPredictedByJob(creditUsage:any,currentModes:any,targetModes:any){
+  const controls=Array.isArray(creditUsage?.jobControls)?creditUsage.jobControls:[];
+  return controls.map((control:any)=>{
+    const fromMode=String(currentModes?.[control.jobId]||'normal');
+    const toMode=String(targetModes?.[control.jobId]||fromMode);
+    const savingsFor=(mode:string)=>mode==='paused'
+      ? Number(control?.pausedSavingsPerDay||0)
+      : mode==='saver'
+        ? Number(control?.saverSavingsPerDay||0)
+        : 0;
+    return {
+      jobId:String(control?.jobId||''),
+      label:String(control?.label||control?.jobId||'Scheduled job'),
+      fromMode,
+      toMode,
+      predictedSavingsPerDay:Math.max(0,savingsFor(toMode)-savingsFor(fromMode)),
+    };
+  }).filter((row:any)=>row.jobId&&row.predictedSavingsPerDay>0);
+}
+
+async function evaluateCreditSaverAutomation(context:Context,creditUsage:any,currentPolicy:any){
+  const health=healthStore(context);
+  const threshold=80;
+  const maximumSuggestionThreshold=90;
+  const projectedPercent=Number(creditUsage?.projection?.projectedAllowancePercent);
+  const cycleStart=String(creditUsage?.cycleStart||'');
+  const now=new Date().toISOString();
+  const saved:any=(await health.get('credits/automation-state',{type:'json'}))||{};
+  const sameCycle=cycleStart&&String(saved?.cycleStart||'')===cycleStart;
+  const wasAbove=Boolean(sameCycle&&saved?.aboveBalancedThreshold);
+  const isAbove=Number.isFinite(projectedPercent)&&projectedPercent>=threshold;
+  const crossedUp=isAbove&&!wasAbove;
+  const modes=currentPolicy?.modes||{};
+  const allNormal=Object.values(modes).every(mode=>mode==='normal');
+  let policy=currentPolicy;
+  let autoApplied=false;
+  let autoAppliedAt='';
+  let skippedReason='';
+
+  if(context.deploy.context==='production'&&crossedUp&&allNormal){
+    const balanced=creditSaverPreset('balanced-savings');
+    if(balanced){
+      const predictedByJob=creditSaverPredictedByJob(creditUsage,modes,balanced.modes);
+      const predictedSavingsPerDay=predictedByJob.reduce((sum:number,row:any)=>sum+Number(row.predictedSavingsPerDay||0),0);
+      policy=await setCreditSaverModes(context,balanced.modes,'system-health:auto-80');
+      await beginCreditSaverMeasurement(context,{
+        source:'automatic-threshold',
+        label:'Automatic Balanced Savings at 80% projected usage',
+        modes:policy.modes,
+        baselineCredits:Number(creditUsage?.totalEstimatedCredits||0),
+        baselineDailyBurnRate:Number(creditUsage?.projection?.weightedDailyBurnRate||0),
+        predictedSavingsPerDay,
+        predictedByJob,
+        productionDeployCount:Number(creditUsage?.productionDeploys||0),
+        cycleStart,
+      });
+      autoApplied=true;
+      autoAppliedAt=now;
+    }
+  }else if(crossedUp&&!allNormal){
+    skippedReason='Projected usage crossed 80%, but at least one safe scheduled job was already outside Normal mode, so Balanced Savings was not forced over the existing manual policy.';
+  }
+
+  const controls=Array.isArray(creditUsage?.jobControls)?creditUsage.jobControls:[];
+  const currentSavingsPerDay=controls.reduce((sum:number,control:any)=>{
+    const mode=String(policy?.modes?.[control.jobId]||'normal');
+    return sum+creditSaverModeSavings(control,mode);
+  },0);
+  const remainingDays=Math.max(0,Number(creditUsage?.projection?.remainingDays||0));
+  const rawProjected=Math.max(0,Number(creditUsage?.projection?.projectedEndOfCycleCredits||0));
+  const adjustedProjected=Math.max(Number(creditUsage?.totalEstimatedCredits||0),rawProjected-currentSavingsPerDay*remainingDays);
+  const allowance=Math.max(0,Number(creditUsage?.monthlyAllowance||0));
+  const adjustedPercent=allowance?adjustedProjected/allowance*100:null;
+  const maximumSuggested=adjustedPercent!=null&&adjustedPercent>=maximumSuggestionThreshold;
+
+  const state={
+    cycleStart,
+    lastProjectedPercent:Number.isFinite(projectedPercent)?Math.round(projectedPercent*10)/10:null,
+    aboveBalancedThreshold:isAbove,
+    lastEvaluatedAt:now,
+    lastBalancedAt:autoApplied?autoAppliedAt:(sameCycle?clean(saved?.lastBalancedAt,80):''),
+    lastBalancedProjectedPercent:autoApplied&&Number.isFinite(projectedPercent)
+      ? Math.round(projectedPercent*10)/10
+      : sameCycle&&Number.isFinite(Number(saved?.lastBalancedProjectedPercent))
+        ? Number(saved.lastBalancedProjectedPercent)
+        : null,
+    maximumSuggested,
+    maximumSuggestedAt:maximumSuggested
+      ? (sameCycle&&saved?.maximumSuggested?clean(saved?.maximumSuggestedAt,80)||now:now)
+      : '',
+  };
+  if(context.deploy.context==='production')await health.setJSON('credits/automation-state',state);
+
+  return {
+    policy,
+    automation:{
+      enabled:true,
+      balancedThresholdPercent:threshold,
+      maximumSuggestionThresholdPercent:maximumSuggestionThreshold,
+      projectedPercent:Number.isFinite(projectedPercent)?Math.round(projectedPercent*10)/10:null,
+      crossedBalancedThreshold:crossedUp,
+      autoAppliedBalanced:autoApplied,
+      autoAppliedAt:autoAppliedAt||state.lastBalancedAt,
+      skippedReason,
+      adjustedProjectedCredits:Math.round(adjustedProjected*100)/100,
+      adjustedProjectedPercent:adjustedPercent==null?null:Math.round(adjustedPercent*10)/10,
+      maximumSavingsSuggested:maximumSuggested,
+      maximumSavingsAutomatic:false,
+      note:'Balanced Savings can be applied automatically only on an upward crossing of 80% while all six safe jobs are in Normal mode. Maximum Savings is suggestion-only and is never applied automatically.',
+    },
+  };
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===8 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===9 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -2321,7 +2474,10 @@ export async function cachedDeploymentHistory(context:Context) {
     creditSnapshots,
     saverLearningBefore,
   );
-  const creditSaverPolicy=await readCreditSaverPolicy(context);
+  let creditSaverPolicy=await readCreditSaverPolicy(context);
+  const automationResult=await evaluateCreditSaverAutomation(context,creditUsage,creditSaverPolicy);
+  creditSaverPolicy=automationResult.policy;
+  creditUsage.creditAutomation=automationResult.automation;
   creditUsage.saverPolicy=creditSaverPolicy;
   creditUsage.jobControls=(creditUsage.jobControls||[]).map((item:any)=>({
     ...item,
