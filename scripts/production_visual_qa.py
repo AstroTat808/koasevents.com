@@ -608,9 +608,11 @@ def admin_mode(browser_name):
    response=page.goto(BASE+"/admin/quotes/",wait_until="domcontentloaded",timeout=45000)
    page.wait_for_selector("[data-admin-ui]:not(.hidden)",state="visible",timeout=8000)
    page.wait_for_function("() => document.body.innerText.includes('KEP-QA-RULE')",timeout=8000)
-   buttons=page.get_by_role("button",name="Proposal",exact=True)
+   buttons=page.get_by_role("button",name="Finalize proposal",exact=True)
    if buttons.count()<1:
-    raise RuntimeError("Proposal action button was not rendered for QA record.")
+    buttons=page.get_by_role("button",name="Review proposal",exact=True)
+   if buttons.count()<1:
+    raise RuntimeError("Proposal editor action was not rendered for QA record.")
    buttons.last.click()
    page.wait_for_selector("[data-rule-decision]:not(.hidden)",state="visible",timeout=5000)
    title=page.locator("[data-rule-decision-title]").inner_text()
