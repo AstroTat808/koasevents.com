@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { hasCapability, requireOperations } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
 
@@ -334,7 +334,7 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireOperations();
+  const auth = await requireCapability('events.view');
   if (auth.response) return auth.response;
 
   const salesStore = salesStoreFor(context);
