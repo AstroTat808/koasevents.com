@@ -20,7 +20,7 @@ import {
   saveHealthAlertPolicy,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
-import { clearCreditSaverPolicy, setCreditSaverAction } from './_shared/credit-saver';
+import { clearCreditSaverPolicy, readCreditSaverPolicy, setCreditSaverAction } from './_shared/credit-saver';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -35,12 +35,13 @@ function nextHourlySyncIso(now=new Date()){
   return next.toISOString();
 }
 
-async function office365HealthSummary(context:Context){
+async function office365HealthSummary(context:Context,deployments:any=null){
   const cfg=office365CalendarConfig();
-  const [state,conflicts,auditRuns]=await Promise.all([
+  const [state,conflicts,auditRuns,creditSaverPolicy]=await Promise.all([
     readOffice365SyncState(context),
     readOffice365Conflicts(context),
     readOffice365SyncAudit(context),
+    readCreditSaverPolicy(context),
   ]);
   const allRuns=Array.isArray(auditRuns)?auditRuns:[];
   const runsSince=(days:number)=>allRuns.filter((run:any)=>{
@@ -82,6 +83,61 @@ async function office365HealthSummary(context:Context){
       : state?.lastSuccessAt
         ? 'connected'
         : 'configured';
+
+  const functionSchedules=Array.isArray(deployments?.current?.functionSchedules)
+    ? deployments.current.functionSchedules
+    : [];
+  const scheduledFunction=functionSchedules.find((row:any)=>String(row?.name||'')==='office365-calendar-sync')||null;
+  const scheduledFunctionDeployed=Boolean(scheduledFunction);
+  const scheduledFunctionCron=String(scheduledFunction?.cron||'');
+  const syncPaused=Boolean(
+    !creditSaverPolicy?.expired
+    && Array.isArray(creditSaverPolicy?.activeActions)
+    && creditSaverPolicy.activeActions.includes('office365-calendar-sync-pause')
+  );
+  const rawCommitsBehind=Number(deployments?.current?.commitsBehind);
+  const commitsBehind=Number.isFinite(rawCommitsBehind)?Math.max(0,rawCommitsBehind):null;
+  const deploymentState=String(deployments?.connectionHealth?.deploymentState||'unknown');
+  const deploymentLagTooHigh=Boolean(
+    deployments?.connectionHealth?.lagTooHigh===true
+    || (commitsBehind!=null&&commitsBehind>1)
+  );
+  const verificationStatus=deploymentLagTooHigh
+    ? 'blocked'
+    : commitsBehind===0
+      ? 'ready'
+      : commitsBehind===1
+        ? (deploymentState==='deploying'||deploymentState==='waiting'?'catching_up':'caution')
+        : 'unknown';
+  const latestRun=allRuns[0]||null;
+  const latestRunError=String(latestRun?.error||'').trim();
+  const graphAuthFailed=Boolean(authErrorPattern.test(latestRunError||lastError));
+  const graphAuthenticationStatus=!cfg.configured
+    ? 'not_configured'
+    : graphAuthFailed
+      ? 'failed'
+      : latestRun?.status==='success'||Boolean(state?.lastSuccessAt)
+        ? 'succeeded'
+        : 'awaiting';
+
+  const operationalStatus=deploymentLagTooHigh
+    ? 'production_behind'
+    : graphAuthenticationStatus==='failed'
+      ? 'authentication_failed'
+      : !cfg.configured
+        ? 'not_configured'
+        : !scheduledFunctionDeployed
+          ? 'schedule_missing'
+          : syncPaused
+            ? 'paused'
+            : verificationStatus==='caution'||verificationStatus==='catching_up'
+              ? 'deployment_catching_up'
+              : 'scheduled';
+  const operationalSeverity=['production_behind','authentication_failed','not_configured','schedule_missing'].includes(operationalStatus)
+    ? 'red'
+    : ['paused','deployment_catching_up'].includes(operationalStatus)
+      ? 'yellow'
+      : 'green';
   const policy=await readHealthAlertPolicy(context);
   const thresholds=policy.office365ReliabilityThresholds||{yellowBelow:98,redBelow:90};
   const sevenDay=reliabilityFor(7);
@@ -128,7 +184,35 @@ async function office365HealthSummary(context:Context){
     lastError,
     lastAttemptAt:String(state?.lastAttemptAt||''),
     lastSuccessAt:String(state?.lastSuccessAt||''),
-    nextScheduledSyncAt:nextHourlySyncIso(),
+    nextScheduledSyncAt:syncPaused?'':nextHourlySyncIso(),
+    operationalStatus,
+    operationalSeverity,
+    signals:{
+      scheduledFunction:{
+        status:scheduledFunctionDeployed?'deployed':'missing',
+        deployed:scheduledFunctionDeployed,
+        cron:scheduledFunctionCron,
+        name:'office365-calendar-sync',
+      },
+      creditSaver:{
+        status:syncPaused?'paused':'active',
+        paused:syncPaused,
+        expiresAt:String(creditSaverPolicy?.expiresAt||''),
+      },
+      authentication:{
+        status:graphAuthenticationStatus,
+        failed:graphAuthenticationStatus==='failed',
+        error:graphAuthenticationStatus==='failed'?(latestRunError||lastError):'',
+      },
+      verification:{
+        status:verificationStatus,
+        blocked:verificationStatus==='blocked',
+        commitsBehind,
+        deploymentState,
+        productionCommit:String(deployments?.current?.commit||''),
+        mainCommit:String(deployments?.current?.mainCommit||''),
+      },
+    },
     unresolvedConflicts:Array.isArray(conflicts)?conflicts.length:0,
     changedLast24Hours,
     runsLast24Hours:recentRuns.length,
@@ -169,7 +253,8 @@ export default async (req:Request,context:Context) => {
         ...current,
         office365ReliabilityThresholds:{yellowBelow,redBelow},
       },actor);
-      return Response.json({ok:true,policy,office365:await office365HealthSummary(context)},{headers:{'Cache-Control':'private, no-store'}});
+      const deployments=await cachedDeploymentHistory(context);
+      return Response.json({ok:true,policy,office365:await office365HealthSummary(context,deployments)},{headers:{'Cache-Control':'private, no-store'}});
     }
 
     if(body?.action==='compare-releases'){
@@ -208,13 +293,13 @@ export default async (req:Request,context:Context) => {
     await applyHealthAlertPolicy(context,current,previousHourly);
     await persistHealth(context,current);
     await sendHealthTransitionAlerts(previous,current);
-    const [uptimeHistory,policy,deployments,releases,office365]=await Promise.all([
+    const [uptimeHistory,policy,deployments,releases]=await Promise.all([
       readUptimeHistory(context,2300),
       readHealthAlertPolicy(context),
       cachedDeploymentHistory(context),
       readProductionReleases(context,50),
-      office365HealthSummary(context),
     ]);
+    const office365=await office365HealthSummary(context,deployments);
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
@@ -238,14 +323,14 @@ export default async (req:Request,context:Context) => {
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
-  const [history,uptimeHistory,deployments,policy,releases,office365]=await Promise.all([
+  const [history,uptimeHistory,deployments,policy,releases]=await Promise.all([
     readHealthHistory(context,120),
     readUptimeHistory(context,2300),
     cachedDeploymentHistory(context),
     readHealthAlertPolicy(context),
     readProductionReleases(context,50),
-    office365HealthSummary(context),
   ]);
+  const office365=await office365HealthSummary(context,deployments);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
   const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
