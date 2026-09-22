@@ -70,5 +70,5 @@ export default async (_req: Request, context: Context) => {
 };
 
 export const config: Config = {
-  schedule: '@hourly',
+  schedule: '0 */4 * * *',
 };

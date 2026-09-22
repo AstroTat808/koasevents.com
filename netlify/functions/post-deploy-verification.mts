@@ -48,5 +48,5 @@ export default async (_req:Request,context:Context) => {
 };
 
 export const config:Config={
-  schedule:'*/5 * * * *',
+  schedule:'*/15 * * * *',
 };

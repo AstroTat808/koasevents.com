@@ -58,4 +58,4 @@ export default async(_req:Request,context:Context)=>{
     }
   }
 };
-export const config:Config={schedule:'@hourly'};
+export const config:Config={schedule:'0 */6 * * *'};
