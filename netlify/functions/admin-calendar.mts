@@ -2,7 +2,6 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireCapability } from './_shared/admin';
 import { readOffice365ExternalItems } from './_shared/office365-calendar-sync';
-import { getExternalOutlookCalendarItems } from './_shared/outlook-calendar-sync';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -146,7 +145,8 @@ export default async(req:Request,context:Context)=>{
       if(!inRange(payment.dueDate,start,end))return;
       items.push({
         id:'payment-'+record.id+'-'+payment.id,date:payment.dueDate,time:'',endTime:'',type:'payment',subtype:'payment',
-        title:payment.label,detail:(payment.docNumber?'QBO #'+payment.docNumber+' · ':'')+(payment.status==='paid'?'Paid':payment.status==='open'?'
+        title:payment.label,detail:(payment.docNumber?'QBO #'+payment.docNumber+' · ':'')+(payment.status==='paid'?'Paid':payment.status==='open'?'$'+payment.balance.toFixed(2)+' remaining':'Not yet invoiced in QuickBooks'),
+        status:payment.status,recordId:record.id,customerName,owner:'',venueArea,
       });
     });
 
@@ -196,215 +196,9 @@ export default async(req:Request,context:Context)=>{
       }
     }
   }
-
-  const externalOutlookItems=await getExternalOutlookCalendarItems(context,start,end);
-  items.push(...externalOutlookItems);
 
   const externalItems=await readOffice365ExternalItems(context);
   externalItems.filter((item:any)=>inRange(isoDate(item?.date),start,end)).forEach((item:any)=>items.push(item));
-
-  items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.time).localeCompare(String(b.time))||String(a.title).localeCompare(String(b.title)));
-  conflicts.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.severity).localeCompare(String(b.severity)));
-
-  return Response.json({
-    range:{start,end},
-    items,
-    conflicts,
-    totals:{
-      bookedEvents:entries.length,
-      calendarItems:items.length,
-      confirmedConflicts:conflicts.filter((c)=>c.severity==='confirmed').length,
-      potentialConflicts:conflicts.filter((c)=>c.severity==='potential').length,
-    }
-  },{headers:{'Cache-Control':'private, no-store'}});
-};
-
-export const config:Config={path:'/api/admin/calendar'};
-+payment.balance.toFixed(2)+' remaining':'Not yet invoiced in QuickBooks'),
-        status:payment.status,recordId:record.id,customerName,owner:'',venueArea,
-      });
-    });
-
-    const checklist=Array.isArray(ops.checklist)&&ops.checklist.length?ops.checklist:basicChecklist(eventDate);
-    checklist.filter((row:any)=>row?.dueDate).forEach((row:any)=>{
-      const due=isoDate(row.dueDate);if(!inRange(due,start,end))return;
-      items.push({
-        id:'check-'+record.id+'-'+row.id,date:due,time:'',endTime:'',type:'deadline',
-        title:row.text||'Event deadline',detail:row.owner?'Owner: '+row.owner:'Event Ops deadline',
-        status:row.status||'not_started',recordId:record.id,customerName,owner:row.owner||'',venueArea,
-      });
-    });
-  }
-
-  const conflicts:any[]=[];
-  for(let i=0;i<entries.length;i++){
-    for(let j=i+1;j<entries.length;j++){
-      const a=entries[i],b=entries[j];
-      const dateA=isoDate(a.record.customer?.eventDate),dateB=isoDate(b.record.customer?.eventDate);
-      if(!dateA||dateA!==dateB||!inRange(dateA,start,end))continue;
-      const areaA=(clean(a.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const areaB=(clean(b.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const overlap=overlaps(a,b);
-
-      if(areaA===areaB && overlap!==false){
-        conflicts.push({
-          id:'venue-'+a.record.id+'-'+b.record.id,date:dateA,type:'venue',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Venue schedule overlap':'Potential venue conflict',
-          detail:(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+' use '+(clean(a.ops?.venueArea,180)||'Koa’s Events')+(overlap===null?' but one or both event windows are incomplete.':'.'),
-          recordIds:[a.record.id,b.record.id],
-        });
-      }
-
-      const ownersA=eventOwners(a.ops),ownersB=eventOwners(b.ops);
-      const shared=[...ownersA].filter((owner)=>ownersB.has(owner));
-      if(shared.length && overlap!==false){
-        conflicts.push({
-          id:'staff-'+a.record.id+'-'+b.record.id,date:dateA,type:'staff',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Staffing overlap':'Potential staffing conflict',
-          detail:shared.join(', ')+' assigned to both '+(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+(overlap===null?' with incomplete event windows.':'.'),
-          recordIds:[a.record.id,b.record.id],owners:shared,
-        });
-      }
-    }
-  }
-
-  items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.time).localeCompare(String(b.time))||String(a.title).localeCompare(String(b.title)));
-  conflicts.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.severity).localeCompare(String(b.severity)));
-
-  return Response.json({
-    range:{start,end},
-    items,
-    conflicts,
-    totals:{
-      bookedEvents:entries.length,
-      calendarItems:items.length,
-      confirmedConflicts:conflicts.filter((c)=>c.severity==='confirmed').length,
-      potentialConflicts:conflicts.filter((c)=>c.severity==='potential').length,
-    }
-  },{headers:{'Cache-Control':'private, no-store'}});
-};
-
-export const config:Config={path:'/api/admin/calendar'};
-+payment.balance.toFixed(2)+' remaining':'Not yet invoiced in QuickBooks'),
-        status:payment.status,recordId:record.id,customerName,owner:'',venueArea,
-      });
-    });
-
-    const checklist=Array.isArray(ops.checklist)&&ops.checklist.length?ops.checklist:basicChecklist(eventDate);
-    checklist.filter((row:any)=>row?.dueDate).forEach((row:any)=>{
-      const due=isoDate(row.dueDate);if(!inRange(due,start,end))return;
-      const deadlineTitle=clean(row.text,180)||'Event deadline';
-      const deadlineSubtype=(String(row.id||'').toLowerCase().includes('insurance')||deadlineTitle.toLowerCase().includes('insurance'))?'insurance':'deadline';
-      items.push({
-        id:'check-'+record.id+'-'+row.id,date:due,time:'',endTime:'',type:'deadline',subtype:deadlineSubtype,
-        title:deadlineTitle,detail:row.owner?'Owner: '+row.owner:'Event Ops deadline',
-        status:row.status||'not_started',recordId:record.id,customerName,owner:row.owner||'',venueArea,
-      });
-    });
-  }
-
-  const conflicts:any[]=[];
-  for(let i=0;i<entries.length;i++){
-    for(let j=i+1;j<entries.length;j++){
-      const a=entries[i],b=entries[j];
-      const dateA=isoDate(a.record.customer?.eventDate),dateB=isoDate(b.record.customer?.eventDate);
-      if(!dateA||dateA!==dateB||!inRange(dateA,start,end))continue;
-      const areaA=(clean(a.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const areaB=(clean(b.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const overlap=overlaps(a,b);
-
-      if(areaA===areaB && overlap!==false){
-        conflicts.push({
-          id:'venue-'+a.record.id+'-'+b.record.id,date:dateA,type:'venue',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Venue schedule overlap':'Potential venue conflict',
-          detail:(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+' use '+(clean(a.ops?.venueArea,180)||'Koa’s Events')+(overlap===null?' but one or both event windows are incomplete.':'.'),
-          recordIds:[a.record.id,b.record.id],
-        });
-      }
-
-      const ownersA=eventOwners(a.ops),ownersB=eventOwners(b.ops);
-      const shared=[...ownersA].filter((owner)=>ownersB.has(owner));
-      if(shared.length && overlap!==false){
-        conflicts.push({
-          id:'staff-'+a.record.id+'-'+b.record.id,date:dateA,type:'staff',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Staffing overlap':'Potential staffing conflict',
-          detail:shared.join(', ')+' assigned to both '+(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+(overlap===null?' with incomplete event windows.':'.'),
-          recordIds:[a.record.id,b.record.id],owners:shared,
-        });
-      }
-    }
-  }
-
-  items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.time).localeCompare(String(b.time))||String(a.title).localeCompare(String(b.title)));
-  conflicts.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.severity).localeCompare(String(b.severity)));
-
-  return Response.json({
-    range:{start,end},
-    items,
-    conflicts,
-    totals:{
-      bookedEvents:entries.length,
-      calendarItems:items.length,
-      confirmedConflicts:conflicts.filter((c)=>c.severity==='confirmed').length,
-      potentialConflicts:conflicts.filter((c)=>c.severity==='potential').length,
-    }
-  },{headers:{'Cache-Control':'private, no-store'}});
-};
-
-export const config:Config={path:'/api/admin/calendar'};
-+payment.balance.toFixed(2)+' remaining':'Not yet invoiced in QuickBooks'),
-        status:payment.status,recordId:record.id,customerName,owner:'',venueArea,
-      });
-    });
-
-    const checklist=Array.isArray(ops.checklist)&&ops.checklist.length?ops.checklist:basicChecklist(eventDate);
-    checklist.filter((row:any)=>row?.dueDate).forEach((row:any)=>{
-      const due=isoDate(row.dueDate);if(!inRange(due,start,end))return;
-      items.push({
-        id:'check-'+record.id+'-'+row.id,date:due,time:'',endTime:'',type:'deadline',
-        title:row.text||'Event deadline',detail:row.owner?'Owner: '+row.owner:'Event Ops deadline',
-        status:row.status||'not_started',recordId:record.id,customerName,owner:row.owner||'',venueArea,
-      });
-    });
-  }
-
-  const conflicts:any[]=[];
-  for(let i=0;i<entries.length;i++){
-    for(let j=i+1;j<entries.length;j++){
-      const a=entries[i],b=entries[j];
-      const dateA=isoDate(a.record.customer?.eventDate),dateB=isoDate(b.record.customer?.eventDate);
-      if(!dateA||dateA!==dateB||!inRange(dateA,start,end))continue;
-      const areaA=(clean(a.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const areaB=(clean(b.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const overlap=overlaps(a,b);
-
-      if(areaA===areaB && overlap!==false){
-        conflicts.push({
-          id:'venue-'+a.record.id+'-'+b.record.id,date:dateA,type:'venue',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Venue schedule overlap':'Potential venue conflict',
-          detail:(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+' use '+(clean(a.ops?.venueArea,180)||'Koa’s Events')+(overlap===null?' but one or both event windows are incomplete.':'.'),
-          recordIds:[a.record.id,b.record.id],
-        });
-      }
-
-      const ownersA=eventOwners(a.ops),ownersB=eventOwners(b.ops);
-      const shared=[...ownersA].filter((owner)=>ownersB.has(owner));
-      if(shared.length && overlap!==false){
-        conflicts.push({
-          id:'staff-'+a.record.id+'-'+b.record.id,date:dateA,type:'staff',
-          severity:overlap===true?'confirmed':'potential',
-          title:overlap===true?'Staffing overlap':'Potential staffing conflict',
-          detail:shared.join(', ')+' assigned to both '+(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+(overlap===null?' with incomplete event windows.':'.'),
-          recordIds:[a.record.id,b.record.id],owners:shared,
-        });
-      }
-    }
-  }
 
   items.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.time).localeCompare(String(b.time))||String(a.title).localeCompare(String(b.title)));
   conflicts.sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.severity).localeCompare(String(b.severity)));
