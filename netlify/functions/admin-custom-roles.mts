@@ -10,7 +10,7 @@ function email(user:any){return clean(user?.email,240).toLowerCase();}
 function sessionVersion(user:any){const n=Number(meta(user)?.sessionVersion||0);return Number.isFinite(n)&&n>=0?Math.floor(n):0;}
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireAdmin();if(auth.response)return auth.response;
+  const auth=await requireAdmin(req);if(auth.response)return auth.response;
   const actor=email(auth.user)||'admin';
 
   if(req.method==='GET'){
