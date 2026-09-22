@@ -34,7 +34,9 @@ export default async(req:Request,context:Context)=>{
     const createdAt=new Date().toISOString();
     await appendAuthEvent(context,{type:risk.suspicious?'suspicious_login':'login_success',email:normalized,userId:clean(user.id,160),ipFingerprint:ip,userAgent:ua,device:risk.device,detail:risk.suspicious?'Successful sign-in flagged for review.':'Successful sign-in.',suspicious:risk.suspicious,reasons:risk.reasons});
     if(risk.suspicious)await sendSuspiciousLoginAlert({email:normalized,device:risk.device,reasons:risk.reasons,createdAt});
-    return Response.json({ok:true,suspicious:risk.suspicious,reasons:risk.reasons,session});
+    const response=Response.json({ok:true,suspicious:risk.suspicious,reasons:risk.reasons,session});
+    if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
+    return response;
   }
 
   return Response.json({error:'Unknown authentication event.'},{status:400});
