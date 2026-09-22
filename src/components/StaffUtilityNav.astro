@@ -171,6 +171,12 @@
     setMenu(open);
   });
 
+  nav?.querySelectorAll('[data-workspace-link]').forEach((link) => {
+    link.addEventListener('click', () => {
+      if (window.innerWidth < 768) setMenu(false);
+    });
+  });
+
   window.addEventListener('resize', () => {
     if (window.innerWidth >= 768 && links instanceof HTMLElement) {
       links.classList.remove('hidden');
