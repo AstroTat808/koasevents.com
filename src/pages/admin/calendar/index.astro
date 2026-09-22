@@ -124,6 +124,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </aside>
 
+        <section data-sync-conflict-section class="hidden rounded-[1.5rem] border border-[var(--koa-clay)]/25 bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Calendar sync conflicts</p>
+              <h2 class="display mt-2 text-4xl">Choose which version to keep</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">When both Koa’s and Office 365 were edited before the next sync, neither side is overwritten automatically. Compare the changed fields below and choose the authoritative version.</p>
+            </div>
+            <span data-sync-conflict-count class="rounded-full bg-[var(--koa-clay)] px-3 py-2 text-xs font-black uppercase tracking-[.08em] text-white">0 conflicts</span>
+          </div>
+          <div data-sync-conflicts class="mt-5 grid gap-4"></div>
+        </section>
+
         <section class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
           <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
             <div class="flex items-end justify-between gap-3">
@@ -153,6 +165,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .legend-office{background:color-mix(in srgb,var(--koa-amber-light) 24%,white);color:var(--koa-ink);border-color:color-mix(in srgb,var(--koa-amber-light) 45%,var(--koa-line))}
     .calendar-sync-button{border-radius:9999px;background:var(--koa-clay);padding:.55rem .8rem;font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:white}
     .calendar-sync-button:disabled{cursor:wait;opacity:.55}
+    .sync-conflict-card{border:1px solid var(--koa-line);border-radius:1.2rem;overflow:hidden;background:var(--koa-ivory)}
+    .sync-conflict-grid{display:grid;grid-template-columns:minmax(7rem,.55fr) repeat(2,minmax(12rem,1fr))}
+    .sync-conflict-grid>div{border-top:1px solid var(--koa-line);padding:.7rem .85rem}
+    .sync-conflict-grid>div:nth-child(-n+3){border-top:0}
+    .sync-conflict-grid>div:nth-child(3n+2),.sync-conflict-grid>div:nth-child(3n+3){border-left:1px solid var(--koa-line)}
+    .sync-conflict-label{font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--koa-clay)}
+    .sync-conflict-value{font-size:.82rem;font-weight:700;color:var(--koa-ink)}
+    .sync-conflict-value.is-different{background:color-mix(in srgb,var(--koa-amber-light) 20%,white)}
+    @media(max-width:720px){.sync-conflict-grid{grid-template-columns:7rem 1fr}.sync-conflict-grid>div:nth-child(3n+3){grid-column:2}.sync-conflict-grid>div:nth-child(3n+3)::before{content:"Office 365 · ";font-size:.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:var(--koa-clay)}.sync-conflict-grid>div:nth-child(3n+2)::before{content:"Koa’s · ";font-size:.55rem;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:var(--koa-forest)}}
     .calendar-view-switch{display:flex;border:1px solid var(--koa-line);border-radius:9999px;background:var(--koa-ivory);padding:.22rem}
     .calendar-view-button{border-radius:9999px;padding:.55rem .85rem;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:color-mix(in srgb,var(--koa-ink) 55%,transparent)}
     .calendar-view-button.is-active{background:var(--koa-forest);color:white;box-shadow:0 4px 14px rgb(0 0 0/.08)}
@@ -240,6 +261,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const previewOwner=document.querySelector('[data-preview-owner]');
     const previewOpen=document.querySelector('[data-preview-open]');
     const previewDay=document.querySelector('[data-preview-day]');
+    const syncConflictSection=document.querySelector('[data-sync-conflict-section]');
+    const syncConflicts=document.querySelector('[data-sync-conflicts]');
+    const syncConflictCount=document.querySelector('[data-sync-conflict-count]');
     let cursor=new Date();
     cursor=new Date(cursor.getFullYear(),cursor.getMonth(),1);
     let activeView='month';
@@ -467,15 +491,70 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length)agenda.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No calendar items in this month.'));
     }
 
+    function formatConflictValue(field,value){
+      if(!value)return 'Not set';
+      if(field==='date')return dateLabel(value);
+      if(field==='startTime'||field==='endTime')return timeLabel(value);
+      return value;
+    }
+    function renderOffice365Conflicts(rows){
+      const conflicts=Array.isArray(rows)?rows:[];
+      syncConflicts.innerHTML='';
+      syncConflictCount.textContent=conflicts.length+' conflict'+(conflicts.length===1?'':'s');
+      syncConflictSection.classList.toggle('hidden',conflicts.length===0);
+      conflicts.forEach((conflict)=>{
+        const card=document.createElement('article');card.className='sync-conflict-card';
+        const head=document.createElement('div');head.className='flex flex-col gap-3 bg-white p-4 sm:flex-row sm:items-center sm:justify-between';
+        const titleWrap=document.createElement('div');
+        titleWrap.append(text('strong','text-sm text-[var(--koa-forest)]',conflict.koa?.title||conflict.office365?.title||conflict.recordId),text('p','mt-1 text-xs text-[var(--koa-ink)]/45','Detected '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(conflict.detectedAt))));
+        const buttons=document.createElement('div');buttons.className='flex flex-wrap gap-2';
+        const keepKoa=text('button','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white','Keep Koa’s');
+        keepKoa.type='button';keepKoa.dataset.resolveConflict='keep_koa';keepKoa.dataset.recordId=conflict.recordId;
+        const keepOffice=text('button','rounded-full bg-[var(--koa-clay)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white','Keep Office 365');
+        keepOffice.type='button';keepOffice.dataset.resolveConflict='keep_office365';keepOffice.dataset.recordId=conflict.recordId;
+        buttons.append(keepKoa,keepOffice);head.append(titleWrap,buttons);card.appendChild(head);
+
+        const grid=document.createElement('div');grid.className='sync-conflict-grid';
+        [['','Koa’s Master Calendar','Office 365'],['date','Event date','Event date'],['startTime','Start time','Start time'],['endTime','End time','End time'],['venue','Venue / location','Venue / location']].forEach((row,index)=>{
+          if(index===0){
+            grid.append(text('div','sync-conflict-label','Field'),text('div','sync-conflict-label','Koa’s'),text('div','sync-conflict-label','Office 365'));return;
+          }
+          const field=row[0],different=(conflict.differingFields||[]).includes(field);
+          grid.append(
+            text('div','sync-conflict-label',row[1]),
+            text('div','sync-conflict-value'+(different?' is-different':''),formatConflictValue(field,conflict.koa?.[field])),
+            text('div','sync-conflict-value'+(different?' is-different':''),formatConflictValue(field,conflict.office365?.[field]))
+          );
+        });
+        card.appendChild(grid);syncConflicts.appendChild(card);
+      });
+    }
+    async function resolveSyncConflict(recordId,resolution,button){
+      if(!recordId||!resolution)return;
+      button.disabled=true;const original=button.textContent;button.textContent='Saving…';
+      try{
+        const res=await fetch('/api/admin/calendar-office365',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'resolve_conflict',recordId,resolution})});
+        const result=await res.json();
+        if(!res.ok||!result.ok)throw new Error(result?.error||'Conflict resolution failed');
+        await load();
+      }catch(error){
+        button.textContent='Failed';
+        window.setTimeout(()=>{button.textContent=original;button.disabled=false;},1800);
+        return;
+      }
+      button.textContent=original;button.disabled=false;
+    }
+
     async function loadOffice365Status(){
       const statusEl=document.querySelector('[data-office365-status]');
       try{
         const res=await fetch('/api/admin/calendar-office365',{cache:'no-store'});
         const status=await res.json();
         if(!res.ok)throw new Error(status?.error||'Status unavailable');
+        renderOffice365Conflicts(status.conflicts||[]);
         if(!status.configured){statusEl.textContent='Office 365 sync needs Microsoft Graph environment variables';return;}
         if(status.lastError){statusEl.textContent='Office 365 sync error: '+status.lastError;return;}
-        statusEl.textContent=status.lastSuccessAt?'Office 365 synced '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(status.lastSuccessAt)):'Office 365 sync ready';
+        statusEl.textContent=status.lastSuccessAt?'Office 365 synced '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(status.lastSuccessAt))+(status.conflicts?.length?' · '+status.conflicts.length+' conflict'+(status.conflicts.length===1?'':'s'):''):'Office 365 sync ready';
       }catch{statusEl.textContent='Office 365 sync status unavailable';}
     }
     async function syncOffice365Now(){
@@ -509,6 +588,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-preview-close]')?.addEventListener('click',closePreview);
     document.querySelector('[data-office365-sync]')?.addEventListener('click',syncOffice365Now);
+    syncConflicts?.addEventListener('click',(event)=>{
+      const button=event.target.closest('[data-resolve-conflict]');
+      if(!button)return;
+      resolveSyncConflict(button.dataset.recordId,button.dataset.resolveConflict,button);
+    });
     document.querySelector('[data-preview-backdrop]')?.addEventListener('click',closePreview);
     previewDay?.addEventListener('click',()=>{if(!previewItem)return;const key=previewItem.date;closePreview();openDayPanel(key);});
     document.querySelectorAll('[data-filter]').forEach((button)=>button.addEventListener('click',()=>{
