@@ -44,8 +44,10 @@ permissions:
   contents: read
 
 env:
-  PRODUCTION_BASE_URL: ${{ github.event_name == 'pull_request' && format('https://deploy-preview-{0}--koasevents-website.netlify.app', github.event.number) || inputs.base_url || 'https://koasevents.com' }}
-  EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+  # Deploy previews on the production Netlify project require Netlify authentication.
+  # PRs therefore run source/build QA only; full live QA runs against production after merge.
+  PRODUCTION_BASE_URL: ${{ inputs.base_url || 'https://koasevents.com' }}
+  EXPECTED_COMMIT: ${{ github.sha }}
   VISUAL_RESULTS: visual-results
 
 jobs:
@@ -81,6 +83,7 @@ jobs:
 
   deployed-smoke:
     name: Deploy route + asset smoke
+    if: github.event_name != 'pull_request'
     needs: source-build-audit
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -105,6 +108,7 @@ jobs:
 
   admin-startup-audit:
     name: Admin startup browser audit
+    if: github.event_name != 'pull_request'
     needs: source-build-audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -133,6 +137,7 @@ jobs:
 
   visual-audit:
     name: Responsive visual audit
+    if: github.event_name != 'pull_request'
     needs: deployed-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -175,9 +180,9 @@ jobs:
             echo '| Gate | Result |'
             echo '| --- | --- |'
             echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
-            echo '| Staging route smoke | ${{ needs.deployed-smoke.result }} |'
-            echo '| Admin startup browser audit | ${{ needs.admin-startup-audit.result }} |'
-            echo '| Responsive visual audit | ${{ needs.visual-audit.result }} |'
+            echo '| Live production route smoke | ${{ needs.deployed-smoke.result }} |'
+            echo '| Live admin startup browser audit | ${{ needs.admin-startup-audit.result }} |'
+            echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
           } >> "$GITHUB_STEP_SUMMARY"
