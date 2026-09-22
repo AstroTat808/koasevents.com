@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { requireAdmin } from './_shared/admin';
-import { office365CalendarConfig, readOffice365Conflicts, readOffice365SyncState, resolveOffice365Conflict, syncOffice365Calendar } from './_shared/office365-calendar-sync';
+import { office365CalendarConfig, readOffice365Conflicts, readOffice365ResolvedConflicts, readOffice365SyncState, resolveOffice365Conflict, syncOffice365Calendar } from './_shared/office365-calendar-sync';
 
 export default async(req:Request,context:Context)=>{
   const auth=await requireAdmin(req);if(auth.response)return auth.response;
@@ -20,13 +20,14 @@ export default async(req:Request,context:Context)=>{
       conflicts:Number(state.conflicts||0),
       externalImported:Number(state.externalImported||0),
       conflicts:await readOffice365Conflicts(context),
+      resolvedConflicts:await readOffice365ResolvedConflicts(context),
     },{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method==='POST'){
     try{
       const body:any=await req.json().catch(()=>({}));
       if(body?.action==='resolve_conflict'){
-        const result=await resolveOffice365Conflict(context,body.recordId,body.resolution);
+        const result=await resolveOffice365Conflict(context,body.recordId,body.resolution,auth.user?.email||'Unknown staff user');
         return Response.json(result,{headers:{'Cache-Control':'private, no-store'}});
       }
       const result=await syncOffice365Calendar(context);
