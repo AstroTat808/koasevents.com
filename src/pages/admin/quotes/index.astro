@@ -432,6 +432,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <div data-payment-items class="mt-4 grid gap-3"></div>
       </div>
 
+      <section data-rule-decision class="mt-6 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-5">
+        <p class="eyebrow text-[var(--koa-clay)]">Explain this rule decision</p>
+        <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div><h3 data-rule-decision-title class="display text-2xl text-[var(--koa-forest)]"></h3><p data-rule-decision-preset class="mt-1 text-sm font-semibold text-[var(--koa-ink)]/65"></p></div>
+          <span data-rule-decision-priority class="w-fit rounded-full bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]"></span>
+        </div>
+        <div data-rule-decision-summary class="mt-4 grid gap-2"></div>
+        <div data-rule-decision-conflicts class="mt-4 hidden rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs leading-5 text-amber-950"></div>
+      </section>
+
       <div class="mt-8 grid gap-5 lg:grid-cols-2">
         <label class="grid gap-2 text-sm font-semibold">Client-facing notes<textarea name="notesToClient" rows="5" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
         <label class="grid gap-2 text-sm font-semibold">Internal notes<textarea name="notes" rows="5" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
@@ -722,6 +732,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const proposalLink = document.querySelector('[data-proposal-link]');
     const proposalLinkWrap = document.querySelector('[data-proposal-link-wrap]');
     const acceptanceInfo = document.querySelector('[data-acceptance-info]');
+    const ruleDecision = document.querySelector('[data-rule-decision]');
+    const ruleDecisionTitle = document.querySelector('[data-rule-decision-title]');
+    const ruleDecisionPreset = document.querySelector('[data-rule-decision-preset]');
+    const ruleDecisionPriority = document.querySelector('[data-rule-decision-priority]');
+    const ruleDecisionSummary = document.querySelector('[data-rule-decision-summary]');
+    const ruleDecisionConflicts = document.querySelector('[data-rule-decision-conflicts]');
     const copyClientLink = document.querySelector('[data-copy-client-link]');
     const qboProposalStatus = document.querySelector('[data-qbo-proposal-status]');
     const qboSyncEstimateButton = document.querySelector('[data-qbo-sync-estimate]');
@@ -2899,6 +2915,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const accepted=record.proposal?.acceptance;
       acceptanceInfo.classList.toggle('hidden',!accepted);
       if(accepted) acceptanceInfo.textContent='Accepted by '+accepted.name+' on '+dateTime(accepted.acceptedAt)+'.';
+      const decision=record.proposal?.paymentRuleDecision;
+      ruleDecision?.classList.toggle('hidden',!decision);
+      if(decision){
+        if(ruleDecisionTitle)ruleDecisionTitle.textContent=decision.ruleName||'Automatic payment rule';
+        if(ruleDecisionPreset)ruleDecisionPreset.textContent='Selected preset: '+String(decision.presetName||decision.presetId||'');
+        if(ruleDecisionPriority)ruleDecisionPriority.textContent='Priority '+String(decision.priority||0);
+        if(ruleDecisionSummary){
+          ruleDecisionSummary.innerHTML='';
+          (decision.explanation||[]).forEach((line)=>{
+            const item=document.createElement('div');
+            item.className='rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/70';
+            item.textContent=line;
+            ruleDecisionSummary.appendChild(item);
+          });
+        }
+        const names=Array.isArray(decision.matchedRuleNames)?decision.matchedRuleNames:[];
+        if(ruleDecisionConflicts){
+          const hasOverlap=names.length>1;
+          ruleDecisionConflicts.classList.toggle('hidden',!hasOverlap);
+          ruleDecisionConflicts.textContent=hasOverlap
+            ? names.length+' rules matched this proposal: '+names.join(', ')+'. “'+String(decision.ruleName||'')+'” won because it had the highest priority at proposal creation.'
+            : '';
+        }
+      }
       renderQboProposal(record);
       renderReconciliationHistory(document.querySelector('[data-proposal-reconciliation-history]'),record);
       proposalMessage.textContent=''; recalcEditor(); proposalDialog.showModal();
