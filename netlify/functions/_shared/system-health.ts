@@ -621,6 +621,22 @@ export async function cachedDeploymentHistory(context:Context) {
     compareStatus:'',
   };
 
+  const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  if(current.deployId && netlifyToken){
+    try{
+      const response=await fetch('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(current.deployId),{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const deploy:any=await response.json();
+        current.deployTime=clean(deploy?.published_at||deploy?.updated_at||deploy?.created_at,80)||current.deployTime;
+        const availableFunctions=Array.isArray(deploy?.available_functions)?deploy.available_functions:[];
+        if(availableFunctions.length) current.functionCount=availableFunctions.length;
+      }
+    }catch{}
+  }
+
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   const headers:Record<string,string>={
     'Accept':'application/vnd.github+json',
