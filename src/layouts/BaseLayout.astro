@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { businessRules } from '../data/businessRules';
+import StaffUtilityNav from '../components/StaffUtilityNav.astro';
 
 interface Props {
   title: string;
@@ -43,6 +44,7 @@ const robotsContent = noindex
 const buildCommit = String(process.env.COMMIT_REF || '').trim();
 const deployId = String(process.env.DEPLOY_ID || '').trim();
 const buildTime = new Date().toISOString();
+const showWorkspaceNav = canonicalPath === '/staff/' || canonicalPath.startsWith('/admin/');
 
 const breadcrumbLabelMap: Record<string, string> = {
   about: 'About',
@@ -295,6 +297,7 @@ const seoSchema = {
         }
       })();
     </script>
+    {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
     <script is:inline>
       (() => {

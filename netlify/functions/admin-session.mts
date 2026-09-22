@@ -10,6 +10,8 @@ export default async (req:Request) => {
   if (!ctx.sessionUser || !ctx.user) return new Response('Unauthorized', { status:401 });
 
   const email = clean(ctx.user?.email,240).toLowerCase();
+  const metadata = ctx.user?.user_metadata || ctx.user?.userMetadata || {};
+  const displayName = clean(metadata?.full_name || metadata?.name || ctx.user?.name || '',120);
   const security = ctx.security || {
     forcePasswordChange:false,
     passwordChangedAt:'',
@@ -23,6 +25,7 @@ export default async (req:Request) => {
 
   return Response.json({
     email,
+    displayName,
     role:ctx.role,
     roles:[ctx.role],
     isAdmin:isApprovedAdmin(ctx.user),

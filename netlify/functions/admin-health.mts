@@ -20,6 +20,7 @@ import {
   saveHealthAlertPolicy,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
+import { clearCreditSaverPolicy, setCreditSaverAction } from './_shared/credit-saver';
 
 export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
@@ -43,6 +44,25 @@ export default async (req:Request,context:Context) => {
       }catch(error){
         return Response.json({error:error instanceof Error?error.message:'Unable to compare releases.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
       }
+    }
+
+    if(body?.action==='set-credit-saver'){
+      try{
+        const policy=await setCreditSaverAction(
+          context,
+          String(body.actionId||'') as any,
+          Boolean(body.enabled),
+          actor,
+        );
+        return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({error:error instanceof Error?error.message:'Unable to update credit-saver policy.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
+    if(body?.action==='clear-credit-saver'){
+      const policy=await clearCreditSaverPolicy(context,actor);
+      return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 
     const [previous,previousHourly]=await Promise.all([

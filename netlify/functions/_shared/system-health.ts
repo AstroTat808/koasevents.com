@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { readCreditSaverPolicy } from './credit-saver';
 
 export type HealthCheck = {
   id: string;
@@ -1002,35 +1003,435 @@ function billingCycleWindow(now=new Date()) {
   return {cycleDay,start:start.toISOString(),end:end.toISOString()};
 }
 
-function estimateNetlifyDeploymentCredits(rows:any[]) {
-  const window=billingCycleWindow();
-  const startMs=Date.parse(window.start);
-  const endMs=Date.parse(window.end);
-  const creditsPerDeploy=Math.max(0,Number(Netlify.env.get('KOA_NETLIFY_PRODUCTION_DEPLOY_CREDITS') || 15));
-  const monthlyAllowance=Math.max(0,Number(Netlify.env.get('KOA_NETLIFY_MONTHLY_CREDIT_ALLOWANCE') || 1000));
+function positiveNumber(value:unknown,fallback:number) {
+  const parsed=Number(value);
+  return Number.isFinite(parsed)&&parsed>=0?parsed:fallback;
+}
+
+function netlifyCreditRates() {
+  return {
+    productionDeploy:positiveNumber(Netlify.env.get('KOA_NETLIFY_PRODUCTION_DEPLOY_CREDITS'),15),
+    computeGbHour:positiveNumber(Netlify.env.get('KOA_NETLIFY_COMPUTE_CREDITS_PER_GB_HOUR'),10),
+    bandwidthGb:positiveNumber(Netlify.env.get('KOA_NETLIFY_BANDWIDTH_CREDITS_PER_GB'),20),
+    webRequests10k:positiveNumber(Netlify.env.get('KOA_NETLIFY_WEB_REQUEST_CREDITS_PER_10K'),2),
+  };
+}
+
+function creditSeverity(percent:number|null) {
+  if(percent==null||!Number.isFinite(percent)) return 'unknown';
+  if(percent>=90) return 'red';
+  if(percent>=80) return 'orange';
+  if(percent>=60) return 'yellow';
+  return 'green';
+}
+
+function scheduledRunsPerDay(schedules:any[]) {
+  let total=0;
+  for(const item of schedules||[]){
+    const cron=clean(item?.cron,80);
+    if(!cron) continue;
+    if(cron==='@hourly'){total+=24;continue;}
+    let match=cron.match(/^\*\/(\d+) \* \* \* \*$/);
+    if(match){total+=1440/Math.max(1,Number(match[1]));continue;}
+    match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
+    if(match){total+=24/Math.max(1,Number(match[1]));continue;}
+    if(/^0 \d{1,2} \* \* \*$/.test(cron)){total+=1;continue;}
+  }
+  return Math.round(total*100)/100;
+}
+
+async function fetchNetlifyBandwidthUsage(token:string) {
+  if(!token) return null;
+  const teamSlug=clean(Netlify.env.get('KOA_NETLIFY_TEAM_SLUG') || 'koasadmin',120);
+  try{
+    const response=await fetch('https://api.netlify.com/api/v1/accounts/'+encodeURIComponent(teamSlug)+'/bandwidth',{
+      headers:{Authorization:'Bearer '+token,'User-Agent':'KoaEvents-Health/1.0'},
+      signal:AbortSignal.timeout(12_000),
+    });
+    if(!response.ok) return null;
+    const body:any=await response.json();
+    const used=Number(body?.used);
+    if(!Number.isFinite(used)||used<0) return null;
+    return {
+      usedBytes:used,
+      includedBytes:Number.isFinite(Number(body?.included))?Number(body.included):null,
+      additionalBytes:Number.isFinite(Number(body?.additional))?Number(body.additional):null,
+      periodStart:clean(body?.period_start_date,80),
+      periodEnd:clean(body?.period_end_date,80),
+      lastUpdatedAt:clean(body?.last_updated_at,80),
+      source:'Netlify account bandwidth meter',
+    };
+  }catch{
+    return null;
+  }
+}
+
+function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[], creditSnapshots:any[]=[]) {
+  const fallbackWindow=billingCycleWindow();
+  const cycleStart=bandwidth?.periodStart && Number.isFinite(Date.parse(bandwidth.periodStart))
+    ? bandwidth.periodStart
+    : fallbackWindow.start;
+  const cycleEnd=bandwidth?.periodEnd && Number.isFinite(Date.parse(bandwidth.periodEnd))
+    ? bandwidth.periodEnd
+    : fallbackWindow.end;
+  const startMs=Date.parse(cycleStart);
+  const endMs=Date.parse(cycleEnd);
+  const nowMs=Date.now();
+  const rates=netlifyCreditRates();
+  const monthlyAllowance=positiveNumber(Netlify.env.get('KOA_NETLIFY_MONTHLY_CREDIT_ALLOWANCE'),1000);
+
   const successful=(rows||[]).filter((row:any)=>{
     const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
     return row?.state==='ready' && Number.isFinite(published) && published>=startMs && published<endMs;
   });
-  const estimatedDeploymentCredits=Math.round(successful.length*creditsPerDeploy*100)/100;
+  const deployCredits=successful.length*rates.productionDeploy;
+
+  const bandwidthBytes=bandwidth?.usedBytes==null?null:Number(bandwidth.usedBytes);
+  const bandwidthGb=bandwidthBytes==null?null:bandwidthBytes/1073741824;
+  const bandwidthCredits=bandwidthGb==null?null:bandwidthGb*rates.bandwidthGb;
+
+  const configuredRequests=Number(Netlify.env.get('KOA_NETLIFY_WEB_REQUESTS_ESTIMATE'));
+  const averageBytesPerRequest=Math.max(1024,positiveNumber(Netlify.env.get('KOA_NETLIFY_AVG_BYTES_PER_REQUEST'),180*1024));
+  const webRequests=Number.isFinite(configuredRequests)&&configuredRequests>=0
+    ? configuredRequests
+    : bandwidthBytes==null?null:Math.round(bandwidthBytes/averageBytesPerRequest);
+  const webRequestCredits=webRequests==null?null:(webRequests/10000)*rates.webRequests10k;
+
+  const configuredCompute=Number(Netlify.env.get('KOA_NETLIFY_FUNCTION_GB_HOURS_ESTIMATE'));
+  const scheduleRunsDay=scheduledRunsPerDay(schedules);
+  const elapsedDays=Math.max(0,(Math.min(nowMs,endMs)-startMs)/86400000);
+  const scheduledInvocations=Math.max(0,Math.round(scheduleRunsDay*elapsedDays));
+  const scheduledAverageMs=Math.max(1,positiveNumber(Netlify.env.get('KOA_NETLIFY_SCHEDULED_FUNCTION_AVG_MS'),1000));
+  const functionRequestShare=Math.min(1,Math.max(0,positiveNumber(Netlify.env.get('KOA_NETLIFY_FUNCTION_REQUEST_SHARE'),0.05)));
+  const functionAverageMs=Math.max(1,positiveNumber(Netlify.env.get('KOA_NETLIFY_FUNCTION_AVG_MS'),250));
+  const memoryGb=Math.max(0.125,positiveNumber(Netlify.env.get('KOA_NETLIFY_FUNCTION_MEMORY_GB'),1));
+  const estimatedOnDemandInvocations=webRequests==null?0:Math.round(webRequests*functionRequestShare);
+  const estimatedRuntimeMs=scheduledInvocations*scheduledAverageMs+estimatedOnDemandInvocations*functionAverageMs;
+  const computeGbHours=Number.isFinite(configuredCompute)&&configuredCompute>=0
+    ? configuredCompute
+    : (estimatedRuntimeMs/3600000)*memoryGb;
+  const computeCredits=computeGbHours*rates.computeGbHour;
+
+  const components=[
+    {id:'deploys',label:'Production deploys',usage:successful.length,unit:'deploys',credits:deployCredits,mode:'measured'},
+    {id:'compute',label:'Functions compute',usage:computeGbHours,unit:'GB-hour',credits:computeCredits,mode:Number.isFinite(configuredCompute)&&configuredCompute>=0?'configured':'estimated'},
+    {id:'bandwidth',label:'Bandwidth',usage:bandwidthGb,unit:'GB',credits:bandwidthCredits,mode:bandwidthGb==null?'unavailable':'measured'},
+    {id:'requests',label:'Web requests',usage:webRequests,unit:'requests',credits:webRequestCredits,mode:Number.isFinite(configuredRequests)&&configuredRequests>=0?'configured':webRequests==null?'unavailable':'estimated'},
+  ];
+  const knownCredits=components.reduce((sum,item)=>sum+(Number.isFinite(Number(item.credits))?Number(item.credits):0),0);
+  const totalCredits=Math.round(knownCredits*100)/100;
+  const percent=monthlyAllowance?Math.round((totalCredits/monthlyAllowance)*1000)/10:null;
+  const remaining=monthlyAllowance?Math.max(0,Math.round((monthlyAllowance-totalCredits)*100)/100):null;
+
+  const rawElapsedDays=Math.max(0,(Math.min(nowMs,endMs)-startMs)/86400000);
+  const projectionElapsedDays=Math.max(1,rawElapsedDays);
+  const cycleDays=Math.max(1,(endMs-startMs)/86400000);
+  const remainingDays=Math.max(0,(endMs-Math.min(nowMs,endMs))/86400000);
+  const fullCycleDailyBurnRate=totalCredits/projectionElapsedDays;
+
+  const recentCutoff=Math.max(startMs,nowMs-7*86400000);
+  const recentSuccessful=successful.filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return Number.isFinite(published)&&published>=recentCutoff&&published<=nowMs;
+  });
+  const recentWindowDays=Math.max(1,(Math.min(nowMs,endMs)-recentCutoff)/86400000);
+  const snapshotRows=(creditSnapshots||[])
+    .filter((row:any)=>
+      String(row?.cycleStart||'')===String(cycleStart)
+      && Number.isFinite(Date.parse(String(row?.at||'')))
+      && Date.parse(String(row.at))>=recentCutoff
+      && Date.parse(String(row.at))<=nowMs
+      && Number.isFinite(Number(row?.totalEstimatedCredits))
+    )
+    .sort((a:any,b:any)=>Date.parse(String(a.at))-Date.parse(String(b.at)));
+  snapshotRows.push({at:new Date(nowMs).toISOString(),totalEstimatedCredits:totalCredits,cycleStart});
+
+  let recentDailyBurnRate:number;
+  let recentRateSource='deploy timestamps + cycle average';
+  const firstRecent=snapshotRows[0];
+  const lastRecent=snapshotRows[snapshotRows.length-1];
+  const snapshotSpanDays=firstRecent&&lastRecent
+    ? Math.max(0,(Date.parse(String(lastRecent.at))-Date.parse(String(firstRecent.at)))/86400000)
+    : 0;
+
+  if(snapshotRows.length>=2 && snapshotSpanDays>=0.25){
+    const delta=Math.max(0,Number(lastRecent.totalEstimatedCredits)-Number(firstRecent.totalEstimatedCredits));
+    recentDailyBurnRate=delta/Math.max(0.25,snapshotSpanDays);
+    recentRateSource='stored credit snapshots';
+  }else{
+    const recentDeployRate=(recentSuccessful.length*rates.productionDeploy)/recentWindowDays;
+    const nonDeployRate=Math.max(0,totalCredits-deployCredits)/projectionElapsedDays;
+    recentDailyBurnRate=recentDeployRate+nonDeployRate;
+  }
+
+  const recentWeight=Math.min(0.95,Math.max(0.5,positiveNumber(Netlify.env.get('KOA_NETLIFY_RECENT_BURN_WEIGHT'),0.7)));
+  const baselineWeight=1-recentWeight;
+  const weightedDailyBurnRate=(recentDailyBurnRate*recentWeight)+(fullCycleDailyBurnRate*baselineWeight);
+  const projectedEndOfCycleCredits=Math.round((totalCredits+weightedDailyBurnRate*remainingDays)*100)/100;
+  const projectedAllowancePercent=monthlyAllowance
+    ? Math.round((projectedEndOfCycleCredits/monthlyAllowance)*1000)/10
+    : null;
+  const projectedSeverity=creditSeverity(projectedAllowancePercent);
+  const projectionConfidence=snapshotSpanDays>=7?'high':snapshotSpanDays>=2?'medium':rawElapsedDays>=7?'medium':'low';
+
+  const remainingCreditsRaw=Math.max(0,monthlyAllowance-totalCredits);
+  const daysUntilExhausted=projectedEndOfCycleCredits>monthlyAllowance && weightedDailyBurnRate>0
+    ? Math.max(0,remainingCreditsRaw/weightedDailyBurnRate)
+    : null;
+  const exhaustionAt=daysUntilExhausted==null
+    ? null
+    : new Date(nowMs+daysUntilExhausted*86400000).toISOString();
+
+  const chartWindowStart=Math.max(startMs,nowMs-29*86400000);
+  const actualByDay=new Map<string,any>();
+  for(const row of creditSnapshots||[]){
+    const atMs=Date.parse(String(row?.at||''));
+    const credits=Number(row?.totalEstimatedCredits);
+    if(!Number.isFinite(atMs)||!Number.isFinite(credits)||atMs<chartWindowStart||atMs>nowMs) continue;
+    const day=new Date(atMs).toISOString().slice(0,10);
+    const previous=actualByDay.get(day);
+    if(!previous||Date.parse(String(previous.at))<atMs){
+      actualByDay.set(day,{at:new Date(atMs).toISOString(),credits:Math.round(credits*100)/100});
+    }
+  }
+  const currentDay=new Date(nowMs).toISOString().slice(0,10);
+  actualByDay.set(currentDay,{at:new Date(nowMs).toISOString(),credits:totalCredits});
+  const actualPoints=[...actualByDay.values()].sort((a:any,b:any)=>Date.parse(a.at)-Date.parse(b.at));
+
+  const projectionPoints:any[]=[{at:new Date(nowMs).toISOString(),credits:totalCredits}];
+  const projectionDays=Math.max(0,Math.min(30,Math.ceil(remainingDays)));
+  for(let day=1;day<=projectionDays;day+=1){
+    const atMs=Math.min(endMs,nowMs+day*86400000);
+    const credits=Math.round((totalCredits+weightedDailyBurnRate*((atMs-nowMs)/86400000))*100)/100;
+    projectionPoints.push({at:new Date(atMs).toISOString(),credits});
+    if(atMs>=endMs) break;
+  }
+
+  const projectedOverAllowance=projectedEndOfCycleCredits>monthlyAllowance;
+  const excessCredits=Math.max(0,projectedEndOfCycleCredits-monthlyAllowance);
+  const requiredDailyReduction=projectedOverAllowance&&remainingDays>0
+    ? excessCredits/remainingDays
+    : 0;
+  const recentDeploysPerDay=recentSuccessful.length/recentWindowDays;
+  const recommendations:any[]=[];
+
+  if(projectedOverAllowance){
+    const deploySavingsPerDay=Math.max(0,(recentDeploysPerDay-1)*rates.productionDeploy);
+    recommendations.push({
+      id:'production-deploys',
+      priority:1,
+      title:'Pause nonessential production deploys and batch releases',
+      detail:'Keep development in Deploy Previews and consolidate approved changes into at most one production release per day until the forecast returns below the allowance.',
+      impact:deploySavingsPerDay>0
+        ? 'At the recent release pace, limiting production to one release/day could avoid about '+Math.round(deploySavingsPerDay*100)/100+' credits/day.'
+        : 'Every avoided production release saves '+rates.productionDeploy+' credits.',
+      estimatedSavingsPerDay:Math.round(deploySavingsPerDay*100)/100,
+      estimatedSavingsThisCycle:Math.round(deploySavingsPerDay*remainingDays*100)/100,
+      protects:'Deploy Previews, CRM, QuickBooks webhooks, Turnstile, Resend, and System Health remain available.',
+    });
+
+    const scheduleRows=(schedules||[]).map((item:any)=>{
+      const cron=clean(item?.cron,80);
+      let runs=0;
+      if(cron==='@hourly') runs=24;
+      else {
+        let match=cron.match(/^\*\/(\d+) \* \* \* \*$/);
+        if(match) runs=1440/Math.max(1,Number(match[1]));
+        else {
+          match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
+          if(match) runs=24/Math.max(1,Number(match[1]));
+          else if(/^0 \d{1,2} \* \* \*$/.test(cron)) runs=1;
+        }
+      }
+      return {name:clean(item?.name,120),cron,runsPerDay:runs};
+    }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
+    const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
+    if(verifier&&verifier.runsPerDay>48){
+      const savedRunsPerDay=verifier.runsPerDay/2;
+      const computeSavingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const verifierCycleSavings=computeSavingsPerDay*remainingDays;
+      recommendations.push({
+        id:'post-deploy-verification',
+        priority:2,
+        title:'Temporarily reduce post-deploy verification to every 30 minutes',
+        detail:'The verifier is the highest-frequency scheduled job. During a credit-risk period, moving it from every 15 minutes to every 30 minutes cuts its scheduled invocations in half without disabling verification.',
+        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day'+(computeSavingsPerDay>0?' (~'+Math.round(computeSavingsPerDay*1000)/1000+' estimated compute credits/day).':'.'),
+        estimatedSavingsPerDay:Math.round(computeSavingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(verifierCycleSavings*100)/100,
+        safeActionId:'post-deploy-verification-half',
+        protects:'Keep hourly System Health, lead-response reminders, QuickBooks webhooks, and the four-hour reconciliation fallback unchanged.',
+      });
+    }
+
+    const qbRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='quickbooks-hourly-reconciliation');
+    if(qbRuns){
+      const savedRunsPerDay=3;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'quickbooks-reconciliation',
+        priority:3,
+        title:'Temporarily run the QuickBooks reconciliation fallback every 8 hours',
+        detail:'QuickBooks webhooks remain immediate. This only halves the scheduled fallback reconciliation from every 4 hours to every 8 hours until the billing cycle resets.',
+        impact:'About 3 fewer reconciliation runs/day (~'+Math.round(savingsPerDay*1000)/1000+' estimated compute credits/day).',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'quickbooks-reconciliation-half',
+        protects:'QuickBooks payment/invoice webhooks remain unchanged and immediate.',
+      });
+    }
+
+    const lifecycleRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='crm-lifecycle');
+    if(lifecycleRuns){
+      const savedRunsPerDay=2;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'crm-lifecycle',
+        priority:4,
+        title:'Temporarily run the full CRM lifecycle sweep every 12 hours',
+        detail:'This halves the background CRM maintenance sweep from every 6 hours to every 12 hours. Interactive CRM operations remain available.',
+        impact:'About 2 fewer lifecycle sweeps/day (~'+Math.round(savingsPerDay*1000)/1000+' estimated compute credits/day).',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'crm-lifecycle-half',
+        protects:'CRM pages, lead capture, proposals, bookings, and manual operations remain available.',
+      });
+    }
+
+    const componentById=new Map(components.map((item:any)=>[item.id,item]));
+    const bandwidthComponent:any=componentById.get('bandwidth');
+    const requestComponent:any=componentById.get('requests');
+    const computeComponent:any=componentById.get('compute');
+    if(Number(bandwidthComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'bandwidth',
+        priority:3,
+        title:'Reduce high-bandwidth page loads before lowering business automation',
+        detail:'Keep the responsive Image CDN path enabled, lazy-load gallery/blog media, and investigate the highest-transfer public paths before changing CRM or payment workflows.',
+        impact:'Bandwidth is currently a material share of estimated credit use.',
+        protects:'No effect on CRM, QuickBooks, Turnstile, Resend, or client data.',
+      });
+    }else if(Number(computeComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'compute',
+        priority:3,
+        title:'Review nonessential scheduled compute before core integrations',
+        detail:'Start with high-frequency verification/maintenance jobs. Do not disable QuickBooks webhooks, Turnstile validation, Resend webhooks, or the core hourly health monitor.',
+        impact:'Functions compute is currently a material share of estimated credit use.',
+        protects:'Payment, security, email, and core health event processing stay intact.',
+      });
+    }else if(Number(requestComponent?.credits||0)>=Math.max(5,totalCredits*0.2)){
+      recommendations.push({
+        id:'requests',
+        priority:3,
+        title:'Reduce repeat requests with caching and on-demand refresh',
+        detail:'Prefer cached dashboard data and user-triggered refreshes over background polling. Keep webhook endpoints event-driven.',
+        impact:'Web requests are currently a material share of estimated credit use.',
+        protects:'Webhook-based CRM, QuickBooks, Resend, and security events remain immediate.',
+      });
+    }
+
+    recommendations.push({
+      id:'reduction-target',
+      priority:4,
+      title:'Hit the daily reduction target',
+      detail:'The current forecast needs roughly '+Math.round(requiredDailyReduction*100)/100+' fewer credits/day for the remainder of this billing cycle to finish at or below the '+monthlyAllowance+'-credit allowance.',
+      impact:'Projected overage: '+Math.round(excessCredits*100)/100+' credits if the weighted burn rate continues.',
+      protects:'Use this as the target when deciding which optional releases or jobs to defer.',
+    });
+  }
+
+  const previewFirstEnabledAt=clean(
+    Netlify.env.get('KOA_NETLIFY_PREVIEW_FIRST_ENABLED_AT') || '2026-09-22T11:20:44Z',
+    80,
+  );
+  const previewFirstEnabledMs=Date.parse(previewFirstEnabledAt);
+  const successfulPreviews=(previews||[]).filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return row?.state==='ready'
+      && Number.isFinite(published)
+      && Number.isFinite(previewFirstEnabledMs)
+      && published>=previewFirstEnabledMs;
+  });
+  const estimatedCreditsSaved=Math.round(successfulPreviews.length*rates.productionDeploy*100)/100;
+
+  const severityRank:Record<string,number>={unknown:0,green:1,yellow:2,orange:3,red:4};
+  const actualSeverity=creditSeverity(percent);
+  const warningSeverity=(severityRank[projectedSeverity]||0)>(severityRank[actualSeverity]||0)
+    ? projectedSeverity
+    : actualSeverity;
+
   return {
-    basis:'Production deploys only',
-    cycleDay:window.cycleDay,
-    cycleStart:window.start,
-    cycleEnd:window.end,
+    version:5,
+    basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
+    cycleStart,
+    cycleEnd,
     productionDeploys:successful.length,
-    creditsPerProductionDeploy:creditsPerDeploy,
-    estimatedDeploymentCredits,
     monthlyAllowance,
-    estimatedAllowancePercent:monthlyAllowance?Math.round((estimatedDeploymentCredits/monthlyAllowance)*1000)/10:null,
-    note:'Estimate excludes bandwidth, function compute, web requests, image transformations, and other Netlify usage.',
+    totalEstimatedCredits:totalCredits,
+    estimatedAllowancePercent:percent,
+    estimatedRemainingCredits:remaining,
+    severity:actualSeverity,
+    warningSeverity,
+    chart:{
+      windowDays:30,
+      windowStart:new Date(chartWindowStart).toISOString(),
+      windowEnd:new Date(Math.min(endMs,nowMs+30*86400000)).toISOString(),
+      allowance:monthlyAllowance,
+      actual:actualPoints,
+      projected:projectionPoints,
+      note:'Actual line uses stored estimated-credit snapshots; projected line uses the current recent-weighted daily burn rate.',
+    },
+    recommendations,
+    projection:{
+      dailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
+      weightedDailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
+      recent7DayBurnRate:Math.round(recentDailyBurnRate*100)/100,
+      fullCycleDailyBurnRate:Math.round(fullCycleDailyBurnRate*100)/100,
+      recentWeight:Math.round(recentWeight*1000)/10,
+      baselineWeight:Math.round(baselineWeight*1000)/10,
+      recentRateSource,
+      snapshotSpanDays:Math.round(snapshotSpanDays*100)/100,
+      cycleDays:Math.round(cycleDays*100)/100,
+      elapsedDays:Math.round(rawElapsedDays*100)/100,
+      remainingDays:Math.round(remainingDays*100)/100,
+      projectedEndOfCycleCredits,
+      projectedAllowancePercent,
+      severity:projectedSeverity,
+      confidence:projectionConfidence,
+      daysUntilExhausted:daysUntilExhausted==null?null:Math.round(daysUntilExhausted*10)/10,
+      exhaustionAt,
+    },
+    savings:{
+      enabledAt:previewFirstEnabledAt,
+      successfulDeployPreviews:successfulPreviews.length,
+      estimatedCreditsSaved,
+      methodology:'Successful Deploy Previews since preview-first enforcement × current production-deploy credit rate.',
+    },
+    rates,
+    components:components.map(item=>({
+      ...item,
+      usage:item.usage==null?null:Math.round(Number(item.usage)*1000)/1000,
+      credits:item.credits==null?null:Math.round(Number(item.credits)*100)/100,
+    })),
+    assumptions:{
+      averageBytesPerRequest:Math.round(averageBytesPerRequest),
+      functionRequestShare:Math.round(functionRequestShare*1000)/10,
+      functionAverageMs:Math.round(functionAverageMs),
+      scheduledFunctionAverageMs:Math.round(scheduledAverageMs),
+      functionMemoryGb:Math.round(memoryGb*1000)/1000,
+      scheduledRunsPerDay:scheduleRunsDay,
+      scheduledInvocations,
+      bandwidthLastUpdatedAt:bandwidth?.lastUpdatedAt||'',
+    },
+    thresholds:{yellow:60,orange:80,red:90},
+    note:'Deploys and bandwidth use Netlify data. Compute and web requests are estimates unless configured overrides are supplied; compare against Netlify Usage & billing for the invoice-grade total.',
   };
 }
 
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===5 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -1046,32 +1447,44 @@ export async function cachedDeploymentHistory(context:Context) {
     behindMain:null,
     commitsBehind:null,
     compareStatus:'',
+    functionSchedules:[],
   };
 
   const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
   let netlifyDeployHistory:any[]=[];
+  let netlifyPreviewHistory:any[]=[];
   if(netlifyToken){
     try{
       const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
-      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100',{
-        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
-        signal:AbortSignal.timeout(12_000),
-      });
-      if(response.ok){
+      const collected:any[]=[];
+      for(let page=1;page<=5;page+=1){
+        const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100&page='+page,{
+          headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+          signal:AbortSignal.timeout(12_000),
+        });
+        if(!response.ok) break;
         const rows:any[]=await response.json();
-        netlifyDeployHistory=rows
-          .filter((row:any)=>clean(row?.context,40)==='production')
-          .map((row:any)=>({
-            deployId:clean(row?.id,120),
-            commit:clean(row?.commit_ref,80),
-            state:clean(row?.state,40),
-            title:clean(row?.title,300),
-            createdAt:clean(row?.created_at,80),
-            publishedAt:clean(row?.published_at,80),
-            deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
-            errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
-          }));
+        collected.push(...rows);
+        if(rows.length<100) break;
       }
+      const normalizeDeploy=(row:any)=>({
+        deployId:clean(row?.id,120),
+        commit:clean(row?.commit_ref,80),
+        state:clean(row?.state,40),
+        context:clean(row?.context,40),
+        reviewId:row?.review_id==null?null:Number(row.review_id),
+        title:clean(row?.title,300),
+        createdAt:clean(row?.created_at,80),
+        publishedAt:clean(row?.published_at,80),
+        deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
+        errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
+      });
+      netlifyDeployHistory=collected
+        .filter((row:any)=>clean(row?.context,40)==='production')
+        .map(normalizeDeploy);
+      netlifyPreviewHistory=collected
+        .filter((row:any)=>clean(row?.context,40)==='deploy-preview')
+        .map(normalizeDeploy);
     }catch{}
   }
   if(current.deployId && netlifyToken){
@@ -1085,6 +1498,7 @@ export async function cachedDeploymentHistory(context:Context) {
         current.deployTime=clean(deploy?.published_at||deploy?.updated_at||deploy?.created_at,80)||current.deployTime;
         const availableFunctions=Array.isArray(deploy?.available_functions)?deploy.available_functions:[];
         if(availableFunctions.length) current.functionCount=availableFunctions.length;
+        current.functionSchedules=Array.isArray(deploy?.function_schedules)?deploy.function_schedules:[];
       }
     }catch{}
   }
@@ -1190,8 +1604,40 @@ export async function cachedDeploymentHistory(context:Context) {
     lastSuccessfulQa.commit===current.commit
   );
   const postDeployVerification=await readPostDeployVerification(context);
+  const bandwidthUsage=await fetchNetlifyBandwidthUsage(netlifyToken);
+  const creditSnapshots=((await store.get('credits/history',{type:'json'})) || []) as any[];
+  const creditUsage=estimateNetlifyCredits(
+    netlifyDeployHistory,
+    netlifyPreviewHistory,
+    bandwidthUsage,
+    current.functionSchedules||[],
+    creditSnapshots,
+  );
+  const creditSaverPolicy=await readCreditSaverPolicy(context);
+  creditUsage.saverPolicy=creditSaverPolicy;
+  creditUsage.recommendations=(creditUsage.recommendations||[]).map((item:any)=>({
+    ...item,
+    active:Boolean(item.safeActionId && creditSaverPolicy.activeActions?.includes(item.safeActionId)),
+    canApply:Boolean(item.safeActionId),
+  }));
+  const generatedAt=new Date().toISOString();
+  const compactCreditSnapshot={
+    at:generatedAt,
+    cycleStart:creditUsage.cycleStart,
+    totalEstimatedCredits:creditUsage.totalEstimatedCredits,
+  };
+  const sameCycleSnapshots=creditSnapshots
+    .filter((row:any)=>String(row?.cycleStart||'')===String(creditUsage.cycleStart))
+    .sort((a:any,b:any)=>Date.parse(String(b?.at||''))-Date.parse(String(a?.at||'')));
+  const latestCreditSnapshot=sameCycleSnapshots[0]||null;
+  const latestAgeMs=latestCreditSnapshot?Date.now()-Date.parse(String(latestCreditSnapshot.at||'')):Infinity;
+  const nextCreditSnapshots=latestAgeMs<60*60*1000
+    ? [compactCreditSnapshot,...creditSnapshots.filter((row:any)=>row!==latestCreditSnapshot)]
+    : [compactCreditSnapshot,...creditSnapshots];
+  await store.setJSON('credits/history',nextCreditSnapshots.slice(0,800));
+
   const result={
-    generatedAt:new Date().toISOString(),
+    generatedAt,
     current,
     deploymentHealthy,
     postDeployVerification,
@@ -1201,7 +1647,7 @@ export async function cachedDeploymentHistory(context:Context) {
     failedBuilds,
     failedDeployGroups,
     netlifyDeployHistory,
-    creditUsage:estimateNetlifyDeploymentCredits(netlifyDeployHistory),
+    creditUsage,
     history,
   };
   await store.setJSON('deployments/cache',result);
