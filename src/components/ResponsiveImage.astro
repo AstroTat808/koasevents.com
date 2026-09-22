@@ -21,11 +21,39 @@ const {
   class: className = '',
   sizes = '100vw',
   priority = false,
+  fit = 'cover',
+  position = 'center',
+  quality = 84,
   focalIgnore = false,
 } = Astro.props;
+
+const transform = (targetWidth: number, targetHeight?: number, format = 'webp') => {
+  const params = new URLSearchParams({
+    url: src,
+    w: String(Math.max(1, Math.round(targetWidth))),
+    fit,
+    position,
+    q: String(Math.max(1, Math.min(100, Math.round(quality)))),
+    fm: format,
+  });
+  if (targetHeight) params.set('h', String(Math.max(1, Math.round(targetHeight))));
+  return '/.netlify/images?' + params.toString();
+};
+
+const ratio = height / width;
+const candidates = [...new Set([480, 768, 1024, 1440, 1800, width])]
+  .filter((candidate) => candidate > 0 && candidate <= Math.max(width, 1800))
+  .sort((a, b) => a - b);
+
+const srcset = candidates
+  .map((candidate) => transform(candidate, Math.round(candidate * ratio)) + ' ' + candidate + 'w')
+  .join(', ');
+
+const fallbackSrc = transform(Math.min(width, 1800), Math.round(Math.min(width, 1800) * ratio));
 ---
 <img
-  src={src}
+  src={fallbackSrc}
+  srcset={srcset}
   sizes={sizes}
   width={width}
   height={height}

@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import Header from '../../components/Header.astro';
 import Footer from '../../components/Footer.astro';
 import { wixBlogPosts } from '../../data/wixBlogPosts';
-import { koaMarketingGallery } from '../../data/media';
+import { koaMarketingGallery, netlifyImage, netlifySrcSet } from '../../data/media';
 import { blogVisuals } from '../../data/blogVisuals';
 
 export function getStaticPaths() {
@@ -104,6 +104,11 @@ const renderArticleBody = (html: string) => {
     }
   }
 
+  rendered = rendered.replace(/<img\b([^>]*?)\bsrc="(\/media\/[^"]+)"([^>]*)>/gi, (_match, before, source, after) => {
+    const optimized = netlifyImage(source, 1400, undefined, 'contain', 'center', 86);
+    return '<img' + before + 'src="' + optimized + '"' + after + ' loading="lazy" decoding="async">';
+  });
+
   return rendered;
 };
 const renderedBodyHtml = renderArticleBody(post.bodyHtml || '');
@@ -186,7 +191,9 @@ const articleSchema = {
             aria-label="Open featured image"
           >
             <img
-              src={post.featuredImage}
+              src={netlifyImage(post.featuredImage, 1600, 900, 'cover', 'center', 86)}
+              srcset={netlifySrcSet(post.featuredImage, 1600, 900, 'cover', 'center', 86)}
+              sizes="(min-width:1024px) 80vw,100vw"
               alt={post.title}
               width="1600"
               height="900"
@@ -269,7 +276,9 @@ const articleSchema = {
                     aria-label={`Open gallery image: ${image.alt}`}
                   >
                     <img
-                      src={image.src}
+                      src={netlifyImage(image.src, index === 0 ? 1200 : 800, index === 0 ? 675 : 600, 'cover', 'center', 84)}
+                      srcset={netlifySrcSet(image.src, index === 0 ? 1200 : 800, index === 0 ? 675 : 600, 'cover', 'center', 84)}
+                      sizes={index === 0 ? "(min-width:1024px) 66vw,100vw" : "(min-width:1024px) 33vw,(min-width:640px) 50vw,100vw"}
                       alt={image.alt}
                       loading="lazy"
                       decoding="async"
@@ -298,7 +307,7 @@ const articleSchema = {
             <div class="mt-8 grid gap-5 md:grid-cols-3">
               {related.map((item) => (
                 <a href={`/blog/${item.slug}/`} class="group overflow-hidden rounded-[1.4rem] border border-[var(--koa-line)] bg-white">
-                  <img src={item.featuredImage} alt="" loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                  <img src={netlifyImage(item.featuredImage, 800, 500, 'cover', 'center', 84)} srcset={netlifySrcSet(item.featuredImage, 800, 500, 'cover', 'center', 84)} sizes="(min-width:768px) 33vw,100vw" alt="" loading="lazy" decoding="async" class="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
                   <div class="p-5">
                     <p class="eyebrow text-[var(--koa-clay)]">{item.category}</p>
                     <h3 class="display mt-3 text-2xl leading-[1.05]">{item.title}</h3>
@@ -346,7 +355,9 @@ const articleSchema = {
       function show(index) {
         if (!items.length) return;
         current = (index + items.length) % items.length;
-        image.src = items[current].src;
+        const original = items[current].src;
+        const params = new URLSearchParams({ url: original, w: '1800', q: '88', fm: 'webp', fit: 'contain' });
+        image.src = '/.netlify/images?' + params.toString();
         image.alt = items[current].alt || '';
         if (caption) caption.textContent = items[current].alt || '';
         if (!dialog.open) dialog.showModal();

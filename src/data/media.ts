@@ -334,6 +334,7 @@ export function netlifyImage(
     fit,
     position,
     q: String(quality),
+    fm: 'webp',
   });
   if (height) params.set('h', String(height));
   return '/.netlify/images?' + params.toString();
