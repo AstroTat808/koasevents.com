@@ -116,6 +116,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </section>
         </section>
 
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Role permissions</p>
+            <h2 class="display mt-2 text-4xl">Page-by-page access matrix</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Each role has a locked baseline. Individual permissions can add access without weakening the role’s required permissions.</p>
+          </div>
+          <div data-role-matrix class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4"></div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
           <div class="grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
             <div>
@@ -458,6 +467,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
+    function renderRoleMatrix() {
+      const container=document.querySelector('[data-role-matrix]');
+      if(!container)return;
+      const labels=new Map(capabilityDefinitions.map((cap)=>[cap.id,cap.label]));
+      container.innerHTML='';
+      roleDefinitions.forEach((role)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const title=document.createElement('h3');title.className='text-base font-semibold text-[var(--koa-forest)]';title.textContent=role.label;
+        const list=document.createElement('ul');list.className='mt-3 grid gap-1.5 text-xs leading-5 text-[var(--koa-ink)]/58';
+        (role.capabilities||[]).forEach((capability)=>{
+          const item=document.createElement('li');item.textContent='• '+(labels.get(capability)||capability);list.appendChild(item);
+        });
+        if(!(role.capabilities||[]).length){const item=document.createElement('li');item.textContent='No default access';list.appendChild(item);}
+        card.append(title,list);container.appendChild(card);
+      });
+    }
+
     function renderAudit(rows) {
       auditList.innerHTML = '';
       auditCount.textContent = rows.length+' entr'+(rows.length === 1 ? 'y' : 'ies');
@@ -495,6 +522,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           policyForm.elements.requireChangeOnAdminSet.checked=securityPolicy.requireChangeOnAdminSet!==false;
         }
         renderUsers();
+        renderRoleMatrix();
         renderAudit(data.audit || []);
       } catch (error) {
         listMessage.textContent = error.message;
