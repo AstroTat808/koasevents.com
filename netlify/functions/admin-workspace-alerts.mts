@@ -27,6 +27,7 @@ type LifecycleRecord=AlertDetail&{
 type UserAlertState={
   seen:Record<string,string>;
   snoozes:Record<string,{until:string;createdAt:string}>;
+  dismissed:Record<string,{dismissedAt:string}>;
   updatedAt:string;
 };
 
@@ -77,7 +78,8 @@ function snoozeUntil(payload:any){
 function cleanUserState(value:any):UserAlertState{
   const seen=value?.seen&&typeof value.seen==='object'?value.seen:{};
   const snoozes=value?.snoozes&&typeof value.snoozes==='object'?value.snoozes:{};
-  return {seen,snoozes,updatedAt:clip(value?.updatedAt,80)};
+  const dismissed=value?.dismissed&&typeof value.dismissed==='object'?value.dismissed:{};
+  return {seen,snoozes,dismissed,updatedAt:clip(value?.updatedAt,80)};
 }
 
 async function readUserState(context:Context,user:any){
@@ -316,6 +318,25 @@ export default async(req:Request,context:Context)=>{
       return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
     }
 
+    if(action==='dismiss'){
+      const id=clip(body?.occurrenceId,80);
+      const record=activeByOccurrence.get(id);
+      if(!record||!canViewCategory(user,record.category))return Response.json({error:'Alert is no longer active.'},{status:404});
+      const now=new Date().toISOString();
+      state.dismissed[id]={dismissedAt:now};
+      state.seen[id]=state.seen[id]||now;
+      delete state.snoozes[id];
+      await saveUserState(context,user,state);
+      return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
+    if(action==='restore-dismissed'){
+      const id=clip(body?.occurrenceId,80);
+      delete state.dismissed[id];
+      await saveUserState(context,user,state);
+      return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
     return Response.json({error:'Unknown alert action.'},{status:400});
   }
 
@@ -337,10 +358,12 @@ export default async(req:Request,context:Context)=>{
       isNew:!state.seen[record.occurrenceId],
       seenAt:state.seen[record.occurrenceId]||'',
       snoozedUntil:state.snoozes[record.occurrenceId]?.until||'',
+      dismissedAt:state.dismissed[record.occurrenceId]?.dismissedAt||'',
     }));
 
-  const visibleAlerts=activeVisible.filter((record:any)=>!record.snoozedUntil);
-  const snoozedAlerts=activeVisible.filter((record:any)=>Boolean(record.snoozedUntil));
+  const visibleAlerts=activeVisible.filter((record:any)=>!record.snoozedUntil&&!record.dismissedAt);
+  const snoozedAlerts=activeVisible.filter((record:any)=>Boolean(record.snoozedUntil)&&!record.dismissedAt);
+  const dismissedAlerts=activeVisible.filter((record:any)=>Boolean(record.dismissedAt));
   const severityOrder:Record<Severity,number>={urgent:0,upcoming:1,info:2};
   visibleAlerts.sort((a:any,b:any)=>{
     if(Boolean(a.isNew)!==Boolean(b.isNew))return a.isNew?-1:1;
@@ -371,9 +394,11 @@ export default async(req:Request,context:Context)=>{
     total:visibleAlerts.length,
     newCount:visibleAlerts.filter((alert:any)=>alert.isNew).length,
     snoozedCount:snoozedAlerts.length,
+    dismissedCount:dismissedAlerts.length,
     severityCounts,
     alerts:visibleAlerts.slice(0,100),
     snoozed:snoozedAlerts.slice(0,100),
+    dismissed:dismissedAlerts.slice(0,100),
     history:visibleHistory(user,lifecycle.active,lifecycle.history),
     items,
   },{headers:{'Cache-Control':'private, no-store'}});
