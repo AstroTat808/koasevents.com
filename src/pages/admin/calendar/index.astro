@@ -26,17 +26,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-clay)] p-5 text-white"><p class="eyebrow text-white/70">Potential conflicts</p><p data-total-potential class="display mt-2 text-4xl">0</p></article>
         </section>
 
-        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex items-center gap-3">
-              <button data-prev type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-lg text-[var(--koa-forest)]">←</button>
-              <div>
+        <section class="calendar-shell rounded-[1.75rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-7">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div class="flex flex-wrap items-center gap-3">
+              <button data-prev type="button" aria-label="Previous month" class="calendar-nav">←</button>
+              <div class="min-w-[15rem]">
                 <p class="eyebrow text-[var(--koa-clay)]">Calendar month</p>
-                <h2 data-month-title class="display mt-1 text-4xl"></h2>
+                <h2 data-month-title class="display mt-1 text-4xl sm:text-5xl"></h2>
               </div>
-              <button data-next type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-lg text-[var(--koa-forest)]">→</button>
+              <button data-next type="button" aria-label="Next month" class="calendar-nav">→</button>
+              <button data-today type="button" class="calendar-today">Today</button>
             </div>
-            <div class="flex flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
+            <div class="flex max-w-3xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
               <span class="legend legend-event">Event</span>
               <span class="legend legend-payment">QBO payment</span>
               <span class="legend legend-deadline">Deadline</span>
@@ -44,10 +45,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <span class="legend legend-task">Task / timeline</span>
             </div>
           </div>
-          <div class="mt-5 grid grid-cols-7 border-l border-t border-[var(--koa-line)] text-center text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">
-            <div class="border-b border-r border-[var(--koa-line)] p-2">Sun</div><div class="border-b border-r border-[var(--koa-line)] p-2">Mon</div><div class="border-b border-r border-[var(--koa-line)] p-2">Tue</div><div class="border-b border-r border-[var(--koa-line)] p-2">Wed</div><div class="border-b border-r border-[var(--koa-line)] p-2">Thu</div><div class="border-b border-r border-[var(--koa-line)] p-2">Fri</div><div class="border-b border-r border-[var(--koa-line)] p-2">Sat</div>
+
+          <div class="mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
+            <div class="calendar-grid-wrap">
+              <div class="calendar-weekdays grid grid-cols-7 text-center text-[.6rem] font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+              </div>
+              <div data-calendar class="calendar-grid grid grid-cols-7"></div>
+            </div>
           </div>
-          <div data-calendar class="grid grid-cols-7 border-l border-[var(--koa-line)]"></div>
+
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--koa-ink)]/45">
+            <p>Open any calendar item to jump directly into that event record.</p>
+            <p class="font-semibold text-[var(--koa-forest)]/65">Month view · 6-week grid</p>
+          </div>
         </section>
 
         <section class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
@@ -68,23 +79,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     </div>
   </main>
 
-  <style>
-    .legend{border-radius:9999px;padding:.5rem .7rem;border:1px solid var(--koa-line)}
+  <style is:global>
+    .legend{border-radius:9999px;padding:.55rem .78rem;border:1px solid var(--koa-line);white-space:nowrap}
     .legend-event{background:var(--koa-forest);color:white;border-color:var(--koa-forest)}
     .legend-payment{background:var(--koa-clay);color:white;border-color:var(--koa-clay)}
     .legend-deadline{background:var(--koa-sand);color:var(--koa-forest)}
     .legend-vendor{background:white;color:var(--koa-clay)}
     .legend-task{background:var(--koa-ink);color:white;border-color:var(--koa-ink)}
-    .calendar-day{min-height:9rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line);padding:.5rem;background:white}
-    .calendar-day.is-other{background:color-mix(in srgb,var(--koa-sand) 55%,white);color:color-mix(in srgb,var(--koa-ink) 40%,transparent)}
-    .calendar-item{display:block;width:100%;border-radius:.5rem;padding:.35rem .45rem;text-align:left;font-size:.64rem;line-height:1.25}
+    .calendar-nav{display:grid;height:3rem;width:3rem;place-items:center;border-radius:9999px;border:1px solid var(--koa-line);background:white;font-size:1.2rem;color:var(--koa-forest);transition:transform .16s ease,background .16s ease}
+    .calendar-nav:hover{background:var(--koa-ivory);transform:translateY(-1px)}
+    .calendar-today{border-radius:9999px;background:var(--koa-sand);padding:.72rem 1rem;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--koa-forest)}
+    .calendar-grid-wrap{min-width:68rem}
+    .calendar-weekdays{background:color-mix(in srgb,var(--koa-sand) 54%,white)}
+    .calendar-weekdays>div{border-right:1px solid var(--koa-line);padding:.8rem .5rem}
+    .calendar-weekdays>div:last-child{border-right:0}
+    .calendar-grid{border-top:1px solid var(--koa-line)}
+    .calendar-day{position:relative;min-height:12.5rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line);padding:.7rem;background:white;transition:background .16s ease}
+    .calendar-day:nth-child(7n){border-right:0}
+    .calendar-day:nth-last-child(-n+7){border-bottom:0}
+    .calendar-day.is-weekend:not(.is-other){background:color-mix(in srgb,var(--koa-ivory) 72%,white)}
+    .calendar-day.is-other{background:color-mix(in srgb,var(--koa-sand) 42%,white);color:color-mix(in srgb,var(--koa-ink) 38%,transparent)}
+    .calendar-day.is-today{background:color-mix(in srgb,var(--koa-amber-light) 16%,white)}
+    .calendar-day.is-today::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 2px var(--koa-forest)}
+    .calendar-day.is-today .calendar-date-number{display:grid;height:1.8rem;min-width:1.8rem;place-items:center;border-radius:9999px;background:var(--koa-forest);padding:0 .35rem;color:white}
+    .calendar-item{display:block;width:100%;overflow:hidden;border-radius:.55rem;padding:.42rem .5rem;text-align:left;font-size:.67rem;font-weight:700;line-height:1.3;text-overflow:ellipsis;white-space:nowrap;transition:transform .12s ease,filter .12s ease}
+    .calendar-item:hover{transform:translateY(-1px);filter:brightness(.98)}
     .calendar-item.event{background:var(--koa-forest);color:white}
     .calendar-item.payment{background:var(--koa-clay);color:white}
     .calendar-item.deadline{background:var(--koa-sand);color:var(--koa-forest)}
     .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:white}
     .calendar-item.task,.calendar-item.timeline{background:var(--koa-ink);color:white}
-    .calendar-item.is-overdue{outline:2px solid var(--koa-clay)}
-    @media(max-width:800px){.calendar-day{min-height:7rem;padding:.35rem}.calendar-item{font-size:.58rem}}
+    .calendar-item.is-overdue{outline:2px solid var(--koa-clay);outline-offset:1px}
+    @media(min-width:1536px){.calendar-day{min-height:14rem}.calendar-grid-wrap{min-width:76rem}.calendar-item{font-size:.7rem}}
+    @media(max-width:800px){.calendar-shell{margin-inline:-.25rem}.calendar-grid-wrap{min-width:62rem}.calendar-day{min-height:10.5rem;padding:.55rem}.calendar-item{font-size:.62rem}}
   </style>
 
   <script>
@@ -133,9 +160,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       (data.items||[]).forEach((item)=>{const list=itemsByDate.get(item.date)||[];list.push(item);itemsByDate.set(item.date,list);});
       for(let i=0;i<42;i++){
         const date=addDays(gridStart,i);const key=ymd(date);const cell=document.createElement('div');
-        cell.className='calendar-day'+(date.getMonth()!==cursor.getMonth()?' is-other':'');
-        const head=document.createElement('div');head.className='mb-2 flex items-center justify-between';
-        head.appendChild(text('span','text-xs font-bold',String(date.getDate())));
+        cell.className='calendar-day'+(date.getMonth()!==cursor.getMonth()?' is-other':'')+([0,6].includes(date.getDay())?' is-weekend':'')+(key===today()?' is-today':'');
+        const head=document.createElement('div');head.className='mb-2 flex items-center justify-between gap-1';
+        head.appendChild(text('span','calendar-date-number text-xs font-bold',String(date.getDate())));
         const dayConflicts=(data.conflicts||[]).filter((c)=>c.date===key);
         if(dayConflicts.length)head.appendChild(text('span','rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
         cell.appendChild(head);
@@ -194,6 +221,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
     document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
+    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=new Date(now.getFullYear(),now.getMonth(),1);load();});
     load();
   </script>
 </BaseLayout>
