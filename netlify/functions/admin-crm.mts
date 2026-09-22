@@ -67,7 +67,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 }
 
 export default async (req:Request, context:Context) => {
-  const auth = await requireCapability('crm.view');
+  const auth = await requireCapability('crm.view', req);
   if (auth.response) return auth.response;
 
   const crm = crmStoreFor(context);
