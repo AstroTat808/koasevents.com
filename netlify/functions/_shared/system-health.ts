@@ -40,9 +40,18 @@ export type HealthAlertPolicy = {
   rules: HealthAlertRule[];
 };
 
+export type CrmStartupSignal = {
+  status: 'healthy' | 'failed';
+  phase: string;
+  detail: string;
+  reportedAt: string;
+  deployId: string;
+  commit: string;
+};
+
 const PAGE_CHECKS = [
   ['admin-home','Content Admin','/admin/','data-auth-panel'],
-  ['business-crm','Business CRM','/admin/crm/','data-admin-ui'],
+  ['business-crm','Business CRM','/admin/crm/','data-crm-watchdog'],
   ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
   ['event-ops','Event Ops','/admin/events/','data-app'],
   ['master-calendar','Master Calendar','/admin/calendar/','data-app'],
@@ -80,13 +89,14 @@ const API_CHECKS = [
 export function healthComponents() {
   return [
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
+    {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
   ];
 }
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'business-crm','sales-crm','event-ops','master-calendar','staff-home',
+    'business-crm','business-crm-startup','sales-crm','event-ops','master-calendar','staff-home',
     'admin-session','business-crm-api','sales-crm-api','event-ops-api','calendar-api',
   ]);
   return immediate.has(id)?1:2;
@@ -168,6 +178,29 @@ function clean(value: unknown, max=500) {
   return String(value || '').trim().slice(0,max);
 }
 
+export async function recordCrmStartupSignal(context:Context,input:Partial<CrmStartupSignal>) {
+  const status:CrmStartupSignal['status']=input.status==='failed'?'failed':'healthy';
+  const signal:CrmStartupSignal={
+    status,
+    phase:clean(input.phase,80)||'unknown',
+    detail:clean(input.detail,500),
+    reportedAt:new Date().toISOString(),
+    deployId:clean(input.deployId,120),
+    commit:clean(input.commit,120),
+  };
+  const store=healthStore(context);
+  const history=((await store.get('client/business-crm-startup/history',{type:'json'}))||[]) as CrmStartupSignal[];
+  await Promise.all([
+    store.setJSON('client/business-crm-startup/latest',signal),
+    store.setJSON('client/business-crm-startup/history',[signal,...history].slice(0,100)),
+  ]);
+  return signal;
+}
+
+export async function readCrmStartupSignal(context:Context):Promise<CrmStartupSignal|null> {
+  return ((await healthStore(context).get('client/business-crm-startup/latest',{type:'json'}))||null) as CrmStartupSignal|null;
+}
+
 function baseUrl() {
   return clean(Netlify.env.get('URL'),500) || 'https://koasevents.com';
 }
@@ -186,7 +219,7 @@ async function timedFetch(url:string, init:RequestInit={}) {
   }
 }
 
-export async function runSystemHealth(source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
+export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
   const origin=baseUrl().replace(/\/$/,'');
   const pageChecks=PAGE_CHECKS.map(async ([id,name,path,marker]):Promise<HealthCheck>=>{
     const result=await timedFetch(origin+path);
@@ -207,7 +240,32 @@ export async function runSystemHealth(source:'hourly'|'manual'|'post-deploy'='ho
       detail:result.error || (ok?(status===200?'Endpoint reachable':'Endpoint reachable and authorization enforced'):'Unexpected API response'),
     };
   });
-  const checks=await Promise.all([...pageChecks,...apiChecks]);
+  const [baseChecks,startupSignal]=await Promise.all([
+    Promise.all([...pageChecks,...apiChecks]),
+    readCrmStartupSignal(context),
+  ]);
+  const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
+  const commit=clean(Netlify.env.get('COMMIT_REF'),120);
+  const sameRelease=Boolean(startupSignal && (
+    (deployId && startupSignal.deployId && startupSignal.deployId===deployId)
+    || (!startupSignal.deployId && commit && startupSignal.commit && startupSignal.commit===commit)
+  ));
+  const startupFailed=Boolean(sameRelease && startupSignal?.status==='failed');
+  const startupCheck:HealthCheck={
+    id:'business-crm-startup',
+    name:'Business CRM startup',
+    kind:'page',
+    path:'/admin/crm/',
+    ok:!startupFailed,
+    status:startupFailed?500:200,
+    ms:0,
+    detail:startupFailed
+      ? 'A logged-in staff browser reported CRM startup failure · '+clean(startupSignal?.phase,80)+(startupSignal?.detail?' · '+clean(startupSignal.detail,300):'')
+      : sameRelease && startupSignal?.status==='healthy'
+        ? 'Logged-in staff browser confirmed the CRM interface initialized successfully'
+        : 'No logged-in browser startup failure has been reported for the current deploy',
+  };
+  const checks=[...baseChecks,startupCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
