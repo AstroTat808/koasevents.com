@@ -161,6 +161,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Private event deposit %<input name="privateEventPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">General fallback deposit %<input name="defaultPercent" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
             </div>
+            <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4">
+              <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Payment schedule presets</p>
+                  <p class="mt-1 text-xs text-[var(--koa-ink)]/50">Apply a preset to the unsaved editor, then customize deposit %, milestone order, dates, or percentages before saving.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" data-payment-preset="standardWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Standard Wedding</button>
+                  <button type="button" data-payment-preset="extendedWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Extended Wedding</button>
+                  <button type="button" data-payment-preset="microWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Micro Wedding</button>
+                  <button type="button" data-payment-preset="mobileBar" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Mobile Bar</button>
+                  <button type="button" data-payment-preset="privateEvent" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Private Event</button>
+                </div>
+              </div>
+              <p data-preset-message class="mt-3 text-xs text-[var(--koa-ink)]/48"></p>
+            </section>
             <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 xl:grid-cols-2">
               <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="venueWedding">
                 <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Venue Wedding</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="venueWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
@@ -184,15 +200,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Live wedding preview</p>
-                  <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">$10,000 sample wedding</h3>
-                  <p class="mt-1 max-w-2xl text-xs leading-5 text-[var(--koa-ink)]/50">Uses the unsaved Venue Wedding deposit and milestone template above. Change or reorder rows to preview the actual amounts immediately.</p>
+                  <h3 data-wedding-preview-heading class="display mt-2 text-3xl text-[var(--koa-forest)]">Sample wedding preview</h3>
+                  <p class="mt-1 max-w-2xl text-xs leading-5 text-[var(--koa-ink)]/50">Uses the unsaved Venue Wedding deposit and milestone template above. Change the contract total, date, rows, percentages, or order to preview the actual amounts immediately.</p>
                 </div>
-                <label class="grid gap-2 text-sm font-semibold">Sample wedding date
-                  <input data-wedding-preview-date type="date" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
-                </label>
+                <div class="grid gap-3 sm:grid-cols-2">
+                  <label class="grid gap-2 text-sm font-semibold">Sample contract total
+                    <input data-wedding-preview-total type="number" min="1" step="100" value="10000" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-semibold">Sample wedding date
+                    <input data-wedding-preview-date type="date" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" />
+                  </label>
+                </div>
               </div>
               <div data-wedding-preview class="mt-5 grid gap-3"></div>
               <p data-wedding-preview-note class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/48"></p>
+            </section>
+            <section data-template-validation class="hidden rounded-xl border p-4">
+              <p data-template-validation-title class="text-xs font-black uppercase tracking-[.09em]"></p>
+              <div data-template-validation-list class="mt-2 grid gap-1 text-xs leading-5"></div>
             </section>
             <div class="flex flex-wrap items-center gap-3">
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save deposit + schedule defaults</button>
@@ -523,8 +548,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let draggingTemplateRow=null;
     function templateList(key){return document.querySelector('[data-template-list="'+key+'"]');}
     function weddingPreviewDate(){return document.querySelector('[data-wedding-preview-date]');}
+    function weddingPreviewTotal(){return document.querySelector('[data-wedding-preview-total]');}
+    function weddingPreviewHeading(){return document.querySelector('[data-wedding-preview-heading]');}
     function weddingPreview(){return document.querySelector('[data-wedding-preview]');}
     function weddingPreviewNote(){return document.querySelector('[data-wedding-preview-note]');}
+    function presetMessage(){return document.querySelector('[data-preset-message]');}
+    function validationBox(){return document.querySelector('[data-template-validation]');}
+    function validationTitle(){return document.querySelector('[data-template-validation-title]');}
+    function validationList(){return document.querySelector('[data-template-validation-list]');}
     function roundPreviewMoney(value){return Math.round(Number(value||0)*100)/100;}
     function formatPreviewDate(iso){
       if(!iso)return 'Choose a sample date';
@@ -580,7 +611,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const before=event.clientY<rect.top+(rect.height/2);
         list.insertBefore(draggingTemplateRow,before?target:target.nextSibling);
         updateTemplateRowRoles(key);
-        if(key==='venueWedding')renderWeddingPreview();
+        if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
       });
       list.addEventListener('drop',(event)=>{
         if(!draggingTemplateRow||draggingTemplateRow.parentElement!==list)return;
@@ -588,7 +619,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         draggingTemplateRow.classList.remove('opacity-45','ring-2','ring-[var(--koa-clay)]');
         draggingTemplateRow=null;
         updateTemplateRowRoles(key);
-        if(key==='venueWedding')renderWeddingPreview();
+        if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
       });
     }
     function moveTemplateRow(key,row,direction){
@@ -601,8 +632,100 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(next)list.insertBefore(next,row);
       }
       updateTemplateRowRoles(key);
-      if(key==='venueWedding')renderWeddingPreview();
+      if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
     }
+    const paymentPresets={
+      standardWedding:{label:'Standard Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+        {label:'Second payment',dueDaysBefore:90,percentOfRemaining:50},
+        {label:'Final payment',dueDaysBefore:60,percentOfRemaining:100},
+      ]},
+      extendedWedding:{label:'Extended Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+        {label:'120-day payment',dueDaysBefore:120,percentOfRemaining:25},
+        {label:'90-day payment',dueDaysBefore:90,percentOfRemaining:25},
+        {label:'60-day payment',dueDaysBefore:60,percentOfRemaining:25},
+        {label:'30-day final payment',dueDaysBefore:30,percentOfRemaining:100},
+      ]},
+      microWedding:{label:'Micro Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+        {label:'Second payment',dueDaysBefore:60,percentOfRemaining:50},
+        {label:'Final payment',dueDaysBefore:30,percentOfRemaining:100},
+      ]},
+      mobileBar:{label:'Mobile Bar',key:'mobileBar',depositField:'mobileBarPercent',depositPercent:10,milestones:[
+        {label:'Final balance',dueDaysBefore:14,percentOfRemaining:100},
+      ]},
+      privateEvent:{label:'Private Event',key:'privateEvent',depositField:'privateEventPercent',depositPercent:10,milestones:[
+        {label:'Final balance',dueDaysBefore:30,percentOfRemaining:100},
+      ]},
+    };
+    function applyPaymentPreset(name){
+      const preset=paymentPresets[name];if(!preset)return;
+      if(depositForm?.elements?.[preset.depositField])depositForm.elements[preset.depositField].value=String(preset.depositPercent);
+      renderTemplate(preset.key,preset.milestones);
+      if(preset.key==='venueWedding')renderWeddingPreview();
+      renderTemplateValidation();
+      const message=presetMessage();
+      if(message)message.textContent=preset.label+' applied to the unsaved editor. Review and customize it, then press Save when ready.';
+    }
+    function validatePaymentTemplates(){
+      const errors=[];
+      const warnings=[];
+      const labels={venueWedding:'Venue Wedding',mobileBar:'Mobile Bar',privateEvent:'Private Event',default:'General fallback'};
+      const depositFields={venueWedding:'venueWeddingPercent',mobileBar:'mobileBarPercent',privateEvent:'privateEventPercent',default:'defaultPercent'};
+      templateKeys.forEach((key)=>{
+        const rows=readTemplate(key);
+        const label=labels[key]||key;
+        const deposit=Number(depositForm?.elements?.[depositFields[key]]?.value||0);
+        if(!Number.isFinite(deposit)||deposit<0||deposit>100)errors.push(label+': deposit percentage must be between 0% and 100%.');
+        else if(deposit===0)warnings.push(label+': 0% deposit is unusual.');
+        else if(deposit>50)warnings.push(label+': deposit above 50% is unusual ('+deposit+'%).');
+        if(!rows.length){errors.push(label+': at least one post-deposit milestone is required.');return;}
+        let priorDays=null;
+        let configuredPercent=0;
+        rows.forEach((row,index)=>{
+          const rowLabel=String(row.label||'').trim()||('Milestone '+(index+1));
+          const days=Number(row.dueDaysBefore);
+          const last=index===rows.length-1;
+          if(!String(row.label||'').trim())errors.push(label+': milestone '+(index+1)+' needs a label.');
+          if(!Number.isFinite(days))errors.push(label+' · '+rowLabel+': days before event must be a number.');
+          else{
+            if(days<0)errors.push(label+' · '+rowLabel+': payment is scheduled after the event ('+Math.abs(days)+' day'+(Math.abs(days)===1?'':'s')+' after).');
+            if(days>730)errors.push(label+' · '+rowLabel+': due date is more than 730 days before the event.');
+            if(days===0)warnings.push(label+' · '+rowLabel+': payment is due on the event date.');
+            if(priorDays!=null&&days>priorDays)warnings.push(label+': '+rowLabel+' is out of chronological order because '+days+' days before the event comes earlier than the milestone above it ('+priorDays+' days).');
+            if(priorDays!=null&&days===priorDays)warnings.push(label+': two milestones are due on the same day ('+days+' days before the event).');
+            priorDays=days;
+          }
+          if(!last){
+            const pct=Number(row.percentOfRemaining);
+            if(!Number.isFinite(pct)||pct<0||pct>100)errors.push(label+' · '+rowLabel+': percentage must be between 0% and 100%.');
+            else{
+              configuredPercent+=pct;
+              if(pct===0)warnings.push(label+' · '+rowLabel+': 0% creates a $0 milestone.');
+              else if(pct<5)warnings.push(label+' · '+rowLabel+': '+pct+'% is an unusually small milestone.');
+              else if(pct>75)warnings.push(label+' · '+rowLabel+': '+pct+'% is an unusually large milestone.');
+            }
+          }
+        });
+        if(configuredPercent>=100)warnings.push(label+': configured milestones use '+configuredPercent+'% before the automatic final remainder, so the final milestone may be $0.');
+      });
+      return {errors:[...new Set(errors)],warnings:[...new Set(warnings)]};
+    }
+    function renderTemplateValidation(){
+      const box=validationBox();const title=validationTitle();const list=validationList();if(!box||!title||!list)return validatePaymentTemplates();
+      const result=validatePaymentTemplates();
+      box.classList.toggle('hidden',!result.errors.length&&!result.warnings.length);
+      box.className='rounded-xl border p-4 '+(result.errors.length?'border-red-200 bg-red-50':result.warnings.length?'border-amber-200 bg-amber-50':'hidden');
+      title.className='text-xs font-black uppercase tracking-[.09em] '+(result.errors.length?'text-red-800':'text-amber-800');
+      title.textContent=result.errors.length?'Fix before saving':'Review before saving';
+      list.innerHTML='';
+      [...result.errors.map(message=>({message,type:'error'})),...result.warnings.map(message=>({message,type:'warning'}))].forEach((item)=>{
+        const row=document.createElement('p');
+        row.className=item.type==='error'?'text-red-800':'text-amber-800';
+        row.textContent=(item.type==='error'?'• ':'• ')+item.message;
+        list.appendChild(row);
+      });
+      return result;
+    }
+
     function addTemplateRow(key,item={label:'Payment',dueDaysBefore:30,percentOfRemaining:100}){
       const list=templateList(key);if(!list)return;
       enableTemplateDropZone(key);
@@ -613,7 +736,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       row.querySelector('[data-template-label]').value=item.label||'Payment';
       row.querySelector('[data-template-days]').value=String(Number(item.dueDaysBefore||0));
       row.querySelector('[data-template-percent]').value=String(Number(item.percentOfRemaining??100));
-      row.querySelectorAll('[data-template-label],[data-template-days],[data-template-percent]').forEach((input)=>input.addEventListener('input',()=>{if(key==='venueWedding')renderWeddingPreview();}));
+      row.querySelectorAll('[data-template-label],[data-template-days],[data-template-percent]').forEach((input)=>input.addEventListener('input',()=>{if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();}));
       const handle=row.querySelector('[data-template-drag]');
       handle.addEventListener('dragstart',(event)=>{
         draggingTemplateRow=row;
@@ -625,7 +748,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         row.classList.remove('opacity-45','ring-2','ring-[var(--koa-clay)]');
         draggingTemplateRow=null;
         updateTemplateRowRoles(key);
-        if(key==='venueWedding')renderWeddingPreview();
+        if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
       });
       row.querySelector('[data-template-up]').addEventListener('click',()=>moveTemplateRow(key,row,-1));
       row.querySelector('[data-template-down]').addEventListener('click',()=>moveTemplateRow(key,row,1));
@@ -633,11 +756,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(list.children.length<=1){if(depositMessage)depositMessage.textContent='Each template needs at least one post-deposit milestone.';return;}
         row.remove();
         updateTemplateRowRoles(key);
-        if(key==='venueWedding')renderWeddingPreview();
+        if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
       });
       list.appendChild(row);
       updateTemplateRowRoles(key);
-      if(key==='venueWedding')renderWeddingPreview();
+      if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
     }
     function renderTemplate(key,rows){
       const list=templateList(key);if(!list)return;list.innerHTML='';
@@ -658,7 +781,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderWeddingPreview(){
       const container=weddingPreview();if(!container)return;
       ensureWeddingPreviewDate();
-      const total=10000;
+      const total=Math.max(1,Number(weddingPreviewTotal()?.value||10000));
+      const heading=weddingPreviewHeading();if(heading)heading.textContent=money(total)+' sample wedding';
       const depositPercent=Math.min(100,Math.max(0,Number(depositForm?.elements?.venueWeddingPercent?.value||0)));
       const deposit=roundPreviewMoney(total*depositPercent/100);
       const remaining=roundPreviewMoney(total-deposit);
@@ -761,6 +885,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderTemplate('privateEvent',state.depositSettings.privateEventMilestones);
         renderTemplate('default',state.depositSettings.defaultMilestones);
         renderWeddingPreview();
+        renderTemplateValidation();
       }
       renderCatalog();
       renderDiagnostics();
@@ -798,7 +923,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       finally{testAccountingAlert.disabled=false;testAccountingAlert.textContent='Test Accounting Alert';}
     });
     document.querySelectorAll('[data-add-template]').forEach((button)=>button.addEventListener('click',()=>addTemplateRow(button.dataset.addTemplate,{label:'Payment',dueDaysBefore:30,percentOfRemaining:0})));
-    depositForm?.elements?.venueWeddingPercent?.addEventListener('input',renderWeddingPreview);
+    document.querySelectorAll('[data-payment-preset]').forEach((button)=>button.addEventListener('click',()=>applyPaymentPreset(button.dataset.paymentPreset)));
+    depositForm?.querySelectorAll('input[name$="Percent"]').forEach((input)=>input.addEventListener('input',()=>{renderTemplateValidation();if(input.name==='venueWeddingPercent')renderWeddingPreview();}));
+    weddingPreviewTotal()?.addEventListener('input',renderWeddingPreview);
     weddingPreviewDate()?.addEventListener('input',renderWeddingPreview);
     document.querySelectorAll('[data-close-catalog]').forEach((button)=>button.addEventListener('click',()=>catalogDialog?.close()));
     newCatalog?.addEventListener('click',()=>openCatalogItem());
@@ -829,10 +956,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
     });
     depositForm?.addEventListener('submit',async(event)=>{
-      event.preventDefault();const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
+      event.preventDefault();
+      const validation=renderTemplateValidation();
+      if(validation.errors.length){
+        if(depositMessage)depositMessage.textContent='Fix the payment schedule errors above before saving.';
+        validationBox()?.scrollIntoView({behavior:'smooth',block:'center'});
+        return;
+      }
+      if(validation.warnings.length&&!window.confirm('These payment schedules have '+validation.warnings.length+' warning'+(validation.warnings.length===1?'':'s')+'. Save them anyway?'))return;
+      const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
       try{
         const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingMilestones:readTemplate('venueWedding'),mobileBarMilestones:readTemplate('mobileBar'),privateEventMilestones:readTemplate('privateEvent'),defaultMilestones:readTemplate('default')});
         state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
+        renderTemplateValidation();
       }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
     cleanupProductionTest?.addEventListener('click',async()=>{
