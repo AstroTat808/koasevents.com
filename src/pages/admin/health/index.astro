@@ -45,12 +45,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <input data-release-search type="search" placeholder="Search commit, deploy, file, or feature…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" />
               <select data-release-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold">
                 <option value="all">All changes</option>
-                <option value="Business CRM">CRM</option>
-                <option value="QuickBooks">QuickBooks</option>
-                <option value="Public Website">Website</option>
-                <option value="Authentication & Security">Security</option>
-                <option value="Vendor CRM">Vendor</option>
-                <option value="User Management">User Management</option>
+                <option value="crm">CRM</option>
+                <option value="quickbooks">QuickBooks</option>
+                <option value="website">Website</option>
+                <option value="security">Security</option>
+                <option value="vendor">Vendor</option>
+                <option value="users">User Management</option>
               </select>
               <button data-release-clear type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear</button>
             </div>
@@ -244,7 +244,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ...(release.features||[]),...(release.changedFiles||[])
         ].join(' ').toLowerCase();
         const termOk=!term||haystack.includes(term);
-        const categoryOk=category==='all'||(release.features||[]).includes(category);
+        const features=new Set(release.features||[]);
+        const categoryOk=
+          category==='all' ||
+          (category==='crm' && (features.has('Business CRM')||features.has('Sales CRM & Proposals'))) ||
+          (category==='quickbooks' && features.has('QuickBooks')) ||
+          (category==='website' && ['Public Website','Blog','Gallery','Local SEO'].some(value=>features.has(value))) ||
+          (category==='security' && ['Authentication & Security','System Health'].some(value=>features.has(value))) ||
+          (category==='vendor' && ['Vendor CRM','Insurance Compliance'].some(value=>features.has(value))) ||
+          (category==='users' && features.has('User Management'));
         return termOk&&categoryOk;
       });
       releases.forEach((release)=>{
