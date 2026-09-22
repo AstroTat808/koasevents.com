@@ -1610,7 +1610,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
 
   const office365=scheduleRows.find((item:any)=>item.name==='office365-calendar-sync');
   if(office365){
-    const savingsPerDay=(24*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+    const savingsPerDay=24*scheduledCreditPerRun;
     recommendations.push({
       id:'office365-calendar-sync',
       priority:5,
@@ -1629,7 +1629,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'post-deploy-verification',
         priority:6,
@@ -1644,7 +1644,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       });
     }
     if(scheduleRows.some((item:any)=>item.name==='quickbooks-hourly-reconciliation')){
-      const savingsPerDay=(3*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=3*scheduledCreditPerRun;
       recommendations.push({
         id:'quickbooks-reconciliation',
         priority:7,
@@ -1659,7 +1659,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       });
     }
     if(scheduleRows.some((item:any)=>item.name==='crm-lifecycle')){
-      const savingsPerDay=(2*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=2*scheduledCreditPerRun;
       recommendations.push({
         id:'crm-lifecycle',
         priority:8,
@@ -1693,7 +1693,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
-      const computeSavingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const computeSavingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       const verifierCycleSavings=computeSavingsPerDay*remainingDays;
       recommendations.push({
         id:'post-deploy-verification',
@@ -1711,7 +1711,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const qbRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='quickbooks-hourly-reconciliation');
     if(qbRuns){
       const savedRunsPerDay=3;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'quickbooks-reconciliation',
         priority:3,
@@ -1728,7 +1728,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     const lifecycleRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='crm-lifecycle');
     if(lifecycleRuns){
       const savedRunsPerDay=2;
-      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const savingsPerDay=savedRunsPerDay*scheduledCreditPerRun;
       recommendations.push({
         id:'crm-lifecycle',
         priority:4,
