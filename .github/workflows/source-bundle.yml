@@ -1,0 +1,25 @@
+name: Source Bundle
+
+on:
+  push:
+    paths:
+      - '.github/workflows/source-bundle.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: koasevents-source
+          path: |
+            .
+            !.git/**
+          include-hidden-files: true
+          compression-level: 6
+          retention-days: 1
