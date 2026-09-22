@@ -190,11 +190,14 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     loginForm?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const data = new FormData(loginForm);
+      const email = String(data.get('email') || '').trim().toLowerCase();
       try {
-        const user = await login(String(data.get('email')), String(data.get('password')));
+        const user = await login(email, String(data.get('password')));
+        await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'success',email})}).catch(()=>null);
         if (authError) authError.classList.add('hidden');
         showAuthState(user);
       } catch (err) {
+        await fetch('/api/auth/record',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'failure',email})}).catch(()=>null);
         if (authError) {
           const status = Number(err?.status || err?.cause?.status || 0);
           const raw = err instanceof Error ? err.message : '';
