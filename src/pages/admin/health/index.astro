@@ -132,6 +132,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployed</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Functions</p><p data-deploy-functions class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Production vs main</p><p data-deploy-sync class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-main class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Git deployment connection</p><p data-deploy-git-link class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-git-detail class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Last successful QA</p><p data-deploy-last-qa class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployment health</p><p data-deploy-health class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Post-deploy verification</p><p data-post-deploy-verification class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
@@ -975,6 +976,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         syncEl.className='mt-2 text-sm font-semibold text-amber-800';
       }
       mainEl.textContent=currentDeploy.mainCommit?'main '+String(currentDeploy.mainCommit).slice(0,12):'';
+      const connectionHealth=deployments.connectionHealth||{};
+      const gitLinkEl=document.querySelector('[data-deploy-git-link]');
+      const gitDetailEl=document.querySelector('[data-deploy-git-detail]');
+      if(connectionHealth.githubLinked===true){
+        gitLinkEl.textContent='Connected';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-emerald-800';
+      }else if(connectionHealth.githubLinked===false){
+        gitLinkEl.textContent='Disconnected or mislinked';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
+      }else{
+        gitLinkEl.textContent='Unable to verify';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
+      }
+      gitDetailEl.textContent=connectionHealth.detail||[
+        currentDeploy.repository||'',
+        currentDeploy.productionBranch?('branch '+currentDeploy.productionBranch):''
+      ].filter(Boolean).join(' · ');
       const lastQa=deployments.lastSuccessfulQa;
       document.querySelector('[data-deploy-last-qa]').textContent=lastQa
         ? ((lastQa.updatedAt||lastQa.createdAt)?new Date(lastQa.updatedAt||lastQa.createdAt).toLocaleString():'Success')+' · '+String(lastQa.commit||'').slice(0,12)
