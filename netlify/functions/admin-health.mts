@@ -7,6 +7,7 @@ import {
   calculateIncidents,
   calculateUptime,
   healthComponents,
+  hydrateProductionReleaseMetadata,
   persistHealth,
   readHealthAlertPolicy,
   readHealthHistory,
@@ -60,7 +61,8 @@ export default async (req:Request,context:Context) => {
     ]);
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
-    deployments.releaseTimeline=releaseTimelineWithIncidents(releases,deployments.history||[],incidents);
+    const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
+    deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
     return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments},{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -89,7 +91,8 @@ export default async (req:Request,context:Context) => {
   ]);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
-  deployments.releaseTimeline=releaseTimelineWithIncidents(releases,deployments.history||[],incidents);
+  const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
+  deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
   return Response.json({
     current:latest,
     history,
