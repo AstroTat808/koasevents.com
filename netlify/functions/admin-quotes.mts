@@ -719,7 +719,80 @@ function proposalCategory(packageId = '', inquiry?: Record<string, unknown>) {
   return 'default';
 }
 
-function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>) {
+function paymentCategoryKey(packageId = '', inquiry?: Record<string, unknown>) {
+  const category = proposalCategory(packageId, inquiry);
+  if (category === 'venue-wedding') return 'venueWedding';
+  if (category === 'mobile-bar') return 'mobileBar';
+  if (category === 'private-event') return 'privateEvent';
+  return 'default';
+}
+
+function builtInPaymentPreset(id: string) {
+  const presets: Record<string, { id:string; name:string; category:string; depositPercent:number; milestones:Array<{label:string;dueDaysBefore:number;percentOfRemaining:number}> }> = {
+    'builtin-standard-wedding': {
+      id:'builtin-standard-wedding', name:'Standard Wedding', category:'venueWedding', depositPercent:10,
+      milestones:[{label:'Second payment',dueDaysBefore:90,percentOfRemaining:50},{label:'Final payment',dueDaysBefore:60,percentOfRemaining:100}],
+    },
+    'builtin-extended-wedding': {
+      id:'builtin-extended-wedding', name:'Extended Wedding', category:'venueWedding', depositPercent:10,
+      milestones:[{label:'120-day payment',dueDaysBefore:120,percentOfRemaining:25},{label:'90-day payment',dueDaysBefore:90,percentOfRemaining:25},{label:'60-day payment',dueDaysBefore:60,percentOfRemaining:25},{label:'30-day final payment',dueDaysBefore:30,percentOfRemaining:100}],
+    },
+    'builtin-micro-wedding': {
+      id:'builtin-micro-wedding', name:'Micro Wedding', category:'venueWedding', depositPercent:10,
+      milestones:[{label:'Second payment',dueDaysBefore:60,percentOfRemaining:50},{label:'Final payment',dueDaysBefore:30,percentOfRemaining:100}],
+    },
+    'builtin-mobile-bar': {
+      id:'builtin-mobile-bar', name:'Mobile Bar', category:'mobileBar', depositPercent:10,
+      milestones:[{label:'Final balance',dueDaysBefore:14,percentOfRemaining:100}],
+    },
+    'builtin-private-event': {
+      id:'builtin-private-event', name:'Private Event', category:'privateEvent', depositPercent:10,
+      milestones:[{label:'Final balance',dueDaysBefore:30,percentOfRemaining:100}],
+    },
+  };
+  return presets[id] || null;
+}
+
+function leadDaysBetween(bookingDate: string, eventDate: string) {
+  const start = Date.parse(String(bookingDate || '').slice(0,10) + 'T12:00:00Z');
+  const end = Date.parse(String(eventDate || '').slice(0,10) + 'T12:00:00Z');
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  return Math.max(0, Math.ceil((end - start) / 86400000));
+}
+
+function selectedPaymentPreset(
+  settings: QuickBooksDepositSettings,
+  packageId = '',
+  inquiry?: Record<string, unknown>,
+  eventDate = '',
+  bookingDate = '',
+) {
+  const category = paymentCategoryKey(packageId, inquiry);
+  const leadDays = leadDaysBetween(bookingDate || new Date().toISOString().slice(0,10), eventDate);
+  const rules = Array.isArray(settings.autoRules) ? settings.autoRules : [];
+  const match = rules
+    .filter((rule) => rule.active !== false && rule.category === category)
+    .sort((a,b) => Number(a.priority || 0) - Number(b.priority || 0))
+    .find((rule) => {
+      if (leadDays == null) return rule.minLeadDays == null && rule.maxLeadDays == null;
+      if (rule.minLeadDays != null && leadDays < Number(rule.minLeadDays)) return false;
+      if (rule.maxLeadDays != null && leadDays > Number(rule.maxLeadDays)) return false;
+      return true;
+    });
+
+  if (match) {
+    const builtin = builtInPaymentPreset(match.presetId);
+    if (builtin) return { ...builtin, ruleId:match.id, leadDays };
+    const custom = (Array.isArray(settings.customPresets) ? settings.customPresets : []).find((preset) => preset.id === match.presetId);
+    if (custom) return { ...custom, ruleId:match.id, leadDays };
+  }
+
+  return null;
+}
+
+function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>, eventDate = '', bookingDate = '') {
+  const preset = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate);
+  if (preset) return Number(preset.depositPercent || 0);
   const category = proposalCategory(packageId, inquiry);
   if (category === 'mobile-bar') return settings.mobileBarPercent;
   if (category === 'venue-wedding') return settings.venueWeddingPercent;
@@ -727,16 +800,17 @@ function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId
   return settings.defaultPercent;
 }
 
-function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>): PaymentItem[] {
+function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, bookingDate = ''): PaymentItem[] {
   const category = proposalCategory(packageId, inquiry);
+  const selected = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate);
   const remaining = Math.max(0, roundMoney(total - depositAmount));
-  const template = category === 'venue-wedding'
+  const template = selected?.milestones || (category === 'venue-wedding'
     ? settings.venueWeddingMilestones
     : category === 'mobile-bar'
       ? settings.mobileBarMilestones
       : category === 'private-event'
         ? settings.privateEventMilestones
-        : settings.defaultMilestones;
+        : settings.defaultMilestones);
   const rows = Array.isArray(template) && template.length
     ? template
     : [{ label:'Final balance', dueDaysBefore:0, percentOfRemaining:100 }];
@@ -759,7 +833,7 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
   return [{ label:'Reservation deposit', dueDate:'', amount:depositAmount }, ...milestones];
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings) {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '') {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
@@ -837,7 +911,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const depositPercent = Math.min(100, Math.max(0, finite(configuredPercent, 0, 100)));
   const depositAmount = Math.round(total * depositPercent) / 100;
   const schedule = scheduleSettings
-    ? configuredPaymentSchedule(scheduleSettings, total, depositAmount, eventDate, packageId, inquiry)
+    ? configuredPaymentSchedule(scheduleSettings, total, depositAmount, eventDate, packageId, inquiry, bookingDate)
     : rebalancePaymentSchedule([], total, depositAmount, eventDate);
 
   return {
@@ -1780,7 +1854,8 @@ export default async (req: Request, context: Context) => {
     const now = new Date().toISOString();
     const packageId = normalizePackage(quote.state?.startingPoint);
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
-    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId) : 10;
+    const eventDate = cleanText(payload.customer?.eventDate, 40);
+    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, undefined, eventDate, now.slice(0,10)) : 10;
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -1794,11 +1869,11 @@ export default async (req: Request, context: Context) => {
         name: cleanText(payload.customer?.name, 180),
         email: cleanText(payload.customer?.email, 240),
         phone: cleanText(payload.customer?.phone, 80),
-        eventDate: cleanText(payload.customer?.eventDate, 40),
+        eventDate,
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, cleanText(payload.customer?.eventDate, 40), packageId, undefined, depositPercent, depositSettings || undefined) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10)) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -1835,7 +1910,7 @@ export default async (req: Request, context: Context) => {
     const now = new Date().toISOString();
     const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage || source.inquiry?.mobileBarPackage);
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
-    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, source.inquiry) : 10;
+    const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, source.inquiry, source.customer?.eventDate || '', now.slice(0,10)) : 10;
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -1860,7 +1935,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined, now.slice(0,10)) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
