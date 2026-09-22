@@ -155,7 +155,9 @@ const allGalleryImages = [...styledImages, ...galleryMedia];
     function show(index) {
       if (!dialog || !image) return;
       current = (index + lightboxImages.length) % lightboxImages.length;
-      image.src = lightboxImages[current].src;
+      const original = lightboxImages[current].src;
+      const params = new URLSearchParams({ url: original, w: '1800', q: '88', fm: 'webp', fit: 'contain' });
+      image.src = '/.netlify/images?' + params.toString();
       image.alt = lightboxImages[current].alt;
       if (!dialog.open) dialog.showModal();
     }
