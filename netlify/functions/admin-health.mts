@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { isApprovedAdmin, requireOperations } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 import {
   applyHealthAlertPolicy,
   cachedDeploymentHistory,
@@ -18,12 +18,12 @@ import {
 } from './_shared/system-health';
 
 export default async (req:Request,context:Context) => {
-  const auth=await requireOperations();
+  const auth=await requireCapability('health.view');
   if(auth.response) return auth.response;
-  const admin=isApprovedAdmin(auth.user);
+  const admin=hasCapability(auth.user,'health.manage');
 
   if(req.method==='POST'){
-    if(!admin) return Response.json({error:'Administrator permission required.'},{status:403});
+    if(!admin) return Response.json({error:'System Health management permission required.'},{status:403});
     const body:any=await req.json().catch(()=>({}));
     const actor=String(auth.user?.email||'admin').trim().toLowerCase();
 
