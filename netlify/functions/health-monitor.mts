@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import {
   applyHealthAlertPolicy,
+  cachedDeploymentHistory,
   persistHealth,
   readLatestHealth,
   readLatestHourlyHealth,
@@ -18,6 +19,7 @@ export default async (_req:Request,context:Context) => {
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
+  await cachedDeploymentHistory(context);
 };
 
 export const config:Config={schedule:'@hourly'};
