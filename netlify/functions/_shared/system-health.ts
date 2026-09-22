@@ -591,21 +591,79 @@ export async function cachedDeploymentHistory(context:Context) {
   const home=await timedFetch(origin+'/');
   const html=home.response?await home.response.text().catch(()=>''):'';
   const match=(name:string)=>html.match(new RegExp('<meta\\s+name=["\\\']'+name+'["\\\']\\s+content=["\\\']([^"\\\']+)["\\\']','i'))?.[1]||'';
-  const current={
+  const current:any={
     commit:match('koa-build-commit'),
     deployId:match('koa-deploy-id'),
     builtAt:match('koa-build-time'),
+    deployTime:match('koa-build-time'),
+    functionCount:null,
+    mainCommit:'',
+    behindMain:null,
+    commitsBehind:null,
+    compareStatus:'',
   };
 
-  const headers={'Accept':'application/vnd.github+json','User-Agent':'KoaEvents-Health/1.0'};
+  const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  const headers:Record<string,string>={
+    'Accept':'application/vnd.github+json',
+    'User-Agent':'KoaEvents-Health/1.0',
+    ...(githubToken?{Authorization:'Bearer '+githubToken}:{}),
+  };
+
+  try{
+    const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/main',{headers,signal:AbortSignal.timeout(12_000)});
+    if(response.ok){
+      const body:any=await response.json();
+      current.mainCommit=clean(body?.sha,80);
+    }
+  }catch{}
+
+  if(current.commit){
+    try{
+      const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/contents/netlify/functions?ref='+encodeURIComponent(current.commit),{headers,signal:AbortSignal.timeout(12_000)});
+      if(response.ok){
+        const rows:any[]=await response.json();
+        current.functionCount=rows.filter((row:any)=>
+          row?.type==='file' && /\.(?:mts|ts|mjs|js|cjs)$/i.test(String(row?.name||''))
+        ).length;
+      }
+    }catch{}
+  }
+
+  if(current.commit && current.mainCommit){
+    if(current.commit===current.mainCommit){
+      current.behindMain=false;
+      current.commitsBehind=0;
+      current.compareStatus='identical';
+    }else{
+      try{
+        const response=await fetch(
+          'https://api.github.com/repos/AstroTat808/koasevents.com/compare/'+encodeURIComponent(current.commit)+'...'+encodeURIComponent(current.mainCommit),
+          {headers,signal:AbortSignal.timeout(12_000)},
+        );
+        if(response.ok){
+          const body:any=await response.json();
+          current.compareStatus=clean(body?.status,40);
+          const mainAhead=Math.max(0,Number(body?.ahead_by||0));
+          current.commitsBehind=Number.isFinite(mainAhead)?mainAhead:null;
+          current.behindMain=mainAhead>0;
+        }else{
+          current.behindMain=current.commit!==current.mainCommit;
+        }
+      }catch{
+        current.behindMain=current.commit!==current.mainCommit;
+      }
+    }
+  }
+
   let runs:any[]=[];
   try{
-    const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/actions/workflows/production-visual-qa.yml/runs?per_page=15',{headers,signal:AbortSignal.timeout(12_000)});
+    const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/actions/workflows/production-visual-qa.yml/runs?per_page=20',{headers,signal:AbortSignal.timeout(12_000)});
     if(response.ok) runs=(await response.json()).workflow_runs||[];
   }catch{}
 
   const history:any[]=[];
-  for(const run of runs.slice(0,12)){
+  for(const run of runs.slice(0,15)){
     let failedJobs:string[]=[];
     if(run.conclusion==='failure'){
       try{
@@ -630,9 +688,30 @@ export async function cachedDeploymentHistory(context:Context) {
     });
   }
 
-  const lastSuccessfulQa=history.find(row=>row.conclusion==='success')||null;
+  const lastSuccessfulQa=history.find(row=>
+    row.conclusion==='success' && row.event==='push' && row.branch==='main'
+  )||null;
+  const latestQaForCurrentDeploy=history.find(row=>
+    row.commit===current.commit && row.event==='push' && row.branch==='main'
+  )||null;
   const failedBuilds=history.filter(row=>row.conclusion==='failure');
-  const result={generatedAt:new Date().toISOString(),current,lastSuccessfulDeployment:current,lastSuccessfulQa,failedBuilds,history};
+  const deploymentHealthy=Boolean(
+    current.commit &&
+    current.deployId &&
+    current.behindMain===false &&
+    lastSuccessfulQa &&
+    lastSuccessfulQa.commit===current.commit
+  );
+  const result={
+    generatedAt:new Date().toISOString(),
+    current,
+    deploymentHealthy,
+    lastSuccessfulDeployment:current,
+    lastSuccessfulQa,
+    latestQaForCurrentDeploy,
+    failedBuilds,
+    history,
+  };
   await store.setJSON('deployments/cache',result);
   return result;
 }
