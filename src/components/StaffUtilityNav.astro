@@ -37,7 +37,7 @@
     <div
       id="koa-workspace-links"
       data-workspace-links
-      class="mt-2 hidden max-h-[72vh] grid-cols-1 gap-3 overflow-y-auto rounded-[1rem] border border-[var(--koa-line)] bg-white p-3 shadow-[var(--shadow-soft)] md:mt-3 md:grid md:max-h-none md:grid-cols-2 md:overflow-visible lg:grid-cols-5"
+      class="mt-2 hidden max-h-[72vh] grid-cols-1 gap-3 overflow-y-auto rounded-[1rem] border border-[var(--koa-line)] bg-white p-3 shadow-[var(--shadow-soft)] md:mt-3 md:grid md:max-h-none md:grid-cols-2 md:overflow-visible lg:grid-cols-6"
     >
       <section data-workspace-group class="workspace-group">
         <p class="workspace-group-title">Home</p>
@@ -79,11 +79,17 @@
       </section>
 
       <section data-workspace-group class="workspace-group">
-        <p class="workspace-group-title">Accounting + Admin</p>
+        <p class="workspace-group-title">Accounting</p>
         <div class="workspace-group-links">
           <a data-workspace-link data-capability="quickbooks.view" href="/admin/quickbooks/" class="workspace-nav-link">
             <span>QuickBooks</span><span data-link-alert="accountingMismatches" class="hidden workspace-link-badge"></span>
           </a>
+        </div>
+      </section>
+
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Administration</p>
+        <div class="workspace-group-links">
           <a data-workspace-link data-capability="security.view" href="/admin/security/" class="workspace-nav-link">Security</a>
           <a data-workspace-link data-capability="health.view" href="/admin/health/" class="workspace-nav-link">
             <span>System Health</span><span data-link-alert="healthWarnings" class="hidden workspace-link-badge"></span>
