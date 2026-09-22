@@ -474,6 +474,18 @@
     }
   }
 
+  async function markVisibleAlertsSeen() {
+    const fresh = (alertPayload?.alerts || []).filter((alert)=>alert.isNew).map((alert)=>alert.occurrenceId);
+    if (!fresh.length) return;
+    try {
+      await fetch('/api/admin/workspace-alerts',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'mark-seen',occurrenceIds:fresh}),
+      });
+    } catch {}
+  }
+
   function actionButton(label, onClick) {
     const button = document.createElement('button');
     button.type = 'button';
@@ -764,8 +776,7 @@
     nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
     if (opening) {
       setMenu(false);
-      const fresh = (alertPayload?.alerts || []).filter((alert)=>alert.isNew).map((alert)=>alert.occurrenceId);
-      if (fresh.length) alertAction('mark-seen',{occurrenceIds:fresh});
+      markVisibleAlertsSeen();
     }
   });
 
@@ -776,14 +787,14 @@
     center.classList.toggle('hidden', !opening);
     nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
     if (opening) {
-      const fresh = (alertPayload?.alerts || []).filter((alert)=>alert.isNew).map((alert)=>alert.occurrenceId);
-      if (fresh.length) alertAction('mark-seen',{occurrenceIds:fresh});
+      markVisibleAlertsSeen();
     }
   });
 
   nav?.querySelector('[data-workspace-alert-close]')?.addEventListener('click', () => {
     nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
     nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded','false');
+    nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded','false');
   });
 
   nav?.querySelectorAll('[data-workspace-link]').forEach((link) => {
