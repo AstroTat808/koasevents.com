@@ -28,10 +28,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div><p class="eyebrow text-[var(--koa-clay)]">Current production</p><h2 class="display mt-2 text-4xl">Deployment</h2></div>
-          <div class="mt-5 grid gap-4 md:grid-cols-3">
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy ID</p><p data-deploy-id class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Built</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+          <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy ID</p><p data-deploy-id class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployed</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Functions</p><p data-deploy-functions class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Production vs main</p><p data-deploy-sync class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-main class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Last successful QA</p><p data-deploy-last-qa class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployment health</p><p data-deploy-health class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
           </div>
           <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Recent deployment QA</p><div data-deploy-history class="mt-3 grid gap-3"></div></div>
         </section>
@@ -197,7 +201,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const currentDeploy=deployments.current||{};
       document.querySelector('[data-deploy-commit]').textContent=currentDeploy.commit||'Unavailable';
       document.querySelector('[data-deploy-id]').textContent=currentDeploy.deployId||'Unavailable';
-      document.querySelector('[data-deploy-built]').textContent=currentDeploy.builtAt?new Date(currentDeploy.builtAt).toLocaleString():'Unavailable';
+      document.querySelector('[data-deploy-built]').textContent=currentDeploy.deployTime?new Date(currentDeploy.deployTime).toLocaleString():(currentDeploy.builtAt?new Date(currentDeploy.builtAt).toLocaleString():'Unavailable');
+      document.querySelector('[data-deploy-functions]').textContent=currentDeploy.functionCount==null?'Unavailable':String(currentDeploy.functionCount);
+      const syncEl=document.querySelector('[data-deploy-sync]');
+      const mainEl=document.querySelector('[data-deploy-main]');
+      if(currentDeploy.behindMain===false){
+        syncEl.textContent='Current with main';
+        syncEl.className='mt-2 text-sm font-semibold text-emerald-800';
+      }else if(currentDeploy.behindMain===true){
+        const behind=Number(currentDeploy.commitsBehind||0);
+        syncEl.textContent='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
+        syncEl.className='mt-2 text-sm font-semibold text-red-800';
+      }else{
+        syncEl.textContent='Unable to compare';
+        syncEl.className='mt-2 text-sm font-semibold text-amber-800';
+      }
+      mainEl.textContent=currentDeploy.mainCommit?'main '+String(currentDeploy.mainCommit).slice(0,12):'';
+      const lastQa=deployments.lastSuccessfulQa;
+      document.querySelector('[data-deploy-last-qa]').textContent=lastQa
+        ? ((lastQa.updatedAt||lastQa.createdAt)?new Date(lastQa.updatedAt||lastQa.createdAt).toLocaleString():'Success')+' · '+String(lastQa.commit||'').slice(0,12)
+        : 'No successful production QA yet';
+      const healthEl=document.querySelector('[data-deploy-health]');
+      if(deployments.deploymentHealthy){
+        healthEl.textContent='Healthy';
+        healthEl.className='mt-2 text-sm font-semibold text-emerald-800';
+      }else{
+        const qaCurrent=deployments.latestQaForCurrentDeploy;
+        healthEl.textContent=currentDeploy.behindMain===true?'Production is behind main':qaCurrent?.conclusion==='failure'?'Current deploy QA failed':'Waiting for successful QA on current deploy';
+        healthEl.className='mt-2 text-sm font-semibold text-amber-800';
+      }
 
       deployHistory.innerHTML='';
       const rows=deployments.history||[];

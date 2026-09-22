@@ -38,7 +38,27 @@ ADMIN_ROUTES=[
  ("admin-gallery","/admin/gallery/"),
  ("admin-security","/admin/security/"),
  ("admin-seo","/admin/seo/"),
- ("admin-health","/admin/health/")
+ ("admin-health","/admin/health/"),
+ ("admin-insurance","/admin/insurance/"),
+ ("admin-vendors","/admin/vendors/")
+]
+
+PROTECTED_ADMIN_APIS=[
+ ("user-management-api","/api/admin/staff"),
+ ("custom-roles-api","/api/admin/custom-roles"),
+ ("auth-security-api","/api/admin/auth-security"),
+ ("business-crm-api","/api/admin/crm"),
+ ("sales-crm-api","/api/admin/quotes"),
+ ("event-ops-api","/api/admin/events"),
+ ("calendar-api","/api/admin/calendar"),
+ ("quickbooks-api","/api/admin/quickbooks"),
+ ("blog-admin-api","/api/blog?admin=1"),
+ ("gallery-admin-api","/api/gallery"),
+ ("vendor-crm-api","/api/admin/vendors"),
+ ("vendor-insurance-api","/api/admin/vendor-insurance-compliance"),
+ ("security-api","/api/admin/security?days=7"),
+ ("local-seo-api","/api/admin/local-seo"),
+ ("system-health-api","/api/admin/health"),
 ]
 
 @dataclass
@@ -497,7 +517,15 @@ def admin_mode(browser_name):
 
   ctx.close();browser.close()
 
- report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"failures":failures}
+ api_results=[]
+ for name,path in PROTECTED_ADMIN_APIS:
+  status,_,body=get(path)
+  ok=status in {401,403}
+  api_results.append({"name":name,"path":path,"status":status,"ok":ok})
+  if not ok:
+   failures.append({"route":path,"detail":f"Protected admin API expected 401/403 without authentication, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
+
+ report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"protectedApis":api_results,"failures":failures}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
  print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
  return 1 if failures else 0
