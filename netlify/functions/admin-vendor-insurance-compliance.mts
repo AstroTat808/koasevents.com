@@ -6,7 +6,7 @@ import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sy
 function store(c:Context,name:string){return c.deploy.context==='production'?getStore({name,consistency:'strong'}):getDeployStore({name});}
 function daysUntil(date:unknown){const raw=String(date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const target=Date.parse(raw+'T00:00:00Z');const today=Date.parse(todayHst()+'T00:00:00Z');return Math.ceil((target-today)/86400000);}
 export default async(_req:Request,context:Context)=>{
-  const auth=await requireCapability('insurance.view');if(auth.response)return auth.response;
+  const auth=await requireCapability('insurance.view', _req);if(auth.response)return auth.response;
   const [vendors,records]=await Promise.all([
     store(context,'koa-vendors').get('vendors/index',{type:'json'}),
     store(context,'koa-sales').get('records/index',{type:'json'}),
