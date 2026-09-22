@@ -59,6 +59,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p data-office365-runs class="mt-1 text-[.68rem] text-[var(--koa-ink)]/45"></p>
             </article>
           </div>
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">7-day reliability</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Recent sync performance</h3></div>
+                <span data-office365-reliability-7d-runs class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Success rate</p><p data-office365-reliability-7d-success class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Avg changed/run</p><p data-office365-reliability-7d-average class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Conflict rate</p><p data-office365-reliability-7d-conflict class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Auth failures</p><p data-office365-reliability-7d-auth class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+              </div>
+            </article>
+            <article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">30-day reliability</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Longer-term sync performance</h3></div>
+                <span data-office365-reliability-30d-runs class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Success rate</p><p data-office365-reliability-30d-success class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Avg changed/run</p><p data-office365-reliability-30d-average class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Conflict rate</p><p data-office365-reliability-30d-conflict class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Auth failures</p><p data-office365-reliability-30d-auth class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+              </div>
+            </article>
+          </div>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
@@ -311,6 +337,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const office365Conflicts=document.querySelector('[data-office365-conflicts]');
     const office365Changed=document.querySelector('[data-office365-changed]');
     const office365Runs=document.querySelector('[data-office365-runs]');
+    const office365Reliability7dRuns=document.querySelector('[data-office365-reliability-7d-runs]');
+    const office365Reliability7dSuccess=document.querySelector('[data-office365-reliability-7d-success]');
+    const office365Reliability7dAverage=document.querySelector('[data-office365-reliability-7d-average]');
+    const office365Reliability7dConflict=document.querySelector('[data-office365-reliability-7d-conflict]');
+    const office365Reliability7dAuth=document.querySelector('[data-office365-reliability-7d-auth]');
+    const office365Reliability30dRuns=document.querySelector('[data-office365-reliability-30d-runs]');
+    const office365Reliability30dSuccess=document.querySelector('[data-office365-reliability-30d-success]');
+    const office365Reliability30dAverage=document.querySelector('[data-office365-reliability-30d-average]');
+    const office365Reliability30dConflict=document.querySelector('[data-office365-reliability-30d-conflict]');
+    const office365Reliability30dAuth=document.querySelector('[data-office365-reliability-30d-auth]');
     const overall=document.querySelector('[data-overall]');
     const creditPanel=document.querySelector('[data-credit-panel]');
     const creditCycle=document.querySelector('[data-credit-cycle]');
@@ -602,6 +638,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         office365Conflicts.className='display mt-2 text-3xl '+(Number(office365.unresolvedConflicts||0)>0?'text-red-800':'text-[var(--koa-forest)]');
         office365Changed.textContent=String(office365.changedLast24Hours||0);
         office365Runs.textContent=String(office365.runsLast24Hours||0)+' sync run'+(Number(office365.runsLast24Hours||0)===1?'':'s')+' in the last 24 hours';
+        const renderOfficeReliability=(period,nodes)=>{
+          const runs=Number(period?.totalRuns||0);
+          nodes.runs.textContent=runs+' run'+(runs===1?'':'s');
+          nodes.success.textContent=period?.successRate==null?'—':String(period.successRate)+'%';
+          nodes.average.textContent=period?.averageEventsChangedPerRun==null?'—':String(period.averageEventsChangedPerRun);
+          nodes.conflict.textContent=period?.conflictRate==null?'—':String(period.conflictRate)+'%';
+          nodes.auth.textContent=String(period?.authenticationFailures||0);
+          nodes.auth.className='mt-1 text-xl font-semibold '+(Number(period?.authenticationFailures||0)>0?'text-red-800':'text-[var(--koa-forest)]');
+          nodes.conflict.className='mt-1 text-xl font-semibold '+(Number(period?.conflictRate||0)>0?'text-amber-800':'text-[var(--koa-forest)]');
+        };
+        renderOfficeReliability(office365.reliability?.['7d']||{},{
+          runs:office365Reliability7dRuns,success:office365Reliability7dSuccess,average:office365Reliability7dAverage,conflict:office365Reliability7dConflict,auth:office365Reliability7dAuth
+        });
+        renderOfficeReliability(office365.reliability?.['30d']||{},{
+          runs:office365Reliability30dRuns,success:office365Reliability30dSuccess,average:office365Reliability30dAverage,conflict:office365Reliability30dConflict,auth:office365Reliability30dAuth
+        });
       }
 
       const deployments=data.deployments||{};

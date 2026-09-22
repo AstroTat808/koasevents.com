@@ -63,8 +63,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="ml-auto flex flex-wrap items-center gap-2">
               <span data-office365-status class="text-[.6rem] font-bold text-[var(--koa-ink)]/45">Office 365 sync status loading…</span>
               <button data-office365-sync type="button" class="calendar-sync-button">Sync now</button>
+              <button data-office365-sync-verify type="button" class="calendar-sync-button">Sync now + verify</button>
             </div>
           </div>
+          <div data-office365-verify-result class="mt-3 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"></div>
 
           <div class="mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
             <div data-month-view class="calendar-grid-wrap">
@@ -300,6 +302,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const syncAuditSection=document.querySelector('[data-sync-audit-section]');
     const syncAudit=document.querySelector('[data-sync-audit]');
     const syncAuditToggle=document.querySelector('[data-sync-audit-toggle]');
+    const office365VerifyResult=document.querySelector('[data-office365-verify-result]');
+    const office365SyncVerifyButton=document.querySelector('[data-office365-sync-verify]');
     const syncAuditFilterButtons=[...document.querySelectorAll('[data-sync-audit-filter]')];
     let syncAuditRuns=[];
     let syncAuditAction='all';
@@ -680,6 +684,75 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         statusEl.textContent=status.lastSuccessAt?'Office 365 synced '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(status.lastSuccessAt))+(status.conflicts?.length?' · '+status.conflicts.length+' conflict'+(status.conflicts.length===1?'':'s'):''):'Office 365 sync ready';
       }catch{statusEl.textContent='Office 365 sync status unavailable';}
     }
+
+    function renderOffice365Verification(result){
+      if(!office365VerifyResult)return;
+      const verification=result?.verification||{};
+      const summary=verification.summary||{};
+      office365VerifyResult.classList.remove('hidden');
+      office365VerifyResult.innerHTML='';
+      const ok=Boolean(verification.ok);
+      const head=document.createElement('div');
+      head.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
+      const left=document.createElement('div');
+      left.append(
+        text('strong','text-sm '+(ok?'text-emerald-800':'text-red-800'),ok?'Sync verification passed':'Sync verification needs attention'),
+        text('p','mt-1 text-xs text-[var(--koa-ink)]/55',
+          (summary.booked||0)+' booked · '+(summary.linked||0)+' linked · '+(summary.missing||0)+' missing · '+(summary.duplicates||0)+' duplicate warning'+((summary.duplicates||0)===1?'':'s')+' · '+(summary.mismatches||0)+' mismatch'+((summary.mismatches||0)===1?'':'es')+' · '+(summary.conflicts||0)+' unresolved conflict'+((summary.conflicts||0)===1?'':'s'))
+      );
+      const stamp=text('span','text-[.65rem] font-semibold text-[var(--koa-ink)]/45',verification.checkedAt?new Date(verification.checkedAt).toLocaleString():'');
+      head.append(left,stamp);office365VerifyResult.appendChild(head);
+
+      const issues=Array.isArray(verification.issues)?verification.issues:[];
+      if(issues.length){
+        const list=document.createElement('div');list.className='mt-3 grid gap-2';
+        issues.slice(0,20).forEach((issue)=>{
+          const row=document.createElement('div');
+          row.className='rounded-lg border '+(issue.severity==='error'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50')+' p-3 text-xs';
+          const fields=Array.isArray(issue.fields)&&issue.fields.length?' · '+issue.fields.join(', '):'';
+          row.append(
+            text('strong',issue.severity==='error'?'text-red-800':'text-amber-900',(issue.title||issue.recordId||'Calendar item')+' · '+String(issue.type||'issue').replaceAll('_',' ')),
+            text('p','mt-1 text-[var(--koa-ink)]/60',(issue.date?dateLabel(issue.date)+' · ':'')+(issue.detail||'')+fields)
+          );
+          list.appendChild(row);
+        });
+        if(issues.length>20)list.appendChild(text('p','text-xs text-[var(--koa-ink)]/45','Showing 20 of '+issues.length+' verification issues.'));
+        office365VerifyResult.appendChild(list);
+      }else if(ok){
+        office365VerifyResult.appendChild(text('p','mt-3 text-xs text-emerald-800','Every booked Koa event has one linked Office 365 event and the synchronized fields match.'));
+      }
+    }
+
+    async function syncOffice365NowAndVerify(){
+      const button=office365SyncVerifyButton;
+      const statusEl=document.querySelector('[data-office365-status]');
+      if(!button)return;
+      button.disabled=true;button.textContent='Syncing + verifying…';
+      if(statusEl)statusEl.textContent='Syncing Office 365 and verifying results…';
+      try{
+        const res=await fetch('/api/admin/calendar-office365',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'sync_verify'}),
+        });
+        const result=await res.json().catch(()=>({}));
+        if(!res.ok)throw new Error(result?.error||'Sync verification failed');
+        renderOffice365Verification(result);
+        const sync=result.sync||{};
+        if(statusEl)statusEl.textContent='Sync complete: '+(sync.created||0)+' created · '+(sync.adopted||0)+' adopted · '+(sync.pushed||0)+' pushed · '+(sync.pulled||0)+' pulled · verification '+(result.verification?.ok?'passed':'needs attention');
+        await load();
+      }catch(error){
+        if(statusEl)statusEl.textContent='Office 365 sync + verify error: '+String(error?.message||error);
+        if(office365VerifyResult){
+          office365VerifyResult.classList.remove('hidden');
+          office365VerifyResult.innerHTML='';
+          office365VerifyResult.appendChild(text('strong','text-sm text-red-800','Sync + verify failed'),text('p','mt-1 text-xs text-red-700',String(error?.message||error)));
+        }
+      }finally{
+        button.disabled=false;button.textContent='Sync now + verify';
+      }
+    }
+
     async function syncOffice365Now(){
       const button=document.querySelector('[data-office365-sync]');
       const statusEl=document.querySelector('[data-office365-status]');
@@ -711,6 +784,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-preview-close]')?.addEventListener('click',closePreview);
     document.querySelector('[data-office365-sync]')?.addEventListener('click',syncOffice365Now);
+    office365SyncVerifyButton?.addEventListener('click',syncOffice365NowAndVerify);
     syncAuditToggle?.addEventListener('click',()=>{
       const opening=syncAudit.classList.contains('hidden');
       syncAudit.classList.toggle('hidden',!opening);

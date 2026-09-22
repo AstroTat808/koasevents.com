@@ -42,17 +42,39 @@ async function office365HealthSummary(context:Context){
     readOffice365Conflicts(context),
     readOffice365SyncAudit(context),
   ]);
-  const cutoff=Date.now()-24*60*60*1000;
-  const recentRuns=(Array.isArray(auditRuns)?auditRuns:[]).filter((run:any)=>{
+  const allRuns=Array.isArray(auditRuns)?auditRuns:[];
+  const runsSince=(days:number)=>allRuns.filter((run:any)=>{
     const at=Date.parse(String(run?.completedAt||run?.startedAt||''));
-    return Number.isFinite(at)&&at>=cutoff;
+    return Number.isFinite(at)&&at>=Date.now()-days*24*60*60*1000;
   });
-  const changedLast24Hours=recentRuns.reduce((total:number,run:any)=>{
+  const changedCount=(run:any)=>{
     const t=run?.totals||{};
-    return total+Number(t.created||0)+Number(t.adopted||0)+Number(t.pushed||0)+Number(t.pulled||0);
-  },0);
+    return Number(t.created||0)+Number(t.adopted||0)+Number(t.pushed||0)+Number(t.pulled||0);
+  };
+  const authErrorPattern=/token|unauthori[sz]ed|forbidden|\b401\b|\b403\b|permission|consent|credential|invalid_client|access denied/i;
+  const reliabilityFor=(days:number)=>{
+    const runs=runsSince(days);
+    const totalRuns=runs.length;
+    const successfulRuns=runs.filter((run:any)=>run?.status==='success').length;
+    const conflictRuns=runs.filter((run:any)=>Number(run?.totals?.conflicted||0)>0).length;
+    const authenticationFailures=runs.filter((run:any)=>authErrorPattern.test(String(run?.error||''))).length;
+    const totalChanged=runs.reduce((sum:number,run:any)=>sum+changedCount(run),0);
+    return {
+      days,
+      totalRuns,
+      successfulRuns,
+      successRate:totalRuns?Math.round((successfulRuns/totalRuns)*1000)/10:null,
+      averageEventsChangedPerRun:totalRuns?Math.round((totalChanged/totalRuns)*10)/10:null,
+      conflictRuns,
+      conflictRate:totalRuns?Math.round((conflictRuns/totalRuns)*1000)/10:null,
+      authenticationFailures,
+      totalEventsChanged:totalChanged,
+    };
+  };
+  const recentRuns=runsSince(1);
+  const changedLast24Hours=recentRuns.reduce((total:number,run:any)=>total+changedCount(run),0);
   const lastError=String(state?.lastError||'').trim();
-  const authFailure=/token|unauthori[sz]ed|forbidden|\b401\b|\b403\b|permission|consent|credential|invalid_client|access denied/i.test(lastError);
+  const authFailure=authErrorPattern.test(lastError);
   const authenticationStatus=!cfg.configured
     ? 'not_configured'
     : lastError
@@ -70,6 +92,10 @@ async function office365HealthSummary(context:Context){
     unresolvedConflicts:Array.isArray(conflicts)?conflicts.length:0,
     changedLast24Hours,
     runsLast24Hours:recentRuns.length,
+    reliability:{
+      '7d':reliabilityFor(7),
+      '30d':reliabilityFor(30),
+    },
     calendarOwner:String(cfg.calendarOwner||''),
     calendarName:String(cfg.calendarName||''),
   };
