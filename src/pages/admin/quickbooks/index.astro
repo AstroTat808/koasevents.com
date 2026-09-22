@@ -712,6 +712,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       privateEvent:{id:'builtin-private-event',label:'Private Event',key:'privateEvent',category:'privateEvent',depositField:'privateEventPercent',depositPercent:10,milestones:[
         {label:'Final balance',dueDaysBefore:30,percentOfRemaining:100},
       ]},
+      generalFallback:{id:'builtin-general-fallback',label:'General Fallback',key:'default',category:'default',depositField:'defaultPercent',depositPercent:10,milestones:[
+        {label:'Final balance',dueDaysBefore:30,percentOfRemaining:100},
+      ]},
     };
     function builtInPresetList(){return Object.values(paymentPresets);}
     function allPresetOptions(){
@@ -753,6 +756,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           if(!window.confirm('Delete custom preset “'+preset.name+'”?'))return;
           state.depositSettings.customPresets=(state.depositSettings.customPresets||[]).filter((item)=>item.id!==preset.id);
           state.depositSettings.autoRules=(state.depositSettings.autoRules||[]).filter((rule)=>rule.presetId!==preset.id);
+          renderAutoRules();
           await persistPaymentSettings('Custom preset deleted.');
         });
         actions.append(apply,remove);card.append(title,meta,actions);list.appendChild(card);
@@ -819,11 +823,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const list=autoRuleList();if(!list)return;
       const row=document.createElement('div');row.dataset.autoRule='1';row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 xl:grid-cols-[1.25fr_.8fr_.65fr_.65fr_1.25fr_.45fr_auto] xl:items-end';
       row.dataset.ruleId=rule.id;
-      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min lead days<input data-rule-min type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max lead days<input data-rule-max type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><label class="grid gap-1 text-xs font-semibold">Priority<input data-rule-priority type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><div class="flex gap-2"><label class="flex items-center gap-2 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min months away<input data-rule-min type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max months away<input data-rule-max type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><label class="grid gap-1 text-xs font-semibold">Priority<input data-rule-priority type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><div class="flex gap-2"><label class="flex items-center gap-2 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
       row.querySelector('[data-rule-name]').value=rule.name||'Payment rule';
       row.querySelector('[data-rule-category]').value=rule.category||'default';
-      row.querySelector('[data-rule-min]').value=rule.minLeadDays==null?'':String(rule.minLeadDays);
-      row.querySelector('[data-rule-max]').value=rule.maxLeadDays==null?'':String(rule.maxLeadDays);
+      row.querySelector('[data-rule-min]').value=rule.minLeadDays==null?'':String(Math.round((Number(rule.minLeadDays)/30.4375)*10)/10);
+      row.querySelector('[data-rule-max]').value=rule.maxLeadDays==null?'':String(Math.round((Number(rule.maxLeadDays)/30.4375)*10)/10);
       row.querySelector('[data-rule-priority]').value=String(Number(rule.priority||0));
       row.querySelector('[data-rule-active]').checked=rule.active!==false;
       const refreshRulePresets=()=>{
@@ -842,8 +846,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         id:row.dataset.ruleId||('rule-'+index),
         name:String(row.querySelector('[data-rule-name]')?.value||'Payment rule').trim(),
         category:row.querySelector('[data-rule-category]')?.value||'default',
-        minLeadDays:row.querySelector('[data-rule-min]')?.value===''?null:Number(row.querySelector('[data-rule-min]')?.value),
-        maxLeadDays:row.querySelector('[data-rule-max]')?.value===''?null:Number(row.querySelector('[data-rule-max]')?.value),
+        minLeadDays:row.querySelector('[data-rule-min]')?.value===''?null:Math.round(Number(row.querySelector('[data-rule-min]')?.value)*30.4375),
+        maxLeadDays:row.querySelector('[data-rule-max]')?.value===''?null:Math.round(Number(row.querySelector('[data-rule-max]')?.value)*30.4375),
         presetId:row.querySelector('[data-rule-preset]')?.value||'',
         priority:Number(row.querySelector('[data-rule-priority]')?.value||index),
         active:Boolean(row.querySelector('[data-rule-active]')?.checked),
