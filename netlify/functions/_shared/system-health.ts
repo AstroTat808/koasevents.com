@@ -1578,6 +1578,35 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     return {name:clean(item?.name,120),cron,runsPerDay:runs};
   }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
 
+  const scheduledCreditPerRun=(scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+  const jobDefinitions=[
+    {jobId:'post-deploy-verification',functionName:'post-deploy-verification',label:'Post-deploy verification',saverLabel:'Every 30 minutes',normalLabel:'Every 15 minutes',normalRuns:96,saverRuns:48,saverRisk:1,pausedRisk:6,protects:'Hourly System Health continues to monitor production.'},
+    {jobId:'quickbooks-reconciliation',functionName:'quickbooks-hourly-reconciliation',label:'QuickBooks fallback reconciliation',saverLabel:'Every 8 hours',normalLabel:'Every 4 hours',normalRuns:6,saverRuns:3,saverRisk:1,pausedRisk:5,protects:'QuickBooks webhooks remain immediate.'},
+    {jobId:'crm-lifecycle',functionName:'crm-lifecycle',label:'CRM lifecycle maintenance',saverLabel:'Every 12 hours',normalLabel:'Every 6 hours',normalRuns:4,saverRuns:2,saverRisk:2,pausedRisk:5,protects:'Interactive CRM, lead capture, proposals, and bookings stay available.'},
+    {jobId:'office365-calendar-sync',functionName:'office365-calendar-sync',label:'Office 365 automatic sync',saverLabel:'Every 4 hours',normalLabel:'Hourly',normalRuns:24,saverRuns:6,saverRisk:2,pausedRisk:4,protects:'Manual Sync now + verify remains available.'},
+    {jobId:'review-requests',functionName:'review-requests',label:'Review requests',saverLabel:'Every other day',normalLabel:'Daily',normalRuns:1,saverRuns:.5,saverRisk:1,pausedRisk:2,protects:'No client, CRM, payment, or security workflow is affected.'},
+    {jobId:'vendor-insurance-reminders',functionName:'vendor-insurance-reminders',label:'Vendor insurance reminders',saverLabel:'Every other day',normalLabel:'Daily',normalRuns:1,saverRuns:.5,saverRisk:2,pausedRisk:3,protects:'Insurance records and manual compliance review remain available.'},
+  ];
+  const deployedScheduleNames=new Set(scheduleRows.map((row:any)=>row.name));
+  const jobControls=jobDefinitions
+    .filter((row:any)=>deployedScheduleNames.has(row.functionName))
+    .map((row:any)=>{
+      const normalRunsPerDay=row.normalRuns;
+      const saverRunsPerDay=row.saverRuns;
+      const saverSavingsPerDay=Math.max(0,(normalRunsPerDay-saverRunsPerDay)*scheduledCreditPerRun);
+      const pausedSavingsPerDay=Math.max(0,normalRunsPerDay*scheduledCreditPerRun);
+      return {
+        ...row,
+        modes:['normal','saver','paused'],
+        normalRunsPerDay,
+        saverRunsPerDay,
+        saverSavingsPerDay:Math.round(saverSavingsPerDay*100000)/100000,
+        pausedSavingsPerDay:Math.round(pausedSavingsPerDay*100000)/100000,
+        saverSavingsThisCycle:Math.round(saverSavingsPerDay*remainingDays*100)/100,
+        pausedSavingsThisCycle:Math.round(pausedSavingsPerDay*remainingDays*100)/100,
+      };
+    });
+
   const office365=scheduleRows.find((item:any)=>item.name==='office365-calendar-sync');
   if(office365){
     const savingsPerDay=(24*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
@@ -1776,7 +1805,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:6,
+    version:7,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1797,6 +1826,11 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       note:'Actual line uses stored estimated-credit snapshots; projected line uses the current recent-weighted daily burn rate.',
     },
     recommendations,
+    jobControls,
+    reductionTarget:{
+      requiredDailyReduction:Math.round(requiredDailyReduction*100)/100,
+      excessCredits:Math.round(excessCredits*100)/100,
+    },
     projection:{
       dailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
       weightedDailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
@@ -1843,10 +1877,100 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
   };
 }
 
+
+function creditSaverModeSavings(control:any,mode:string){
+  if(mode==='paused')return Number(control?.pausedSavingsPerDay||0);
+  if(mode==='saver')return Number(control?.saverSavingsPerDay||0);
+  return 0;
+}
+
+function optimizeCreditSaverPlan(creditUsage:any,policy:any){
+  const controls=Array.isArray(creditUsage?.jobControls)?creditUsage.jobControls:[];
+  const currentModes=policy?.modes&&typeof policy.modes==='object'?policy.modes:{};
+  const remainingDays=Math.max(0,Number(creditUsage?.projection?.remainingDays||0));
+  const allowance=Math.max(0,Number(creditUsage?.monthlyAllowance||0));
+  const rawProjected=Math.max(0,Number(creditUsage?.projection?.projectedEndOfCycleCredits||0));
+  const currentSavingsPerDay=controls.reduce((sum:number,row:any)=>sum+creditSaverModeSavings(row,currentModes[row.jobId]||'normal'),0);
+  const currentCycleSavings=currentSavingsPerDay*remainingDays;
+  const projectedWithCurrent=Math.max(Number(creditUsage?.totalEstimatedCredits||0),rawProjected-currentCycleSavings);
+  const neededCycleSavings=Math.max(0,projectedWithCurrent-allowance);
+  const modes=['normal','saver','paused'];
+  let best:any=null;
+  let bestFallback:any=null;
+  const total=Math.pow(3,controls.length);
+
+  for(let mask=0;mask<total;mask+=1){
+    let value=mask;
+    const changes:any[]=[];
+    let additionalPerDay=0;
+    let disruption=0;
+    let valid=true;
+    for(const row of controls){
+      const current=String(currentModes[row.jobId]||'normal');
+      const currentRank=modes.indexOf(current);
+      const next=modes[value%3]||'normal';
+      value=Math.floor(value/3);
+      const nextRank=modes.indexOf(next);
+      if(nextRank<currentRank){valid=false;break;}
+      const currentSaving=creditSaverModeSavings(row,current);
+      const nextSaving=creditSaverModeSavings(row,next);
+      additionalPerDay+=Math.max(0,nextSaving-currentSaving);
+      if(next!==current){
+        disruption+=next==='paused'?Number(row.pausedRisk||5):Number(row.saverRisk||1);
+        changes.push({
+          jobId:row.jobId,
+          label:row.label,
+          fromMode:current,
+          toMode:next,
+          estimatedSavingsPerDay:Math.round(Math.max(0,nextSaving-currentSaving)*100000)/100000,
+          estimatedSavingsThisCycle:Math.round(Math.max(0,nextSaving-currentSaving)*remainingDays*100)/100,
+        });
+      }
+    }
+    if(!valid)continue;
+    const cycleSavings=additionalPerDay*remainingDays;
+    const candidate={
+      changes,
+      additionalSavingsPerDay:additionalPerDay,
+      additionalSavingsThisCycle:cycleSavings,
+      disruption,
+      projectedAfter:Math.max(Number(creditUsage?.totalEstimatedCredits||0),projectedWithCurrent-cycleSavings),
+    };
+    const meets=cycleSavings+1e-9>=neededCycleSavings;
+    if(meets){
+      if(!best
+        || candidate.disruption<best.disruption
+        || (candidate.disruption===best.disruption&&candidate.changes.length<best.changes.length)
+        || (candidate.disruption===best.disruption&&candidate.changes.length===best.changes.length&&candidate.additionalSavingsThisCycle<best.additionalSavingsThisCycle)
+      )best=candidate;
+    }
+    if(!bestFallback
+      || candidate.additionalSavingsThisCycle>bestFallback.additionalSavingsThisCycle
+      || (candidate.additionalSavingsThisCycle===bestFallback.additionalSavingsThisCycle&&candidate.disruption<bestFallback.disruption)
+    )bestFallback=candidate;
+  }
+
+  const selected=best||bestFallback||{changes:[],additionalSavingsPerDay:0,additionalSavingsThisCycle:0,projectedAfter:projectedWithCurrent,disruption:0};
+  return {
+    status:neededCycleSavings<=0?'within_allowance':best?'recommended':'insufficient',
+    currentProjectedEndOfCycle:Math.round(projectedWithCurrent*100)/100,
+    currentEstimatedSavingsPerDay:Math.round(currentSavingsPerDay*100000)/100000,
+    currentEstimatedSavingsThisCycle:Math.round(currentCycleSavings*100)/100,
+    neededAdditionalSavingsThisCycle:Math.round(neededCycleSavings*100)/100,
+    neededAdditionalSavingsPerDay:remainingDays?Math.round((neededCycleSavings/remainingDays)*100000)/100000:0,
+    recommendedChanges:selected.changes,
+    estimatedAdditionalSavingsPerDay:Math.round(selected.additionalSavingsPerDay*100000)/100000,
+    estimatedAdditionalSavingsThisCycle:Math.round(selected.additionalSavingsThisCycle*100)/100,
+    projectedAfterPlan:Math.round(selected.projectedAfter*100)/100,
+    estimatedShortfallAfterPlan:Math.round(Math.max(0,selected.projectedAfter-allowance)*100)/100,
+    canApply:Boolean(selected.changes.length),
+  };
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===6 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===7 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -2044,6 +2168,11 @@ export async function cachedDeploymentHistory(context:Context) {
   );
   const creditSaverPolicy=await readCreditSaverPolicy(context);
   creditUsage.saverPolicy=creditSaverPolicy;
+  creditUsage.jobControls=(creditUsage.jobControls||[]).map((item:any)=>({
+    ...item,
+    currentMode:String(creditSaverPolicy?.modes?.[item.jobId]||'normal'),
+  }));
+  creditUsage.autoSaverPlan=optimizeCreditSaverPlan(creditUsage,creditSaverPolicy);
   creditUsage.recommendations=(creditUsage.recommendations||[]).map((item:any)=>({
     ...item,
     active:Boolean(item.safeActionId && creditSaverPolicy.activeActions?.includes(item.safeActionId)),
