@@ -218,7 +218,7 @@ export default async(req:Request,context:Context)=>{
     const allAssignments=assignmentMap.get(person.id)||[];
     const assignments=[...allAssignments]
       .sort((a:any,b:any)=>String(a.sortDate||'9999').localeCompare(String(b.sortDate||'9999'))||a.label.localeCompare(b.label))
-      .slice(0,12);
+      .slice(0,120);
 
     const openCrmTasks=allAssignments.filter((row:any)=>row.type==='task').length;
     const upcomingEventIds=new Set(
