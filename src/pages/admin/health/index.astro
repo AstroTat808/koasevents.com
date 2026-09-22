@@ -964,32 +964,50 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelector('[data-deploy-functions]').textContent=currentDeploy.functionCount==null?'Unavailable':String(currentDeploy.functionCount);
       const syncEl=document.querySelector('[data-deploy-sync]');
       const mainEl=document.querySelector('[data-deploy-main]');
+      const connectionHealth=deployments.connectionHealth||{};
+      const deploymentState=String(connectionHealth.deploymentState||'unknown');
       if(currentDeploy.behindMain===false){
         syncEl.textContent='Current with main';
         syncEl.className='mt-2 text-sm font-semibold text-emerald-800';
       }else if(currentDeploy.behindMain===true){
         const behind=Number(currentDeploy.commitsBehind||0);
-        syncEl.textContent='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
-        syncEl.className='mt-2 text-sm font-semibold '+(behind===1?'text-amber-800':'text-red-800');
+        const lag='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
+        if(deploymentState==='deploying'){
+          syncEl.textContent=lag+' · build in progress';
+        }else if(deploymentState==='waiting'){
+          syncEl.textContent=lag+' · waiting for Git trigger';
+        }else if(deploymentState==='auto-deploy-broken'){
+          syncEl.textContent=lag+' · Git auto-deploy stalled';
+        }else if(deploymentState==='deploy-failed'){
+          syncEl.textContent=lag+' · production deploy failed';
+        }else{
+          syncEl.textContent=lag;
+        }
+        syncEl.className='mt-2 text-sm font-semibold '+(connectionHealth.severity==='red'?'text-red-800':'text-amber-800');
       }else{
         syncEl.textContent='Unable to compare';
         syncEl.className='mt-2 text-sm font-semibold text-red-800';
       }
       mainEl.textContent=currentDeploy.mainCommit?'main '+String(currentDeploy.mainCommit).slice(0,12):'';
-      const connectionHealth=deployments.connectionHealth||{};
       const gitLinkEl=document.querySelector('[data-deploy-git-link]');
       const gitDetailEl=document.querySelector('[data-deploy-git-detail]');
-      if(connectionHealth.severity==='green'){
+      if(deploymentState==='synced'){
         gitLinkEl.textContent='Connected · current';
         gitLinkEl.className='mt-2 text-sm font-semibold text-emerald-800';
-      }else if(connectionHealth.severity==='yellow'){
-        gitLinkEl.textContent='Connected · 1 commit behind';
+      }else if(deploymentState==='deploying'){
+        gitLinkEl.textContent='Build in progress';
+        gitLinkEl.className='mt-2 text-sm font-semibold '+(connectionHealth.severity==='red'?'text-red-800':'text-amber-800');
+      }else if(deploymentState==='waiting'){
+        gitLinkEl.textContent='Waiting for Git auto-deploy';
         gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
-      }else if(connectionHealth.githubLinked===false){
-        gitLinkEl.textContent='Disconnected or mislinked';
+      }else if(deploymentState==='deploy-failed'){
+        gitLinkEl.textContent='Production deploy failed';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
+      }else if(deploymentState==='auto-deploy-broken'){
+        gitLinkEl.textContent=connectionHealth.githubLinked===false?'Disconnected or mislinked':'Git auto-deploy stalled';
         gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
       }else{
-        gitLinkEl.textContent='Deployment sync critical';
+        gitLinkEl.textContent='Unable to verify';
         gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
       }
       gitDetailEl.textContent=connectionHealth.detail||[
@@ -1006,8 +1024,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         healthEl.className='mt-2 text-sm font-semibold text-emerald-800';
       }else{
         const qaCurrent=deployments.latestQaForCurrentDeploy;
-        healthEl.textContent=currentDeploy.behindMain===true?'Production is behind main':qaCurrent?.conclusion==='failure'?'Current deploy QA failed':'Waiting for successful QA on current deploy';
-        healthEl.className='mt-2 text-sm font-semibold text-amber-800';
+        if(deploymentState==='deploying'){
+          healthEl.textContent='Deploy in progress · production is catching up';
+          healthEl.className='mt-2 text-sm font-semibold '+(connectionHealth.severity==='red'?'text-red-800':'text-amber-800');
+        }else if(deploymentState==='waiting'){
+          healthEl.textContent='Waiting for Git auto-deploy to start';
+          healthEl.className='mt-2 text-sm font-semibold text-amber-800';
+        }else if(deploymentState==='auto-deploy-broken'){
+          healthEl.textContent='Git auto-deploy stalled';
+          healthEl.className='mt-2 text-sm font-semibold text-red-800';
+        }else if(deploymentState==='deploy-failed'){
+          healthEl.textContent='Production deploy failed';
+          healthEl.className='mt-2 text-sm font-semibold text-red-800';
+        }else{
+          healthEl.textContent=currentDeploy.behindMain===true?'Production is behind main':qaCurrent?.conclusion==='failure'?'Current deploy QA failed':'Waiting for successful QA on current deploy';
+          healthEl.className='mt-2 text-sm font-semibold text-amber-800';
+        }
       }
       const postDeploy=deployments.postDeployVerification;
       const postDeployEl=document.querySelector('[data-post-deploy-verification]');
