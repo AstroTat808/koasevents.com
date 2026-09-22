@@ -292,6 +292,135 @@ function buildConflict(existing:Office365SyncConflict|undefined,recordId:string,
   };
 }
 
+
+function normalizedSubject(value:unknown){
+  return clean(value,180).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+
+function verificationIssue(type:string,severity:'warning'|'error',shape:any,event:GraphEvent|null,detail:string,extra:any={}){
+  return {
+    type,
+    severity,
+    recordId:clean(shape?.recordId,200),
+    title:clean(shape?.title,180)||clean(event?.subject,180)||'Calendar event',
+    date:clean(shape?.date,20)||localParts(event||{}).date,
+    outlookEventId:clean(event?.id,500),
+    detail:clean(detail,700),
+    ...extra,
+  };
+}
+
+export async function verifyOffice365Calendar(context:Context){
+  const cfg=office365CalendarConfig();
+  const checkedAt=new Date().toISOString();
+  if(!cfg.configured){
+    return {
+      ok:false,
+      status:'not_configured',
+      checkedAt,
+      summary:{booked:0,linked:0,missing:0,duplicates:0,mismatches:0,orphans:0,conflicts:0},
+      issues:[{type:'configuration',severity:'error',recordId:'',title:'Office 365 calendar',date:'',outlookEventId:'',detail:'Microsoft Graph environment variables are incomplete.'}],
+    };
+  }
+
+  const accessToken=await token();
+  const {entries}=await loadBooked(context);
+  const dates=entries.map((entry)=>entry.shape.date).filter(Boolean).sort();
+  const today=new Date().toISOString().slice(0,10);
+  const start=dates[0]&&dates[0]<addDays(today,-90)?dates[0]:addDays(today,-90);
+  const end=dates.at(-1)&&dates.at(-1)>addDays(today,730)?dates.at(-1):addDays(today,730);
+  const outlookEvents=await listEvents(accessToken,start,end);
+  const conflicts=await readOffice365Conflicts(context);
+  const issues:any[]=[];
+  const activeIds=new Set(entries.map((entry)=>clean(entry.shape.recordId,200)).filter(Boolean));
+  const markerEvents=new Map<string,GraphEvent[]>();
+
+  for(const event of outlookEvents){
+    const rid=recordIdFromEvent(event);
+    if(!rid)continue;
+    const rows=markerEvents.get(rid)||[];
+    rows.push(event);
+    markerEvents.set(rid,rows);
+  }
+
+  let linked=0;
+  for(const entry of entries){
+    const shape=entry.shape;
+    if(!shape.recordId||!shape.date){
+      issues.push(verificationIssue('invalid_booking','error',shape,null,!shape.recordId?'Booked CRM record is missing an ID.':'Booked CRM record is missing an event date.'));
+      continue;
+    }
+
+    const linkedEvents=[...(markerEvents.get(shape.recordId)||[])];
+    const link=((await syncStore(context).get('links/'+shape.recordId,{type:'json'}))||{}) as Partial<LinkState>;
+    if(link.outlookEventId&&!linkedEvents.some((event)=>event.id===link.outlookEventId)){
+      try{
+        const byId=await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(link.outlookEventId),accessToken) as GraphEvent;
+        if(byId?.id)linkedEvents.push(byId);
+      }catch{}
+    }
+
+    if(!linkedEvents.length){
+      issues.push(verificationIssue('missing_link','error',shape,null,'No linked Office 365 event was found for this booked Koa event.'));
+      continue;
+    }
+
+    const uniqueLinked=[...new Map(linkedEvents.map((event)=>[event.id,event])).values()];
+    linked+=1;
+    if(uniqueLinked.length>1){
+      issues.push(verificationIssue('duplicate_linked','error',shape,uniqueLinked[0],'More than one Office 365 event contains the same KOA_RECORD_ID marker.',{duplicateEventIds:uniqueLinked.map((event)=>event.id)}));
+    }
+
+    const event=uniqueLinked.find((row)=>row.id===link.outlookEventId)||uniqueLinked[0];
+    const parts=localParts(event);
+    const mismatchedFields:string[]=[];
+    if(clean(event.subject,180)!==clean(shape.title,180))mismatchedFields.push('title');
+    if(parts.date!==shape.date)mismatchedFields.push('date');
+    if(parts.startTime!==(shape.startTime||''))mismatchedFields.push('startTime');
+    if(parts.endTime!==(shape.endTime||''))mismatchedFields.push('endTime');
+    if(clean(event.location?.displayName,180)!==clean(shape.venue,180))mismatchedFields.push('venue');
+    if(mismatchedFields.length){
+      issues.push(verificationIssue('field_mismatch','warning',shape,event,'Linked Office 365 values do not match Koa’s current booking fields.',{fields:mismatchedFields}));
+    }
+
+    const sameDateLookalikes=outlookEvents.filter((candidate)=>{
+      if(candidate.id===event.id||recordIdFromEvent(candidate))return false;
+      const p=localParts(candidate);
+      if(p.date!==shape.date)return false;
+      const a=normalizedSubject(candidate.subject);
+      const b=normalizedSubject(shape.title);
+      return Boolean(a&&b&&(a===b||a.includes(b)||b.includes(a)));
+    });
+    if(sameDateLookalikes.length){
+      issues.push(verificationIssue('possible_duplicate','warning',shape,event,'An unlinked Office 365 event on the same date has a matching or very similar title.',{duplicateEventIds:sameDateLookalikes.map((row)=>row.id)}));
+    }
+  }
+
+  for(const [recordId,events] of markerEvents){
+    if(activeIds.has(recordId))continue;
+    events.forEach((event)=>issues.push(verificationIssue('orphan_link','warning',{recordId,title:event.subject,date:localParts(event).date},event,'This Office 365 event is linked to a KOA_RECORD_ID that is not an active booked CRM event.')));
+  }
+
+  const summary={
+    booked:entries.length,
+    linked,
+    missing:issues.filter((issue)=>issue.type==='missing_link').length,
+    duplicates:issues.filter((issue)=>issue.type==='duplicate_linked'||issue.type==='possible_duplicate').length,
+    mismatches:issues.filter((issue)=>issue.type==='field_mismatch').length,
+    orphans:issues.filter((issue)=>issue.type==='orphan_link').length,
+    conflicts:conflicts.length,
+  };
+  return {
+    ok:issues.every((issue)=>issue.severity!=='error')&&conflicts.length===0,
+    status:issues.length||conflicts.length?'attention':'passed',
+    checkedAt,
+    range:{start,end},
+    summary,
+    issues,
+    unresolvedConflicts:conflicts,
+  };
+}
+
 export async function syncOffice365Calendar(context:Context,trigger='manual',triggeredBy=''){
   const cfg=office365CalendarConfig();
   const startedAt=new Date().toISOString();
