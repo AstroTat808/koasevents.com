@@ -128,7 +128,7 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const auth = await requireCapability('gallery.view');
+  const auth = await requireCapability('gallery.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
