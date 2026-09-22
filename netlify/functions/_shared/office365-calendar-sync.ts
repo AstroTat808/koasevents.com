@@ -560,8 +560,15 @@ export async function syncOffice365Calendar(context:Context,trigger='manual',tri
           adopted++;
           const index=unlinkedEvents.findIndex((row)=>row.id===event?.id);
           if(index>=0)unlinkedEvents.splice(index,1);
+          if(!eventHasRecordMarker(event,shape.recordId)&&!recordIdFromEvent(event)){
+            event=await graph(
+              (await calendarPath(accessToken))+'/events/'+encodeURIComponent(event.id),
+              accessToken,
+              {method:'PATCH',body:JSON.stringify({body:eventBodyWithMarker(event,shape.recordId)})}
+            ) as GraphEvent;
+          }
           await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
-          addAudit('adopted',shape,event,'Matched one existing Office 365 event on the same date and reused it instead of creating a duplicate.');
+          addAudit('adopted',shape,event,'Matched one existing Office 365 event on the same date, preserved it, and attached the KOA_RECORD_ID link marker.');
           continue;
         }
         if(candidates.length>1){
@@ -575,6 +582,14 @@ export async function syncOffice365Calendar(context:Context,trigger='manual',tri
         await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
         addAudit('created',shape,event,'Created a new linked Office 365 event because no safe existing match was found.');
         continue;
+      }
+
+      if(!eventHasRecordMarker(event,shape.recordId)&&!recordIdFromEvent(event)){
+        event=await graph(
+          (await calendarPath(accessToken))+'/events/'+encodeURIComponent(event.id),
+          accessToken,
+          {method:'PATCH',body:JSON.stringify({body:eventBodyWithMarker(event,shape.recordId)})}
+        ) as GraphEvent;
       }
 
       const currentCrmHash=crmHash(shape);
