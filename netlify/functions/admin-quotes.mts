@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { hasCapability, isApprovedManager, requireOperations } from './_shared/admin';
+import { hasCapability, isApprovedManager, requireCapability } from './_shared/admin';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -1353,7 +1353,7 @@ function staffPerformance(records:SalesRecord[], events:any[], staff:Operational
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireOperations();
+  const auth = await requireCapability('sales.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
@@ -1438,8 +1438,8 @@ export default async (req: Request, context: Context) => {
     'update-mobile-bar-profit-settings':'sales.profit_settings',
     'update-profit-model':'sales.profit_settings',
   };
-  const requestedCapability=capabilityByAction[String(payload.action)];
-  if (requestedCapability && !hasCapability(auth.user,requestedCapability)) {
+  const requestedCapability=capabilityByAction[String(payload.action)] || 'sales.manage';
+  if (!hasCapability(auth.user,requestedCapability)) {
     return Response.json({ error: 'You do not have permission for this sales action.' }, { status: 403 });
   }
   if (payload.action === 'assign-owner' && !isApprovedManager(auth.user)) {
