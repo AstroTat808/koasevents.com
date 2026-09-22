@@ -1,0 +1,22 @@
+name: Debug preview metadata
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/debug-preview-meta.yml'
+permissions:
+  contents: read
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read preview build metadata
+        run: |
+          set -e
+          url="https://deploy-preview-${{ github.event.number }}--koasevents-website.netlify.app/signature-wedding/"
+          echo "URL: $url"
+          curl -fsSL "$url" -o /tmp/page.html
+          grep -oE '<meta name="koa-build-commit" content="[^"]+"' /tmp/page.html || true
+          grep -oE '<meta name="koa-deploy-id" content="[^"]+"' /tmp/page.html || true
+          grep -oE '<meta name="koa-build-time" content="[^"]+"' /tmp/page.html || true
+          echo "Expected head: ${{ github.event.pull_request.head.sha }}"
