@@ -316,6 +316,16 @@ function subjectMatches(shape:any,event:GraphEvent){
   const b=normalizedSubject(event?.subject);
   return Boolean(a&&b&&(a===b||a.includes(b)||b.includes(a)));
 }
+function safeAdoptionCandidate(shape:any,event:GraphEvent){
+  const p=localParts(event);
+  const titleMatch=normalizedSubject(shape?.title)===normalizedSubject(event?.subject);
+  const startMatch=!shape?.startTime||p.startTime===shape.startTime;
+  const endMatch=!shape?.endTime||p.endTime===shape.endTime;
+  const shapeLocation=normalizedLocation(shape?.venue);
+  const eventLocation=normalizedLocation(event?.location?.displayName);
+  const locationMatch=!shapeLocation||shapeLocation==="koa s events"||shapeLocation===eventLocation;
+  return Boolean(titleMatch&&p.date===shape?.date&&startMatch&&endMatch&&locationMatch);
+}
 function exactDuplicate(shape:any,linked:GraphEvent,candidate:GraphEvent){
   const lp=localParts(linked),cp=localParts(candidate);
   return normalizedSubject(linked.subject)===normalizedSubject(candidate.subject)
@@ -393,7 +403,7 @@ export async function verifyOffice365Calendar(context:Context){
       const candidates=outlookEvents.filter((candidate)=>{
         if(recordIdFromEvent(candidate))return false;
         const parts=localParts(candidate);
-        return parts.date===shape.date&&subjectMatches(shape,candidate);
+        return parts.date===shape.date&&safeAdoptionCandidate(shape,candidate);
       });
       const repairs=candidates.length===1?[{
         type:'adopt_existing',
@@ -728,7 +738,7 @@ export async function repairOffice365VerificationIssue(context:Context,input:any
   if(type==='adopt_existing'){
     if(recordIdFromEvent(event))throw new Error('This Outlook event is already linked to a CRM booking.');
     const parts=localParts(event);
-    if(parts.date!==shape.date||!subjectMatches(shape,event))throw new Error('This Outlook event is no longer a safe match for the CRM booking.');
+    if(!safeAdoptionCandidate(shape,event))throw new Error('This Outlook event is no longer an exact enough match for safe automatic adoption.');
     const updated=await graph(
       (await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),
       accessToken,
