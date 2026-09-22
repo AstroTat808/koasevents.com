@@ -595,6 +595,136 @@ export async function readPostDeployVerification(context:Context) {
   return ((await healthStore(context).get('deployments/post-deploy-verification',{type:'json'})) || null) as any;
 }
 
+export type ProductionRelease = {
+  deployId:string;
+  commit:string;
+  commitTitle:string;
+  commitMessage:string;
+  publishedAt:string;
+  deployDurationSeconds:number|null;
+  features:string[];
+  changedFiles:string[];
+  verification:any;
+  recordedAt:string;
+};
+
+export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
+  const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
+  return rows.slice(0,Math.max(1,Math.min(100,limit)));
+}
+
+function featureLabelsForFiles(files:string[]) {
+  const labels=new Set<string>();
+  for(const path of files){
+    if(path.includes('/admin/staff')||path.includes('admin-staff')||path.includes('custom-roles')) labels.add('User Management');
+    if(path.includes('identity')||path.includes('account-security')||path.includes('auth-security')||path.includes('/staff/')) labels.add('Authentication & Security');
+    if(path.includes('/admin/crm')||path.includes('admin-crm')||path.includes('crm-')) labels.add('Business CRM');
+    if(path.includes('/admin/quotes')||path.includes('admin-quotes')||path.includes('quotes.')) labels.add('Sales CRM & Proposals');
+    if(path.includes('/admin/events')||path.includes('admin-events')||path.includes('event-')) labels.add('Event Ops');
+    if(path.includes('/admin/calendar')||path.includes('admin-calendar')) labels.add('Master Calendar');
+    if(path.includes('quickbooks')) labels.add('QuickBooks');
+    if(path.includes('/admin/vendors')||path.includes('admin-vendors')||path.includes('vendor-marketplace')||path.includes('vendor-portal')) labels.add('Vendor CRM');
+    if(path.includes('/admin/insurance')||path.includes('insurance')) labels.add('Insurance Compliance');
+    if(path.includes('/admin/blog')||path.includes('blog.')) labels.add('Blog');
+    if(path.includes('/admin/gallery')||path.includes('gallery.')) labels.add('Gallery');
+    if(path.includes('/admin/seo')||path.includes('local-seo')) labels.add('Local SEO');
+    if(path.includes('/admin/health')||path.includes('system-health')||path.includes('health-monitor')||path.includes('post-deploy')) labels.add('System Health');
+    if(path.startsWith('src/pages/')&&!path.includes('/admin/')&&!path.includes('/staff/')) labels.add('Public Website');
+    if(path.startsWith('.github/')||path==='netlify.toml'||path.startsWith('scripts/')) labels.add('Deployment & QA');
+  }
+  return [...labels];
+}
+
+export async function recordProductionRelease(context:Context,input:any) {
+  const deployId=clean(input?.deployId,120);
+  const commit=clean(input?.commit,120);
+  if(!deployId) return null;
+  const store=healthStore(context);
+  const existing=await readProductionReleases(context,100);
+  const previous=existing.find(row=>row.deployId===deployId);
+
+  const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  const githubHeaders:Record<string,string>={
+    'Accept':'application/vnd.github+json',
+    'User-Agent':'KoaEvents-Health/1.0',
+    ...(githubToken?{Authorization:'Bearer '+githubToken}:{}),
+  };
+
+  let commitTitle=previous?.commitTitle||'';
+  let commitMessage=previous?.commitMessage||'';
+  let changedFiles=previous?.changedFiles||[];
+  if(commit){
+    try{
+      const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(commit),{
+        headers:githubHeaders,signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const body:any=await response.json();
+        commitMessage=clean(body?.commit?.message,2000);
+        commitTitle=clean(commitMessage.split('\n')[0],300);
+        changedFiles=Array.isArray(body?.files)
+          ? body.files.map((file:any)=>clean(file?.filename,300)).filter(Boolean).slice(0,300)
+          : changedFiles;
+      }
+    }catch{}
+  }
+
+  let publishedAt=clean(input?.publishedAt,80)||previous?.publishedAt||clean(input?.checkedAt,80);
+  let deployDurationSeconds=Number.isFinite(Number(input?.deployDurationSeconds))
+    ? Number(input.deployDurationSeconds)
+    : previous?.deployDurationSeconds??null;
+  const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  if(netlifyToken){
+    try{
+      const response=await fetch('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(deployId),{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const deploy:any=await response.json();
+        publishedAt=clean(deploy?.published_at||deploy?.updated_at||deploy?.created_at,80)||publishedAt;
+        const seconds=Number(deploy?.deploy_time);
+        if(Number.isFinite(seconds)) deployDurationSeconds=seconds;
+      }
+    }catch{}
+  }
+
+  const record:ProductionRelease={
+    deployId,
+    commit,
+    commitTitle:commitTitle||('Production deploy '+deployId.slice(0,8)),
+    commitMessage,
+    publishedAt:publishedAt||new Date().toISOString(),
+    deployDurationSeconds,
+    features:featureLabelsForFiles(changedFiles),
+    changedFiles,
+    verification:input?.verification||previous?.verification||null,
+    recordedAt:new Date().toISOString(),
+  };
+  const next=[record,...existing.filter(row=>row.deployId!==deployId)]
+    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
+    .slice(0,100);
+  await store.setJSON('deployments/releases',next);
+  return record;
+}
+
+export function releaseTimelineWithIncidents(releases:ProductionRelease[],qaHistory:any[],incidents:any) {
+  const sorted=[...(releases||[])].sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt));
+  return sorted.map((release,index)=>{
+    const newer=sorted[index-1];
+    const start=Date.parse(release.publishedAt);
+    const end=newer?Date.parse(newer.publishedAt):Date.now();
+    const releaseIncidents=(incidents?.recentIncidents||[]).filter((incident:any)=>{
+      const at=Date.parse(String(incident?.startedAt||''));
+      return Number.isFinite(at)&&at>=start&&at<end;
+    });
+    const qa=qaHistory.find((row:any)=>
+      row.commit===release.commit && row.event==='push' && row.branch==='main'
+    )||null;
+    return {...release,qa,incidents:releaseIncidents};
+  });
+}
+
 export async function savePostDeployVerification(context:Context,record:any) {
   await healthStore(context).setJSON('deployments/post-deploy-verification',record);
   return record;

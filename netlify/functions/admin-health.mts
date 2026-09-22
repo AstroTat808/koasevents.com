@@ -11,7 +11,9 @@ import {
   readHealthHistory,
   readLatestHealth,
   readLatestHourlyHealth,
+  readProductionReleases,
   readUptimeHistory,
+  releaseTimelineWithIncidents,
   runSystemHealth,
   saveHealthAlertPolicy,
   sendHealthTransitionAlerts,
@@ -40,13 +42,15 @@ export default async (req:Request,context:Context) => {
     await applyHealthAlertPolicy(context,current,previousHourly);
     await persistHealth(context,current);
     await sendHealthTransitionAlerts(previous,current);
-    const [uptimeHistory,policy,deployments]=await Promise.all([
+    const [uptimeHistory,policy,deployments,releases]=await Promise.all([
       readUptimeHistory(context,2300),
       readHealthAlertPolicy(context),
       cachedDeploymentHistory(context),
+      readProductionReleases(context,50),
     ]);
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
+    deployments.releaseTimeline=releaseTimelineWithIncidents(releases,deployments.history||[],incidents);
     return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments},{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -66,14 +70,16 @@ export default async (req:Request,context:Context) => {
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
-  const [history,uptimeHistory,deployments,policy]=await Promise.all([
+  const [history,uptimeHistory,deployments,policy,releases]=await Promise.all([
     readHealthHistory(context,120),
     readUptimeHistory(context,2300),
     cachedDeploymentHistory(context),
     readHealthAlertPolicy(context),
+    readProductionReleases(context,50),
   ]);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
+  deployments.releaseTimeline=releaseTimelineWithIncidents(releases,deployments.history||[],incidents);
   return Response.json({
     current:latest,
     history,

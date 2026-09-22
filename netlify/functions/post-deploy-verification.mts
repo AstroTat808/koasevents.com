@@ -5,6 +5,7 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readPostDeployVerification,
+  recordProductionRelease,
   runSystemHealth,
   savePostDeployVerification,
   sendHealthTransitionAlerts,
@@ -32,7 +33,7 @@ export default async (_req:Request,context:Context) => {
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
 
-  await savePostDeployVerification(context,{
+  const verification={
     deployId,
     commit,
     checkedAt:current.checkedAt,
@@ -41,7 +42,9 @@ export default async (_req:Request,context:Context) => {
     failed:current.failed,
     failedIds:current.failedIds,
     checkCount:current.checks.length,
-  });
+  };
+  await savePostDeployVerification(context,verification);
+  await recordProductionRelease(context,{deployId,commit,checkedAt:current.checkedAt,verification});
 };
 
 export const config:Config={
