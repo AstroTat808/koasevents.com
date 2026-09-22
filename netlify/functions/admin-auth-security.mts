@@ -8,7 +8,7 @@ function clean(v:unknown,max=300){return String(v||'').trim().slice(0,max);}
 function email(user:any){return clean(user?.email,240).toLowerCase();}
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireAdmin();if(auth.response)return auth.response;
+  const auth=await requireAdmin(req);if(auth.response)return auth.response;
   const actor=email(auth.user)||'admin';
 
   if(req.method==='GET'){
