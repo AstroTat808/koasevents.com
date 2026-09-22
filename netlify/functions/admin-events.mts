@@ -349,7 +349,7 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireCapability('events.view');
+  const auth = await requireCapability('events.view', req);
   if (auth.response) return auth.response;
 
   const salesStore = salesStoreFor(context);
