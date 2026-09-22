@@ -61,6 +61,28 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Open System Health for details if your role permits it.</span>
             </div>
 
+            <section class="mb-6 rounded-[1.35rem] border border-[var(--koa-line)] bg-white p-6 shadow-sm">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">My profile</p>
+                  <h2 class="display mt-2 text-3xl">Staff signature details</h2>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/55">Update your own display name and client-facing Job Title. This does not change your role, permissions, or access.</p>
+                </div>
+              </div>
+              <form data-profile-form class="mt-5 grid gap-4 md:grid-cols-2">
+                <label class="grid gap-2 text-sm font-semibold">Display name
+                  <input name="displayName" required maxlength="180" autocomplete="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+                </label>
+                <label class="grid gap-2 text-sm font-semibold">Job Title
+                  <input name="jobTitle" maxlength="120" autocomplete="organization-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Wedding & Events Manager" />
+                </label>
+                <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                  <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save profile</button>
+                  <span data-profile-message class="text-sm text-[var(--koa-ink)]/55"></span>
+                </div>
+              </form>
+            </section>
+
             <div data-app-grid class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <a data-capability="crm.view" href="/admin/crm/" class="rounded-[1.35rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/68">Clients, projects, tasks, appointments, workflows, templates and activity.</span></a>
               <a data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.35rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/72">Inquiries, proposals, bookings, follow-ups and sales reporting.</span></a>
@@ -113,6 +135,8 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const logoutButton=document.querySelector('[data-logout]');
     let recoveryMode=false;
     const roleBadge=document.querySelector('[data-role-badge]');
+    const profileForm=document.querySelector('[data-profile-form]');
+    const profileMessage=document.querySelector('[data-profile-message]');
 
     async function updateHealthWarning(session){
       const warning=document.querySelector('[data-health-warning]');
@@ -139,6 +163,11 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       logoutButton?.classList.toggle('hidden',!signedIn);
       roleBadge?.classList.toggle('hidden',!signedIn);
       if(roleBadge)roleBadge.textContent=roleLabels[session?.role]||String(session?.role||'').replaceAll('_',' ');
+      if(profileForm&&signedIn){
+        profileForm.elements.displayName.value=session?.displayName||'';
+        profileForm.elements.jobTitle.value=session?.jobTitle||'';
+        if(profileMessage)profileMessage.textContent='';
+      }
 
       accessWarning?.classList.add('hidden');
       passwordRequired?.classList.add('hidden');
@@ -273,6 +302,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         loginForm?.classList.remove('hidden');
         if(authError){authError.textContent='Password updated. Sign in again with your new password.';authError.classList.remove('hidden');}
       }catch(err){if(message)message.textContent=err instanceof Error?err.message:'Unable to update password.';}
+    });
+
+    profileForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const button=form.querySelector('button');
+      const original=button?.textContent||'Save profile';
+      if(button){button.disabled=true;button.textContent='Saving…';}
+      if(profileMessage)profileMessage.textContent='';
+      try{
+        const response=await fetch('/api/account/profile',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({displayName:form.elements.displayName.value,jobTitle:form.elements.jobTitle.value}),
+        });
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to update profile.');
+        if(profileMessage)profileMessage.textContent='Profile updated. New staff email signatures will use these details.';
+        await refreshSession();
+      }catch(err){
+        if(profileMessage)profileMessage.textContent=err instanceof Error?err.message:'Unable to update profile.';
+      }finally{
+        if(button){button.disabled=false;button.textContent=original;}
+      }
     });
 
     logoutButton?.addEventListener('click',async()=>{await logout();renderSession(null);});
