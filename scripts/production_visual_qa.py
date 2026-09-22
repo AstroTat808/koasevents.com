@@ -53,7 +53,6 @@ PROTECTED_ADMIN_APIS=[
  ("calendar-api","/api/admin/calendar"),
  ("quickbooks-api","/api/admin/quickbooks"),
  ("blog-admin-api","/api/blog?admin=1"),
- ("gallery-admin-api","/api/gallery"),
  ("vendor-crm-api","/api/admin/vendors"),
  ("vendor-insurance-api","/api/admin/vendor-insurance-compliance"),
  ("security-api","/api/admin/security?days=7"),
@@ -641,6 +640,14 @@ def admin_mode(browser_name):
   api_results.append({"name":name,"path":path,"status":status,"ok":ok})
   if not ok:
    failures.append({"route":path,"detail":f"Protected admin API expected 401/403 without authentication, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
+
+ # /api/gallery intentionally exposes read-only gallery state to the public gallery page.
+ # Only mutating gallery operations require gallery permissions, so GET must remain public.
+ status,_,body=get("/api/gallery")
+ gallery_public_ok=(status==200)
+ api_results.append({"name":"gallery-public-read-api","path":"/api/gallery","status":status,"ok":gallery_public_ok,"expected":"public read"})
+ if not gallery_public_ok:
+  failures.append({"route":"/api/gallery","detail":f"Public gallery read endpoint expected HTTP 200, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
 
  report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"protectedApis":api_results,"failures":failures}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
