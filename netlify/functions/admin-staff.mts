@@ -55,6 +55,7 @@ function normalizeRole(value:unknown){return clean(value,60).toLowerCase().repla
 function strongTemporaryPassword(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);const raw=Array.from(bytes,b=>b.toString(36).padStart(2,'0')).join('');return 'Koa!'+raw.slice(0,28)+'9a';}
 function validatePassword(value:unknown){const password=String(value??'');if(password.length<10)return{ok:false,error:'Password must be at least 10 characters.'};if(password.length>128)return{ok:false,error:'Password must be 128 characters or fewer.'};return{ok:true,password};}
 function metadataFor(user:any){return user?.appMetadata||user?.app_metadata||{};}
+function userMetadataFor(user:any){return user?.userMetadata||user?.user_metadata||{};}
 function rolesFor(user:any){const candidates=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];const roles=candidates.find(Array.isArray)||[];return roles.map((role:any)=>normalizeRole(role)).filter(Boolean);}
 function permissionsFor(user:any){const values=metadataFor(user)?.permissions;return Array.isArray(values)?values.map((permission:any)=>clean(permission,100).toLowerCase()).filter((permission:string)=>STAFF_CAPABILITIES.includes(permission as any)):[];}
 function sessionVersion(user:any){const n=Number(metadataFor(user)?.sessionVersion??0);return Number.isFinite(n)&&n>=0?Math.floor(n):0;}
@@ -69,7 +70,8 @@ function effectiveRole(user:any):StaffRole|'custom'|'deactivated'|'none'{
   if(candidates.includes('staff'))return 'sales';
   return 'none';
 }
-function normalizedName(user:any){return clean(user?.name||user?.userMetadata?.full_name||user?.user_metadata?.full_name,180);}
+function normalizedName(user:any){return clean(user?.name||userMetadataFor(user)?.full_name,180);}
+function normalizedJobTitle(user:any){return clean(userMetadataFor(user)?.job_title||userMetadataFor(user)?.jobTitle,120);}
 function publicRoleLabel(role:string){return (ROLE_LABELS as Record<string,string>)[role]||role.replaceAll('_',' ');}
 async function allUsers(){return await admin.listUsers({page:1,perPage:200});}
 function activeAdminCount(users:any[]){return users.filter(user=>!isDeactivated(user)&&effectiveRole(user)==='admin').length;}
@@ -87,6 +89,7 @@ async function normalizeUser(user:any,policy:any){
     id:clean(user?.id,120),
     email:normalizeEmail(user?.email),
     name:normalizedName(user),
+    jobTitle:normalizedJobTitle(user),
     role:effectiveRole(user),
     roleLabel:effectiveRole(user)==='custom'?(clean(metadataFor(user)?.customRoleName,100)||'Custom Role'):publicRoleLabel(effectiveRole(user)),
     customRoleId:clean(metadataFor(user)?.customRoleId,100),
@@ -152,7 +155,7 @@ export default async(req:Request,context:Context)=>{
   }
 
   if(action==='create-user'||action==='invite'){
-    const email=normalizeEmail(body.email),name=clean(body.name,180),role=normalizeRole(body.role),setupMode=clean(body.setupMode||'email',20).toLowerCase();
+    const email=normalizeEmail(body.email),name=clean(body.name,180),jobTitle=clean(body.jobTitle,120),role=normalizeRole(body.role),setupMode=clean(body.setupMode||'email',20).toLowerCase();
     if(!email.includes('@'))return Response.json({error:'A valid email is required.'},{status:400});
     if(!name)return Response.json({error:'Name is required.'},{status:400});
     if(!USER_ROLES.has(role))return Response.json({error:'Choose a valid Koa’s role.'},{status:400});
@@ -174,7 +177,7 @@ export default async(req:Request,context:Context)=>{
           passwordChangedAt:setupMode==='manual'?now:'',
           sessionVersion:0,
         },
-        user_metadata:{full_name:name},
+        user_metadata:{full_name:name,job_title:jobTitle},
       },
     });
 
@@ -183,7 +186,7 @@ export default async(req:Request,context:Context)=>{
       try{await requestPasswordRecovery(email);setupEmailSent=true;}
       catch(error){setupEmailError=error instanceof Error?clean(error.message,500):'Password setup email failed.';}
     }
-    await appendStaffAudit(context,{actor,action:'user_created',subjectId:clean(created?.id,120),subjectEmail:email,detail:'Created '+publicRoleLabel(role)+' account for '+email+'.',metadata:{role,setupMode,setupEmailSent}});
+    await appendStaffAudit(context,{actor,action:'user_created',subjectId:clean(created?.id,120),subjectEmail:email,detail:'Created '+publicRoleLabel(role)+' account for '+email+(jobTitle?' · '+jobTitle:'')+'.',metadata:{role,jobTitle,setupMode,setupEmailSent}});
     return Response.json({ok:true,user:await normalizeUser(created,policy),setupMode,setupEmailSent,setupEmailError,message:setupMode==='email'?(setupEmailSent?'Account created and password setup email sent.':'Account created, but the setup email could not be sent.'):'Account created with the password you set. A password change will be required at next sign-in.'});
   }
 
@@ -235,6 +238,14 @@ export default async(req:Request,context:Context)=>{
     const name=clean(body.name,180);if(!name)return Response.json({error:'Name is required.'},{status:400});
     const updated:any=await admin.updateUser(userId,{user_metadata:{...(current?.userMetadata||current?.user_metadata||{}),full_name:name}});
     await appendStaffAudit(context,{actor,action:'user_name_changed',subjectId:userId,subjectEmail:email,detail:'Changed display name for '+email+' to '+name+'.',metadata:{from:normalizedName(current),to:name}});
+    return Response.json({ok:true,user:await normalizeUser(updated,policy)});
+  }
+
+  if(action==='set-job-title'){
+    const jobTitle=clean(body.jobTitle,120);
+    const previous=normalizedJobTitle(current);
+    const updated:any=await admin.updateUser(userId,{user_metadata:{...userMetadataFor(current),job_title:jobTitle}});
+    await appendStaffAudit(context,{actor,action:'user_job_title_changed',subjectId:userId,subjectEmail:email,detail:jobTitle?'Changed job title for '+email+' to '+jobTitle+'.':'Cleared job title for '+email+'.',metadata:{from:previous,to:jobTitle}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
 
