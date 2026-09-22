@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
 
@@ -78,7 +78,7 @@ function sanitize(body:any,current:any={}){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireAdmin(); if(auth.response)return auth.response;
+  const auth=await requireCapability('vendors.view'); if(auth.response)return auth.response;
   const store=storeFor(context);
   const vendors=await list(store,'vendors/index');
   if(req.method==='GET'){
@@ -87,6 +87,7 @@ export default async(req:Request,context:Context)=>{
     return Response.json({vendors:enriched,reviews,requests},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
+  if(!hasCapability(auth.user,'vendors.manage'))return Response.json({error:'Vendor Manager permission required.'},{status:403});
   const body:any=await req.json().catch(()=>null); const action=clean(body?.action,40);
   if(action==='save-vendor'){
     const current=vendors.find(v=>v.id===body?.vendor?.id)||{};
