@@ -60,6 +60,14 @@ PROTECTED_ADMIN_APIS=[
  ("system-health-api","/api/admin/health"),
 ]
 
+# Hybrid APIs intentionally expose a public read surface while protecting mutations.
+# /api/blog is also hybrid: GET /api/blog is public, while GET /api/blog?admin=1
+# and all non-GET methods require blog permissions. The protected admin list above
+# deliberately tests only the admin=1 variant.
+HYBRID_PUBLIC_READ_APIS=[
+ ("gallery-api","/api/gallery",{"action":"visibility","src":"/qa-security-check","hidden":False}),
+]
+
 @dataclass
 class Finding:
  code:str
@@ -641,13 +649,18 @@ def admin_mode(browser_name):
   if not ok:
    failures.append({"route":path,"detail":f"Protected admin API expected 401/403 without authentication, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
 
- # /api/gallery intentionally exposes read-only gallery state to the public gallery page.
- # Only mutating gallery operations require gallery permissions, so GET must remain public.
- status,_,body=get("/api/gallery")
- gallery_public_ok=(status==200)
- api_results.append({"name":"gallery-public-read-api","path":"/api/gallery","status":status,"ok":gallery_public_ok,"expected":"public read"})
- if not gallery_public_ok:
-  failures.append({"route":"/api/gallery","detail":f"Public gallery read endpoint expected HTTP 200, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
+ for name,path,payload in HYBRID_PUBLIC_READ_APIS:
+  status,_,body=get(path)
+  public_read_ok=(status==200)
+  api_results.append({"name":name+"-public-read","path":path,"method":"GET","status":status,"ok":public_read_ok,"expected":"public read"})
+  if not public_read_ok:
+   failures.append({"route":path,"detail":f"Hybrid public-read API expected HTTP 200 for GET, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
+
+  status,_,body=post(path,json.dumps(payload),"application/json")
+  protected_write_ok=status in {401,403}
+  api_results.append({"name":name+"-unauthenticated-write","path":path,"method":"POST","status":status,"ok":protected_write_ok,"expected":"401/403"})
+  if not protected_write_ok:
+   failures.append({"route":path,"detail":f"Hybrid API mutation expected 401/403 without authentication, got HTTP {status}.","pageErrors":[],"consoleErrors":[]})
 
  report={"mode":"admin","baseUrl":BASE,"browser":browser_name,"routes":results,"protectedApis":api_results,"failures":failures}
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
