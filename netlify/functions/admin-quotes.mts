@@ -749,6 +749,10 @@ function builtInPaymentPreset(id: string) {
       id:'builtin-private-event', name:'Private Event', category:'privateEvent', depositPercent:10,
       milestones:[{label:'Final balance',dueDaysBefore:30,percentOfRemaining:100}],
     },
+    'builtin-general-fallback': {
+      id:'builtin-general-fallback', name:'General Fallback', category:'default', depositPercent:10,
+      milestones:[{label:'Final balance',dueDaysBefore:30,percentOfRemaining:100}],
+    },
   };
   return presets[id] || null;
 }
