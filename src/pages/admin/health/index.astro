@@ -970,24 +970,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(currentDeploy.behindMain===true){
         const behind=Number(currentDeploy.commitsBehind||0);
         syncEl.textContent='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
-        syncEl.className='mt-2 text-sm font-semibold text-red-800';
+        syncEl.className='mt-2 text-sm font-semibold '+(behind===1?'text-amber-800':'text-red-800');
       }else{
         syncEl.textContent='Unable to compare';
-        syncEl.className='mt-2 text-sm font-semibold text-amber-800';
+        syncEl.className='mt-2 text-sm font-semibold text-red-800';
       }
       mainEl.textContent=currentDeploy.mainCommit?'main '+String(currentDeploy.mainCommit).slice(0,12):'';
       const connectionHealth=deployments.connectionHealth||{};
       const gitLinkEl=document.querySelector('[data-deploy-git-link]');
       const gitDetailEl=document.querySelector('[data-deploy-git-detail]');
-      if(connectionHealth.githubLinked===true){
-        gitLinkEl.textContent='Connected';
+      if(connectionHealth.severity==='green'){
+        gitLinkEl.textContent='Connected · current';
         gitLinkEl.className='mt-2 text-sm font-semibold text-emerald-800';
+      }else if(connectionHealth.severity==='yellow'){
+        gitLinkEl.textContent='Connected · 1 commit behind';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
       }else if(connectionHealth.githubLinked===false){
         gitLinkEl.textContent='Disconnected or mislinked';
         gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
       }else{
-        gitLinkEl.textContent='Unable to verify';
-        gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
+        gitLinkEl.textContent='Deployment sync critical';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
       }
       gitDetailEl.textContent=connectionHealth.detail||[
         currentDeploy.repository||'',
