@@ -37,6 +37,10 @@ export type HealthAlertPolicy = {
   updatedAt: string;
   updatedBy: string;
   publicStatusEnabled: boolean;
+  office365ReliabilityThresholds: {
+    yellowBelow: number;
+    redBelow: number;
+  };
   rules: HealthAlertRule[];
 };
 
@@ -106,6 +110,7 @@ export function defaultHealthAlertPolicy():HealthAlertPolicy {
     updatedAt:'',
     updatedBy:'',
     publicStatusEnabled:false,
+    office365ReliabilityThresholds:{yellowBelow:98,redBelow:90},
     rules:healthComponents().map(component=>({
       id:component.id,
       alertAfter:defaultAlertAfter(component.id),
@@ -124,6 +129,10 @@ export async function readHealthAlertPolicy(context:Context):Promise<HealthAlert
     updatedAt:clean(stored.updatedAt,80),
     updatedBy:clean(stored.updatedBy,240),
     publicStatusEnabled:Boolean(stored.publicStatusEnabled),
+    office365ReliabilityThresholds:{
+      yellowBelow:Number.isFinite(Number(stored?.office365ReliabilityThresholds?.yellowBelow))?Math.max(0,Math.min(100,Number(stored.office365ReliabilityThresholds.yellowBelow))):defaults.office365ReliabilityThresholds.yellowBelow,
+      redBelow:Number.isFinite(Number(stored?.office365ReliabilityThresholds?.redBelow))?Math.max(0,Math.min(100,Number(stored.office365ReliabilityThresholds.redBelow))):defaults.office365ReliabilityThresholds.redBelow,
+    },
     rules:defaults.rules.map(rule=>{
       const saved:any=byId.get(rule.id);
       return {
@@ -144,6 +153,10 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
     updatedAt:new Date().toISOString(),
     updatedBy:clean(actor,240)||'admin',
     publicStatusEnabled:Boolean(input?.publicStatusEnabled),
+    office365ReliabilityThresholds:{
+      yellowBelow:Number.isFinite(Number(input?.office365ReliabilityThresholds?.yellowBelow))?Math.max(0,Math.min(100,Number(input.office365ReliabilityThresholds.yellowBelow))):defaults.office365ReliabilityThresholds.yellowBelow,
+      redBelow:Number.isFinite(Number(input?.office365ReliabilityThresholds?.redBelow))?Math.max(0,Math.min(100,Number(input.office365ReliabilityThresholds.redBelow))):defaults.office365ReliabilityThresholds.redBelow,
+    },
     rules:defaults.rules.map(rule=>{
       const saved:any=byId.get(rule.id);
       return {
