@@ -55,7 +55,10 @@ function deviceLabel(ua:string){
   const browser=v.includes('edg/')?'Edge':v.includes('chrome/')&&!v.includes('edg/')?'Chrome':v.includes('firefox/')?'Firefox':v.includes('safari/')&&!v.includes('chrome/')?'Safari':'Browser';
   return browser+' on '+os;
 }
-export async function requestSessionId(req:Request){return hash(cookie(req,'nf_jwt'));}
+export async function requestSessionId(req:Request){
+  const stable=cookie(req,'koa_sid');
+  return stable||hash(cookie(req,'nf_jwt'));
+}
 export function requestUserAgent(req:Request){return clean(req.headers.get('user-agent'),800);}
 export async function appendAuthEvent(context:Context,event:Omit<AuthEvent,'id'|'createdAt'>){
   const s=store();const current=((await s.get('auth-events/index',{type:'json'}))||[]) as AuthEvent[];
