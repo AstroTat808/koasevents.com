@@ -17,8 +17,17 @@
           aria-controls="koa-workspace-links"
         >
           <span>Workspace</span>
-          <span data-workspace-total class="hidden workspace-total-badge" aria-label="Workspace alerts"></span>
           <span data-workspace-chevron aria-hidden="true">⌄</span>
+        </button>
+        <button
+          data-workspace-alert-toggle-mobile
+          type="button"
+          class="hidden workspace-mobile-alert md:hidden"
+          aria-expanded="false"
+          aria-controls="koa-workspace-alert-center"
+          aria-label="Open workspace alerts"
+        >
+          <span data-workspace-total class="workspace-total-badge"></span>
         </button>
 
         <span
@@ -115,6 +124,7 @@
 
 <style>
   .workspace-menu-button,
+  .workspace-mobile-alert,
   .workspace-signout,
   .workspace-nav-link {
     border: 1px solid var(--koa-line);
@@ -135,6 +145,17 @@
     border-color: var(--koa-forest);
     color: white;
     padding: .7rem .9rem;
+  }
+
+  .workspace-mobile-alert {
+    align-items: center;
+    justify-content: center;
+    min-width: 2.35rem;
+    min-height: 2.35rem;
+    border-color: color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
+    background: white;
+    color: var(--koa-clay);
+    padding: .45rem;
   }
 
   .workspace-signout {
@@ -219,6 +240,24 @@
     color: white;
     padding: 0 .3rem;
     font-size: .55rem;
+  }
+
+  .workspace-link-badge[data-severity="urgent"],
+  .workspace-total-badge[data-severity="urgent"] {
+    background: rgb(185 28 28);
+    color: white;
+  }
+
+  .workspace-link-badge[data-severity="upcoming"],
+  .workspace-total-badge[data-severity="upcoming"] {
+    background: rgb(180 83 9);
+    color: white;
+  }
+
+  .workspace-link-badge[data-severity="info"],
+  .workspace-total-badge[data-severity="info"] {
+    background: rgb(29 78 216);
+    color: white;
   }
 
   .workspace-nav-link[aria-current="page"] .workspace-link-badge {
@@ -332,6 +371,13 @@
     return count > 99 ? '99+' : String(count);
   }
 
+  function highestSeverity(alerts) {
+    const rows = Array.isArray(alerts) ? alerts : [];
+    if (rows.some((row) => row?.severity === 'urgent')) return 'urgent';
+    if (rows.some((row) => row?.severity === 'upcoming')) return 'upcoming';
+    return rows.length ? 'info' : '';
+  }
+
   function setMenu(open) {
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
     links.classList.toggle('hidden', !open);
@@ -413,10 +459,14 @@
     const mobileBadge = nav?.querySelector('[data-workspace-total]');
     const desktopBadge = nav?.querySelector('[data-workspace-alert-toggle]');
 
+    const mobileAlertButton = nav?.querySelector('[data-workspace-alert-toggle-mobile]');
     if (mobileBadge instanceof HTMLElement) {
       mobileBadge.textContent = badgeText(total);
-      mobileBadge.classList.toggle('hidden', total <= 0);
-      mobileBadge.classList.toggle('inline-flex', total > 0);
+      mobileBadge.dataset.severity = highestSeverity(payload?.alerts);
+    }
+    if (mobileAlertButton instanceof HTMLElement) {
+      mobileAlertButton.classList.toggle('hidden', total <= 0);
+      mobileAlertButton.classList.toggle('inline-flex', total > 0);
     }
     if (desktopBadge instanceof HTMLElement) {
       desktopBadge.textContent = total > 0 ? badgeText(total) + ' alerts' : '';
@@ -432,6 +482,7 @@
       const count = Math.max(0, Number(payload?.items?.[key]?.count || 0));
       badge.textContent = badgeText(count);
       badge.title = payload?.items?.[key]?.label || 'Workspace alerts';
+      badge.dataset.severity = highestSeverity(payload?.items?.[key]?.alerts);
       badge.classList.toggle('hidden', count <= 0);
       badge.classList.toggle('inline-flex', count > 0);
     });
@@ -446,16 +497,18 @@
   }
 
   toggle?.addEventListener('click', () => {
-    const total = Number(nav?.querySelector('[data-workspace-total]')?.textContent?.replace('+','') || 0);
-    if (total > 0) {
-      const center = nav?.querySelector('[data-workspace-alert-center]');
-      const opening = center?.classList.contains('hidden');
-      center?.classList.toggle('hidden', !opening);
-      if (opening) setMenu(false);
-      return;
-    }
     const open = toggle.getAttribute('aria-expanded') !== 'true';
+    nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
     setMenu(open);
+  });
+
+  nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.addEventListener('click', () => {
+    const center = nav?.querySelector('[data-workspace-alert-center]');
+    if (!(center instanceof HTMLElement)) return;
+    const opening = center.classList.contains('hidden');
+    center.classList.toggle('hidden', !opening);
+    nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+    if (opening) setMenu(false);
   });
 
   nav?.querySelector('[data-workspace-alert-toggle]')?.addEventListener('click', () => {
