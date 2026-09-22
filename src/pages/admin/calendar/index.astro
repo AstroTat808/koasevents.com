@@ -36,6 +36,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <button data-view="month" type="button" class="calendar-view-button is-active">Month</button>
                 <button data-view="week" type="button" class="calendar-view-button">Week</button>
                 <button data-view="agenda" type="button" class="calendar-view-button">Agenda</button>
+                <button data-view="staff" type="button" class="calendar-view-button">Staff Schedule</button>
               </div>
             </div>
             <div class="flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
@@ -77,6 +78,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div data-week-view class="hidden min-w-[70rem] bg-white"></div>
             <div data-agenda-view class="hidden bg-white p-4 sm:p-6"></div>
+            <div data-staff-view class="hidden bg-white">
+              <div class="flex flex-col gap-3 border-b border-[var(--koa-line)] p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Staffing</p>
+                  <h3 class="display mt-1 text-3xl text-[var(--koa-forest)]">Team schedule</h3>
+                  <p class="mt-1 text-xs text-[var(--koa-ink)]/50">Events, assigned work, availability, and overload warnings by employee.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <div class="calendar-view-switch" role="group" aria-label="Staff schedule range">
+                    <button data-staff-scale="week" type="button" class="calendar-view-button is-active">Week</button>
+                    <button data-staff-scale="month" type="button" class="calendar-view-button">Month</button>
+                  </div>
+                  <input data-staff-schedule-search type="search" placeholder="Search staff…" class="rounded-xl border border-[var(--koa-line)] px-3 py-2 text-sm" />
+                </div>
+              </div>
+              <div data-staff-schedule class="overflow-x-auto"></div>
+              <p data-staff-schedule-note class="border-t border-[var(--koa-line)] px-4 py-3 text-xs text-[var(--koa-ink)]/45">Availability is internal. Click a staff/date cell to update availability; staff can edit themselves, while Event Ops managers can edit the team.</p>
+            </div>
           </div>
 
           <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--koa-ink)]/45">
@@ -247,6 +266,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .week-day-body{display:grid;align-content:start;gap:.5rem;padding:.7rem}
     .agenda-group{border-bottom:1px solid var(--koa-line);padding:1rem 0}
     .agenda-group:last-child{border-bottom:0}
+    .staff-schedule-grid{display:grid;min-width:max-content}
+    .staff-schedule-head,.staff-schedule-name,.staff-schedule-cell{border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line)}
+    .staff-schedule-head{position:sticky;top:0;z-index:8;background:color-mix(in srgb,var(--koa-sand) 58%,white);padding:.65rem .5rem;text-align:center}
+    .staff-schedule-name{position:sticky;left:0;z-index:7;background:white;padding:.65rem .75rem;min-width:15rem}
+    .staff-schedule-corner{position:sticky;left:0;top:0;z-index:10;background:var(--koa-forest);color:white;padding:.75rem;min-width:15rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line)}
+    .staff-schedule-cell{min-height:5.7rem;background:white;padding:.42rem;min-width:9rem}
+    .staff-schedule-cell.is-weekend{background:color-mix(in srgb,var(--koa-ivory) 72%,white)}
+    .staff-schedule-cell.is-today{box-shadow:inset 0 0 0 2px var(--koa-forest)}
+    .staff-schedule-cell.has-overload{background:color-mix(in srgb,#f59e0b 10%,white)}
+    .staff-schedule-pill{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:.45rem;padding:.28rem .38rem;font-size:.58rem;font-weight:800;line-height:1.25}
+    .staff-schedule-pill.event{background:var(--koa-forest);color:white}
+    .staff-schedule-pill.task{background:var(--koa-ink);color:white}
+    .staff-schedule-pill.project{background:color-mix(in srgb,var(--koa-clay) 18%,white);color:var(--koa-clay);border:1px solid color-mix(in srgb,var(--koa-clay) 28%,var(--koa-line))}
+    .staff-availability{display:inline-flex;border-radius:9999px;padding:.2rem .42rem;font-size:.5rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em}
+    .staff-availability.available{background:#ecfdf5;color:#166534}.staff-availability.tentative{background:#fffbeb;color:#92400e}.staff-availability.unavailable{background:#fef2f2;color:#991b1b}.staff-availability.pto{background:#eff6ff;color:#1d4ed8}.staff-availability.unset{background:var(--koa-sand);color:color-mix(in srgb,var(--koa-ink) 55%,transparent)}
+    .staff-overload-badge{display:inline-flex;border-radius:9999px;background:#fef3c7;padding:.2rem .42rem;font-size:.5rem;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#92400e}
     .agenda-date{display:flex;min-width:7.5rem;flex-direction:column}
     .day-panel{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;transition:opacity .16s ease}
     .day-panel.is-open{pointer-events:auto;opacity:1}
@@ -280,6 +315,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const monthView=document.querySelector('[data-month-view]');
     const weekView=document.querySelector('[data-week-view]');
     const agendaView=document.querySelector('[data-agenda-view]');
+    const staffView=document.querySelector('[data-staff-view]');
+    const staffSchedule=document.querySelector('[data-staff-schedule]');
+    const staffScheduleSearch=document.querySelector('[data-staff-schedule-search]');
+    const staffScaleButtons=[...document.querySelectorAll('[data-staff-scale]')];
     const viewDescription=document.querySelector('[data-view-description]');
     const dayPanel=document.querySelector('[data-day-panel]');
     const dayTitle=document.querySelector('[data-day-title]');
@@ -310,6 +349,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let cursor=new Date();
     cursor=new Date(cursor.getFullYear(),cursor.getMonth(),1);
     let activeView='month';
+    let staffScale='week';
+    let staffDirectory=[];
+    let availabilityRows=[];
+    let currentSession=null;
     const activeFilters=new Set();
     let previewItem=null;
     let data={items:[],conflicts:[],totals:{}};
@@ -332,7 +375,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return {start:ymd(gridStart),end:ymd(gridEnd),gridStart,gridEnd};
     }
     function rangeForWeek(date){const gridStart=startOfWeek(date);const gridEnd=addDays(gridStart,6);return {start:ymd(gridStart),end:ymd(gridEnd),gridStart,gridEnd};}
-    function rangeForView(){return activeView==='week'?rangeForWeek(cursor):rangeForMonth(cursor);}
+    function rangeForView(){
+      if(activeView==='week')return rangeForWeek(cursor);
+      if(activeView==='staff')return staffScale==='week'?rangeForWeek(cursor):rangeForMonth(cursor);
+      return rangeForMonth(cursor);
+    }
     function typeLabel(type){return ({event:'Event',payment:'QBO payment',deadline:'Deadline',vendor:'Vendor',task:'Task',timeline:'Run of show'})[type]||type;}
     function visualFor(item){
       if(item.type==='event'&&item.subtype==='wedding')return {icon:'💍',label:'Wedding',className:'event'};
@@ -484,12 +531,102 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!keys.length)agendaView.appendChild(text('p','rounded-xl bg-[var(--koa-ivory)] p-4 text-sm text-[var(--koa-ink)]/45','No calendar items in this month.'));
     }
 
+    function availabilityFor(email,date){
+      return availabilityRows.find((row)=>String(row.email||'').toLowerCase()===String(email||'').toLowerCase()&&row.date===date)||null;
+    }
+    function availabilityLabel(status){
+      return ({available:'Available',tentative:'Tentative',unavailable:'Unavailable',pto:'PTO'})[status]||'Not set';
+    }
+    function assignmentDate(row){
+      return String(row.dueDate||row.eventDate||row.sortDate||'').slice(0,10);
+    }
+    function datesForStaffView(){
+      const range=staffScale==='week'?rangeForWeek(cursor):{gridStart:new Date(cursor.getFullYear(),cursor.getMonth(),1),gridEnd:new Date(cursor.getFullYear(),cursor.getMonth()+1,0)};
+      const dates=[];let d=new Date(range.gridStart);
+      while(d<=range.gridEnd){dates.push(new Date(d));d=addDays(d,1);}
+      return dates;
+    }
+    async function editAvailability(staff,date){
+      if(!staff||!date)return;
+      const existing=availabilityFor(staff.email,date);
+      const status=prompt('Availability for '+staff.name+' on '+date+'\n\nEnter: available, tentative, unavailable, or pto',existing?.status||'available');
+      if(status===null)return;
+      const normalized=String(status||'').trim().toLowerCase();
+      if(!['available','tentative','unavailable','pto'].includes(normalized)){alert('Use available, tentative, unavailable, or pto.');return;}
+      const note=prompt('Optional availability note:',existing?.note||'');
+      if(note===null)return;
+      const response=await fetch('/api/admin/staff-availability',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:staff.email,date,status:normalized,note})});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){alert(result.error||'Availability could not be updated.');return;}
+      const index=availabilityRows.findIndex((row)=>String(row.email||'').toLowerCase()===staff.email.toLowerCase()&&row.date===date);
+      if(index>=0)availabilityRows[index]=result.availability;else availabilityRows.push(result.availability);
+      renderStaffSchedule();
+    }
+    function renderStaffSchedule(){
+      if(!staffSchedule)return;
+      const dates=datesForStaffView();
+      const query=String(staffScheduleSearch?.value||'').trim().toLowerCase();
+      const staff=staffDirectory.filter((person)=>!query||[person.name,person.email,person.jobTitle,person.roleLabel].some((v)=>String(v||'').toLowerCase().includes(query)));
+      const cols='15rem repeat('+dates.length+','+(staffScale==='week'?'11rem':'9rem')+')';
+      const grid=document.createElement('div');grid.className='staff-schedule-grid';grid.style.gridTemplateColumns=cols;
+      const corner=document.createElement('div');corner.className='staff-schedule-corner';corner.innerHTML='<p class="text-[.58rem] font-black uppercase tracking-[.09em] text-white/65">Employee</p><strong class="mt-1 block text-sm">Availability + assigned work</strong>';grid.appendChild(corner);
+      dates.forEach((date)=>{
+        const key=ymd(date);const head=document.createElement('div');head.className='staff-schedule-head'+(key===today()?' bg-[var(--koa-amber-light)]/25':'');
+        head.innerHTML='<span class="block text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+weekdayLabel(date)+'</span><strong class="display mt-0.5 block text-xl text-[var(--koa-forest)]">'+date.getDate()+'</strong>'+(staffScale==='month'?'<span class="block text-[.5rem] text-[var(--koa-ink)]/40">'+new Intl.DateTimeFormat('en-US',{month:'short'}).format(date)+'</span>':'');
+        grid.appendChild(head);
+      });
+      staff.forEach((person)=>{
+        const name=document.createElement('div');name.className='staff-schedule-name';
+        const avatar=person.photoUrl?'<img src="'+person.photoUrl+'" alt="" class="h-10 w-10 shrink-0 rounded-full object-cover">':'<span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-xs font-black text-white">'+String(person.name||'K').charAt(0).toUpperCase()+'</span>';
+        const workload=person.workload||{};
+        name.innerHTML='<div class="flex items-start gap-3">'+avatar+'<div class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+person.name+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/45">'+(person.jobTitle||person.roleLabel||'Staff')+'</span><span class="mt-1 block text-[.55rem] font-bold text-[var(--koa-ink)]/40">'+Number(workload.totalOpenAssignments||0)+' open · '+Number(workload.upcomingEvents||0)+' upcoming event'+(Number(workload.upcomingEvents||0)===1?'':'s')+'</span></div></div>';
+        grid.appendChild(name);
+        dates.forEach((date)=>{
+          const key=ymd(date);const availability=availabilityFor(person.email,key);
+          const assignments=(person.assignments||[]).filter((row)=>assignmentDate(row)===key);
+          const load=(person.dateLoad||[]).find((row)=>row.date===key);
+          const availabilityConflict=Boolean(assignments.length&&['unavailable','pto'].includes(String(availability?.status||'')));
+          const overload=Boolean(load?.heavy)||availabilityConflict;
+          const cell=document.createElement('button');cell.type='button';cell.className='staff-schedule-cell text-left'+([0,6].includes(date.getDay())?' is-weekend':'')+(key===today()?' is-today':'')+(overload?' has-overload':'');
+          const top=document.createElement('div');top.className='mb-1.5 flex flex-wrap items-center justify-between gap-1';
+          const badge=document.createElement('span');badge.className='staff-availability '+(availability?.status||'unset');badge.textContent=availabilityLabel(availability?.status);
+          top.appendChild(badge);
+          if(availabilityConflict){const warn=document.createElement('span');warn.className='staff-overload-badge';warn.textContent='Availability conflict';top.appendChild(warn);}
+          else if(overload){const warn=document.createElement('span');warn.className='staff-overload-badge';warn.textContent=(load?.responsibilityCount||0)+' load';top.appendChild(warn);}
+          cell.appendChild(top);
+          if(availability?.note)cell.appendChild(text('p','mb-1 truncate text-[.55rem] font-semibold text-[var(--koa-ink)]/48',availability.note));
+          const list=document.createElement('div');list.className='grid gap-1';
+          assignments.slice(0,staffScale==='week'?4:2).forEach((row)=>{
+            const pill=document.createElement('span');pill.className='staff-schedule-pill '+(row.type==='task'?'task':row.type==='event'?'event':'project');
+            pill.textContent=(row.type==='event'?'◆ ':row.type==='task'?'☑ ':'• ')+(row.responsibilityLabel||row.label||row.detail||'Assignment');pill.title=[row.label,row.detail].filter(Boolean).join(' · ');list.appendChild(pill);
+          });
+          if(assignments.length>(staffScale==='week'?4:2))list.appendChild(text('span','text-[.52rem] font-bold text-[var(--koa-ink)]/40','+'+(assignments.length-(staffScale==='week'?4:2))+' more'));
+          if(!assignments.length&&!availability)list.appendChild(text('span','text-[.55rem] text-[var(--koa-ink)]/28','No assigned work'));
+          cell.appendChild(list);
+          cell.addEventListener('click',()=>editAvailability(person,key));
+          grid.appendChild(cell);
+        });
+      });
+      if(!staff.length){const empty=document.createElement('div');empty.className='p-6 text-sm text-[var(--koa-ink)]/50';empty.textContent='No staff match this search.';staffSchedule.replaceChildren(empty);return;}
+      staffSchedule.replaceChildren(grid);
+    }
+
     function renderActiveView(){
       monthView.classList.toggle('hidden',activeView!=='month');
       weekView.classList.toggle('hidden',activeView!=='week');
       agendaView.classList.toggle('hidden',activeView!=='agenda');
+      staffView.classList.toggle('hidden',activeView!=='staff');
       document.querySelectorAll('[data-view]').forEach((button)=>button.classList.toggle('is-active',button.dataset.view===activeView));
-      if(activeView==='week'){
+      if(activeView==='staff'){
+        const range=staffScale==='week'?rangeForWeek(cursor):{gridStart:new Date(cursor.getFullYear(),cursor.getMonth(),1),gridEnd:new Date(cursor.getFullYear(),cursor.getMonth()+1,0)};
+        periodEyebrow.textContent='Staff schedule';
+        monthTitle.textContent=staffScale==='week'
+          ? new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(range.gridStart)+' – '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(range.gridEnd)
+          : monthLabel(cursor);
+        viewDescription.textContent='Staff schedule · '+staffScale+' view · availability + workload';
+        staffScaleButtons.forEach((button)=>button.classList.toggle('is-active',button.dataset.staffScale===staffScale));
+        renderStaffSchedule();
+      }else if(activeView==='week'){
         const {gridStart,gridEnd}=rangeForWeek(cursor);
         periodEyebrow.textContent='Calendar week';
         monthTitle.textContent=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(gridStart)+' – '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(gridEnd);
@@ -818,17 +955,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(){
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
-      app.classList.remove('hidden');
+      currentSession=user;app.classList.remove('hidden');
       const range=rangeForView();
-      const res=await fetch('/api/admin/calendar?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'});
+      const [res,staffRes,availabilityRes]=await Promise.all([
+        fetch('/api/admin/calendar?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'}),
+        fetch('/api/staff/directory',{cache:'no-store'}),
+        fetch('/api/admin/staff-availability?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'})
+      ]);
       if(!res.ok)return;
-      data=await res.json();renderTotals();renderActiveView();renderConflicts();renderAgenda();loadOffice365Status();
+      data=await res.json();
+      if(staffRes.ok){const staffData=await staffRes.json();staffDirectory=staffData.staff||[];}
+      if(availabilityRes.ok){const availabilityData=await availabilityRes.json();availabilityRows=availabilityData.availability||[];}
+      renderTotals();renderActiveView();renderConflicts();renderAgenda();loadOffice365Status();
     }
 
-    document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=activeView==='week'?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
-    document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=activeView==='week'?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
-    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=activeView==='week'?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
-    document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=activeView==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
+    document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
+    document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
+    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
+    document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
+    staffScaleButtons.forEach((button)=>button.addEventListener('click',()=>{staffScale=button.dataset.staffScale||'week';const nowDate=new Date(cursor);cursor=staffScale==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
+    staffScheduleSearch?.addEventListener('input',renderStaffSchedule);
     document.querySelector('[data-day-close]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-preview-close]')?.addEventListener('click',closePreview);
