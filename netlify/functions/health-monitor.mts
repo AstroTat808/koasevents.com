@@ -14,7 +14,7 @@ export default async (_req:Request,context:Context) => {
     readLatestHealth(context),
     readLatestHourlyHealth(context),
   ]);
-  const current=await runSystemHealth('hourly');
+  const current=await runSystemHealth(context,'hourly');
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
