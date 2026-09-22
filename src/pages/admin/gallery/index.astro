@@ -146,18 +146,8 @@ const allCategories = [...categories, 'Legacy Archive'];
     const vendorOptions = document.querySelector('[data-vendor-options]');
     const vendorSearch = document.querySelector('[data-vendor-search]');
     const vendorMessage = document.querySelector('[data-vendor-message]');
-    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-
-    let state = { uploads: [], hiddenCurated: [], hiddenUploads: [], curatedEdits: {}, categoryOrder: {} };
-    let selected = new Set();
-    let cropSession = null;
-    let vendors = [];
-    let vendorSession = null;
-
     function hasAdminAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+      return Boolean(user?.capabilities?.includes('gallery.view') || user?.permissions?.includes('gallery.view'));
     }
 
     async function optimizedFile(file) {
