@@ -16,11 +16,11 @@ const handler: Handler = async (event) => {
       : {};
 
   const existingRoles = Array.isArray(existingAppMetadata.roles)
-    ? existingAppMetadata.roles.filter((role: unknown) => typeof role === 'string' && role !== 'admin')
+    ? existingAppMetadata.roles.filter((role: unknown) => typeof role === 'string')
     : [];
 
   const roles = ADMIN_EMAILS.has(email)
-    ? [...new Set([...existingRoles, 'admin'])]
+    ? [...new Set([...existingRoles.filter((role: string) => role !== 'deactivated'), 'admin'])]
     : existingRoles;
 
   return {
