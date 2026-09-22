@@ -1569,7 +1569,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       else {
         match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
         if(match) runs=24/Math.max(1,Number(match[1]));
-        else if(/^0 \d{1,2} \* \* \*$/ .test(cron)) runs=1;
+        else if(/^0 \d{1,2} \* \* \*$/.test(cron)) runs=1;
       }
     }
     return {name:clean(item?.name,120),cron,runsPerDay:runs};
@@ -1590,6 +1590,56 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       proactive:true,
       protects:'Manual Office 365 Sync now + verify remains available; no CRM, QuickBooks, Turnstile, Resend, or health-monitor behavior is disabled.',
     });
+  }
+
+  if(!projectedOverAllowance){
+    const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
+    if(verifier&&verifier.runsPerDay>48){
+      const savedRunsPerDay=verifier.runsPerDay/2;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'post-deploy-verification',
+        priority:6,
+        title:'Optional: reduce post-deploy verification to every 30 minutes',
+        detail:'Use this during development-heavy periods to cut verification work in half. New releases are still verified automatically.',
+        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'post-deploy-verification-half',
+        proactive:true,
+        protects:'Hourly System Health remains active.',
+      });
+    }
+    if(scheduleRows.some((item:any)=>item.name==='quickbooks-hourly-reconciliation')){
+      const savingsPerDay=(3*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'quickbooks-reconciliation',
+        priority:7,
+        title:'Optional: reduce QuickBooks fallback reconciliation to every 8 hours',
+        detail:'QuickBooks webhooks remain immediate; only the scheduled safety-net reconciliation is slowed.',
+        impact:'About 3 fewer reconciliation runs/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'quickbooks-reconciliation-half',
+        proactive:true,
+        protects:'Payment and invoice webhooks remain immediate.',
+      });
+    }
+    if(scheduleRows.some((item:any)=>item.name==='crm-lifecycle')){
+      const savingsPerDay=(2*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'crm-lifecycle',
+        priority:8,
+        title:'Optional: reduce CRM lifecycle sweep to every 12 hours',
+        detail:'Interactive CRM operations remain unchanged; only the maintenance sweep is slowed.',
+        impact:'About 2 fewer lifecycle sweeps/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'crm-lifecycle-half',
+        proactive:true,
+        protects:'Lead capture, proposals, bookings, and manual CRM work remain available.',
+      });
+    }
   }
 
   if(projectedOverAllowance){
