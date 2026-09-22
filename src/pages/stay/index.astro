@@ -5,7 +5,7 @@ import Footer from '../../components/Footer.astro';
 import ResponsiveImage from '../../components/ResponsiveImage.astro';
 import { media, koaMarketingMedia } from '../../data/media';
 
-const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
 
 const stayDetails = [
   { image: koaMarketingMedia.bridalSuiteWeddingReady, label: 'Bridal suite' },
