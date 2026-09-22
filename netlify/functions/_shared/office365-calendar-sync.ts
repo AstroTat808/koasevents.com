@@ -154,6 +154,18 @@ function recordIdFromEvent(event:GraphEvent){
   const match=haystack.match(/KOA_RECORD_ID:([A-Za-z0-9._:-]+)/);
   return clean(match?.[1],200);
 }
+function eventHasRecordMarker(event:GraphEvent,recordId:string){
+  return recordIdFromEvent(event)===clean(recordId,200);
+}
+function eventBodyWithMarker(event:GraphEvent,recordId:string){
+  const existing=String(event.body?.content||'').trim();
+  if(eventHasRecordMarker(event,recordId))return {contentType:event.body?.contentType||'HTML',content:existing};
+  const markerText=marker(recordId);
+  if(String(event.body?.contentType||'').toLowerCase()==='text'){
+    return {contentType:'Text',content:[existing,markerText].filter(Boolean).join('\n')};
+  }
+  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with Koa’s Master Calendar.</p>')+'<p>'+markerText+'</p>'};
+}
 function localParts(event:GraphEvent){
   const start=clean(event.start?.dateTime,40);
   const end=clean(event.end?.dateTime,40);
@@ -296,6 +308,23 @@ function buildConflict(existing:Office365SyncConflict|undefined,recordId:string,
 function normalizedSubject(value:unknown){
   return clean(value,180).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 }
+function normalizedLocation(value:unknown){
+  return clean(value,180).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+}
+function subjectMatches(shape:any,event:GraphEvent){
+  const a=normalizedSubject(shape?.title);
+  const b=normalizedSubject(event?.subject);
+  return Boolean(a&&b&&(a===b||a.includes(b)||b.includes(a)));
+}
+function exactDuplicate(shape:any,linked:GraphEvent,candidate:GraphEvent){
+  const lp=localParts(linked),cp=localParts(candidate);
+  return normalizedSubject(linked.subject)===normalizedSubject(candidate.subject)
+    && lp.date===cp.date
+    && lp.startTime===cp.startTime
+    && lp.endTime===cp.endTime
+    && normalizedLocation(linked.location?.displayName)===normalizedLocation(candidate.location?.displayName)
+    && cp.date===shape.date;
+}
 
 function verificationIssue(type:string,severity:'warning'|'error',shape:any,event:GraphEvent|null,detail:string,extra:any={}){
   return {
@@ -361,7 +390,24 @@ export async function verifyOffice365Calendar(context:Context){
     }
 
     if(!linkedEvents.length){
-      issues.push(verificationIssue('missing_link','error',shape,null,'No linked Office 365 event was found for this booked Koa event.'));
+      const candidates=outlookEvents.filter((candidate)=>{
+        if(recordIdFromEvent(candidate))return false;
+        const parts=localParts(candidate);
+        return parts.date===shape.date&&subjectMatches(shape,candidate);
+      });
+      const repairs=candidates.length===1?[{
+        type:'adopt_existing',
+        label:'Relink existing Outlook event',
+        recordId:shape.recordId,
+        eventId:candidates[0].id,
+        requiresConfirmation:false,
+      }]:[];
+      issues.push(verificationIssue('missing_link','error',shape,candidates[0]||null,
+        candidates.length===1?'No linked Office 365 event was found, but one safe existing match can be relinked.':
+        candidates.length>1?'No linked Office 365 event was found and multiple possible matches need review.':
+        'No linked Office 365 event was found for this booked Koa event.',
+        {candidateEventIds:candidates.map((row)=>row.id),repairs}
+      ));
       continue;
     }
 
@@ -372,6 +418,11 @@ export async function verifyOffice365Calendar(context:Context){
     }
 
     const event=uniqueLinked.find((row)=>row.id===link.outlookEventId)||uniqueLinked[0];
+    if(!eventHasRecordMarker(event,shape.recordId)){
+      issues.push(verificationIssue('missing_marker','warning',shape,event,'The stored Office 365 link exists, but its KOA_RECORD_ID marker is missing.',{
+        repairs:[{type:'restore_marker',label:'Restore Koa link marker',recordId:shape.recordId,eventId:event.id,requiresConfirmation:false}],
+      }));
+    }
     const parts=localParts(event);
     const mismatchedFields:string[]=[];
     if(clean(event.subject,180)!==clean(shape.title,180))mismatchedFields.push('title');
@@ -392,7 +443,17 @@ export async function verifyOffice365Calendar(context:Context){
       return Boolean(a&&b&&(a===b||a.includes(b)||b.includes(a)));
     });
     if(sameDateLookalikes.length){
-      issues.push(verificationIssue('possible_duplicate','warning',shape,event,'An unlinked Office 365 event on the same date has a matching or very similar title.',{duplicateEventIds:sameDateLookalikes.map((row)=>row.id)}));
+      const deletable=sameDateLookalikes.filter((candidate)=>exactDuplicate(shape,event,candidate));
+      issues.push(verificationIssue('possible_duplicate','warning',shape,event,'An unlinked Office 365 event on the same date has a matching or very similar title.',{
+        duplicateEventIds:sameDateLookalikes.map((row)=>row.id),
+        repairs:deletable.map((candidate)=>({
+          type:'delete_duplicate',
+          label:'Delete confirmed duplicate',
+          recordId:shape.recordId,
+          eventId:candidate.id,
+          requiresConfirmation:true,
+        })),
+      }));
     }
   }
 
@@ -632,4 +693,65 @@ export async function resolveOffice365Conflict(context:Context,recordIdInput:str
     finalKoa:conflictSides(finalShape,event).koa,finalOffice365:conflictSides(finalShape,event).office365,
   },...resolved].slice(0,500));
   return {ok:true,recordId,resolution,remaining:remaining.length};
+}
+
+
+export async function repairOffice365VerificationIssue(context:Context,input:any,actor=''){
+  const type=clean(input?.type,60);
+  const recordId=clean(input?.recordId,200);
+  const eventId=clean(input?.eventId,500);
+  const confirmed=Boolean(input?.confirmed);
+  if(!recordId||!eventId)throw new Error('Repair requires a CRM record ID and Office 365 event ID.');
+
+  const accessToken=await token();
+  const {entries}=await loadBooked(context);
+  const entry=entries.find((row)=>clean(row?.shape?.recordId,200)===recordId);
+  if(!entry)throw new Error('The linked CRM booking is no longer active or booked.');
+  const shape=entry.shape;
+  const event=await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),accessToken) as GraphEvent;
+  if(!event?.id)throw new Error('The Office 365 event no longer exists.');
+
+  if(type==='restore_marker'){
+    const existingMarker=recordIdFromEvent(event);
+    if(existingMarker&&existingMarker!==recordId)throw new Error('This Outlook event is already linked to a different CRM booking.');
+    const updated=eventHasRecordMarker(event,recordId)?event:await graph(
+      (await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),
+      accessToken,
+      {method:'PATCH',body:JSON.stringify({body:eventBodyWithMarker(event,recordId)})}
+    ) as GraphEvent;
+    await syncStore(context).setJSON('links/'+recordId,{
+      recordId,outlookEventId:eventId,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(updated),lastSyncedAt:new Date().toISOString(),
+    });
+    return {ok:true,repair:type,message:'Koa link marker restored.',verification:await verifyOffice365Calendar(context)};
+  }
+
+  if(type==='adopt_existing'){
+    if(recordIdFromEvent(event))throw new Error('This Outlook event is already linked to a CRM booking.');
+    const parts=localParts(event);
+    if(parts.date!==shape.date||!subjectMatches(shape,event))throw new Error('This Outlook event is no longer a safe match for the CRM booking.');
+    const updated=await graph(
+      (await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),
+      accessToken,
+      {method:'PATCH',body:JSON.stringify({body:eventBodyWithMarker(event,recordId)})}
+    ) as GraphEvent;
+    await syncStore(context).setJSON('links/'+recordId,{
+      recordId,outlookEventId:eventId,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(updated),lastSyncedAt:new Date().toISOString(),
+    });
+    return {ok:true,repair:type,message:'Existing Office 365 event adopted and linked to Koa’s.',verification:await verifyOffice365Calendar(context)};
+  }
+
+  if(type==='delete_duplicate'){
+    if(!confirmed)throw new Error('Duplicate deletion requires explicit confirmation.');
+    if(recordIdFromEvent(event))throw new Error('Linked Office 365 events cannot be deleted by duplicate repair.');
+    const link=((await syncStore(context).get('links/'+recordId,{type:'json'}))||{}) as Partial<LinkState>;
+    const linkedId=clean(link.outlookEventId,500);
+    if(!linkedId||linkedId===eventId)throw new Error('A separate linked Office 365 event is required before deleting a duplicate.');
+    const linked=await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(linkedId),accessToken) as GraphEvent;
+    if(!eventHasRecordMarker(linked,recordId))throw new Error('The retained Office 365 event is not securely linked to this CRM booking.');
+    if(!exactDuplicate(shape,linked,event))throw new Error('The event no longer meets the strict duplicate safety check.');
+    await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(eventId),accessToken,{method:'DELETE'});
+    return {ok:true,repair:type,message:'Confirmed duplicate Office 365 event deleted.',verification:await verifyOffice365Calendar(context)};
+  }
+
+  throw new Error('Unknown Office 365 verification repair action.');
 }
