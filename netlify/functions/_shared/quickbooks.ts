@@ -329,6 +329,8 @@ export type QuickBooksPaymentRule = {
   category: 'venueWedding' | 'mobileBar' | 'privateEvent' | 'default';
   minLeadDays: number | null;
   maxLeadDays: number | null;
+  minContractValue: number | null;
+  maxContractValue: number | null;
   presetId: string;
   priority: number;
   active: boolean;
@@ -415,12 +417,16 @@ function cleanAutoRules(input: unknown): QuickBooksPaymentRule[] {
       : 'default';
     const min = item?.minLeadDays == null || item?.minLeadDays === '' ? null : Math.max(0, Math.round(Number(item.minLeadDays)));
     const max = item?.maxLeadDays == null || item?.maxLeadDays === '' ? null : Math.max(0, Math.round(Number(item.maxLeadDays)));
+    const minValue = item?.minContractValue == null || item?.minContractValue === '' ? null : Math.max(0, Math.round(Number(item.minContractValue) * 100) / 100);
+    const maxValue = item?.maxContractValue == null || item?.maxContractValue === '' ? null : Math.max(0, Math.round(Number(item.maxContractValue) * 100) / 100);
     return {
       id: String(item?.id || 'rule-' + (index + 1)).trim().slice(0, 80),
       name: String(item?.name || 'Payment rule').trim().slice(0, 120),
       category,
       minLeadDays: min == null || !Number.isFinite(min) ? null : min,
       maxLeadDays: max == null || !Number.isFinite(max) ? null : max,
+      minContractValue: minValue == null || !Number.isFinite(minValue) ? null : minValue,
+      maxContractValue: maxValue == null || !Number.isFinite(maxValue) ? null : maxValue,
       presetId: String(item?.presetId || '').trim().slice(0, 80),
       priority: Math.max(0, Math.round(Number(item?.priority ?? index))),
       active: item?.active !== false,
@@ -445,11 +451,11 @@ export async function getQuickBooksDepositSettings(context: Context): Promise<Qu
     { label:'Final balance', dueDaysBefore:cleanDueDays(stored?.defaultFinalDueDaysBefore,30), percentOfRemaining:100 },
   ];
   const defaultRules: QuickBooksPaymentRule[] = [
-    { id:'rule-wedding-extended', name:'Wedding · 12+ months', category:'venueWedding', minLeadDays:365, maxLeadDays:null, presetId:'builtin-extended-wedding', priority:10, active:true },
-    { id:'rule-wedding-standard', name:'Wedding · 6–12 months', category:'venueWedding', minLeadDays:180, maxLeadDays:364, presetId:'builtin-standard-wedding', priority:20, active:true },
-    { id:'rule-wedding-micro', name:'Wedding · under 6 months', category:'venueWedding', minLeadDays:0, maxLeadDays:179, presetId:'builtin-micro-wedding', priority:30, active:true },
-    { id:'rule-mobile-bar', name:'Mobile Bar', category:'mobileBar', minLeadDays:null, maxLeadDays:null, presetId:'builtin-mobile-bar', priority:40, active:true },
-    { id:'rule-private-event', name:'Private Event', category:'privateEvent', minLeadDays:null, maxLeadDays:null, presetId:'builtin-private-event', priority:50, active:true },
+    { id:'rule-wedding-extended', name:'Wedding · 12+ months', category:'venueWedding', minLeadDays:365, maxLeadDays:null, minContractValue:null, maxContractValue:null, presetId:'builtin-extended-wedding', priority:10, active:true },
+    { id:'rule-wedding-standard', name:'Wedding · 6–12 months', category:'venueWedding', minLeadDays:180, maxLeadDays:364, minContractValue:null, maxContractValue:null, presetId:'builtin-standard-wedding', priority:20, active:true },
+    { id:'rule-wedding-micro', name:'Wedding · under 6 months', category:'venueWedding', minLeadDays:0, maxLeadDays:179, minContractValue:null, maxContractValue:null, presetId:'builtin-micro-wedding', priority:30, active:true },
+    { id:'rule-mobile-bar', name:'Mobile Bar', category:'mobileBar', minLeadDays:null, maxLeadDays:null, minContractValue:null, maxContractValue:null, presetId:'builtin-mobile-bar', priority:40, active:true },
+    { id:'rule-private-event', name:'Private Event', category:'privateEvent', minLeadDays:null, maxLeadDays:null, minContractValue:null, maxContractValue:null, presetId:'builtin-private-event', priority:50, active:true },
   ];
   return {
     defaultPercent: cleanDepositPercent(stored?.defaultPercent, 10),
