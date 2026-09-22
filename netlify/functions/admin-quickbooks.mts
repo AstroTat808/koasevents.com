@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import {
   completeOAuth,
@@ -598,7 +598,7 @@ export default async (req: Request, context: Context) => {
     }
   }
 
-  const auth = await requireAdmin();
+  const auth = await requireCapability('quickbooks.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
@@ -662,6 +662,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  if (!hasCapability(auth.user,'quickbooks.manage')) return Response.json({ error:'Accounting management permission required.' }, { status:403 });
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
 
