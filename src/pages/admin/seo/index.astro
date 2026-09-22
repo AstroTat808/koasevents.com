@@ -189,6 +189,13 @@ const cards = [
       return Boolean(user?.capabilities?.includes('seo.view') || user?.permissions?.includes('seo.view'));
     }
 
+    const ui=document.querySelector('[data-admin-ui]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const citationsWrap=document.querySelector('[data-citations]');
+    const addForm=document.querySelector('[data-add-citation]');
+    const message=document.querySelector('[data-citation-message]');
+    let citationPayload={citations:[],totals:{verified:0,needsUpdate:0,unverified:0}};
+
     function text(tag,className,content) {
       const el=document.createElement(tag);
       if(className)el.className=className;
