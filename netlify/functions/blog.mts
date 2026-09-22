@@ -56,7 +56,7 @@ export default async (req: Request, context: Context) => {
     const admin = url.searchParams.get('admin') === '1';
 
     if (admin) {
-      const auth = await requireCapability('blog.view');
+      const auth = await requireCapability('blog.view', req);
       if (auth.response) return auth.response;
       return Response.json({ posts: posts.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)) });
     }
@@ -68,7 +68,7 @@ export default async (req: Request, context: Context) => {
     });
   }
 
-  const auth = await requireCapability('blog.view');
+  const auth = await requireCapability('blog.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'POST') {
