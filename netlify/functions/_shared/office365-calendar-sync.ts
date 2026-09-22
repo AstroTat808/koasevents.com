@@ -55,6 +55,29 @@ export type Office365SyncConflict={
   office365:ConflictSide;
 };
 
+type SyncAuditAction='created'|'adopted'|'pushed'|'pulled'|'conflicted'|'skipped';
+type SyncAuditEntry={
+  action:SyncAuditAction;
+  recordId:string;
+  title:string;
+  date:string;
+  outlookEventId:string;
+  detail:string;
+};
+type SyncAuditRun={
+  id:string;
+  startedAt:string;
+  completedAt:string;
+  status:'success'|'error'|'not_configured';
+  trigger:string;
+  triggeredBy:string;
+  calendarOwner:string;
+  calendarName:string;
+  totals:Record<SyncAuditAction,number>;
+  entries:SyncAuditEntry[];
+  error?:string;
+};
+
 function env(){
   return {
     tenantId:clean(Netlify.env.get('MICROSOFT_GRAPH_TENANT_ID'),200),
@@ -243,6 +266,20 @@ export async function readOffice365ResolvedConflicts(context:Context){
   return (((await syncStore(context).get('conflicts/resolved/index',{type:'json'}))||[]) as any[])
     .sort((a,b)=>String(b.resolvedAt||'').localeCompare(String(a.resolvedAt||'')));
 }
+export async function readOffice365SyncAudit(context:Context){
+  return (((await syncStore(context).get('audit/runs/index',{type:'json'}))||[]) as SyncAuditRun[])
+    .sort((a,b)=>String(b.startedAt||'').localeCompare(String(a.startedAt||'')));
+}
+async function saveOffice365SyncAudit(context:Context,run:SyncAuditRun){
+  const rows=await readOffice365SyncAudit(context);
+  const next=[run,...rows.filter((row)=>row.id!==run.id)].slice(0,100);
+  await syncStore(context).setJSON('audit/runs/index',next);
+}
+function auditTotals(entries:SyncAuditEntry[]){
+  const totals={created:0,adopted:0,pushed:0,pulled:0,conflicted:0,skipped:0};
+  entries.forEach((entry)=>{totals[entry.action]=(totals[entry.action]||0)+1;});
+  return totals;
+}
 async function saveOffice365Conflicts(context:Context,rows:Office365SyncConflict[]){
   await syncStore(context).setJSON('conflicts/index',rows);
 }
@@ -255,12 +292,25 @@ function buildConflict(existing:Office365SyncConflict|undefined,recordId:string,
   };
 }
 
-export async function syncOffice365Calendar(context:Context){
+export async function syncOffice365Calendar(context:Context,trigger='manual',triggeredBy=''){
   const cfg=office365CalendarConfig();
   const startedAt=new Date().toISOString();
+  const runId='sync-'+startedAt.replace(/\D/g,'').slice(0,14)+'-'+crypto.randomUUID().slice(0,8);
+  const auditEntries:SyncAuditEntry[]=[];
+  const addAudit=(action:SyncAuditAction,shape:any,event:any,detail:string)=>{
+    auditEntries.push({
+      action,
+      recordId:clean(shape?.recordId,200),
+      title:clean(shape?.title,180)||clean(event?.subject,180)||'Calendar event',
+      date:clean(shape?.date,20)||localParts(event||{}).date,
+      outlookEventId:clean(event?.id,500),
+      detail:clean(detail,500),
+    });
+  };
   if(!cfg.configured){
     const state={configured:false,lastAttemptAt:startedAt,lastError:'Microsoft Graph environment variables are incomplete.'};
     await syncStore(context).setJSON('state',state);
+    await saveOffice365SyncAudit(context,{id:runId,startedAt,completedAt:new Date().toISOString(),status:'not_configured',trigger,triggeredBy:clean(triggeredBy,240),calendarOwner:cfg.calendarOwner,calendarName:cfg.calendarName,totals:auditTotals(auditEntries),entries:auditEntries,error:state.lastError});
     return state;
   }
   try{
@@ -286,7 +336,10 @@ export async function syncOffice365Calendar(context:Context){
     const unlinkedEvents=outlookEvents.filter((event)=>!recordIdFromEvent(event));
     for(const entry of entries){
       const shape=entry.shape;
-      if(!shape.recordId||!shape.date)continue;
+      if(!shape.recordId||!shape.date){
+        addAudit('skipped',shape,null,!shape.recordId?'CRM record ID is missing.':'Event date is missing.');
+        continue;
+      }
       const linkKey='links/'+shape.recordId;
       const link=((await syncStore(context).get(linkKey,{type:'json'}))||{}) as Partial<LinkState>;
       let event=linkedByRecord.get(shape.recordId);
@@ -308,16 +361,19 @@ export async function syncOffice365Calendar(context:Context){
           const index=unlinkedEvents.findIndex((row)=>row.id===event?.id);
           if(index>=0)unlinkedEvents.splice(index,1);
           await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
+          addAudit('adopted',shape,event,'Matched one existing Office 365 event on the same date and reused it instead of creating a duplicate.');
           continue;
         }
         if(candidates.length>1){
           conflictMap.set(shape.recordId,buildConflict(undefined,shape.recordId,candidates[0],shape));
           conflicts++;
+          addAudit('conflicted',shape,candidates[0],'Multiple existing Office 365 events could match this booking; no event was created or adopted.');
           continue;
         }
         event=await createOutlookEvent(accessToken,shape);
         created++;
         await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
+        addAudit('created',shape,event,'Created a new linked Office 365 event because no safe existing match was found.');
         continue;
       }
 
@@ -329,6 +385,7 @@ export async function syncOffice365Calendar(context:Context){
       if(pendingConflict){
         conflictMap.set(shape.recordId,buildConflict(pendingConflict,shape.recordId,event,shape));
         conflicts++;
+        addAudit('conflicted',shape,event,'A previously detected Koa’s / Office 365 conflict is still awaiting staff resolution.');
         continue;
       }
 
@@ -348,14 +405,19 @@ export async function syncOffice365Calendar(context:Context){
         entry.ops=nextOps;
         entry.shape=crmShape(records.find((row)=>row?.id===shape.recordId)||entry.record,nextOps);
         pulled++;
+        addAudit('pulled',entry.shape,event,'Pulled Office 365 date, time, or location changes into Koa’s CRM/Event Ops.');
       }else if(crmChanged&&outlookChanged){
         // Never guess when both systems changed independently. Preserve both values and
         // surface a conflict so staff can explicitly choose which side wins.
         conflictMap.set(shape.recordId,buildConflict(undefined,shape.recordId,event,shape));
         conflicts++;
+        addAudit('conflicted',shape,event,'Both Koa’s and Office 365 changed since the previous sync; neither side was overwritten.');
         continue;
       }else if(crmChanged||!link.lastCrmHash){
         event=await updateOutlookEvent(accessToken,event.id,shape);pushed++;
+        addAudit('pushed',shape,event,'Pushed Koa’s date, time, or location changes to the linked Office 365 event.');
+      }else{
+        addAudit('skipped',shape,event,'No synchronized date, time, or location fields changed.');
       }
 
       const finalShape=entry.shape||shape;
@@ -372,12 +434,16 @@ export async function syncOffice365Calendar(context:Context){
     const conflictRows=[...conflictMap.values()].filter((row)=>activeRecordIds.has(row.recordId));
     await saveOffice365Conflicts(context,conflictRows);
     await syncStore(context).setJSON('external/index',external.filter((item)=>item.date));
-    const state={configured:true,lastAttemptAt:startedAt,lastSuccessAt:new Date().toISOString(),lastError:'',created,adopted,pushed,pulled,conflicts:conflictRows.length,externalImported:external.length,calendarOwner:cfg.calendarOwner};
+    const completedAt=new Date().toISOString();
+    const state={configured:true,lastAttemptAt:startedAt,lastSuccessAt:completedAt,lastError:'',created,adopted,pushed,pulled,conflicts:conflictRows.length,externalImported:external.length,calendarOwner:cfg.calendarOwner,runId};
     await syncStore(context).setJSON('state',state);
+    await saveOffice365SyncAudit(context,{id:runId,startedAt,completedAt,status:'success',trigger,triggeredBy:clean(triggeredBy,240),calendarOwner:cfg.calendarOwner,calendarName:cfg.calendarName,totals:auditTotals(auditEntries),entries:auditEntries});
     return state;
   }catch(error:any){
-    const state={configured:true,lastAttemptAt:startedAt,lastError:clean(error?.message||error,1000)};
+    const message=clean(error?.message||error,1000);
+    const state={configured:true,lastAttemptAt:startedAt,lastError:message,runId};
     await syncStore(context).setJSON('state',state);
+    await saveOffice365SyncAudit(context,{id:runId,startedAt,completedAt:new Date().toISOString(),status:'error',trigger,triggeredBy:clean(triggeredBy,240),calendarOwner:cfg.calendarOwner,calendarName:cfg.calendarName,totals:auditTotals(auditEntries),entries:auditEntries,error:message});
     throw error;
   }
 }
