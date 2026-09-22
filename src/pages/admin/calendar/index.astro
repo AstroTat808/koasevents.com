@@ -29,37 +29,61 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="calendar-shell rounded-[1.75rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div class="flex flex-wrap items-center gap-3">
-              <button data-prev type="button" aria-label="Previous month" class="calendar-nav">←</button>
+              <button data-prev type="button" aria-label="Previous period" class="calendar-nav">←</button>
               <div class="min-w-[15rem]">
-                <p class="eyebrow text-[var(--koa-clay)]">Calendar month</p>
+                <p data-period-eyebrow class="eyebrow text-[var(--koa-clay)]">Calendar month</p>
                 <h2 data-month-title class="display mt-1 text-4xl sm:text-5xl"></h2>
               </div>
-              <button data-next type="button" aria-label="Next month" class="calendar-nav">→</button>
+              <button data-next type="button" aria-label="Next period" class="calendar-nav">→</button>
               <button data-today type="button" class="calendar-today">Today</button>
+              <div class="calendar-view-switch" role="group" aria-label="Calendar view">
+                <button data-view="month" type="button" class="calendar-view-button is-active">Month</button>
+                <button data-view="week" type="button" class="calendar-view-button">Week</button>
+                <button data-view="agenda" type="button" class="calendar-view-button">Agenda</button>
+              </div>
             </div>
-            <div class="flex max-w-3xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
-              <span class="legend legend-event">Event</span>
-              <span class="legend legend-payment">QBO payment</span>
-              <span class="legend legend-deadline">Deadline</span>
-              <span class="legend legend-vendor">Vendor</span>
-              <span class="legend legend-task">Task / timeline</span>
+            <div class="flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
+              <span class="legend legend-event"><span aria-hidden="true">💍</span> Wedding</span>
+              <span class="legend legend-event"><span aria-hidden="true">◆</span> Event</span>
+              <span class="legend legend-payment"><span aria-hidden="true">＄</span> Payment</span>
+              <span class="legend legend-deadline"><span aria-hidden="true">🛡</span> Insurance</span>
+              <span class="legend legend-vendor"><span aria-hidden="true">🚚</span> Vendor</span>
+              <span class="legend legend-staff"><span aria-hidden="true">👤</span> Staffing</span>
+              <span class="legend legend-task"><span aria-hidden="true">☑</span> Task / run of show</span>
             </div>
           </div>
 
           <div class="mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
-            <div class="calendar-grid-wrap">
+            <div data-month-view class="calendar-grid-wrap">
               <div class="calendar-weekdays grid grid-cols-7 text-center text-[.6rem] font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">
                 <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
               </div>
               <div data-calendar class="calendar-grid grid grid-cols-7"></div>
             </div>
+            <div data-week-view class="hidden min-w-[70rem] bg-white"></div>
+            <div data-agenda-view class="hidden bg-white p-4 sm:p-6"></div>
           </div>
 
           <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--koa-ink)]/45">
-            <p>Open any calendar item to jump directly into that event record.</p>
-            <p class="font-semibold text-[var(--koa-forest)]/65">Month view · 6-week grid</p>
+            <p>Click any day for a full day detail. Open an item to jump directly into that event record.</p>
+            <p data-view-description class="font-semibold text-[var(--koa-forest)]/65">Month view · 6-week grid</p>
           </div>
         </section>
+
+        <aside data-day-panel class="day-panel" aria-hidden="true">
+          <button data-day-panel-backdrop class="day-panel-backdrop" aria-label="Close day details"></button>
+          <div class="day-panel-card" role="dialog" aria-modal="true" aria-labelledby="day-panel-title">
+            <div class="flex items-start justify-between gap-4 border-b border-[var(--koa-line)] p-5 sm:p-6">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Day detail</p>
+                <h2 id="day-panel-title" data-day-title class="display mt-2 text-3xl"></h2>
+                <p data-day-summary class="mt-2 text-sm text-[var(--koa-ink)]/50"></p>
+              </div>
+              <button data-day-close type="button" class="calendar-nav" aria-label="Close day details">×</button>
+            </div>
+            <div data-day-content class="grid gap-3 overflow-y-auto p-5 sm:p-6"></div>
+          </div>
+        </aside>
 
         <section class="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
           <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
@@ -86,6 +110,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .legend-deadline{background:var(--koa-sand);color:var(--koa-forest)}
     .legend-vendor{background:white;color:var(--koa-clay)}
     .legend-task{background:var(--koa-ink);color:white;border-color:var(--koa-ink)}
+    .legend-staff{background:color-mix(in srgb,var(--koa-forest) 12%,white);color:var(--koa-forest);border-color:color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
+    .calendar-view-switch{display:flex;border:1px solid var(--koa-line);border-radius:9999px;background:var(--koa-ivory);padding:.22rem}
+    .calendar-view-button{border-radius:9999px;padding:.55rem .85rem;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:color-mix(in srgb,var(--koa-ink) 55%,transparent)}
+    .calendar-view-button.is-active{background:var(--koa-forest);color:white;box-shadow:0 4px 14px rgb(0 0 0/.08)}
     .calendar-nav{display:grid;height:3rem;width:3rem;place-items:center;border-radius:9999px;border:1px solid var(--koa-line);background:white;font-size:1.2rem;color:var(--koa-forest);transition:transform .16s ease,background .16s ease}
     .calendar-nav:hover{background:var(--koa-ivory);transform:translateY(-1px)}
     .calendar-today{border-radius:9999px;background:var(--koa-sand);padding:.72rem 1rem;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--koa-forest)}
@@ -102,13 +130,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-day.is-today{background:color-mix(in srgb,var(--koa-amber-light) 16%,white)}
     .calendar-day.is-today::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 2px var(--koa-forest)}
     .calendar-day.is-today .calendar-date-number{display:grid;height:1.8rem;min-width:1.8rem;place-items:center;border-radius:9999px;background:var(--koa-forest);padding:0 .35rem;color:white}
-    .calendar-item{display:block;width:100%;overflow:hidden;border-radius:.55rem;padding:.42rem .5rem;text-align:left;font-size:.67rem;font-weight:700;line-height:1.3;text-overflow:ellipsis;white-space:nowrap;transition:transform .12s ease,filter .12s ease}
+    .calendar-item{display:flex;width:100%;align-items:center;gap:.35rem;overflow:hidden;border-radius:.55rem;padding:.42rem .5rem;text-align:left;font-size:.67rem;font-weight:700;line-height:1.3;transition:transform .12s ease,filter .12s ease}
+    .calendar-item-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .calendar-icon{flex:0 0 auto;font-size:.72rem;line-height:1}
     .calendar-item:hover{transform:translateY(-1px);filter:brightness(.98)}
     .calendar-item.event{background:var(--koa-forest);color:white}
     .calendar-item.payment{background:var(--koa-clay);color:white}
     .calendar-item.deadline{background:var(--koa-sand);color:var(--koa-forest)}
     .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:white}
     .calendar-item.task,.calendar-item.timeline{background:var(--koa-ink);color:white}
+    .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
+    .week-grid{display:grid;grid-template-columns:6rem repeat(7,minmax(9rem,1fr));min-height:42rem}
+    .week-time-column,.week-day-column{border-right:1px solid var(--koa-line)}
+    .week-day-column:last-child{border-right:0}
+    .week-day-head{min-height:4.4rem;border-bottom:1px solid var(--koa-line);padding:.8rem;background:color-mix(in srgb,var(--koa-sand) 45%,white)}
+    .week-day-body{display:grid;gap:.45rem;padding:.65rem}
+    .week-time-column{background:var(--koa-ivory)}
+    .week-time-label{height:4rem;border-bottom:1px dashed color-mix(in srgb,var(--koa-line) 70%,transparent);padding:.45rem .55rem;font-size:.6rem;font-weight:800;color:color-mix(in srgb,var(--koa-ink) 46%,transparent)}
+    .agenda-group{border-bottom:1px solid var(--koa-line);padding:1rem 0}
+    .agenda-group:last-child{border-bottom:0}
+    .agenda-date{display:flex;min-width:7.5rem;flex-direction:column}
+    .day-panel{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;transition:opacity .16s ease}
+    .day-panel.is-open{pointer-events:auto;opacity:1}
+    .day-panel-backdrop{position:absolute;inset:0;background:rgb(6 24 19/.34);backdrop-filter:blur(2px)}
+    .day-panel-card{position:absolute;right:0;top:0;height:100%;width:min(34rem,94vw);transform:translateX(100%);background:white;box-shadow:-18px 0 50px rgb(0 0 0/.16);transition:transform .2s ease;display:flex;flex-direction:column}
+    .day-panel.is-open .day-panel-card{transform:translateX(0)}
+    .day-detail-item{border:1px solid var(--koa-line);border-radius:1rem;background:var(--koa-ivory);padding:1rem}
+    .calendar-day{cursor:pointer}
+    .calendar-day:hover{background:color-mix(in srgb,var(--koa-amber-light) 9%,white)}
     .calendar-item.is-overdue{outline:2px solid var(--koa-clay);outline-offset:1px}
     @media(min-width:1536px){.calendar-day{min-height:14rem}.calendar-grid-wrap{min-width:76rem}.calendar-item{font-size:.7rem}}
     @media(max-width:800px){.calendar-shell{margin-inline:-.25rem}.calendar-grid-wrap{min-width:62rem}.calendar-day{min-height:10.5rem;padding:.55rem}.calendar-item{font-size:.62rem}}
@@ -124,8 +173,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const agenda=document.querySelector('[data-agenda]');
     const conflictsEl=document.querySelector('[data-conflicts]');
     const monthTitle=document.querySelector('[data-month-title]');
+    const periodEyebrow=document.querySelector('[data-period-eyebrow]');
+    const monthView=document.querySelector('[data-month-view]');
+    const weekView=document.querySelector('[data-week-view]');
+    const agendaView=document.querySelector('[data-agenda-view]');
+    const viewDescription=document.querySelector('[data-view-description]');
+    const dayPanel=document.querySelector('[data-day-panel]');
+    const dayTitle=document.querySelector('[data-day-title]');
+    const daySummary=document.querySelector('[data-day-summary]');
+    const dayContent=document.querySelector('[data-day-content]');
     let cursor=new Date();
     cursor=new Date(cursor.getFullYear(),cursor.getMonth(),1);
+    let activeView='month';
     let data={items:[],conflicts:[],totals:{}};
 
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
@@ -134,16 +193,74 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function addDays(date,days){const d=new Date(date);d.setDate(d.getDate()+days);return d;}
     function dateLabel(value){return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value+'T12:00:00'));}
     function monthLabel(date){return new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(date);}
+    function weekdayLabel(date){return new Intl.DateTimeFormat('en-US',{weekday:'short'}).format(date);}
     function timeLabel(value){if(!value)return '';const [h,m]=value.split(':').map(Number);const d=new Date(2000,0,1,h,m);return new Intl.DateTimeFormat('en-US',{hour:'numeric',minute:'2-digit'}).format(d);}
     function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
     function today(){return ymd(new Date());}
+    function startOfWeek(date){const d=new Date(date);d.setDate(d.getDate()-d.getDay());d.setHours(0,0,0,0);return d;}
     function rangeForMonth(date){
       const first=new Date(date.getFullYear(),date.getMonth(),1);
       const gridStart=addDays(first,-first.getDay());
       const gridEnd=addDays(gridStart,41);
       return {start:ymd(gridStart),end:ymd(gridEnd),gridStart,gridEnd};
     }
+    function rangeForWeek(date){const gridStart=startOfWeek(date);const gridEnd=addDays(gridStart,6);return {start:ymd(gridStart),end:ymd(gridEnd),gridStart,gridEnd};}
+    function rangeForView(){return activeView==='week'?rangeForWeek(cursor):rangeForMonth(cursor);}
     function typeLabel(type){return ({event:'Event',payment:'QBO payment',deadline:'Deadline',vendor:'Vendor',task:'Task',timeline:'Run of show'})[type]||type;}
+    function visualFor(item){
+      if(item.type==='event'&&item.subtype==='wedding')return {icon:'💍',label:'Wedding',className:'event'};
+      if(item.type==='event')return {icon:'◆',label:'Event',className:'event'};
+      if(item.type==='payment')return {icon:'＄',label:'Payment',className:'payment'};
+      if(item.type==='deadline'&&item.subtype==='insurance')return {icon:'🛡',label:'Insurance',className:'deadline'};
+      if(item.type==='deadline')return {icon:'!',label:'Deadline',className:'deadline'};
+      if(item.type==='vendor')return {icon:'🚚',label:'Vendor',className:'vendor'};
+      if(item.type==='task'&&item.subtype==='staffing')return {icon:'👤',label:'Staffing',className:'staffing'};
+      if(item.type==='timeline')return {icon:'▶',label:'Run of show',className:'timeline'};
+      return {icon:'☑',label:'Task',className:'task'};
+    }
+    function itemLink(item,compact=false){
+      const a=document.createElement('a');a.href='/admin/events/?record='+encodeURIComponent(item.recordId);
+      const visual=visualFor(item);a.className='calendar-item '+visual.className+(item.date<today() && !['paid','complete','not_applicable'].includes(item.status)?' is-overdue':'');
+      a.title=[visual.label,item.customerName,item.detail,item.owner?'Owner: '+item.owner:''].filter(Boolean).join(' · ');
+      const icon=text('span','calendar-icon',visual.icon);icon.setAttribute('aria-hidden','true');
+      const label=text('span','calendar-item-label',(item.time?timeLabel(item.time)+' ':'')+item.title);
+      a.append(icon,label);
+      if(!compact)a.dataset.calendarItem='true';
+      return a;
+    }
+    function itemsForDate(key){return (data.items||[]).filter((item)=>item.date===key);}
+    function conflictsForDate(key){return (data.conflicts||[]).filter((item)=>item.date===key);}
+    function openDayPanel(key){
+      const rows=itemsForDate(key);const conflicts=conflictsForDate(key);
+      dayTitle.textContent=new Intl.DateTimeFormat('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'}).format(new Date(key+'T12:00:00'));
+      daySummary.textContent=rows.length+' calendar item'+(rows.length===1?'':'s')+(conflicts.length?' · '+conflicts.length+' conflict alert'+(conflicts.length===1?'':'s'):'');
+      dayContent.innerHTML='';
+      if(conflicts.length){
+        const conflictWrap=document.createElement('div');conflictWrap.className='grid gap-2';
+        conflicts.forEach((conflict)=>{
+          const card=document.createElement('article');card.className='rounded-xl bg-[var(--koa-ink)] p-4 text-white';
+          card.append(text('strong','text-sm',conflict.title),text('p','mt-2 text-sm text-white/65',conflict.detail));
+          conflictWrap.appendChild(card);
+        });
+        dayContent.appendChild(conflictWrap);
+      }
+      rows.forEach((item)=>{
+        const visual=visualFor(item);const card=document.createElement('article');card.className='day-detail-item';
+        const head=document.createElement('div');head.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');left.className='flex items-start gap-3';
+        left.append(text('span','text-lg',visual.icon));
+        const copy=document.createElement('div');copy.append(text('strong','text-sm text-[var(--koa-forest)]',item.title),text('p','mt-1 text-xs font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]',visual.label+(item.time?' · '+timeLabel(item.time):'')));
+        left.appendChild(copy);head.appendChild(left);
+        const open=document.createElement('a');open.href='/admin/events/?record='+encodeURIComponent(item.recordId);open.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';open.textContent='Open';
+        head.appendChild(open);card.appendChild(head);
+        card.appendChild(text('p','mt-3 text-sm leading-5 text-[var(--koa-ink)]/58',item.customerName+(item.detail?' · '+item.detail:'')));
+        if(item.owner)card.appendChild(text('p','mt-2 text-xs font-semibold text-[var(--koa-clay)]','Owner: '+item.owner));
+        dayContent.appendChild(card);
+      });
+      if(!rows.length&&!conflicts.length)dayContent.appendChild(text('p','rounded-xl bg-[var(--koa-ivory)] p-4 text-sm text-[var(--koa-ink)]/50','Nothing is scheduled for this day.'));
+      dayPanel.classList.add('is-open');dayPanel.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
+    }
+    function closeDayPanel(){dayPanel.classList.remove('is-open');dayPanel.setAttribute('aria-hidden','true');document.body.style.overflow='';}
 
     function renderTotals(){
       document.querySelector('[data-total-events]').textContent=String(data.totals?.bookedEvents||0);
@@ -154,7 +271,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderCalendar(){
-      monthTitle.textContent=monthLabel(cursor);calendar.innerHTML='';
+      calendar.innerHTML='';
       const {gridStart}=rangeForMonth(cursor);
       const itemsByDate=new Map();
       (data.items||[]).forEach((item)=>{const list=itemsByDate.get(item.date)||[];list.push(item);itemsByDate.set(item.date,list);});
@@ -167,14 +284,65 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(dayConflicts.length)head.appendChild(text('span','rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
         cell.appendChild(head);
         const list=document.createElement('div');list.className='grid gap-1';
-        (itemsByDate.get(key)||[]).slice(0,5).forEach((item)=>{
-          const a=document.createElement('a');a.href='/admin/events/?record='+encodeURIComponent(item.recordId);a.className='calendar-item '+item.type+(key<today() && !['paid','complete','not_applicable'].includes(item.status)?' is-overdue':'');
-          a.title=[typeLabel(item.type),item.customerName,item.detail,item.owner?'Owner: '+item.owner:''].filter(Boolean).join(' · ');
-          a.textContent=(item.time?timeLabel(item.time)+' ':'')+item.title;
-          list.appendChild(a);
-        });
-        const extra=(itemsByDate.get(key)||[]).length-5;if(extra>0)list.appendChild(text('span','text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more'));
-        cell.appendChild(list);calendar.appendChild(cell);
+        (itemsByDate.get(key)||[]).slice(0,5).forEach((item)=>{const a=itemLink(item);a.addEventListener('click',(event)=>event.stopPropagation());list.appendChild(a);});
+        const extra=(itemsByDate.get(key)||[]).length-5;if(extra>0){const more=text('button','text-left text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more');more.type='button';more.addEventListener('click',(event)=>{event.stopPropagation();openDayPanel(key);});list.appendChild(more);}
+        cell.appendChild(list);cell.addEventListener('click',()=>openDayPanel(key));calendar.appendChild(cell);
+      }
+    }
+
+    function renderWeek(){
+      weekView.innerHTML='';
+      const {gridStart}=rangeForWeek(cursor);
+      const wrapper=document.createElement('div');wrapper.className='week-grid';
+      const timeCol=document.createElement('div');timeCol.className='week-time-column';
+      const spacer=document.createElement('div');spacer.className='week-day-head';timeCol.appendChild(spacer);
+      for(let h=7;h<=22;h++){const label=text('div','week-time-label',new Intl.DateTimeFormat('en-US',{hour:'numeric'}).format(new Date(2000,0,1,h)));timeCol.appendChild(label);}
+      wrapper.appendChild(timeCol);
+      for(let i=0;i<7;i++){
+        const date=addDays(gridStart,i),key=ymd(date);const col=document.createElement('div');col.className='week-day-column';
+        const head=document.createElement('button');head.type='button';head.className='week-day-head w-full text-left'+(key===today()?' bg-[var(--koa-amber-light)]/20':'');
+        head.append(text('p','text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',weekdayLabel(date)),text('p','display mt-1 text-2xl text-[var(--koa-forest)]',String(date.getDate())));
+        head.addEventListener('click',()=>openDayPanel(key));col.appendChild(head);
+        const body=document.createElement('div');body.className='week-day-body';
+        const rows=itemsForDate(key);rows.forEach((item)=>body.appendChild(itemLink(item,true)));
+        if(!rows.length){const empty=text('button','rounded-lg border border-dashed border-[var(--koa-line)] p-3 text-left text-xs text-[var(--koa-ink)]/35','No items');empty.type='button';empty.addEventListener('click',()=>openDayPanel(key));body.appendChild(empty);}
+        col.appendChild(body);wrapper.appendChild(col);
+      }
+      weekView.appendChild(wrapper);
+    }
+
+    function renderAgendaView(){
+      agendaView.innerHTML='';
+      const {start,end}=rangeForMonth(cursor);
+      const grouped=new Map();
+      (data.items||[]).filter((item)=>item.date>=start&&item.date<=end).forEach((item)=>{const rows=grouped.get(item.date)||[];rows.push(item);grouped.set(item.date,rows);});
+      const keys=[...grouped.keys()].sort();
+      keys.forEach((key)=>{
+        const group=document.createElement('section');group.className='agenda-group flex flex-col gap-3 sm:flex-row';
+        const date=new Date(key+'T12:00:00');const dateBox=document.createElement('button');dateBox.type='button';dateBox.className='agenda-date text-left';dateBox.addEventListener('click',()=>openDayPanel(key));
+        dateBox.append(text('span','text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]',weekdayLabel(date)),text('strong','display text-3xl text-[var(--koa-forest)]',String(date.getDate())),text('span','text-xs text-[var(--koa-ink)]/45',new Intl.DateTimeFormat('en-US',{month:'short'}).format(date)));
+        const list=document.createElement('div');list.className='grid flex-1 gap-2';
+        grouped.get(key).forEach((item)=>list.appendChild(itemLink(item,true)));
+        group.append(dateBox,list);agendaView.appendChild(group);
+      });
+      if(!keys.length)agendaView.appendChild(text('p','rounded-xl bg-[var(--koa-ivory)] p-4 text-sm text-[var(--koa-ink)]/45','No calendar items in this month.'));
+    }
+
+    function renderActiveView(){
+      monthView.classList.toggle('hidden',activeView!=='month');
+      weekView.classList.toggle('hidden',activeView!=='week');
+      agendaView.classList.toggle('hidden',activeView!=='agenda');
+      document.querySelectorAll('[data-view]').forEach((button)=>button.classList.toggle('is-active',button.dataset.view===activeView));
+      if(activeView==='week'){
+        const {gridStart,gridEnd}=rangeForWeek(cursor);
+        periodEyebrow.textContent='Calendar week';
+        monthTitle.textContent=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(gridStart)+' – '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(gridEnd);
+        viewDescription.textContent='Week view · operational schedule';
+        renderWeek();
+      }else if(activeView==='agenda'){
+        periodEyebrow.textContent='Calendar agenda';monthTitle.textContent=monthLabel(cursor);viewDescription.textContent='Agenda view · chronological month';renderAgendaView();
+      }else{
+        periodEyebrow.textContent='Calendar month';monthTitle.textContent=monthLabel(cursor);viewDescription.textContent='Month view · 6-week grid';renderCalendar();
       }
     }
 
@@ -213,15 +381,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     async function load(){
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
       app.classList.remove('hidden');
-      const range=rangeForMonth(cursor);
+      const range=rangeForView();
       const res=await fetch('/api/admin/calendar?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'});
       if(!res.ok)return;
-      data=await res.json();renderTotals();renderCalendar();renderConflicts();renderAgenda();
+      data=await res.json();renderTotals();renderActiveView();renderConflicts();renderAgenda();
     }
 
-    document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
-    document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
-    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=new Date(now.getFullYear(),now.getMonth(),1);load();});
+    document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=activeView==='week'?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
+    document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=activeView==='week'?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
+    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=activeView==='week'?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
+    document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=activeView==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
+    document.querySelector('[data-day-close]')?.addEventListener('click',closeDayPanel);
+    document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
+    document.addEventListener('keydown',(event)=>{if(event.key==='Escape')closeDayPanel();});
     load();
   </script>
 </BaseLayout>
