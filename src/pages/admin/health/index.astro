@@ -33,7 +33,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h2 class="display mt-2 text-4xl">Office 365 calendar sync</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Production synchronization health for the shared Koa’s Events calendar.</p>
             </div>
-            <a href="/admin/calendar/" class="w-fit rounded-full border border-[var(--koa-line)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open Master Calendar</a>
+            <div class="flex flex-wrap items-center gap-2">
+              <span data-office365-severity class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Reliability —</span>
+              <a href="/admin/calendar/" class="w-fit rounded-full border border-[var(--koa-line)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open Master Calendar</a>
+            </div>
           </div>
           <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
@@ -84,6 +87,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Auth failures</p><p data-office365-reliability-30d-auth class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
               </div>
             </article>
+          </div>
+
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">30-day trend</p>
+                <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Daily Office 365 reliability</h3>
+                <p class="mt-1 text-xs text-[var(--koa-ink)]/48">Success rate is shown as a line. Daily conflict runs and authentication failures are shown as bars.</p>
+              </div>
+              <div class="flex flex-wrap gap-3 text-[.62rem] font-bold text-[var(--koa-ink)]/55">
+                <span>● Success rate</span><span>▮ Conflicts</span><span>▮ Auth failures</span>
+              </div>
+            </div>
+            <div data-office365-trend class="mt-4 overflow-x-auto"></div>
+          </div>
+
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Reliability thresholds</p>
+                <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Automatic health severity</h3>
+                <p class="mt-1 text-xs text-[var(--koa-ink)]/48">Based on the rolling 7-day sync success rate. Green is at or above the yellow threshold; red is below the red threshold.</p>
+              </div>
+              <div class="flex flex-wrap items-end gap-3">
+                <label class="grid gap-1 text-xs font-bold text-[var(--koa-ink)]/65">Yellow below %
+                  <input data-office365-yellow-threshold type="number" min="0" max="100" step=".1" class="w-28 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" />
+                </label>
+                <label class="grid gap-1 text-xs font-bold text-[var(--koa-ink)]/65">Red below %
+                  <input data-office365-red-threshold type="number" min="0" max="100" step=".1" class="w-28 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm" />
+                </label>
+                <button data-save-office365-thresholds type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Save thresholds</button>
+              </div>
+            </div>
+            <p data-office365-threshold-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
           </div>
         </section>
 
@@ -347,6 +384,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const office365Reliability30dAverage=document.querySelector('[data-office365-reliability-30d-average]');
     const office365Reliability30dConflict=document.querySelector('[data-office365-reliability-30d-conflict]');
     const office365Reliability30dAuth=document.querySelector('[data-office365-reliability-30d-auth]');
+    const office365Trend=document.querySelector('[data-office365-trend]');
+    const office365Severity=document.querySelector('[data-office365-severity]');
+    const office365YellowThreshold=document.querySelector('[data-office365-yellow-threshold]');
+    const office365RedThreshold=document.querySelector('[data-office365-red-threshold]');
+    const saveOffice365Thresholds=document.querySelector('[data-save-office365-thresholds]');
+    const office365ThresholdMessage=document.querySelector('[data-office365-threshold-message]');
     const overall=document.querySelector('[data-overall]');
     const creditPanel=document.querySelector('[data-credit-panel]');
     const creditCycle=document.querySelector('[data-credit-cycle]');
@@ -589,6 +632,37 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       releaseDialog.showModal();
     }
 
+    function renderOffice365Trend(rows){
+      if(!office365Trend)return;
+      const data=Array.isArray(rows)?rows:[];
+      if(!data.length){office365Trend.innerHTML='<p class="text-xs text-[var(--koa-ink)]/45">No sync trend history is available yet.</p>';return;}
+      const width=900,height=250,padL=38,padR=20,padT=18,padB=34;
+      const plotW=width-padL-padR,plotH=height-padT-padB;
+      const maxCount=Math.max(1,...data.map((row)=>Math.max(Number(row.conflictRuns||0),Number(row.authenticationFailures||0))));
+      const x=(index)=>padL+(data.length===1?plotW/2:index*(plotW/(data.length-1)));
+      const yRate=(rate)=>padT+plotH-(Math.max(0,Math.min(100,Number(rate??0)))/100)*plotH;
+      const yCount=(count)=>padT+plotH-(Math.max(0,Number(count||0))/maxCount)*(plotH*.35);
+      const successPoints=data.filter((row)=>row.successRate!=null).map((row,index)=>{
+        const actualIndex=data.indexOf(row);return x(actualIndex)+','+yRate(row.successRate);
+      }).join(' ');
+      let svg='<svg viewBox="0 0 '+width+' '+height+'" class="min-w-[760px] w-full" role="img" aria-label="Office 365 daily reliability trend">';
+      [0,25,50,75,100].forEach((rate)=>{
+        const y=yRate(rate);svg+='<line x1="'+padL+'" y1="'+y+'" x2="'+(width-padR)+'" y2="'+y+'" stroke="currentColor" opacity=".08"/><text x="4" y="'+(y+4)+'" font-size="10" fill="currentColor" opacity=".45">'+rate+'%</text>';
+      });
+      data.forEach((row,index)=>{
+        const xx=x(index),barW=Math.max(4,Math.min(10,plotW/data.length*.28));
+        const cy=yCount(row.conflictRuns),ay=yCount(row.authenticationFailures);
+        const base=padT+plotH;
+        if(Number(row.conflictRuns||0)>0)svg+='<rect x="'+(xx-barW-1)+'" y="'+cy+'" width="'+barW+'" height="'+(base-cy)+'" rx="2" fill="#c58a3a" opacity=".72"/>';
+        if(Number(row.authenticationFailures||0)>0)svg+='<rect x="'+(xx+1)+'" y="'+ay+'" width="'+barW+'" height="'+(base-ay)+'" rx="2" fill="#991b1b" opacity=".72"/>';
+        if(index%5===0||index===data.length-1)svg+='<text x="'+xx+'" y="'+(height-10)+'" text-anchor="middle" font-size="9" fill="currentColor" opacity=".45">'+String(row.date||'').slice(5)+'</text>';
+      });
+      if(successPoints)svg+='<polyline points="'+successPoints+'" fill="none" stroke="#24483b" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>';
+      data.forEach((row,index)=>{if(row.successRate!=null)svg+='<circle cx="'+x(index)+'" cy="'+yRate(row.successRate)+'" r="2.5" fill="#24483b"><title>'+row.date+': '+row.successRate+'% success, '+Number(row.conflictRuns||0)+' conflict runs, '+Number(row.authenticationFailures||0)+' auth failures</title></circle>';});
+      svg+='</svg>';
+      office365Trend.innerHTML=svg;
+    }
+
     function render(data){
       const current=data.current;
       if(current){
@@ -654,6 +728,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderOfficeReliability(office365.reliability?.['30d']||{},{
           runs:office365Reliability30dRuns,success:office365Reliability30dSuccess,average:office365Reliability30dAverage,conflict:office365Reliability30dConflict,auth:office365Reliability30dAuth
         });
+        const thresholds=office365.reliabilityThresholds||{yellowBelow:98,redBelow:90};
+        office365YellowThreshold.value=String(thresholds.yellowBelow??98);
+        office365RedThreshold.value=String(thresholds.redBelow??90);
+        const severity=String(office365.severity||'unknown');
+        const severityLabels={green:'Healthy',yellow:'Watch',red:'Critical',unknown:'Insufficient data'};
+        office365Severity.textContent='Reliability · '+(severityLabels[severity]||severity);
+        office365Severity.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+(
+          severity==='green'?'bg-emerald-100 text-emerald-800':
+          severity==='yellow'?'bg-amber-100 text-amber-900':
+          severity==='red'?'bg-red-100 text-red-800':'bg-slate-100 text-slate-700'
+        );
+        renderOffice365Trend(office365.reliabilityTrend||[]);
       }
 
       const deployments=data.deployments||{};
@@ -1121,6 +1207,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         compareMessage.textContent='';
         showComparison(data.comparison);
       }catch(error){compareMessage.textContent=error instanceof Error?error.message:'Unable to compare releases.';}
+    });
+
+    saveOffice365Thresholds?.addEventListener('click',async()=>{
+      saveOffice365Thresholds.disabled=true;office365ThresholdMessage.textContent='Saving…';
+      try{
+        const yellowBelow=Number(office365YellowThreshold.value);
+        const redBelow=Number(office365RedThreshold.value);
+        if(!Number.isFinite(yellowBelow)||!Number.isFinite(redBelow)||yellowBelow<0||yellowBelow>100||redBelow<0||redBelow>100)throw new Error('Thresholds must be between 0 and 100.');
+        if(redBelow>=yellowBelow)throw new Error('Red threshold must be lower than yellow.');
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'save-office365-thresholds',yellowBelow,redBelow}),
+        });
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to save thresholds.');
+        office365ThresholdMessage.textContent='Office 365 reliability thresholds saved.';
+        await load();
+      }catch(error){office365ThresholdMessage.textContent=error instanceof Error?error.message:'Unable to save thresholds.';}
+      finally{saveOffice365Thresholds.disabled=false;}
     });
 
     savePolicy?.addEventListener('click',async()=>{
