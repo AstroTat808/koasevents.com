@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
 import { sendReviewRequest } from './_shared/review-email.ts';
+import { shouldRunScheduledJob } from './_shared/credit-saver';
 
 const HST_OFFSET_MS = -10 * 60 * 60 * 1000;
 
@@ -40,6 +41,7 @@ function eventId() {
 
 export default async (_req: Request, context: Context) => {
   if (context.deploy.context !== 'production') return;
+  if (!(await shouldRunScheduledJob(context,'review-requests'))) return;
 
   const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
   if (!apiKey) return;

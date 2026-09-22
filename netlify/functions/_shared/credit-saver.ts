@@ -1,6 +1,15 @@
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 
+export type CreditSaverMode='normal'|'saver'|'paused';
+export type CreditSaverJobId=
+  | 'post-deploy-verification'
+  | 'quickbooks-reconciliation'
+  | 'crm-lifecycle'
+  | 'office365-calendar-sync'
+  | 'review-requests'
+  | 'vendor-insurance-reminders';
+
 export type CreditSaverActionId =
   | 'post-deploy-verification-half'
   | 'quickbooks-reconciliation-half'
@@ -8,13 +17,22 @@ export type CreditSaverActionId =
   | 'office365-calendar-sync-pause';
 
 export type CreditSaverPolicy = {
-  updatedAt: string;
-  updatedBy: string;
-  expiresAt: string;
-  actions: Partial<Record<CreditSaverActionId, boolean>>;
+  updatedAt:string;
+  updatedBy:string;
+  expiresAt:string;
+  modes:Record<CreditSaverJobId,CreditSaverMode>;
 };
 
-const ACTION_IDS:CreditSaverActionId[]=[
+export const CREDIT_SAVER_JOBS:CreditSaverJobId[]=[
+  'post-deploy-verification',
+  'quickbooks-reconciliation',
+  'crm-lifecycle',
+  'office365-calendar-sync',
+  'review-requests',
+  'vendor-insurance-reminders',
+];
+
+const LEGACY_ACTIONS:CreditSaverActionId[]=[
   'post-deploy-verification-half',
   'quickbooks-reconciliation-half',
   'crm-lifecycle-half',
@@ -42,26 +60,100 @@ function nextBillingCycleEnd(now=new Date()){
     : new Date(Date.UTC(year,month+1,day,0,0,0,0)).toISOString();
 }
 
+function normalizeMode(value:unknown):CreditSaverMode{
+  return value==='paused'?'paused':value==='saver'?'saver':'normal';
+}
+
+function defaultModes():Record<CreditSaverJobId,CreditSaverMode>{
+  return Object.fromEntries(CREDIT_SAVER_JOBS.map(id=>[id,'normal'])) as Record<CreditSaverJobId,CreditSaverMode>;
+}
+
+function legacyModes(value:any){
+  const modes=defaultModes();
+  if(value?.actions?.['post-deploy-verification-half'])modes['post-deploy-verification']='saver';
+  if(value?.actions?.['quickbooks-reconciliation-half'])modes['quickbooks-reconciliation']='saver';
+  if(value?.actions?.['crm-lifecycle-half'])modes['crm-lifecycle']='saver';
+  if(value?.actions?.['office365-calendar-sync-pause'])modes['office365-calendar-sync']='paused';
+  return modes;
+}
+
 function normalizedPolicy(value:any):CreditSaverPolicy{
-  const actions:Partial<Record<CreditSaverActionId,boolean>>={};
-  for(const id of ACTION_IDS) actions[id]=Boolean(value?.actions?.[id]);
+  const modes=legacyModes(value);
+  if(value?.modes&&typeof value.modes==='object'){
+    for(const id of CREDIT_SAVER_JOBS)modes[id]=normalizeMode(value.modes[id]);
+  }
   return {
     updatedAt:clean(value?.updatedAt,80),
     updatedBy:clean(value?.updatedBy,180),
     expiresAt:clean(value?.expiresAt,80)||nextBillingCycleEnd(),
-    actions,
+    modes,
   };
+}
+
+function activeActionsForModes(modes:Record<CreditSaverJobId,CreditSaverMode>){
+  const actions:CreditSaverActionId[]=[];
+  if(modes['post-deploy-verification']==='saver')actions.push('post-deploy-verification-half');
+  if(modes['quickbooks-reconciliation']==='saver')actions.push('quickbooks-reconciliation-half');
+  if(modes['crm-lifecycle']==='saver')actions.push('crm-lifecycle-half');
+  if(modes['office365-calendar-sync']==='paused')actions.push('office365-calendar-sync-pause');
+  return actions;
 }
 
 export async function readCreditSaverPolicy(context:Context){
   const saved:any=(await store(context).get('credits/saver-policy',{type:'json'}))||{};
   const policy=normalizedPolicy(saved);
-  const expired=Number.isFinite(Date.parse(policy.expiresAt)) && Date.now()>=Date.parse(policy.expiresAt);
+  const expired=Number.isFinite(Date.parse(policy.expiresAt))&&Date.now()>=Date.parse(policy.expiresAt);
+  const modes=expired?defaultModes():policy.modes;
   return {
     ...policy,
+    modes,
     expired,
-    activeActions:ACTION_IDS.filter(id=>Boolean(policy.actions[id])&&!expired),
+    activeActions:expired?[]:activeActionsForModes(modes),
+    activeModes:CREDIT_SAVER_JOBS.filter(id=>modes[id]!=='normal').map(id=>({jobId:id,mode:modes[id]})),
   };
+}
+
+async function savePolicy(context:Context,policy:CreditSaverPolicy){
+  const health=store(context);
+  await health.setJSON('credits/saver-policy',policy);
+  await health.delete('deployments/cache');
+  return readCreditSaverPolicy(context);
+}
+
+export async function setCreditSaverMode(
+  context:Context,
+  jobId:CreditSaverJobId,
+  mode:CreditSaverMode,
+  actor:string,
+){
+  if(!CREDIT_SAVER_JOBS.includes(jobId))throw new Error('Unknown scheduled job.');
+  const nextMode=normalizeMode(mode);
+  const current=await readCreditSaverPolicy(context);
+  return savePolicy(context,{
+    updatedAt:new Date().toISOString(),
+    updatedBy:clean(actor,180)||'admin',
+    expiresAt:current.expired?nextBillingCycleEnd():current.expiresAt||nextBillingCycleEnd(),
+    modes:{...current.modes,[jobId]:nextMode},
+  });
+}
+
+export async function setCreditSaverModes(
+  context:Context,
+  changes:Partial<Record<CreditSaverJobId,CreditSaverMode>>,
+  actor:string,
+){
+  const current=await readCreditSaverPolicy(context);
+  const modes={...current.modes};
+  for(const [jobId,mode] of Object.entries(changes||{})){
+    if(!CREDIT_SAVER_JOBS.includes(jobId as CreditSaverJobId))continue;
+    modes[jobId as CreditSaverJobId]=normalizeMode(mode);
+  }
+  return savePolicy(context,{
+    updatedAt:new Date().toISOString(),
+    updatedBy:clean(actor,180)||'admin',
+    expiresAt:current.expired?nextBillingCycleEnd():current.expiresAt||nextBillingCycleEnd(),
+    modes,
+  });
 }
 
 export async function setCreditSaverAction(
@@ -70,54 +162,41 @@ export async function setCreditSaverAction(
   enabled:boolean,
   actor:string,
 ){
-  if(!ACTION_IDS.includes(actionId)) throw new Error('Unknown credit-saver action.');
-  const current=await readCreditSaverPolicy(context);
-  const policy:CreditSaverPolicy={
-    updatedAt:new Date().toISOString(),
-    updatedBy:clean(actor,180)||'admin',
-    expiresAt:current.expired?nextBillingCycleEnd():current.expiresAt||nextBillingCycleEnd(),
-    actions:{
-      ...current.actions,
-      [actionId]:Boolean(enabled),
-    },
+  if(!LEGACY_ACTIONS.includes(actionId))throw new Error('Unknown credit-saver action.');
+  const map:Record<CreditSaverActionId,{jobId:CreditSaverJobId,on:CreditSaverMode}>={
+    'post-deploy-verification-half':{jobId:'post-deploy-verification',on:'saver'},
+    'quickbooks-reconciliation-half':{jobId:'quickbooks-reconciliation',on:'saver'},
+    'crm-lifecycle-half':{jobId:'crm-lifecycle',on:'saver'},
+    'office365-calendar-sync-pause':{jobId:'office365-calendar-sync',on:'paused'},
   };
-  const health=store(context);
-  await health.setJSON('credits/saver-policy',policy);
-  await health.delete('deployments/cache');
-  return readCreditSaverPolicy(context);
+  const row=map[actionId];
+  return setCreditSaverMode(context,row.jobId,enabled?row.on:'normal',actor);
 }
 
 export async function clearCreditSaverPolicy(context:Context,actor:string){
-  const policy:CreditSaverPolicy={
+  return savePolicy(context,{
     updatedAt:new Date().toISOString(),
     updatedBy:clean(actor,180)||'admin',
     expiresAt:nextBillingCycleEnd(),
-    actions:{},
-  };
-  const health=store(context);
-  await health.setJSON('credits/saver-policy',policy);
-  await health.delete('deployments/cache');
-  return readCreditSaverPolicy(context);
+    modes:defaultModes(),
+  });
 }
 
-export async function shouldRunScheduledJob(context:Context,job:
-  'post-deploy-verification'|'quickbooks-reconciliation'|'crm-lifecycle'|'office365-calendar-sync'
-){
-  if(context.deploy.context!=='production') return true;
+function utcDayNumber(now:Date){
+  return Math.floor(Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate())/86400000);
+}
+
+export async function shouldRunScheduledJob(context:Context,job:CreditSaverJobId){
+  if(context.deploy.context!=='production')return true;
   const policy=await readCreditSaverPolicy(context);
-  if(policy.expired) return true;
+  const mode=policy.modes[job]||'normal';
+  if(mode==='normal')return true;
+  if(mode==='paused')return false;
   const now=new Date();
-  if(job==='post-deploy-verification' && policy.actions['post-deploy-verification-half']){
-    return now.getUTCMinutes()%30===0;
-  }
-  if(job==='quickbooks-reconciliation' && policy.actions['quickbooks-reconciliation-half']){
-    return now.getUTCHours()%8===0;
-  }
-  if(job==='crm-lifecycle' && policy.actions['crm-lifecycle-half']){
-    return now.getUTCHours()%12===0;
-  }
-  if(job==='office365-calendar-sync' && policy.actions['office365-calendar-sync-pause']){
-    return false;
-  }
+  if(job==='post-deploy-verification')return now.getUTCMinutes()%30===0;
+  if(job==='quickbooks-reconciliation')return now.getUTCHours()%8===0;
+  if(job==='crm-lifecycle')return now.getUTCHours()%12===0;
+  if(job==='office365-calendar-sync')return now.getUTCHours()%4===0;
+  if(job==='review-requests'||job==='vendor-insurance-reminders')return utcDayNumber(now)%2===0;
   return true;
 }

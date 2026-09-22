@@ -20,7 +20,7 @@ import {
   saveHealthAlertPolicy,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
-import { clearCreditSaverPolicy, readCreditSaverPolicy, setCreditSaverAction } from './_shared/credit-saver';
+import { clearCreditSaverPolicy, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -28,10 +28,13 @@ import {
   readOffice365SyncState,
 } from './_shared/office365-calendar-sync';
 
-function nextHourlySyncIso(now=new Date()){
+function nextOfficeSyncIso(mode:string,now=new Date()){
   const next=new Date(now);
   next.setUTCMinutes(0,0,0);
   next.setUTCHours(next.getUTCHours()+1);
+  if(mode==='saver'){
+    while(next.getUTCHours()%4!==0)next.setUTCHours(next.getUTCHours()+1);
+  }
   return next.toISOString();
 }
 
@@ -90,11 +93,9 @@ async function office365HealthSummary(context:Context,deployments:any=null){
   const scheduledFunction=functionSchedules.find((row:any)=>String(row?.name||'')==='office365-calendar-sync')||null;
   const scheduledFunctionDeployed=Boolean(scheduledFunction);
   const scheduledFunctionCron=String(scheduledFunction?.cron||'');
-  const syncPaused=Boolean(
-    !creditSaverPolicy?.expired
-    && Array.isArray(creditSaverPolicy?.activeActions)
-    && creditSaverPolicy.activeActions.includes('office365-calendar-sync-pause')
-  );
+  const office365Mode=String(creditSaverPolicy?.modes?.['office365-calendar-sync']||'normal');
+  const syncPaused=office365Mode==='paused';
+  const syncSaver=office365Mode==='saver';
   const rawCommitsBehind=Number(deployments?.current?.commitsBehind);
   const commitsBehind=Number.isFinite(rawCommitsBehind)?Math.max(0,rawCommitsBehind):null;
   const deploymentState=String(deployments?.connectionHealth?.deploymentState||'unknown');
@@ -130,12 +131,14 @@ async function office365HealthSummary(context:Context,deployments:any=null){
           ? 'schedule_missing'
           : syncPaused
             ? 'paused'
-            : verificationStatus==='caution'||verificationStatus==='catching_up'
+            : syncSaver
+              ? 'saver'
+              : verificationStatus==='caution'||verificationStatus==='catching_up'
               ? 'deployment_catching_up'
               : 'scheduled';
   const operationalSeverity=['production_behind','authentication_failed','not_configured','schedule_missing'].includes(operationalStatus)
     ? 'red'
-    : ['paused','deployment_catching_up'].includes(operationalStatus)
+    : ['paused','saver','deployment_catching_up'].includes(operationalStatus)
       ? 'yellow'
       : 'green';
   const policy=await readHealthAlertPolicy(context);
@@ -184,7 +187,7 @@ async function office365HealthSummary(context:Context,deployments:any=null){
     lastError,
     lastAttemptAt:String(state?.lastAttemptAt||''),
     lastSuccessAt:String(state?.lastSuccessAt||''),
-    nextScheduledSyncAt:syncPaused?'':nextHourlySyncIso(),
+    nextScheduledSyncAt:syncPaused?'':nextOfficeSyncIso(office365Mode),
     operationalStatus,
     operationalSeverity,
     signals:{
@@ -195,8 +198,10 @@ async function office365HealthSummary(context:Context,deployments:any=null){
         name:'office365-calendar-sync',
       },
       creditSaver:{
-        status:syncPaused?'paused':'active',
+        status:syncPaused?'paused':syncSaver?'saver':'active',
+        mode:office365Mode,
         paused:syncPaused,
+        saver:syncSaver,
         expiresAt:String(creditSaverPolicy?.expiresAt||''),
       },
       authentication:{
@@ -263,6 +268,30 @@ export default async (req:Request,context:Context) => {
         return Response.json({ok:true,comparison},{headers:{'Cache-Control':'private, no-store'}});
       }catch(error){
         return Response.json({error:error instanceof Error?error.message:'Unable to compare releases.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
+    if(body?.action==='set-credit-saver-mode'){
+      try{
+        const policy=await setCreditSaverMode(
+          context,
+          String(body.jobId||'') as any,
+          String(body.mode||'normal') as any,
+          actor,
+        );
+        return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({error:error instanceof Error?error.message:'Unable to update scheduled-job mode.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
+    if(body?.action==='apply-credit-saver-plan'){
+      try{
+        const changes=body?.modes&&typeof body.modes==='object'?body.modes:{};
+        const policy=await setCreditSaverModes(context,changes,actor);
+        return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({error:error instanceof Error?error.message:'Unable to apply credit-saver plan.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
       }
     }
 
