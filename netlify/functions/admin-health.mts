@@ -18,7 +18,7 @@ import {
 } from './_shared/system-health';
 
 export default async (req:Request,context:Context) => {
-  const auth=await requireCapability('health.view');
+  const auth=await requireCapability('health.view', req);
   if(auth.response) return auth.response;
   const admin=hasCapability(auth.user,'health.manage');
 
