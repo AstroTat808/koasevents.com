@@ -131,6 +131,7 @@ export const PAGE_CAPABILITIES = {
   '/admin/': 'admin.dashboard.view',
   '/admin/staff/': 'users.manage',
   '/admin/crm/': 'crm.view',
+  '/admin/email-preview/': 'crm.view',
   '/admin/quotes/': 'sales.view',
   '/admin/events/': 'events.view',
   '/admin/calendar/': 'calendar.view',

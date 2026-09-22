@@ -81,12 +81,25 @@ export function emailGreetingText(name?: unknown) {
   return 'Aloha' + (nameText ? ' ' + nameText : '') + ',';
 }
 
-export function emailSignature() {
+export type EmailSignaturePerson = {
+  name?: string;
+  title?: string;
+};
+
+export function emailSignature(person: EmailSignaturePerson = {}) {
+  const name = String(person.name || '').trim();
+  const title = String(person.title || '').trim();
+  const identity = name
+    ? '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">' + esc(name) + '</div>' +
+      (title ? '<div style="font-size:13px;line-height:20px;color:#66736d;">' + esc(title) + '</div>' : '') +
+      '<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700;color:#173d30;">Koa’s Events Team</div>'
+    : '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">Koa’s Events Team</div>';
+
   return (
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc;">' +
       '<tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30;">' +
         '<div style="font-size:14px;line-height:22px;">Mahalo,</div>' +
-        '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">Koa’s Events Team</div>' +
+        identity +
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">' +
           '<tr>' +
             '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#a96d4a;">&#9993;</td>' +
@@ -106,11 +119,13 @@ export function emailSignature() {
   );
 }
 
-export function emailSignatureText() {
+export function emailSignatureText(person: EmailSignaturePerson = {}) {
+  const name = String(person.name || '').trim();
+  const title = String(person.title || '').trim();
   return [
     'Mahalo,',
     '',
-    'Koa’s Events Team',
+    ...(name ? [name, ...(title ? [title] : []), 'Koa’s Events Team'] : ['Koa’s Events Team']),
     '✉ aloha@koasevents.com',
     '☎ (844) 808-KOAS',
     '↗ www.koasevents.com',

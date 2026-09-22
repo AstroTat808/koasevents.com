@@ -1,3 +1,4 @@
+import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { readCreditSaverPolicy } from './credit-saver';
@@ -482,24 +483,29 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
   const summary=fullyRecovered
     ? 'All monitored Koa’s admin/staff services are healthy again.'
     : 'The health monitor detected a change in system health.';
-  const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;padding:28px;font-family:Arial,sans-serif;color:#173d30">'
-    +'<div style="max-width:680px;margin:auto;background:#fff;border:1px solid #e7dfd0;border-radius:20px;padding:28px">'
-    +'<div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a">Koa’s Events · System Health</div>'
-    +'<h1 style="font-family:Georgia,serif;font-size:30px;margin:10px 0 14px">'+esc(fullyRecovered?'System recovered':'Health change detected')+'</h1>'
+  const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;font-family:Arial,sans-serif;color:#173d30">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
+    +emailHeader({brand:'events',eyebrow:'System Health',title:fullyRecovered?'System recovered':'Health change detected'})
+    +'<tr><td style="padding:28px">'
+    +emailGreeting('Team')
     +'<p style="line-height:1.6;color:#52635b">'+esc(summary)+'</p>'
     +(brokenNames.length?'<p><strong>Newly failing:</strong> '+brokenNames.map(esc).join(', ')+'</p>':'')
     +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
     +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
     +'<p style="font-size:12px;color:#78827d">Checked '+esc(current.checkedAt)+' · '+failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s')+'</p>'
     +'<p><a href="https://koasevents.com/admin/health/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open System Health</a></p>'
-    +'</div></body></html>';
+    +emailSignature()
+    +'</td></tr></table></td></tr></table></body></html>';
   const text=[
+    emailGreetingText('Team'),'',
     'Koa’s Events System Health',summary,
     brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
     failedNames.length?'Still failing: '+failedNames.join(', '):'',
     'Checked: '+current.checkedAt,
-    'System Health: https://koasevents.com/admin/health/',
+    'System Health: https://koasevents.com/admin/health/','',
+    emailSignatureText(),
   ].filter(Boolean).join('\n');
   try{
     const response=await fetch('https://api.resend.com/emails',{

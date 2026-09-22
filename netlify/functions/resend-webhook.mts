@@ -33,6 +33,7 @@ function communicationLabel(key: string) {
     responseReminder: 'Internal response reminder',
     clientFollowUp: '24-hour client follow-up',
     reviewRequest: 'Google review request',
+    staffResponse: 'Staff-sent client response',
   };
   return labels[key] || key.replace(/([A-Z])/g, ' $1').trim();
 }
