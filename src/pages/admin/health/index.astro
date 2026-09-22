@@ -38,7 +38,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployment health</p><p data-deploy-health class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Post-deploy verification</p><p data-post-deploy-verification class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
           </div>
-          <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release timeline</p><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Click a release to see its commit message, affected systems, QA result, deploy duration, and incidents that began while that release was live.</p><div data-release-timeline class="mt-3 grid gap-3"></div></div>
+          <div class="mt-6">
+            <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release timeline</p>
+            <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Search or filter releases, click one for details, or compare two production deploys side-by-side.</p>
+            <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+              <input data-release-search type="search" placeholder="Search commit, deploy, file, or feature…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" />
+              <select data-release-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold">
+                <option value="all">All changes</option>
+                <option value="Business CRM">CRM</option>
+                <option value="QuickBooks">QuickBooks</option>
+                <option value="Public Website">Website</option>
+                <option value="Authentication & Security">Security</option>
+                <option value="Vendor CRM">Vendor</option>
+                <option value="User Management">User Management</option>
+              </select>
+              <button data-release-clear type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear</button>
+            </div>
+            <div class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-4">
+              <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Compare releases</p>
+              <div class="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_auto]">
+                <select data-compare-base class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold"><option value="">Older release</option></select>
+                <select data-compare-head class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold"><option value="">Newer release</option></select>
+                <button data-compare-releases type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Compare</button>
+              </div>
+              <p data-compare-message class="mt-2 text-xs text-[var(--koa-ink)]/55"></p>
+            </div>
+            <div data-release-timeline class="mt-3 grid gap-3"></div>
+          </div>
           <div class="mt-6"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Recent deployment QA</p><div data-deploy-history class="mt-3 grid gap-3"></div></div>
         </section>
 
@@ -49,6 +75,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-close-release type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40">×</button>
             </div>
             <div data-release-detail class="mt-5 grid gap-5 text-sm"></div>
+          </div>
+        </dialog>
+
+        <dialog data-compare-dialog class="w-[min(96vw,980px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+          <div class="p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Release comparison</p><h2 data-compare-title class="display mt-2 text-3xl">Compare releases</h2></div>
+              <button data-close-compare type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40">×</button>
+            </div>
+            <div data-compare-detail class="mt-5 grid gap-5 text-sm"></div>
           </div>
         </dialog>
 
@@ -148,6 +184,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const releaseDialog=document.querySelector('[data-release-dialog]');
     const releaseTitle=document.querySelector('[data-release-title]');
     const releaseDetail=document.querySelector('[data-release-detail]');
+    const releaseSearch=document.querySelector('[data-release-search]');
+    const releaseFilter=document.querySelector('[data-release-filter]');
+    const compareBase=document.querySelector('[data-compare-base]');
+    const compareHead=document.querySelector('[data-compare-head]');
+    const compareMessage=document.querySelector('[data-compare-message]');
+    const compareDialog=document.querySelector('[data-compare-dialog]');
+    const compareTitle=document.querySelector('[data-compare-title]');
+    const compareDetail=document.querySelector('[data-compare-detail]');
     const uptimeBody=document.querySelector('[data-uptime-body]');
     const uptimeSamples=document.querySelector('[data-uptime-samples]');
     const incidentBody=document.querySelector('[data-incident-body]');
@@ -159,6 +203,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const overall=document.querySelector('[data-overall]');
     let latestPolicy=null;
     let latestComponents=[];
+    let latestReleases=[];
     const passed=document.querySelector('[data-passed]');
     const failed=document.querySelector('[data-failed]');
     const checked=document.querySelector('[data-checked]');
@@ -187,6 +232,93 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(hours)parts.push(hours+'h');
       if(mins||!parts.length)parts.push(mins+'m');
       return parts.join(' ');
+    }
+
+    function renderReleaseTimeline(){
+      releaseTimeline.innerHTML='';
+      const term=String(releaseSearch?.value||'').trim().toLowerCase();
+      const category=String(releaseFilter?.value||'all');
+      const releases=latestReleases.filter((release)=>{
+        const haystack=[
+          release.commitTitle,release.commitMessage,release.commit,release.deployId,
+          ...(release.features||[]),...(release.changedFiles||[])
+        ].join(' ').toLowerCase();
+        const termOk=!term||haystack.includes(term);
+        const categoryOk=category==='all'||(release.features||[]).includes(category);
+        return termOk&&categoryOk;
+      });
+      releases.forEach((release)=>{
+        const index=latestReleases.indexOf(release);
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
+        const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
+        const incidentCount=(release.incidents||[]).length;
+        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span></div><p class="mt-3 text-xs text-[var(--koa-ink)]/55">'+(release.publishedAt?new Date(release.publishedAt).toLocaleString():'Unknown deployment time')+' · '+(release.deployDurationSeconds==null?'duration unavailable':release.deployDurationSeconds+'s deploy')+' · '+incidentCount+' incident'+(incidentCount===1?'':'s')+' began</p>';
+        button.querySelector('strong').textContent=release.commitTitle||'Production release';
+        button.querySelector('p.text-xs').textContent=(release.commit||'').slice(0,12)+' · '+(release.deployId||'');
+        button.addEventListener('click',()=>showRelease(release));
+        releaseTimeline.appendChild(button);
+      });
+      if(!releases.length)releaseTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No releases match the current search/filter.</p>';
+    }
+
+    function populateCompareSelectors(){
+      const currentBase=compareBase.value;
+      const currentHead=compareHead.value;
+      const options=latestReleases.map((release,index)=>'<option value="'+release.commit+'">'+(index+1)+'. '+(release.commitTitle||'Production release')+' · '+String(release.commit||'').slice(0,8)+'</option>').join('');
+      compareBase.innerHTML='<option value="">Older release</option>'+options;
+      compareHead.innerHTML='<option value="">Newer release</option>'+options;
+      if(latestReleases.length>=2){
+        compareBase.value=currentBase||latestReleases[1].commit;
+        compareHead.value=currentHead||latestReleases[0].commit;
+      }
+    }
+
+    function showComparison(comparison){
+      compareDetail.innerHTML='';
+      compareTitle.textContent='Release comparison';
+      const stats=document.createElement('section');stats.className='grid gap-3 sm:grid-cols-4';
+      [
+        ['Commits',String(comparison.totalCommits||0)],
+        ['Files',String((comparison.files||[]).length)],
+        ['Additions',String((comparison.files||[]).reduce((sum,file)=>sum+Number(file.additions||0),0))],
+        ['Deletions',String((comparison.files||[]).reduce((sum,file)=>sum+Number(file.deletions||0),0))],
+      ].forEach(([label,value])=>{
+        const card=document.createElement('div');card.className='rounded-xl bg-[var(--koa-sand)] p-4';
+        card.innerHTML='<p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-2 text-lg font-semibold text-[var(--koa-forest)]"></p>';
+        card.children[0].textContent=label;card.children[1].textContent=value;stats.appendChild(card);
+      });
+      compareDetail.appendChild(stats);
+
+      const features=document.createElement('section');
+      features.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Features affected</p>';
+      const chips=document.createElement('div');chips.className='mt-3 flex flex-wrap gap-2';
+      (comparison.features||[]).forEach((feature)=>{const chip=document.createElement('span');chip.className='rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]';chip.textContent=feature;chips.appendChild(chip);});
+      if(!(comparison.features||[]).length)chips.innerHTML='<span class="text-sm text-[var(--koa-ink)]/48">No categorized feature changes.</span>';
+      features.appendChild(chips);compareDetail.appendChild(features);
+
+      const behavior=document.createElement('section');
+      behavior.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Behavior changes</p>';
+      const behaviorList=document.createElement('div');behaviorList.className='mt-3 grid gap-2';
+      (comparison.behaviorChanges||[]).forEach((item)=>{const row=document.createElement('div');row.className='rounded-xl border border-[var(--koa-line)] p-3 text-sm text-[var(--koa-forest)]';row.textContent=item;behaviorList.appendChild(row);});
+      if(!(comparison.behaviorChanges||[]).length)behaviorList.innerHTML='<p class="text-sm text-[var(--koa-ink)]/48">No commit-level behavior notes were found.</p>';
+      behavior.appendChild(behaviorList);compareDetail.appendChild(behavior);
+
+      const files=document.createElement('section');
+      files.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Changed files</p>';
+      const fileList=document.createElement('div');fileList.className='mt-3 max-h-[420px] overflow-auto rounded-xl border border-[var(--koa-line)]';
+      (comparison.files||[]).forEach((file)=>{
+        const row=document.createElement('div');row.className='border-b border-[var(--koa-line)] p-3 last:border-b-0';
+        row.innerHTML='<div class="flex flex-wrap items-center justify-between gap-3"><code class="text-xs text-[var(--koa-forest)]"></code><span class="text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]"></span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        row.querySelector('code').textContent=file.filename;
+        row.querySelector('span').textContent=file.status||'changed';
+        row.querySelector('p').textContent='+'+Number(file.additions||0)+' / -'+Number(file.deletions||0)+' · '+Number(file.changes||0)+' total changes';
+        fileList.appendChild(row);
+      });
+      if(!(comparison.files||[]).length)fileList.innerHTML='<p class="p-4 text-sm text-[var(--koa-ink)]/48">No file differences.</p>';
+      files.appendChild(fileList);compareDetail.appendChild(files);
+      compareDialog.showModal();
     }
 
     function showRelease(release){
@@ -312,21 +444,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         postDeployEl.className='mt-2 text-sm font-semibold text-amber-800';
       }
 
-      releaseTimeline.innerHTML='';
-      const releases=deployments.releaseTimeline||[];
-      releases.forEach((release,index)=>{
-        const button=document.createElement('button');
-        button.type='button';
-        button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
-        const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
-        const incidentCount=(release.incidents||[]).length;
-        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span></div><p class="mt-3 text-xs text-[var(--koa-ink)]/55">'+(release.publishedAt?new Date(release.publishedAt).toLocaleString():'Unknown deployment time')+' · '+(release.deployDurationSeconds==null?'duration unavailable':release.deployDurationSeconds+'s deploy')+' · '+incidentCount+' incident'+(incidentCount===1?'':'s')+' began</p>';
-        button.querySelector('strong').textContent=release.commitTitle||'Production release';
-        button.querySelector('p.text-xs').textContent=(release.commit||'').slice(0,12)+' · '+(release.deployId||'');
-        button.addEventListener('click',()=>showRelease(release));
-        releaseTimeline.appendChild(button);
-      });
-      if(!releases.length)releaseTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Release history begins with production deployments recorded by the new post-deploy verifier.</p>';
+      latestReleases=deployments.releaseTimeline||[];
+      renderReleaseTimeline();
+      populateCompareSelectors();
 
       deployHistory.innerHTML='';
       const rows=deployments.history||[];
@@ -447,6 +567,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
 
     document.querySelector('[data-close-release]')?.addEventListener('click',()=>releaseDialog.close());
+    document.querySelector('[data-close-compare]')?.addEventListener('click',()=>compareDialog.close());
+    releaseSearch?.addEventListener('input',renderReleaseTimeline);
+    releaseFilter?.addEventListener('change',renderReleaseTimeline);
+    document.querySelector('[data-release-clear]')?.addEventListener('click',()=>{
+      releaseSearch.value='';
+      releaseFilter.value='all';
+      renderReleaseTimeline();
+    });
+    document.querySelector('[data-compare-releases]')?.addEventListener('click',async()=>{
+      const baseCommit=String(compareBase.value||'');
+      const headCommit=String(compareHead.value||'');
+      if(!baseCommit||!headCommit){compareMessage.textContent='Choose two releases to compare.';return;}
+      if(baseCommit===headCommit){compareMessage.textContent='Choose two different releases.';return;}
+      compareMessage.textContent='Comparing releases…';
+      try{
+        const response=await fetch('/api/admin/health',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'compare-releases',baseCommit,headCommit})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to compare releases.');
+        compareMessage.textContent='';
+        showComparison(data.comparison);
+      }catch(error){compareMessage.textContent=error instanceof Error?error.message:'Unable to compare releases.';}
+    });
 
     savePolicy?.addEventListener('click',async()=>{
       savePolicy.disabled=true;policyMessage.textContent='Saving…';
