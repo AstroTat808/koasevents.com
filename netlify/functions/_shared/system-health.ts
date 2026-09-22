@@ -661,18 +661,20 @@ function releaseRiskFlags(files:any[],commits:any[]) {
   const definitions=[
     {id:'authentication',label:'Authentication / access',severity:'high',path:/identity|auth-|account-security|admin-staff|custom-roles|staff-directory|admin-session/i,content:/password|session|role|permission|login|logout|token|identity|auth/i},
     {id:'payments',label:'Payments / accounting',severity:'high',path:/quickbooks|payment|invoice|billing|price|estimate|deposit/i,content:/payment|invoice|quickbooks|billing|refund|deposit|balance|amount/i},
-    {id:'crm-deletion',label:'CRM deletion / cleanup',severity:'high',path:/crm|quotes|sales|security/i,content:/delete|trash|restore|cleanup|purge|remove.*record|auto.?trash|confirmed.?spam/i},
+    {id:'crm-deletion',label:'CRM deletion / cleanup',severity:'high',path:/crm|quotes|sales|security/i,content:/delete|trash|restore|cleanup|purge|remove.*record|auto.?trash|confirmed.?spam/i,requireBoth:true},
     {id:'forms',label:'Public forms / lead capture',severity:'medium',path:/inquire|contact|wedding-inquiry|thank-you|stay|crm-inquiries|forms?/i,content:/form|submit|inquiry|turnstile|honeypot|lead/i},
     {id:'security',label:'Security controls',severity:'high',path:/security|turnstile|rate.?limit|edge-functions|headers|admin\.ts/i,content:/block|security|turnstile|siteverify|rate.?limit|permission|csrf|origin/i},
     {id:'storage',label:'Database / storage',severity:'high',path:/store|storage|blobs?|database|postgres|neon|schema|migration/i,content:/getStore|getDeployStore|database|storage|blob|migration|schema/i},
-    {id:'environment',label:'Environment / deployment variables',severity:'high',path:/netlify\.toml|\.github\/workflows|config|env|deployment/i,content:/Netlify\.env|process\.env|secret|environment|site.?id|token/i},
+    {id:'environment',label:'Environment / deployment variables',severity:'high',path:/netlify\.toml|(^|\/)\.env|env\.d|config/i,content:/Netlify\.env|process\.env|\$\{\{\s*secrets\.|environment variable|site.?id|secret key|api key/i},
   ];
   const flags:any[]=[];
   for(const definition of definitions){
     const matchingFiles=files.filter((file:any)=>{
       const filename=String(file?.filename||'');
       const patch=String(file?.patch||'');
-      return definition.path.test(filename)||definition.content.test(patch);
+      const pathMatch=definition.path.test(filename);
+      const contentMatch=definition.content.test(patch);
+      return definition.requireBoth ? (pathMatch&&contentMatch) : (pathMatch||contentMatch);
     }).map((file:any)=>file.filename);
     const matchingCommits=commits.filter((commit:any)=>definition.content.test(String(commit?.message||commit?.title||''))).map((commit:any)=>commit.title);
     if(matchingFiles.length||matchingCommits.length){
