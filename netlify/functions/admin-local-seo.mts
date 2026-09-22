@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
-import { requireAdmin } from './_shared/admin';
+import { hasCapability, requireCapability } from './_shared/admin';
 
 type CitationStatus = 'verified' | 'needs-update' | 'unverified' | 'not-applicable';
 
@@ -109,7 +109,7 @@ async function writeCitations(records: CitationRecord[]) {
 }
 
 export default async (req: Request) => {
-  const auth = await requireAdmin();
+  const auth = await requireCapability('seo.view');
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
