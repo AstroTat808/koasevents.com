@@ -29,10 +29,22 @@
 
       <div class="flex min-w-0 items-center gap-2">
         <span data-workspace-user class="truncate text-xs font-semibold text-[var(--koa-ink)]/65"></span>
-        <span data-workspace-total-desktop class="hidden workspace-desktop-alert md:inline-flex"></span>
+        <button data-workspace-alert-toggle type="button" class="hidden workspace-desktop-alert md:inline-flex" aria-expanded="false" aria-controls="koa-workspace-alert-center"></button>
         <button data-workspace-logout type="button" class="workspace-signout">Sign out</button>
       </div>
     </div>
+
+    <section id="koa-workspace-alert-center" data-workspace-alert-center class="hidden workspace-alert-center" aria-label="Workspace alerts">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="workspace-group-title">Alert Center</p>
+          <h2 class="display text-2xl text-[var(--koa-forest)]">Items needing attention</h2>
+          <p data-workspace-alert-summary class="mt-1 text-xs text-[var(--koa-ink)]/55"></p>
+        </div>
+        <button data-workspace-alert-close type="button" class="workspace-alert-close">Close</button>
+      </div>
+      <div data-workspace-alert-list class="mt-4 grid gap-2"></div>
+    </section>
 
     <div
       id="koa-workspace-links"
@@ -223,6 +235,63 @@
     text-transform: uppercase;
   }
 
+  .workspace-alert-center {
+    margin-top: .7rem;
+    border: 1px solid var(--koa-line);
+    border-radius: 1rem;
+    background: white;
+    padding: 1rem;
+    box-shadow: var(--shadow-soft);
+  }
+
+  .workspace-alert-close {
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    padding: .5rem .7rem;
+    color: var(--koa-clay);
+    font-size: .55rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .workspace-alert-row {
+    display: block;
+    border: 1px solid var(--koa-line);
+    border-radius: .85rem;
+    padding: .75rem;
+    background: white;
+  }
+
+  .workspace-alert-row[data-severity="urgent"] {
+    border-color: rgb(254 202 202);
+    background: rgb(254 242 242);
+  }
+
+  .workspace-alert-row[data-severity="upcoming"] {
+    border-color: rgb(253 230 138);
+    background: rgb(255 251 235);
+  }
+
+  .workspace-alert-row[data-severity="info"] {
+    border-color: rgb(191 219 254);
+    background: rgb(239 246 255);
+  }
+
+  .workspace-alert-severity {
+    display: inline-flex;
+    border-radius: 9999px;
+    padding: .25rem .45rem;
+    font-size: .5rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .workspace-alert-severity[data-severity="urgent"] { background: rgb(254 226 226); color: rgb(185 28 28); }
+  .workspace-alert-severity[data-severity="upcoming"] { background: rgb(254 243 199); color: rgb(180 83 9); }
+  .workspace-alert-severity[data-severity="info"] { background: rgb(219 234 254); color: rgb(29 78 216); }
+
   @media (min-width: 768px) {
     [data-workspace-nav] > .container-shell > div:first-child {
       min-height: 2.3rem;
@@ -280,10 +349,69 @@
     });
   }
 
+  function renderAlertCenter(payload) {
+    const center = nav?.querySelector('[data-workspace-alert-center]');
+    const list = nav?.querySelector('[data-workspace-alert-list]');
+    const summary = nav?.querySelector('[data-workspace-alert-summary]');
+    if (!(list instanceof HTMLElement)) return;
+
+    const alerts = Array.isArray(payload?.alerts) ? payload.alerts : [];
+    list.innerHTML = '';
+
+    if (summary instanceof HTMLElement) {
+      const counts = payload?.severityCounts || {};
+      summary.textContent = [
+        Number(counts.urgent || 0) ? Number(counts.urgent || 0) + ' urgent' : '',
+        Number(counts.upcoming || 0) ? Number(counts.upcoming || 0) + ' upcoming' : '',
+        Number(counts.info || 0) ? Number(counts.info || 0) + ' informational' : '',
+      ].filter(Boolean).join(' · ') || 'No active alerts.';
+    }
+
+    if (!alerts.length) {
+      const empty = document.createElement('p');
+      empty.className = 'rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55';
+      empty.textContent = 'No active workspace alerts.';
+      list.appendChild(empty);
+      return;
+    }
+
+    alerts.forEach((alert) => {
+      const row = document.createElement('a');
+      row.href = alert.href || '#';
+      row.className = 'workspace-alert-row';
+      row.dataset.severity = alert.severity || 'info';
+
+      const top = document.createElement('div');
+      top.className = 'flex flex-wrap items-center justify-between gap-2';
+
+      const title = document.createElement('strong');
+      title.className = 'text-sm text-[var(--koa-forest)]';
+      title.textContent = alert.title || 'Workspace alert';
+
+      const sev = document.createElement('span');
+      sev.className = 'workspace-alert-severity';
+      sev.dataset.severity = alert.severity || 'info';
+      sev.textContent = alert.severity === 'urgent' ? 'Urgent' : alert.severity === 'upcoming' ? 'Upcoming' : 'Info';
+
+      const context = document.createElement('p');
+      context.className = 'mt-1 text-xs font-semibold text-[var(--koa-ink)]/65';
+      context.textContent = alert.context || '';
+
+      const detail = document.createElement('p');
+      detail.className = 'mt-1 text-xs leading-5 text-[var(--koa-ink)]/52';
+      detail.textContent = alert.detail || '';
+
+      top.append(title,sev);
+      row.append(top,context,detail);
+      row.addEventListener('click',()=>center?.classList.add('hidden'));
+      list.appendChild(row);
+    });
+  }
+
   function renderAlerts(payload) {
     const total = Math.max(0, Number(payload?.total || 0));
     const mobileBadge = nav?.querySelector('[data-workspace-total]');
-    const desktopBadge = nav?.querySelector('[data-workspace-total-desktop]');
+    const desktopBadge = nav?.querySelector('[data-workspace-alert-toggle]');
 
     if (mobileBadge instanceof HTMLElement) {
       mobileBadge.textContent = badgeText(total);
@@ -295,6 +423,8 @@
       desktopBadge.classList.toggle('hidden', total <= 0);
       desktopBadge.classList.toggle('md:inline-flex', total > 0);
     }
+
+    renderAlertCenter(payload);
 
     nav?.querySelectorAll('[data-link-alert]').forEach((badge) => {
       if (!(badge instanceof HTMLElement)) return;
@@ -316,8 +446,29 @@
   }
 
   toggle?.addEventListener('click', () => {
+    const total = Number(nav?.querySelector('[data-workspace-total]')?.textContent?.replace('+','') || 0);
+    if (total > 0) {
+      const center = nav?.querySelector('[data-workspace-alert-center]');
+      const opening = center?.classList.contains('hidden');
+      center?.classList.toggle('hidden', !opening);
+      if (opening) setMenu(false);
+      return;
+    }
     const open = toggle.getAttribute('aria-expanded') !== 'true';
     setMenu(open);
+  });
+
+  nav?.querySelector('[data-workspace-alert-toggle]')?.addEventListener('click', () => {
+    const center = nav?.querySelector('[data-workspace-alert-center]');
+    if (!(center instanceof HTMLElement)) return;
+    const opening = center.classList.contains('hidden');
+    center.classList.toggle('hidden', !opening);
+    nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', opening ? 'true' : 'false');
+  });
+
+  nav?.querySelector('[data-workspace-alert-close]')?.addEventListener('click', () => {
+    nav?.querySelector('[data-workspace-alert-center]')?.classList.add('hidden');
+    nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded','false');
   });
 
   nav?.querySelectorAll('[data-workspace-link]').forEach((link) => {
