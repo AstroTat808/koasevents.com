@@ -116,6 +116,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </section>
         </section>
 
+        <section class="grid gap-6 xl:grid-cols-[.78fr_1.22fr]">
+          <form data-custom-role-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Custom roles</p>
+            <h2 class="display mt-2 text-4xl">Build a role</h2>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">Create roles such as Wedding Lead or Bookkeeper and select the exact capabilities the role receives.</p>
+            <input name="id" type="hidden" />
+            <div class="mt-5 grid gap-4">
+              <label class="grid gap-2 text-sm font-semibold">Role name<input name="name" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Wedding Lead" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Description<textarea name="description" rows="3" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="What this role is for…"></textarea></label>
+              <div data-custom-role-capabilities class="grid gap-2 sm:grid-cols-2"></div>
+              <div class="flex flex-wrap gap-3">
+                <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save custom role</button>
+                <button data-clear-custom-role type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">New role</button>
+              </div>
+              <p data-custom-role-message class="text-sm text-[var(--koa-ink)]/55"></p>
+            </div>
+          </form>
+
+          <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Saved custom roles</p><h2 class="display mt-2 text-4xl">Role library</h2></div>
+            <div data-custom-role-list class="mt-5 grid gap-3"></div>
+          </section>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div>
             <p class="eyebrow text-[var(--koa-clay)]">Role permissions</p>
@@ -147,6 +171,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button class="rounded-full bg-[var(--koa-amber-light)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-ink)]">Save policy</button>
               <p data-security-policy-message class="sm:col-span-3 text-xs text-white/70"></p>
             </form>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Authentication security</p><h2 class="display mt-2 text-4xl">Login history + active sessions</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Successful and failed sign-ins, suspicious-login flags, tracked devices, and session revocation.</p></div>
+            <button data-refresh-auth-security type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Refresh security</button>
+          </div>
+          <div data-mfa-readiness class="mt-4 rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/60"></div>
+          <div class="mt-5 grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
+            <div data-security-user-list class="grid gap-3"></div>
+            <div><div data-active-session-detail class="rounded-xl border border-[var(--koa-line)] p-4 text-sm text-[var(--koa-ink)]/55">Select a user to inspect active sessions and login history.</div></div>
           </div>
         </section>
 
@@ -213,8 +249,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     let capabilityDefinitions = [];
     let roleDefinitions = [];
+    let customRoleDefinitions = [];
     let securityPolicy = null;
     let allUsers = [];
+    let authSecurityData = null;
 
     function roles(user) {
       const sources = [user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
@@ -236,13 +274,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return data;
     }
 
-    function roleLabel(role) {
+    async function customRoleApi(body) {
+      const options=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'};
+      const response=await fetch('/api/admin/custom-roles',options);
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Custom role request failed.');
+      return data;
+    }
+    async function authSecurityApi(body,userId='') {
+      const url='/api/admin/auth-security'+(userId?'?userId='+encodeURIComponent(userId):'');
+      const options=body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'};
+      const response=await fetch(url,options);
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Authentication security request failed.');
+      return data;
+    }
+
+    function roleLabel(role,user=null) {
+      if(role==='custom'&&user?.roleLabel)return user.roleLabel;
       const found=roleDefinitions.find((row)=>row.id===role);
       if(found)return found.label;
       return role === 'deactivated' ? 'Deactivated' : role === 'none' ? 'No role' : String(role||'').replaceAll('_',' ').replace(/\b\w/g,(m)=>m.toUpperCase());
     }
     function roleOptionsHtml(selected='sales'){
-      return roleDefinitions.map((role)=>'<option value="'+role.id+'"'+(role.id===selected?' selected':'')+'>'+role.label+'</option>').join('');
+      const built=roleDefinitions.map((role)=>'<option value="'+role.id+'"'+(role.id===selected?' selected':'')+'>'+role.label+'</option>');
+      const custom=customRoleDefinitions.map((role)=>'<option value="custom:'+role.id+'"'+(('custom:'+role.id)===selected?' selected':'')+'>'+role.name+' (Custom)</option>');
+      return [...built,...custom].join('');
     }
 
     function statusLabel(status) {
@@ -305,7 +362,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'bg-amber-50 text-amber-800 border-amber-200'
           : 'bg-red-50 text-red-700 border-red-200';
 
-        info.innerHTML = '<div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        info.innerHTML = '<div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role,user)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
         info.querySelector('h3').textContent = user.name || user.email || 'Unnamed user';
         info.querySelector('p:last-child').textContent = [
           user.email,
@@ -331,26 +388,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if (user.status === 'deactivated') {
           const reactivateRole = document.createElement('select');
           reactivateRole.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
-          reactivateRole.innerHTML = roleOptionsHtml('sales');
+          reactivateRole.innerHTML = roleOptionsHtml(user.customRoleId?'custom:'+user.customRoleId:'sales');
           controls.appendChild(reactivateRole);
           controls.appendChild(button('Reactivate','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800',async()=> {
             try {
               listMessage.textContent = 'Reactivating account…';
-              await api({action:'reactivate',userId:user.id,role:reactivateRole.value});
+              if(String(reactivateRole.value).startsWith('custom:')){
+                await api({action:'reactivate',userId:user.id,role:'read_only'});
+                await customRoleApi({action:'assign',userId:user.id,roleId:String(reactivateRole.value).slice(7)});
+              }else await api({action:'reactivate',userId:user.id,role:reactivateRole.value});
               await load();
             } catch (error) { listMessage.textContent = error.message; }
           }));
         } else if (!user.protected) {
           const roleSelect = document.createElement('select');
           roleSelect.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold';
-          roleSelect.innerHTML = roleOptionsHtml(user.role);
-          roleSelect.value = roleDefinitions.some((role)=>role.id===user.role) ? user.role : 'sales';
+          const selectedRole=user.role==='custom'&&user.customRoleId?'custom:'+user.customRoleId:user.role;
+          roleSelect.innerHTML = roleOptionsHtml(selectedRole);
+          roleSelect.value = selectedRole;
           controls.appendChild(roleSelect);
           controls.appendChild(button('Save role','rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white',async()=> {
             if (roleSelect.value === 'admin' && user.role !== 'admin' && !confirm('Grant full Administrator access to '+user.email+'?')) return;
             try {
               listMessage.textContent = 'Saving role…';
-              await api({action:'set-role',userId:user.id,role:roleSelect.value});
+              if(String(roleSelect.value).startsWith('custom:')) await customRoleApi({action:'assign',userId:user.id,roleId:String(roleSelect.value).slice(7)});
+              else await api({action:'set-role',userId:user.id,role:roleSelect.value});
               await load();
             } catch (error) { listMessage.textContent = error.message; }
           }));
@@ -467,12 +529,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
+    function renderCustomRoleBuilder() {
+      const caps=document.querySelector('[data-custom-role-capabilities]');
+      if(caps){
+        caps.innerHTML='';
+        capabilityDefinitions.forEach((cap)=>{
+          const label=document.createElement('label');label.className='flex items-start gap-2 rounded-xl border border-[var(--koa-line)] p-3 text-xs font-semibold';
+          const input=document.createElement('input');input.type='checkbox';input.value=cap.id;input.className='mt-0.5';
+          label.append(input,document.createTextNode(cap.label));caps.appendChild(label);
+        });
+      }
+      const list=document.querySelector('[data-custom-role-list]');if(!list)return;list.innerHTML='';
+      customRoleDefinitions.forEach((role)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const top=document.createElement('div');top.className='flex items-start justify-between gap-3';
+        const info=document.createElement('div');info.innerHTML='<strong class="text-[var(--koa-forest)]"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50"></p>';info.querySelector('strong').textContent=role.name;info.querySelector('p').textContent=role.description||((role.capabilities||[]).length+' permissions');
+        const actions=document.createElement('div');actions.className='flex gap-2';
+        actions.appendChild(button('Edit','rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em]',()=>{
+          const form=document.querySelector('[data-custom-role-form]');form.elements.id.value=role.id;form.elements.name.value=role.name;form.elements.description.value=role.description||'';
+          const selected=new Set(role.capabilities||[]);form.querySelectorAll('[data-custom-role-capabilities] input').forEach(input=>input.checked=selected.has(input.value));form.scrollIntoView({behavior:'smooth',block:'center'});
+        }));
+        actions.appendChild(button('Delete','rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700',async()=>{
+          if(!confirm('Delete custom role '+role.name+'?'))return;
+          try{await customRoleApi({action:'delete',roleId:role.id});await load();}catch(error){document.querySelector('[data-custom-role-message]').textContent=error.message;}
+        }));
+        top.append(info,actions);card.appendChild(top);list.appendChild(card);
+      });
+      if(!customRoleDefinitions.length)list.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No custom roles yet.</p>';
+    }
+
     function renderRoleMatrix() {
       const container=document.querySelector('[data-role-matrix]');
       if(!container)return;
       const labels=new Map(capabilityDefinitions.map((cap)=>[cap.id,cap.label]));
       container.innerHTML='';
-      roleDefinitions.forEach((role)=>{
+      [...roleDefinitions,...customRoleDefinitions.map(role=>({id:'custom:'+role.id,label:role.name,capabilities:role.capabilities}))].forEach((role)=>{
         const card=document.createElement('article');
         card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         const title=document.createElement('h3');title.className='text-base font-semibold text-[var(--koa-forest)]';title.textContent=role.label;
@@ -509,9 +600,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     async function load() {
       try {
         listMessage.textContent = 'Loading accounts…';
-        const data = await api();
+        const [data,customData] = await Promise.all([api(),customRoleApi()]);
         capabilityDefinitions = data.capabilities || [];
         roleDefinitions = data.roles || [];
+        customRoleDefinitions = customData.roles || [];
         securityPolicy = data.policy || {};
         allUsers = data.users || [];
         setSummary(data.summary || {});
@@ -521,13 +613,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           if([...policyForm.elements.passwordExpiryDays.options].some((option)=>option.value===days))policyForm.elements.passwordExpiryDays.value=days;
           policyForm.elements.requireChangeOnAdminSet.checked=securityPolicy.requireChangeOnAdminSet!==false;
         }
+        const createRoleSelect=createForm?.elements?.role;if(createRoleSelect)createRoleSelect.innerHTML=roleOptionsHtml(createRoleSelect.value||'sales');
         renderUsers();
+        renderCustomRoleBuilder();
         renderRoleMatrix();
         renderAudit(data.audit || []);
       } catch (error) {
         listMessage.textContent = error.message;
       }
     }
+
+    document.querySelector('[data-custom-role-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();const form=event.currentTarget;const message=document.querySelector('[data-custom-role-message]');
+      const capabilities=[...form.querySelectorAll('[data-custom-role-capabilities] input:checked')].map(input=>input.value);
+      if(message)message.textContent='Saving…';
+      try{await customRoleApi({action:'save',role:{id:form.elements.id.value,name:form.elements.name.value,description:form.elements.description.value,capabilities}});form.reset();if(message)message.textContent='Custom role saved.';await load();}catch(error){if(message)message.textContent=error.message;}
+    });
+    document.querySelector('[data-clear-custom-role]')?.addEventListener('click',()=>document.querySelector('[data-custom-role-form]')?.reset());
 
     createForm?.querySelectorAll('input[name="setupMode"]').forEach((radio) => {
       radio.addEventListener('change', () => {
@@ -549,7 +651,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         return;
       }
 
-      if (String(data.get('role')) === 'admin' && !confirm('Create a new account with full Administrator access?')) return;
+      const requestedRole=String(data.get('role')||'sales');
+      if (requestedRole === 'admin' && !confirm('Create a new account with full Administrator access?')) return;
 
       createMessage.textContent = 'Creating account…';
       try {
@@ -557,10 +660,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           action:'create-user',
           name:data.get('name'),
           email:data.get('email'),
-          role:data.get('role'),
+          role:requestedRole.startsWith('custom:')?'read_only':requestedRole,
           setupMode,
           password: setupMode === 'manual' ? password : undefined,
         });
+        if(requestedRole.startsWith('custom:'))await customRoleApi({action:'assign',userId:result.user.id,roleId:requestedRole.slice(7)});
         createMessage.textContent = result.message || 'Account created.';
         createForm.reset();
         createPassword.classList.add('hidden');
@@ -606,6 +710,38 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
 
+    async function loadAuthSecurity(){
+      try{
+        authSecurityData=await authSecurityApi();
+        const mfa=document.querySelector('[data-mfa-readiness]');
+        if(mfa)mfa.textContent='MFA readiness: policy/UI hooks are prepared, but Netlify Identity in the current integration does not expose supported MFA enrollment/verification controls, so MFA is not being presented as enforced.';
+        const list=document.querySelector('[data-security-user-list]');list.innerHTML='';
+        (authSecurityData.users||[]).forEach((user)=>{
+          const card=document.createElement('button');card.type='button';card.className='rounded-xl border border-[var(--koa-line)] p-4 text-left';
+          card.innerHTML='<strong class="block text-sm text-[var(--koa-forest)]"></strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/50"></span>';
+          card.querySelector('strong').textContent=user.name||user.email;card.querySelector('span').textContent=user.activeSessions+' active session'+(user.activeSessions===1?'':'s')+' · '+user.suspiciousEvents+' suspicious event'+(user.suspiciousEvents===1?'':'s');
+          card.onclick=()=>showSecurityUser(user.id);list.appendChild(card);
+        });
+      }catch(error){document.querySelector('[data-mfa-readiness]').textContent=error.message;}
+    }
+    async function showSecurityUser(userId){
+      const data=await authSecurityApi(null,userId);const box=document.querySelector('[data-active-session-detail]');box.innerHTML='';
+      const h=document.createElement('div');h.innerHTML='<h3 class="text-lg font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p>';h.querySelector('h3').textContent=data.user.name||data.user.email;h.querySelector('p').textContent=data.user.email;box.appendChild(h);
+      const sessionWrap=document.createElement('div');sessionWrap.className='mt-4 grid gap-2';
+      (data.sessions||[]).forEach((session)=>{
+        const row=document.createElement('article');row.className='rounded-xl border border-[var(--koa-line)] p-3';
+        const info=document.createElement('div');info.innerHTML='<strong class="text-sm"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';info.querySelector('strong').textContent=session.device+(session.current?' · Current session':'');info.querySelector('p').textContent='Last seen '+new Date(session.lastSeenAt).toLocaleString()+(session.revokedAt?' · Revoked '+new Date(session.revokedAt).toLocaleString():'');
+        row.appendChild(info);
+        if(session.active&&!session.current)row.appendChild(button('Revoke session','mt-2 rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700',async()=>{await authSecurityApi({action:'revoke-session',userId,sessionId:session.id});await showSecurityUser(userId);await loadAuthSecurity();}));
+        sessionWrap.appendChild(row);
+      });
+      if(!(data.sessions||[]).length)sessionWrap.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No tracked sessions yet.</p>';
+      box.appendChild(sessionWrap);
+      const history=document.createElement('div');history.className='mt-5 grid gap-2';history.innerHTML='<h4 class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recent login history</h4>';
+      (data.events||[]).slice(0,20).forEach((event)=>{const row=document.createElement('div');row.className='rounded-lg bg-[var(--koa-sand)] p-3 text-xs';row.textContent=new Date(event.createdAt).toLocaleString()+' · '+event.type.replaceAll('_',' ')+(event.device?' · '+event.device:'')+(event.reasons?.length?' · '+event.reasons.join('; '):'');history.appendChild(row);});box.appendChild(history);
+    }
+    document.querySelector('[data-refresh-auth-security]')?.addEventListener('click',loadAuthSecurity);
+
     document.querySelector('[data-close-password]')?.addEventListener('click', () => passwordDialog.close());
     document.querySelector('[data-cancel-password]')?.addEventListener('click', () => passwordDialog.close());
     document.querySelector('[data-refresh]')?.addEventListener('click', load);
@@ -617,6 +753,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const ok = isAdmin(user);
     app?.classList.toggle('hidden', !ok);
     unauthorized?.classList.toggle('hidden', ok);
-    if (ok) await load();
+    if (ok) { await load(); await loadAuthSecurity(); }
   </script>
 </BaseLayout>
