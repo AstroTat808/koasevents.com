@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { capabilitiesFor, hasCapability, operationsRole, requireOperations } from './_shared/admin';
+import { capabilitiesFor, hasCapability, operationsRole, requireCapability } from './_shared/admin';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -67,7 +67,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 }
 
 export default async (req:Request, context:Context) => {
-  const auth = await requireOperations();
+  const auth = await requireCapability('crm.view');
   if (auth.response) return auth.response;
 
   const crm = crmStoreFor(context);
@@ -388,8 +388,8 @@ export default async (req:Request, context:Context) => {
     'save-workflow':'crm.workflows',
     'save-template':'crm.templates',
   };
-  const requiredCapability=capabilityByAction[action];
-  if (requiredCapability && !hasCapability(auth.user, requiredCapability)) {
+  const requiredCapability=capabilityByAction[action] || 'crm.manage';
+  if (!hasCapability(auth.user, requiredCapability)) {
     return Response.json({error:'You do not have permission for this CRM action.'},{status:403});
   }
 
