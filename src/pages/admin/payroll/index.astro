@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Mobile Bar Payroll" description="Mobile Bar bartender payroll and compensation reporting." canonical="https://koasevents.com/admin/payroll/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-7xl">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+        <h1 class="display mt-3 text-5xl">Payroll</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/55">Loading payroll workspace…</p>
+      </section>
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Admin access required</h1>
+      </section>
+      <div data-app class="hidden grid gap-5">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Koa’s Mobile Bar</p>
+              <h1 class="display mt-3 text-5xl">Bartender payroll</h1>
+              <p class="mt-3 max-w-2xl text-sm leading-6 text-white/65">Hours × bartender pay rate + recorded tips. Clocked hours take priority over manually entered performance hours.</p>
+            </div>
+            <a href="/admin/quotes/" class="w-fit rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Back to Sales CRM</a>
+          </div>
+        </header>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <form data-period-form class="flex flex-wrap items-end gap-3">
+            <label class="grid gap-2 text-sm font-semibold">Pay period start<input name="start" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="grid gap-2 text-sm font-semibold">Pay period end<input name="end" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run payroll</button>
+          </form>
+          <p data-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
+        </section>
+
+        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></section>
+        <section data-payroll-rows class="grid gap-4"></section>
+      </div>
+    </div>
+  </main>
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const loading=document.querySelector('[data-loading]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const app=document.querySelector('[data-app]');
+    const form=document.querySelector('[data-period-form]');
+    const summary=document.querySelector('[data-summary]');
+    const rows=document.querySelector('[data-payroll-rows]');
+    const message=document.querySelector('[data-message]');
+    const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
+    const date=(value)=>value?new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value+'T12:00:00')):'';
+
+    function defaultDates(){
+      const now=new Date();
+      const start=new Date(now.getFullYear(),now.getMonth(),1);
+      const end=new Date(now.getFullYear(),now.getMonth()+1,0);
+      const key=(d)=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      form.elements.start.value=key(start);form.elements.end.value=key(end);
+    }
+    function card(label,value){
+      const el=document.createElement('article');el.className='rounded-xl bg-white p-4 shadow-[var(--shadow-soft)]';
+      el.innerHTML='<p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+label+'</p><strong class="display mt-2 block text-3xl text-[var(--koa-forest)]">'+value+'</strong>';
+      return el;
+    }
+    function render(data){
+      summary.innerHTML='';
+      summary.append(card('Bartenders',String(data.summary.bartenders||0)),card('Hours',Number(data.summary.hours||0).toFixed(2)),card('Wages',money(data.summary.wages)),card('Tips',money(data.summary.tips)),card('Total owed',money(data.summary.total)));
+      rows.innerHTML='';
+      (data.rows||[]).forEach((row)=>{
+        const article=document.createElement('article');article.className='rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]';
+        const top=document.createElement('div');top.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+        top.innerHTML='<div><p class="eyebrow text-[var(--koa-clay)]">Bartender</p><h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">'+row.name+'</h2><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+money(row.hourlyRate)+'/hr</p></div><div class="text-left sm:text-right"><strong class="display text-3xl text-[var(--koa-forest)]">'+money(row.totals.total)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+row.totals.hours.toFixed(2)+' hr · '+money(row.totals.wages)+' wages · '+money(row.totals.tips)+' tips</p></div>';
+        article.appendChild(top);
+        const list=document.createElement('div');list.className='mt-4 grid gap-2';
+        (row.events||[]).forEach((event)=>{
+          const item=document.createElement('div');item.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-sm';
+          item.innerHTML='<div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><strong class="text-[var(--koa-forest)]">'+date(event.eventDate)+' · '+event.clientName+'</strong><strong>'+money(event.total)+'</strong></div><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+event.hours.toFixed(2)+' hr × '+money(event.rate)+' = '+money(event.wages)+' · tips '+money(event.tips)+(event.estimated?' · hours estimated / not clocked':'')+'</p>';
+          list.appendChild(item);
+        });
+        article.appendChild(list);rows.appendChild(article);
+      });
+      if(!(data.rows||[]).length)rows.innerHTML='<p class="rounded-xl bg-white p-5 text-sm text-[var(--koa-ink)]/50 shadow-[var(--shadow-soft)]">No Mobile Bar payroll activity in this pay period.</p>';
+    }
+    async function loadPayroll(){
+      message.textContent='Loading payroll…';
+      const start=form.elements.start.value,end=form.elements.end.value;
+      const response=await fetch('/api/admin/payroll?start='+encodeURIComponent(start)+'&end='+encodeURIComponent(end),{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok){message.textContent=data.error||'Unable to load payroll.';return;}
+      message.textContent='Pay period '+date(data.start)+' – '+date(data.end);
+      render(data);
+    }
+    form?.addEventListener('submit',(event)=>{event.preventDefault();loadPayroll();});
+    (async()=>{
+      const session=await getAdminSession();
+      loading?.classList.add('hidden');
+      if(!session){unauthorized?.classList.remove('hidden');return;}
+      app?.classList.remove('hidden');defaultDates();await loadPayroll();
+    })();
+  </script>
+</BaseLayout>
