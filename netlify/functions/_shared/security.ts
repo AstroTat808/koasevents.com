@@ -259,7 +259,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
     }
   }
 
-  const siteKeyConfigured = Boolean(
+  let siteKeyConfigured = Boolean(
     String(
       Netlify.env.get('PUBLIC_TURNSTILE_SITE_KEY') ||
       Netlify.env.get('TURNSTILE_SITEKEY') ||
@@ -267,9 +267,21 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       '',
     ).trim(),
   );
+  let siteKeySource = siteKeyConfigured ? 'environment' : '';
+  if (!siteKeyConfigured) {
+    try {
+      const origin = String(context.site?.url || 'https://koasevents.com').replace(/\/$/, '');
+      const response = await fetch(origin + '/inquire/', { signal: AbortSignal.timeout(8000) });
+      const html = response.ok ? await response.text() : '';
+      siteKeyConfigured = /class=["'][^"']*cf-turnstile[^"']*["'][^>]*data-sitekey=["'][^"']+["']/i.test(html)
+        || /data-sitekey=["'][^"']+["'][^>]*class=["'][^"']*cf-turnstile/i.test(html);
+      if (siteKeyConfigured) siteKeySource = 'deployed-widget';
+    } catch {}
+  }
 
   return {
     siteKeyConfigured,
+    siteKeySource,
     secretConfigured: Boolean(securitySecret()),
     windowDays: Math.max(1, Math.min(90, Math.round(Number(days || 30)))),
     totals: {
