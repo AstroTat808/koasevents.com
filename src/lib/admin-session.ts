@@ -1,9 +1,34 @@
+export type AdminSessionRole =
+  | 'admin'
+  | 'manager'
+  | 'sales'
+  | 'event_coordinator'
+  | 'vendor_manager'
+  | 'content_editor'
+  | 'accounting'
+  | 'read_only'
+  | 'deactivated'
+  | 'none';
+
 export type AdminSession = {
   email: string;
-  role: 'admin'|'manager'|'sales'|'none';
+  role: AdminSessionRole;
   roles: string[];
   isAdmin: boolean;
   permissions: string[];
+  capabilities: string[];
+  accessBlocked: boolean;
+  blockReason: ''|'account_disabled'|'session_revoked'|'password_expired'|'password_change_required';
+  security: {
+    forcePasswordChange: boolean;
+    passwordChangedAt: string;
+    passwordExpiresAt: string;
+    passwordExpired: boolean;
+    passwordExpiryDays: number;
+    sessionVersion: number;
+    tokenSessionVersion: number;
+    sessionRevoked: boolean;
+  };
   app_metadata: { roles:string[]; permissions:string[] };
   appMetadata: { roles:string[]; permissions:string[] };
 };
