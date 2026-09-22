@@ -75,6 +75,12 @@ for (const file of roots.flatMap(walk)) {
     if ((text.match(/<script\b/g) || []).length > 6) {
       failures.push(file + ': unusually high number of script blocks; inspect for accidental duplication');
     }
+    if (/\$\$\$\s*\(/.test(text)) {
+      failures.push(file + ': invalid triple-dollar selector helper ($$) detected');
+    }
+    if (/(^|[^$])\$\([^\n]*?\)\.forEach\s*\(/m.test(text)) {
+      failures.push(file + ': single-element $() selector cannot be iterated with forEach; use $()');
+    }
     continue;
   }
   checkScript(file);
