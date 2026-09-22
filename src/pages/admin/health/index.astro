@@ -20,9 +20,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       <div data-app class="mt-8 hidden grid gap-6">
         <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Overall</p><p data-overall class="display mt-3 text-4xl text-[var(--koa-forest)]">—</p></article>
+          <button data-overall-card type="button" class="rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)] disabled:cursor-default disabled:hover:translate-y-0" aria-label="Show failed health checks">
+            <p class="eyebrow text-[var(--koa-clay)]">Overall</p>
+            <p data-overall class="display mt-3 text-4xl text-[var(--koa-forest)]">—</p>
+            <p data-overall-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View failed checks ↓</p>
+          </button>
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Passed</p><p data-passed class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
-          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Failed</p><p data-failed class="display mt-3 text-4xl text-red-800">0</p></article>
+          <button data-failed-card type="button" class="rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-700 disabled:cursor-default disabled:hover:translate-y-0" aria-label="Show failed health checks">
+            <p class="eyebrow text-[var(--koa-clay)]">Failed</p>
+            <p data-failed class="display mt-3 text-4xl text-red-800">0</p>
+            <p data-failed-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View failed checks ↓</p>
+          </button>
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p></article>
         </section>
 
@@ -257,7 +265,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div><p class="eyebrow text-[var(--koa-clay)]">Protected interfaces</p><h2 class="display mt-2 text-4xl">Pages + APIs</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly checks use non-destructive page-shell probes and protected endpoint reachability checks. Manual checks use the same monitor and immediately persist the result.</p></div>
-          <div data-results class="mt-5 grid gap-3 lg:grid-cols-2"></div>
+          <div data-results id="health-check-results" class="mt-5 grid gap-3 lg:grid-cols-2" tabindex="-1"></div>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
@@ -420,10 +428,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const passed=document.querySelector('[data-passed]');
     const failed=document.querySelector('[data-failed]');
     const checked=document.querySelector('[data-checked]');
+    const overallCard=document.querySelector('[data-overall-card]');
+    const failedCard=document.querySelector('[data-failed-card]');
+    const overallHint=document.querySelector('[data-overall-hint]');
+    const failedHint=document.querySelector('[data-failed-hint]');
 
     function healthRow(row){
       const card=document.createElement('article');
       card.className='rounded-xl border '+(row.ok?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50')+' p-4';
+      card.dataset.healthOk=row.ok?'true':'false';
+      if(!row.ok){
+        card.tabIndex=-1;
+        card.setAttribute('aria-label','Failed health check: '+String(row.name||'Unknown check'));
+      }
       const top=document.createElement('div');top.className='flex items-start justify-between gap-4';
       const left=document.createElement('div');
       const title=document.createElement('h3');title.className='font-semibold text-[var(--koa-forest)]';title.textContent=row.name;
@@ -434,6 +451,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const detail=document.createElement('p');detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='HTTP '+(row.status||'—')+' · '+row.ms+' ms · '+(row.detail||'');
       card.append(top,detail);return card;
     }
+
+    function showFailedChecks(){
+      const failedChecks=[...results.querySelectorAll('[data-health-ok="false"]')];
+      if(!failedChecks.length)return;
+      const firstFailure=failedChecks[0];
+      firstFailure.scrollIntoView({behavior:'smooth',block:'center'});
+      window.setTimeout(()=>{
+        firstFailure.focus({preventScroll:true});
+        firstFailure.classList.add('ring-2','ring-red-700','ring-offset-2');
+        window.setTimeout(()=>firstFailure.classList.remove('ring-2','ring-red-700','ring-offset-2'),1800);
+      },450);
+    }
+
+    overallCard?.addEventListener('click',showFailedChecks);
+    failedCard?.addEventListener('click',showFailedChecks);
 
     function formatDuration(minutes){
       const value=Math.max(0,Number(minutes||0));
@@ -673,10 +705,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         passed.textContent=String(current.passed||0);
         failed.textContent=String(current.failed||0);
         checked.textContent=current.checkedAt?new Date(current.checkedAt).toLocaleString():'—';
+        const hasFailures=Number(current.failed||0)>0;
+        overallCard.disabled=!hasFailures;
+        failedCard.disabled=!hasFailures;
+        overallCard.setAttribute('aria-disabled',String(!hasFailures));
+        failedCard.setAttribute('aria-disabled',String(!hasFailures));
+        overallHint.classList.toggle('hidden',!hasFailures);
+        failedHint.classList.toggle('hidden',!hasFailures);
         results.innerHTML='';
-        (current.checks||[]).forEach(row=>results.appendChild(healthRow(row)));
+        const checks=[...(current.checks||[])];
+        checks.sort((a,b)=>Number(a.ok)-Number(b.ok));
+        checks.forEach(row=>results.appendChild(healthRow(row)));
       }else{
         overall.textContent='No data';
+        overallCard.disabled=true;
+        failedCard.disabled=true;
+        overallHint.classList.add('hidden');
+        failedHint.classList.add('hidden');
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
 
