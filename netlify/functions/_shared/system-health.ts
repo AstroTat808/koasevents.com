@@ -12,7 +12,7 @@ export type HealthCheck = {
   status: number;
   ms: number;
   detail: string;
-  severity?: 'green' | 'yellow' | 'red';
+  severity?: 'green' | 'yellow' | 'red' | 'info';
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
 };
 
@@ -494,6 +494,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     return {
       id,name,kind:'page',path,ok,status:result.response?.status||0,ms:result.ms,
       detail:result.error || (ok?'Page shell + startup marker present':result.response?.ok?'Expected startup marker missing':'Page request failed'),
+      severity:ok?'green':(defaultAlertAfter(id)===1?'red':'yellow'),
     };
   });
   const apiChecks=API_CHECKS.map(async ([id,name,path]):Promise<HealthCheck>=>{
@@ -503,6 +504,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     return {
       id,name,kind:'api',path,ok,status,ms:result.ms,
       detail:result.error || (ok?(status===200?'Endpoint reachable':'Endpoint reachable and authorization enforced'):'Unexpected API response'),
+      severity:ok?'green':(defaultAlertAfter(id)===1?'red':'yellow'),
     };
   });
   const [baseChecks,startupSignal,deploymentSync]=await Promise.all([
@@ -525,6 +527,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     ok:!startupFailed,
     status:startupFailed?500:200,
     ms:0,
+    severity:startupFailed?'red':'green',
     detail:startupFailed
       ? 'A logged-in staff browser reported CRM startup failure · '+clean(startupSignal?.phase,80)+(startupSignal?.detail?' · '+clean(startupSignal.detail,300):'')
       : sameRelease && startupSignal?.status==='healthy'
