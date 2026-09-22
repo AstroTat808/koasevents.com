@@ -1,4 +1,4 @@
-# Deployment trigger check: 2026-09-22 Turnstile + release compare live verification
+# Deployment trigger check: 2026-09-22 Turnstile health and release intelligence
 [build]
   command = "python3 scripts/production_visual_qa.py --mode source && npm run build"
   publish = "dist"
