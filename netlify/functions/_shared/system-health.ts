@@ -707,32 +707,6 @@ export async function compareProductionReleaseCommits(baseCommit:string,headComm
     behaviorChanges:[],
   };
 
-  let netlifyDeployHistory:any[]=[];
-  if(netlifyToken){
-    try{
-      const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
-      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=40',{
-        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
-        signal:AbortSignal.timeout(12_000),
-      });
-      if(response.ok){
-        const rows:any[]=await response.json();
-        netlifyDeployHistory=rows
-          .filter((row:any)=>clean(row?.context,40)==='production')
-          .map((row:any)=>({
-            deployId:clean(row?.id,120),
-            commit:clean(row?.commit_ref,80),
-            state:clean(row?.state,40),
-            title:clean(row?.title,300),
-            createdAt:clean(row?.created_at,80),
-            publishedAt:clean(row?.published_at,80),
-            deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
-            errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
-          }));
-      }
-    }catch{}
-  }
-
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
   const headers:Record<string,string>={
     'Accept':'application/vnd.github+json',
@@ -1015,6 +989,44 @@ function groupConsecutiveDeployFailures(rows:any[]) {
   return groups.slice(0,12);
 }
 
+function billingCycleWindow(now=new Date()) {
+  const configured=Number(Netlify.env.get('KOA_NETLIFY_BILLING_CYCLE_DAY') || 22);
+  const cycleDay=Number.isFinite(configured)?Math.min(28,Math.max(1,Math.floor(configured))):22;
+  const year=now.getUTCFullYear();
+  const month=now.getUTCMonth();
+  const thisMonthStart=new Date(Date.UTC(year,month,cycleDay,0,0,0,0));
+  const start=now>=thisMonthStart
+    ? thisMonthStart
+    : new Date(Date.UTC(year,month-1,cycleDay,0,0,0,0));
+  const end=new Date(Date.UTC(start.getUTCFullYear(),start.getUTCMonth()+1,cycleDay,0,0,0,0));
+  return {cycleDay,start:start.toISOString(),end:end.toISOString()};
+}
+
+function estimateNetlifyDeploymentCredits(rows:any[]) {
+  const window=billingCycleWindow();
+  const startMs=Date.parse(window.start);
+  const endMs=Date.parse(window.end);
+  const creditsPerDeploy=Math.max(0,Number(Netlify.env.get('KOA_NETLIFY_PRODUCTION_DEPLOY_CREDITS') || 15));
+  const monthlyAllowance=Math.max(0,Number(Netlify.env.get('KOA_NETLIFY_MONTHLY_CREDIT_ALLOWANCE') || 1000));
+  const successful=(rows||[]).filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return row?.state==='ready' && Number.isFinite(published) && published>=startMs && published<endMs;
+  });
+  const estimatedDeploymentCredits=Math.round(successful.length*creditsPerDeploy*100)/100;
+  return {
+    basis:'Production deploys only',
+    cycleDay:window.cycleDay,
+    cycleStart:window.start,
+    cycleEnd:window.end,
+    productionDeploys:successful.length,
+    creditsPerProductionDeploy:creditsPerDeploy,
+    estimatedDeploymentCredits,
+    monthlyAllowance,
+    estimatedAllowancePercent:monthlyAllowance?Math.round((estimatedDeploymentCredits/monthlyAllowance)*1000)/10:null,
+    note:'Estimate excludes bandwidth, function compute, web requests, image transformations, and other Netlify usage.',
+  };
+}
+
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
@@ -1037,6 +1049,31 @@ export async function cachedDeploymentHistory(context:Context) {
   };
 
   const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  let netlifyDeployHistory:any[]=[];
+  if(netlifyToken){
+    try{
+      const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
+      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100',{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const rows:any[]=await response.json();
+        netlifyDeployHistory=rows
+          .filter((row:any)=>clean(row?.context,40)==='production')
+          .map((row:any)=>({
+            deployId:clean(row?.id,120),
+            commit:clean(row?.commit_ref,80),
+            state:clean(row?.state,40),
+            title:clean(row?.title,300),
+            createdAt:clean(row?.created_at,80),
+            publishedAt:clean(row?.published_at,80),
+            deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
+            errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
+          }));
+      }
+    }catch{}
+  }
   if(current.deployId && netlifyToken){
     try{
       const response=await fetch('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(current.deployId),{
@@ -1164,6 +1201,7 @@ export async function cachedDeploymentHistory(context:Context) {
     failedBuilds,
     failedDeployGroups,
     netlifyDeployHistory,
+    creditUsage:estimateNetlifyDeploymentCredits(netlifyDeployHistory),
     history,
   };
   await store.setJSON('deployments/cache',result);
