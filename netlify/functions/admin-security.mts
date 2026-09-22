@@ -6,6 +6,7 @@ import {
   createBlocklistEntry,
   getBlocklist,
   getSecurityEvents,
+  getTurnstileStatus,
   removeAutomaticBlocksForIncident,
   removeBlocklistEntry,
   setSecurityReview,
@@ -275,6 +276,8 @@ export default async (req: Request, context: Context) => {
       review: event.review || null,
     }));
 
+  const turnstile = await getTurnstileStatus(context, days);
+
   const blocklist = (await getBlocklist(context, false))
     .map((entry) => ({
       id: entry.id,
@@ -307,6 +310,7 @@ export default async (req: Request, context: Context) => {
     topSources,
     recent,
     blocklist,
+    turnstile,
   }, {
     headers: { 'Cache-Control': 'private, no-store' },
   });

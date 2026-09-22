@@ -605,6 +605,11 @@ export type ProductionRelease = {
   features:string[];
   changedFiles:string[];
   verification:any;
+  authorName:string;
+  authorLogin:string;
+  pullRequestNumber:number|null;
+  pullRequestUrl:string;
+  summary:string;
   recordedAt:string;
 };
 
@@ -633,6 +638,56 @@ export function featureLabelsForFiles(files:string[]) {
     if(path.startsWith('.github/')||path==='netlify.toml'||path.startsWith('scripts/')) labels.add('Deployment & QA');
   }
   return [...labels];
+}
+
+function plainEnglishReleaseSummary(title:string,features:string[]) {
+  const staffAreas=features.filter((feature)=>[
+    'User Management','Authentication & Security','Business CRM','Sales CRM & Proposals',
+    'Event Ops','Master Calendar','QuickBooks','Vendor CRM','Insurance Compliance','System Health',
+    'Deployment & QA'
+  ].includes(feature));
+  const clientAreas=features.filter((feature)=>[
+    'Public Website','Blog','Gallery','Local SEO'
+  ].includes(feature));
+  const parts:string[]=[];
+  if(staffAreas.length) parts.push('Staff systems changed: '+staffAreas.join(', ')+'.');
+  if(clientAreas.length) parts.push('Client-facing website changed: '+clientAreas.join(', ')+'.');
+  if(!parts.length) parts.push('Technical release with no categorized staff/client feature area.');
+  if(title) parts.push('Release focus: '+clean(title,220)+'.');
+  return parts.join(' ');
+}
+
+function releaseRiskFlags(files:any[],commits:any[]) {
+  const definitions=[
+    {id:'authentication',label:'Authentication / access',severity:'high',path:/identity|auth-|account-security|admin-staff|custom-roles|staff-directory|admin-session/i,content:/password|session|role|permission|login|logout|token|identity|auth/i},
+    {id:'payments',label:'Payments / accounting',severity:'high',path:/quickbooks|payment|invoice|billing|price|estimate|deposit/i,content:/payment|invoice|quickbooks|billing|refund|deposit|balance|amount/i},
+    {id:'crm-deletion',label:'CRM deletion / cleanup',severity:'high',path:/crm|quotes|sales|security/i,content:/delete|trash|restore|cleanup|purge|remove.*record|auto.?trash|confirmed.?spam/i,requireBoth:true},
+    {id:'forms',label:'Public forms / lead capture',severity:'medium',path:/inquire|contact|wedding-inquiry|thank-you|stay|crm-inquiries|forms?/i,content:/form|submit|inquiry|turnstile|honeypot|lead/i},
+    {id:'security',label:'Security controls',severity:'high',path:/security|turnstile|rate.?limit|edge-functions|headers|admin\.ts/i,content:/block|security|turnstile|siteverify|rate.?limit|permission|csrf|origin/i},
+    {id:'storage',label:'Database / storage',severity:'high',path:/store|storage|blobs?|database|postgres|neon|schema|migration/i,content:/getStore|getDeployStore|database|storage|blob|migration|schema/i},
+    {id:'environment',label:'Environment / deployment variables',severity:'high',path:/netlify\.toml|(^|\/)\.env|env\.d|config/i,content:/Netlify\.env|process\.env|\$\{\{\s*secrets\.|environment variable|site.?id|secret key|api key/i},
+  ];
+  const flags:any[]=[];
+  for(const definition of definitions){
+    const matchingFiles=files.filter((file:any)=>{
+      const filename=String(file?.filename||'');
+      const patch=String(file?.patch||'');
+      const pathMatch=definition.path.test(filename);
+      const contentMatch=definition.content.test(patch);
+      return definition.requireBoth ? (pathMatch&&contentMatch) : (pathMatch||contentMatch);
+    }).map((file:any)=>file.filename);
+    const matchingCommits=commits.filter((commit:any)=>definition.content.test(String(commit?.message||commit?.title||''))).map((commit:any)=>commit.title);
+    if(matchingFiles.length||matchingCommits.length){
+      flags.push({
+        id:definition.id,
+        label:definition.label,
+        severity:definition.severity,
+        files:[...new Set(matchingFiles)].slice(0,25),
+        commits:[...new Set(matchingCommits)].slice(0,12),
+      });
+    }
+  }
+  return flags;
 }
 
 export async function compareProductionReleaseCommits(baseCommit:string,headCommit:string) {
@@ -664,7 +719,8 @@ export async function compareProductionReleaseCommits(baseCommit:string,headComm
   );
   if(!response.ok) throw new Error('GitHub release comparison failed with HTTP '+response.status+'.');
   const body:any=await response.json();
-  const files=(Array.isArray(body?.files)?body.files:[]).map((file:any)=>({
+  const rawFiles=Array.isArray(body?.files)?body.files:[];
+  const files=rawFiles.map((file:any)=>({
     filename:clean(file?.filename,400),
     status:clean(file?.status,40),
     additions:Number(file?.additions||0),
@@ -684,6 +740,7 @@ export async function compareProductionReleaseCommits(baseCommit:string,headComm
   });
   const features=featureLabelsForFiles(files.map((file:any)=>file.filename));
   const behaviorChanges=commits.map((commit:any)=>commit.title).filter(Boolean);
+  const riskFlags=releaseRiskFlags(rawFiles,commits);
   return {
     baseCommit:clean(body?.base_commit?.sha,80)||base,
     headCommit:clean(body?.merge_base_commit?.sha,80)===head?head:(clean(body?.commits?.at?.(-1)?.sha,80)||head),
@@ -695,6 +752,8 @@ export async function compareProductionReleaseCommits(baseCommit:string,headComm
     commits,
     files,
     behaviorChanges,
+    riskFlags,
+    riskLevel:riskFlags.some((flag:any)=>flag.severity==='high')?'high':riskFlags.length?'medium':'low',
   };
 }
 
@@ -716,6 +775,10 @@ export async function recordProductionRelease(context:Context,input:any) {
   let commitTitle=previous?.commitTitle||'';
   let commitMessage=previous?.commitMessage||'';
   let changedFiles=previous?.changedFiles||[];
+  let authorName=previous?.authorName||'';
+  let authorLogin=previous?.authorLogin||'';
+  let pullRequestNumber=previous?.pullRequestNumber??null;
+  let pullRequestUrl=previous?.pullRequestUrl||'';
   if(commit){
     try{
       const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(commit),{
@@ -728,8 +791,32 @@ export async function recordProductionRelease(context:Context,input:any) {
         changedFiles=Array.isArray(body?.files)
           ? body.files.map((file:any)=>clean(file?.filename,300)).filter(Boolean).slice(0,300)
           : changedFiles;
+        authorName=clean(body?.commit?.author?.name,180)||authorName;
+        authorLogin=clean(body?.author?.login,120)||authorLogin;
+        const titlePr=commitTitle.match(/\(#(\d+)\)\s*$/);
+        if(titlePr){
+          pullRequestNumber=Number(titlePr[1]);
+          pullRequestUrl='https://github.com/AstroTat808/koasevents.com/pull/'+pullRequestNumber;
+        }
       }
     }catch{}
+    if(!pullRequestNumber){
+      try{
+        const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(commit)+'/pulls',{
+          headers:{...githubHeaders,'Accept':'application/vnd.github+json'},
+          signal:AbortSignal.timeout(12_000),
+        });
+        if(response.ok){
+          const pulls:any[]=await response.json();
+          const merged=pulls.find((pull:any)=>pull?.merged_at)||pulls[0];
+          if(merged){
+            pullRequestNumber=Number(merged?.number||0)||null;
+            pullRequestUrl=clean(merged?.html_url,500);
+            authorLogin=authorLogin||clean(merged?.user?.login,120);
+          }
+        }
+      }catch{}
+    }
   }
 
   let publishedAt=clean(input?.publishedAt,80)||previous?.publishedAt||clean(input?.checkedAt,80);
@@ -762,6 +849,11 @@ export async function recordProductionRelease(context:Context,input:any) {
     features:featureLabelsForFiles(changedFiles),
     changedFiles,
     verification:input?.verification||previous?.verification||null,
+    authorName,
+    authorLogin,
+    pullRequestNumber,
+    pullRequestUrl,
+    summary:plainEnglishReleaseSummary(commitTitle,featureLabelsForFiles(changedFiles)),
     recordedAt:new Date().toISOString(),
   };
   const next=[record,...existing.filter(row=>row.deployId!==deployId)]
@@ -769,6 +861,24 @@ export async function recordProductionRelease(context:Context,input:any) {
     .slice(0,100);
   await store.setJSON('deployments/releases',next);
   return record;
+}
+
+export async function hydrateProductionReleaseMetadata(context:Context,releases:ProductionRelease[],limit=20) {
+  const hydrated:ProductionRelease[]=[];
+  let refreshed=0;
+  for(const release of releases){
+    const missing=!release.summary||!release.authorName||!release.pullRequestUrl;
+    if(missing&&refreshed<Math.max(1,Math.min(25,limit))){
+      try{
+        const row=await recordProductionRelease(context,release);
+        hydrated.push((row||release) as ProductionRelease);
+        refreshed+=1;
+        continue;
+      }catch{}
+    }
+    hydrated.push(release);
+  }
+  return hydrated;
 }
 
 export function releaseTimelineWithIncidents(releases:ProductionRelease[],qaHistory:any[],incidents:any) {

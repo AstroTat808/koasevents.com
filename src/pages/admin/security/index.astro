@@ -56,6 +56,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </article>
         </section>
 
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Cloudflare Turnstile</p>
+              <h2 class="display mt-2 text-3xl">Siteverify status</h2>
+              <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/48">Shows whether the public widget key and server secret are configured, plus real server-side Siteverify successes, failures, and Cloudflare error codes.</p>
+            </div>
+            <span data-turnstile-overall class="rounded-full bg-[var(--koa-sand)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Loading…</span>
+          </div>
+          <div class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Site key</p><p data-turnstile-sitekey class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Server secret</p><p data-turnstile-secret class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last success</p><p data-turnstile-success class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Failed validations</p><p data-turnstile-failures class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">0</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Successful validations</p><p data-turnstile-successes class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">0</p></article>
+          </div>
+          <div class="mt-5">
+            <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Cloudflare / validation error codes</p>
+            <div data-turnstile-errors class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"></div>
+          </div>
+        </section>
+
         <section class="grid gap-6 xl:grid-cols-[1.15fr_.85fr]">
           <article class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
             <div class="flex flex-wrap items-end justify-between gap-3">
@@ -177,6 +199,38 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       td.textContent = message;
       tr.appendChild(td);
       return tr;
+    }
+
+    function renderTurnstile(turnstile) {
+      const siteKey=Boolean(turnstile?.siteKeyConfigured);
+      const secret=Boolean(turnstile?.secretConfigured);
+      const lastSuccess=turnstile?.lastSuccess;
+      const failures=Number(turnstile?.totals?.failed||0);
+      const successes=Number(turnstile?.totals?.successful||0);
+      const overall=document.querySelector('[data-turnstile-overall]');
+      const configured=siteKey&&secret;
+      const healthy=configured&&Boolean(lastSuccess);
+      if(overall){
+        overall.textContent=healthy?'Verified':configured?'Configured · awaiting success':'Configuration needed';
+        overall.className='rounded-full px-4 py-2 text-xs font-black uppercase tracking-[.08em] '+(healthy?'bg-emerald-100 text-emerald-800':configured?'bg-amber-100 text-amber-800':'bg-red-100 text-red-800');
+      }
+      setText('[data-turnstile-sitekey]',siteKey?('Configured'+(turnstile?.siteKeySource==='deployed-widget'?' · deployed widget':'')):'Missing');
+      setText('[data-turnstile-secret]',secret?'Configured':'Missing');
+      setText('[data-turnstile-success]',lastSuccess?.createdAt?new Date(lastSuccess.createdAt).toLocaleString():'No successful validation recorded');
+      setText('[data-turnstile-failures]',failures);
+      setText('[data-turnstile-successes]',successes);
+      const errors=document.querySelector('[data-turnstile-errors]');
+      errors.innerHTML='';
+      (turnstile?.errorCodes||[]).forEach((row)=>{
+        const card=document.createElement('div');
+        card.className='rounded-xl border border-red-100 bg-red-50 p-3';
+        card.innerHTML='<div class="flex items-center justify-between gap-3"><code class="text-xs font-semibold text-red-900"></code><strong class="text-sm text-red-900"></strong></div><p class="mt-1 text-[.68rem] text-red-900/55"></p>';
+        card.querySelector('code').textContent=row.code;
+        card.querySelector('strong').textContent=String(row.count);
+        card.querySelector('p').textContent=row.lastSeenAt?'Last seen '+new Date(row.lastSeenAt).toLocaleString():'';
+        errors.appendChild(card);
+      });
+      if(!(turnstile?.errorCodes||[]).length)errors.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No Turnstile validation error codes in this range.</p>';
     }
 
     function renderDaily(rows) {
@@ -459,6 +513,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       setText('[data-generated]', 'Updated ' + new Date(payload.generatedAt).toLocaleString());
       if (status) status.textContent = (payload.recent || []).length + ' incidents shown';
 
+      renderTurnstile(payload.turnstile || {});
       renderDaily(payload.daily || []);
       renderReasons(payload.topReasons || []);
       renderSources(payload.topSources || []);

@@ -9,6 +9,7 @@ import {
   getSecurityEvents,
   ipFingerprint,
   recordSecurityEvent,
+  recordTurnstileValidation,
   securityIdentity,
 } from './_shared/security.ts';
 
@@ -149,7 +150,12 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
   }
 
   const responseToken = cleanText(token, 2048);
-  if (!responseToken) return { ok: false, configured: true, error: 'Complete the security check and try again.' };
+  if (!responseToken) return {
+    ok: false,
+    configured: true,
+    error: 'Complete the security check and try again.',
+    codes: ['missing-token'],
+  };
 
   const remoteIp =
     cleanText(req.headers.get('x-nf-client-connection-ip'), 80) ||
@@ -174,19 +180,34 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
     const verifiedHostname = cleanText(data?.hostname, 255).toLowerCase();
     const verifiedAction = cleanText(data?.action, 64);
 
+    const ok = Boolean(
+      result.ok &&
+      data?.success &&
+      verifiedAction === expectedAction &&
+      verifiedHostname === requestHostname
+    );
+    const codes = Array.isArray(data?.['error-codes']) ? [...data['error-codes']] : [];
+    if (data?.success && verifiedAction !== expectedAction) codes.push('action-mismatch');
+    if (data?.success && verifiedHostname !== requestHostname) codes.push('hostname-mismatch');
     return {
-      ok: Boolean(
-        result.ok &&
-        data?.success &&
-        verifiedAction === expectedAction &&
-        verifiedHostname === requestHostname
-      ),
+      ok,
       configured: true,
       error: data?.success ? 'Security verification did not match this form. Please try again.' : 'Security verification failed. Please try again.',
-      codes: Array.isArray(data?.['error-codes']) ? data['error-codes'] : [],
+      codes,
+      verifiedAction,
+      verifiedHostname,
+      requestHostname,
+      detail: data?.success
+        ? (ok ? 'Cloudflare Siteverify accepted the token, action, and hostname.' : 'Cloudflare accepted the token but action or hostname did not match.')
+        : 'Cloudflare Siteverify rejected the token.',
     };
   } catch {
-    return { ok: false, configured: true, error: 'Security verification is temporarily unavailable. Please try again.' };
+    return {
+      ok: false,
+      configured: true,
+      error: 'Security verification is temporarily unavailable. Please try again.',
+      codes: ['siteverify-unavailable'],
+    };
   }
 }
 
@@ -338,6 +359,15 @@ export default async (req: Request, context: Context) => {
 
   if (expectedTurnstileAction) {
     const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
+    await recordTurnstileValidation(context, {
+      ok: turnstile.ok,
+      action: turnstile.verifiedAction || '',
+      expectedAction: expectedTurnstileAction,
+      hostname: turnstile.verifiedHostname || '',
+      requestHostname: turnstile.requestHostname || new URL(req.url).hostname,
+      codes: turnstile.codes || [],
+      detail: turnstile.detail || turnstile.error || '',
+    });
     if (!turnstile.ok) {
       const securityEvent = await recordSecurityEvent(context, req, {
         disposition: 'blocked',
