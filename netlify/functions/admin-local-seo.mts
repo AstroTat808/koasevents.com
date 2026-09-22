@@ -109,7 +109,7 @@ async function writeCitations(records: CitationRecord[]) {
 }
 
 export default async (req: Request) => {
-  const auth = await requireCapability('seo.view');
+  const auth = await requireCapability('seo.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
