@@ -51,12 +51,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </div>
 
-            <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated total credits</p><p data-credit-total class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Allowance used</p><p data-credit-percent class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Projected cycle total</p><p data-credit-projected class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p><p data-credit-projected-meta class="mt-2 text-xs text-[var(--koa-ink)]/50">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Credits saved</p><p data-credit-saved class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p><p data-credit-saved-meta class="mt-2 text-xs text-[var(--koa-ink)]/50">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated remaining</p><p data-credit-remaining class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Monthly allowance</p><p data-credit-allowance class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
             </div>
+            <div data-credit-forecast-warning class="mt-4 hidden rounded-xl border p-4 text-sm font-semibold"></div>
 
             <div class="mt-4 h-3 overflow-hidden rounded-full bg-white">
               <div data-credit-bar class="h-full rounded-full bg-emerald-600 transition-[width] duration-500" style="width:0%"></div>
@@ -242,6 +245,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditStatus=document.querySelector('[data-credit-status]');
     const creditTotal=document.querySelector('[data-credit-total]');
     const creditRemaining=document.querySelector('[data-credit-remaining]');
+    const creditProjected=document.querySelector('[data-credit-projected]');
+    const creditProjectedMeta=document.querySelector('[data-credit-projected-meta]');
+    const creditSaved=document.querySelector('[data-credit-saved]');
+    const creditSavedMeta=document.querySelector('[data-credit-saved-meta]');
+    const creditForecastWarning=document.querySelector('[data-credit-forecast-warning]');
     const creditAllowance=document.querySelector('[data-credit-allowance]');
     const creditPercent=document.querySelector('[data-credit-percent]');
     const creditBar=document.querySelector('[data-credit-bar]');
@@ -500,13 +508,38 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(creditTotal)creditTotal.textContent=creditUsage.totalEstimatedCredits==null?'—':String(creditUsage.totalEstimatedCredits);
       if(creditRemaining)creditRemaining.textContent=creditUsage.estimatedRemainingCredits==null?'—':String(creditUsage.estimatedRemainingCredits);
       if(creditAllowance)creditAllowance.textContent=creditUsage.monthlyAllowance==null?'—':String(creditUsage.monthlyAllowance);
+      if(creditProjected)creditProjected.textContent=creditUsage.projection?.projectedEndOfCycleCredits==null?'—':String(creditUsage.projection.projectedEndOfCycleCredits);
+      if(creditProjectedMeta){
+        const p=creditUsage.projection||{};
+        creditProjectedMeta.textContent=p.projectedAllowancePercent==null?'Forecast unavailable':String(p.projectedAllowancePercent)+'% of allowance · '+String(p.confidence||'low')+' confidence';
+      }
+      if(creditSaved)creditSaved.textContent=creditUsage.savings?.estimatedCreditsSaved==null?'—':String(creditUsage.savings.estimatedCreditsSaved);
+      if(creditSavedMeta){
+        const s=creditUsage.savings||{};
+        creditSavedMeta.textContent=(s.successfulDeployPreviews==null?'—':String(s.successfulDeployPreviews))+' successful preview'+(Number(s.successfulDeployPreviews)===1?'':'s')+' counted';
+      }
+      if(creditForecastWarning){
+        const p=creditUsage.projection||{};
+        const projectedSeverity=String(p.severity||'unknown');
+        if(['yellow','orange','red'].includes(projectedSeverity)){
+          creditForecastWarning.className='mt-4 rounded-xl border p-4 text-sm font-semibold '+(
+            projectedSeverity==='red'?'border-red-300 bg-red-50 text-red-800':
+            projectedSeverity==='orange'?'border-orange-300 bg-orange-50 text-orange-900':
+            'border-yellow-300 bg-yellow-50 text-yellow-900'
+          );
+          creditForecastWarning.textContent='Projected end-of-cycle usage is '+String(p.projectedAllowancePercent)+'% ('+String(p.projectedEndOfCycleCredits)+' credits) at the current average daily burn rate.';
+        }else{
+          creditForecastWarning.className='mt-4 hidden rounded-xl border p-4 text-sm font-semibold';
+          creditForecastWarning.textContent='';
+        }
+      }
       if(creditPercent)creditPercent.textContent=creditUsage.estimatedAllowancePercent==null?'—':String(creditUsage.estimatedAllowancePercent)+'%';
       if(creditBar){
         const pct=Math.max(0,Math.min(100,Number(creditUsage.estimatedAllowancePercent||0)));
         creditBar.style.width=pct+'%';
       }
       if(creditStatus){
-        const severity=String(creditUsage.severity||'unknown');
+        const severity=String(creditUsage.warningSeverity||creditUsage.severity||'unknown');
         const statusMap={
           green:['Healthy','bg-emerald-100 text-emerald-800'],
           yellow:['Watch','bg-yellow-100 text-yellow-900'],

@@ -1065,7 +1065,7 @@ async function fetchNetlifyBandwidthUsage(token:string) {
   }
 }
 
-function estimateNetlifyCredits(rows:any[], bandwidth:any, schedules:any[]) {
+function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[]) {
   const fallbackWindow=billingCycleWindow();
   const cycleStart=bandwidth?.periodStart && Number.isFinite(Date.parse(bandwidth.periodStart))
     ? bandwidth.periodStart
@@ -1122,8 +1122,39 @@ function estimateNetlifyCredits(rows:any[], bandwidth:any, schedules:any[]) {
   const percent=monthlyAllowance?Math.round((totalCredits/monthlyAllowance)*1000)/10:null;
   const remaining=monthlyAllowance?Math.max(0,Math.round((monthlyAllowance-totalCredits)*100)/100):null;
 
+  const rawElapsedDays=Math.max(0,(Math.min(nowMs,endMs)-startMs)/86400000);
+  const projectionElapsedDays=Math.max(1,rawElapsedDays);
+  const cycleDays=Math.max(1,(endMs-startMs)/86400000);
+  const dailyBurnRate=totalCredits/projectionElapsedDays;
+  const projectedEndOfCycleCredits=Math.round(dailyBurnRate*cycleDays*100)/100;
+  const projectedAllowancePercent=monthlyAllowance
+    ? Math.round((projectedEndOfCycleCredits/monthlyAllowance)*1000)/10
+    : null;
+  const projectedSeverity=creditSeverity(projectedAllowancePercent);
+  const projectionConfidence=rawElapsedDays>=7?'high':rawElapsedDays>=3?'medium':'low';
+
+  const previewFirstEnabledAt=clean(
+    Netlify.env.get('KOA_NETLIFY_PREVIEW_FIRST_ENABLED_AT') || '2026-09-22T11:20:44Z',
+    80,
+  );
+  const previewFirstEnabledMs=Date.parse(previewFirstEnabledAt);
+  const successfulPreviews=(previews||[]).filter((row:any)=>{
+    const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+    return row?.state==='ready'
+      && Number.isFinite(published)
+      && Number.isFinite(previewFirstEnabledMs)
+      && published>=previewFirstEnabledMs;
+  });
+  const estimatedCreditsSaved=Math.round(successfulPreviews.length*rates.productionDeploy*100)/100;
+
+  const severityRank:Record<string,number>={unknown:0,green:1,yellow:2,orange:3,red:4};
+  const actualSeverity=creditSeverity(percent);
+  const warningSeverity=(severityRank[projectedSeverity]||0)>(severityRank[actualSeverity]||0)
+    ? projectedSeverity
+    : actualSeverity;
+
   return {
-    version:2,
+    version:3,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1132,7 +1163,23 @@ function estimateNetlifyCredits(rows:any[], bandwidth:any, schedules:any[]) {
     totalEstimatedCredits:totalCredits,
     estimatedAllowancePercent:percent,
     estimatedRemainingCredits:remaining,
-    severity:creditSeverity(percent),
+    severity:actualSeverity,
+    warningSeverity,
+    projection:{
+      dailyBurnRate:Math.round(dailyBurnRate*100)/100,
+      cycleDays:Math.round(cycleDays*100)/100,
+      elapsedDays:Math.round(rawElapsedDays*100)/100,
+      projectedEndOfCycleCredits,
+      projectedAllowancePercent,
+      severity:projectedSeverity,
+      confidence:projectionConfidence,
+    },
+    savings:{
+      enabledAt:previewFirstEnabledAt,
+      successfulDeployPreviews:successfulPreviews.length,
+      estimatedCreditsSaved,
+      methodology:'Successful Deploy Previews since preview-first enforcement × current production-deploy credit rate.',
+    },
     rates,
     components:components.map(item=>({
       ...item,
@@ -1157,7 +1204,7 @@ function estimateNetlifyCredits(rows:any[], bandwidth:any, schedules:any[]) {
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===2 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===3 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -1178,6 +1225,7 @@ export async function cachedDeploymentHistory(context:Context) {
 
   const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
   let netlifyDeployHistory:any[]=[];
+  let netlifyPreviewHistory:any[]=[];
   if(netlifyToken){
     try{
       const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
@@ -1192,18 +1240,24 @@ export async function cachedDeploymentHistory(context:Context) {
         collected.push(...rows);
         if(rows.length<100) break;
       }
+      const normalizeDeploy=(row:any)=>({
+        deployId:clean(row?.id,120),
+        commit:clean(row?.commit_ref,80),
+        state:clean(row?.state,40),
+        context:clean(row?.context,40),
+        reviewId:row?.review_id==null?null:Number(row.review_id),
+        title:clean(row?.title,300),
+        createdAt:clean(row?.created_at,80),
+        publishedAt:clean(row?.published_at,80),
+        deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
+        errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
+      });
       netlifyDeployHistory=collected
         .filter((row:any)=>clean(row?.context,40)==='production')
-        .map((row:any)=>({
-          deployId:clean(row?.id,120),
-          commit:clean(row?.commit_ref,80),
-          state:clean(row?.state,40),
-          title:clean(row?.title,300),
-          createdAt:clean(row?.created_at,80),
-          publishedAt:clean(row?.published_at,80),
-          deployTime:Number.isFinite(Number(row?.deploy_time))?Number(row.deploy_time):null,
-          errorMessage:clean(row?.error_message || row?.summary?.messages?.find?.((message:any)=>message?.type==='error')?.description,1000),
-        }));
+        .map(normalizeDeploy);
+      netlifyPreviewHistory=collected
+        .filter((row:any)=>clean(row?.context,40)==='deploy-preview')
+        .map(normalizeDeploy);
     }catch{}
   }
   if(current.deployId && netlifyToken){
@@ -1324,7 +1378,7 @@ export async function cachedDeploymentHistory(context:Context) {
   );
   const postDeployVerification=await readPostDeployVerification(context);
   const bandwidthUsage=await fetchNetlifyBandwidthUsage(netlifyToken);
-  const creditUsage=estimateNetlifyCredits(netlifyDeployHistory,bandwidthUsage,current.functionSchedules||[]);
+  const creditUsage=estimateNetlifyCredits(netlifyDeployHistory,netlifyPreviewHistory,bandwidthUsage,current.functionSchedules||[]);
   const result={
     generatedAt:new Date().toISOString(),
     current,
