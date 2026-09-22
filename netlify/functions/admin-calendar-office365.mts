@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { requireAdmin } from './_shared/admin';
-import { office365CalendarConfig, readOffice365Conflicts, readOffice365ResolvedConflicts, readOffice365SyncAudit, readOffice365SyncState, resolveOffice365Conflict, syncOffice365Calendar, verifyOffice365Calendar } from './_shared/office365-calendar-sync';
+import { office365CalendarConfig, readOffice365Conflicts, readOffice365ResolvedConflicts, readOffice365SyncAudit, readOffice365SyncState, repairOffice365VerificationIssue, resolveOffice365Conflict, syncOffice365Calendar, verifyOffice365Calendar } from './_shared/office365-calendar-sync';
 
 export default async(req:Request,context:Context)=>{
   const auth=await requireAdmin(req);if(auth.response)return auth.response;
@@ -39,6 +39,10 @@ export default async(req:Request,context:Context)=>{
       if(body?.action==='verify_only'){
         const verification=await verifyOffice365Calendar(context);
         return Response.json({ok:Boolean(verification.ok),verification},{headers:{'Cache-Control':'private, no-store'}});
+      }
+      if(body?.action==='repair_verification'){
+        const result=await repairOffice365VerificationIssue(context,body?.repair||{},auth.user?.email||'Unknown staff user');
+        return Response.json(result,{headers:{'Cache-Control':'private, no-store'}});
       }
       const result=await syncOffice365Calendar(context,'manual',auth.user?.email||'Unknown staff user');
       return Response.json({ok:true,...result},{headers:{'Cache-Control':'private, no-store'}});
