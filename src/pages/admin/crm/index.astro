@@ -424,34 +424,57 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   function staffIdentityLine(value){
     const s=staffMatch(value);return s?esc(s.name)+(s.jobTitle?' · '+esc(s.jobTitle):''):esc(value||'');
   }
-  function mountStaffSelector(slot,{name,value='',placeholder='Search staff…'}={}){
+  function sameDateLoad(staff,date){
+    if(!staff||!date)return null;
+    return (staff.dateLoad||[]).find((row)=>row.date===String(date).slice(0,10))||null;
+  }
+  function loadWarning(staff,date){
+    const load=sameDateLoad(staff,date);
+    if(!load)return '';
+    if(load.heavy)return staff.name+' already has '+load.responsibilityCount+' responsibilit'+(load.responsibilityCount===1?'y':'ies')+' across '+load.eventCount+' event'+(load.eventCount===1?'':'s')+' on '+date+'.';
+    if(load.responsibilityCount>=3)return staff.name+' already has '+load.responsibilityCount+' responsibilities on '+date+'.';
+    return '';
+  }
+  function mountStaffSelector(slot,{name,value='',placeholder='Search staff…',contextDate=''}={}){
     if(!slot)return;
     slot.innerHTML='';
     const root=document.createElement('div');root.className='relative';
     const hidden=document.createElement('input');hidden.type='hidden';hidden.name=name||'';hidden.dataset.staffValue='';
     const input=document.createElement('input');input.type='search';input.autocomplete='off';input.placeholder=placeholder;input.className='w-full rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 pr-10 text-sm';
-    const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.35rem)] z-50 hidden max-h-72 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
+    const menu=document.createElement('div');menu.className='absolute left-0 right-0 top-[calc(100%+.35rem)] z-50 hidden max-h-80 overflow-y-auto rounded-xl border border-[var(--koa-line)] bg-white p-2 shadow-xl';
+    const warning=document.createElement('p');warning.className='mt-1 hidden rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-[.66rem] font-semibold leading-4 text-amber-900';warning.dataset.staffLoadWarning='';
     const chosen=staffMatch(value);
     hidden.value=chosen?.email||String(value||'').trim();
     input.value=chosen?.name||'';
     if(value&&!chosen){input.placeholder='Previous assignment: '+String(value).slice(0,80);}
+    const showWarning=(staff)=>{
+      const message=loadWarning(staff,contextDate);
+      warning.textContent=message;
+      warning.classList.toggle('hidden',!message);
+      input.classList.toggle('border-amber-400',Boolean(message));
+    };
+    showWarning(chosen);
     const renderOptions=()=>{
       const q=String(input.value||'').trim().toLowerCase();
       const rows=(data.staff||[]).filter((s)=>!q||[s.name,s.email,s.jobTitle,s.roleLabel].some((v)=>String(v||'').toLowerCase().includes(q))).slice(0,30);
       const clear='<button type="button" data-staff-clear class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-xs font-bold text-[var(--koa-ink)]/55 hover:bg-[var(--koa-sand)]"><span class="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--koa-sand)]">—</span><span>Unassigned</span></button>';
-      menu.innerHTML=clear+rows.map((s)=>'<button type="button" data-staff-option="'+esc(s.email)+'" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[var(--koa-sand)]">'+staffAvatar(s.email,'h-9 w-9')+'<span class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+esc(s.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+esc(s.jobTitle||s.roleLabel||'Staff')+'</span></span></button>').join('');
+      menu.innerHTML=clear+rows.map((s)=>{
+        const load=sameDateLoad(s,contextDate);
+        const loadBadge=load&&load.heavy?'<span class="ml-auto shrink-0 rounded-full bg-amber-100 px-2 py-1 text-[.5rem] font-black uppercase tracking-[.05em] text-amber-900">'+load.responsibilityCount+' same-day</span>':load&&load.responsibilityCount>=3?'<span class="ml-auto shrink-0 rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.05em] text-[var(--koa-clay)]">'+load.responsibilityCount+' same-day</span>':'';
+        return '<button type="button" data-staff-option="'+esc(s.email)+'" class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-[var(--koa-sand)]">'+staffAvatar(s.email,'h-9 w-9')+'<span class="min-w-0"><strong class="block truncate text-sm text-[var(--koa-forest)]">'+esc(s.name)+'</strong><span class="block truncate text-xs text-[var(--koa-ink)]/50">'+esc(s.jobTitle||s.roleLabel||'Staff')+' · '+Number(s.workload?.totalOpenAssignments||0)+' open</span></span>'+loadBadge+'</button>';
+      }).join('');
       menu.classList.remove('hidden');
-      menu.querySelector('[data-staff-clear]')?.addEventListener('click',()=>{hidden.value='';input.value='';menu.classList.add('hidden');});
+      menu.querySelector('[data-staff-clear]')?.addEventListener('click',()=>{hidden.value='';input.value='';showWarning(null);menu.classList.add('hidden');});
       menu.querySelectorAll('[data-staff-option]').forEach((button)=>button.addEventListener('click',()=>{
         const s=(data.staff||[]).find((row)=>row.email===button.dataset.staffOption);if(!s)return;
-        hidden.value=s.email;input.value=s.name;menu.classList.add('hidden');
+        hidden.value=s.email;input.value=s.name;showWarning(s);menu.classList.add('hidden');
       }));
     };
     input.addEventListener('focus',renderOptions);
-    input.addEventListener('input',()=>{hidden.value='';renderOptions();});
+    input.addEventListener('input',()=>{hidden.value='';showWarning(null);renderOptions();});
     input.addEventListener('keydown',(event)=>{if(event.key==='Escape')menu.classList.add('hidden');});
     input.addEventListener('blur',()=>setTimeout(()=>menu.classList.add('hidden'),160));
-    root.append(hidden,input,menu);slot.appendChild(root);
+    root.append(hidden,input,menu,warning);slot.appendChild(root);
   }
   async function post(payload){ const r=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); const j=await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error||'Request failed'); return j; }
   async function load(){
@@ -630,8 +653,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     if(p.stage==='booked')links.push('<a href="/admin/events/?recordId='+encodeURIComponent(p.id)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Event Ops</a>');
     links.push('<a href="/planning/?record='+encodeURIComponent(p.id)+'" target="_blank" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Client planning</a>');
     $('[data-detail-links]').innerHTML=links.join('');
-    const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; mountStaffSelector($('[data-project-owner-selector]'),{name:'owner',value:p.meta?.owner||'',placeholder:'Search project owner'}); f.company.value=p.meta?.company||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
-    mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee'});
+    const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; mountStaffSelector($('[data-project-owner-selector]'),{name:'owner',value:p.meta?.owner||'',placeholder:'Search project owner',contextDate:p.customer?.eventDate||''}); f.company.value=p.meta?.company||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
+    mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee',contextDate:p.customer?.eventDate||''});
     const recipient=$('[data-client-email-recipient]'); if(recipient) recipient.value=p.customer?.email||'';
     const templateSelect=$('[data-client-email-template]');
     if(templateSelect){
@@ -717,7 +740,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   });
   $('[data-project-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-project',recordId:selectedId,projectStatus:f.projectStatus.value,owner:f.owner.value,company:f.company.value,address:f.address.value,partnerName:f.partnerName.value,sourceDetail:f.sourceDetail.value,tags:f.tags.value.split(',').map(x=>x.trim()).filter(Boolean)});await load();});
   $('[data-note-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-note',recordId:selectedId,body:f.body.value});f.reset();await load();});
-  $('[data-task-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-task',recordId:selectedId,title:f.title.value,dueDate:f.dueDate.value,assignee:f.assignee.value,priority:f.priority.value});f.reset();mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee'});await load();});
+  $('[data-task-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-task',recordId:selectedId,title:f.title.value,dueDate:f.dueDate.value,assignee:f.assignee.value,priority:f.priority.value});f.reset();mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee',contextDate:data.projects.find(x=>x.id===selectedId)?.customer?.eventDate||''});await load();});
   $('[data-appointment-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'schedule-appointment',recordId:selectedId,title:f.title.value,startsAt:f.startsAt.value,durationMinutes:f.durationMinutes.value,location:f.location.value});f.reset();await load();});
   $('[data-enroll-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;if(!f.workflowId.value)return;await post({action:'enroll-workflow',recordId:selectedId,workflowId:f.workflowId.value});await load();});
   $('[data-workflow-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;const steps=f.steps.value.split('\n').map((line,i)=>{const [days,...rest]=line.split('|');return{id:'',label:'Step '+(i+1),offsetDays:Number(days)||0,taskTitle:rest.join('|').trim()}}).filter(x=>x.taskTitle);await post({action:'save-workflow',id:f.id.value,name:f.name.value,description:f.description.value,trigger:f.trigger.value,steps,active:f.active.checked});f.reset();f.active.checked=true;await load();});
