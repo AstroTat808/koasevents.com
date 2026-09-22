@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { admin, requestPasswordRecovery, verifyRequestOrigin } from '@netlify/identity';
+import { admin, requestPasswordRecovery } from '@netlify/identity';
 
 const APPROVED_ADMIN_EMAILS = new Set([
   'chris@sibel.org',
@@ -34,9 +34,8 @@ function rolesFor(user: any) {
 export default async (req: Request, _context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
-  try {
-    verifyRequestOrigin(req);
-  } catch {
+  const origin = clean(req.headers.get('origin'), 300);
+  if (!['https://koasevents.com', 'https://www.koasevents.com'].includes(origin)) {
     return Response.json({ error: 'This account setup request must come from the Koa’s Events admin page.' }, { status: 403 });
   }
 
