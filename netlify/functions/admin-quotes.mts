@@ -1353,7 +1353,7 @@ function staffPerformance(records:SalesRecord[], events:any[], staff:Operational
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireCapability('sales.view');
+  const auth = await requireCapability('sales.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
