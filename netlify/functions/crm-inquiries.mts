@@ -56,7 +56,7 @@ function idSuffix() {
 }
 
 function turnstileSecret() {
-  return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
+  return String(Netlify.env.get('TURNSTILE_SECRET_KEY') || Netlify.env.get('TURNSTILE_SECRET') || '').trim();
 }
 
 function mobileIngestSecret() {
