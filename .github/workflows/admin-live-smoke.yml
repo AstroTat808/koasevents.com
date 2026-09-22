@@ -1,0 +1,73 @@
+name: Admin live smoke
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/admin-live-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify live admin pages and protected APIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://koasevents.com"
+
+          admin_html="$(curl -fsSL "$base/admin/")"
+          printf '%s' "$admin_html" | grep -q "Content Admin"
+          printf '%s' "$admin_html" | grep -q "Create or repair an approved admin account"
+
+          users_html="$(curl -fsSL "$base/admin/staff/")"
+          printf '%s' "$users_html" | grep -q "User Management"
+          printf '%s' "$users_html" | grep -q "Custom roles"
+          printf '%s' "$users_html" | grep -q "Login history + active sessions"
+
+          for path in /api/admin/staff /api/admin/custom-roles /api/admin/auth-security; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' "$base$path")"
+            if [ "$code" != "401" ]; then
+              echo "::error::$path expected 401 without authentication, got $code"
+              cat /tmp/body
+              exit 1
+            fi
+          done
+
+          code="$(curl -sS -o /tmp/body -w '%{http_code}' "$base/api/admin/bootstrap")"
+          if [ "$code" != "405" ]; then
+            echo "::error::bootstrap GET expected 405, got $code"
+            cat /tmp/body
+            exit 1
+          fi
+
+      - name: Verify both protected administrator accounts can be created or repaired
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://koasevents.com"
+          for email in chris@sibel.org koasadmin@koasevents.com; do
+            body="$(mktemp)"
+            code="$(curl -sS -o "$body" -w '%{http_code}'               -X POST "$base/api/admin/bootstrap"               -H 'Origin: https://koasevents.com'               -H 'Content-Type: application/json'               --data "{\"email\":\"$email\"}")"
+            echo "$email -> HTTP $code"
+            cat "$body"
+            echo
+            if [ "$code" != "200" ] && [ "$code" != "502" ]; then
+              echo "::error::administrator bootstrap failed for $email"
+              exit 1
+            fi
+            if [ "$code" = "502" ] && ! grep -q '"accountReady":true' "$body"; then
+              echo "::error::account was not confirmed ready for $email"
+              exit 1
+            fi
+          done
+
+      - name: Verify unapproved bootstrap is rejected
+        shell: bash
+        run: |
+          code="$(curl -sS -o /tmp/body -w '%{http_code}'             -X POST https://koasevents.com/api/admin/bootstrap             -H 'Origin: https://koasevents.com'             -H 'Content-Type: application/json'             --data '{"email":"not-approved@example.com"}')"
+          test "$code" = "403"
