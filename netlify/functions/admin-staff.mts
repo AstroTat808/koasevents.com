@@ -1,10 +1,10 @@
 import type { Context, Config } from '@netlify/functions';
-import { admin } from '@netlify/identity';
+import { admin, requestPasswordRecovery } from '@netlify/identity';
 import { requireAdmin, STAFF_CAPABILITIES } from './_shared/admin';
 import { appendStaffAudit, readStaffAudit } from './_shared/staff-audit';
 
 const PROTECTED_ADMIN_EMAILS = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-const STAFF_ROLES = new Set(['sales','manager']);
+const STAFF_ROLES = new Set(['sales','manager','admin']);
 const CAPABILITY_LABELS:Record<string,string>={
   'blog.manage':'Publish + manage Blog',
   'event_ops.manage':'Edit Event Ops',
@@ -68,8 +68,8 @@ async function sendInviteEmail(email:string,name:string,role:string,password:str
       from,to:[email],subject:'Your Koa\'s Events staff account',
       html:`<div style="font-family:Arial,sans-serif;line-height:1.6;color:#23352f">
         <h2 style="margin:0 0 16px">Aloha ${name||'there'},</h2>
-        <p>Your Koa's Events staff account has been created with <strong>${role==='manager'?'Manager':'Sales Rep'}</strong> access.</p>
-        <p>Sign in at <a href="https://koasevents.com/staff/">https://koasevents.com/staff/</a> using:</p>
+        <p>Your Koa's Events account has been created with <strong>${role==='admin'?'Administrator':role==='manager'?'Manager':'Sales Rep'}</strong> access.</p>
+        <p>Sign in at <a href="${role==='admin'?'https://koasevents.com/admin/':'https://koasevents.com/staff/'}">${role==='admin'?'https://koasevents.com/admin/':'https://koasevents.com/staff/'}</a> using:</p>
         <p><strong>Email:</strong> ${email}<br><strong>Temporary password:</strong> ${password}</p>
         <p>After signing in, use Change Password in the Staff Workspace.</p>
         <p>Mahalo,<br>Koa's Events</p>
@@ -102,7 +102,7 @@ export default async (req:Request,context:Context) => {
   if(action==='invite'){
     const email=normalizeEmail(body.email); const name=clean(body.name,180); const role=clean(body.role,40).toLowerCase();
     if(!email.includes('@')) return Response.json({error:'A valid email is required.'},{status:400});
-    if(!STAFF_ROLES.has(role)) return Response.json({error:'Choose Sales Rep or Manager.'},{status:400});
+    if(!STAFF_ROLES.has(role)) return Response.json({error:'Choose Sales Rep, Manager, or Administrator.'},{status:400});
     const existing=(await admin.listUsers({page:1,perPage:200})).find((u:any)=>normalizeEmail(u?.email)===email);
     if(existing) return Response.json({error:'That email already has an Identity account. Change its role instead.'},{status:409});
     const password=randomPassword();
@@ -116,13 +116,19 @@ export default async (req:Request,context:Context) => {
   if(!userId) return Response.json({error:'User ID required.'},{status:400});
   const current:any=await admin.getUser(userId);
   const email=normalizeEmail(current?.email);
+  if(action==='reset-password'){
+    await requestPasswordRecovery(email);
+    await appendStaffAudit(context,{actor,action:'staff_password_reset_sent',subjectId:userId,subjectEmail:email,detail:'Sent password reset email to '+email+'.',metadata:{}});
+    return Response.json({ok:true,message:'Password reset email sent.'});
+  }
+
   if(PROTECTED_ADMIN_EMAILS.has(email) && ['set-role','set-permissions','deactivate','delete'].includes(action)){
     return Response.json({error:'Protected administrator accounts cannot be changed here.'},{status:403});
   }
 
   if(action==='set-role'||action==='reactivate'){
     const role=clean(body.role,40).toLowerCase();
-    if(!STAFF_ROLES.has(role)) return Response.json({error:'Choose Sales Rep or Manager.'},{status:400});
+    if(!STAFF_ROLES.has(role)) return Response.json({error:'Choose Sales Rep, Manager, or Administrator.'},{status:400});
     const previous=effectiveRole(current);
     const appMetadata={...metadataFor(current),roles:[role],active:true,permissions:permissionsFor(current)};
     const updated:any=await admin.updateUser(userId,{role,app_metadata:appMetadata});
