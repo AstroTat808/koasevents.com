@@ -975,6 +975,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const operationalMap={
           scheduled:['Scheduled function deployed','Office 365 automatic synchronization is deployed and eligible to run on schedule.','Healthy','border-emerald-200 bg-emerald-50','bg-emerald-100 text-emerald-800'],
           paused:['Sync intentionally paused by credit saver','The Office 365 scheduled function is deployed, but automatic runs are intentionally paused by the active credit-saver policy. Manual Sync now + verify remains available.','Paused','border-amber-200 bg-amber-50','bg-amber-100 text-amber-900'],
+          saver:['Office 365 sync running in Saver mode','Automatic Office 365 synchronization is reduced from hourly to every four hours. Manual Sync now + verify remains available.','Saver','border-amber-200 bg-amber-50','bg-amber-100 text-amber-900'],
           authentication_failed:['Microsoft Graph authentication failed','The production sync reported an authentication, permission, credential, or tenant-consent failure.','Auth failed','border-red-300 bg-red-50','bg-red-100 text-red-800'],
           production_behind:['Production too far behind GitHub to verify','Production is more than one commit behind main, so the newest Office 365 code cannot be treated as verified yet.','Verification blocked','border-red-300 bg-red-50','bg-red-100 text-red-800'],
           schedule_missing:['Office 365 scheduled function missing','The current Netlify production deploy does not report the office365-calendar-sync scheduled function.','Missing','border-red-300 bg-red-50','bg-red-100 text-red-800'],
@@ -997,11 +998,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           : 'Current production deploy does not list office365-calendar-sync.';
 
         const pause=signals.creditSaver||{};
-        office365Pause.textContent=pause.paused?'Paused intentionally':'Automatic sync active';
-        office365Pause.className='mt-2 text-sm font-semibold '+(pause.paused?'text-amber-800':'text-emerald-800');
-        office365PauseDetail.textContent=pause.paused
+        const officeMode=String(pause.mode||'normal');
+        office365Pause.textContent=officeMode==='paused'?'Paused intentionally':officeMode==='saver'?'Saver · every 4 hours':'Automatic sync active';
+        office365Pause.className='mt-2 text-sm font-semibold '+(officeMode==='normal'?'text-emerald-800':'text-amber-800');
+        office365PauseDetail.textContent=officeMode==='paused'
           ? 'Credit saver is suppressing scheduled Office 365 runs'+(pause.expiresAt?' until '+new Date(pause.expiresAt).toLocaleString():'')+'.'
-          : 'Credit saver is not suppressing Office 365 scheduled runs.';
+          : officeMode==='saver'
+            ? 'Credit saver allows one scheduled sync every four hours'+(pause.expiresAt?' until '+new Date(pause.expiresAt).toLocaleString():'')+'.'
+            : 'Office 365 is using its normal hourly automatic schedule.';
 
         const graphAuth=signals.authentication||{};
         const graphLabels={succeeded:'Succeeded',failed:'Failed',awaiting:'Awaiting first confirmed sync',not_configured:'Not configured'};
