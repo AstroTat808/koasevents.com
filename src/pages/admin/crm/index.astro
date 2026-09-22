@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
 <BaseLayout noindex title="Koa’s Business CRM" description="Unified client, project, workflow, task, scheduling, communication and template management." canonical="https://koasevents.com/admin/crm/">
-  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+  <main data-crm-watchdog class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell">
       <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -336,6 +336,56 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
 <script is:inline>
+  (() => {
+    const meta = (name) => document.querySelector('meta[name="'+name+'"]')?.getAttribute('content') || '';
+    const deployId = meta('koa-deploy-id');
+    const commit = meta('koa-build-commit');
+    let finished = false;
+    let timer = null;
+
+    const send = async (status, phase, detail) => {
+      if (finished && status === 'failed') return;
+      if (status === 'healthy') finished = true;
+      if (timer) clearTimeout(timer);
+      try {
+        await fetch('/api/admin/crm',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'same-origin',
+          keepalive:true,
+          body:JSON.stringify({action:'report-startup-health',status,phase,detail,deployId,commit}),
+        });
+      } catch {}
+    };
+
+    window.__koaCrmStartupWatchdog = {
+      healthy(detail='CRM interface rendered') { send('healthy','rendered',detail); },
+      failed(phase='browser-error',detail='CRM startup failed') { send('failed',phase,detail); },
+    };
+
+    const pending = window.__koaCrmStartupPending;
+    if (pending) {
+      window.__koaCrmStartupPending = null;
+      window.__koaCrmStartupWatchdog[pending.status === 'healthy' ? 'healthy' : 'failed'](pending.phase, pending.detail);
+      return;
+    }
+
+    (async () => {
+      try {
+        const response = await fetch('/api/admin/session',{cache:'no-store',credentials:'same-origin',signal:AbortSignal.timeout(8000)});
+        if (!response.ok) return;
+        const session = await response.json();
+        const capabilities = new Set(session?.capabilities || session?.permissions || []);
+        if (session?.accessBlocked || (!session?.isAdmin && !capabilities.has('crm.view'))) return;
+        timer = setTimeout(() => {
+          window.__koaCrmStartupWatchdog?.failed('browser-timeout','CRM page shell loaded but the client workspace did not finish initializing within 20 seconds.');
+        }, 20000);
+      } catch {}
+    })();
+  })();
+</script>
+
+<script is:inline>
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
@@ -378,6 +428,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-admin-ui]')?.classList.remove('hidden');
     applyRoleUi();
     render();
+    const watchdog=window.__koaCrmStartupWatchdog;
+    if(watchdog) watchdog.healthy('Business CRM data loaded and interface rendered.');
+    else window.__koaCrmStartupPending={status:'healthy',phase:'rendered',detail:'Business CRM data loaded and interface rendered.'};
     return true;
   }
   function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName].join(' ').toLowerCase(); }
@@ -646,6 +699,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
   });
 
-  (async()=>{try{await load();}catch(error){console.error('Business CRM startup failed',error);$('[data-admin-ui]')?.classList.add('hidden');$('[data-unauthorized]')?.classList.add('hidden');const status=$('[data-crm-status]');const message=$('[data-crm-status-message]');status?.classList.remove('hidden');if(message)message.innerHTML='Business CRM could not initialize. <button type="button" data-crm-retry class="underline font-black">Retry</button>';status?.querySelector('[data-crm-retry]')?.addEventListener('click',()=>load().catch((retryError)=>{console.error('Business CRM retry failed',retryError);if(message)message.textContent='Business CRM is still unavailable. The CRM service did not respond within 15 seconds.';}));}})();
+  (async()=>{try{await load();}catch(error){console.error('Business CRM startup failed',error);const detail=error instanceof Error?error.message:'Business CRM startup failed';const watchdog=window.__koaCrmStartupWatchdog;if(watchdog)watchdog.failed('startup-exception',detail);else window.__koaCrmStartupPending={status:'failed',phase:'startup-exception',detail};$('[data-admin-ui]')?.classList.add('hidden');$('[data-unauthorized]')?.classList.add('hidden');const status=$('[data-crm-status]');const message=$('[data-crm-status-message]');status?.classList.remove('hidden');if(message)message.innerHTML='Business CRM could not initialize. <button type="button" data-crm-retry class="underline font-black">Retry</button>';status?.querySelector('[data-crm-retry]')?.addEventListener('click',()=>load().catch((retryError)=>{console.error('Business CRM retry failed',retryError);const retryDetail=retryError instanceof Error?retryError.message:'Business CRM retry failed';window.__koaCrmStartupWatchdog?.failed('retry-failed',retryDetail);if(message)message.textContent='Business CRM is still unavailable. The CRM service did not respond within 15 seconds.';}));}})();
 </script>
 </BaseLayout>
