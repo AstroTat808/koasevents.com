@@ -1065,7 +1065,7 @@ async function fetchNetlifyBandwidthUsage(token:string) {
   }
 }
 
-function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[]) {
+function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, schedules:any[], creditSnapshots:any[]=[]) {
   const fallbackWindow=billingCycleWindow();
   const cycleStart=bandwidth?.periodStart && Number.isFinite(Date.parse(bandwidth.periodStart))
     ? bandwidth.periodStart
@@ -1125,13 +1125,61 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
   const rawElapsedDays=Math.max(0,(Math.min(nowMs,endMs)-startMs)/86400000);
   const projectionElapsedDays=Math.max(1,rawElapsedDays);
   const cycleDays=Math.max(1,(endMs-startMs)/86400000);
-  const dailyBurnRate=totalCredits/projectionElapsedDays;
-  const projectedEndOfCycleCredits=Math.round(dailyBurnRate*cycleDays*100)/100;
+  const remainingDays=Math.max(0,(endMs-Math.min(nowMs,endMs))/86400000);
+  const fullCycleDailyBurnRate=totalCredits/projectionElapsedDays;
+
+  const recentCutoff=Math.max(startMs,nowMs-7*86400000);
+  const snapshotRows=(creditSnapshots||[])
+    .filter((row:any)=>
+      String(row?.cycleStart||'')===String(cycleStart)
+      && Number.isFinite(Date.parse(String(row?.at||'')))
+      && Date.parse(String(row.at))>=recentCutoff
+      && Date.parse(String(row.at))<=nowMs
+      && Number.isFinite(Number(row?.totalEstimatedCredits))
+    )
+    .sort((a:any,b:any)=>Date.parse(String(a.at))-Date.parse(String(b.at)));
+  snapshotRows.push({at:new Date(nowMs).toISOString(),totalEstimatedCredits:totalCredits,cycleStart});
+
+  let recentDailyBurnRate:number;
+  let recentRateSource='deploy timestamps + cycle average';
+  const firstRecent=snapshotRows[0];
+  const lastRecent=snapshotRows[snapshotRows.length-1];
+  const snapshotSpanDays=firstRecent&&lastRecent
+    ? Math.max(0,(Date.parse(String(lastRecent.at))-Date.parse(String(firstRecent.at)))/86400000)
+    : 0;
+
+  if(snapshotRows.length>=2 && snapshotSpanDays>=0.25){
+    const delta=Math.max(0,Number(lastRecent.totalEstimatedCredits)-Number(firstRecent.totalEstimatedCredits));
+    recentDailyBurnRate=delta/Math.max(0.25,snapshotSpanDays);
+    recentRateSource='stored credit snapshots';
+  }else{
+    const recentSuccessful=successful.filter((row:any)=>{
+      const published=Date.parse(String(row?.publishedAt||row?.createdAt||''));
+      return Number.isFinite(published)&&published>=recentCutoff&&published<=nowMs;
+    });
+    const recentWindowDays=Math.max(1,(Math.min(nowMs,endMs)-recentCutoff)/86400000);
+    const recentDeployRate=(recentSuccessful.length*rates.productionDeploy)/recentWindowDays;
+    const nonDeployRate=Math.max(0,totalCredits-deployCredits)/projectionElapsedDays;
+    recentDailyBurnRate=recentDeployRate+nonDeployRate;
+  }
+
+  const recentWeight=Math.min(0.95,Math.max(0.5,positiveNumber(Netlify.env.get('KOA_NETLIFY_RECENT_BURN_WEIGHT'),0.7)));
+  const baselineWeight=1-recentWeight;
+  const weightedDailyBurnRate=(recentDailyBurnRate*recentWeight)+(fullCycleDailyBurnRate*baselineWeight);
+  const projectedEndOfCycleCredits=Math.round((totalCredits+weightedDailyBurnRate*remainingDays)*100)/100;
   const projectedAllowancePercent=monthlyAllowance
     ? Math.round((projectedEndOfCycleCredits/monthlyAllowance)*1000)/10
     : null;
   const projectedSeverity=creditSeverity(projectedAllowancePercent);
-  const projectionConfidence=rawElapsedDays>=7?'high':rawElapsedDays>=3?'medium':'low';
+  const projectionConfidence=snapshotSpanDays>=7?'high':snapshotSpanDays>=2?'medium':rawElapsedDays>=7?'medium':'low';
+
+  const remainingCreditsRaw=Math.max(0,monthlyAllowance-totalCredits);
+  const daysUntilExhausted=projectedEndOfCycleCredits>monthlyAllowance && weightedDailyBurnRate>0
+    ? Math.max(0,remainingCreditsRaw/weightedDailyBurnRate)
+    : null;
+  const exhaustionAt=daysUntilExhausted==null
+    ? null
+    : new Date(nowMs+daysUntilExhausted*86400000).toISOString();
 
   const previewFirstEnabledAt=clean(
     Netlify.env.get('KOA_NETLIFY_PREVIEW_FIRST_ENABLED_AT') || '2026-09-22T11:20:44Z',
@@ -1154,7 +1202,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:3,
+    version:4,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1166,13 +1214,23 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     severity:actualSeverity,
     warningSeverity,
     projection:{
-      dailyBurnRate:Math.round(dailyBurnRate*100)/100,
+      dailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
+      weightedDailyBurnRate:Math.round(weightedDailyBurnRate*100)/100,
+      recent7DayBurnRate:Math.round(recentDailyBurnRate*100)/100,
+      fullCycleDailyBurnRate:Math.round(fullCycleDailyBurnRate*100)/100,
+      recentWeight:Math.round(recentWeight*1000)/10,
+      baselineWeight:Math.round(baselineWeight*1000)/10,
+      recentRateSource,
+      snapshotSpanDays:Math.round(snapshotSpanDays*100)/100,
       cycleDays:Math.round(cycleDays*100)/100,
       elapsedDays:Math.round(rawElapsedDays*100)/100,
+      remainingDays:Math.round(remainingDays*100)/100,
       projectedEndOfCycleCredits,
       projectedAllowancePercent,
       severity:projectedSeverity,
       confidence:projectionConfidence,
+      daysUntilExhausted:daysUntilExhausted==null?null:Math.round(daysUntilExhausted*10)/10,
+      exhaustionAt,
     },
     savings:{
       enabledAt:previewFirstEnabledAt,
@@ -1204,7 +1262,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===3 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===4 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -1378,9 +1436,32 @@ export async function cachedDeploymentHistory(context:Context) {
   );
   const postDeployVerification=await readPostDeployVerification(context);
   const bandwidthUsage=await fetchNetlifyBandwidthUsage(netlifyToken);
-  const creditUsage=estimateNetlifyCredits(netlifyDeployHistory,netlifyPreviewHistory,bandwidthUsage,current.functionSchedules||[]);
+  const creditSnapshots=((await store.get('credits/history',{type:'json'})) || []) as any[];
+  const creditUsage=estimateNetlifyCredits(
+    netlifyDeployHistory,
+    netlifyPreviewHistory,
+    bandwidthUsage,
+    current.functionSchedules||[],
+    creditSnapshots,
+  );
+  const generatedAt=new Date().toISOString();
+  const compactCreditSnapshot={
+    at:generatedAt,
+    cycleStart:creditUsage.cycleStart,
+    totalEstimatedCredits:creditUsage.totalEstimatedCredits,
+  };
+  const sameCycleSnapshots=creditSnapshots
+    .filter((row:any)=>String(row?.cycleStart||'')===String(creditUsage.cycleStart))
+    .sort((a:any,b:any)=>Date.parse(String(b?.at||''))-Date.parse(String(a?.at||'')));
+  const latestCreditSnapshot=sameCycleSnapshots[0]||null;
+  const latestAgeMs=latestCreditSnapshot?Date.now()-Date.parse(String(latestCreditSnapshot.at||'')):Infinity;
+  const nextCreditSnapshots=latestAgeMs<60*60*1000
+    ? [compactCreditSnapshot,...creditSnapshots.filter((row:any)=>row!==latestCreditSnapshot)]
+    : [compactCreditSnapshot,...creditSnapshots];
+  await store.setJSON('credits/history',nextCreditSnapshots.slice(0,240));
+
   const result={
-    generatedAt:new Date().toISOString(),
+    generatedAt,
     current,
     deploymentHealthy,
     postDeployVerification,
