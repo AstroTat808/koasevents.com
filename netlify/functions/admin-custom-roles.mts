@@ -27,8 +27,14 @@ export default async(req:Request,context:Context)=>{
   if(action==='save'){
     try{
       const role=await saveCustomRole(body.role||{},actor);
-      await appendStaffAudit(context,{actor,action:'custom_role_saved',detail:'Saved custom role '+role.name+'.',metadata:{roleId:role.id,capabilities:role.capabilities}});
-      return Response.json({ok:true,role});
+      const users=await admin.listUsers({page:1,perPage:200});
+      const assigned=users.filter((u:any)=>clean(meta(u)?.customRoleId,100)===role.id);
+      await Promise.all(assigned.map(async(user:any)=>{
+        const nextVersion=sessionVersion(user)+1;
+        await admin.updateUser(user.id,{role:'custom',app_metadata:{...meta(user),roles:['custom'],customRoleId:role.id,customRoleName:role.name,permissions:role.capabilities,active:true,sessionVersion:nextVersion}});
+      }));
+      await appendStaffAudit(context,{actor,action:'custom_role_saved',detail:'Saved custom role '+role.name+' and synchronized '+assigned.length+' assigned account(s).',metadata:{roleId:role.id,capabilities:role.capabilities,assignedUsers:assigned.length}});
+      return Response.json({ok:true,role,updatedUsers:assigned.length});
     }catch(error){return Response.json({error:error instanceof Error?error.message:'Unable to save custom role.'},{status:400});}
   }
 
