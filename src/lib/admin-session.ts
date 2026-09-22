@@ -7,6 +7,7 @@ export type AdminSessionRole =
   | 'content_editor'
   | 'accounting'
   | 'read_only'
+  | 'custom'
   | 'deactivated'
   | 'none';
 
