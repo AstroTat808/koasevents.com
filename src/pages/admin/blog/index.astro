@@ -39,25 +39,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const form = document.querySelector('[data-post-form]');
     const list = document.querySelector('[data-post-list]');
     const message = document.querySelector('[data-message]');
-    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let posts = [];
     let managerAccess = false;
 
-    function userRoles(user) {
-      const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];
-      return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());
-    }
     function hasAdminAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roles = userRoles(user);
-      return approvedAdminEmails.has(email) || roles.some((role) => ['admin','staff','sales','manager'].includes(role));
+      return Boolean(user?.capabilities?.includes('blog.view') || user?.permissions?.includes('blog.view'));
     }
     function hasManagerAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roles = userRoles(user);
-      const meta=user?.appMetadata||user?.app_metadata||{};
-      const permissions=Array.isArray(meta.permissions)?meta.permissions.map((p)=>String(p||'').toLowerCase()):[];
-      return approvedAdminEmails.has(email) || roles.includes('admin') || roles.includes('manager') || permissions.includes('blog.manage');
+      return Boolean(user?.capabilities?.includes('blog.manage') || user?.permissions?.includes('blog.manage'));
     }
     function applyRoleUi() {
       const publishedOption=form?.elements?.status?.querySelector?.('option[value="published"]');
