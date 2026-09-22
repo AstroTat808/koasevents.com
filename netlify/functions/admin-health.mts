@@ -21,6 +21,59 @@ import {
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, setCreditSaverAction } from './_shared/credit-saver';
+import {
+  office365CalendarConfig,
+  readOffice365Conflicts,
+  readOffice365SyncAudit,
+  readOffice365SyncState,
+} from './_shared/office365-calendar-sync';
+
+function nextHourlySyncIso(now=new Date()){
+  const next=new Date(now);
+  next.setUTCMinutes(0,0,0);
+  next.setUTCHours(next.getUTCHours()+1);
+  return next.toISOString();
+}
+
+async function office365HealthSummary(context:Context){
+  const cfg=office365CalendarConfig();
+  const [state,conflicts,auditRuns]=await Promise.all([
+    readOffice365SyncState(context),
+    readOffice365Conflicts(context),
+    readOffice365SyncAudit(context),
+  ]);
+  const cutoff=Date.now()-24*60*60*1000;
+  const recentRuns=(Array.isArray(auditRuns)?auditRuns:[]).filter((run:any)=>{
+    const at=Date.parse(String(run?.completedAt||run?.startedAt||''));
+    return Number.isFinite(at)&&at>=cutoff;
+  });
+  const changedLast24Hours=recentRuns.reduce((total:number,run:any)=>{
+    const t=run?.totals||{};
+    return total+Number(t.created||0)+Number(t.adopted||0)+Number(t.pushed||0)+Number(t.pulled||0);
+  },0);
+  const lastError=String(state?.lastError||'').trim();
+  const authFailure=/token|unauthori[sz]ed|forbidden|\b401\b|\b403\b|permission|consent|credential|invalid_client|access denied/i.test(lastError);
+  const authenticationStatus=!cfg.configured
+    ? 'not_configured'
+    : lastError
+      ? (authFailure?'authentication_error':'sync_error')
+      : state?.lastSuccessAt
+        ? 'connected'
+        : 'configured';
+  return {
+    configured:Boolean(cfg.configured),
+    authenticationStatus,
+    lastError,
+    lastAttemptAt:String(state?.lastAttemptAt||''),
+    lastSuccessAt:String(state?.lastSuccessAt||''),
+    nextScheduledSyncAt:nextHourlySyncIso(),
+    unresolvedConflicts:Array.isArray(conflicts)?conflicts.length:0,
+    changedLast24Hours,
+    runsLast24Hours:recentRuns.length,
+    calendarOwner:String(cfg.calendarOwner||''),
+    calendarName:String(cfg.calendarName||''),
+  };
+}
 
 export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
@@ -73,17 +126,18 @@ export default async (req:Request,context:Context) => {
     await applyHealthAlertPolicy(context,current,previousHourly);
     await persistHealth(context,current);
     await sendHealthTransitionAlerts(previous,current);
-    const [uptimeHistory,policy,deployments,releases]=await Promise.all([
+    const [uptimeHistory,policy,deployments,releases,office365]=await Promise.all([
       readUptimeHistory(context,2300),
       readHealthAlertPolicy(context),
       cachedDeploymentHistory(context),
       readProductionReleases(context,50),
+      office365HealthSummary(context),
     ]);
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
     deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -102,12 +156,13 @@ export default async (req:Request,context:Context) => {
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
-  const [history,uptimeHistory,deployments,policy,releases]=await Promise.all([
+  const [history,uptimeHistory,deployments,policy,releases,office365]=await Promise.all([
     readHealthHistory(context,120),
     readUptimeHistory(context,2300),
     cachedDeploymentHistory(context),
     readHealthAlertPolicy(context),
     readProductionReleases(context,50),
+    office365HealthSummary(context),
   ]);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
@@ -121,6 +176,7 @@ export default async (req:Request,context:Context) => {
     policy,
     components:healthComponents(),
     deployments,
+    office365,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
