@@ -56,6 +56,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <button data-tab="overview" class="tab-button">Overview</button>
             <button data-tab="documents" class="tab-button">Documents</button>
             <button data-tab="vendors" class="tab-button">Vendors</button>
+            <button data-tab="vendor-ops" class="tab-button">Vendor Ops</button>
             <button data-tab="questionnaire" class="tab-button">Questionnaire</button>
             <button data-tab="timeline" class="tab-button">Run of show</button>
             <button data-tab="checklist" class="tab-button">Checklist</button>
@@ -135,6 +136,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <button data-save-vendors class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save vendors</button>
           </div>
 
+          <div data-panel="vendor-ops" class="panel hidden grid gap-6">
+            <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                <div><p class="eyebrow text-[var(--koa-clay)]">Vendor readiness</p><h3 class="display mt-2 text-4xl">Deadlines + conflicts</h3><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Automatic checks for insurance, Event Brief acknowledgment, arrival times, load-in overlap, and setup collisions.</p></div>
+                <div data-vendor-op-counts class="text-sm text-[var(--koa-ink)]/55"></div>
+              </div>
+              <div data-vendor-conflicts class="mt-5 grid gap-2"></div>
+              <div data-vendor-deadlines class="mt-5 grid gap-2 md:grid-cols-2"></div>
+            </section>
+
+            <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Event Briefs</p><h3 class="display mt-2 text-4xl">Vendor-specific arrival + venue instructions</h3><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Each vendor receives only their own access details, setup responsibilities and applicable Koa’s rules.</p></div>
+              <div data-vendor-briefs class="mt-5 grid gap-4"></div>
+              <button data-save-briefs class="mt-5 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save Event Brief details</button>
+            </section>
+
+            <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">Floor plan + setup ownership</p><h3 class="display mt-2 text-4xl">Who provides, delivers, sets up + removes each item</h3></div><button data-add-setup type="button" class="rounded-full border border-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Add setup item</button></div>
+              <div data-setup-items class="mt-5 grid gap-3"></div>
+              <button data-save-setup class="mt-5 rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save setup ownership</button>
+            </section>
+          </div>
+
           <div data-panel="questionnaire" class="panel hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
             <div><p class="eyebrow text-[var(--koa-clay)]">Planning questionnaire</p><h3 class="display mt-2 text-4xl">Open decisions + client answers</h3></div>
             <div data-questionnaire class="mt-6 grid gap-3"></div>
@@ -192,6 +216,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const timelineEl=document.querySelector('[data-timeline]');
     const checklistEl=document.querySelector('[data-checklist]');
     const tasksEl=document.querySelector('[data-tasks]');
+    const vendorBriefsEl=document.querySelector('[data-vendor-briefs]');
+    const setupItemsEl=document.querySelector('[data-setup-items]');
+    const vendorConflictsEl=document.querySelector('[data-vendor-conflicts]');
+    const vendorDeadlinesEl=document.querySelector('[data-vendor-deadlines]');
 
     let payload={events:[]};
     let selected=null;
@@ -205,7 +233,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(managerAccess)return;
       overviewForm?.querySelectorAll('input,select,textarea,button').forEach((el)=>el.disabled=true);
       uploadForm?.classList.add('hidden');
-      ['[data-add-vendor]','[data-save-vendors]','[data-save-vendor-requirements]','[data-apply-vendor-suggestions]','[data-save-questionnaire]','[data-add-timeline]','[data-save-timeline]','[data-save-checklist]','[data-add-task]','[data-save-tasks]'].forEach((selector)=>document.querySelector(selector)?.classList.add('hidden'));
+      ['[data-add-vendor]','[data-save-vendors]','[data-save-vendor-requirements]','[data-apply-vendor-suggestions]','[data-save-briefs]','[data-add-setup]','[data-save-setup]','[data-save-questionnaire]','[data-add-timeline]','[data-save-timeline]','[data-save-checklist]','[data-add-task]','[data-save-tasks]'].forEach((selector)=>document.querySelector(selector)?.classList.add('hidden'));
     }
     function text(tag,cls,value){const el=document.createElement(tag);if(cls)el.className=cls;el.textContent=value;return el;}
     function dateLabel(value){if(!value)return 'Date TBD';return new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(value.length===10?value+'T12:00:00':value));}
@@ -272,7 +300,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       overviewForm.elements.eventEnd.value=entry.ops.eventEnd||'';
       overviewForm.elements.teardownEnd.value=entry.ops.teardownEnd||'';
       overviewForm.elements.notes.value=entry.ops.notes||'';
-      renderVendorSuggestions();renderVendorRequirements();renderVendors();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
+      renderVendorSuggestions();renderVendorRequirements();renderVendors();renderVendorOperations();renderQuestionnaire();renderTimeline();renderChecklist();renderTasks();renderDocuments();renderSummary();renderEventList();showTab(activeTab);
     }
 
     function renderVendorSuggestions(){
@@ -308,6 +336,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
     function renderVendors(){vendorsEl.innerHTML='';(selected?.ops.vendors||[]).forEach((v)=>vendorsEl.appendChild(vendorRow(v)));if(!(selected?.ops.vendors||[]).length)vendorsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No vendors added yet.'));}
     function collectVendors(){return [...vendorsEl.children].filter((row)=>row.dataset?.id).map((row)=>({id:row.dataset.id,marketplaceVendorId:row.dataset.marketplaceVendorId||'',company:row.querySelector('[data-company]').value,contact:row.querySelector('[data-contact]').value,role:row.querySelector('[data-role]').value,email:row.querySelector('[data-email]').value,phone:row.querySelector('[data-phone]').value,arrivalTime:row.querySelector('[data-arrival]').value,insuranceStatus:row.querySelector('[data-insurance]').value,notes:row.querySelector('[data-notes]').value}));}
+
+
+    function vendorName(id){
+      const v=(selected?.ops?.vendors||[]).find((x)=>String(x.id)===String(id));return v?.company||v?.contact||'Unassigned';
+    }
+    function vendorSelect(value=''){
+      const s=document.createElement('select');s.className='field';
+      s.innerHTML='<option value="">Unassigned / Koa’s</option>'+((selected?.ops?.vendors||[]).map(v=>'<option value="'+escapeHtml(v.id)+'">'+escapeHtml(v.company||v.contact||v.role||'Vendor')+'</option>').join(''));
+      s.value=value||'';return s;
+    }
+    function renderVendorOperations(){
+      const operations=selected?.vendorOperations||{deadlines:[],conflicts:[],counts:{}};
+      const counts=operations.counts||{};
+      const countEl=document.querySelector('[data-vendor-op-counts]');
+      if(countEl)countEl.textContent=[counts.high?counts.high+' high priority':'',counts.medium?counts.medium+' warnings':'',counts.overdue?counts.overdue+' overdue':'',counts.dueSoon?counts.dueSoon+' due soon':''].filter(Boolean).join(' · ')||'No active vendor warnings';
+
+      if(vendorConflictsEl){vendorConflictsEl.innerHTML='';(operations.conflicts||[]).forEach(x=>{const a=document.createElement('article');a.className='rounded-xl border p-3 '+(x.severity==='high'?'border-red-200 bg-red-50':x.severity==='medium'?'border-amber-200 bg-amber-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');a.innerHTML='<span class="text-[.55rem] font-black uppercase tracking-[.08em]">'+escapeHtml(x.severity)+'</span><p class="mt-1 text-sm font-semibold">'+escapeHtml(x.label)+'</p>';vendorConflictsEl.appendChild(a)});if(!(operations.conflicts||[]).length)vendorConflictsEl.textContent='No current conflicts detected.'}
+      if(vendorDeadlinesEl){vendorDeadlinesEl.innerHTML='';(operations.deadlines||[]).forEach(d=>{const a=document.createElement('article');a.className='rounded-xl border border-[var(--koa-line)] p-3';a.innerHTML='<div class="flex items-start justify-between gap-3"><strong class="text-sm">'+escapeHtml(d.vendorName)+'</strong><span class="text-[.55rem] font-black uppercase tracking-[.08em]">'+escapeHtml(String(d.status).replaceAll('_',' '))+'</span></div><p class="mt-1 text-xs">'+escapeHtml(d.label)+' · '+escapeHtml(d.dueDate||'No date')+'</p>';vendorDeadlinesEl.appendChild(a)})}
+
+      if(vendorBriefsEl){vendorBriefsEl.innerHTML='';(selected?.ops?.vendors||[]).forEach(v=>{const card=document.createElement('article');card.dataset.id=v.id;card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';card.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><strong class="text-sm">'+escapeHtml(v.company||v.contact||'Vendor')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+escapeHtml(v.role||'Vendor')+' · '+(v.briefAcknowledgedAt?'Acknowledged':'Not acknowledged')+'</p></div><button type="button" data-send class="rounded-full border border-[var(--koa-forest)] px-3 py-2 text-xs font-bold text-[var(--koa-forest)]">Send Event Brief</button></div><div class="mt-3 grid gap-3 md:grid-cols-3"><label class="text-xs font-semibold">Arrival<input data-arrival type="time" class="field mt-1"></label><label class="text-xs font-semibold">Load-in zone<input data-zone class="field mt-1" placeholder="Pavilion west gate"></label><label class="text-xs font-semibold">Departure<input data-departure type="time" class="field mt-1"></label><label class="text-xs font-semibold md:col-span-2">Parking / access<textarea data-parking rows="2" class="field mt-1"></textarea></label><label class="text-xs font-semibold">Power / water<textarea data-power rows="2" class="field mt-1"></textarea></label><label class="text-xs font-semibold">Emergency contact<input data-emergency class="field mt-1"></label><label class="text-xs font-semibold md:col-span-2">Vendor-specific note<textarea data-note rows="2" class="field mt-1"></textarea></label></div><p data-msg class="mt-2 text-xs text-[var(--koa-ink)]/50"></p>';
+        card.querySelector('[data-arrival]').value=v.arrivalTime||'';card.querySelector('[data-zone]').value=v.loadInZone||'';card.querySelector('[data-departure]').value=v.departureTime||'';card.querySelector('[data-parking]').value=v.parkingInstructions||'';card.querySelector('[data-power]').value=v.powerWaterNeeds||'';card.querySelector('[data-emergency]').value=v.emergencyContact||'';card.querySelector('[data-note]').value=v.briefNote||'';
+        card.querySelector('[data-send]').onclick=async()=>{const msg=card.querySelector('[data-msg]');msg.textContent='Sending…';try{const result=await saveSection('send-vendor-brief',{vendorId:v.id});selected.vendorOperations=result.vendorOperations;msg.textContent='Event Brief sent.';renderVendorOperations()}catch(err){msg.textContent=err.message}};vendorBriefsEl.appendChild(card)});if(!(selected?.ops?.vendors||[]).length)vendorBriefsEl.textContent='Add vendors first.'}
+
+      renderSetupItems();
+    }
+    function collectBriefs(){return [...vendorBriefsEl.children].filter(x=>x.dataset?.id).map(card=>({id:card.dataset.id,arrivalTime:card.querySelector('[data-arrival]').value,loadInZone:card.querySelector('[data-zone]').value,departureTime:card.querySelector('[data-departure]').value,parkingInstructions:card.querySelector('[data-parking]').value,powerWaterNeeds:card.querySelector('[data-power]').value,emergencyContact:card.querySelector('[data-emergency]').value,briefNote:card.querySelector('[data-note]').value}))}
+    function setupRow(item={}){
+      const row=document.createElement('article');row.dataset.id=item.id||uid('SET');row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+      const top=document.createElement('div');top.className='grid gap-3 md:grid-cols-[10rem_1.4fr_1fr_6rem_9rem]';top.innerHTML='<select data-type class="field"><option>Guest Tables</option><option>Bar</option><option>DJ / Audio</option><option>Arch / Ceremony</option><option>Buffet / Catering</option><option>Cake / Dessert</option><option>Rentals</option><option>Decor</option><option>Florals</option><option>Photo Booth</option><option>Custom</option></select><input data-label class="field" placeholder="Item / setup"><input data-location class="field" placeholder="Location"><input data-qty type="number" min="0" class="field" placeholder="Qty"><input data-time type="time" class="field">';row.appendChild(top);
+      const owners=document.createElement('div');owners.className='mt-3 grid gap-3 md:grid-cols-4';[['responsible','Responsible'],['delivery','Deliver'],['setup','Set up'],['removal','Remove']].forEach(([key,label])=>{const wrap=document.createElement('label');wrap.className='text-xs font-semibold';wrap.append(document.createTextNode(label));const s=vendorSelect(item[key+'VendorId']||'');s.dataset[key]='';s.classList.add('mt-1');wrap.appendChild(s);owners.appendChild(wrap)});row.appendChild(owners);
+      const bottom=document.createElement('div');bottom.className='mt-3 grid gap-3 md:grid-cols-[1fr_9rem_auto]';bottom.innerHTML='<textarea data-notes rows="2" class="field" placeholder="Setup/removal notes"></textarea><select data-status class="field"><option value="planned">Planned</option><option value="confirmed">Confirmed</option><option value="set">Set</option><option value="removed">Removed</option></select><button type="button" data-remove class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs">Remove</button>';row.appendChild(bottom);
+      row.querySelector('[data-type]').value=item.type||'Custom';row.querySelector('[data-label]').value=item.label||'';row.querySelector('[data-location]').value=item.location||'';row.querySelector('[data-qty]').value=item.quantity||0;row.querySelector('[data-time]').value=item.setupTime||'';row.querySelector('[data-notes]').value=item.notes||'';row.querySelector('[data-status]').value=item.status||'planned';row.querySelector('[data-remove]').onclick=()=>row.remove();return row;
+    }
+    function renderSetupItems(){if(!setupItemsEl)return;setupItemsEl.innerHTML='';(selected?.ops?.setupItems||[]).forEach(x=>setupItemsEl.appendChild(setupRow(x)));if(!(selected?.ops?.setupItems||[]).length)setupItemsEl.appendChild(text('p','text-sm text-[var(--koa-ink)]/45','No setup ownership items yet.'))}
+    function collectSetupItems(){return [...setupItemsEl.children].filter(x=>x.dataset?.id).map(row=>({id:row.dataset.id,type:row.querySelector('[data-type]').value,label:row.querySelector('[data-label]').value,location:row.querySelector('[data-location]').value,quantity:Number(row.querySelector('[data-qty]').value||0),setupTime:row.querySelector('[data-time]').value,responsibleVendorId:row.querySelector('[data-responsible]').value,deliveryVendorId:row.querySelector('[data-delivery]').value,setupVendorId:row.querySelector('[data-setup]').value,removalVendorId:row.querySelector('[data-removal]').value,notes:row.querySelector('[data-notes]').value,status:row.querySelector('[data-status]').value}))}
 
     function renderQuestionnaire(){
       questionnaireEl.innerHTML='';
@@ -383,7 +446,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function saveSection(action,data){
-      const result=await api({action,recordId:selected.record.id,...data});selected.ops=result.ops;if(Array.isArray(result.vendorSuggestions))selected.vendorSuggestions=result.vendorSuggestions;renderSummary();return result;
+      const result=await api({action,recordId:selected.record.id,...data});selected.ops=result.ops;if(Array.isArray(result.vendorSuggestions))selected.vendorSuggestions=result.vendorSuggestions;if(result.vendorOperations)selected.vendorOperations=result.vendorOperations;renderSummary();return result;
     }
 
     async function load(q=''){
@@ -409,6 +472,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{await saveSection('save-vendors',{vendors:collectVendors()});selected.ops.vendors=collectVendors();renderVendors();renderSummary();});
     document.querySelector('[data-save-vendor-requirements]')?.addEventListener('click',async()=>{await saveSection('save-vendor-requirements',{vendorRequirements:collectVendorRequirements()});renderVendorRequirements();renderVendorSuggestions();});
     document.querySelector('[data-apply-vendor-suggestions]')?.addEventListener('click',async()=>{if(!selected)return;const result=await saveSection('apply-vendor-suggestions',{});selected.ops=result.ops;renderVendorRequirements();await load(String(search?.value||'').trim());});
+    document.querySelector('[data-save-briefs]')?.addEventListener('click',async()=>{const result=await saveSection('save-vendor-brief-details',{vendors:collectBriefs()});selected.vendorOperations=result.vendorOperations;renderVendorOperations();});
+    document.querySelector('[data-add-setup]')?.addEventListener('click',()=>{if(setupItemsEl.querySelector('p'))setupItemsEl.innerHTML='';setupItemsEl.appendChild(setupRow());});
+    document.querySelector('[data-save-setup]')?.addEventListener('click',async()=>{const result=await saveSection('save-setup-items',{setupItems:collectSetupItems()});selected.vendorOperations=result.vendorOperations;renderVendorOperations();});
     document.querySelector('[data-save-questionnaire]')?.addEventListener('click',async()=>{await saveSection('save-questionnaire',{questionnaire:collectQuestionnaire()});renderQuestionnaire();renderVendorRequirements();renderVendorSuggestions();});
     document.querySelector('[data-add-timeline]')?.addEventListener('click',()=>{if(timelineEl.querySelector('p'))timelineEl.innerHTML='';timelineEl.appendChild(timelineRow());});
     document.querySelector('[data-save-timeline]')?.addEventListener('click',async()=>{await saveSection('save-timeline',{timeline:collectTimeline()});renderTimeline();});
