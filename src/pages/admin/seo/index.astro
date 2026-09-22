@@ -185,18 +185,8 @@ const cards = [
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
 
-    const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
-    const ui = document.querySelector('[data-admin-ui]');
-    const unauthorized = document.querySelector('[data-unauthorized]');
-    const citationsWrap = document.querySelector('[data-citations]');
-    const message = document.querySelector('[data-citation-message]');
-    const addForm = document.querySelector('[data-add-citation]');
-    let citationPayload = { citations: [], totals: {} };
-
     function hasAdminAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roles = user?.app_metadata?.roles || [];
-      return approvedAdminEmails.has(email) || (Array.isArray(roles) && roles.includes('admin'));
+      return Boolean(user?.capabilities?.includes('seo.view') || user?.permissions?.includes('seo.view'));
     }
 
     function text(tag,className,content) {
