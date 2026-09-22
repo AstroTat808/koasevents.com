@@ -220,11 +220,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Automatic preset selection</p>
-                  <p class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/50">Rules run in priority order when a new proposal is created. Lead time is measured from proposal creation/booking date to event date. Existing proposals are never rewritten.</p>
+                  <p class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/50">Rules run top-to-bottom when a new proposal is created. Drag rows to change priority. Matching can use event type, months away, and contract value. Existing proposals are never rewritten.</p>
                 </div>
                 <button data-add-auto-rule type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Add rule +</button>
               </div>
               <div data-auto-rule-list class="mt-4 grid gap-3"></div>
+              <section class="mt-5 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Rule simulator</p>
+                  <p class="mt-1 text-xs text-[var(--koa-ink)]/50">Tests the unsaved rule order and values currently on screen. It does not create or modify a proposal.</p>
+                </div>
+                <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                  <label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-sim-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label>
+                  <label class="grid gap-1 text-xs font-semibold">Booking date<input data-rule-sim-booking type="date" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label>
+                  <label class="grid gap-1 text-xs font-semibold">Event date<input data-rule-sim-event type="date" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label>
+                  <label class="grid gap-1 text-xs font-semibold">Contract value<input data-rule-sim-value type="number" min="0" step="100" value="10000" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label>
+                  <button data-run-rule-simulator type="button" class="self-end rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Run simulator</button>
+                </div>
+                <div data-rule-simulator-result class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4 text-sm text-[var(--koa-ink)]/70">Enter a scenario and run the simulator.</div>
+              </section>
             </section>
 
             <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 xl:grid-cols-2">
@@ -613,6 +627,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function compareSelectB(){return document.querySelector('[data-compare-b]');}
     function comparePanel(which){return document.querySelector('[data-compare-panel="'+which+'"]');}
     function autoRuleList(){return document.querySelector('[data-auto-rule-list]');}
+    function ruleSimCategory(){return document.querySelector('[data-rule-sim-category]');}
+    function ruleSimBooking(){return document.querySelector('[data-rule-sim-booking]');}
+    function ruleSimEvent(){return document.querySelector('[data-rule-sim-event]');}
+    function ruleSimValue(){return document.querySelector('[data-rule-sim-value]');}
+    function ruleSimResult(){return document.querySelector('[data-rule-simulator-result]');}
     function roundPreviewMoney(value){return Math.round(Number(value||0)*100)/100;}
     function formatPreviewDate(iso){
       if(!iso)return 'Choose a sample date';
@@ -819,16 +838,55 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function rulePresetOptions(category){
       return allPresetOptions().filter((preset)=>(preset.category||preset.key)===category);
     }
-    function addAutoRuleRow(rule={id:'rule-'+Date.now(),name:'New payment rule',category:'venueWedding',minLeadDays:null,maxLeadDays:null,presetId:'builtin-standard-wedding',priority:100,active:true}){
+    let draggingAutoRule=null;
+    function updateAutoRuleOrder(){
+      [...(autoRuleList()?.querySelectorAll('[data-auto-rule]')||[])].forEach((row,index)=>{
+        row.dataset.priority=String((index+1)*10);
+        const badge=row.querySelector('[data-rule-order]');
+        if(badge)badge.textContent='#'+(index+1);
+      });
+    }
+    function enableAutoRuleDropZone(){
+      const list=autoRuleList();if(!list||list.dataset.dropReady==='1')return;
+      list.dataset.dropReady='1';
+      list.addEventListener('dragover',(event)=>{
+        if(!draggingAutoRule)return;
+        event.preventDefault();
+        const target=event.target.closest('[data-auto-rule]');
+        if(!target||target===draggingAutoRule)return;
+        const rect=target.getBoundingClientRect();
+        const before=event.clientY<rect.top+(rect.height/2);
+        list.insertBefore(draggingAutoRule,before?target:target.nextSibling);
+        updateAutoRuleOrder();
+      });
+      list.addEventListener('drop',(event)=>{
+        if(!draggingAutoRule)return;
+        event.preventDefault();
+        draggingAutoRule.classList.remove('opacity-45','ring-2','ring-[var(--koa-clay)]');
+        draggingAutoRule=null;
+        updateAutoRuleOrder();
+      });
+    }
+    function moveAutoRule(row,direction){
       const list=autoRuleList();if(!list)return;
-      const row=document.createElement('div');row.dataset.autoRule='1';row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 xl:grid-cols-[1.25fr_.8fr_.65fr_.65fr_1.25fr_.45fr_auto] xl:items-end';
+      if(direction<0){const prev=row.previousElementSibling;if(prev)list.insertBefore(row,prev);}
+      else{const next=row.nextElementSibling;if(next)list.insertBefore(next,row);}
+      updateAutoRuleOrder();
+    }
+    function addAutoRuleRow(rule={id:'rule-'+Date.now(),name:'New payment rule',category:'venueWedding',minLeadDays:null,maxLeadDays:null,minContractValue:null,maxContractValue:null,presetId:'builtin-standard-wedding',priority:100,active:true}){
+      const list=autoRuleList();if(!list)return;
+      enableAutoRuleDropZone();
+      const row=document.createElement('div');
+      row.dataset.autoRule='1';
+      row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 xl:grid-cols-[auto_1.1fr_.75fr_.62fr_.62fr_.72fr_.72fr_1.1fr_auto] xl:items-end';
       row.dataset.ruleId=rule.id;
-      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min months away<input data-rule-min type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max months away<input data-rule-max type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><label class="grid gap-1 text-xs font-semibold">Priority<input data-rule-priority type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><div class="flex gap-2"><label class="flex items-center gap-2 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
+      row.innerHTML='<div class="flex items-center gap-1 self-center"><button data-rule-drag type="button" draggable="true" class="cursor-grab rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-[.65rem] font-black text-[var(--koa-ink)]/45" title="Drag to reorder">↕</button><span data-rule-order class="text-[.6rem] font-black text-[var(--koa-clay)]"></span></div><label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min months<input data-rule-min type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max months<input data-rule-max type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Min contract $<input data-rule-min-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max contract $<input data-rule-max-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><div class="flex flex-wrap gap-1"><button data-rule-up type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↑</button><button data-rule-down type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↓</button><label class="flex items-center gap-1 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-2 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
       row.querySelector('[data-rule-name]').value=rule.name||'Payment rule';
       row.querySelector('[data-rule-category]').value=rule.category||'default';
       row.querySelector('[data-rule-min]').value=rule.minLeadDays==null?'':String(Math.round((Number(rule.minLeadDays)/30.4375)*10)/10);
       row.querySelector('[data-rule-max]').value=rule.maxLeadDays==null?'':String(Math.round((Number(rule.maxLeadDays)/30.4375)*10)/10);
-      row.querySelector('[data-rule-priority]').value=String(Number(rule.priority||0));
+      row.querySelector('[data-rule-min-value]').value=rule.minContractValue==null?'':String(Number(rule.minContractValue));
+      row.querySelector('[data-rule-max-value]').value=rule.maxContractValue==null?'':String(Number(rule.maxContractValue));
       row.querySelector('[data-rule-active]').checked=rule.active!==false;
       const refreshRulePresets=()=>{
         const category=row.querySelector('[data-rule-category]').value;
@@ -837,9 +895,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         rulePresetOptions(category).forEach((preset)=>{const option=document.createElement('option');option.value=preset.id;option.textContent=preset.label||preset.name;select.appendChild(option);});
         if([...select.options].some((option)=>option.value===current))select.value=current;
       };
+      const handle=row.querySelector('[data-rule-drag]');
+      handle.addEventListener('dragstart',(event)=>{draggingAutoRule=row;event.dataTransfer.effectAllowed='move';event.dataTransfer.setData('text/plain',rule.id||'rule');row.classList.add('opacity-45','ring-2','ring-[var(--koa-clay)]');});
+      handle.addEventListener('dragend',()=>{row.classList.remove('opacity-45','ring-2','ring-[var(--koa-clay)]');draggingAutoRule=null;updateAutoRuleOrder();});
+      row.querySelector('[data-rule-up]').addEventListener('click',()=>moveAutoRule(row,-1));
+      row.querySelector('[data-rule-down]').addEventListener('click',()=>moveAutoRule(row,1));
       row.querySelector('[data-rule-category]').addEventListener('change',refreshRulePresets);
-      row.querySelector('[data-remove-rule]').addEventListener('click',()=>row.remove());
-      list.appendChild(row);refreshRulePresets();
+      row.querySelector('[data-remove-rule]').addEventListener('click',()=>{row.remove();updateAutoRuleOrder();});
+      list.appendChild(row);refreshRulePresets();updateAutoRuleOrder();
     }
     function readAutoRules(){
       return [...(autoRuleList()?.querySelectorAll('[data-auto-rule]')||[])].map((row,index)=>({
@@ -848,15 +911,62 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         category:row.querySelector('[data-rule-category]')?.value||'default',
         minLeadDays:row.querySelector('[data-rule-min]')?.value===''?null:Math.round(Number(row.querySelector('[data-rule-min]')?.value)*30.4375),
         maxLeadDays:row.querySelector('[data-rule-max]')?.value===''?null:Math.round(Number(row.querySelector('[data-rule-max]')?.value)*30.4375),
+        minContractValue:row.querySelector('[data-rule-min-value]')?.value===''?null:Number(row.querySelector('[data-rule-min-value]')?.value),
+        maxContractValue:row.querySelector('[data-rule-max-value]')?.value===''?null:Number(row.querySelector('[data-rule-max-value]')?.value),
         presetId:row.querySelector('[data-rule-preset]')?.value||'',
-        priority:Number(row.querySelector('[data-rule-priority]')?.value||index),
+        priority:(index+1)*10,
         active:Boolean(row.querySelector('[data-rule-active]')?.checked),
-      })).sort((a,b)=>a.priority-b.priority);
+      }));
     }
     function renderAutoRules(){
       const list=autoRuleList();if(!list)return;list.innerHTML='';
-      (state?.depositSettings?.autoRules||[]).forEach((rule)=>addAutoRuleRow(rule));
+      [...(state?.depositSettings?.autoRules||[])].sort((a,b)=>Number(a.priority||0)-Number(b.priority||0)).forEach((rule)=>addAutoRuleRow(rule));
+      updateAutoRuleOrder();
     }
+    function ruleLeadDays(bookingDate,eventDate){
+      const start=Date.parse(String(bookingDate||'')+'T12:00:00');
+      const end=Date.parse(String(eventDate||'')+'T12:00:00');
+      if(!Number.isFinite(start)||!Number.isFinite(end))return null;
+      return Math.max(0,Math.ceil((end-start)/86400000));
+    }
+    function simulatePaymentRule(){
+      const category=String(ruleSimCategory()?.value||'venueWedding');
+      const bookingDate=String(ruleSimBooking()?.value||'');
+      const eventDate=String(ruleSimEvent()?.value||'');
+      const contractValue=Math.max(0,Number(ruleSimValue()?.value||0));
+      const leadDays=ruleLeadDays(bookingDate,eventDate);
+      const rules=readAutoRules();
+      const matched=rules.find((rule)=>{
+        if(!rule.active||rule.category!==category)return false;
+        if(leadDays==null){
+          if(rule.minLeadDays!=null||rule.maxLeadDays!=null)return false;
+        }else{
+          if(rule.minLeadDays!=null&&leadDays<rule.minLeadDays)return false;
+          if(rule.maxLeadDays!=null&&leadDays>rule.maxLeadDays)return false;
+        }
+        if(rule.minContractValue!=null&&contractValue<rule.minContractValue)return false;
+        if(rule.maxContractValue!=null&&contractValue>rule.maxContractValue)return false;
+        return true;
+      });
+      const result=ruleSimResult();if(!result)return;
+      result.innerHTML='';
+      if(!bookingDate||!eventDate){
+        const message=document.createElement('strong');message.textContent='Enter both booking and event dates.';result.appendChild(message);return;
+      }
+      if(!matched){
+        const message=document.createElement('strong');message.textContent='No rule matched.';
+        const detail=document.createElement('div');detail.className='mt-1 text-xs text-[var(--koa-ink)]/50';detail.textContent='The category default payment template would be used.';
+        result.append(message,detail);return;
+      }
+      const preset=presetById(matched.presetId);
+      const months=leadDays==null?'—':(leadDays/30.4375).toFixed(1).replace(/\.0$/,'');
+      const eyebrow=document.createElement('div');eyebrow.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';eyebrow.textContent='Selected rule #'+((rules.indexOf(matched))+1);
+      const heading=document.createElement('strong');heading.className='mt-1 block text-lg text-[var(--koa-forest)]';heading.textContent=matched.name;
+      const presetLine=document.createElement('div');presetLine.className='mt-1 text-sm';presetLine.textContent='Preset: '+(preset?.label||preset?.name||matched.presetId);
+      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(contractValue)+' contract value';
+      result.append(eyebrow,heading,presetLine,detail);
+    }
+
     function paymentSettingsPayload(){
       const data=new FormData(depositForm);
       return {
@@ -1111,6 +1221,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderCustomPresets();
         renderAutoRules();
         refreshPresetSelectors();
+        if(ruleSimBooking()&&!ruleSimBooking().value)ruleSimBooking().value=new Date().toISOString().slice(0,10);
+        if(ruleSimEvent()&&!ruleSimEvent().value){const d=new Date();d.setFullYear(d.getFullYear()+1);ruleSimEvent().value=d.toISOString().slice(0,10);}
       }
       renderCatalog();
       renderDiagnostics();
@@ -1168,6 +1280,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       catch(err){state.depositSettings.customPresets=(state.depositSettings.customPresets||[]).filter((item)=>item.id!==preset.id);if(customPresetMessage())customPresetMessage().textContent=err.message||'Unable to save custom preset.';}
     });
     document.querySelector('[data-add-auto-rule]')?.addEventListener('click',()=>addAutoRuleRow());
+    document.querySelector('[data-run-rule-simulator]')?.addEventListener('click',simulatePaymentRule);
     compareSelectA()?.addEventListener('change',renderComparison);
     compareSelectB()?.addEventListener('change',renderComparison);
     depositForm?.querySelectorAll('input[name$="Percent"]').forEach((input)=>input.addEventListener('input',()=>{renderTemplateValidation();if(input.name==='venueWeddingPercent')renderWeddingPreview();}));
@@ -1207,6 +1320,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(validation.errors.length){
         if(depositMessage)depositMessage.textContent='Fix the payment schedule errors above before saving.';
         validationBox()?.scrollIntoView({behavior:'smooth',block:'center'});
+        return;
+      }
+      const rules=readAutoRules();
+      const ruleErrors=[];
+      rules.forEach((rule,index)=>{
+        if(rule.minLeadDays!=null&&rule.maxLeadDays!=null&&rule.minLeadDays>rule.maxLeadDays)ruleErrors.push('Rule #'+(index+1)+' has a minimum lead time greater than its maximum.');
+        if(rule.minContractValue!=null&&rule.maxContractValue!=null&&rule.minContractValue>rule.maxContractValue)ruleErrors.push('Rule #'+(index+1)+' has a minimum contract value greater than its maximum.');
+        if(!rule.presetId)ruleErrors.push('Rule #'+(index+1)+' does not have a preset selected.');
+      });
+      if(ruleErrors.length){
+        if(depositMessage)depositMessage.textContent=ruleErrors.join(' ');
         return;
       }
       if(validation.warnings.length&&!window.confirm('These payment schedules have '+validation.warnings.length+' warning'+(validation.warnings.length===1?'':'s')+'. Save them anyway?'))return;
