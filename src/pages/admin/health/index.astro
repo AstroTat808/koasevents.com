@@ -51,10 +51,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </div>
 
-            <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated total credits</p><p data-credit-total class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Allowance used</p><p data-credit-percent class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Projected cycle total</p><p data-credit-projected class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p><p data-credit-projected-meta class="mt-2 text-xs text-[var(--koa-ink)]/50">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Days until exhausted</p><p data-credit-exhaust-days class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p><p data-credit-exhaust-date class="mt-2 text-xs text-[var(--koa-ink)]/50">Only shown when projected over allowance</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Credits saved</p><p data-credit-saved class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p><p data-credit-saved-meta class="mt-2 text-xs text-[var(--koa-ink)]/50">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated remaining</p><p data-credit-remaining class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Monthly allowance</p><p data-credit-allowance class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
@@ -248,6 +249,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditProjected=document.querySelector('[data-credit-projected]');
     const creditProjectedMeta=document.querySelector('[data-credit-projected-meta]');
     const creditSaved=document.querySelector('[data-credit-saved]');
+    const creditExhaustDays=document.querySelector('[data-credit-exhaust-days]');
+    const creditExhaustDate=document.querySelector('[data-credit-exhaust-date]');
     const creditSavedMeta=document.querySelector('[data-credit-saved-meta]');
     const creditForecastWarning=document.querySelector('[data-credit-forecast-warning]');
     const creditAllowance=document.querySelector('[data-credit-allowance]');
@@ -511,7 +514,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(creditProjected)creditProjected.textContent=creditUsage.projection?.projectedEndOfCycleCredits==null?'—':String(creditUsage.projection.projectedEndOfCycleCredits);
       if(creditProjectedMeta){
         const p=creditUsage.projection||{};
-        creditProjectedMeta.textContent=p.projectedAllowancePercent==null?'Forecast unavailable':String(p.projectedAllowancePercent)+'% of allowance · '+String(p.confidence||'low')+' confidence';
+        if(p.projectedAllowancePercent==null){
+          creditProjectedMeta.textContent='Forecast unavailable';
+        }else{
+          const recent=p.recent7DayBurnRate==null?'—':String(p.recent7DayBurnRate);
+          const baseline=p.fullCycleDailyBurnRate==null?'—':String(p.fullCycleDailyBurnRate);
+          const weighted=p.weightedDailyBurnRate==null?'—':String(p.weightedDailyBurnRate);
+          creditProjectedMeta.textContent=String(p.projectedAllowancePercent)+'% of allowance · '+String(p.confidence||'low')+' confidence · '+recent+'/day recent · '+baseline+'/day cycle · '+weighted+'/day weighted';
+        }
+      }
+      if(creditExhaustDays){
+        const days=creditUsage.projection?.daysUntilExhausted;
+        creditExhaustDays.textContent=days==null?'—':String(days);
+      }
+      if(creditExhaustDate){
+        const at=creditUsage.projection?.exhaustionAt;
+        creditExhaustDate.textContent=at
+          ? 'Estimated '+new Date(at).toLocaleString()
+          : 'Projection stays within current allowance';
       }
       if(creditSaved)creditSaved.textContent=creditUsage.savings?.estimatedCreditsSaved==null?'—':String(creditUsage.savings.estimatedCreditsSaved);
       if(creditSavedMeta){
@@ -527,7 +547,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             projectedSeverity==='orange'?'border-orange-300 bg-orange-50 text-orange-900':
             'border-yellow-300 bg-yellow-50 text-yellow-900'
           );
-          creditForecastWarning.textContent='Projected end-of-cycle usage is '+String(p.projectedAllowancePercent)+'% ('+String(p.projectedEndOfCycleCredits)+' credits) at the current average daily burn rate.';
+          const exhaustion=p.daysUntilExhausted==null?'':' Estimated exhaustion in '+String(p.daysUntilExhausted)+' days ('+new Date(p.exhaustionAt).toLocaleString()+').';
+          creditForecastWarning.textContent='Projected end-of-cycle usage is '+String(p.projectedAllowancePercent)+'% ('+String(p.projectedEndOfCycleCredits)+' credits) using a recent-weighted burn rate.'+exhaustion;
         }else{
           creditForecastWarning.className='mt-4 hidden rounded-xl border p-4 text-sm font-semibold';
           creditForecastWarning.textContent='';
