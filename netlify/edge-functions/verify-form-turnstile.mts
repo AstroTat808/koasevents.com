@@ -59,7 +59,7 @@ function blocked(message = 'Security verification failed. Please return to the f
 }
 
 export default async (req: Request, context: Context) => {
-  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || '').trim();
+  const secret = String(Netlify.env.get('TURNSTILE_SECRET_KEY') || Netlify.env.get('TURNSTILE_SECRET') || '').trim();
   if (!secret) return context.next();
 
   const pathname = new URL(req.url).pathname;
