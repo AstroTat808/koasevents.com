@@ -715,7 +715,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   $('[data-approve-client]')?.addEventListener('click',async()=>{const p=data.projects.find(x=>x.id===selectedId);if(!p)return;if(!confirm('Mark '+(p.customer?.name||'this client')+' as legitimate?\n\nThis suppresses future bogus-client cleanup flags for this CRM record.'))return;await post({action:'approve-cleanup-review',recordId:selectedId});await load();});
   $('[data-toggle-trash]')?.addEventListener('click',()=>{$('[data-trash-panel]').classList.remove('hidden');$('[data-project-list]').classList.add('hidden');});
   $('[data-close-trash]')?.addEventListener('click',()=>{$('[data-trash-panel]').classList.add('hidden');$('[data-project-list]').classList.remove('hidden');});
-  $('[data-select-visible]')?.addEventListener('click',()=>{visibleProjectIds.forEach(id=>selectedProjects.add(id));renderProjects();});
+  $('[data-select-visible]')?.addEventListener('click',()=>{
+    visibleProjectIds.forEach(id=>selectedProjects.add(id));
+    renderProjects();
+  });
   $('[data-clear-selection]')?.addEventListener('click',()=>{selectedProjects.clear();renderProjects();});
   $('[data-bulk-trash]')?.addEventListener('click',async()=>{
     const ids=[...selectedProjects]; if(!ids.length)return;
