@@ -150,7 +150,12 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
   }
 
   const responseToken = cleanText(token, 2048);
-  if (!responseToken) return { ok: false, configured: true, error: 'Complete the security check and try again.' };
+  if (!responseToken) return {
+    ok: false,
+    configured: true,
+    error: 'Complete the security check and try again.',
+    codes: ['missing-token'],
+  };
 
   const remoteIp =
     cleanText(req.headers.get('x-nf-client-connection-ip'), 80) ||
@@ -181,7 +186,9 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
       verifiedAction === expectedAction &&
       verifiedHostname === requestHostname
     );
-    const codes = Array.isArray(data?.['error-codes']) ? data['error-codes'] : [];
+    const codes = Array.isArray(data?.['error-codes']) ? [...data['error-codes']] : [];
+    if (data?.success && verifiedAction !== expectedAction) codes.push('action-mismatch');
+    if (data?.success && verifiedHostname !== requestHostname) codes.push('hostname-mismatch');
     return {
       ok,
       configured: true,
@@ -195,7 +202,12 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
         : 'Cloudflare Siteverify rejected the token.',
     };
   } catch {
-    return { ok: false, configured: true, error: 'Security verification is temporarily unavailable. Please try again.' };
+    return {
+      ok: false,
+      configured: true,
+      error: 'Security verification is temporarily unavailable. Please try again.',
+      codes: ['siteverify-unavailable'],
+    };
   }
 }
 
