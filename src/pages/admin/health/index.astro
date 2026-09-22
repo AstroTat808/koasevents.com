@@ -39,21 +39,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Post-deploy verification</p><p data-post-deploy-verification class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
           </div>
 
-          <div class="mt-6 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+          <div data-credit-panel class="mt-6 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
             <div class="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Netlify credit usage</p>
-                <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Production deploy estimate</h3>
+                <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Estimated total usage</h3>
               </div>
-              <p data-credit-cycle class="text-xs font-semibold text-[var(--koa-ink)]/55">—</p>
+              <div class="text-right">
+                <p data-credit-status class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800">Healthy</p>
+                <p data-credit-cycle class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/55">—</p>
+              </div>
             </div>
+
             <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Production deploys</p><p data-credit-deploys class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
-              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated deploy credits</p><p data-credit-estimate class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
-              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Personal allowance</p><p data-credit-allowance class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
-              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Deploy share of allowance</p><p data-credit-percent class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated total credits</p><p data-credit-total class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Allowance used</p><p data-credit-percent class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated remaining</p><p data-credit-remaining class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
+              <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Monthly allowance</p><p data-credit-allowance class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
             </div>
-            <p data-credit-note class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/52">This is a deployment-only estimate, not the Netlify billing total.</p>
+
+            <div class="mt-4 h-3 overflow-hidden rounded-full bg-white">
+              <div data-credit-bar class="h-full rounded-full bg-emerald-600 transition-[width] duration-500" style="width:0%"></div>
+            </div>
+            <div class="mt-2 flex justify-between text-[.62rem] font-semibold text-[var(--koa-ink)]/45">
+              <span>0%</span><span>60% yellow</span><span>80% orange</span><span>90% red</span><span>100%</span>
+            </div>
+
+            <div data-credit-components class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
+            <p data-credit-note class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/52">—</p>
           </div>
           <div class="mt-6">
             <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release timeline</p>
@@ -224,11 +237,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const savePolicy=document.querySelector('[data-save-policy]');
     const policyMessage=document.querySelector('[data-policy-message]');
     const overall=document.querySelector('[data-overall]');
+    const creditPanel=document.querySelector('[data-credit-panel]');
     const creditCycle=document.querySelector('[data-credit-cycle]');
-    const creditDeploys=document.querySelector('[data-credit-deploys]');
-    const creditEstimate=document.querySelector('[data-credit-estimate]');
+    const creditStatus=document.querySelector('[data-credit-status]');
+    const creditTotal=document.querySelector('[data-credit-total]');
+    const creditRemaining=document.querySelector('[data-credit-remaining]');
     const creditAllowance=document.querySelector('[data-credit-allowance]');
     const creditPercent=document.querySelector('[data-credit-percent]');
+    const creditBar=document.querySelector('[data-credit-bar]');
+    const creditComponents=document.querySelector('[data-credit-components]');
     const creditNote=document.querySelector('[data-credit-note]');
     let latestPolicy=null;
     let latestComponents=[];
@@ -480,11 +497,60 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const end=creditUsage.cycleEnd?new Date(creditUsage.cycleEnd).toLocaleDateString():'—';
         creditCycle.textContent='Cycle '+start+' – '+end;
       }
-      if(creditDeploys)creditDeploys.textContent=creditUsage.productionDeploys==null?'—':String(creditUsage.productionDeploys);
-      if(creditEstimate)creditEstimate.textContent=creditUsage.estimatedDeploymentCredits==null?'—':String(creditUsage.estimatedDeploymentCredits);
+      if(creditTotal)creditTotal.textContent=creditUsage.totalEstimatedCredits==null?'—':String(creditUsage.totalEstimatedCredits);
+      if(creditRemaining)creditRemaining.textContent=creditUsage.estimatedRemainingCredits==null?'—':String(creditUsage.estimatedRemainingCredits);
       if(creditAllowance)creditAllowance.textContent=creditUsage.monthlyAllowance==null?'—':String(creditUsage.monthlyAllowance);
       if(creditPercent)creditPercent.textContent=creditUsage.estimatedAllowancePercent==null?'—':String(creditUsage.estimatedAllowancePercent)+'%';
-      if(creditNote)creditNote.textContent=creditUsage.note||'Deployment-only estimate; other Netlify usage is excluded.';
+      if(creditBar){
+        const pct=Math.max(0,Math.min(100,Number(creditUsage.estimatedAllowancePercent||0)));
+        creditBar.style.width=pct+'%';
+      }
+      if(creditStatus){
+        const severity=String(creditUsage.severity||'unknown');
+        const statusMap={
+          green:['Healthy','bg-emerald-100 text-emerald-800'],
+          yellow:['Watch','bg-yellow-100 text-yellow-900'],
+          orange:['High','bg-orange-100 text-orange-900'],
+          red:['Critical','bg-red-100 text-red-800'],
+          unknown:['Estimate unavailable','bg-[var(--koa-sand)] text-[var(--koa-forest)]'],
+        };
+        const selected=statusMap[severity]||statusMap.unknown;
+        creditStatus.textContent=selected[0];
+        creditStatus.className='inline-flex rounded-full px-3 py-1 text-[.58rem] font-black uppercase tracking-[.08em] '+selected[1];
+        if(creditBar){
+          creditBar.className='h-full rounded-full transition-[width] duration-500 '+(
+            severity==='red'?'bg-red-700':severity==='orange'?'bg-orange-500':severity==='yellow'?'bg-yellow-500':'bg-emerald-600'
+          );
+        }
+        if(creditPanel){
+          creditPanel.className='mt-6 rounded-[1.2rem] border p-5 '+(
+            severity==='red'?'border-red-300 bg-red-50':
+            severity==='orange'?'border-orange-300 bg-orange-50':
+            severity==='yellow'?'border-yellow-300 bg-yellow-50':
+            'border-[var(--koa-line)] bg-[var(--koa-ivory)]'
+          );
+        }
+      }
+      if(creditComponents){
+        creditComponents.innerHTML='';
+        (creditUsage.components||[]).forEach((item)=>{
+          const card=document.createElement('article');
+          card.className='rounded-xl bg-white p-4';
+          const label=document.createElement('p');
+          label.className='text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+          label.textContent=item.label||item.id||'Usage';
+          const value=document.createElement('p');
+          value.className='display mt-2 text-2xl text-[var(--koa-forest)]';
+          value.textContent=item.credits==null?'—':String(item.credits)+' credits';
+          const meta=document.createElement('p');
+          meta.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/52';
+          const usage=item.usage==null?'usage unavailable':String(item.usage)+' '+String(item.unit||'');
+          meta.textContent=usage+' · '+String(item.mode||'estimated');
+          card.append(label,value,meta);
+          creditComponents.appendChild(card);
+        });
+      }
+      if(creditNote)creditNote.textContent=creditUsage.note||'Credit estimate unavailable.';
       const currentDeploy=deployments.current||{};
       document.querySelector('[data-deploy-commit]').textContent=currentDeploy.commit||'Unavailable';
       document.querySelector('[data-deploy-id]').textContent=currentDeploy.deployId||'Unavailable';
