@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import { admin, getUser } from '@netlify/identity';
+import { managedSessionStatus } from './auth-security';
 
 const ADMIN_EMAILS = new Set([
   'chris@sibel.org',
@@ -319,7 +320,7 @@ export function passwordSecurityFor(user: any, sessionUser: any, policy: AuthSec
   };
 }
 
-export async function getAccessContext() {
+export async function getAccessContext(req?:Request) {
   const sessionUser = await getUser();
   if (!sessionUser) {
     return {
@@ -343,6 +344,8 @@ export async function getAccessContext() {
   const role = roleFromUser(authoritativeUser);
   const capabilities = capabilitiesFor(authoritativeUser);
   const security = passwordSecurityFor(authoritativeUser, sessionUser, policy);
+  const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
+  if(managedSession?.revoked) security.sessionRevoked = true;
 
   return {
     sessionUser,
@@ -374,8 +377,8 @@ function blockedResponse(ctx: Awaited<ReturnType<typeof getAccessContext>>) {
   return null;
 }
 
-export async function requireAdmin() {
-  const ctx = await getAccessContext();
+export async function requireAdmin(req?:Request) {
+  const ctx = await getAccessContext(req);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role !== 'admin') {
@@ -384,8 +387,8 @@ export async function requireAdmin() {
   return { user:ctx.user, response:null };
 }
 
-export async function requireManager() {
-  const ctx = await getAccessContext();
+export async function requireManager(req?:Request) {
+  const ctx = await getAccessContext(req);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!['admin','manager'].includes(ctx.role)) {
@@ -394,8 +397,8 @@ export async function requireManager() {
   return { user:ctx.user, response:null };
 }
 
-export async function requireCapability(capability: StaffCapability) {
-  const ctx = await getAccessContext();
+export async function requireCapability(capability: StaffCapability, req?:Request) {
+  const ctx = await getAccessContext(req);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!ctx.capabilities.includes(capability)) {
@@ -404,8 +407,8 @@ export async function requireCapability(capability: StaffCapability) {
   return { user:ctx.user, response:null };
 }
 
-export async function requireOperations() {
-  const ctx = await getAccessContext();
+export async function requireOperations(req?:Request) {
+  const ctx = await getAccessContext(req);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role === 'none' || ctx.role === 'deactivated') {
