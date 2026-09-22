@@ -12,6 +12,7 @@ export type HealthCheck = {
   status: number;
   ms: number;
   detail: string;
+  severity?: 'green' | 'yellow' | 'red';
 };
 
 export type HealthSnapshot = {
@@ -22,6 +23,8 @@ export type HealthSnapshot = {
   failed: number;
   failedIds: string[];
   alertFailedIds?: string[];
+  deployId?: string;
+  commit?: string;
   checks: HealthCheck[];
   source: 'hourly' | 'manual' | 'post-deploy';
 };
@@ -338,14 +341,20 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
   const lagTooHigh=commitsBehind!=null&&commitsBehind>1;
   const lagUnknown=commitsBehind==null;
   const linked=githubLinked===true;
-  const ok=linked&&!lagTooHigh&&!lagUnknown&&Boolean(liveCommit&&mainCommit);
+  const metadataReady=Boolean(liveCommit&&mainCommit);
+  const severity:'green'|'yellow'|'red'=(!linked||lagTooHigh||lagUnknown||!metadataReady)
+    ? 'red'
+    : commitsBehind===1
+      ? 'yellow'
+      : 'green';
+  const ok=severity!=='red';
   let detail=connectionDetail;
   if(liveCommit&&mainCommit){
     detail+=(detail?' ':'')+(commitsBehind==null
       ? 'Production/main commit lag could not be determined.'
       : commitsBehind===0
         ? 'Production matches main.'
-        : 'Production is '+commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind main'+(commitsBehind===1?' (within warning threshold).':'.'));
+        : 'Production is '+commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind main'+(commitsBehind===1?' · warning until the next deploy publishes.':'.'));
   }else{
     detail+=(detail?' ':'')+'Production or main commit metadata is unavailable.';
   }
@@ -361,6 +370,7 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
     commitsBehind,
     compareStatus,
     lagTooHigh,
+    severity,
     detail:clean(detail,700),
     ms:Date.now()-started,
   };
@@ -422,6 +432,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     status:deploymentSync.ok?200:503,
     ms:Number(deploymentSync.ms||0),
     detail:clean(deploymentSync.detail,700),
+    severity:deploymentSync.severity,
   };
   const checks=[...baseChecks,startupCheck,deploymentSyncCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
@@ -432,6 +443,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     passed:checks.length-failedIds.length,
     failed:failedIds.length,
     failedIds,
+    deployId,
+    commit,
     checks,
     source,
   };
