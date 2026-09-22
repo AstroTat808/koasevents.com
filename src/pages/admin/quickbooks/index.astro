@@ -177,6 +177,56 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
               <p data-preset-message class="mt-3 text-xs text-[var(--koa-ink)]/48"></p>
             </section>
+
+            <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Custom payment presets</p>
+                  <p class="mt-1 text-xs text-[var(--koa-ink)]/50">Save any current category template with a reusable name such as “Koa Premium Wedding” or “Corporate Event.”</p>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+                  <input data-custom-preset-name placeholder="Preset name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" />
+                  <select data-custom-preset-category class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm">
+                    <option value="venueWedding">Venue Wedding</option>
+                    <option value="mobileBar">Mobile Bar</option>
+                    <option value="privateEvent">Private Event</option>
+                    <option value="default">General fallback</option>
+                  </select>
+                  <button data-save-custom-preset type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Save current as preset</button>
+                </div>
+              </div>
+              <div data-custom-preset-list class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3"></div>
+              <p data-custom-preset-message class="mt-3 text-xs text-[var(--koa-ink)]/48"></p>
+            </section>
+
+            <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/30 p-4">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Preset comparison</p>
+                  <p class="mt-1 text-xs text-[var(--koa-ink)]/50">Compare two presets using the same contract total and event date before applying either one.</p>
+                </div>
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <select data-compare-a class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm"></select>
+                  <select data-compare-b class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm"></select>
+                </div>
+              </div>
+              <div class="mt-4 grid gap-4 xl:grid-cols-2">
+                <div data-compare-panel="a" class="rounded-xl border border-[var(--koa-line)] bg-white p-4"></div>
+                <div data-compare-panel="b" class="rounded-xl border border-[var(--koa-line)] bg-white p-4"></div>
+              </div>
+            </section>
+
+            <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Automatic preset selection</p>
+                  <p class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/50">Rules run in priority order when a new proposal is created. Lead time is measured from proposal creation/booking date to event date. Existing proposals are never rewritten.</p>
+                </div>
+                <button data-add-auto-rule type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Add rule +</button>
+              </div>
+              <div data-auto-rule-list class="mt-4 grid gap-3"></div>
+            </section>
+
             <div class="grid gap-4 border-t border-[var(--koa-line)] pt-5 xl:grid-cols-2">
               <section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4" data-template-card="venueWedding">
                 <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Venue Wedding</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Post-deposit milestones</p></div><button type="button" data-add-template="venueWedding" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add milestone +</button></div>
@@ -555,6 +605,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function validationBox(){return document.querySelector('[data-template-validation]');}
     function validationTitle(){return document.querySelector('[data-template-validation-title]');}
     function validationList(){return document.querySelector('[data-template-validation-list]');}
+    function customPresetName(){return document.querySelector('[data-custom-preset-name]');}
+    function customPresetCategory(){return document.querySelector('[data-custom-preset-category]');}
+    function customPresetList(){return document.querySelector('[data-custom-preset-list]');}
+    function customPresetMessage(){return document.querySelector('[data-custom-preset-message]');}
+    function compareSelectA(){return document.querySelector('[data-compare-a]');}
+    function compareSelectB(){return document.querySelector('[data-compare-b]');}
+    function comparePanel(which){return document.querySelector('[data-compare-panel="'+which+'"]');}
+    function autoRuleList(){return document.querySelector('[data-auto-rule-list]');}
     function roundPreviewMoney(value){return Math.round(Number(value||0)*100)/100;}
     function formatPreviewDate(iso){
       if(!iso)return 'Choose a sample date';
@@ -634,35 +692,196 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(key==='venueWedding')renderWeddingPreview();renderTemplateValidation();
     }
     const paymentPresets={
-      standardWedding:{label:'Standard Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+      standardWedding:{id:'builtin-standard-wedding',label:'Standard Wedding',key:'venueWedding',category:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
         {label:'Second payment',dueDaysBefore:90,percentOfRemaining:50},
         {label:'Final payment',dueDaysBefore:60,percentOfRemaining:100},
       ]},
-      extendedWedding:{label:'Extended Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+      extendedWedding:{id:'builtin-extended-wedding',label:'Extended Wedding',key:'venueWedding',category:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
         {label:'120-day payment',dueDaysBefore:120,percentOfRemaining:25},
         {label:'90-day payment',dueDaysBefore:90,percentOfRemaining:25},
         {label:'60-day payment',dueDaysBefore:60,percentOfRemaining:25},
         {label:'30-day final payment',dueDaysBefore:30,percentOfRemaining:100},
       ]},
-      microWedding:{label:'Micro Wedding',key:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
+      microWedding:{id:'builtin-micro-wedding',label:'Micro Wedding',key:'venueWedding',category:'venueWedding',depositField:'venueWeddingPercent',depositPercent:10,milestones:[
         {label:'Second payment',dueDaysBefore:60,percentOfRemaining:50},
         {label:'Final payment',dueDaysBefore:30,percentOfRemaining:100},
       ]},
-      mobileBar:{label:'Mobile Bar',key:'mobileBar',depositField:'mobileBarPercent',depositPercent:10,milestones:[
+      mobileBar:{id:'builtin-mobile-bar',label:'Mobile Bar',key:'mobileBar',category:'mobileBar',depositField:'mobileBarPercent',depositPercent:10,milestones:[
         {label:'Final balance',dueDaysBefore:14,percentOfRemaining:100},
       ]},
-      privateEvent:{label:'Private Event',key:'privateEvent',depositField:'privateEventPercent',depositPercent:10,milestones:[
+      privateEvent:{id:'builtin-private-event',label:'Private Event',key:'privateEvent',category:'privateEvent',depositField:'privateEventPercent',depositPercent:10,milestones:[
         {label:'Final balance',dueDaysBefore:30,percentOfRemaining:100},
       ]},
     };
-    function applyPaymentPreset(name){
-      const preset=paymentPresets[name];if(!preset)return;
-      if(depositForm?.elements?.[preset.depositField])depositForm.elements[preset.depositField].value=String(preset.depositPercent);
-      renderTemplate(preset.key,preset.milestones);
-      if(preset.key==='venueWedding')renderWeddingPreview();
+    function builtInPresetList(){return Object.values(paymentPresets);}
+    function allPresetOptions(){
+      return [
+        ...builtInPresetList(),
+        ...((state?.depositSettings?.customPresets||[]).map((preset)=>({
+          id:preset.id,label:preset.name,key:preset.category,category:preset.category,depositPercent:Number(preset.depositPercent||0),milestones:preset.milestones||[],custom:true,
+        }))),
+      ];
+    }
+    function presetById(id){return allPresetOptions().find((preset)=>preset.id===id)||null;}
+    function depositFieldForCategory(category){
+      return {venueWedding:'venueWeddingPercent',mobileBar:'mobileBarPercent',privateEvent:'privateEventPercent',default:'defaultPercent'}[category]||'defaultPercent';
+    }
+    function applyPresetObject(preset){
+      if(!preset)return;
+      const field=depositFieldForCategory(preset.category||preset.key);
+      if(depositForm?.elements?.[field])depositForm.elements[field].value=String(Number(preset.depositPercent||0));
+      renderTemplate(preset.category||preset.key,preset.milestones||[]);
+      if((preset.category||preset.key)==='venueWedding')renderWeddingPreview();
       renderTemplateValidation();
       const message=presetMessage();
-      if(message)message.textContent=preset.label+' applied to the unsaved editor. Review and customize it, then press Save when ready.';
+      if(message)message.textContent=(preset.label||preset.name||'Preset')+' applied to the unsaved editor. Review and customize it, then press Save when ready.';
+    }
+    function renderCustomPresets(){
+      const list=customPresetList();if(!list)return;list.innerHTML='';
+      const presets=state?.depositSettings?.customPresets||[];
+      if(!presets.length){
+        const empty=document.createElement('p');empty.className='text-xs text-[var(--koa-ink)]/45';empty.textContent='No custom presets saved yet.';list.appendChild(empty);
+      }else presets.forEach((preset)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+        const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=preset.name;
+        const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/45';meta.textContent=(preset.category||'default')+' · '+Number(preset.depositPercent||0)+'% deposit · '+(preset.milestones?.length||0)+' milestone'+((preset.milestones?.length||0)===1?'':'s');
+        const actions=document.createElement('div');actions.className='mt-3 flex flex-wrap gap-2';
+        const apply=document.createElement('button');apply.type='button';apply.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase text-[var(--koa-forest)]';apply.textContent='Apply';
+        apply.addEventListener('click',()=>applyPresetObject({id:preset.id,label:preset.name,category:preset.category,depositPercent:preset.depositPercent,milestones:preset.milestones,custom:true}));
+        const remove=document.createElement('button');remove.type='button';remove.className='rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase text-red-700';remove.textContent='Delete';
+        remove.addEventListener('click',async()=>{
+          if(!window.confirm('Delete custom preset “'+preset.name+'”?'))return;
+          state.depositSettings.customPresets=(state.depositSettings.customPresets||[]).filter((item)=>item.id!==preset.id);
+          state.depositSettings.autoRules=(state.depositSettings.autoRules||[]).filter((rule)=>rule.presetId!==preset.id);
+          await persistPaymentSettings('Custom preset deleted.');
+        });
+        actions.append(apply,remove);card.append(title,meta,actions);list.appendChild(card);
+      });
+      refreshPresetSelectors();
+    }
+    function presetSchedulePreview(preset,total,eventDate){
+      const depositPercent=Math.min(100,Math.max(0,Number(preset?.depositPercent||0)));
+      const deposit=roundPreviewMoney(total*depositPercent/100);
+      const remaining=roundPreviewMoney(total-deposit);
+      const rows=Array.isArray(preset?.milestones)&&preset.milestones.length?preset.milestones:[{label:'Final balance',dueDaysBefore:0,percentOfRemaining:100}];
+      let allocated=0;
+      const schedule=[{label:'Reservation deposit',amount:deposit,due:'At booking'}];
+      rows.forEach((item,index)=>{
+        const last=index===rows.length-1;
+        const amount=last?Math.max(0,roundPreviewMoney(remaining-allocated)):Math.min(Math.max(0,roundPreviewMoney(remaining-allocated)),Math.max(0,roundPreviewMoney(remaining*Math.min(100,Math.max(0,Number(item.percentOfRemaining||0)))/100)));
+        allocated=roundPreviewMoney(allocated+amount);
+        schedule.push({label:item.label||'Payment',amount,due:formatPreviewDate(dueDateFromEvent(eventDate,item.dueDaysBefore))});
+      });
+      return {depositPercent,deposit,remaining,schedule};
+    }
+    function renderComparisonPanel(which,preset){
+      const panel=comparePanel(which);if(!panel)return;panel.innerHTML='';
+      if(!preset){panel.textContent='Choose a preset.';return;}
+      const total=Math.max(1,Number(weddingPreviewTotal()?.value||10000));
+      const eventDate=weddingPreviewDate()?.value||'';
+      const preview=presetSchedulePreview(preset,total,eventDate);
+      const title=document.createElement('div');title.className='flex items-start justify-between gap-3';
+      const titleText=document.createElement('div');
+      const heading=document.createElement('strong');heading.className='text-sm text-[var(--koa-forest)]';heading.textContent=preset.label||preset.name;
+      const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/45';meta.textContent=preview.depositPercent+'% deposit · '+preview.schedule.length+' payments';
+      titleText.append(heading,meta);
+      const apply=document.createElement('button');apply.type='button';apply.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase text-[var(--koa-forest)]';apply.textContent='Apply';
+      apply.addEventListener('click',()=>applyPresetObject(preset));
+      title.append(titleText,apply);panel.appendChild(title);
+      const rows=document.createElement('div');rows.className='mt-3 grid gap-2';
+      preview.schedule.forEach((item)=>{
+        const row=document.createElement('div');row.className='grid grid-cols-[1fr_auto] gap-3 rounded-lg bg-[var(--koa-ivory)] px-3 py-2 text-xs';
+        const left=document.createElement('div');left.innerHTML='<strong>'+item.label+'</strong><div class="text-[var(--koa-ink)]/45">'+item.due+'</div>';
+        const amt=document.createElement('strong');amt.textContent=money(item.amount);row.append(left,amt);rows.appendChild(row);
+      });
+      panel.appendChild(rows);
+    }
+    function renderComparison(){
+      renderComparisonPanel('a',presetById(compareSelectA()?.value));
+      renderComparisonPanel('b',presetById(compareSelectB()?.value));
+    }
+    function refreshPresetSelectors(){
+      const presets=allPresetOptions();
+      [compareSelectA(),compareSelectB()].forEach((select,index)=>{
+        if(!select)return;
+        const current=select.value;select.innerHTML='';
+        presets.forEach((preset)=>{const option=document.createElement('option');option.value=preset.id;option.textContent=preset.label||preset.name;select.appendChild(option);});
+        if(current&&presets.some((preset)=>preset.id===current))select.value=current;
+        else if(presets.length)select.value=presets[Math.min(index,presets.length-1)].id;
+      });
+      renderComparison();
+      renderAutoRules();
+    }
+    function rulePresetOptions(category){
+      return allPresetOptions().filter((preset)=>(preset.category||preset.key)===category);
+    }
+    function addAutoRuleRow(rule={id:'rule-'+Date.now(),name:'New payment rule',category:'venueWedding',minLeadDays:null,maxLeadDays:null,presetId:'builtin-standard-wedding',priority:100,active:true}){
+      const list=autoRuleList();if(!list)return;
+      const row=document.createElement('div');row.dataset.autoRule='1';row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 xl:grid-cols-[1.25fr_.8fr_.65fr_.65fr_1.25fr_.45fr_auto] xl:items-end';
+      row.dataset.ruleId=rule.id;
+      row.innerHTML='<label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min lead days<input data-rule-min type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max lead days<input data-rule-max type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><label class="grid gap-1 text-xs font-semibold">Priority<input data-rule-priority type="number" min="0" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><div class="flex gap-2"><label class="flex items-center gap-2 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
+      row.querySelector('[data-rule-name]').value=rule.name||'Payment rule';
+      row.querySelector('[data-rule-category]').value=rule.category||'default';
+      row.querySelector('[data-rule-min]').value=rule.minLeadDays==null?'':String(rule.minLeadDays);
+      row.querySelector('[data-rule-max]').value=rule.maxLeadDays==null?'':String(rule.maxLeadDays);
+      row.querySelector('[data-rule-priority]').value=String(Number(rule.priority||0));
+      row.querySelector('[data-rule-active]').checked=rule.active!==false;
+      const refreshRulePresets=()=>{
+        const category=row.querySelector('[data-rule-category]').value;
+        const select=row.querySelector('[data-rule-preset]');
+        const current=select.value||rule.presetId;select.innerHTML='';
+        rulePresetOptions(category).forEach((preset)=>{const option=document.createElement('option');option.value=preset.id;option.textContent=preset.label||preset.name;select.appendChild(option);});
+        if([...select.options].some((option)=>option.value===current))select.value=current;
+      };
+      row.querySelector('[data-rule-category]').addEventListener('change',refreshRulePresets);
+      row.querySelector('[data-remove-rule]').addEventListener('click',()=>row.remove());
+      list.appendChild(row);refreshRulePresets();
+    }
+    function readAutoRules(){
+      return [...(autoRuleList()?.querySelectorAll('[data-auto-rule]')||[])].map((row,index)=>({
+        id:row.dataset.ruleId||('rule-'+index),
+        name:String(row.querySelector('[data-rule-name]')?.value||'Payment rule').trim(),
+        category:row.querySelector('[data-rule-category]')?.value||'default',
+        minLeadDays:row.querySelector('[data-rule-min]')?.value===''?null:Number(row.querySelector('[data-rule-min]')?.value),
+        maxLeadDays:row.querySelector('[data-rule-max]')?.value===''?null:Number(row.querySelector('[data-rule-max]')?.value),
+        presetId:row.querySelector('[data-rule-preset]')?.value||'',
+        priority:Number(row.querySelector('[data-rule-priority]')?.value||index),
+        active:Boolean(row.querySelector('[data-rule-active]')?.checked),
+      })).sort((a,b)=>a.priority-b.priority);
+    }
+    function renderAutoRules(){
+      const list=autoRuleList();if(!list)return;list.innerHTML='';
+      (state?.depositSettings?.autoRules||[]).forEach((rule)=>addAutoRuleRow(rule));
+    }
+    function paymentSettingsPayload(){
+      const data=new FormData(depositForm);
+      return {
+        action:'save-deposit-settings',
+        venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),
+        mobileBarPercent:Number(data.get('mobileBarPercent')||0),
+        privateEventPercent:Number(data.get('privateEventPercent')||0),
+        defaultPercent:Number(data.get('defaultPercent')||0),
+        venueWeddingMilestones:readTemplate('venueWedding'),
+        mobileBarMilestones:readTemplate('mobileBar'),
+        privateEventMilestones:readTemplate('privateEvent'),
+        defaultMilestones:readTemplate('default'),
+        customPresets:state?.depositSettings?.customPresets||[],
+        autoRules:readAutoRules(),
+      };
+    }
+    async function persistPaymentSettings(message='Payment settings saved.'){
+      const result=await api(paymentSettingsPayload());
+      state.depositSettings=result.depositSettings;
+      renderCustomPresets();
+      renderAutoRules();
+      renderComparison();
+      if(customPresetMessage())customPresetMessage().textContent=message;
+      return result;
+    }
+
+    function applyPaymentPreset(name){
+      const preset=paymentPresets[name];if(!preset)return;
+      applyPresetObject(preset);
     }
     function validatePaymentTemplates(){
       const errors=[];
@@ -885,6 +1104,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderTemplate('default',state.depositSettings.defaultMilestones);
         renderWeddingPreview();
         renderTemplateValidation();
+        renderCustomPresets();
+        renderAutoRules();
+        refreshPresetSelectors();
       }
       renderCatalog();
       renderDiagnostics();
@@ -923,9 +1145,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
     document.querySelectorAll('[data-add-template]').forEach((button)=>button.addEventListener('click',()=>addTemplateRow(button.dataset.addTemplate,{label:'Payment',dueDaysBefore:30,percentOfRemaining:0})));
     document.querySelectorAll('[data-payment-preset]').forEach((button)=>button.addEventListener('click',()=>applyPaymentPreset(button.dataset.paymentPreset)));
+    document.querySelector('[data-save-custom-preset]')?.addEventListener('click',async()=>{
+      const name=String(customPresetName()?.value||'').trim();
+      const category=String(customPresetCategory()?.value||'venueWedding');
+      if(!name){if(customPresetMessage())customPresetMessage().textContent='Enter a preset name first.';return;}
+      const field=depositFieldForCategory(category);
+      const preset={
+        id:'custom-'+Date.now().toString(36),
+        name,
+        category,
+        depositPercent:Number(depositForm?.elements?.[field]?.value||0),
+        milestones:readTemplate(category),
+        createdAt:new Date().toISOString(),
+        updatedAt:new Date().toISOString(),
+      };
+      state.depositSettings.customPresets=[...(state.depositSettings.customPresets||[]),preset];
+      try{await persistPaymentSettings('Saved custom preset “'+name+'”.');customPresetName().value='';}
+      catch(err){state.depositSettings.customPresets=(state.depositSettings.customPresets||[]).filter((item)=>item.id!==preset.id);if(customPresetMessage())customPresetMessage().textContent=err.message||'Unable to save custom preset.';}
+    });
+    document.querySelector('[data-add-auto-rule]')?.addEventListener('click',()=>addAutoRuleRow());
+    compareSelectA()?.addEventListener('change',renderComparison);
+    compareSelectB()?.addEventListener('change',renderComparison);
     depositForm?.querySelectorAll('input[name$="Percent"]').forEach((input)=>input.addEventListener('input',()=>{renderTemplateValidation();if(input.name==='venueWeddingPercent')renderWeddingPreview();}));
-    weddingPreviewTotal()?.addEventListener('input',renderWeddingPreview);
-    weddingPreviewDate()?.addEventListener('input',renderWeddingPreview);
+    weddingPreviewTotal()?.addEventListener('input',()=>{renderWeddingPreview();renderComparison();});
+    weddingPreviewDate()?.addEventListener('input',()=>{renderWeddingPreview();renderComparison();});
     document.querySelectorAll('[data-close-catalog]').forEach((button)=>button.addEventListener('click',()=>catalogDialog?.close()));
     newCatalog?.addEventListener('click',()=>openCatalogItem());
     importCatalog?.addEventListener('click',async()=>{
@@ -965,8 +1208,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(validation.warnings.length&&!window.confirm('These payment schedules have '+validation.warnings.length+' warning'+(validation.warnings.length===1?'':'s')+'. Save them anyway?'))return;
       const data=new FormData(depositForm);if(depositMessage)depositMessage.textContent='Saving deposit defaults…';
       try{
-        const result=await api({action:'save-deposit-settings',venueWeddingPercent:Number(data.get('venueWeddingPercent')||0),mobileBarPercent:Number(data.get('mobileBarPercent')||0),privateEventPercent:Number(data.get('privateEventPercent')||0),defaultPercent:Number(data.get('defaultPercent')||0),venueWeddingMilestones:readTemplate('venueWedding'),mobileBarMilestones:readTemplate('mobileBar'),privateEventMilestones:readTemplate('privateEvent'),defaultMilestones:readTemplate('default')});
-        state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults by event category.';
+        state.depositSettings.autoRules=readAutoRules();
+        const result=await api(paymentSettingsPayload());
+        state.depositSettings=result.depositSettings;if(depositMessage)depositMessage.textContent='Saved. New proposals will use these defaults and automatic selection rules.';
         renderTemplateValidation();
       }catch(err){if(depositMessage)depositMessage.textContent=err.message||'Unable to save deposit defaults.';}
     });
