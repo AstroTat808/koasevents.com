@@ -240,7 +240,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const category=String(releaseFilter?.value||'all');
       const releases=latestReleases.filter((release)=>{
         const haystack=[
-          release.commitTitle,release.commitMessage,release.commit,release.deployId,
+          release.commitTitle,release.commitMessage,release.commit,release.deployId,release.summary,
+          release.authorName,release.authorLogin,release.pullRequestNumber,release.pullRequestUrl,
           ...(release.features||[]),...(release.changedFiles||[])
         ].join(' ').toLowerCase();
         const termOk=!term||haystack.includes(term);
