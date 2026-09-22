@@ -272,7 +272,7 @@ export async function readOffice365SyncAudit(context:Context){
 }
 async function saveOffice365SyncAudit(context:Context,run:SyncAuditRun){
   const rows=await readOffice365SyncAudit(context);
-  const next=[run,...rows.filter((row)=>row.id!==run.id)].slice(0,100);
+  const next=[run,...rows.filter((row)=>row.id!==run.id)].slice(0,1000);
   await syncStore(context).setJSON('audit/runs/index',next);
 }
 function auditTotals(entries:SyncAuditEntry[]){
