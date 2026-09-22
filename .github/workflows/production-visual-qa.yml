@@ -107,7 +107,7 @@ jobs:
           if-no-files-found: error
 
   admin-startup-audit:
-    name: Admin startup browser audit
+    name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
     needs: source-build-audit
     runs-on: ubuntu-latest
@@ -125,7 +125,7 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Wait for this exact Netlify deploy
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
-      - name: Verify every admin page reaches a visible startup state
+      - name: Verify every protected admin page and API
         run: python scripts/production_visual_qa.py --mode admin --browser chromium
       - uses: actions/upload-artifact@v4
         if: always()
@@ -181,7 +181,7 @@ jobs:
             echo '| --- | --- |'
             echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
             echo '| Live production route smoke | ${{ needs.deployed-smoke.result }} |'
-            echo '| Live admin startup browser audit | ${{ needs.admin-startup-audit.result }} |'
+            echo '| Protected admin post-deploy audit | ${{ needs.admin-startup-audit.result }} |'
             echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
