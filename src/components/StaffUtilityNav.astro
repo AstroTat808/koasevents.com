@@ -17,6 +17,7 @@
           aria-controls="koa-workspace-links"
         >
           <span>Workspace</span>
+          <span data-workspace-total class="hidden workspace-total-badge" aria-label="Workspace alerts"></span>
           <span data-workspace-chevron aria-hidden="true">⌄</span>
         </button>
 
@@ -28,6 +29,7 @@
 
       <div class="flex min-w-0 items-center gap-2">
         <span data-workspace-user class="truncate text-xs font-semibold text-[var(--koa-ink)]/65"></span>
+        <span data-workspace-total-desktop class="hidden workspace-desktop-alert md:inline-flex"></span>
         <button data-workspace-logout type="button" class="workspace-signout">Sign out</button>
       </div>
     </div>
@@ -35,23 +37,60 @@
     <div
       id="koa-workspace-links"
       data-workspace-links
-      class="mt-2 hidden max-h-[70vh] grid-cols-1 gap-2 overflow-y-auto rounded-[1rem] border border-[var(--koa-line)] bg-white p-2 shadow-[var(--shadow-soft)] md:mt-0 md:flex md:max-h-none md:flex-wrap md:items-center md:overflow-visible md:border-0 md:bg-transparent md:p-0 md:shadow-none"
+      class="mt-2 hidden max-h-[72vh] grid-cols-1 gap-3 overflow-y-auto rounded-[1rem] border border-[var(--koa-line)] bg-white p-3 shadow-[var(--shadow-soft)] md:mt-3 md:grid md:max-h-none md:grid-cols-2 md:overflow-visible lg:grid-cols-5"
     >
-      <a data-workspace-link data-capability="admin.dashboard.view" href="/admin/" class="workspace-nav-link">Admin Home</a>
-      <a data-workspace-link href="/staff/" class="workspace-nav-link workspace-nav-home">Staff Home</a>
-      <a data-workspace-link data-capability="crm.view" href="/admin/crm/" class="workspace-nav-link">Business CRM</a>
-      <a data-workspace-link data-capability="sales.view" href="/admin/quotes/" class="workspace-nav-link">Sales CRM</a>
-      <a data-workspace-link data-capability="events.view" href="/admin/events/" class="workspace-nav-link">Event Ops</a>
-      <a data-workspace-link data-capability="calendar.view" href="/admin/calendar/" class="workspace-nav-link">Master Calendar</a>
-      <a data-workspace-link data-capability="vendors.view" href="/admin/vendors/" class="workspace-nav-link">Vendor CRM</a>
-      <a data-workspace-link data-capability="insurance.view" href="/admin/insurance/" class="workspace-nav-link">Insurance</a>
-      <a data-workspace-link data-capability="quickbooks.view" href="/admin/quickbooks/" class="workspace-nav-link">QuickBooks</a>
-      <a data-workspace-link data-capability="blog.view" href="/admin/blog/" class="workspace-nav-link">Blog</a>
-      <a data-workspace-link data-capability="gallery.view" href="/admin/gallery/" class="workspace-nav-link">Gallery</a>
-      <a data-workspace-link data-capability="seo.view" href="/admin/seo/" class="workspace-nav-link">Local SEO</a>
-      <a data-workspace-link data-capability="security.view" href="/admin/security/" class="workspace-nav-link">Security</a>
-      <a data-workspace-link data-capability="health.view" href="/admin/health/" class="workspace-nav-link">System Health</a>
-      <a data-workspace-link data-capability="users.manage" href="/admin/staff/" class="workspace-nav-link">User Management</a>
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Home</p>
+        <div class="workspace-group-links">
+          <a data-workspace-link data-capability="admin.dashboard.view" href="/admin/" class="workspace-nav-link">Admin Home</a>
+          <a data-workspace-link href="/staff/" class="workspace-nav-link workspace-nav-home">Staff Home</a>
+        </div>
+      </section>
+
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Sales</p>
+        <div class="workspace-group-links">
+          <a data-workspace-link data-capability="crm.view" href="/admin/crm/" class="workspace-nav-link">
+            <span>Business CRM</span><span data-link-alert="overdueTasks" class="hidden workspace-link-badge"></span>
+          </a>
+          <a data-workspace-link data-capability="sales.view" href="/admin/quotes/" class="workspace-nav-link">Sales CRM</a>
+        </div>
+      </section>
+
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Operations</p>
+        <div class="workspace-group-links">
+          <a data-workspace-link data-capability="events.view" href="/admin/events/" class="workspace-nav-link">Event Ops</a>
+          <a data-workspace-link data-capability="calendar.view" href="/admin/calendar/" class="workspace-nav-link">Master Calendar</a>
+          <a data-workspace-link data-capability="vendors.view" href="/admin/vendors/" class="workspace-nav-link">Vendor CRM</a>
+          <a data-workspace-link data-capability="insurance.view" href="/admin/insurance/" class="workspace-nav-link">
+            <span>Insurance</span><span data-link-alert="vendorInsurance" class="hidden workspace-link-badge"></span>
+          </a>
+        </div>
+      </section>
+
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Content</p>
+        <div class="workspace-group-links">
+          <a data-workspace-link data-capability="blog.view" href="/admin/blog/" class="workspace-nav-link">Blog</a>
+          <a data-workspace-link data-capability="gallery.view" href="/admin/gallery/" class="workspace-nav-link">Gallery</a>
+          <a data-workspace-link data-capability="seo.view" href="/admin/seo/" class="workspace-nav-link">Local SEO</a>
+        </div>
+      </section>
+
+      <section data-workspace-group class="workspace-group">
+        <p class="workspace-group-title">Accounting + Admin</p>
+        <div class="workspace-group-links">
+          <a data-workspace-link data-capability="quickbooks.view" href="/admin/quickbooks/" class="workspace-nav-link">
+            <span>QuickBooks</span><span data-link-alert="accountingMismatches" class="hidden workspace-link-badge"></span>
+          </a>
+          <a data-workspace-link data-capability="security.view" href="/admin/security/" class="workspace-nav-link">Security</a>
+          <a data-workspace-link data-capability="health.view" href="/admin/health/" class="workspace-nav-link">
+            <span>System Health</span><span data-link-alert="healthWarnings" class="hidden workspace-link-badge"></span>
+          </a>
+          <a data-workspace-link data-capability="users.manage" href="/admin/staff/" class="workspace-nav-link">User Management</a>
+        </div>
+      </section>
     </div>
   </div>
 </nav>
@@ -73,7 +112,7 @@
   .workspace-menu-button {
     display: inline-flex;
     align-items: center;
-    gap: .5rem;
+    gap: .45rem;
     background: var(--koa-forest);
     border-color: var(--koa-forest);
     color: white;
@@ -87,10 +126,34 @@
     padding: .55rem .75rem;
   }
 
+  .workspace-group {
+    min-width: 0;
+    border-radius: .85rem;
+    background: color-mix(in srgb, var(--koa-sand) 42%, white);
+    padding: .65rem;
+  }
+
+  .workspace-group-title {
+    padding: 0 .3rem .45rem;
+    color: var(--koa-clay);
+    font-size: .52rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .workspace-group-links {
+    display: grid;
+    gap: .35rem;
+  }
+
   .workspace-nav-link {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
     background: white;
-    padding: .7rem .85rem;
+    padding: .68rem .75rem;
     color: var(--koa-forest);
   }
 
@@ -112,20 +175,51 @@
     color: white;
   }
 
+  .workspace-total-badge,
+  .workspace-link-badge,
+  .workspace-desktop-alert {
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    font-weight: 900;
+    letter-spacing: 0;
+  }
+
+  .workspace-total-badge {
+    min-width: 1.15rem;
+    height: 1.15rem;
+    background: white;
+    color: var(--koa-clay);
+    padding: 0 .3rem;
+    font-size: .58rem;
+  }
+
+  .workspace-link-badge {
+    min-width: 1.15rem;
+    height: 1.15rem;
+    background: var(--koa-clay);
+    color: white;
+    padding: 0 .3rem;
+    font-size: .55rem;
+  }
+
+  .workspace-nav-link[aria-current="page"] .workspace-link-badge {
+    background: white;
+    color: var(--koa-clay);
+  }
+
+  .workspace-desktop-alert {
+    border: 1px solid color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
+    background: color-mix(in srgb, var(--koa-clay) 10%, white);
+    color: var(--koa-clay);
+    padding: .52rem .7rem;
+    font-size: .58rem;
+    text-transform: uppercase;
+  }
+
   @media (min-width: 768px) {
-    [data-workspace-nav] .container-shell {
-      display: flex;
-      align-items: center;
-      gap: .65rem;
-    }
-
-    [data-workspace-nav] [data-workspace-links] {
-      flex: 1 1 auto;
-    }
-
     [data-workspace-nav] > .container-shell > div:first-child {
-      order: 2;
-      margin-left: auto;
+      min-height: 2.3rem;
     }
   }
 </style>
@@ -158,12 +252,61 @@
     return labels[role] || String(role || 'Staff').replaceAll('_', ' ');
   }
 
+  function badgeText(value) {
+    const count = Math.max(0, Number(value || 0));
+    return count > 99 ? '99+' : String(count);
+  }
+
   function setMenu(open) {
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
     links.classList.toggle('hidden', !open);
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
     const chevron = toggle.querySelector('[data-workspace-chevron]');
     if (chevron) chevron.textContent = open ? '⌃' : '⌄';
+  }
+
+  function updateGroupVisibility() {
+    nav?.querySelectorAll('[data-workspace-group]').forEach((group) => {
+      if (!(group instanceof HTMLElement)) return;
+      const visibleLinks = [...group.querySelectorAll('[data-workspace-link]')]
+        .some((node) => node instanceof HTMLElement && !node.classList.contains('hidden'));
+      group.classList.toggle('hidden', !visibleLinks);
+    });
+  }
+
+  function renderAlerts(payload) {
+    const total = Math.max(0, Number(payload?.total || 0));
+    const mobileBadge = nav?.querySelector('[data-workspace-total]');
+    const desktopBadge = nav?.querySelector('[data-workspace-total-desktop]');
+
+    if (mobileBadge instanceof HTMLElement) {
+      mobileBadge.textContent = badgeText(total);
+      mobileBadge.classList.toggle('hidden', total <= 0);
+      mobileBadge.classList.toggle('inline-flex', total > 0);
+    }
+    if (desktopBadge instanceof HTMLElement) {
+      desktopBadge.textContent = total > 0 ? badgeText(total) + ' alerts' : '';
+      desktopBadge.classList.toggle('hidden', total <= 0);
+      desktopBadge.classList.toggle('md:inline-flex', total > 0);
+    }
+
+    nav?.querySelectorAll('[data-link-alert]').forEach((badge) => {
+      if (!(badge instanceof HTMLElement)) return;
+      const key = badge.dataset.linkAlert || '';
+      const count = Math.max(0, Number(payload?.items?.[key]?.count || 0));
+      badge.textContent = badgeText(count);
+      badge.title = payload?.items?.[key]?.label || 'Workspace alerts';
+      badge.classList.toggle('hidden', count <= 0);
+      badge.classList.toggle('inline-flex', count > 0);
+    });
+  }
+
+  async function loadAlerts() {
+    try {
+      const response = await fetch('/api/admin/workspace-alerts',{cache:'no-store'});
+      if (!response.ok) return;
+      renderAlerts(await response.json());
+    } catch {}
   }
 
   toggle?.addEventListener('click', () => {
@@ -214,6 +357,8 @@
       }
     });
 
+    updateGroupVisibility();
+
     const role = nav.querySelector('[data-workspace-role]');
     if (role) role.textContent = roleLabel(session.role);
 
@@ -225,6 +370,7 @@
     }
 
     nav.classList.remove('hidden');
+    loadAlerts();
   }
 
   showWorkspaceNav();
