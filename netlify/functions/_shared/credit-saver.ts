@@ -4,7 +4,8 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 export type CreditSaverActionId =
   | 'post-deploy-verification-half'
   | 'quickbooks-reconciliation-half'
-  | 'crm-lifecycle-half';
+  | 'crm-lifecycle-half'
+  | 'office365-calendar-sync-pause';
 
 export type CreditSaverPolicy = {
   updatedAt: string;
@@ -17,6 +18,7 @@ const ACTION_IDS:CreditSaverActionId[]=[
   'post-deploy-verification-half',
   'quickbooks-reconciliation-half',
   'crm-lifecycle-half',
+  'office365-calendar-sync-pause',
 ];
 
 function store(context:Context){
@@ -99,7 +101,7 @@ export async function clearCreditSaverPolicy(context:Context,actor:string){
 }
 
 export async function shouldRunScheduledJob(context:Context,job:
-  'post-deploy-verification'|'quickbooks-reconciliation'|'crm-lifecycle'
+  'post-deploy-verification'|'quickbooks-reconciliation'|'crm-lifecycle'|'office365-calendar-sync'
 ){
   if(context.deploy.context!=='production') return true;
   const policy=await readCreditSaverPolicy(context);
@@ -113,6 +115,9 @@ export async function shouldRunScheduledJob(context:Context,job:
   }
   if(job==='crm-lifecycle' && policy.actions['crm-lifecycle-half']){
     return now.getUTCHours()%12===0;
+  }
+  if(job==='office365-calendar-sync' && policy.actions['office365-calendar-sync-pause']){
+    return false;
   }
   return true;
 }

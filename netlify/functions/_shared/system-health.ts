@@ -1559,6 +1559,89 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
   const recentDeploysPerDay=recentSuccessful.length/recentWindowDays;
   const recommendations:any[]=[];
 
+  const scheduleRows=(schedules||[]).map((item:any)=>{
+    const cron=clean(item?.cron,80);
+    let runs=0;
+    if(cron==='@hourly') runs=24;
+    else {
+      let match=cron.match(/^\*\/(\d+) \* \* \* \*$/);
+      if(match) runs=1440/Math.max(1,Number(match[1]));
+      else {
+        match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
+        if(match) runs=24/Math.max(1,Number(match[1]));
+        else if(/^0 \d{1,2} \* \* \*$/.test(cron)) runs=1;
+      }
+    }
+    return {name:clean(item?.name,120),cron,runsPerDay:runs};
+  }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
+
+  const office365=scheduleRows.find((item:any)=>item.name==='office365-calendar-sync');
+  if(office365){
+    const savingsPerDay=(24*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+    recommendations.push({
+      id:'office365-calendar-sync',
+      priority:5,
+      title:'Temporarily pause automatic Office 365 calendar sync',
+      detail:'Stops only the hourly automatic sync until the billing cycle resets. Staff can still use Sync now + verify from the Master Calendar whenever they need an immediate sync.',
+      impact:'Avoids up to 24 scheduled sync invocations/day while paused (~'+Math.round(savingsPerDay*1000)/1000+' estimated compute credits/day under current runtime assumptions).',
+      estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+      estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+      safeActionId:'office365-calendar-sync-pause',
+      proactive:true,
+      protects:'Manual Office 365 Sync now + verify remains available; no CRM, QuickBooks, Turnstile, Resend, or health-monitor behavior is disabled.',
+    });
+  }
+
+  if(!projectedOverAllowance){
+    const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
+    if(verifier&&verifier.runsPerDay>48){
+      const savedRunsPerDay=verifier.runsPerDay/2;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'post-deploy-verification',
+        priority:6,
+        title:'Optional: reduce post-deploy verification to every 30 minutes',
+        detail:'Use this during development-heavy periods to cut verification work in half. New releases are still verified automatically.',
+        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'post-deploy-verification-half',
+        proactive:true,
+        protects:'Hourly System Health remains active.',
+      });
+    }
+    if(scheduleRows.some((item:any)=>item.name==='quickbooks-hourly-reconciliation')){
+      const savingsPerDay=(3*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'quickbooks-reconciliation',
+        priority:7,
+        title:'Optional: reduce QuickBooks fallback reconciliation to every 8 hours',
+        detail:'QuickBooks webhooks remain immediate; only the scheduled safety-net reconciliation is slowed.',
+        impact:'About 3 fewer reconciliation runs/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'quickbooks-reconciliation-half',
+        proactive:true,
+        protects:'Payment and invoice webhooks remain immediate.',
+      });
+    }
+    if(scheduleRows.some((item:any)=>item.name==='crm-lifecycle')){
+      const savingsPerDay=(2*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'crm-lifecycle',
+        priority:8,
+        title:'Optional: reduce CRM lifecycle sweep to every 12 hours',
+        detail:'Interactive CRM operations remain unchanged; only the maintenance sweep is slowed.',
+        impact:'About 2 fewer lifecycle sweeps/day.',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'crm-lifecycle-half',
+        proactive:true,
+        protects:'Lead capture, proposals, bookings, and manual CRM work remain available.',
+      });
+    }
+  }
+
   if(projectedOverAllowance){
     const deploySavingsPerDay=Math.max(0,(recentDeploysPerDay-1)*rates.productionDeploy);
     recommendations.push({
@@ -1574,21 +1657,6 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       protects:'Deploy Previews, CRM, QuickBooks webhooks, Turnstile, Resend, and System Health remain available.',
     });
 
-    const scheduleRows=(schedules||[]).map((item:any)=>{
-      const cron=clean(item?.cron,80);
-      let runs=0;
-      if(cron==='@hourly') runs=24;
-      else {
-        let match=cron.match(/^\*\/(\d+) \* \* \* \*$/);
-        if(match) runs=1440/Math.max(1,Number(match[1]));
-        else {
-          match=cron.match(/^0 \*\/(\d+) \* \* \*$/);
-          if(match) runs=24/Math.max(1,Number(match[1]));
-          else if(/^0 \d{1,2} \* \* \*$/.test(cron)) runs=1;
-        }
-      }
-      return {name:clean(item?.name,120),cron,runsPerDay:runs};
-    }).sort((a:any,b:any)=>b.runsPerDay-a.runsPerDay);
     const verifier=scheduleRows.find((item:any)=>item.name==='post-deploy-verification');
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
@@ -1705,7 +1773,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     : actualSeverity;
 
   return {
-    version:5,
+    version:6,
     basis:'Measured deploys + measured bandwidth + modeled compute and request usage',
     cycleStart,
     cycleEnd,
@@ -1775,7 +1843,7 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===5 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.creditUsage?.version===6 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
