@@ -110,7 +110,7 @@ async function normalizeUser(user:any,policy:any){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireAdmin();if(auth.response)return auth.response;
+  const auth=await requireAdmin(req);if(auth.response)return auth.response;
   const actor=normalizeEmail(auth.user?.email)||'admin';
   const actorId=clean(auth.user?.id,120);
   const policy=await readAuthSecurityPolicy();
