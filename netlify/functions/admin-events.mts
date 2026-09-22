@@ -3,6 +3,8 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
+import { buildVendorOperations, ensureVendorBriefState, sanitizeSetupItems } from './_shared/vendor-event-ops.ts';
+import { sendVendorEmail } from './_shared/vendor-email.ts';
 
 type Vendor = {
   id: string;
@@ -88,6 +90,7 @@ type EventOps = {
   checklist: ChecklistItem[];
   tasks: EventTask[];
   documents: EventDocument[];
+  setupItems: any[];
 };
 
 function salesStoreFor(context: Context) {
@@ -240,6 +243,7 @@ function defaultOps(record: any): EventOps {
     checklist: seedChecklist(eventDate),
     tasks: seedTasks(),
     documents: [],
+    setupItems: [],
   };
   seeded.vendorRequirements = suggestVendorRequirements(record, seeded).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
   return seeded as EventOps;
@@ -248,7 +252,7 @@ function defaultOps(record: any): EventOps {
 function sanitizeVendors(input: unknown): Vendor[] {
   if (!Array.isArray(input)) return [];
   const statuses = new Set(['not_requested','requested','received','approved']);
-  return input.slice(0, 100).map((row: any) => ({
+  return ensureVendorBriefState(input.slice(0, 100).map((row: any) => ({
     id: clean(row?.id, 80) || id('V'),
     marketplaceVendorId: clean(row?.marketplaceVendorId, 100),
     company: clean(row?.company, 180),
@@ -259,7 +263,18 @@ function sanitizeVendors(input: unknown): Vendor[] {
     arrivalTime: clean(row?.arrivalTime, 40),
     insuranceStatus: statuses.has(row?.insuranceStatus) ? row.insuranceStatus : 'not_requested',
     notes: clean(row?.notes, 1600),
-  }));
+    briefToken: clean(row?.briefToken,100),
+    briefSentAt: clean(row?.briefSentAt,60),
+    briefAcknowledgedAt: clean(row?.briefAcknowledgedAt,60),
+    briefAcknowledgedName: clean(row?.briefAcknowledgedName,180),
+    briefAcknowledgements: Array.isArray(row?.briefAcknowledgements)?row.briefAcknowledgements:[],
+    loadInZone: clean(row?.loadInZone,180),
+    parkingInstructions: clean(row?.parkingInstructions,1000),
+    powerWaterNeeds: clean(row?.powerWaterNeeds,1000),
+    departureTime: clean(row?.departureTime,40),
+    emergencyContact: clean(row?.emergencyContact,300),
+    briefNote: clean(row?.briefNote,1600),
+  }))) as Vendor[];
 }
 
 function sanitizeVendorRequirements(input: unknown): VendorRequirement[] {
@@ -366,6 +381,8 @@ export default async (req: Request, context: Context) => {
       const mergedQuestionnaire=ensureQuestionnaire((ops.questionnaire||[]) as QuestionAnswer[]);
       if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+      ops.vendors=ensureVendorBriefState(ops.vendors||[]) as any;
+      if(!Array.isArray((ops as any).setupItems))(ops as any).setupItems=[];
       const refreshedVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
       if(JSON.stringify(refreshedVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
       if (!Array.isArray((ops as any).vendorRequirements)) {
@@ -394,6 +411,7 @@ export default async (req: Request, context: Context) => {
         },
         ops,
         vendorSuggestions: suggestVendorRequirements(record, ops),
+        vendorOperations: buildVendorOperations(record, ops),
       };
     }));
 
@@ -432,6 +450,25 @@ export default async (req: Request, context: Context) => {
   } else if (action === 'save-vendors') {
     const masterVendors:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
     ops.vendors = applyMasterInsuranceToAssignments(sanitizeVendors(payload?.vendors), masterVendors, record.customer?.eventDate);
+  } else if (action === 'save-vendor-brief-details') {
+    const incoming=ensureVendorBriefState(payload?.vendors||[]);
+    const byId=new Map(incoming.map((v:any)=>[String(v.id),v]));
+    ops.vendors=ensureVendorBriefState(ops.vendors||[]).map((vendor:any)=>{
+      const next:any=byId.get(String(vendor.id));if(!next)return vendor;
+      return {...vendor,arrivalTime:clean(next.arrivalTime,40),loadInZone:clean(next.loadInZone,180),parkingInstructions:clean(next.parkingInstructions,1000),powerWaterNeeds:clean(next.powerWaterNeeds,1000),departureTime:clean(next.departureTime,40),emergencyContact:clean(next.emergencyContact,300),briefNote:clean(next.briefNote,1600)};
+    }) as any;
+  } else if (action === 'save-setup-items') {
+    (ops as any).setupItems=sanitizeSetupItems(payload?.setupItems);
+  } else if (action === 'send-vendor-brief') {
+    ops.vendors=ensureVendorBriefState(ops.vendors||[]) as any;
+    const vendor:any=(ops.vendors||[]).find((v:any)=>String(v.id)===clean(payload?.vendorId,100));
+    if(!vendor)return Response.json({error:'Vendor assignment not found.'},{status:404});
+    if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending the Event Brief.'},{status:400});
+    const url='https://koasevents.com/vendor-brief/?token='+encodeURIComponent(vendor.briefToken);
+    const assigned=sanitizeSetupItems((ops as any).setupItems||[]).filter((item:any)=>[item.responsibleVendorId,item.deliveryVendorId,item.setupVendorId,item.removalVendorId].includes(vendor.id));
+    const result=await sendVendorEmail({to:[vendor.email],subject:'Koa’s Event Brief — '+(record.customer?.eventDate||'upcoming event'),title:'Your Koa’s Event Brief is ready.',body:'Please review your arrival, load-in, setup/removal responsibilities, venue instructions, and applicable Koa’s rules, then acknowledge the brief before the event.',detail:[vendor.role,record.customer?.eventDate?'Event: '+record.customer.eventDate:'',vendor.arrivalTime?'Arrival: '+vendor.arrivalTime:'',assigned.length?assigned.length+' setup assignment'+(assigned.length===1?'':'s'):''].filter(Boolean).join(' · '),actionLabel:'Review Event Brief',actionUrl:url,idempotencyKey:'koa-event-brief-'+record.id+'-'+vendor.id+'-'+new Date().toISOString().slice(0,10)});
+    vendor.briefSentAt=new Date().toISOString();
+    vendor.briefLastMessageId=result.id||'';
   } else if (action === 'save-vendor-requirements') {
     ops.vendorRequirements = sanitizeVendorRequirements(payload?.vendorRequirements);
     (ops as any).vendorRequirementsMode = 'manual';
@@ -464,7 +501,7 @@ export default async (req: Request, context: Context) => {
     detail: action.replace('save-', '') + ' updated in Event Ops.',
   });
 
-  return Response.json({ ok: true, ops, vendorSuggestions: suggestVendorRequirements(record, ops) }, { headers: { 'Cache-Control': 'private, no-store' } });
+  return Response.json({ ok: true, ops, vendorSuggestions: suggestVendorRequirements(record, ops), vendorOperations: buildVendorOperations(record, ops) }, { headers: { 'Cache-Control': 'private, no-store' } });
 };
 
 export const config: Config = { path: '/api/admin/events' };
