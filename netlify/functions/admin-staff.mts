@@ -59,12 +59,13 @@ function rolesFor(user:any){const candidates=[user?.roles,user?.appMetadata?.rol
 function permissionsFor(user:any){const values=metadataFor(user)?.permissions;return Array.isArray(values)?values.map((permission:any)=>clean(permission,100).toLowerCase()).filter((permission:string)=>STAFF_CAPABILITIES.includes(permission as any)):[];}
 function sessionVersion(user:any){const n=Number(metadataFor(user)?.sessionVersion??0);return Number.isFinite(n)&&n>=0?Math.floor(n):0;}
 function isDeactivated(user:any){return rolesFor(user).includes('deactivated')||metadataFor(user)?.active===false;}
-function effectiveRole(user:any):StaffRole|'deactivated'|'none'{
+function effectiveRole(user:any):StaffRole|'custom'|'deactivated'|'none'{
   const email=normalizeEmail(user?.email);
   if(PROTECTED_ADMIN_EMAILS.has(email))return 'admin';
   if(isDeactivated(user))return 'deactivated';
   const candidates=[...rolesFor(user),normalizeRole(user?.role)];
   for(const role of ROLE_IDS)if(candidates.includes(role))return role;
+  if(candidates.includes('custom'))return 'custom';
   if(candidates.includes('staff'))return 'sales';
   return 'none';
 }
@@ -87,6 +88,8 @@ async function normalizeUser(user:any,policy:any){
     email:normalizeEmail(user?.email),
     name:normalizedName(user),
     role:effectiveRole(user),
+    roleLabel:effectiveRole(user)==='custom'?(clean(metadataFor(user)?.customRoleName,100)||'Custom Role'):publicRoleLabel(effectiveRole(user)),
+    customRoleId:clean(metadataFor(user)?.customRoleId,100),
     permissions:permissionsFor(user),
     active:!isDeactivated(user),
     status:isDeactivated(user)?'deactivated':confirmedAt?'active':'pending',
@@ -116,7 +119,7 @@ export default async(req:Request,context:Context)=>{
     const [users,audit]=await Promise.all([allUsers(),readStaffAudit(context,500)]);
     const normalized=await Promise.all(users.map((user:any)=>normalizeUser(user,policy)));
     normalized.sort((a,b)=>{
-      const order:Record<string,number>={admin:0,manager:1,event_coordinator:2,vendor_manager:3,content_editor:4,accounting:5,sales:6,read_only:7,deactivated:8,none:9};
+      const order:Record<string,number>={admin:0,manager:1,event_coordinator:2,vendor_manager:3,content_editor:4,accounting:5,sales:6,custom:7,read_only:8,deactivated:9,none:10};
       return (order[a.role]??99)-(order[b.role]??99)||a.email.localeCompare(b.email);
     });
     return Response.json({
@@ -242,7 +245,7 @@ export default async(req:Request,context:Context)=>{
     if(PROTECTED_ADMIN_EMAILS.has(email)&&role!=='admin')return Response.json({error:'Protected administrator accounts must remain Administrators.'},{status:403});
     if(previous==='admin'&&role!=='admin'){const users=await allUsers();if(activeAdminCount(users)<=1)return Response.json({error:'At least one active Administrator account must remain.'},{status:409});}
     const nextVersion=sessionVersion(current)+1;
-    const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
+    const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,customRoleId:undefined,customRoleName:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
     await appendStaffAudit(context,{actor,action:'user_role_changed',subjectId:userId,subjectEmail:email,detail:'Changed role for '+email+' from '+previous+' to '+role+'. Existing sessions were revoked.',metadata:{from:previous,to:role,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
@@ -270,7 +273,7 @@ export default async(req:Request,context:Context)=>{
     const requested=normalizeRole(body.role),stored=normalizeRole(metadataFor(current)?.previousRole);
     const role=USER_ROLES.has(requested)?requested:USER_ROLES.has(stored)?stored:'sales';
     const nextVersion=sessionVersion(current)+1;
-    const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
+    const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,customRoleId:undefined,customRoleName:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
     await appendStaffAudit(context,{actor,action:'user_reactivated',subjectId:userId,subjectEmail:email,detail:'Reactivated '+email+' as '+role+'.',metadata:{role,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
