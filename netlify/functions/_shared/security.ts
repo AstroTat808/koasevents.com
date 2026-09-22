@@ -48,6 +48,18 @@ export interface SecurityEvent {
   review?: SecurityReview;
 }
 
+export interface TurnstileValidation {
+  id: string;
+  createdAt: string;
+  ok: boolean;
+  action: string;
+  expectedAction: string;
+  hostname: string;
+  requestHostname: string;
+  codes: string[];
+  detail: string;
+}
+
 const DISPOSABLE_EMAIL_DOMAINS = new Set([
   '10minutemail.com',
   'guerrillamail.com',
@@ -182,6 +194,95 @@ export async function getSecurityEvents(context: Context) {
   ]);
   const list = (Array.isArray(events) ? events : []) as SecurityEvent[];
   return list.map((event) => reviews[event.id] ? { ...event, review: reviews[event.id] } : event);
+}
+
+export async function recordTurnstileValidation(
+  context: Context,
+  input: {
+    ok: boolean;
+    action?: unknown;
+    expectedAction?: unknown;
+    hostname?: unknown;
+    requestHostname?: unknown;
+    codes?: unknown;
+    detail?: unknown;
+  },
+) {
+  const store = storeFor(context);
+  const codes = Array.isArray(input.codes)
+    ? input.codes.map((value) => clean(value, 120)).filter(Boolean).slice(0, 12)
+    : [];
+
+  const row: TurnstileValidation = {
+    id: 'TS-' + idSuffix(),
+    createdAt: new Date().toISOString(),
+    ok: Boolean(input.ok),
+    action: clean(input.action, 80),
+    expectedAction: clean(input.expectedAction, 80),
+    hostname: clean(input.hostname, 255).toLowerCase(),
+    requestHostname: clean(input.requestHostname, 255).toLowerCase(),
+    codes,
+    detail: clean(input.detail, 500),
+  };
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const current = await store.getWithMetadata('turnstile/validations', { type: 'json', consistency: 'strong' });
+    const list = Array.isArray(current?.data) ? current.data as TurnstileValidation[] : [];
+    const next = [row, ...list.filter((item) => item?.id !== row.id)].slice(0, 2000);
+    const write = current
+      ? await store.setJSON('turnstile/validations', next, { onlyIfMatch: current.etag })
+      : await store.setJSON('turnstile/validations', next, { onlyIfNew: true });
+    if (write.modified) return row;
+  }
+
+  const fallback = ((await store.get('turnstile/validations', { type: 'json', consistency: 'strong' })) || []) as TurnstileValidation[];
+  await store.setJSON('turnstile/validations', [row, ...fallback].slice(0, 2000));
+  return row;
+}
+
+export async function getTurnstileStatus(context: Context, days = 30) {
+  const store = storeFor(context);
+  const rows = ((await store.get('turnstile/validations', { type: 'json', consistency: 'strong' })) || []) as TurnstileValidation[];
+  const cutoff = Date.now() - Math.max(1, Math.min(90, Math.round(Number(days || 30)))) * 24 * 60 * 60 * 1000;
+  const inRange = rows.filter((row) => Date.parse(row.createdAt) >= cutoff);
+  const failures = inRange.filter((row) => !row.ok);
+  const successes = inRange.filter((row) => row.ok);
+  const errorMap = new Map<string, { code: string; count: number; lastSeenAt: string }>();
+
+  for (const row of failures) {
+    const codes = row.codes.length ? row.codes : ['unknown-error'];
+    for (const code of codes) {
+      const current = errorMap.get(code) || { code, count: 0, lastSeenAt: '' };
+      current.count += 1;
+      if (!current.lastSeenAt || Date.parse(row.createdAt) > Date.parse(current.lastSeenAt)) current.lastSeenAt = row.createdAt;
+      errorMap.set(code, current);
+    }
+  }
+
+  const siteKeyConfigured = Boolean(
+    String(
+      Netlify.env.get('PUBLIC_TURNSTILE_SITE_KEY') ||
+      Netlify.env.get('TURNSTILE_SITEKEY') ||
+      Netlify.env.get('TURNSTILE_SITE_KEY') ||
+      '',
+    ).trim(),
+  );
+
+  return {
+    siteKeyConfigured,
+    secretConfigured: Boolean(securitySecret()),
+    windowDays: Math.max(1, Math.min(90, Math.round(Number(days || 30)))),
+    totals: {
+      validations: inRange.length,
+      successful: successes.length,
+      failed: failures.length,
+    },
+    lastSuccess: rows.find((row) => row.ok) || null,
+    lastFailure: rows.find((row) => !row.ok) || null,
+    errorCodes: [...errorMap.values()]
+      .sort((a, b) => b.count - a.count || Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt))
+      .slice(0, 12),
+  };
 }
 
 export async function setSecurityReview(
