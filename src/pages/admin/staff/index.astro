@@ -37,6 +37,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Name
                 <input name="name" required autocomplete="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
               </label>
+              <label class="grid gap-2 text-sm font-semibold">Job title
+                <input name="jobTitle" maxlength="120" autocomplete="organization-title" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Wedding & Events Manager" />
+                <span class="text-xs font-normal leading-5 text-[var(--koa-ink)]/48">Used in personalized staff email signatures. If left blank, the staff role is used instead.</span>
+              </label>
               <label class="grid gap-2 text-sm font-semibold">Email
                 <input name="email" type="email" required autocomplete="email" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
               </label>
@@ -331,7 +335,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const role = String(roleFilter?.value || 'all');
       const status = String(statusFilter?.value || 'all');
       return allUsers.filter((user) => {
-        const matchesTerm = !term || [user.name,user.email,user.role,user.status].some((value) => String(value || '').toLowerCase().includes(term));
+        const matchesTerm = !term || [user.name,user.jobTitle,user.email,user.role,user.status].some((value) => String(value || '').toLowerCase().includes(term));
         const matchesRole = role === 'all' || user.role === role;
         const matchesStatus = status === 'all' || user.status === status;
         return matchesTerm && matchesRole && matchesStatus;
@@ -364,6 +368,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         info.innerHTML = '<div class="flex flex-wrap items-center gap-2"><span class="text-[.56rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+roleLabel(user.role,user)+'</span><span class="rounded-full border px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+statusLabel(user.status)+'</span></div><h3 class="mt-2 text-base font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
         info.querySelector('h3').textContent = user.name || user.email || 'Unnamed user';
+        if(user.jobTitle){const title=document.createElement('p');title.className='mt-1 text-sm font-semibold text-[var(--koa-clay)]';title.textContent=user.jobTitle;info.querySelector('h3').after(title);}
         info.querySelector('p:last-child').textContent = [
           user.email,
           user.lastSignInAt ? 'Last sign-in '+new Date(user.lastSignInAt).toLocaleString() : 'Never signed in',
@@ -458,6 +463,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           try {
             listMessage.textContent = 'Updating name…';
             await api({action:'set-name',userId:user.id,name});
+            await load();
+          } catch (error) { listMessage.textContent = error.message; }
+        }));
+
+        controls.appendChild(button('Edit job title','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]',async()=> {
+          const jobTitle = prompt('Job title for '+user.email+' (leave blank to use the role in email signatures):', user.jobTitle || '');
+          if (jobTitle === null) return;
+          try {
+            listMessage.textContent = 'Updating job title…';
+            await api({action:'set-job-title',userId:user.id,jobTitle});
             await load();
           } catch (error) { listMessage.textContent = error.message; }
         }));
@@ -659,6 +674,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const result = await api({
           action:'create-user',
           name:data.get('name'),
+          jobTitle:data.get('jobTitle'),
           email:data.get('email'),
           role:requestedRole.startsWith('custom:')?'read_only':requestedRole,
           setupMode,

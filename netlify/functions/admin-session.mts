@@ -12,6 +12,7 @@ export default async (req:Request) => {
   const email = clean(ctx.user?.email,240).toLowerCase();
   const metadata = ctx.user?.user_metadata || ctx.user?.userMetadata || {};
   const displayName = clean(metadata?.full_name || metadata?.name || ctx.user?.name || '',120);
+  const jobTitle = clean(metadata?.job_title || metadata?.jobTitle || '',120);
   const security = ctx.security || {
     forcePasswordChange:false,
     passwordChangedAt:'',
@@ -26,6 +27,7 @@ export default async (req:Request) => {
   return Response.json({
     email,
     displayName,
+    jobTitle,
     role:ctx.role,
     roles:[ctx.role],
     isAdmin:isApprovedAdmin(ctx.user),

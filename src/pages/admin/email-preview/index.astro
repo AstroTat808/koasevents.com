@@ -39,6 +39,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delivery</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">Resend transactional email</strong></div>
             <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Shared contact</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">aloha@koasevents.com · (844) 808-KOAS</strong></div>
           </div>
+          <div class="mt-4 flex flex-col gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/55 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p class="text-sm font-semibold text-[var(--koa-forest)]">Send this preview to your inbox</p>
+              <p data-preview-test-recipient class="mt-1 text-xs text-[var(--koa-ink)]/50"></p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span data-preview-test-status class="text-xs font-semibold text-[var(--koa-ink)]/55"></span>
+              <button data-send-test type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.09em] text-white">Send test to myself</button>
+            </div>
+          </div>
         </section>
 
         <section class="mt-6 rounded-[1.5rem] bg-[var(--koa-ink)] p-5 shadow-[var(--shadow-soft)]">
@@ -86,10 +96,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const brandName=(brand)=>brand==='mobile'?'Koa’s Mobile Bar':'Koa’s Events';
     const logo=(brand)=>brand==='mobile'?'/brand/koa-mobile-bar-email-logo.png':'/brand/koa-events-email-logo.png';
 
+    function roleLabel(role){const labels={admin:'Administrator',manager:'Manager',sales:'Sales Rep',event_coordinator:'Event Coordinator',vendor_manager:'Vendor Manager',content_editor:'Content Editor',accounting:'Accounting',read_only:'Read Only',custom:'Custom Role'};return labels[role]||'Koa’s Events Team';}
+    let currentSession=null;
     function signature(personalized=false){
+      const name=esc(currentSession?.displayName||currentSession?.email||'Koa’s Events Team');
+      const title=esc(currentSession?.jobTitle||roleLabel(currentSession?.role));
       return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc"><tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
         +'<div style="font-size:14px;line-height:22px">Mahalo,</div>'
-        +(personalized?'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Jordan Sample</div><div style="font-size:13px;line-height:20px;color:#66736d">Sales Rep</div><div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Koa’s Events Team</div>')
+        +(personalized?'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">'+name+'</div><div style="font-size:13px;line-height:20px;color:#66736d">'+title+'</div><div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">Koa’s Events Team</div>')
         +'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;font:13px/20px Arial,sans-serif"><tr><td width="24" style="color:#a96d4a">✉</td><td>aloha@koasevents.com</td></tr><tr><td style="color:#a96d4a">☎</td><td>(844) 808-KOAS</td></tr><tr><td style="color:#a96d4a">↗</td><td>www.koasevents.com</td></tr></table>'
         +'</td></tr></table>';
     }
@@ -133,12 +147,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function init(){
       const session=await getAdminSession();
+      currentSession=session;
       const app=document.querySelector('[data-email-preview-app]');
       const denied=document.querySelector('[data-email-preview-unauthorized]');
       if(!session||session.accessBlocked){denied?.classList.remove('hidden');return;}
       const capabilities=new Set(session.capabilities||session.permissions||[]);
       if(!capabilities.has('crm.view')&&!session.isAdmin){denied?.classList.remove('hidden');return;}
       select.innerHTML=templates.map((row)=>'<option value="'+row.id+'">'+row.category+' · '+row.name+'</option>').join('');
+      const recipient=document.querySelector('[data-preview-test-recipient]');if(recipient)recipient.textContent='Test recipient: '+session.email+(session.jobTitle?' · signature title: '+session.jobTitle:' · signature title falls back to '+roleLabel(session.role));
       app?.classList.remove('hidden');
       render();
     }
@@ -146,6 +162,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     select?.addEventListener('change',render);
     brand?.addEventListener('change',render);
     document.querySelectorAll('[data-preview-device]').forEach((button)=>button.addEventListener('click',()=>{device=button.dataset.previewDevice||'desktop';render();}));
+    document.querySelector('[data-send-test]')?.addEventListener('click',async(event)=>{
+      const button=event.currentTarget;
+      const status=document.querySelector('[data-preview-test-status]');
+      const template=templates.find((row)=>row.id===select.value)||templates[0];
+      const original=button.textContent;
+      button.disabled=true;button.textContent='Sending…';if(status)status.textContent='';
+      try{
+        const response=await fetch('/api/admin/email-preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({templateId:template.id,brand:brand.value})});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Test email could not be sent.');
+        if(status)status.textContent='Sent to '+result.to+(result.messageId?' · '+result.messageId:'');
+      }catch(error){
+        if(status)status.textContent=error instanceof Error?error.message:'Test email could not be sent.';
+      }finally{
+        button.disabled=false;button.textContent=original;
+      }
+    });
     init();
   </script>
 </BaseLayout>
