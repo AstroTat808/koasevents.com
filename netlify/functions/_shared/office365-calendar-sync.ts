@@ -239,6 +239,10 @@ export async function readOffice365Conflicts(context:Context){
   return (((await syncStore(context).get('conflicts/index',{type:'json'}))||[]) as Office365SyncConflict[])
     .sort((a,b)=>String(a.detectedAt).localeCompare(String(b.detectedAt)));
 }
+export async function readOffice365ResolvedConflicts(context:Context){
+  return (((await syncStore(context).get('conflicts/resolved/index',{type:'json'}))||[]) as any[])
+    .sort((a,b)=>String(b.resolvedAt||'').localeCompare(String(a.resolvedAt||'')));
+}
 async function saveOffice365Conflicts(context:Context,rows:Office365SyncConflict[]){
   await syncStore(context).setJSON('conflicts/index',rows);
 }
@@ -276,8 +280,10 @@ export async function syncOffice365Calendar(context:Context){
       if(rid)linkedByRecord.set(rid,event); else if(!event.isAllDay||event.subject)external.push(toExternalItem(event));
     }
 
-    let pushed=0,pulled=0,created=0,conflicts=0;
+    let pushed=0,pulled=0,created=0,conflicts=0,adopted=0;
     let recordsChanged=false;
+    const normalizedSubject=(value:unknown)=>clean(value,180).toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    const unlinkedEvents=outlookEvents.filter((event)=>!recordIdFromEvent(event));
     for(const entry of entries){
       const shape=entry.shape;
       if(!shape.recordId||!shape.date)continue;
@@ -288,6 +294,27 @@ export async function syncOffice365Calendar(context:Context){
         try{event=await graph((await calendarPath(accessToken))+'/events/'+encodeURIComponent(link.outlookEventId),accessToken) as GraphEvent;}catch{}
       }
       if(!event){
+        const subjectNeedle=normalizedSubject(shape.title);
+        const candidates=unlinkedEvents.filter((candidate)=>{
+          const parts=localParts(candidate);
+          if(parts.date!==shape.date)return false;
+          const subject=normalizedSubject(candidate.subject);
+          if(!subjectNeedle||!subject)return false;
+          return subject===subjectNeedle||subject.includes(subjectNeedle)||subjectNeedle.includes(subject);
+        });
+        if(candidates.length===1){
+          event=candidates[0];
+          adopted++;
+          const index=unlinkedEvents.findIndex((row)=>row.id===event?.id);
+          if(index>=0)unlinkedEvents.splice(index,1);
+          await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
+          continue;
+        }
+        if(candidates.length>1){
+          conflictMap.set(shape.recordId,buildConflict(undefined,shape.recordId,candidates[0],shape));
+          conflicts++;
+          continue;
+        }
         event=await createOutlookEvent(accessToken,shape);
         created++;
         await syncStore(context).setJSON(linkKey,{recordId:shape.recordId,outlookEventId:event.id,lastCrmHash:crmHash(shape),lastOutlookHash:outlookHash(event),lastSyncedAt:new Date().toISOString()});
@@ -345,7 +372,7 @@ export async function syncOffice365Calendar(context:Context){
     const conflictRows=[...conflictMap.values()].filter((row)=>activeRecordIds.has(row.recordId));
     await saveOffice365Conflicts(context,conflictRows);
     await syncStore(context).setJSON('external/index',external.filter((item)=>item.date));
-    const state={configured:true,lastAttemptAt:startedAt,lastSuccessAt:new Date().toISOString(),lastError:'',created,pushed,pulled,conflicts:conflictRows.length,externalImported:external.length,calendarOwner:cfg.calendarOwner};
+    const state={configured:true,lastAttemptAt:startedAt,lastSuccessAt:new Date().toISOString(),lastError:'',created,adopted,pushed,pulled,conflicts:conflictRows.length,externalImported:external.length,calendarOwner:cfg.calendarOwner};
     await syncStore(context).setJSON('state',state);
     return state;
   }catch(error:any){
@@ -355,7 +382,7 @@ export async function syncOffice365Calendar(context:Context){
   }
 }
 
-export async function resolveOffice365Conflict(context:Context,recordIdInput:string,resolutionInput:string){
+export async function resolveOffice365Conflict(context:Context,recordIdInput:string,resolutionInput:string,resolvedByInput=''){
   const recordId=clean(recordIdInput,200);
   const resolution=clean(resolutionInput,40);
   if(!recordId)throw new Error('A CRM record ID is required.');
@@ -406,7 +433,8 @@ export async function resolveOffice365Conflict(context:Context,recordIdInput:str
   await saveOffice365Conflicts(context,remaining);
   const resolved=((await syncStore(context).get('conflicts/resolved/index',{type:'json'}))||[]) as any[];
   await syncStore(context).setJSON('conflicts/resolved/index',[{
-    ...conflict,resolution,resolvedAt:new Date().toISOString(),finalKoa:conflictSides(finalShape,event).koa,finalOffice365:conflictSides(finalShape,event).office365,
+    ...conflict,resolution,resolvedAt:new Date().toISOString(),resolvedBy:clean(resolvedByInput,240)||'Unknown staff user',
+    finalKoa:conflictSides(finalShape,event).koa,finalOffice365:conflictSides(finalShape,event).office365,
   },...resolved].slice(0,500));
   return {ok:true,recordId,resolution,remaining:remaining.length};
 }
