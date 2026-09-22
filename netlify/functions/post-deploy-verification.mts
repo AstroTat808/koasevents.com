@@ -10,12 +10,14 @@ import {
   savePostDeployVerification,
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
+import { shouldRunScheduledJob } from './_shared/credit-saver';
 
 function clean(value:unknown,max=300){
   return String(value||'').trim().slice(0,max);
 }
 
 export default async (_req:Request,context:Context) => {
+  if(!(await shouldRunScheduledJob(context,'post-deploy-verification'))) return;
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
   if(!deployId) return;

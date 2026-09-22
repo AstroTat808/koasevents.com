@@ -87,7 +87,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <p data-credit-chart-note class="mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/45">—</p>
               </div>
               <div class="rounded-xl bg-white p-4">
-                <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recommended actions</p>
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recommended actions</p>
+                    <p data-credit-saver-status class="mt-1 text-xs text-[var(--koa-ink)]/50">No temporary credit-saver settings active.</p>
+                  </div>
+                  <button data-credit-saver-clear type="button" class="hidden rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Restore all now</button>
+                </div>
                 <div data-credit-recommendations class="mt-3 grid gap-3"></div>
               </div>
             </div>
@@ -284,6 +290,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditChart=document.querySelector('[data-credit-chart]');
     const creditChartNote=document.querySelector('[data-credit-chart-note]');
     const creditRecommendations=document.querySelector('[data-credit-recommendations]');
+    const creditSaverStatus=document.querySelector('[data-credit-saver-status]');
+    const creditSaverClear=document.querySelector('[data-credit-saver-clear]');
     let latestPolicy=null;
     let latestComponents=[];
     let latestReleases=[];
@@ -686,23 +694,54 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(creditChartNote)creditChartNote.textContent=creditUsage.chart?.note||'Credit history will build over time.';
       if(creditRecommendations){
         creditRecommendations.innerHTML='';
+        const saverPolicy=creditUsage.saverPolicy||{};
+        const activeActions=Array.isArray(saverPolicy.activeActions)?saverPolicy.activeActions:[];
+        if(creditSaverStatus){
+          creditSaverStatus.textContent=activeActions.length
+            ? activeActions.length+' temporary setting'+(activeActions.length===1?' is':'s are')+' active until '+new Date(saverPolicy.expiresAt).toLocaleString()+'.'
+            : 'No temporary credit-saver settings active.';
+        }
+        if(creditSaverClear)creditSaverClear.classList.toggle('hidden',activeActions.length===0);
+
         const recommendations=Array.isArray(creditUsage.recommendations)?creditUsage.recommendations:[];
         recommendations.sort((a,b)=>Number(a.priority||99)-Number(b.priority||99)).forEach((item,index)=>{
           const card=document.createElement('article');
-          card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+          card.className='rounded-xl border '+(item.active?'border-emerald-300 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]')+' p-3';
           const title=document.createElement('strong');
           title.className='block text-sm text-[var(--koa-forest)]';
           title.textContent=(index+1)+'. '+String(item.title||'Recommended action');
           const detail=document.createElement('p');
           detail.className='mt-1 text-xs leading-5 text-[var(--koa-ink)]/58';
           detail.textContent=String(item.detail||'');
+
+          const savings=document.createElement('div');
+          savings.className='mt-2 rounded-lg bg-white/75 p-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/60';
+          const perDay=item.estimatedSavingsPerDay;
+          const cycle=item.estimatedSavingsThisCycle;
+          savings.textContent=(perDay==null&&cycle==null)
+            ? 'Estimated savings depend on future usage.'
+            : 'Estimated savings: '+(perDay==null?'—':String(perDay)+' credits/day')+' · '+(cycle==null?'—':String(cycle)+' credits through this cycle');
+
           const impact=document.createElement('p');
           impact.className='mt-2 text-[.68rem] font-semibold leading-5 text-[var(--koa-clay)]';
           impact.textContent=String(item.impact||'');
           const protects=document.createElement('p');
           protects.className='mt-1 text-[.65rem] leading-5 text-[var(--koa-ink)]/42';
           protects.textContent=String(item.protects||'');
-          card.append(title,detail,impact,protects);
+          card.append(title,detail,savings,impact,protects);
+
+          if(item.canApply&&item.safeActionId){
+            const actions=document.createElement('div');
+            actions.className='mt-3 flex flex-wrap items-center gap-2';
+            const button=document.createElement('button');
+            button.type='button';
+            button.dataset.creditSaverAction=String(item.safeActionId);
+            button.dataset.creditSaverEnabled=item.active?'false':'true';
+            button.className='rounded-full px-3 py-2 text-[.6rem] font-black uppercase tracking-[.07em] '+(item.active?'border border-emerald-300 bg-white text-emerald-800':'bg-[var(--koa-forest)] text-white');
+            button.textContent=item.active?'Restore normal cadence':'Apply until cycle reset';
+            actions.appendChild(button);
+            card.appendChild(actions);
+          }
           creditRecommendations.appendChild(card);
         });
         if(!recommendations.length){
@@ -873,6 +912,49 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         tr.append(service,timingTd,publicTd,labelTd);policyBody.appendChild(tr);
       });
     }
+
+    creditRecommendations?.addEventListener('click',async(event)=>{
+      const button=event.target?.closest?.('[data-credit-saver-action]');
+      if(!button)return;
+      const actionId=String(button.dataset.creditSaverAction||'');
+      const enabled=button.dataset.creditSaverEnabled==='true';
+      button.disabled=true;
+      const original=button.textContent;
+      button.textContent=enabled?'Applying…':'Restoring…';
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'set-credit-saver',actionId,enabled}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to update credit-saver setting.');
+        await load();
+      }catch(error){
+        button.textContent=error instanceof Error?error.message:original;
+        button.disabled=false;
+      }
+    });
+
+    creditSaverClear?.addEventListener('click',async()=>{
+      creditSaverClear.disabled=true;
+      const original=creditSaverClear.textContent;
+      creditSaverClear.textContent='Restoring…';
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'clear-credit-saver'}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to restore normal settings.');
+        await load();
+      }catch(error){
+        creditSaverClear.textContent=error instanceof Error?error.message:original;
+      }finally{
+        creditSaverClear.disabled=false;
+      }
+    });
 
     async function load(){
       const response=await fetch('/api/admin/health',{cache:'no-store'});

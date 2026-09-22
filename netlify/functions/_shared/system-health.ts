@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { readCreditSaverPolicy } from './credit-saver';
 
 export type HealthCheck = {
   id: string;
@@ -1224,6 +1225,8 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
       impact:deploySavingsPerDay>0
         ? 'At the recent release pace, limiting production to one release/day could avoid about '+Math.round(deploySavingsPerDay*100)/100+' credits/day.'
         : 'Every avoided production release saves '+rates.productionDeploy+' credits.',
+      estimatedSavingsPerDay:Math.round(deploySavingsPerDay*100)/100,
+      estimatedSavingsThisCycle:Math.round(deploySavingsPerDay*remainingDays*100)/100,
       protects:'Deploy Previews, CRM, QuickBooks webhooks, Turnstile, Resend, and System Health remain available.',
     });
 
@@ -1246,13 +1249,51 @@ function estimateNetlifyCredits(rows:any[], previews:any[], bandwidth:any, sched
     if(verifier&&verifier.runsPerDay>48){
       const savedRunsPerDay=verifier.runsPerDay/2;
       const computeSavingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      const verifierCycleSavings=computeSavingsPerDay*remainingDays;
       recommendations.push({
         id:'post-deploy-verification',
         priority:2,
         title:'Temporarily reduce post-deploy verification to every 30 minutes',
         detail:'The verifier is the highest-frequency scheduled job. During a credit-risk period, moving it from every 15 minutes to every 30 minutes cuts its scheduled invocations in half without disabling verification.',
-        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day'+(computeSavingsPerDay>0?' (~'+Math.round(computeSavingsPerDay*1000)/1000+' estimated compute credits/day under current runtime assumptions).':'.'),
+        impact:'About '+Math.round(savedRunsPerDay)+' fewer scheduled invocations/day'+(computeSavingsPerDay>0?' (~'+Math.round(computeSavingsPerDay*1000)/1000+' estimated compute credits/day).':'.'),
+        estimatedSavingsPerDay:Math.round(computeSavingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(verifierCycleSavings*100)/100,
+        safeActionId:'post-deploy-verification-half',
         protects:'Keep hourly System Health, lead-response reminders, QuickBooks webhooks, and the four-hour reconciliation fallback unchanged.',
+      });
+    }
+
+    const qbRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='quickbooks-hourly-reconciliation');
+    if(qbRuns){
+      const savedRunsPerDay=3;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'quickbooks-reconciliation',
+        priority:3,
+        title:'Temporarily run the QuickBooks reconciliation fallback every 8 hours',
+        detail:'QuickBooks webhooks remain immediate. This only halves the scheduled fallback reconciliation from every 4 hours to every 8 hours until the billing cycle resets.',
+        impact:'About 3 fewer reconciliation runs/day (~'+Math.round(savingsPerDay*1000)/1000+' estimated compute credits/day).',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'quickbooks-reconciliation-half',
+        protects:'QuickBooks payment/invoice webhooks remain unchanged and immediate.',
+      });
+    }
+
+    const lifecycleRuns=(schedules||[]).find((item:any)=>clean(item?.name,120)==='crm-lifecycle');
+    if(lifecycleRuns){
+      const savedRunsPerDay=2;
+      const savingsPerDay=(savedRunsPerDay*scheduledAverageMs/3600000)*memoryGb*rates.computeGbHour;
+      recommendations.push({
+        id:'crm-lifecycle',
+        priority:4,
+        title:'Temporarily run the full CRM lifecycle sweep every 12 hours',
+        detail:'This halves the background CRM maintenance sweep from every 6 hours to every 12 hours. Interactive CRM operations remain available.',
+        impact:'About 2 fewer lifecycle sweeps/day (~'+Math.round(savingsPerDay*1000)/1000+' estimated compute credits/day).',
+        estimatedSavingsPerDay:Math.round(savingsPerDay*1000)/1000,
+        estimatedSavingsThisCycle:Math.round(savingsPerDay*remainingDays*100)/100,
+        safeActionId:'crm-lifecycle-half',
+        protects:'CRM pages, lead capture, proposals, bookings, and manual operations remain available.',
       });
     }
 
@@ -1572,6 +1613,13 @@ export async function cachedDeploymentHistory(context:Context) {
     current.functionSchedules||[],
     creditSnapshots,
   );
+  const creditSaverPolicy=await readCreditSaverPolicy(context);
+  creditUsage.saverPolicy=creditSaverPolicy;
+  creditUsage.recommendations=(creditUsage.recommendations||[]).map((item:any)=>({
+    ...item,
+    active:Boolean(item.safeActionId && creditSaverPolicy.activeActions?.includes(item.safeActionId)),
+    canApply:Boolean(item.safeActionId),
+  }));
   const generatedAt=new Date().toISOString();
   const compactCreditSnapshot={
     at:generatedAt,

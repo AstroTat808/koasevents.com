@@ -9,6 +9,7 @@ import {
   syncQuickBooksAccountingStatus,
 } from './admin-quickbooks.mts';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
+import { shouldRunScheduledJob } from './_shared/credit-saver';
 
 function isReconciliationCandidate(record: any) {
   if (!record || record.kind !== 'proposal' || !record.proposal) return false;
@@ -22,6 +23,7 @@ function isReconciliationCandidate(record: any) {
 
 export default async (_req: Request, context: Context) => {
   if (context.deploy.context !== 'production') return;
+  if (!(await shouldRunScheduledJob(context,'quickbooks-reconciliation'))) return;
 
   let records = await readQuickBooksSalesRecords(context);
   const candidates = records.filter(isReconciliationCandidate);
