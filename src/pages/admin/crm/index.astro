@@ -366,7 +366,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const pending = window.__koaCrmStartupPending;
     if (pending) {
       window.__koaCrmStartupPending = null;
-      window.__koaCrmStartupWatchdog[pending.status === 'healthy' ? 'healthy' : 'failed'](pending.phase, pending.detail);
+      if (pending.status === 'healthy') window.__koaCrmStartupWatchdog.healthy(pending.detail);
+      else window.__koaCrmStartupWatchdog.failed(pending.phase, pending.detail);
       return;
     }
 
