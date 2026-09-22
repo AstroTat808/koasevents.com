@@ -598,7 +598,7 @@ export default async (req: Request, context: Context) => {
     }
   }
 
-  const auth = await requireCapability('quickbooks.view');
+  const auth = await requireCapability('quickbooks.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
