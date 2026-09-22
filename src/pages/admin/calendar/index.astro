@@ -124,6 +124,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </aside>
 
+        <section data-sync-history-section class="hidden rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Calendar sync history</p>
+              <h2 class="display mt-2 text-4xl">Resolved conflicts</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">A permanent audit trail of which version was kept, who resolved it, and the before-and-after scheduling values.</p>
+            </div>
+            <button data-sync-history-toggle type="button" class="calendar-filter">Show history</button>
+          </div>
+          <div data-sync-history class="mt-5 hidden grid gap-4"></div>
+        </section>
+
         <section data-sync-conflict-section class="hidden rounded-[1.5rem] border border-[var(--koa-clay)]/25 bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -264,6 +276,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const syncConflictSection=document.querySelector('[data-sync-conflict-section]');
     const syncConflicts=document.querySelector('[data-sync-conflicts]');
     const syncConflictCount=document.querySelector('[data-sync-conflict-count]');
+    const syncHistorySection=document.querySelector('[data-sync-history-section]');
+    const syncHistory=document.querySelector('[data-sync-history]');
+    const syncHistoryToggle=document.querySelector('[data-sync-history-toggle]');
     let cursor=new Date();
     cursor=new Date(cursor.getFullYear(),cursor.getMonth(),1);
     let activeView='month';
@@ -545,6 +560,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       button.textContent=original;button.disabled=false;
     }
 
+    function renderResolvedConflictHistory(rows){
+      const history=Array.isArray(rows)?rows:[];
+      syncHistorySection.classList.toggle('hidden',history.length===0);
+      syncHistory.innerHTML='';
+      history.forEach((item)=>{
+        const card=document.createElement('article');card.className='sync-conflict-card bg-white';
+        const head=document.createElement('div');head.className='flex flex-col gap-2 border-b border-[var(--koa-line)] p-4 sm:flex-row sm:items-center sm:justify-between';
+        const left=document.createElement('div');
+        left.append(
+          text('strong','text-sm text-[var(--koa-forest)]',item.koa?.title||item.office365?.title||item.recordId),
+          text('p','mt-1 text-xs text-[var(--koa-ink)]/45',(item.resolution==='keep_koa'?'Kept Koa’s':'Kept Office 365')+' · '+(item.resolvedBy||'Unknown staff user')+' · '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(item.resolvedAt)))
+        );
+        head.appendChild(left);card.appendChild(head);
+
+        const grid=document.createElement('div');grid.className='sync-conflict-grid';
+        grid.append(text('div','sync-conflict-label','Field'),text('div','sync-conflict-label','Before'),text('div','sync-conflict-label','After'));
+        ['date','startTime','endTime','venue'].forEach((field)=>{
+          const label=field==='date'?'Event date':field==='startTime'?'Start time':field==='endTime'?'End time':'Venue / location';
+          const before=item.resolution==='keep_koa'?item.office365?.[field]:item.koa?.[field];
+          const after=item.resolution==='keep_koa'?item.finalOffice365?.[field]:item.finalKoa?.[field];
+          grid.append(text('div','sync-conflict-label',label),text('div','sync-conflict-value',formatConflictValue(field,before)),text('div','sync-conflict-value',formatConflictValue(field,after)));
+        });
+        card.appendChild(grid);syncHistory.appendChild(card);
+      });
+    }
+
     async function loadOffice365Status(){
       const statusEl=document.querySelector('[data-office365-status]');
       try{
@@ -552,6 +593,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const status=await res.json();
         if(!res.ok)throw new Error(status?.error||'Status unavailable');
         renderOffice365Conflicts(status.conflicts||[]);
+        renderResolvedConflictHistory(status.resolvedConflicts||[]);
         if(!status.configured){statusEl.textContent='Office 365 sync needs Microsoft Graph environment variables';return;}
         if(status.lastError){statusEl.textContent='Office 365 sync error: '+status.lastError;return;}
         statusEl.textContent=status.lastSuccessAt?'Office 365 synced '+new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(status.lastSuccessAt))+(status.conflicts?.length?' · '+status.conflicts.length+' conflict'+(status.conflicts.length===1?'':'s'):''):'Office 365 sync ready';
@@ -588,6 +630,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-preview-close]')?.addEventListener('click',closePreview);
     document.querySelector('[data-office365-sync]')?.addEventListener('click',syncOffice365Now);
+    syncHistoryToggle?.addEventListener('click',()=>{
+      const opening=syncHistory.classList.contains('hidden');
+      syncHistory.classList.toggle('hidden',!opening);
+      syncHistoryToggle.textContent=opening?'Hide history':'Show history';
+    });
     syncConflicts?.addEventListener('click',(event)=>{
       const button=event.target.closest('[data-resolve-conflict]');
       if(!button)return;
