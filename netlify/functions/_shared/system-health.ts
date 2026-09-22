@@ -448,7 +448,8 @@ async function inspectDeploymentSync(context:Context,seed:any={}) {
       '; the lag is expected while this deploy finishes.';
   }else if(deploymentState==='waiting'){
     const ageMinutes=mainAgeMs==null?null:Math.max(0,Math.floor(mainAgeMs/60000));
-    detail+=(detail?' ':'')+'The main commit is recent'+(ageMinutes==null?'':' ('+ageMinutes+' minute'+(ageMinutes===1?'':'s')+' old')+
+    detail+=(detail?' ':'')+'The main commit is recent'+
+      (ageMinutes==null?'':' ('+ageMinutes+' minute'+(ageMinutes===1?'':'s')+' old)')+
       '; allowing up to 5 minutes for Netlify Git auto-deploy to start.';
   }else if(deploymentState==='deploy-failed'){
     detail+=(detail?' ':'')+'The production deploy for main ended in '+targetDeployState+
