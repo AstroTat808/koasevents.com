@@ -79,7 +79,9 @@ export async function setCreditSaverAction(
       [actionId]:Boolean(enabled),
     },
   };
-  await store(context).setJSON('credits/saver-policy',policy);
+  const health=store(context);
+  await health.setJSON('credits/saver-policy',policy);
+  await health.delete('deployments/cache');
   return readCreditSaverPolicy(context);
 }
 
@@ -90,7 +92,9 @@ export async function clearCreditSaverPolicy(context:Context,actor:string){
     expiresAt:nextBillingCycleEnd(),
     actions:{},
   };
-  await store(context).setJSON('credits/saver-policy',policy);
+  const health=store(context);
+  await health.setJSON('credits/saver-policy',policy);
+  await health.delete('deployments/cache');
   return readCreditSaverPolicy(context);
 }
 
