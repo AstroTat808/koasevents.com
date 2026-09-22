@@ -6,7 +6,7 @@ import Footer from '../../components/Footer.astro';
 const requestedService = Astro.url.searchParams.get('service') || '';
 const requestedPackage = Astro.url.searchParams.get('package') || '';
 const requestedGuests = Astro.url.searchParams.get('guests') || '';
-const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || '';
+const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.meta.env.TURNSTILE_SITEKEY || import.meta.env.TURNSTILE_SITE_KEY || '';
 ---
 <BaseLayout
   title="Check Big Island Event Venue Availability | Koa’s Events"
