@@ -243,6 +243,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </div>
 
+            <div class="mt-5 rounded-xl bg-white p-4">
+              <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">One-click presets</p>
+                  <h4 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Choose an operating profile</h4>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Each preset shows the exact six-job mode changes before you apply it.</p>
+                </div>
+              </div>
+              <div data-credit-presets class="mt-4 grid gap-3 lg:grid-cols-3"></div>
+            </div>
+
             <div class="mt-5 grid gap-4 xl:grid-cols-[1.15fr_.85fr]">
               <div class="rounded-xl bg-white p-4">
                 <div>
@@ -258,6 +269,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <div data-credit-auto-plan class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/58">Calculating…</div>
                 <button data-credit-auto-plan-apply type="button" class="mt-4 hidden rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.07em] text-white">Apply recommended plan</button>
               </div>
+            </div>
+
+            <div class="mt-5 rounded-xl bg-white p-4">
+              <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Savings accuracy</p>
+                  <h4 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Predicted versus realized burn reduction</h4>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Uses stored System Health credit snapshots. Measurement windows containing a production deploy are excluded from calibration.</p>
+                </div>
+                <div class="text-right">
+                  <p data-credit-learning-factor class="text-sm font-semibold text-[var(--koa-forest)]">Calibration 1.00×</p>
+                  <p data-credit-learning-count class="mt-1 text-[.65rem] text-[var(--koa-ink)]/45">No completed clean windows yet</p>
+                </div>
+              </div>
+              <div data-credit-learning-active class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">No saver-plan measurement is active.</div>
+              <div data-credit-learning-history class="mt-3 grid gap-2"></div>
             </div>
 
             <div data-credit-components class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
@@ -522,6 +549,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditRecommendations=document.querySelector('[data-credit-recommendations]');
     const creditSaverStatus=document.querySelector('[data-credit-saver-status]');
     const creditSaverClear=document.querySelector('[data-credit-saver-clear]');
+    const creditPresets=document.querySelector('[data-credit-presets]');
+    const creditLearningFactor=document.querySelector('[data-credit-learning-factor]');
+    const creditLearningCount=document.querySelector('[data-credit-learning-count]');
+    const creditLearningActive=document.querySelector('[data-credit-learning-active]');
+    const creditLearningHistory=document.querySelector('[data-credit-learning-history]');
     const creditJobControls=document.querySelector('[data-credit-job-controls]');
     const creditAutoPlan=document.querySelector('[data-credit-auto-plan]');
     const creditAutoPlanApply=document.querySelector('[data-credit-auto-plan-apply]');
@@ -1250,13 +1282,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(creditRecommendations){
         creditRecommendations.innerHTML='';
         const saverPolicy=creditUsage.saverPolicy||{};
-        const activeActions=Array.isArray(saverPolicy.activeActions)?saverPolicy.activeActions:[];
+        const activeModes=Array.isArray(saverPolicy.activeModes)?saverPolicy.activeModes:[];
         if(creditSaverStatus){
-          creditSaverStatus.textContent=activeActions.length
-            ? activeActions.length+' temporary setting'+(activeActions.length===1?' is':'s are')+' active until '+new Date(saverPolicy.expiresAt).toLocaleString()+'.'
+          creditSaverStatus.textContent=activeModes.length
+            ? activeModes.length+' temporary setting'+(activeModes.length===1?' is':'s are')+' active until '+new Date(saverPolicy.expiresAt).toLocaleString()+'.'
             : 'No temporary credit-saver settings active.';
         }
-        if(creditSaverClear)creditSaverClear.classList.toggle('hidden',activeActions.length===0);
+        if(creditSaverClear)creditSaverClear.classList.toggle('hidden',activeModes.length===0);
 
         const recommendations=Array.isArray(creditUsage.recommendations)?creditUsage.recommendations:[];
         recommendations.sort((a,b)=>Number(a.priority||99)-Number(b.priority||99)).forEach((item,index)=>{
@@ -1303,6 +1335,87 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           creditRecommendations.innerHTML='<p class="text-xs leading-5 text-[var(--koa-ink)]/50">No credit-saving intervention is currently recommended. The weighted projection is within the configured allowance.</p>';
         }
       }
+      if(creditPresets){
+        creditPresets.innerHTML='';
+        const presets=Array.isArray(creditUsage.presets)?creditUsage.presets:[];
+        presets.forEach((preset)=>{
+          const card=document.createElement('article');
+          card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+          const title=document.createElement('strong');
+          title.className='block text-sm text-[var(--koa-forest)]';
+          title.textContent=String(preset.name||'Preset');
+          const description=document.createElement('p');
+          description.className='mt-1 text-xs leading-5 text-[var(--koa-ink)]/55';
+          description.textContent=String(preset.description||'');
+          const list=document.createElement('div');
+          list.className='mt-3 grid gap-1.5';
+          (Array.isArray(preset.changes)?preset.changes:[]).forEach((change)=>{
+            const line=document.createElement('div');
+            line.className='flex items-center justify-between gap-3 rounded-lg bg-white/75 px-2.5 py-2 text-[.66rem]';
+            const label=document.createElement('span');
+            label.className='font-semibold text-[var(--koa-forest)]';
+            label.textContent=String(change.label||change.jobId||'Job');
+            const modes=document.createElement('span');
+            modes.className=change.changed?'font-black text-[var(--koa-clay)]':'text-[var(--koa-ink)]/40';
+            modes.textContent=String(change.fromMode||'normal')+' → '+String(change.toMode||'normal');
+            line.append(label,modes);
+            list.appendChild(line);
+          });
+          const caution=document.createElement('p');
+          caution.className='mt-3 text-[.64rem] leading-5 text-[var(--koa-ink)]/45';
+          caution.textContent=String(preset.caution||'');
+          const button=document.createElement('button');
+          button.type='button';
+          button.dataset.creditPreset=String(preset.id||'');
+          button.className='mt-3 rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.07em] text-white';
+          button.textContent='Apply '+String(preset.name||'preset');
+          card.append(title,description,list,caution,button);
+          creditPresets.appendChild(card);
+        });
+      }
+
+      const learning=creditUsage.saverLearning||{};
+      if(creditLearningFactor){
+        const factor=Number(learning.calibrationFactor||1);
+        creditLearningFactor.textContent='Calibration '+factor.toFixed(2)+'×';
+      }
+      if(creditLearningCount){
+        const count=Number(learning.validMeasurementCount||0);
+        creditLearningCount.textContent=count
+          ? count+' completed clean measurement window'+(count===1?'':'s')
+          : 'No completed clean windows yet';
+      }
+      if(creditLearningActive){
+        const active=learning.liveMeasurement;
+        if(active){
+          const status=String(active.status||'measuring');
+          if(status==='invalid'){
+            creditLearningActive.className='mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900';
+            creditLearningActive.textContent='Measurement excluded: '+String(active.invalidReason||'the observation window was contaminated.');
+          }else if(status==='completed'){
+            creditLearningActive.className='mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900';
+            creditLearningActive.textContent='Latest clean window completed. Predicted '+String(active.predictedSavingsPerDay??0)+' credits/day; realized '+String(active.realizedSavingsPerDay??0)+' credits/day; accuracy '+String(active.accuracyPercent??'—')+'%.';
+          }else{
+            creditLearningActive.className='mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58';
+            creditLearningActive.textContent='Measuring '+String(active.label||'credit-saver plan')+' · '+String(active.elapsedHours??0)+' / 24 hours observed · predicted '+String(active.predictedSavingsPerDay??0)+' credits/day · current realized estimate '+String(active.realizedSavingsPerDay??0)+' credits/day.';
+          }
+        }else{
+          creditLearningActive.className='mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58';
+          creditLearningActive.textContent='No saver-plan measurement is active.';
+        }
+      }
+      if(creditLearningHistory){
+        creditLearningHistory.innerHTML='';
+        (Array.isArray(learning.history)?learning.history:[]).slice(0,5).forEach((row)=>{
+          const item=document.createElement('div');
+          item.className='rounded-lg border border-[var(--koa-line)] px-3 py-2 text-[.68rem] leading-5';
+          const state=String(row.status||'');
+          const at=row.endedAt||row.startedAt;
+          item.textContent=String(row.label||'Saver plan')+' · '+state+(row.accuracyPercent!=null?' · '+String(row.accuracyPercent)+'% accuracy':'')+(at?' · '+new Date(at).toLocaleString():'')+(row.invalidReason?' · '+String(row.invalidReason):'');
+          creditLearningHistory.appendChild(item);
+        });
+      }
+
       if(creditJobControls){
         creditJobControls.innerHTML='';
         const controls=Array.isArray(creditUsage.jobControls)?creditUsage.jobControls:[];
@@ -1607,6 +1720,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to update credit-saver setting.');
+        await load();
+      }catch(error){
+        button.textContent=error instanceof Error?error.message:original;
+        button.disabled=false;
+      }
+    });
+
+    creditPresets?.addEventListener('click',async(event)=>{
+      const button=event.target?.closest?.('[data-credit-preset]');
+      if(!button)return;
+      const presetId=String(button.dataset.creditPreset||'');
+      button.disabled=true;
+      const original=button.textContent;
+      button.textContent='Applying…';
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'apply-credit-saver-preset',presetId}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to apply preset.');
         await load();
       }catch(error){
         button.textContent=error instanceof Error?error.message:original;
