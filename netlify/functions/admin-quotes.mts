@@ -770,6 +770,7 @@ function selectedPaymentPreset(
   inquiry?: Record<string, unknown>,
   eventDate = '',
   bookingDate = '',
+  contractValue = 0,
 ) {
   const category = paymentCategoryKey(packageId, inquiry);
   const leadDays = leadDaysBetween(bookingDate || new Date().toISOString().slice(0,10), eventDate);
@@ -781,21 +782,23 @@ function selectedPaymentPreset(
       if (leadDays == null) return rule.minLeadDays == null && rule.maxLeadDays == null;
       if (rule.minLeadDays != null && leadDays < Number(rule.minLeadDays)) return false;
       if (rule.maxLeadDays != null && leadDays > Number(rule.maxLeadDays)) return false;
+      if (rule.minContractValue != null && contractValue < Number(rule.minContractValue)) return false;
+      if (rule.maxContractValue != null && contractValue > Number(rule.maxContractValue)) return false;
       return true;
     });
 
   if (match) {
     const builtin = builtInPaymentPreset(match.presetId);
-    if (builtin) return { ...builtin, ruleId:match.id, leadDays };
+    if (builtin) return { ...builtin, ruleId:match.id, leadDays, contractValue };
     const custom = (Array.isArray(settings.customPresets) ? settings.customPresets : []).find((preset) => preset.id === match.presetId);
-    if (custom) return { ...custom, ruleId:match.id, leadDays };
+    if (custom) return { ...custom, ruleId:match.id, leadDays, contractValue };
   }
 
   return null;
 }
 
-function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>, eventDate = '', bookingDate = '') {
-  const preset = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate);
+function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId = '', inquiry?: Record<string, unknown>, eventDate = '', bookingDate = '', contractValue = 0) {
+  const preset = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate, contractValue);
   if (preset) return Number(preset.depositPercent || 0);
   const category = proposalCategory(packageId, inquiry);
   if (category === 'mobile-bar') return settings.mobileBarPercent;
@@ -806,7 +809,7 @@ function configuredDepositPercent(settings: QuickBooksDepositSettings, packageId
 
 function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: number, depositAmount: number, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, bookingDate = ''): PaymentItem[] {
   const category = proposalCategory(packageId, inquiry);
-  const selected = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate);
+  const selected = selectedPaymentPreset(settings, packageId, inquiry, eventDate, bookingDate, total);
   const remaining = Math.max(0, roundMoney(total - depositAmount));
   const template = selected?.milestones || (category === 'venue-wedding'
     ? settings.venueWeddingMilestones
@@ -912,7 +915,8 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const taxRate = 4.712;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.max(0, Math.round((subtotal - discountAmount + taxAmount) * 100) / 100);
-  const depositPercent = Math.min(100, Math.max(0, finite(configuredPercent, 0, 100)));
+  const selectedPreset = scheduleSettings ? selectedPaymentPreset(scheduleSettings, packageId, inquiry, eventDate, bookingDate, total) : null;
+  const depositPercent = Math.min(100, Math.max(0, finite(selectedPreset?.depositPercent ?? configuredPercent, 0, 100)));
   const depositAmount = Math.round(total * depositPercent) / 100;
   const schedule = scheduleSettings
     ? configuredPaymentSchedule(scheduleSettings, total, depositAmount, eventDate, packageId, inquiry, bookingDate)
