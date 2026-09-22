@@ -27,8 +27,10 @@ export function emailBrandForRecord(record: BrandableRecord = {}): EmailBrandKey
   const mobilePackage = String(inquiry.mobileBarPackage || '').trim().toLowerCase();
   const service = String(inquiry.service || '').trim().toLowerCase();
 
+  if (source === 'koa-mobile-bar-inquiry') return 'mobile';
+  if (service === 'both' || String(inquiry.venuePackage || '').trim()) return 'events';
+
   const mobile =
-    source === 'koa-mobile-bar-inquiry' ||
     service === 'mobile-bar' ||
     packageId.startsWith('mobile-') ||
     mobilePackage.startsWith('mobile-');
