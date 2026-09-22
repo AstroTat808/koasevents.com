@@ -949,11 +949,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         return true;
       });
       const result=ruleSimResult();if(!result)return;
-      if(!bookingDate||!eventDate){result.innerHTML='<strong>Enter both booking and event dates.</strong>';return;}
-      if(!matched){result.innerHTML='<strong>No rule matched.</strong><div class="mt-1 text-xs text-[var(--koa-ink)]/50">The category default payment template would be used.</div>';return;}
+      result.innerHTML='';
+      if(!bookingDate||!eventDate){
+        const message=document.createElement('strong');message.textContent='Enter both booking and event dates.';result.appendChild(message);return;
+      }
+      if(!matched){
+        const message=document.createElement('strong');message.textContent='No rule matched.';
+        const detail=document.createElement('div');detail.className='mt-1 text-xs text-[var(--koa-ink)]/50';detail.textContent='The category default payment template would be used.';
+        result.append(message,detail);return;
+      }
       const preset=presetById(matched.presetId);
       const months=leadDays==null?'—':(leadDays/30.4375).toFixed(1).replace(/\.0$/,'');
-      result.innerHTML='<div class="text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Selected rule #'+((rules.indexOf(matched))+1)+'</div><strong class="mt-1 block text-lg text-[var(--koa-forest)]">'+matched.name+'</strong><div class="mt-1 text-sm">Preset: <strong>'+(preset?.label||preset?.name||matched.presetId)+'</strong></div><div class="mt-2 text-xs text-[var(--koa-ink)]/55">'+months+' months ('+(leadDays??'—')+' days) lead time · '+money(contractValue)+' contract value</div>';
+      const eyebrow=document.createElement('div');eyebrow.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';eyebrow.textContent='Selected rule #'+((rules.indexOf(matched))+1);
+      const heading=document.createElement('strong');heading.className='mt-1 block text-lg text-[var(--koa-forest)]';heading.textContent=matched.name;
+      const presetLine=document.createElement('div');presetLine.className='mt-1 text-sm';presetLine.textContent='Preset: '+(preset?.label||preset?.name||matched.presetId);
+      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(contractValue)+' contract value';
+      result.append(eyebrow,heading,presetLine,detail);
     }
 
     function paymentSettingsPayload(){
@@ -1309,6 +1320,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(validation.errors.length){
         if(depositMessage)depositMessage.textContent='Fix the payment schedule errors above before saving.';
         validationBox()?.scrollIntoView({behavior:'smooth',block:'center'});
+        return;
+      }
+      const rules=readAutoRules();
+      const ruleErrors=[];
+      rules.forEach((rule,index)=>{
+        if(rule.minLeadDays!=null&&rule.maxLeadDays!=null&&rule.minLeadDays>rule.maxLeadDays)ruleErrors.push('Rule #'+(index+1)+' has a minimum lead time greater than its maximum.');
+        if(rule.minContractValue!=null&&rule.maxContractValue!=null&&rule.minContractValue>rule.maxContractValue)ruleErrors.push('Rule #'+(index+1)+' has a minimum contract value greater than its maximum.');
+        if(!rule.presetId)ruleErrors.push('Rule #'+(index+1)+' does not have a preset selected.');
+      });
+      if(ruleErrors.length){
+        if(depositMessage)depositMessage.textContent=ruleErrors.join(' ');
         return;
       }
       if(validation.warnings.length&&!window.confirm('These payment schedules have '+validation.warnings.length+' warning'+(validation.warnings.length===1?'':'s')+'. Save them anyway?'))return;
