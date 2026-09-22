@@ -12,7 +12,7 @@
         <button
           data-workspace-toggle
           type="button"
-          class="workspace-menu-button md:hidden"
+          class="workspace-menu-button"
           aria-expanded="false"
           aria-controls="koa-workspace-links"
         >
@@ -452,8 +452,7 @@
   function initializeMenuState() {
     let saved = null;
     try { saved = window.localStorage.getItem('koa-workspace-nav-open'); } catch {}
-    const defaultOpen = window.innerWidth >= 768;
-    setMenu(saved == null ? defaultOpen : saved === '1', false);
+    setMenu(saved == null ? false : saved === '1', false);
   }
 
   function updateGroupVisibility() {
@@ -820,6 +819,14 @@
     link.addEventListener('click', () => {
       if (window.innerWidth < 768) setMenu(false);
     });
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!(nav instanceof HTMLElement) || !(links instanceof HTMLElement)) return;
+    if (links.dataset.open !== 'true') return;
+    const target = event.target;
+    if (target instanceof Node && nav.contains(target)) return;
+    setMenu(false);
   });
 
   window.addEventListener('resize', () => {
