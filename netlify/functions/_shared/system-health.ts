@@ -39,7 +39,7 @@ export type HealthAlertPolicy = {
 };
 
 const PAGE_CHECKS = [
-  ['admin-home','Content Admin','/admin/','data-auth-shell'],
+  ['admin-home','Content Admin','/admin/','data-auth-panel'],
   ['business-crm','Business CRM','/admin/crm/','data-admin-ui'],
   ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
   ['event-ops','Event Ops','/admin/events/','data-app'],
