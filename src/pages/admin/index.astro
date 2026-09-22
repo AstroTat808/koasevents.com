@@ -396,14 +396,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         return;
       }
       try {
-        const user = recoveryToken
-          ? await recoverPassword(recoveryToken, password)
-          : await updateUser({ password });
+        let user = null;
+        if (recoveryToken) {
+          const recoveredUser = await recoverPassword(recoveryToken, password);
+          const email = String(recoveredUser?.email || '').trim().toLowerCase();
+          if (!email) throw new Error('Password updated, but the administrator session could not be established. Sign in with the new password.');
+          user = await login(email, password);
+        } else {
+          await updateUser({ password });
+          const currentUser = await getUser();
+          const email = String(currentUser?.email || '').trim().toLowerCase();
+          user = email ? await login(email, password) : currentUser;
+        }
         recoveryToken = '';
         recoveryMode = false;
         history.replaceState(null, '', '/admin/');
         if (recoveryError) recoveryError.classList.add('hidden');
         showAuthState(user || await getUser());
+        window.location.assign('/admin/');
       } catch (err) {
         if (recoveryError) {
           recoveryError.textContent = err instanceof Error ? err.message : 'Unable to update the password.';
