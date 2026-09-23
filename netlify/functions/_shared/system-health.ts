@@ -325,6 +325,27 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     }catch(error){
       githubMainLookupDetail='GitHub main lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
     }
+
+    // Secondary GitHub path: private repositories can occasionally fail one commit endpoint
+    // while the branch endpoint still returns the branch head with the same read token.
+    if(!mainCommit){
+      try{
+        const branchResponse=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/branches/main',{
+          headers:githubHeaders,
+          signal:AbortSignal.timeout(12_000),
+        });
+        if(branchResponse.ok){
+          const branchBody:any=await branchResponse.json();
+          mainCommit=clean(branchBody?.commit?.sha,80);
+          mainCommitAt=clean(branchBody?.commit?.commit?.committer?.date||branchBody?.commit?.commit?.author?.date,80);
+          githubMainLookupDetail='GitHub main recovered from the branch endpoint.';
+        }else if(!githubMainLookupDetail){
+          githubMainLookupDetail='GitHub main branch lookup returned HTTP '+branchResponse.status+'.';
+        }
+      }catch(error){
+        if(!githubMainLookupDetail) githubMainLookupDetail='GitHub main branch lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
+      }
+    }
   }
 
   const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
@@ -527,7 +548,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     severity='red';
   }else if(commitsBehind===0){
     deploymentState=linked?'synced':'auto-deploy-broken';
-    severity=linked?'green':'red';
+    severity=linked?(mainCommit?'green':'yellow'):'red';
   }else if(!linked){
     deploymentState='auto-deploy-broken';
     severity='red';
