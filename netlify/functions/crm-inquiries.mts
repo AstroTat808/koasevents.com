@@ -118,7 +118,8 @@ function wildOnesIngestSecret() {
 }
 
 async function verifyWildOnesSource(req: Request, formName: string) {
-  if (formName !== 'wild-ones-production-inquiry') return { ok: true, fingerprint: '' };
+  const accepted = new Set(['wild-ones-production-inquiry','wild-ones-site-tour-request','wild-ones-producer-packet-request']);
+  if (!accepted.has(formName)) return { ok: true, fingerprint: '' };
 
   const secret = wildOnesIngestSecret();
   if (!secret) return { ok: false, fingerprint: '', reason: 'Wild Ones ingest secret is not configured.' };
@@ -146,7 +147,7 @@ async function verifyWildOnesSource(req: Request, formName: string) {
   const expectedBuffer = await crypto.subtle.sign(
     'HMAC',
     key,
-    encoder.encode('v1|' + timestamp + '|' + fingerprint + '|wild-ones-production-inquiry'),
+    encoder.encode('v1|' + timestamp + '|' + fingerprint + '|' + formName),
   );
   const expected = base64Url(expectedBuffer);
   if (expected.length !== signature.length) return { ok: false, fingerprint: '', reason: 'Wild Ones source authentication failed.' };
@@ -557,13 +558,13 @@ export default async (req: Request, context: Context) => {
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
   const store = salesStoreFor(context);
-  const businessLine = formName === 'wild-ones-production-inquiry'
+  const businessLine = formName.startsWith('wild-ones-')
     ? 'wild-ones'
     : formName === 'koa-mobile-bar-inquiry'
       ? 'mobile-bar'
       : 'events';
   const projectType = businessLine === 'wild-ones' ? 'large-format-production' : '';
-  const wildQualification = businessLine === 'wild-ones' ? assessWildOnesQualification(payload) : null;
+  const wildQualification = formName === 'wild-ones-production-inquiry' ? assessWildOnesQualification(payload) : null;
   const wildPayload = payload?.wildOnes && typeof payload.wildOnes === 'object' ? payload.wildOnes : {};
 
   const record = {
