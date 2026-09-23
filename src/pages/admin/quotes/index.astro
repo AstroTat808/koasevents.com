@@ -174,26 +174,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <section class="mt-4 rounded-xl border border-white/10 bg-white/[.04] p-4" data-mobile-profit-goals>
               <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
                 <div>
-                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goal + projection</p>
-                  <h4 data-mobile-profit-goal-title class="mt-1 text-lg font-semibold text-white">Current month</h4>
-                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Projected profit combines booked profit with probability-weighted profit from open Mobile Bar opportunities dated in the current month.</p>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]">Profit goals + projections</p>
+                  <h4 class="mt-1 text-lg font-semibold text-white">Monthly, quarterly + annual targets</h4>
+                  <p class="mt-1 max-w-3xl text-[.65rem] leading-5 text-white/45">Each horizon combines booked gross profit with probability-weighted open Mobile Bar opportunities dated in that period.</p>
                 </div>
-                <form data-mobile-profit-goal-form class="flex w-full flex-col gap-2 sm:flex-row xl:w-auto">
-                  <label class="grid flex-1 gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly gross-profit target
-                    <input data-mobile-profit-goal-input name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[210px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="e.g. 10000" />
+                <form data-mobile-profit-goal-form class="grid w-full gap-2 sm:grid-cols-2 xl:w-auto xl:grid-cols-4">
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Monthly target
+                    <input data-goal-input="monthly" name="monthlyGrossProfitTarget" type="number" min="0" max="1000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="10000" />
                   </label>
-                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goal</button>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Quarterly target
+                    <input data-goal-input="quarterly" name="quarterlyGrossProfitTarget" type="number" min="0" max="3000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="30000" />
+                  </label>
+                  <label class="grid gap-1 text-[.58rem] font-black uppercase tracking-[.08em] text-white/55">Annual target
+                    <input data-goal-input="annual" name="annualGrossProfitTarget" type="number" min="0" max="12000000" step="100" class="min-w-[170px] rounded-xl border border-white/15 bg-[var(--koa-ink)] px-3 py-2.5 text-sm font-semibold normal-case tracking-normal text-white" placeholder="120000" />
+                  </label>
+                  <button class="self-end rounded-full bg-[var(--koa-amber-light)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Save goals</button>
                 </form>
               </div>
-              <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Monthly target</p><strong data-mobile-goal-target class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Booked profit</p><strong data-mobile-goal-booked class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Projected profit</p><strong data-mobile-goal-projected class="display mt-1 block text-2xl text-white">$0</strong></article>
-                <article data-mobile-goal-gap-card class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Ahead / behind</p><strong data-mobile-goal-gap class="display mt-1 block text-2xl text-white">$0</strong><p data-mobile-goal-gap-copy class="mt-1 text-[.58rem] text-white/42">Set a goal to compare.</p></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Avg. booked profit</p><strong data-mobile-goal-average class="display mt-1 block text-2xl text-white">—</strong></article>
-                <article class="rounded-lg border border-white/10 bg-black/10 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Bookings needed</p><strong data-mobile-goal-bookings class="display mt-1 block text-2xl text-white">—</strong><p data-mobile-goal-bookings-copy class="mt-1 text-[.58rem] text-white/42">Based on average booked profit.</p></article>
+              <div class="mt-4 grid gap-3 xl:grid-cols-3" data-mobile-goal-horizons>
+                <article data-goal-card="monthly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
+                <article data-goal-card="quarterly" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
+                <article data-goal-card="annual" class="rounded-xl border border-white/10 bg-black/10 p-4"></article>
               </div>
-              <div class="mt-4 h-2 overflow-hidden rounded-full bg-black/20"><div data-mobile-goal-progress class="h-full rounded-full bg-[var(--koa-amber-light)]" style="width:0%"></div></div>
               <p data-mobile-profit-goal-message aria-live="polite" class="mt-3 text-[.62rem] leading-5 text-white/50"></p>
             </section>
 
@@ -667,18 +669,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const mobileProfitTo = document.querySelector('[data-mobile-profit-to]');
     const mobileProfitPeriodLabel = document.querySelector('[data-mobile-profit-period-label]');
     const mobileProfitGoalForm = document.querySelector('[data-mobile-profit-goal-form]');
-    const mobileProfitGoalInput = document.querySelector('[data-mobile-profit-goal-input]');
-    const mobileProfitGoalTitle = document.querySelector('[data-mobile-profit-goal-title]');
-    const mobileGoalTarget = document.querySelector('[data-mobile-goal-target]');
-    const mobileGoalBooked = document.querySelector('[data-mobile-goal-booked]');
-    const mobileGoalProjected = document.querySelector('[data-mobile-goal-projected]');
-    const mobileGoalGapCard = document.querySelector('[data-mobile-goal-gap-card]');
-    const mobileGoalGap = document.querySelector('[data-mobile-goal-gap]');
-    const mobileGoalGapCopy = document.querySelector('[data-mobile-goal-gap-copy]');
-    const mobileGoalAverage = document.querySelector('[data-mobile-goal-average]');
-    const mobileGoalBookings = document.querySelector('[data-mobile-goal-bookings]');
-    const mobileGoalBookingsCopy = document.querySelector('[data-mobile-goal-bookings-copy]');
-    const mobileGoalProgress = document.querySelector('[data-mobile-goal-progress]');
+    const mobileProfitGoalInputs = [...document.querySelectorAll('[data-goal-input]')];
+    const mobileGoalCards = [...document.querySelectorAll('[data-goal-card]')];
     const mobileProfitGoalMessage = document.querySelector('[data-mobile-profit-goal-message]');
     const mobileProfitRevenue = document.querySelector('[data-mobile-profit-revenue]');
     const mobileProfitRevenueMeta = document.querySelector('[data-mobile-profit-revenue-meta]');
@@ -2144,57 +2136,83 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return .15;
     }
 
+    function currentGoalRanges() {
+      const now=new Date();
+      const year=now.getFullYear();
+      const month=now.getMonth();
+      const quarterStart=Math.floor(month/3)*3;
+      return {
+        monthly:{key:'monthly',label:new Intl.DateTimeFormat('en-US',{month:'long',year:'numeric'}).format(now),start:localDateKey(new Date(year,month,1)),end:localDateKey(new Date(year,month+1,0)),targetKey:'monthlyGrossProfitTarget'},
+        quarterly:{key:'quarterly',label:'Q'+(Math.floor(month/3)+1)+' '+year,start:localDateKey(new Date(year,quarterStart,1)),end:localDateKey(new Date(year,quarterStart+3,0)),targetKey:'quarterlyGrossProfitTarget'},
+        annual:{key:'annual',label:String(year),start:year+'-01-01',end:year+'-12-31',targetKey:'annualGrossProfitTarget'},
+      };
+    }
+
+    function recordsInGoalRange(records,range) {
+      return records.filter((record)=>{
+        const eventDate=recordEventDate(record);
+        return eventDate && eventDate>=range.start && eventDate<=range.end;
+      });
+    }
+
+    function mobileGoalProjection(records) {
+      const booked=records.filter((record)=>record.stage==='booked');
+      const open=records.filter((record)=>record.stage!=='booked');
+      const bookedProfit=booked.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
+      const projectedOpenProfit=open.reduce((sum,record)=>sum+(Number(profitValues(record).profit||0)*mobileProfitProbability(record)),0);
+      return {bookedProfit,projectedProfit:bookedProfit+projectedOpenProfit};
+    }
+
+    function renderMobileGoalCard(card,range,projection,target,avgBookedProfit) {
+      if(!card)return;
+      const delta=projection.projectedProfit-target;
+      const progress=target>0?Math.max(0,Math.min(100,(projection.projectedProfit/target)*100)):0;
+      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
+      card.className='rounded-xl border p-4 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
+      card.innerHTML='';
+      const heading=document.createElement('div');heading.className='flex items-start justify-between gap-3';
+      const left=document.createElement('div');
+      left.append(text('p','text-[.52rem] font-black uppercase tracking-[.08em] text-white/45',range.key+' goal'),text('strong','mt-1 block text-base text-white',range.label));
+      heading.append(left,text('strong','display text-2xl text-white',target?money(target):'Not set'));
+      card.appendChild(heading);
+      const metrics=document.createElement('div');metrics.className='mt-4 grid grid-cols-2 gap-2';
+      [
+        ['Booked',money(projection.bookedProfit)],
+        ['Projected',money(projection.projectedProfit)],
+        ['Ahead / behind',target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—'],
+        ['Bookings needed',bookingsNeeded==null?'—':String(bookingsNeeded)]
+      ].forEach(([label,value])=>{
+        const item=document.createElement('div');item.className='rounded-lg border border-white/10 bg-black/10 p-2.5';
+        item.append(text('p','text-[.5rem] font-black uppercase tracking-[.07em] text-white/40',label),text('strong','mt-1 block text-sm text-white',value));
+        metrics.appendChild(item);
+      });
+      card.appendChild(metrics);
+      const track=document.createElement('div');track.className='mt-3 h-2 overflow-hidden rounded-full bg-black/20';
+      const bar=document.createElement('div');bar.className='h-full rounded-full '+(target>0&&projection.projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');bar.style.width=progress+'%';track.appendChild(bar);card.appendChild(track);
+    }
+
     function renderMobileProfitGoalProjection() {
       const allMobile=(payload.records||[])
         .filter(isMobileBarRecord)
         .filter((record)=>!['converted','lost'].includes(record.stage)&&mobileRevenue(record)>0);
-      const now=new Date();
-      const currentMonth=localDateKey(new Date(now.getFullYear(),now.getMonth(),1)).slice(0,7);
-      const monthRows=allMobile.filter((record)=>mobileEventMonth(record)===currentMonth);
-      const bookedRows=monthRows.filter((record)=>record.stage==='booked');
-      const openRows=monthRows.filter((record)=>record.stage!=='booked');
-      const bookedProfit=bookedRows.reduce((sum,record)=>sum+Number(profitValues(record).profit||0),0);
-      const projectedOpenProfit=openRows.reduce((sum,record)=>{
-        const profit=Number(profitValues(record).profit||0);
-        return sum+(profit*mobileProfitProbability(record));
-      },0);
-      const projectedProfit=bookedProfit+projectedOpenProfit;
-      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0));
+      const historicalBooked=allMobile.filter((record)=>record.stage==='booked').map((record)=>Number(profitValues(record).profit||0)).filter((value)=>value>0);
       const avgBookedProfit=historicalBooked.length?historicalBooked.reduce((sum,value)=>sum+value,0)/historicalBooked.length:0;
-      const target=Math.max(0,Number(payload.mobileBarProfitSettings?.monthlyGrossProfitTarget||0));
-      const delta=projectedProfit-target;
-      const bookingsNeeded=target>0&&delta<0&&avgBookedProfit>0?Math.ceil(Math.abs(delta)/avgBookedProfit):target>0&&delta>=0?0:null;
+      const settings=payload.mobileBarProfitSettings||{};
+      const ranges=currentGoalRanges();
 
-      if(mobileProfitGoalTitle)mobileProfitGoalTitle.textContent=monthLabel(currentMonth)+' gross-profit goal';
-      if(mobileProfitGoalInput&&document.activeElement!==mobileProfitGoalInput)mobileProfitGoalInput.value=target?String(Math.round(target*100)/100):'';
-      if(mobileGoalTarget)mobileGoalTarget.textContent=target?money(target):'Not set';
-      if(mobileGoalBooked)mobileGoalBooked.textContent=money(bookedProfit);
-      if(mobileGoalProjected)mobileGoalProjected.textContent=money(projectedProfit);
-      if(mobileGoalAverage)mobileGoalAverage.textContent=historicalBooked.length?money(avgBookedProfit):'—';
-      if(mobileGoalGap){
-        mobileGoalGap.textContent=target?((delta>=0?'+':'−')+money(Math.abs(delta))):'—';
-      }
-      if(mobileGoalGapCopy){
-        mobileGoalGapCopy.textContent=!target?'Set a monthly goal to compare.':delta>=0?'Projected ahead of target.':'Projected below target.';
-      }
-      if(mobileGoalGapCard){
-        mobileGoalGapCard.className='rounded-lg border p-3 '+(!target?'border-white/10 bg-black/10':delta>=0?'border-emerald-300/30 bg-emerald-400/10':'border-red-300/30 bg-red-400/10');
-      }
-      if(mobileGoalBookings)mobileGoalBookings.textContent=bookingsNeeded==null?'—':String(bookingsNeeded);
-      if(mobileGoalBookingsCopy){
-        mobileGoalBookingsCopy.textContent=!target
-          ? 'Set a goal first.'
-          : bookingsNeeded===0
-            ? 'Projected target reached.'
-            : avgBookedProfit>0
-              ? 'At '+money(avgBookedProfit)+' average booked profit.'
-              : 'More booked history is needed.';
-      }
-      if(mobileGoalProgress){
-        const pct=target>0?Math.max(0,Math.min(100,(projectedProfit/target)*100)):0;
-        mobileGoalProgress.style.width=pct+'%';
-        mobileGoalProgress.className='h-full rounded-full '+(target>0&&projectedProfit>=target?'bg-emerald-300':'bg-[var(--koa-amber-light)]');
-      }
+      mobileProfitGoalInputs.forEach((input)=>{
+        const key=input.getAttribute('data-goal-input');
+        const prop=key==='monthly'?'monthlyGrossProfitTarget':key==='quarterly'?'quarterlyGrossProfitTarget':'annualGrossProfitTarget';
+        if(document.activeElement!==input)input.value=Number(settings[prop]||0)?String(Math.round(Number(settings[prop])*100)/100):'';
+      });
+
+      mobileGoalCards.forEach((card)=>{
+        const key=card.getAttribute('data-goal-card');
+        const range=ranges[key];
+        if(!range)return;
+        const projection=mobileGoalProjection(recordsInGoalRange(allMobile,range));
+        renderMobileGoalCard(card,range,projection,Math.max(0,Number(settings[range.targetKey]||0)),avgBookedProfit);
+      });
     }
 
     function weightedMargin(rows) {
@@ -3007,15 +3025,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     [mobileProfitFrom,mobileProfitTo].forEach((control)=>control?.addEventListener('change',renderProfitabilityDashboard));
     mobileProfitGoalForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
-      const target=Math.max(0,Number(mobileProfitGoalInput?.value||0));
-      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving monthly gross-profit target…';
+      const settings={
+        monthlyGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.monthlyGrossProfitTarget?.value||0)),
+        quarterlyGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.quarterlyGrossProfitTarget?.value||0)),
+        annualGrossProfitTarget:Math.max(0,Number(mobileProfitGoalForm.elements.annualGrossProfitTarget?.value||0)),
+      };
+      if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Saving gross-profit targets…';
       try{
-        const result=await api({action:'update-mobile-bar-profit-settings',settings:{monthlyGrossProfitTarget:target}});
-        payload.mobileBarProfitSettings=result.settings||{monthlyGrossProfitTarget:target};
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly gross-profit target saved.';
+        const result=await api({action:'update-mobile-bar-profit-settings',settings});
+        payload.mobileBarProfitSettings=result.settings||settings;
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent='Monthly, quarterly, and annual gross-profit targets saved.';
         renderMobileProfitGoalProjection();
       }catch(error){
-        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goal.';
+        if(mobileProfitGoalMessage)mobileProfitGoalMessage.textContent=error?.message||'Unable to save profit goals.';
       }
     });
     document.querySelectorAll('[data-close-convert]').forEach((button)=>button.addEventListener('click',()=>convertDialog.close()));
