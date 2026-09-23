@@ -14,6 +14,17 @@ export type HealthCheck = {
   detail: string;
   severity?: 'green' | 'yellow' | 'red' | 'info';
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
+  deploymentDetails?: {
+    githubCommit: string;
+    netlifyCommit: string;
+    netlifyDeployId: string;
+    deployStatus: string;
+    deployTime: string;
+    deployDurationSeconds: number | null;
+    repositoryPrivate: boolean | null;
+    verificationSource: string;
+    fallbackUsed: boolean;
+  };
 };
 
 export type HealthSnapshot = {
@@ -244,11 +255,13 @@ async function timedFetch(url:string, init:RequestInit={}) {
 export async function inspectDeploymentSync(context:Context,seed:any={}) {
   const started=Date.now();
   const origin=baseUrl().replace(/\/$/,'');
-  let liveCommit=clean(seed?.liveCommit,80);
+  const runtimeCommit=clean(Netlify.env.get('COMMIT_REF'),80);
+  const runtimeDeployId=clean(Netlify.env.get('DEPLOY_ID'),120);
+  let liveCommit=clean(seed?.liveCommit,80)||runtimeCommit;
   let mainCommit=clean(seed?.mainCommit,80);
   let commitsBehind=Number.isFinite(Number(seed?.commitsBehind))?Math.max(0,Number(seed.commitsBehind)):null;
   let compareStatus=clean(seed?.compareStatus,40);
-  let deployId=clean(seed?.deployId,120);
+  let deployId=clean(seed?.deployId,120)||runtimeDeployId;
   let githubLinked:boolean|null=null;
   let repository='';
   let productionBranch='';
@@ -258,16 +271,34 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   let activeDeployCommit='';
   let activeDeployState='';
   let targetDeployId='';
+  let targetDeployCommit='';
   let targetDeployState='';
   let targetDeployError='';
   let targetDeployCreatedAt='';
+  let deployStatus='';
+  let deployTime='';
+  let deployDurationSeconds:number|null=null;
+  let repositoryPrivate:boolean|null=null;
+  let metadataSource=liveCommit
+    ? (clean(seed?.liveCommit,80)?'seed':runtimeCommit?'netlify-runtime':'')
+    : '';
+  let fallbackUsed=false;
+  let githubMainLookupStatus=0;
+  let githubMainLookupDetail='';
+  let publishedDeployId='';
+  let productionRows:any[]=[];
 
   if(!liveCommit||!deployId){
     const home=await timedFetch(origin+'/');
     const html=home.response?await home.response.text().catch(()=>''):'';
     const meta=(name:string)=>html.match(new RegExp('<meta\\s+name=["\\\']'+name+'["\\\']\\s+content=["\\\']([^"\\\']+)["\\\']','i'))?.[1]||'';
-    liveCommit=liveCommit||clean(meta('koa-build-commit'),80);
-    deployId=deployId||clean(meta('koa-deploy-id'),120);
+    const metaCommit=clean(meta('koa-build-commit'),80);
+    const metaDeployId=clean(meta('koa-deploy-id'),120);
+    if(!liveCommit&&metaCommit){
+      liveCommit=metaCommit;
+      metadataSource='homepage-meta';
+    }
+    if(!deployId&&metaDeployId) deployId=metaDeployId;
   }
 
   const githubToken=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
@@ -283,10 +314,182 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
         headers:githubHeaders,
         signal:AbortSignal.timeout(12_000),
       });
+      githubMainLookupStatus=response.status;
       if(response.ok){
         const body:any=await response.json();
         mainCommit=clean(body?.sha,80);
         mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
+      }else{
+        githubMainLookupDetail='GitHub main lookup returned HTTP '+response.status+'.';
+      }
+    }catch(error){
+      githubMainLookupDetail='GitHub main lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
+    }
+
+    // Secondary GitHub path: private repositories can occasionally fail one commit endpoint
+    // while the branch endpoint still returns the branch head with the same read token.
+    if(!mainCommit){
+      try{
+        const branchResponse=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/branches/main',{
+          headers:githubHeaders,
+          signal:AbortSignal.timeout(12_000),
+        });
+        if(branchResponse.ok){
+          const branchBody:any=await branchResponse.json();
+          mainCommit=clean(branchBody?.commit?.sha,80);
+          mainCommitAt=clean(branchBody?.commit?.commit?.committer?.date||branchBody?.commit?.commit?.author?.date,80);
+          githubMainLookupDetail='GitHub main recovered from the branch endpoint.';
+        }else if(!githubMainLookupDetail){
+          githubMainLookupDetail='GitHub main branch lookup returned HTTP '+branchResponse.status+'.';
+        }
+      }catch(error){
+        if(!githubMainLookupDetail) githubMainLookupDetail='GitHub main branch lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
+      }
+    }
+  }
+
+  const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
+  if(!netlifyToken){
+    connectionDetail='NETLIFY_AUTH_TOKEN is unavailable, so the Git repository connection cannot be verified.';
+  }else{
+    try{
+      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId),{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const site:any=await response.json();
+        const build=site?.build_settings||{};
+        const repoUrl=clean(build?.repo_url||site?.repo_url,500);
+        const repoPath=clean(build?.repo_path||site?.repo_path,300);
+        const repoType=clean(build?.repo_type||build?.provider||site?.repo_type,80).toLowerCase();
+        const installationId=clean(build?.installation_id||site?.installation_id,120);
+        productionBranch=clean(build?.repo_branch||site?.repo_branch,100);
+        repository=repoPath||repoUrl;
+        const repoText=[repoPath,repoUrl].filter(Boolean).join(' ').replace(/\\/g,'/');
+        const expectedRepo=/AstroTat808\/koasevents\.com/i.test(repoText)
+          || /github\.com[:/]AstroTat808\/koasevents\.com(?:\.git)?/i.test(repoText);
+        const githubProvider=repoType.includes('github')||/github\.com/i.test(repoUrl)||Boolean(installationId);
+        const buildsStopped=build?.stop_builds===true;
+        githubLinked=Boolean(expectedRepo&&githubProvider&&!buildsStopped);
+        connectionDetail=githubLinked
+          ? 'Netlify is linked to AstroTat808/koasevents.com'+(productionBranch?' on '+productionBranch:'')+'.'
+          : buildsStopped
+            ? 'Netlify Git builds are disabled for this project.'
+            : repository
+              ? 'Netlify repository linkage does not match AstroTat808/koasevents.com.'
+              : 'No active Git repository linkage is reported by Netlify.';
+
+        const published:any=site?.published_deploy||site?.deploy||null;
+        if(published){
+          publishedDeployId=clean(published?.id,120);
+          const publishedCommit=clean(published?.commit_ref,80);
+          if(!liveCommit&&publishedCommit){
+            liveCommit=publishedCommit;
+            metadataSource='netlify-published-deploy';
+            fallbackUsed=true;
+          }
+          if(!deployId&&publishedDeployId) deployId=publishedDeployId;
+          deployStatus=clean(published?.state,40).toLowerCase()||deployStatus;
+          deployTime=clean(published?.published_at||published?.updated_at||published?.created_at,80)||deployTime;
+          const seconds=Number(published?.deploy_time);
+          if(Number.isFinite(seconds)) deployDurationSeconds=seconds;
+          if(typeof published?.public_repo==='boolean') repositoryPrivate=!published.public_repo;
+        }
+      }else{
+        connectionDetail='Netlify site configuration lookup failed with HTTP '+response.status+'.';
+      }
+    }catch(error){
+      connectionDetail='Netlify site configuration lookup failed: '+(error instanceof Error?clean(error.message,220):'request failed');
+    }
+  }
+
+  if(netlifyToken){
+    try{
+      const response=await fetch(
+        'https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=30',
+        {
+          headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+          signal:AbortSignal.timeout(12_000),
+        },
+      );
+      if(response.ok){
+        const rows:any[]=await response.json();
+        const activeStates=new Set(['new','pending_review','accepted','enqueued','building','uploading','processing','preparing']);
+        productionRows=rows.filter((row:any)=>{
+          const deployContext=clean(row?.context,40);
+          const branch=clean(row?.branch,100);
+          return deployContext==='production' && (!productionBranch||!branch||branch===productionBranch);
+        });
+        const currentProduction=
+          (deployId?productionRows.find((row:any)=>clean(row?.id,120)===deployId):null)
+          || (publishedDeployId?productionRows.find((row:any)=>clean(row?.id,120)===publishedDeployId):null)
+          || productionRows.find((row:any)=>clean(row?.state,40).toLowerCase()==='ready'&&Boolean(row?.published_at))
+          || productionRows.find((row:any)=>clean(row?.state,40).toLowerCase()==='ready')
+          || null;
+
+        if(currentProduction){
+          const currentId=clean(currentProduction?.id,120);
+          const currentCommit=clean(currentProduction?.commit_ref,80);
+          if(currentCommit&&(!liveCommit||(deployId&&currentId===deployId&&currentCommit!==liveCommit))){
+            liveCommit=currentCommit;
+            metadataSource='netlify-current-deploy';
+            fallbackUsed=true;
+          }
+          if(!deployId&&currentId) deployId=currentId;
+          deployStatus=clean(currentProduction?.state,40).toLowerCase()||deployStatus;
+          deployTime=clean(currentProduction?.published_at||currentProduction?.updated_at||currentProduction?.created_at,80)||deployTime;
+          const seconds=Number(currentProduction?.deploy_time);
+          if(Number.isFinite(seconds)) deployDurationSeconds=seconds;
+          if(typeof currentProduction?.public_repo==='boolean') repositoryPrivate=!currentProduction.public_repo;
+        }
+
+        const candidateDifferent=liveCommit
+          ? productionRows.find((row:any)=>clean(row?.commit_ref,80)&&clean(row?.commit_ref,80)!==liveCommit)
+          : null;
+        const target=mainCommit
+          ? productionRows.find((row:any)=>clean(row?.commit_ref,80)===mainCommit)
+          : candidateDifferent;
+        const active=productionRows.find((row:any)=>activeStates.has(clean(row?.state,40).toLowerCase()));
+
+        if(target){
+          targetDeployId=clean(target?.id,120);
+          targetDeployCommit=clean(target?.commit_ref,80);
+          targetDeployState=clean(target?.state,40).toLowerCase();
+          targetDeployError=clean(target?.error_message,240);
+          targetDeployCreatedAt=clean(target?.created_at,80);
+        }
+        if(active){
+          activeDeployId=clean(active?.id,120);
+          activeDeployCommit=clean(active?.commit_ref,80);
+          activeDeployState=clean(active?.state,40).toLowerCase();
+        }
+      }
+    }catch{}
+  }
+
+  if(netlifyToken&&deployId){
+    try{
+      const response=await fetch('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(deployId),{
+        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
+        signal:AbortSignal.timeout(12_000),
+      });
+      if(response.ok){
+        const deploy:any=await response.json();
+        const deployCommit=clean(deploy?.commit_ref,80);
+        if(deployCommit&&deployCommit!==liveCommit){
+          liveCommit=deployCommit;
+          metadataSource='netlify-deploy-detail';
+          fallbackUsed=true;
+        }else if(deployCommit&&!metadataSource){
+          metadataSource='netlify-deploy-detail';
+        }
+        deployStatus=clean(deploy?.state,40).toLowerCase()||deployStatus;
+        deployTime=clean(deploy?.published_at||deploy?.updated_at||deploy?.created_at,80)||deployTime;
+        const seconds=Number(deploy?.deploy_time);
+        if(Number.isFinite(seconds)) deployDurationSeconds=seconds;
+        if(typeof deploy?.public_repo==='boolean') repositoryPrivate=!deploy.public_repo;
       }
     }catch{}
   }
@@ -311,91 +514,28 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     }
   }
 
-  const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
-  const siteId=clean((context as any)?.site?.id || Netlify.env.get('SITE_ID') || 'd1f3ab06-be2a-41c4-b770-59e6a6acd1b9',120);
-  if(!netlifyToken){
-    connectionDetail='NETLIFY_AUTH_TOKEN is unavailable, so the Git repository connection cannot be verified.';
-  }else{
-    try{
-      const response=await fetch('https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId),{
-        headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
-        signal:AbortSignal.timeout(12_000),
-      });
-      if(response.ok){
-        const site:any=await response.json();
-        const build=site?.build_settings||{};
-        const repoUrl=clean(build?.repo_url||site?.repo_url,500);
-        const repoPath=clean(build?.repo_path||site?.repo_path,300);
-        const repoType=clean(build?.repo_type||build?.provider||site?.repo_type,80).toLowerCase();
-        const installationId=clean(build?.installation_id||site?.installation_id,120);
-        productionBranch=clean(build?.repo_branch||site?.repo_branch,100);
-        repository=repoPath||repoUrl;
-        const repoText=[repoPath,repoUrl].filter(Boolean).join(' ');
-        const expectedRepo=/AstroTat808[\\/](?:koasevents\\.com|koasevents\.com)/i.test(repoText)
-          || /github\.com[\\/:]AstroTat808[\\/]koasevents\.com(?:\.git)?/i.test(repoText);
-        const githubProvider=repoType.includes('github')||/github\.com/i.test(repoUrl)||Boolean(installationId);
-        const buildsStopped=build?.stop_builds===true;
-        githubLinked=Boolean(expectedRepo&&githubProvider&&!buildsStopped);
-        connectionDetail=githubLinked
-          ? 'Netlify is linked to AstroTat808/koasevents.com'+(productionBranch?' on '+productionBranch:'')+'.'
-          : buildsStopped
-            ? 'Netlify Git builds are disabled for this project.'
-            : repository
-              ? 'Netlify repository linkage does not match AstroTat808/koasevents.com.'
-              : 'No active Git repository linkage is reported by Netlify.';
-      }else{
-        connectionDetail='Netlify site configuration lookup failed with HTTP '+response.status+'.';
-      }
-    }catch(error){
-      connectionDetail='Netlify site configuration lookup failed: '+(error instanceof Error?clean(error.message,220):'request failed');
-    }
-  }
-
-  if(netlifyToken){
-    try{
-      const response=await fetch(
-        'https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=30',
-        {
-          headers:{Authorization:'Bearer '+netlifyToken,'User-Agent':'KoaEvents-Health/1.0'},
-          signal:AbortSignal.timeout(12_000),
-        },
-      );
-      if(response.ok){
-        const rows:any[]=await response.json();
-        const activeStates=new Set(['new','pending_review','accepted','enqueued','building','uploading','processing','preparing']);
-        const productionRows=rows.filter((row:any)=>{
-          const deployContext=clean(row?.context,40);
-          const branch=clean(row?.branch,100);
-          return deployContext==='production' && (!productionBranch||!branch||branch===productionBranch);
-        });
-        const target=mainCommit
-          ? productionRows.find((row:any)=>clean(row?.commit_ref,80)===mainCommit)
-          : null;
-        const active=productionRows.find((row:any)=>activeStates.has(clean(row?.state,40).toLowerCase()));
-        if(target){
-          targetDeployId=clean(target?.id,120);
-          targetDeployState=clean(target?.state,40).toLowerCase();
-          targetDeployError=clean(target?.error_message,240);
-          targetDeployCreatedAt=clean(target?.created_at,80);
-        }
-        if(active){
-          activeDeployId=clean(active?.id,120);
-          activeDeployCommit=clean(active?.commit_ref,80);
-          activeDeployState=clean(active?.state,40).toLowerCase();
-        }
-      }
-    }catch{}
-  }
-
-  const lagTooHigh=commitsBehind!=null&&commitsBehind>1;
-  const lagUnknown=commitsBehind==null;
-  const linked=githubLinked===true;
-  const metadataReady=Boolean(liveCommit&&mainCommit);
   const activeStates=new Set(['new','pending_review','accepted','enqueued','building','uploading','processing','preparing']);
   const failedStates=new Set(['error','failed','canceled','cancelled']);
   const targetDeployActive=Boolean(targetDeployState&&activeStates.has(targetDeployState));
   const targetDeployFailed=Boolean(targetDeployState&&failedStates.has(targetDeployState));
   const anyDeployActive=Boolean(activeDeployState&&activeStates.has(activeDeployState));
+
+  if(!mainCommit&&liveCommit&&githubLinked===true){
+    if((targetDeployActive||targetDeployFailed)&&targetDeployCommit&&targetDeployCommit!==liveCommit){
+      commitsBehind=commitsBehind==null?1:commitsBehind;
+      compareStatus=targetDeployActive?'netlify-observed-newer-deploy':'netlify-observed-failed-deploy';
+      fallbackUsed=true;
+    }else if(deployStatus==='ready'||deployStatus==='current'||Boolean(deployTime)){
+      commitsBehind=0;
+      compareStatus='netlify-commit-ref';
+      fallbackUsed=true;
+    }
+  }
+
+  const lagTooHigh=commitsBehind!=null&&commitsBehind>1;
+  const lagUnknown=commitsBehind==null;
+  const linked=githubLinked===true;
+  const metadataReady=Boolean(liveCommit&&(mainCommit||fallbackUsed));
   const mainCommitMs=Date.parse(mainCommitAt);
   const mainAgeMs=Number.isFinite(mainCommitMs)?Math.max(0,Date.now()-mainCommitMs):null;
   const triggerGraceMs=5*60*1000;
@@ -408,7 +548,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     severity='red';
   }else if(commitsBehind===0){
     deploymentState=linked?'synced':'auto-deploy-broken';
-    severity=linked?'green':'red';
+    severity=linked?(mainCommit?'green':'yellow'):'red';
   }else if(!linked){
     deploymentState='auto-deploy-broken';
     severity='red';
@@ -432,16 +572,24 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     detail+=(detail?' ':'')+(commitsBehind==null
       ? 'Production/main commit lag could not be determined.'
       : commitsBehind===0
-        ? 'Production matches main.'
+        ? 'Production matches main at '+liveCommit.slice(0,12)+'.'
         : 'Production is '+commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind main.');
+  }else if(liveCommit&&fallbackUsed){
+    detail+=(detail?' ':'')+'Current production exposes Git commit '+liveCommit.slice(0,12)+' through Netlify commit_ref.';
+    if(!mainCommit){
+      detail+=' Direct GitHub main metadata is unavailable';
+      if(githubMainLookupStatus) detail+=' (HTTP '+githubMainLookupStatus+')';
+      detail+='; the monitor used the current Netlify production deploy as its fallback source before deciding health.';
+    }
   }else{
     detail+=(detail?' ':'')+'Production or main commit metadata is unavailable.';
+    if(githubMainLookupDetail) detail+=' '+githubMainLookupDetail;
   }
 
   if(deploymentState==='deploying'){
     const runningId=targetDeployId||activeDeployId;
     const runningState=targetDeployActive?targetDeployState:activeDeployState;
-    const runningCommit=targetDeployActive?mainCommit:activeDeployCommit;
+    const runningCommit=targetDeployActive?(targetDeployCommit||mainCommit):activeDeployCommit;
     detail+=(detail?' ':'')+'Netlify is currently '+(runningState||'processing')+
       (runningId?' deploy '+runningId.slice(0,12):' a production deploy')+
       (runningCommit?' for commit '+runningCommit.slice(0,12):'')+
@@ -452,12 +600,18 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
       (ageMinutes==null?'':' ('+ageMinutes+' minute'+(ageMinutes===1?'':'s')+' old)')+
       '; allowing up to 5 minutes for Netlify Git auto-deploy to start.';
   }else if(deploymentState==='deploy-failed'){
-    detail+=(detail?' ':'')+'The production deploy for main ended in '+targetDeployState+
+    detail+=(detail?' ':'')+'The production deploy for the newest observed commit ended in '+targetDeployState+
       (targetDeployId?' · deploy '+targetDeployId.slice(0,12):'')+
       (targetDeployError?' · '+targetDeployError:'')+'.';
   }else if(deploymentState==='auto-deploy-broken'&&linked&&commitsBehind!=null&&commitsBehind>0){
     detail+=(detail?' ':'')+'No active production deploy for main is visible after the Git trigger grace period; Git auto-deploy appears stalled.';
   }
+
+  const verificationSource=mainCommit
+    ? 'github-main + netlify-production'
+    : fallbackUsed
+      ? 'netlify-commit-ref fallback'
+      : 'unverified';
 
   return {
     ok,
@@ -467,7 +621,17 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     liveCommit,
     mainCommit,
     mainCommitAt,
+    githubCommit:mainCommit||targetDeployCommit||liveCommit,
     deployId,
+    deployStatus,
+    deployTime,
+    deployDurationSeconds,
+    repositoryPrivate,
+    metadataSource,
+    verificationSource,
+    fallbackUsed,
+    githubMainLookupStatus,
+    githubMainLookupDetail,
     commitsBehind,
     compareStatus,
     lagTooHigh,
@@ -477,13 +641,13 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     activeDeployCommit,
     activeDeployState,
     targetDeployId,
+    targetDeployCommit,
     targetDeployState,
     targetDeployCreatedAt,
-    detail:clean(detail,900),
+    detail:clean(detail,1200),
     ms:Date.now()-started,
   };
 }
-
 export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
   const origin=baseUrl().replace(/\/$/,'');
   const pageChecks=PAGE_CHECKS.map(async ([id,name,path,marker]):Promise<HealthCheck>=>{
@@ -542,9 +706,20 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     ok:Boolean(deploymentSync.ok),
     status:deploymentSync.ok?200:503,
     ms:Number(deploymentSync.ms||0),
-    detail:clean(deploymentSync.detail,900),
+    detail:clean(deploymentSync.detail,1200),
     severity:deploymentSync.severity,
     deploymentState:deploymentSync.deploymentState,
+    deploymentDetails:{
+      githubCommit:clean(deploymentSync.githubCommit||deploymentSync.mainCommit||deploymentSync.liveCommit,80),
+      netlifyCommit:clean(deploymentSync.liveCommit,80),
+      netlifyDeployId:clean(deploymentSync.deployId,120),
+      deployStatus:clean(deploymentSync.deployStatus,40),
+      deployTime:clean(deploymentSync.deployTime,80),
+      deployDurationSeconds:Number.isFinite(Number(deploymentSync.deployDurationSeconds))?Number(deploymentSync.deployDurationSeconds):null,
+      repositoryPrivate:typeof deploymentSync.repositoryPrivate==='boolean'?deploymentSync.repositoryPrivate:null,
+      verificationSource:clean(deploymentSync.verificationSource,120),
+      fallbackUsed:Boolean(deploymentSync.fallbackUsed),
+    },
   };
   const checks=[...baseChecks,startupCheck,deploymentSyncCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
@@ -2276,7 +2451,7 @@ async function evaluateCreditSaverAutomation(context:Context,creditUsage:any,cur
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.creditUsage?.version===9 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  if(cached?.deploymentCacheVersion===2 && cached?.creditUsage?.version===9 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -2411,6 +2586,20 @@ export async function cachedDeploymentHistory(context:Context) {
     compareStatus:current.compareStatus,
     deployId:current.deployId,
   });
+  current.commit=current.commit||connectionHealth.liveCommit||'';
+  current.deployId=current.deployId||connectionHealth.deployId||'';
+  current.mainCommit=current.mainCommit||connectionHealth.mainCommit||'';
+  if(current.commitsBehind==null&&connectionHealth.commitsBehind!=null){
+    current.commitsBehind=Number(connectionHealth.commitsBehind);
+    current.behindMain=Number(connectionHealth.commitsBehind)>0;
+    current.compareStatus=current.compareStatus||connectionHealth.compareStatus||'';
+  }
+  current.deployStatus=connectionHealth.deployStatus||'';
+  current.deployTime=connectionHealth.deployTime||current.deployTime;
+  current.deployDurationSeconds=connectionHealth.deployDurationSeconds??null;
+  current.repositoryPrivate=typeof connectionHealth.repositoryPrivate==='boolean'?connectionHealth.repositoryPrivate:null;
+  current.verificationSource=connectionHealth.verificationSource||'';
+  current.fallbackUsed=Boolean(connectionHealth.fallbackUsed);
   current.githubLinked=connectionHealth.githubLinked;
   current.repository=connectionHealth.repository;
   current.productionBranch=connectionHealth.productionBranch;
@@ -2526,6 +2715,7 @@ export async function cachedDeploymentHistory(context:Context) {
   creditUsage.saverLearning=await updateCreditSaverLearning(context,creditUsage,netlifyDeployHistory);
 
   const result={
+    deploymentCacheVersion:2,
     generatedAt,
     current,
     connectionHealth,
