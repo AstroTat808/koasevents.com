@@ -173,9 +173,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div><p class="eyebrow text-[var(--koa-clay)]">Current production</p><h2 class="display mt-2 text-4xl">Deployment</h2></div>
           <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy ID</p><p data-deploy-id class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
-            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deployed</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">GitHub commit</p><p data-deploy-commit class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Netlify deploy ID</p><p data-deploy-id class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy status</p><p data-deploy-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy time</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Repo visibility</p><p data-deploy-private class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Functions</p><p data-deploy-functions class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Production vs main</p><p data-deploy-sync class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-main class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Git deployment connection</p><p data-deploy-git-link class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-git-detail class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
@@ -602,7 +604,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       let cause='The monitor received an unexpected response from this service.';
       let fix='Run the check again. If it still fails, inspect the affected service and its most recent deployment or configuration change.';
 
-      if(deploymentState==='deploying'){
+      if(deploymentState==='synced'&&row?.deploymentDetails?.fallbackUsed){
+        cause='The primary GitHub/main metadata lookup was incomplete, but the monitor recovered production commit metadata from the current Netlify deploy and verified the release without raising a false outage.';
+        fix='No corrective action is required. The fallback path is working as intended; rerun the check only if you want to refresh the metadata.';
+      }else if(deploymentState==='deploying'){
         cause='Production is behind main because a Netlify production build is currently running.';
         fix='Wait for the active deploy to finish, then run System Health again. If the deploy fails, open the deploy failure and fix that build error.';
       }else if(deploymentState==='waiting'){
@@ -649,7 +654,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       healthDetailSeverity.textContent=severity==='critical'?'Critical issue':severity==='warning'?'Warning':severity==='info'?'Information':'Healthy';
       healthDetailSeverity.className='eyebrow '+(severity==='critical'?'text-red-800':severity==='warning'?'text-amber-800':severity==='info'?'text-sky-800':'text-emerald-800');
       healthDetailTitle.textContent=String(row.name||'Health check');
-      healthDetailMeta.textContent=String(row.kind||'check')+' · '+String(row.path||'')+' · HTTP '+String(row.status||'—')+' · '+String(row.ms||0)+' ms';
+      const deploymentDetails=row?.deploymentDetails||null;
+      const deploymentMeta=deploymentDetails
+        ? [
+            deploymentDetails.githubCommit?'GitHub '+String(deploymentDetails.githubCommit).slice(0,12):'',
+            deploymentDetails.netlifyDeployId?'Netlify '+String(deploymentDetails.netlifyDeployId).slice(0,12):'',
+            deploymentDetails.deployStatus?'Status '+String(deploymentDetails.deployStatus):'',
+            deploymentDetails.deployTime?'Deployed '+new Date(deploymentDetails.deployTime).toLocaleString():'',
+            typeof deploymentDetails.repositoryPrivate==='boolean'?(deploymentDetails.repositoryPrivate?'Private repo':'Public repo'):'',
+            deploymentDetails.fallbackUsed?'Fallback verified':'',
+          ].filter(Boolean).join(' · ')
+        : '';
+      healthDetailMeta.textContent=[
+        String(row.kind||'check')+' · '+String(row.path||'')+' · HTTP '+String(row.status||'—')+' · '+String(row.ms||0)+' ms',
+        deploymentMeta,
+      ].filter(Boolean).join(' · ');
       healthDetailError.textContent=String(row.detail||'No additional error detail was recorded.');
       healthDetailCause.textContent=explanation.cause;
       healthDetailFix.textContent=explanation.fix;
@@ -1550,13 +1569,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       if(creditNote)creditNote.textContent=creditUsage.note||'Credit estimate unavailable.';
       const currentDeploy=deployments.current||{};
-      document.querySelector('[data-deploy-commit]').textContent=currentDeploy.commit||'Unavailable';
-      document.querySelector('[data-deploy-id]').textContent=currentDeploy.deployId||'Unavailable';
-      document.querySelector('[data-deploy-built]').textContent=currentDeploy.deployTime?new Date(currentDeploy.deployTime).toLocaleString():(currentDeploy.builtAt?new Date(currentDeploy.builtAt).toLocaleString():'Unavailable');
+      const connectionHealth=deployments.connectionHealth||{};
+      document.querySelector('[data-deploy-commit]').textContent=currentDeploy.mainCommit||connectionHealth.githubCommit||currentDeploy.commit||'Unavailable';
+      document.querySelector('[data-deploy-id]').textContent=currentDeploy.deployId||connectionHealth.deployId||'Unavailable';
+      const deployStatusEl=document.querySelector('[data-deploy-status]');
+      if(deployStatusEl)deployStatusEl.textContent=currentDeploy.deployStatus||connectionHealth.deployStatus||'Unavailable';
+      document.querySelector('[data-deploy-built]').textContent=currentDeploy.deployTime?new Date(currentDeploy.deployTime).toLocaleString():(connectionHealth.deployTime?new Date(connectionHealth.deployTime).toLocaleString():(currentDeploy.builtAt?new Date(currentDeploy.builtAt).toLocaleString():'Unavailable'));
+      const repoPrivateEl=document.querySelector('[data-deploy-private]');
+      const repoPrivate=typeof currentDeploy.repositoryPrivate==='boolean'
+        ? currentDeploy.repositoryPrivate
+        : (typeof connectionHealth.repositoryPrivate==='boolean'?connectionHealth.repositoryPrivate:null);
+      if(repoPrivateEl)repoPrivateEl.textContent=repoPrivate==null?'Unavailable':repoPrivate?'Private':'Public';
       document.querySelector('[data-deploy-functions]').textContent=currentDeploy.functionCount==null?'Unavailable':String(currentDeploy.functionCount);
       const syncEl=document.querySelector('[data-deploy-sync]');
       const mainEl=document.querySelector('[data-deploy-main]');
-      const connectionHealth=deployments.connectionHealth||{};
       const deploymentState=String(connectionHealth.deploymentState||'unknown');
       if(currentDeploy.behindMain===false){
         syncEl.textContent='Current with main';
