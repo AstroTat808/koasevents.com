@@ -14,7 +14,7 @@ type WorkflowStep = { id:string; label:string; offsetDays:number; taskTitle:stri
 type Workflow = { id:string; name:string; description:string; trigger:'manual'|'new-inquiry'|'proposal-sent'|'booked'; steps:WorkflowStep[]; active:boolean; createdAt:string; updatedAt:string; };
 type Enrollment = { id:string; workflowId:string; recordId:string; startedAt:string; createdTaskIds:string[]; };
 type Template = { id:string; type:'email'|'form'|'questionnaire'|'proposal-note'; name:string; subject:string; body:string; active:boolean; updatedAt:string; };
-type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; customFields:Record<string,string>; updatedAt:string; };
+type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; updatedAt:string; };
 type Activity = { id:string; recordId:string; type:string; detail:string; createdAt:string; };
 
 function crmStoreFor(context: Context) {
@@ -94,6 +94,14 @@ function escHtml(value:unknown) {
 function normalizeProject(record:any, meta:ProjectMeta|null) {
   const p = record?.proposal || {};
   const b = record?.booking || {};
+  const source = clean(record?.source,120).toLowerCase();
+  const inferredBusinessLine = source === 'wild-ones-production-inquiry'
+    ? 'wild-ones'
+    : source === 'koa-mobile-bar-inquiry'
+      ? 'mobile-bar'
+      : 'events';
+  const fallbackMeta = { recordId:record.id, projectStatus:'', tags:[], owner:'', company:'', address:'', partnerName:'', sourceDetail:'', businessLine:'', projectType:'', customFields:{}, updatedAt:'' };
+  const projectMeta:any = meta || fallbackMeta;
   return {
     id: record.id,
     kind: record.kind || 'inquiry',
@@ -101,6 +109,10 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
     status: record.status || '',
     createdAt: record.createdAt || '',
     updatedAt: record.updatedAt || record.createdAt || '',
+    businessLine: projectMeta.businessLine || record.businessLine || inferredBusinessLine,
+    projectType: projectMeta.projectType || record.projectType || '',
+    qualification: record.qualification || null,
+    wildOnes: record.wildOnes || null,
     packageId: record.packageId || record?.quote?.state?.startingPoint || record?.inquiry?.venuePackage || record?.inquiry?.mobileBarPackage || '',
     customer: record.customer || {},
     inquiry: record.inquiry || {},
@@ -111,7 +123,7 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
     booking: b ? { status:b.status || '', payments:Array.isArray(b.payments)?b.payments:[], contract:b.contract || null } : null,
     accounting: record.accounting || null,
     communications: record.communications || {},
-    meta: meta || { recordId:record.id, projectStatus:'', tags:[], owner:'', company:'', address:'', partnerName:'', sourceDetail:'', customFields:{}, updatedAt:'' }
+    meta: projectMeta
   };
 }
 
@@ -604,6 +616,8 @@ export default async (req:Request, context:Context) => {
       address:clean(body.address,400),
       partnerName:clean(body.partnerName,180),
       sourceDetail:clean(body.sourceDetail,300),
+      businessLine:['events','mobile-bar','wild-ones'].includes(clean(body.businessLine,40)) ? clean(body.businessLine,40) : clean(existing?.businessLine,40),
+      projectType:clean(body.projectType,80) || clean(existing?.projectType,80),
       customFields:body.customFields && typeof body.customFields==='object'
         ? Object.fromEntries(Object.entries(body.customFields).slice(0,50).map(([k,v])=>[clean(k,80),clean(v,500)]).filter(([k])=>k))
         : (existing?.customFields || {}),
