@@ -1585,8 +1585,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const mainEl=document.querySelector('[data-deploy-main]');
       const deploymentState=String(connectionHealth.deploymentState||'unknown');
       if(currentDeploy.behindMain===false){
-        syncEl.textContent='Current with main';
-        syncEl.className='mt-2 text-sm font-semibold text-emerald-800';
+        if(connectionHealth.fallbackUsed&&!connectionHealth.mainCommit){
+          syncEl.textContent='Netlify production verified · GitHub main unavailable';
+          syncEl.className='mt-2 text-sm font-semibold text-amber-800';
+        }else{
+          syncEl.textContent='Current with main';
+          syncEl.className='mt-2 text-sm font-semibold text-emerald-800';
+        }
       }else if(currentDeploy.behindMain===true){
         const behind=Number(currentDeploy.commitsBehind||0);
         const lag='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
@@ -1610,8 +1615,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const gitLinkEl=document.querySelector('[data-deploy-git-link]');
       const gitDetailEl=document.querySelector('[data-deploy-git-detail]');
       if(deploymentState==='synced'){
-        gitLinkEl.textContent='Connected · current';
-        gitLinkEl.className='mt-2 text-sm font-semibold text-emerald-800';
+        if(connectionHealth.fallbackUsed&&!connectionHealth.mainCommit){
+          gitLinkEl.textContent='Connected · production metadata verified';
+          gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
+        }else{
+          gitLinkEl.textContent='Connected · current';
+          gitLinkEl.className='mt-2 text-sm font-semibold text-emerald-800';
+        }
       }else if(deploymentState==='deploying'){
         gitLinkEl.textContent='Build in progress';
         gitLinkEl.className='mt-2 text-sm font-semibold '+(connectionHealth.severity==='red'?'text-red-800':'text-amber-800');
