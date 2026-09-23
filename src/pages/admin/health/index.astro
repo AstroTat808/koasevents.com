@@ -178,6 +178,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy status</p><p data-deploy-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deploy time</p><p data-deploy-built class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Repo visibility</p><p data-deploy-private class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Verification source</p><p data-deploy-verification-source class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Functions</p><p data-deploy-functions class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Production vs main</p><p data-deploy-sync class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-main class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4 xl:col-span-2"><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Git deployment connection</p><p data-deploy-git-link class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-deploy-git-detail class="mt-1 break-all text-[.65rem] text-[var(--koa-ink)]/45"></p></article>
@@ -374,6 +375,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <section class="rounded-xl bg-[var(--koa-sand)] p-4">
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Error</p>
                 <p data-health-detail-error class="mt-2 text-sm leading-6 text-[var(--koa-forest)]"></p>
+              </section>
+              <section data-health-detail-verification-wrap class="hidden rounded-xl border border-[var(--koa-line)] p-4">
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Verification source</p>
+                <p data-health-detail-verification class="mt-2 text-sm leading-6 text-[var(--koa-forest)]"></p>
               </section>
               <section class="rounded-xl border border-[var(--koa-line)] p-4">
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Likely cause</p>
@@ -586,6 +591,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthDetailTitle=document.querySelector('[data-health-detail-title]');
     const healthDetailMeta=document.querySelector('[data-health-detail-meta]');
     const healthDetailError=document.querySelector('[data-health-detail-error]');
+    const healthDetailVerificationWrap=document.querySelector('[data-health-detail-verification-wrap]');
+    const healthDetailVerification=document.querySelector('[data-health-detail-verification]');
     const healthDetailCause=document.querySelector('[data-health-detail-cause]');
     const healthDetailFix=document.querySelector('[data-health-detail-fix]');
     let latestHealthChecks=[];
@@ -605,8 +612,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       let fix='Run the check again. If it still fails, inspect the affected service and its most recent deployment or configuration change.';
 
       if(deploymentState==='synced'&&row?.deploymentDetails?.fallbackUsed){
-        cause='The primary GitHub/main metadata lookup was incomplete, but the monitor recovered production commit metadata from the current Netlify deploy and verified the release without raising a false outage.';
-        fix='No corrective action is required. The fallback path is working as intended; rerun the check only if you want to refresh the metadata.';
+        cause='Direct GitHub main metadata was not available to the production function, so the monitor verified the current release from Netlify commit_ref instead.';
+        fix='No manual action is required. System Health automatically retries direct GitHub metadata on later checks and returns to full green as soon as GitHub + Netlify verification succeeds.';
       }else if(deploymentState==='deploying'){
         cause='Production is behind main because a Netlify production build is currently running.';
         fix='Wait for the active deploy to finish, then run System Health again. If the deploy fails, open the deploy failure and fix that build error.';
@@ -662,14 +669,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             deploymentDetails.deployStatus?'Status '+String(deploymentDetails.deployStatus):'',
             deploymentDetails.deployTime?'Deployed '+new Date(deploymentDetails.deployTime).toLocaleString():'',
             typeof deploymentDetails.repositoryPrivate==='boolean'?(deploymentDetails.repositoryPrivate?'Private repo':'Public repo'):'',
-            deploymentDetails.fallbackUsed?'Fallback verified':'',
+            deploymentDetails.verificationSourceLabel?('Verified by '+String(deploymentDetails.verificationSourceLabel)):'',
           ].filter(Boolean).join(' · ')
         : '';
       healthDetailMeta.textContent=[
         String(row.kind||'check')+' · '+String(row.path||'')+' · HTTP '+String(row.status||'—')+' · '+String(row.ms||0)+' ms',
         deploymentMeta,
       ].filter(Boolean).join(' · ');
-      healthDetailError.textContent=String(row.detail||'No additional error detail was recorded.');
+      healthDetailError.textContent=String(row.detail||'No additional detail was recorded.');
+      if(deploymentDetails){
+        const verificationLabel=String(deploymentDetails.verificationSourceLabel||deploymentDetails.verificationSource||'Unverified');
+        const githubSource=String(deploymentDetails.githubMetadataSource||'').trim();
+        healthDetailVerification.textContent=verificationLabel+(githubSource?' · '+githubSource:'');
+        healthDetailVerificationWrap.classList.remove('hidden');
+      }else{
+        healthDetailVerification.textContent='';
+        healthDetailVerificationWrap.classList.add('hidden');
+      }
       healthDetailCause.textContent=explanation.cause;
       healthDetailFix.textContent=explanation.fix;
       healthDetailDialog.showModal();
@@ -1580,12 +1596,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ? currentDeploy.repositoryPrivate
         : (typeof connectionHealth.repositoryPrivate==='boolean'?connectionHealth.repositoryPrivate:null);
       if(repoPrivateEl)repoPrivateEl.textContent=repoPrivate==null?'Unavailable':repoPrivate?'Private':'Public';
+      const verificationSourceEl=document.querySelector('[data-deploy-verification-source]');
+      if(verificationSourceEl){
+        verificationSourceEl.textContent=currentDeploy.verificationSourceLabel||connectionHealth.verificationSourceLabel||'Unverified';
+        verificationSourceEl.className='mt-2 text-sm font-semibold '+((currentDeploy.verificationSourceKey||connectionHealth.verificationSourceKey)==='github-netlify'?'text-emerald-800':(currentDeploy.verificationSourceKey||connectionHealth.verificationSourceKey)==='unverified'?'text-red-800':'text-amber-800');
+      }
       document.querySelector('[data-deploy-functions]').textContent=currentDeploy.functionCount==null?'Unavailable':String(currentDeploy.functionCount);
       const syncEl=document.querySelector('[data-deploy-sync]');
       const mainEl=document.querySelector('[data-deploy-main]');
       const deploymentState=String(connectionHealth.deploymentState||'unknown');
       if(currentDeploy.behindMain===false){
-        if(connectionHealth.fallbackUsed&&!connectionHealth.mainCommit){
+        if(connectionHealth.verificationSourceKey==='netlify-fallback'){
           syncEl.textContent='Netlify production verified · GitHub main unavailable';
           syncEl.className='mt-2 text-sm font-semibold text-amber-800';
         }else{
@@ -1615,7 +1636,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const gitLinkEl=document.querySelector('[data-deploy-git-link]');
       const gitDetailEl=document.querySelector('[data-deploy-git-detail]');
       if(deploymentState==='synced'){
-        if(connectionHealth.fallbackUsed&&!connectionHealth.mainCommit){
+        if(connectionHealth.verificationSourceKey==='netlify-fallback'){
           gitLinkEl.textContent='Connected · production metadata verified';
           gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
         }else{
