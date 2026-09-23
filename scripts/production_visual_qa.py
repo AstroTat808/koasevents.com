@@ -151,8 +151,10 @@ def source_mode():
   "profit date range preset":"data-mobile-profit-period",
   "profit custom date start":"data-mobile-profit-from",
   "profit custom date end":"data-mobile-profit-to",
-  "monthly profit goal form":"data-mobile-profit-goal-form",
-  "profit goal projection":"data-mobile-goal-projected",
+  "profit goal form":"data-mobile-profit-goal-form",
+  "monthly profit goal projection":"data-goal-card=\"monthly\"",
+  "quarterly profit goal projection":"data-goal-card=\"quarterly\"",
+  "annual profit goal projection":"data-goal-card=\"annual\"",
   "recommended price apply action":"apply-mobile-bar-margin-target",
  }
  for label,needle in profit_requirements.items():
@@ -166,6 +168,8 @@ def source_mode():
   "profit settings type":"type MobileBarProfitSettings",
   "profit settings storage":"settings/mobile-bar-profitability",
   "profit settings action":"update-mobile-bar-profit-settings",
+  "quarterly profit target":"quarterlyGrossProfitTarget",
+  "annual profit target":"annualGrossProfitTarget",
   "margin target action":"apply-mobile-bar-margin-target",
   "margin adjustment line":"margin-target-adjustment",
  }.items():
