@@ -30,13 +30,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
-          <div class="grid gap-4 lg:grid-cols-[1fr_180px_180px_190px]">
-            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Search projects
-              <input data-search type="search" placeholder="Client, email, phone, event date, package, tag…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal text-[var(--koa-ink)]" />
+          <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-8">
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)] xl:col-span-2">Search projects
+              <input data-search type="search" placeholder="Client, email, event date, brand, production detail, tag…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal text-[var(--koa-ink)]" />
             </label>
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Stage
               <select data-stage-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
                 <option value="all">All stages</option><option value="inquiry">Inquiry</option><option value="lead">Lead</option><option value="proposal">Proposal</option><option value="booked">Booked</option><option value="lost">Lost</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Business line
+              <select data-business-line-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All brands</option><option value="events">Koa’s Events</option><option value="mobile-bar">Koa’s Mobile Bar</option><option value="wild-ones">Wild Ones</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Qualification
+              <select data-qualification-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All scores</option><option value="priority">80–100 Priority</option><option value="qualified">60–79 Qualified</option><option value="review">40–59 Review</option><option value="nurture">Under 40</option><option value="unscored">Unscored</option>
+              </select>
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Complexity
+              <select data-complexity-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All complexity</option><option value="standard">Standard</option><option value="moderate">Moderate</option><option value="high">High</option><option value="unscored">Unscored</option>
               </select>
             </label>
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Task status
@@ -126,6 +141,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <label class="grid gap-1 text-xs font-bold">Status<input name="projectStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Planning / VIP / On hold" /></label>
                   <label class="grid gap-1 text-xs font-bold">Owner<div data-project-owner-selector></div></label>
                   <label class="grid gap-1 text-xs font-bold">Company<input name="company" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                  <label class="grid gap-1 text-xs font-bold">Business line<select name="businessLine" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="events">Koa’s Events</option><option value="mobile-bar">Koa’s Mobile Bar</option><option value="wild-ones">Wild Ones</option></select></label>
+                  <label class="grid gap-1 text-xs font-bold">Project type<input name="projectType" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="large-format-production" /></label>
                   <label class="grid gap-1 text-xs font-bold">Partner / co-client<input name="partnerName" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
                   <label class="grid gap-1 text-xs font-bold sm:col-span-2">Address<input name="address" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
                   <label class="grid gap-1 text-xs font-bold">Source detail<input name="sourceDetail" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Planner referral, Google, venue tour…" /></label>
@@ -139,6 +156,58 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <textarea name="body" rows="5" required class="mt-4 w-full rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" placeholder="Client preferences, decisions, call notes, risks, special handling…"></textarea>
                 <button class="mt-3 rounded-full bg-[var(--koa-ink)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Add note</button>
                 <div data-notes class="mt-5 grid gap-3"></div>
+              </form>
+            </section>
+
+            <section data-wild-ones-panel class="hidden rounded-[1.5rem] border border-violet-200 bg-white p-5 shadow-[var(--shadow-soft)]">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                  <p class="eyebrow text-violet-700">Wild Ones production workspace</p>
+                  <h3 class="display mt-2 text-3xl">Qualification + production milestones</h3>
+                  <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Large-format production details stay inside the same Koa’s Business CRM while using Wild Ones-specific qualification, technical requirements, site-tour, proposal, contract, deposit, and show-readiness milestones.</p>
+                </div>
+                <div class="grid min-w-[320px] grid-cols-3 gap-2">
+                  <div class="rounded-xl bg-violet-950 p-3 text-white"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-white/55">Qualification</p><p data-wild-score class="display mt-1 text-3xl">—</p><p data-wild-band class="text-[.58rem] font-black uppercase tracking-[.06em] text-violet-200">Unscored</p></div>
+                  <div class="rounded-xl bg-[var(--koa-ink)] p-3 text-white"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-white/55">Complexity</p><p data-wild-complexity class="mt-3 text-lg font-black">—</p></div>
+                  <div class="rounded-xl bg-[var(--koa-forest)] p-3 text-white"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-white/55">Guests</p><p data-wild-guests class="display mt-1 text-3xl">—</p></div>
+                </div>
+              </div>
+
+              <form data-wild-ones-form class="mt-5 grid gap-5">
+                <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <label class="grid gap-1 text-xs font-bold">Site tour status<select name="siteTourStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="not_requested">Not requested</option><option value="requested">Requested</option><option value="scheduled">Scheduled</option><option value="completed">Completed</option><option value="waived">Waived</option></select></label>
+                  <label class="grid gap-1 text-xs font-bold">Proposal status<select name="proposalStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="not_started">Not started</option><option value="drafting">Drafting</option><option value="sent">Sent</option><option value="revision">Revision</option><option value="accepted">Accepted</option><option value="declined">Declined</option><option value="expired">Expired</option></select></label>
+                  <label class="grid gap-1 text-xs font-bold">Contract status<select name="contractStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="not_started">Not started</option><option value="drafting">Drafting</option><option value="sent">Sent</option><option value="executed">Executed</option><option value="void">Void</option></select></label>
+                  <label class="grid gap-1 text-xs font-bold">Deposit status<select name="depositStatus" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm"><option value="not_due">Not due</option><option value="due">Due</option><option value="partial">Partial</option><option value="paid">Paid</option><option value="overdue">Overdue</option><option value="refunded">Refunded</option></select></label>
+                </div>
+
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.09em] text-violet-700">Production requirements</p>
+                  <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    <label class="grid gap-1 text-xs font-bold">Stage plan<input name="stagePlan" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Audio plan<input name="audioPlan" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Lighting / visuals<input name="lightingPlan" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Power profile<input name="powerProfile" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Parking plan<input name="parkingPlan" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Security plan<input name="securityPlan" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Load-in<input name="loadInTime" type="datetime-local" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Load-out complete<input name="loadOutTime" type="datetime-local" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" /></label>
+                    <label class="grid gap-1 text-xs font-bold">Production rider / deck<input name="productionRiderUrl" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="URL or file reference" /></label>
+                    <label class="grid gap-1 text-xs font-bold md:col-span-2 xl:col-span-3">Production notes<textarea name="productionNotes" rows="3" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5 text-sm" placeholder="Approvals, technical constraints, vendor decisions, changes, risks…"></textarea></label>
+                  </div>
+                </div>
+
+                <div class="grid gap-5 xl:grid-cols-[.9fr_1.1fr]">
+                  <div class="rounded-xl bg-[var(--koa-sand)] p-4">
+                    <p class="text-xs font-black uppercase tracking-[.09em] text-violet-700">Intake snapshot</p>
+                    <div data-wild-intake class="mt-3 grid gap-2 text-sm"></div>
+                  </div>
+                  <div class="rounded-xl bg-[var(--koa-sand)] p-4">
+                    <div class="flex items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.09em] text-violet-700">Event production timeline</p><p class="mt-1 text-xs text-[var(--koa-ink)]/45">Calculated backward from the event date.</p></div><span data-wild-event-date class="text-xs font-black uppercase tracking-[.07em] text-[var(--koa-clay)]"></span></div>
+                    <div data-wild-timeline class="mt-4 grid gap-2"></div>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-3"><button class="rounded-full bg-violet-800 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save Wild Ones production details</button><span data-wild-save-status class="text-xs font-bold text-[var(--koa-ink)]/50"></span></div>
               </form>
             </section>
 
@@ -507,7 +576,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     else window.__koaCrmStartupPending={status:'healthy',phase:'rendered',detail:'Business CRM data loaded and interface rendered.'};
     return true;
   }
-  function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName].join(' ').toLowerCase(); }
+  function businessLineLabel(value){ return value==='wild-ones'?'Wild Ones':value==='mobile-bar'?'Koa’s Mobile Bar':'Koa’s Events'; }
+  function wildValue(p,key){ return p.meta?.customFields?.[key] || p.wildOnes?.[key] || ''; }
+  function qualificationBand(p){ const score=Number(p.qualification?.score); if(!Number.isFinite(score)||!p.qualification)return 'unscored'; return p.qualification?.band || (score>=80?'priority':score>=60?'qualified':score>=40?'review':'nurture'); }
+  function projectText(p){ return [p.customer?.name,p.customer?.email,p.customer?.phone,p.customer?.eventDate,p.packageId,p.stage,p.businessLine,p.projectType,p.meta?.tags?.join(' '),p.meta?.company,p.meta?.partnerName,p.inquiry?.eventType,p.qualification?.score,p.qualification?.productionComplexity,p.wildOnes?.eventConcept,p.wildOnes?.stagePlan,p.wildOnes?.powerProfile,p.wildOnes?.parkingPlan].join(' ').toLowerCase(); }
   function openTasks(recordId){ return data.tasks.filter(t=>t.recordId===recordId&&t.status!=='done'); }
   function render(){
     const activeIds=new Set(data.projects.map(p=>p.id));
@@ -537,10 +609,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   function renderProjects(){
     const q=String($('[data-search]')?.value||'').trim().toLowerCase();
     const stage=$('[data-stage-filter]')?.value||'all', tf=$('[data-task-filter]')?.value||'all', rf=$('[data-review-filter]')?.value||'all';
+    const line=$('[data-business-line-filter]')?.value||'all', qf=$('[data-qualification-filter]')?.value||'all', cf=$('[data-complexity-filter]')?.value||'all';
     const rows=data.projects.filter(p=>{
       const cleanup=p.cleanup||{disposition:'clean',approvedLegitimate:false};
       const reviewMatch=rf==='all' || (rf==='needs-review'&&(cleanup.disposition==='review'||cleanup.disposition==='auto_trash')) || (rf==='approved'&&cleanup.approvedLegitimate) || (rf==='clean'&&cleanup.disposition==='clean'&&!cleanup.approvedLegitimate);
-      return (!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0))&&reviewMatch;
+      const band=qualificationBand(p);
+      const complexity=String(p.qualification?.productionComplexity||'unscored').toLowerCase();
+      return (!q||projectText(p).includes(q))&&(stage==='all'||p.stage===stage)&&(line==='all'||p.businessLine===line)&&(qf==='all'||band===qf)&&(cf==='all'||complexity===cf)&&(tf==='all'||(tf==='due'?openTasks(p.id).length>0:openTasks(p.id).length===0))&&reviewMatch;
     });
     visibleProjectIds=rows.map(p=>p.id);
     $('[data-project-count]').textContent=rows.length+' shown';
@@ -548,8 +623,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const tasks=openTasks(p.id).length;
       const tags=(p.meta?.tags||[]).slice(0,3).map(t=>'<span class="rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.58rem] font-black uppercase tracking-[.06em]">'+esc(t)+'</span>').join('');
       const cleanup=p.cleanup||{disposition:'clean',score:0,reasons:[]};
+      const lineBadge=p.businessLine==='wild-ones'?'<span class="rounded-full bg-violet-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-violet-900">Wild Ones</span>':p.businessLine==='mobile-bar'?'<span class="rounded-full bg-sky-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-sky-900">Mobile Bar</span>':'';
+      const qualificationBadge=p.businessLine==='wild-ones'&&p.qualification?'<span class="rounded-full bg-[var(--koa-ink)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">Q '+Number(p.qualification.score||0)+' · '+esc(p.qualification.productionComplexity||'standard')+'</span>':'';
       const cleanupBadge=cleanup.disposition==='review'?'<span title="'+esc((cleanup.reasons||[]).join(' • '))+'" class="rounded-full bg-amber-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-amber-900">Review '+cleanup.score+'</span>':cleanup.disposition==='auto_trash'?'<span title="'+esc((cleanup.reasons||[]).join(' • '))+'" class="rounded-full bg-red-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-red-900">Auto-trash '+cleanup.score+'</span>':'';
-      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><button data-project="'+esc(p.id)+'" class="min-w-0 text-left"><div class="flex items-start justify-between gap-3"><div><strong class="text-base text-[var(--koa-ink)]">'+esc(p.customer?.name||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+cleanupBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></button></div>';
+      return '<div class="grid grid-cols-[auto_1fr] items-start gap-3 rounded-xl border '+(p.id===selectedId?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 transition hover:border-[var(--koa-clay)]"><label class="mt-1 inline-flex cursor-pointer"><input data-project-check="'+esc(p.id)+'" type="checkbox" '+(selectedProjects.has(p.id)?'checked':'')+' class="h-4 w-4 accent-[var(--koa-forest)]"></label><button data-project="'+esc(p.id)+'" class="min-w-0 text-left"><div class="flex items-start justify-between gap-3"><div><strong class="text-base text-[var(--koa-ink)]">'+esc(p.customer?.name||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(p.customer?.eventDate||'No date')+' · '+esc(p.packageId||'No package')+'</p></div><div class="flex flex-wrap justify-end gap-1.5">'+lineBadge+qualificationBadge+cleanupBadge+'<span class="rounded-full bg-[var(--koa-forest)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white">'+esc(p.stage)+'</span></div></div><div class="mt-3 flex flex-wrap gap-1.5">'+tags+'</div><p class="mt-3 text-[.65rem] font-bold text-[var(--koa-clay)]">'+tasks+' open task'+(tasks===1?'':'s')+'</p></button></div>';
     }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/55">No projects match these filters.</p>';
     $$('[data-project]').forEach(b=>b.addEventListener('click',()=>{selectedId=b.dataset.project;renderProjects();renderDetail();renderAudit();}));
     $$('[data-project-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?selectedProjects.add(ch.dataset.projectCheck):selectedProjects.delete(ch.dataset.projectCheck);updateBulkUi();}));
@@ -653,7 +730,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     if(p.stage==='booked')links.push('<a href="/admin/events/?recordId='+encodeURIComponent(p.id)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Event Ops</a>');
     links.push('<a href="/planning/?record='+encodeURIComponent(p.id)+'" target="_blank" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Client planning</a>');
     $('[data-detail-links]').innerHTML=links.join('');
-    const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; mountStaffSelector($('[data-project-owner-selector]'),{name:'owner',value:p.meta?.owner||'',placeholder:'Search project owner',contextDate:p.customer?.eventDate||''}); f.company.value=p.meta?.company||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
+    const f=$('[data-project-form]'); f.projectStatus.value=p.meta?.projectStatus||''; mountStaffSelector($('[data-project-owner-selector]'),{name:'owner',value:p.meta?.owner||'',placeholder:'Search project owner',contextDate:p.customer?.eventDate||''}); f.company.value=p.meta?.company||''; f.businessLine.value=p.businessLine||'events'; f.projectType.value=p.projectType||''; f.address.value=p.meta?.address||''; f.partnerName.value=p.meta?.partnerName||''; f.sourceDetail.value=p.meta?.sourceDetail||''; f.tags.value=(p.meta?.tags||[]).join(', ');
+    renderWildOnesPanel(p);
     mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee',contextDate:p.customer?.eventDate||''});
     const recipient=$('[data-client-email-recipient]'); if(recipient) recipient.value=p.customer?.email||'';
     const templateSelect=$('[data-client-email-template]');
@@ -677,6 +755,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     ].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).slice(0,40);
     $('[data-activity]').innerHTML=timeline.map(a=>{const matched=(data.staff||[]).find(s=>String(a.detail||'').toLowerCase().includes(String(s.email||'').toLowerCase())||String(a.detail||'').toLowerCase().includes(String(s.name||'').toLowerCase()));return '<div class="rounded-xl bg-[var(--koa-sand)] p-3"><div class="flex items-start gap-3">'+staffAvatar(matched?.email||'')+'<div class="min-w-0 flex-1"><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(a.type.replaceAll('_',' '))+'</p><p class="mt-1 text-sm">'+esc(a.detail)+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/40">'+fmt(a.createdAt)+'</p></div></div></div>';}).join('')||'<p class="text-sm text-[var(--koa-ink)]/45">No CRM activity yet.</p>';
   }
+  function localDateInput(value){ if(!value)return ''; const d=new Date(value); if(Number.isNaN(d.getTime()))return String(value).slice(0,16); const off=d.getTimezoneOffset(); return new Date(d.getTime()-off*60000).toISOString().slice(0,16); }
+  function productionTimeline(eventDate){
+    if(!eventDate)return [];
+    const base=new Date(String(eventDate).slice(0,10)+'T12:00:00');
+    if(Number.isNaN(base.getTime()))return [];
+    const rows=[
+      [-120,'Production kickoff + preliminary site plan'],[-75,'Stage / electrical / audio / lighting review'],[-60,'Vendor roster + insurance / compliance'],[-45,'Parking, security, bars + guest-flow review'],[-30,'Production plan V1 lock'],[-21,'Final rider + special-effects review'],[-14,'Load-in / load-out operating schedule'],[-7,'Final walkthrough + emergency-access verification'],[-3,'Staffing, vendors, weather plan + contact sheet'],[-1,'Load-in authorization'],[0,'Show day checklist + incident log'],[1,'Load-out + property closeout'],[5,'Financial close + production debrief']
+    ];
+    return rows.map(([offset,label])=>{const d=new Date(base);d.setDate(d.getDate()+Number(offset));return{offset:Number(offset),label,date:d.toISOString().slice(0,10)};});
+  }
+  function renderWildOnesPanel(p){
+    const panel=$('[data-wild-ones-panel]'); if(!panel)return;
+    const isWild=p.businessLine==='wild-ones'; panel.classList.toggle('hidden',!isWild); if(!isWild)return;
+    const q=p.qualification||null, score=Number(q?.score);
+    $('[data-wild-score]').textContent=q&&Number.isFinite(score)?String(score):'—';
+    $('[data-wild-band]').textContent=q?.band?String(q.band).replaceAll('_',' '):'Unscored';
+    $('[data-wild-complexity]').textContent=q?.productionComplexity?String(q.productionComplexity).toUpperCase():'—';
+    $('[data-wild-guests]').textContent=String(p.inquiry?.guestCount||p.wildOnes?.expectedAttendance||'—');
+    const wf=$('[data-wild-ones-form]'), c=p.meta?.customFields||{}, w=p.wildOnes||{};
+    const set=(name,value)=>{if(wf?.elements?.[name])wf.elements[name].value=value||'';};
+    set('siteTourStatus',c.siteTourStatus||w.siteTourStatus||'not_requested'); set('proposalStatus',c.proposalStatus||w.proposalStatus||'not_started'); set('contractStatus',c.contractStatus||w.contractStatus||'not_started'); set('depositStatus',c.depositStatus||w.depositStatus||'not_due');
+    ['stagePlan','audioPlan','lightingPlan','powerProfile','parkingPlan','securityPlan','productionRiderUrl','productionNotes'].forEach(key=>set(key,c[key]||w[key]||''));
+    set('loadInTime',localDateInput(c.loadInTime||w.loadInTime||'')); set('loadOutTime',localDateInput(c.loadOutTime||w.loadOutTime||''));
+    const intake=[
+      ['Event type',p.inquiry?.eventType||'—'],['Concept',w.eventConcept||'—'],['Budget',w.eventBudget||p.inquiry?.budget||'—'],['Planning stage',w.planningStage||'—'],['Organizer experience',w.organizerExperience||'—'],['Decision timing',w.decisionTiming||'—'],['Production vehicle',w.largestProductionVehicle||'—'],['Special elements',(w.specialElements||[]).join(', ')||'None listed']
+    ];
+    $('[data-wild-intake]').innerHTML=intake.map(([label,value])=>'<div class="grid grid-cols-[130px_1fr] gap-3"><span class="text-[.62rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(label)+'</span><strong class="text-sm text-[var(--koa-ink)]">'+esc(value)+'</strong></div>').join('');
+    $('[data-wild-event-date]').textContent=p.customer?.eventDate||'No event date';
+    const timeline=productionTimeline(p.customer?.eventDate);
+    const today=new Date().toISOString().slice(0,10);
+    $('[data-wild-timeline]').innerHTML=timeline.length?timeline.map(row=>'<div class="grid grid-cols-[78px_1fr] gap-3 rounded-lg border border-[var(--koa-line)] bg-white p-3 '+(row.date<today?'opacity-55':'')+'"><div><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-violet-700">'+(row.offset===0?'EVENT':row.offset>0?'T+'+row.offset:'T'+row.offset)+'</p><p class="mt-1 text-xs font-bold text-[var(--koa-ink)]/55">'+esc(row.date)+'</p></div><strong class="text-sm text-[var(--koa-ink)]">'+esc(row.label)+'</strong></div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">Add an event date to generate the production timeline.</p>';
+  }
+
   function renderWorkflows(){
     $('[data-workflows]').innerHTML=data.workflows.length?data.workflows.map(w=>'<button data-edit-workflow="'+esc(w.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(w.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(w.trigger)+'</span></div><p class="mt-2 text-sm text-[var(--koa-ink)]/55">'+esc(w.description||'No description')+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/42">'+w.steps.length+' step'+(w.steps.length===1?'':'s')+' · '+(w.active?'Active':'Paused')+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No workflows saved yet.</p>';
     $$('[data-edit-workflow]').forEach(b=>b.addEventListener('click',()=>{const w=data.workflows.find(x=>x.id===b.dataset.editWorkflow);const f=$('[data-workflow-form]');f.id.value=w.id;f.name.value=w.name;f.description.value=w.description;f.trigger.value=w.trigger;f.active.checked=w.active;f.steps.value=w.steps.map(s=>s.offsetDays+'|'+s.taskTitle).join('\n');f.scrollIntoView({behavior:'smooth',block:'center'});}));
@@ -685,7 +796,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-templates]').innerHTML=data.templates.length?data.templates.map(t=>'<button data-edit-template="'+esc(t.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4 text-left"><div class="flex justify-between gap-3"><strong>'+esc(t.name)+'</strong><span class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">'+esc(t.type)+'</span></div><p class="mt-2 line-clamp-2 text-sm text-[var(--koa-ink)]/55">'+esc(t.subject||t.body)+'</p></button>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No templates saved yet.</p>';
     $$('[data-edit-template]').forEach(b=>b.addEventListener('click',()=>{const t=data.templates.find(x=>x.id===b.dataset.editTemplate);const f=$('[data-template-form]');f.id.value=t.id;f.type.value=t.type;f.name.value=t.name;f.subject.value=t.subject;f.body.value=t.body;f.active.checked=t.active;f.scrollIntoView({behavior:'smooth',block:'center'});}));
   }
-  $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
+  $('[data-search]')?.addEventListener('input',renderProjects); $('[data-stage-filter]')?.addEventListener('change',renderProjects); $('[data-business-line-filter]')?.addEventListener('change',renderProjects); $('[data-qualification-filter]')?.addEventListener('change',renderProjects); $('[data-complexity-filter]')?.addEventListener('change',renderProjects); $('[data-task-filter]')?.addEventListener('change',renderProjects); $('[data-review-filter]')?.addEventListener('change',renderProjects);
   $$('[data-analytics-range]').forEach(b=>b.addEventListener('click',()=>{analyticsRange=b.dataset.analyticsRange||'7';renderAnalytics();}));
   $$('[data-trend-granularity]').forEach(b=>b.addEventListener('click',()=>{trendGranularity=b.dataset.trendGranularity||'day';renderAnalytics();}));
   $$('[data-breakdown]').forEach(b=>b.addEventListener('click',()=>{analyticsBreakdown=b.dataset.breakdown||'websiteForm';renderAnalytics();}));
@@ -741,7 +852,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }catch(err){alert(err.message||'Unable to move client to Trash.');}
     finally{button.disabled=false;button.textContent=original;}
   });
-  $('[data-project-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-project',recordId:selectedId,projectStatus:f.projectStatus.value,owner:f.owner.value,company:f.company.value,address:f.address.value,partnerName:f.partnerName.value,sourceDetail:f.sourceDetail.value,tags:f.tags.value.split(',').map(x=>x.trim()).filter(Boolean)});await load();});
+  $('[data-project-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'save-project',recordId:selectedId,projectStatus:f.projectStatus.value,owner:f.owner.value,company:f.company.value,businessLine:f.businessLine.value,projectType:f.projectType.value,address:f.address.value,partnerName:f.partnerName.value,sourceDetail:f.sourceDetail.value,tags:f.tags.value.split(',').map(x=>x.trim()).filter(Boolean)});await load();});
+  $('[data-wild-ones-form]')?.addEventListener('submit',async e=>{
+    e.preventDefault(); const form=e.currentTarget, p=data.projects.find(x=>x.id===selectedId); if(!p)return;
+    const fields=['siteTourStatus','proposalStatus','contractStatus','depositStatus','stagePlan','audioPlan','lightingPlan','powerProfile','parkingPlan','securityPlan','loadInTime','loadOutTime','productionRiderUrl','productionNotes'];
+    const customFields={...(p.meta?.customFields||{})}; fields.forEach(key=>{customFields[key]=String(form.elements[key]?.value||'').trim();});
+    const status=$('[data-wild-save-status]'); if(status)status.textContent='Saving…';
+    await post({action:'save-project',recordId:selectedId,projectStatus:p.meta?.projectStatus||'',owner:p.meta?.owner||'',company:p.meta?.company||'',businessLine:'wild-ones',projectType:p.projectType||'large-format-production',address:p.meta?.address||'',partnerName:p.meta?.partnerName||'',sourceDetail:p.meta?.sourceDetail||'',tags:p.meta?.tags||[],customFields});
+    if(status)status.textContent='Saved'; await load();
+  });
   $('[data-note-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-note',recordId:selectedId,body:f.body.value});f.reset();await load();});
   $('[data-task-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'add-task',recordId:selectedId,title:f.title.value,dueDate:f.dueDate.value,assignee:f.assignee.value,priority:f.priority.value});f.reset();mountStaffSelector($('[data-task-assignee-selector]'),{name:'assignee',value:'',placeholder:'Search assignee',contextDate:data.projects.find(x=>x.id===selectedId)?.customer?.eventDate||''});await load();});
   $('[data-appointment-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'schedule-appointment',recordId:selectedId,title:f.title.value,startsAt:f.startsAt.value,durationMinutes:f.durationMinutes.value,location:f.location.value});f.reset();await load();});
