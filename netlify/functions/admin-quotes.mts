@@ -96,6 +96,8 @@ type ProfitModel = {
 };
 type MobileBarProfitSettings = {
   monthlyGrossProfitTarget: number;
+  quarterlyGrossProfitTarget: number;
+  annualGrossProfitTarget: number;
   updatedAt: string;
 };
 
@@ -262,9 +264,11 @@ async function writeSalesIndex(context: Context, records: SalesRecord[]) {
   await store.setJSON('records/index', records.slice(0, 1500));
 }
 async function readMobileBarProfitSettings(context: Context): Promise<MobileBarProfitSettings> {
-  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as MobileBarProfitSettings | null;
+  const saved = await salesStoreFor(context).get('settings/mobile-bar-profitability', { type: 'json' }) as Partial<MobileBarProfitSettings> | null;
   return {
     monthlyGrossProfitTarget: finite(saved?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(saved?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(saved?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
     updatedAt: cleanText(saved?.updatedAt || '', 60),
   };
 }
@@ -272,6 +276,8 @@ async function readMobileBarProfitSettings(context: Context): Promise<MobileBarP
 async function writeMobileBarProfitSettings(context: Context, input: any): Promise<MobileBarProfitSettings> {
   const settings: MobileBarProfitSettings = {
     monthlyGrossProfitTarget: finite(input?.monthlyGrossProfitTarget ?? 0, 0, 1_000_000),
+    quarterlyGrossProfitTarget: finite(input?.quarterlyGrossProfitTarget ?? 0, 0, 3_000_000),
+    annualGrossProfitTarget: finite(input?.annualGrossProfitTarget ?? 0, 0, 12_000_000),
     updatedAt: new Date().toISOString(),
   };
   await salesStoreFor(context).setJSON('settings/mobile-bar-profitability', settings);
@@ -2029,9 +2035,9 @@ export default async (req: Request, context: Context) => {
     const settings = await writeMobileBarProfitSettings(context, payload.settings || {});
     await appendEvent(context, {
       type: 'mobile_bar_profit_settings_updated',
-      detail: 'Mobile Bar monthly gross-profit target updated to ' + settings.monthlyGrossProfitTarget.toFixed(2) + '.',
+      detail: 'Mobile Bar gross-profit targets updated: monthly ' + settings.monthlyGrossProfitTarget.toFixed(2) + ', quarterly ' + settings.quarterlyGrossProfitTarget.toFixed(2) + ', annual ' + settings.annualGrossProfitTarget.toFixed(2) + '.',
     });
-    await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly gross-profit target.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget}});
+    await appendStaffAudit(context,{actor:cleanText(auth.user?.email,240)||'staff',action:'sales_profit_settings_changed',detail:'Changed Mobile Bar monthly, quarterly, and annual gross-profit targets.',metadata:{monthlyGrossProfitTarget:settings.monthlyGrossProfitTarget,quarterlyGrossProfitTarget:settings.quarterlyGrossProfitTarget,annualGrossProfitTarget:settings.annualGrossProfitTarget}});
     return Response.json({ ok: true, settings }, { headers: { 'Cache-Control':'private, no-store' } });
   }
   if (payload.action === 'update-profit-model') {
