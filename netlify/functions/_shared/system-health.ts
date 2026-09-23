@@ -23,6 +23,9 @@ export type HealthCheck = {
     deployDurationSeconds: number | null;
     repositoryPrivate: boolean | null;
     verificationSource: string;
+    verificationSourceKey: 'github-netlify' | 'netlify-fallback' | 'netlify-runtime' | 'unverified';
+    verificationSourceLabel: string;
+    githubMetadataSource: string;
     fallbackUsed: boolean;
   };
 };
@@ -285,6 +288,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   let fallbackUsed=false;
   let githubMainLookupStatus=0;
   let githubMainLookupDetail='';
+  let githubMetadataSource='';
   let publishedDeployId='';
   let productionRows:any[]=[];
 
@@ -319,6 +323,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
         const body:any=await response.json();
         mainCommit=clean(body?.sha,80);
         mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
+        githubMetadataSource='GitHub commits/main';
       }else{
         githubMainLookupDetail='GitHub main lookup returned HTTP '+response.status+'.';
       }
@@ -338,6 +343,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
           const branchBody:any=await branchResponse.json();
           mainCommit=clean(branchBody?.commit?.sha,80);
           mainCommitAt=clean(branchBody?.commit?.commit?.committer?.date||branchBody?.commit?.commit?.author?.date,80);
+          githubMetadataSource='GitHub branches/main';
           githubMainLookupDetail='GitHub main recovered from the branch endpoint.';
         }else if(!githubMainLookupDetail){
           githubMainLookupDetail='GitHub main branch lookup returned HTTP '+branchResponse.status+'.';
@@ -607,11 +613,31 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     detail+=(detail?' ':'')+'No active production deploy for main is visible after the Git trigger grace period; Git auto-deploy appears stalled.';
   }
 
-  const verificationSource=mainCommit
-    ? 'github-main + netlify-production'
-    : fallbackUsed
-      ? 'netlify-commit-ref fallback'
-      : 'unverified';
+  const effectiveFallbackUsed=Boolean(fallbackUsed&&!mainCommit);
+  const verificationSourceKey:'github-netlify'|'netlify-fallback'|'netlify-runtime'|'unverified'=
+    mainCommit&&liveCommit
+      ? 'github-netlify'
+      : effectiveFallbackUsed&&liveCommit
+        ? 'netlify-fallback'
+        : liveCommit
+          ? 'netlify-runtime'
+          : 'unverified';
+  const verificationSourceLabel=
+    verificationSourceKey==='github-netlify'
+      ? 'GitHub + Netlify'
+      : verificationSourceKey==='netlify-fallback'
+        ? 'Netlify fallback'
+        : verificationSourceKey==='netlify-runtime'
+          ? 'Netlify runtime'
+          : 'Unverified';
+  const verificationSource=
+    verificationSourceKey==='github-netlify'
+      ? 'github-main + netlify-production'
+      : verificationSourceKey==='netlify-fallback'
+        ? 'netlify-commit-ref fallback'
+        : verificationSourceKey==='netlify-runtime'
+          ? 'netlify-runtime'
+          : 'unverified';
 
   return {
     ok,
@@ -621,7 +647,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     liveCommit,
     mainCommit,
     mainCommitAt,
-    githubCommit:mainCommit||targetDeployCommit||liveCommit,
+    githubCommit:mainCommit,
     deployId,
     deployStatus,
     deployTime,
@@ -629,7 +655,10 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     repositoryPrivate,
     metadataSource,
     verificationSource,
-    fallbackUsed,
+    verificationSourceKey,
+    verificationSourceLabel,
+    githubMetadataSource,
+    fallbackUsed:effectiveFallbackUsed,
     githubMainLookupStatus,
     githubMainLookupDetail,
     commitsBehind,
@@ -710,7 +739,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     severity:deploymentSync.severity,
     deploymentState:deploymentSync.deploymentState,
     deploymentDetails:{
-      githubCommit:clean(deploymentSync.githubCommit||deploymentSync.mainCommit||deploymentSync.liveCommit,80),
+      githubCommit:clean(deploymentSync.githubCommit||deploymentSync.mainCommit,80),
       netlifyCommit:clean(deploymentSync.liveCommit,80),
       netlifyDeployId:clean(deploymentSync.deployId,120),
       deployStatus:clean(deploymentSync.deployStatus,40),
@@ -718,6 +747,9 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       deployDurationSeconds:Number.isFinite(Number(deploymentSync.deployDurationSeconds))?Number(deploymentSync.deployDurationSeconds):null,
       repositoryPrivate:typeof deploymentSync.repositoryPrivate==='boolean'?deploymentSync.repositoryPrivate:null,
       verificationSource:clean(deploymentSync.verificationSource,120),
+      verificationSourceKey:deploymentSync.verificationSourceKey,
+      verificationSourceLabel:clean(deploymentSync.verificationSourceLabel,120),
+      githubMetadataSource:clean(deploymentSync.githubMetadataSource,120),
       fallbackUsed:Boolean(deploymentSync.fallbackUsed),
     },
   };
@@ -2451,7 +2483,12 @@ async function evaluateCreditSaverAutomation(context:Context,creditUsage:any,cur
 export async function cachedDeploymentHistory(context:Context) {
   const store=healthStore(context);
   const cached:any=await store.get('deployments/cache',{type:'json'});
-  if(cached?.deploymentCacheVersion===2 && cached?.creditUsage?.version===9 && Date.now()-Date.parse(String(cached.generatedAt||''))<10*60*1000) return cached;
+  const cachedAgeMs=Date.now()-Date.parse(String(cached?.generatedAt||''));
+  const cachedSourceKey=String(cached?.connectionHealth?.verificationSourceKey||'');
+  const cachedTtlMs=(cachedSourceKey==='netlify-fallback'||cachedSourceKey==='netlify-runtime'||cachedSourceKey==='unverified')
+    ? 60*1000
+    : 10*60*1000;
+  if(cached?.deploymentCacheVersion===3 && cached?.creditUsage?.version===9 && Number.isFinite(cachedAgeMs) && cachedAgeMs<cachedTtlMs) return cached;
 
   const origin=baseUrl().replace(/\/$/,'');
   const home=await timedFetch(origin+'/');
@@ -2598,7 +2635,11 @@ export async function cachedDeploymentHistory(context:Context) {
   current.deployTime=connectionHealth.deployTime||current.deployTime;
   current.deployDurationSeconds=connectionHealth.deployDurationSeconds??null;
   current.repositoryPrivate=typeof connectionHealth.repositoryPrivate==='boolean'?connectionHealth.repositoryPrivate:null;
+  current.githubCommit=connectionHealth.githubCommit||'';
+  current.githubMetadataSource=connectionHealth.githubMetadataSource||'';
   current.verificationSource=connectionHealth.verificationSource||'';
+  current.verificationSourceKey=connectionHealth.verificationSourceKey||'unverified';
+  current.verificationSourceLabel=connectionHealth.verificationSourceLabel||'Unverified';
   current.fallbackUsed=Boolean(connectionHealth.fallbackUsed);
   current.githubLinked=connectionHealth.githubLinked;
   current.repository=connectionHealth.repository;
@@ -2715,7 +2756,7 @@ export async function cachedDeploymentHistory(context:Context) {
   creditUsage.saverLearning=await updateCreditSaverLearning(context,creditUsage,netlifyDeployHistory);
 
   const result={
-    deploymentCacheVersion:2,
+    deploymentCacheVersion:3,
     generatedAt,
     current,
     connectionHealth,
