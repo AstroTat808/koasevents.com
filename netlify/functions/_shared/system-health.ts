@@ -678,7 +678,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
           : 'unverified';
   const verificationSourceLabel=
     verificationSourceKey==='github-netlify'
-      ? 'GitHub + Netlify'
+      ? (githubMetadataSource==='GitHub Actions OIDC'?'GitHub Actions + Netlify':'GitHub + Netlify')
       : verificationSourceKey==='netlify-fallback'
         ? 'Netlify fallback'
         : verificationSourceKey==='netlify-runtime'
