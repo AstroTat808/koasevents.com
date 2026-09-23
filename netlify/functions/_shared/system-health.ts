@@ -71,6 +71,19 @@ export type CrmStartupSignal = {
   commit: string;
 };
 
+export type GithubMainSignal = {
+  sha: string;
+  repository: string;
+  ref: string;
+  workflow: string;
+  actor: string;
+  runId: string;
+  issuedAt: number;
+  expiresAt: number;
+  reportedAt: string;
+  source: 'github-actions-oidc';
+};
+
 const PAGE_CHECKS = [
   ['admin-home','Content Admin','/admin/','data-auth-panel'],
   ['business-crm','Business CRM','/admin/crm/','data-crm-watchdog'],
@@ -237,6 +250,34 @@ export async function readCrmStartupSignal(context:Context):Promise<CrmStartupSi
   return ((await healthStore(context).get('client/business-crm-startup/latest',{type:'json'}))||null) as CrmStartupSignal|null;
 }
 
+export async function readGithubMainSignal(context:Context):Promise<GithubMainSignal|null> {
+  return ((await healthStore(context).get('github/main/latest',{type:'json'}))||null) as GithubMainSignal|null;
+}
+
+export async function recordGithubMainSignal(context:Context,input:GithubMainSignal) {
+  const store=healthStore(context);
+  const existing=((await store.get('github/main/latest',{type:'json'}))||null) as GithubMainSignal|null;
+  const incomingIssuedAt=Math.max(0,Number(input?.issuedAt||0));
+  const existingIssuedAt=Math.max(0,Number(existing?.issuedAt||0));
+  if(existing && incomingIssuedAt<existingIssuedAt){
+    return {accepted:false,signal:existing,reason:'older-oidc-identity'};
+  }
+  const signal:GithubMainSignal={
+    sha:clean(input?.sha,80),
+    repository:clean(input?.repository,240),
+    ref:clean(input?.ref,240),
+    workflow:clean(input?.workflow,240),
+    actor:clean(input?.actor,160),
+    runId:clean(input?.runId,80),
+    issuedAt:incomingIssuedAt,
+    expiresAt:Math.max(0,Number(input?.expiresAt||0)),
+    reportedAt:new Date().toISOString(),
+    source:'github-actions-oidc',
+  };
+  await store.setJSON('github/main/latest',signal);
+  return {accepted:true,signal,reason:'stored'};
+}
+
 function baseUrl() {
   return clean(Netlify.env.get('URL'),500) || 'https://koasevents.com';
 }
@@ -314,6 +355,19 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
 
   if(!mainCommit){
     try{
+      const githubSignal=await readGithubMainSignal(context);
+      if(githubSignal?.sha && /^[a-f0-9]{40}$/i.test(githubSignal.sha) && githubSignal.repository==='AstroTat808/koasevents.com' && githubSignal.ref==='refs/heads/main'){
+        mainCommit=clean(githubSignal.sha,80);
+        mainCommitAt=clean(githubSignal.reportedAt,80);
+        githubMainLookupStatus=200;
+        githubMainLookupDetail='GitHub main verified by a signed GitHub Actions OIDC identity.';
+        githubMetadataSource='GitHub Actions OIDC';
+      }
+    }catch{}
+  }
+
+  if(!mainCommit){
+    try{
       const response=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/main',{
         headers:githubHeaders,
         signal:AbortSignal.timeout(12_000),
@@ -325,7 +379,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
         mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
         githubMetadataSource='GitHub commits/main';
       }else{
-        githubMainLookupDetail='GitHub main lookup returned HTTP '+response.status+'.';
+        githubMainLookupDetail='GitHub main lookup returned HTTP '+response.status+'.'+(!githubToken&&response.status===404?' KOA_GITHUB_READ_TOKEN is not configured; private repositories return 404 to unauthenticated GitHub API requests.':'');
       }
     }catch(error){
       githubMainLookupDetail='GitHub main lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
@@ -624,7 +678,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
           : 'unverified';
   const verificationSourceLabel=
     verificationSourceKey==='github-netlify'
-      ? 'GitHub + Netlify'
+      ? (githubMetadataSource==='GitHub Actions OIDC'?'GitHub Actions + Netlify':'GitHub + Netlify')
       : verificationSourceKey==='netlify-fallback'
         ? 'Netlify fallback'
         : verificationSourceKey==='netlify-runtime'
