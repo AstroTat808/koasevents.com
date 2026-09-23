@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">VenueLoom app icon</title>
+  <rect width="512" height="512" rx="112" fill="#4357F5"/>
+  <path d="M111 137 L211 368 C229 409 282 409 300 368 L403 137" fill="none" stroke="#F7F5EF" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M191 137 L291 368 C308 407 361 407 378 368" fill="none" stroke="#18242B" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 216 L307 334" fill="none" stroke="#18A999" stroke-width="22" stroke-linecap="round"/>
+</svg>
