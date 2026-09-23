@@ -113,6 +113,53 @@ async function verifyMobileSource(req: Request, formName: string) {
     : { ok: false, fingerprint: '', reason: 'Mobile Bar source authentication failed.' };
 }
 
+function wildOnesIngestSecret() {
+  return String(Netlify.env.get('WILD_ONES_INGEST_SECRET') || '').trim();
+}
+
+async function verifyWildOnesSource(req: Request, formName: string) {
+  if (formName !== 'wild-ones-production-inquiry') return { ok: true, fingerprint: '' };
+
+  const secret = wildOnesIngestSecret();
+  if (!secret) return { ok: false, fingerprint: '', reason: 'Wild Ones ingest secret is not configured.' };
+
+  const fingerprint = cleanText(req.headers.get('x-wild-ones-source'), 80).toLowerCase();
+  const timestamp = cleanText(req.headers.get('x-wild-ones-timestamp'), 20);
+  const signature = cleanText(req.headers.get('x-wild-ones-signature'), 160);
+  if (!fingerprint || !timestamp || !signature) {
+    return { ok: false, fingerprint: '', reason: 'Wild Ones source authentication is missing.' };
+  }
+
+  const issuedAt = Number(timestamp);
+  if (!Number.isFinite(issuedAt) || Math.abs(Math.floor(Date.now() / 1000) - issuedAt) > 300) {
+    return { ok: false, fingerprint: '', reason: 'Wild Ones source authentication expired.' };
+  }
+
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const expectedBuffer = await crypto.subtle.sign(
+    'HMAC',
+    key,
+    encoder.encode('v1|' + timestamp + '|' + fingerprint + '|wild-ones-production-inquiry'),
+  );
+  const expected = base64Url(expectedBuffer);
+  if (expected.length !== signature.length) return { ok: false, fingerprint: '', reason: 'Wild Ones source authentication failed.' };
+
+  let mismatch = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    mismatch |= expected.charCodeAt(index) ^ signature.charCodeAt(index);
+  }
+  return mismatch === 0
+    ? { ok: true, fingerprint }
+    : { ok: false, fingerprint: '', reason: 'Wild Ones source authentication failed.' };
+}
+
 function base64Url(bytes: ArrayBuffer) {
   let binary = '';
   for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
@@ -211,6 +258,75 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
   }
 }
 
+function assessWildOnesQualification(payload: any) {
+  const inquiry = payload?.inquiry || {};
+  const wild = payload?.wildOnes || {};
+  const customer = payload?.customer || {};
+  const guests = Math.round(cleanNumber(inquiry.guestCount ?? wild.expectedAttendance, 0, 1000));
+  let score = 0;
+
+  const eventType = cleanText(inquiry.eventType || wild.eventType, 120).toLowerCase();
+  if (/(concert|edm|dance|festival|retreat|production|brand activation|large private)/.test(eventType)) score += 15;
+  else if (eventType) score += 6;
+
+  if (guests >= 75 && guests <= 350) score += 15;
+  else if (guests > 0 && guests <= 450) score += 8;
+
+  const budget = cleanText(inquiry.budget || wild.eventBudget, 120);
+  if (/50,?000\+/.test(budget)) score += 20;
+  else if (/25,?000/.test(budget)) score += 18;
+  else if (/10,?000/.test(budget)) score += 14;
+  else if (/5,?000/.test(budget)) score += 9;
+  else if (budget) score += 4;
+
+  const planning = cleanText(wild.planningStage, 120).toLowerCase();
+  if (planning.includes('ready for venue proposal')) score += 15;
+  else if (planning.includes('production vendors engaged')) score += 13;
+  else if (planning.includes('talent') || planning.includes('programming')) score += 10;
+  else if (planning) score += 6;
+
+  const detailFields = ['stagePlan','audioPlan','lightingPlan','powerProfile','parkingPlan','securityPlan'];
+  score += Math.min(15, detailFields.filter((key) => {
+    const value = cleanText(wild[key], 160);
+    return value && !/not sure/i.test(value);
+  }).length * 2.5);
+
+  const experience = cleanText(wild.organizerExperience, 160).toLowerCase();
+  if (experience.includes('professional') || experience.includes('20+')) score += 10;
+  else if (experience.includes('6–20') || experience.includes('6-20')) score += 8;
+  else if (experience.includes('1–5') || experience.includes('1-5')) score += 5;
+  else if (experience) score += 2;
+
+  const flexibility = cleanText(wild.dateFlexibility, 120).toLowerCase();
+  if (flexibility.includes('flexible') || flexibility.includes('month')) score += 5;
+  else if (flexibility.includes('week')) score += 3;
+
+  const timing = cleanText(wild.decisionTiming, 120).toLowerCase();
+  if (timing.includes('ready to secure')) score += 5;
+  else if (timing.includes('2 week')) score += 4;
+  else if (timing.includes('30 day')) score += 3;
+  else if (timing) score += 1;
+
+  if (cleanText(customer.company || wild.company, 180)) score = Math.min(100, score + 2);
+  score = Math.max(0, Math.min(100, Math.round(score)));
+
+  let complexityPoints = 0;
+  if (guests > 250) complexityPoints += 2;
+  else if (guests > 150) complexityPoints += 1;
+  if (/(concert-grade|generator|hybrid)/i.test(cleanText(wild.powerProfile, 160))) complexityPoints += 2;
+  if (/(box truck|semi|touring)/i.test(cleanText(wild.largestProductionVehicle, 160))) complexityPoints += 2;
+  if (cleanStringList(wild.specialElements, 20, 120).length) complexityPoints += 2;
+  if (cleanNumber(wild.vendorCount, 0, 100) >= 8) complexityPoints += 1;
+  if (/multi-day|overnight/i.test(cleanText(wild.overnightUse, 120))) complexityPoints += 1;
+
+  return {
+    score,
+    band: score >= 80 ? 'priority' : score >= 60 ? 'qualified' : score >= 40 ? 'review' : 'nurture',
+    productionComplexity: complexityPoints >= 6 ? 'high' : complexityPoints >= 3 ? 'moderate' : 'standard',
+    calculatedAt: new Date().toISOString(),
+  };
+}
+
 async function appendEvent(store: any, event: Record<string, unknown>) {
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [event, ...current].slice(0, 10000));
@@ -300,7 +416,11 @@ export default async (req: Request, context: Context) => {
   if (!mobileSource.ok) {
     return json(req, { error: 'Mobile Bar source authentication failed.', code: 'mobile_source_auth_failed' }, 403);
   }
-  const sourceFingerprint = mobileSource.fingerprint || await ipFingerprint(req);
+  const wildOnesSource = await verifyWildOnesSource(req, formName);
+  if (!wildOnesSource.ok) {
+    return json(req, { error: 'Wild Ones source authentication failed.', code: 'wild_ones_source_auth_failed' }, 403);
+  }
+  const sourceFingerprint = wildOnesSource.fingerprint || mobileSource.fingerprint || await ipFingerprint(req);
   const identity = await securityIdentity(payload);
 
   const activeBlock = await findActiveBlock(context, {
@@ -437,6 +557,14 @@ export default async (req: Request, context: Context) => {
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
   const store = salesStoreFor(context);
+  const businessLine = formName === 'wild-ones-production-inquiry'
+    ? 'wild-ones'
+    : formName === 'koa-mobile-bar-inquiry'
+      ? 'mobile-bar'
+      : 'events';
+  const projectType = businessLine === 'wild-ones' ? 'large-format-production' : '';
+  const wildQualification = businessLine === 'wild-ones' ? assessWildOnesQualification(payload) : null;
+  const wildPayload = payload?.wildOnes && typeof payload.wildOnes === 'object' ? payload.wildOnes : {};
 
   const record = {
     id,
@@ -446,6 +574,9 @@ export default async (req: Request, context: Context) => {
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     source: formName || 'website',
+    businessLine,
+    projectType,
+    qualification: wildQualification,
     quoteId,
     packageId,
     customer: {
@@ -504,6 +635,49 @@ export default async (req: Request, context: Context) => {
       barStyle: cleanText(payload.inquiry?.barStyle, 160),
       venueTour: cleanText(payload.inquiry?.venueTour, 160),
     },
+    wildOnes: businessLine === 'wild-ones' ? {
+      eventConcept: cleanText(wildPayload.eventConcept, 5000),
+      preferredDate: cleanText(wildPayload.preferredDate || payload.customer?.eventDate, 40),
+      backupDate: cleanText(wildPayload.backupDate, 40),
+      dateFlexibility: cleanText(wildPayload.dateFlexibility, 120),
+      startTime: cleanText(wildPayload.startTime, 40),
+      endTime: cleanText(wildPayload.endTime, 40),
+      eventAccess: cleanText(wildPayload.eventAccess, 120),
+      stagePlan: cleanText(wildPayload.stagePlan, 160),
+      audioPlan: cleanText(wildPayload.audioPlan, 160),
+      lightingPlan: cleanText(wildPayload.lightingPlan, 160),
+      powerProfile: cleanText(wildPayload.powerProfile, 160),
+      fohRequirements: cleanText(wildPayload.fohRequirements, 160),
+      largestProductionVehicle: cleanText(wildPayload.largestProductionVehicle, 160),
+      specialElements: cleanStringList(wildPayload.specialElements, 20, 120),
+      productionRiderUrl: cleanText(wildPayload.productionRiderUrl, 1000),
+      vendorCount: Math.round(cleanNumber(wildPayload.vendorCount, 0, 200)),
+      eventStaffCount: Math.round(cleanNumber(wildPayload.eventStaffCount, 0, 500)),
+      artistCount: Math.round(cleanNumber(wildPayload.artistCount, 0, 500)),
+      productionCrewCount: Math.round(cleanNumber(wildPayload.productionCrewCount, 0, 500)),
+      beverageService: cleanText(wildPayload.beverageService, 160),
+      securityPlan: cleanText(wildPayload.securityPlan, 160),
+      parkingPlan: cleanText(wildPayload.parkingPlan, 160),
+      insuranceReadiness: cleanText(wildPayload.insuranceReadiness, 160),
+      loadInTime: cleanText(wildPayload.loadInTime, 80),
+      loadOutTime: cleanText(wildPayload.loadOutTime, 80),
+      overnightUse: cleanText(wildPayload.overnightUse, 160),
+      operationsNotes: cleanText(wildPayload.operationsNotes, 5000),
+      eventBudget: cleanText(wildPayload.eventBudget || payload.inquiry?.budget, 160),
+      planningStage: cleanText(wildPayload.planningStage, 160),
+      organizerExperience: cleanText(wildPayload.organizerExperience, 160),
+      decisionTiming: cleanText(wildPayload.decisionTiming, 160),
+      role: cleanText(wildPayload.role, 160),
+      website: cleanText(wildPayload.website, 500),
+      utmSource: cleanText(wildPayload.utmSource, 200),
+      utmMedium: cleanText(wildPayload.utmMedium, 200),
+      utmCampaign: cleanText(wildPayload.utmCampaign, 200),
+      utmContent: cleanText(wildPayload.utmContent, 200),
+      siteTourStatus: 'not_requested',
+      proposalStatus: 'not_started',
+      contractStatus: 'not_started',
+      depositStatus: 'not_due',
+    } : null,
   };
 
   const notificationConfigured = Boolean(String(Netlify.env.get('RESEND_API_KEY') || '').trim());
