@@ -311,11 +311,82 @@ const allCategories = [...categories, 'Legacy Archive'];
       });
     }
 
+    function galleryKeys(grid) {
+      return [...grid.querySelectorAll('[data-gallery-key]')].map((el) => el.dataset.galleryKey);
+    }
+
+    function restoreGalleryOrder(grid, keys) {
+      const cards = new Map([...grid.querySelectorAll('[data-gallery-key]')].map((el) => [el.dataset.galleryKey, el]));
+      keys.forEach((key) => {
+        const card = cards.get(key);
+        if (card) grid.append(card);
+      });
+    }
+
+    function setOrderStatus(status, message, tone = 'idle') {
+      if (!status) return;
+      status.textContent = message;
+      status.className = 'mt-1 text-xs font-black uppercase tracking-[.08em] ' + (
+        tone === 'saving' ? 'text-[var(--koa-clay)]' :
+        tone === 'success' ? 'text-[var(--koa-forest)]' :
+        tone === 'error' ? 'text-red-700' :
+        'text-[var(--koa-ink)]/40'
+      );
+    }
+
+    function autoScrollForPointer(clientY) {
+      const edge = 88;
+      const step = 16;
+      if (clientY < edge) window.scrollBy(0, -step);
+      else if (clientY > window.innerHeight - edge) window.scrollBy(0, step);
+    }
+
+    function reorderAtPointer(grid, dragging, clientX, clientY) {
+      const hit = document.elementFromPoint(clientX, clientY);
+      const target = hit?.closest?.('[data-gallery-key]');
+      if (!target || target === dragging || target.parentElement !== grid) return false;
+
+      const rect = target.getBoundingClientRect();
+      const columns = getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length;
+      const before = columns > 1
+        ? clientX < rect.left + rect.width / 2
+        : clientY < rect.top + rect.height / 2;
+      const reference = before ? target : target.nextSibling;
+      if (reference === dragging || (!before && target.nextSibling === dragging)) return false;
+      grid.insertBefore(dragging, reference);
+      return true;
+    }
+
+    async function saveGalleryOrder(grid, category, originalKeys, status) {
+      const keys = galleryKeys(grid);
+      if (keys.join('|') === originalKeys.join('|')) {
+        setOrderStatus(status, 'Order unchanged');
+        return;
+      }
+
+      grid.dataset.orderSaving = 'true';
+      setOrderStatus(status, 'Saving order…', 'saving');
+      try {
+        await post({ action:'reorder', category, keys });
+        state.categoryOrder[category] = keys;
+        setOrderStatus(status, 'Order saved', 'success');
+        window.setTimeout(() => {
+          if (status?.textContent === 'Order saved') setOrderStatus(status, 'Ready to reorder');
+        }, 2400);
+      } catch (error) {
+        restoreGalleryOrder(grid, originalKeys);
+        setOrderStatus(status, 'Save failed — order restored', 'error');
+        console.error('Gallery reorder failed', error);
+      } finally {
+        delete grid.dataset.orderSaving;
+      }
+    }
+
     function makeCard(item) {
       const key = itemKey(item);
       const article = document.createElement('article');
       article.dataset.galleryKey = key;
-      article.draggable = true;
+      article.draggable = false;
       article.className = 'group overflow-hidden rounded-[1.2rem] border border-[var(--koa-line)] bg-white shadow-sm transition ' + (item.hidden ? 'opacity-55' : '');
 
       const imageWrap = document.createElement('div');
@@ -330,9 +401,11 @@ const allCategories = [...categories, 'Legacy Archive'];
 
       const dragHandle = document.createElement('button');
       dragHandle.type = 'button';
-      dragHandle.className = 'absolute left-3 top-3 cursor-grab rounded-full bg-black/65 px-3 py-2 text-[.62rem] font-black uppercase tracking-[.1em] text-white active:cursor-grabbing';
+      dragHandle.className = 'absolute left-3 top-3 cursor-grab touch-none select-none rounded-full bg-black/65 px-3 py-2 text-[.62rem] font-black uppercase tracking-[.1em] text-white active:cursor-grabbing';
       dragHandle.textContent = '↕ Order';
       dragHandle.title = 'Drag this card to reorder';
+      dragHandle.setAttribute('aria-label', 'Drag photo to change its gallery order');
+      dragHandle.style.touchAction = 'none';
 
       const checkboxLabel = document.createElement('label');
       checkboxLabel.className = 'absolute right-3 top-3 grid size-9 cursor-pointer place-items-center rounded-full bg-white/95 shadow';
@@ -425,22 +498,59 @@ const allCategories = [...categories, 'Legacy Archive'];
       body.append(alt, select, actions);
       article.append(imageWrap, body);
 
-      let allowDrag = false;
-      dragHandle.addEventListener('pointerdown', () => { allowDrag = true; });
-      dragHandle.addEventListener('pointerup', () => { setTimeout(() => { allowDrag = false; }, 0); });
-      article.addEventListener('dragstart', (event) => {
-        if (!allowDrag) {
-          event.preventDefault();
+      let dragSession = null;
+
+      dragHandle.addEventListener('pointerdown', (event) => {
+        if (event.isPrimary === false) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        const grid = article.parentElement;
+        if (!grid || grid.dataset.orderSaving === 'true') return;
+
+        event.preventDefault();
+        const section = grid.closest('section');
+        const status = section?.querySelector('[data-order-status]');
+        dragSession = {
+          pointerId: event.pointerId,
+          grid,
+          category: grid.dataset.adminCategory,
+          originalKeys: galleryKeys(grid),
+          status,
+          moved: false,
+        };
+
+        dragHandle.setPointerCapture(event.pointerId);
+        article.style.pointerEvents = 'none';
+        article.classList.add('opacity-70', 'scale-[.98]', 'ring-2', 'ring-[var(--koa-clay)]');
+        setOrderStatus(status, 'Reordering…', 'saving');
+      });
+
+      dragHandle.addEventListener('pointermove', (event) => {
+        if (!dragSession || event.pointerId !== dragSession.pointerId) return;
+        event.preventDefault();
+        autoScrollForPointer(event.clientY);
+        if (reorderAtPointer(dragSession.grid, article, event.clientX, event.clientY)) dragSession.moved = true;
+      });
+
+      const finishPointerDrag = async (event, cancelled = false) => {
+        if (!dragSession || event.pointerId !== dragSession.pointerId) return;
+        const session = dragSession;
+        dragSession = null;
+
+        article.style.pointerEvents = '';
+        article.classList.remove('opacity-70', 'scale-[.98]', 'ring-2', 'ring-[var(--koa-clay)]');
+        if (dragHandle.hasPointerCapture(event.pointerId)) dragHandle.releasePointerCapture(event.pointerId);
+
+        if (cancelled) {
+          restoreGalleryOrder(session.grid, session.originalKeys);
+          setOrderStatus(session.status, 'Reorder cancelled');
           return;
         }
-        event.dataTransfer.effectAllowed = 'move';
-        event.dataTransfer.setData('text/plain', key);
-        article.classList.add('opacity-40');
-      });
-      article.addEventListener('dragend', () => {
-        allowDrag = false;
-        article.classList.remove('opacity-40');
-      });
+
+        await saveGalleryOrder(session.grid, session.category, session.originalKeys, session.status);
+      };
+
+      dragHandle.addEventListener('pointerup', (event) => { void finishPointerDrag(event); });
+      dragHandle.addEventListener('pointercancel', (event) => { void finishPointerDrag(event, true); });
 
       return article;
     }
@@ -456,36 +566,24 @@ const allCategories = [...categories, 'Legacy Archive'];
         header.className = 'mb-4 flex flex-wrap items-end justify-between gap-3';
         const copy = document.createElement('div');
         copy.innerHTML = '<p class="eyebrow text-[var(--koa-clay)]">' + category + '</p><h2 class="display mt-2 text-3xl">' + items.length + (items.length === 1 ? ' photo' : ' photos') + '</h2>';
+        const meta = document.createElement('div');
+        meta.className = 'text-left sm:text-right';
         const note = document.createElement('p');
         note.className = 'text-xs font-semibold text-[var(--koa-ink)]/45';
         note.textContent = category === 'Legacy Archive' ? 'Archive items can be moved into a public category.' : 'Drag by ↕ Order to control public sequence.';
-        header.append(copy, note);
+        const orderStatus = document.createElement('p');
+        orderStatus.dataset.orderStatus = '';
+        orderStatus.setAttribute('role', 'status');
+        orderStatus.setAttribute('aria-live', 'polite');
+        setOrderStatus(orderStatus, 'Ready to reorder');
+        meta.append(note, orderStatus);
+        header.append(copy, meta);
 
         const grid = document.createElement('div');
         grid.dataset.adminCategory = category;
         grid.className = 'grid min-h-24 gap-4 rounded-[1rem] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4';
 
         items.forEach((item) => grid.append(makeCard(item)));
-
-        grid.addEventListener('dragover', (event) => {
-          event.preventDefault();
-          event.dataTransfer.dropEffect = 'move';
-          const draggingKey = event.dataTransfer.getData('text/plain');
-          const dragging = grid.querySelector('[data-gallery-key="' + CSS.escape(draggingKey) + '"]');
-          if (!dragging) return;
-          const target = event.target.closest('[data-gallery-key]');
-          if (!target || target === dragging || target.parentElement !== grid) return;
-          const rect = target.getBoundingClientRect();
-          const before = event.clientY < rect.top + rect.height / 2;
-          grid.insertBefore(dragging, before ? target : target.nextSibling);
-        });
-
-        grid.addEventListener('drop', async (event) => {
-          event.preventDefault();
-          const keys = [...grid.querySelectorAll('[data-gallery-key]')].map((el) => el.dataset.galleryKey);
-          await post({ action:'reorder', category, keys });
-          state.categoryOrder[category] = keys;
-        });
 
         section.append(header, grid);
         boards.append(section);
