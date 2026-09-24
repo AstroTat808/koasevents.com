@@ -55,6 +55,7 @@ type ActualEvent = {
   eventDate: string;
   packageId: string;
   revenue: number;
+  packagePrice: number;
   guestCount: number;
   addOns: EventAddOn[];
   crmRecordId: string;
@@ -246,6 +247,7 @@ function normalizeEvent(input: any, existing?: ActualEvent, preserveUpdatedAt = 
     eventDate:/^\d{4}-\d{2}-\d{2}$/.test(eventDate) ? eventDate : '',
     packageId:normalizeWeddingPackage(input?.packageId),
     revenue:money(input?.revenue),
+    packagePrice:money(input?.packagePrice),
     guestCount:Math.round(finite(input?.guestCount,0,500)),
     addOns:normalizeEventAddOns(input?.addOns),
     crmRecordId:clean(input?.crmRecordId,100),
@@ -291,6 +293,17 @@ function revenueForRecord(record:SalesRecord) {
   );
 }
 
+function packagePriceForRecord(record:SalesRecord) {
+  const lines = Array.isArray(record.proposal?.lineItems) ? record.proposal!.lineItems! : [];
+  const collection = lines.find((line:any) => clean(line?.id || line?.catalogItemId,80) === 'collection');
+  return money(
+    collection?.amount ??
+    collection?.unitPrice ??
+    record.quote?.state?.basePackagePrice ??
+    0,
+  );
+}
+
 function addOnsForRecord(record:SalesRecord) {
   const lines = Array.isArray(record.proposal?.lineItems) ? record.proposal!.lineItems! : [];
   return normalizeEventAddOns(lines.filter((line:any) => {
@@ -314,6 +327,7 @@ function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent): ActualEv
     eventDate:clean(record.customer?.eventDate,20),
     packageId,
     revenue:revenueForRecord(record),
+    packagePrice:packagePriceForRecord(record),
     guestCount:guestCountForRecord(record),
     addOns:addOnsForRecord(record),
     crmRecordId:clean(record.id,100),
@@ -598,6 +612,7 @@ export default async (req:Request,context:Context) => {
       event.eventDate = existing.eventDate;
       event.packageId = existing.packageId;
       event.revenue = existing.revenue;
+      event.packagePrice = existing.packagePrice;
       event.guestCount = existing.guestCount;
       event.addOns = existing.addOns;
     }
