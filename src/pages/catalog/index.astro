@@ -121,7 +121,10 @@ const badgeClass = {
           </div>
           <div class="max-w-xl lg:justify-self-end">
             <label class="grid gap-2 text-sm font-semibold">
-              Total guest count
+              <span class="flex flex-wrap items-center justify-between gap-2">
+                <span>Total guest count</span>
+                <span class="rounded-full border border-[var(--koa-forest)]/20 bg-white px-3 py-1.5 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Venue max: {businessRules.venue.maximumOccupancy.value} persons</span>
+              </span>
               <input data-builder-guests type="number" min="1" max="100" value="50" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-lg" />
             </label>
             <p class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58">We use this to suggest quantities for guest-based rentals. For 60-inch rounds, the comfortable planning default is 8 guests per table; 10 is the maximum and leaves much less room.</p>
@@ -149,7 +152,7 @@ const badgeClass = {
               <span class:list={['mt-4 block text-sm leading-6', item.featured ? 'text-white/72' : 'text-[var(--koa-ink)]/58']}>{item.description}</span>
               {packageRuleById[item.id] && (
                 <>
-                  <PackageCapacityComparison furnitureCoverage={packageRuleById[item.id]?.includedFurnitureCoverage || 'See package details'} compact dark={Boolean(item.featured)} />
+                  <PackageCapacityComparison furnitureCoverage={packageRuleById[item.id]?.includedFurnitureCoverage || 'See package details'} compact dark={Boolean(item.featured)} showVenueCapacity={false} />
                   <span class:list={['mt-4 block text-xs leading-5', item.featured ? 'text-white/68' : 'text-[var(--koa-ink)]/55']}>
                     <strong class={item.featured ? 'text-[var(--koa-amber-light)]' : 'text-[var(--koa-forest)]'}>Included furniture / inventory:</strong> {packageRuleById[item.id]?.includedInventory}
                   </span>
