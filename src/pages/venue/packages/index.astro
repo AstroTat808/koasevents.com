@@ -9,151 +9,25 @@ import { koaMarketingMedia } from '../../../data/media';
 
 const packages = businessRules.venueWeddingPackages;
 const hero = koaMarketingMedia.ceremonyLiveSunset;
-
-const packageId = (name:string) => name.toLowerCase();
-const isRecommended = (name:string) => name === 'Hibiscus';
-const includesText = (p:any, terms:string[]) =>
-  p.includes.some((item:string) => terms.some((term) => item.toLowerCase().includes(term.toLowerCase())));
 ---
-<BaseLayout title="Big Island Wedding Venue Packages | Koa’s Events" description="Compare Koa’s Big Island wedding packages for intimate weekday weddings, full wedding days, relaxed wedding weekends and the premium Signature Wedding Experience." canonical="https://koasevents.com/venue/packages/">
+<BaseLayout title="Big Island Wedding Venue Packages | Koa’s Events" description="Compare Koa’s Big Island wedding venue packages, starting prices, access and included inventory for celebrations in Mountain View, East Hawaiʻi." canonical="https://koasevents.com/venue/packages/">
 <main>
-  <section class="relative min-h-[68svh] overflow-hidden bg-[var(--koa-ink)] text-white">
-    <ResponsiveImage {...hero} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover opacity-90" priority />
-    <div class="hero-shade absolute inset-0"></div>
-    <Header/>
-    <div class="container-shell relative z-10 flex min-h-[68svh] items-end pb-16 pt-40">
-      <div class="max-w-4xl">
-        <p class="eyebrow text-white/60">Big Island wedding packages · Mountain View</p>
-        <h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Choose the amount of time, support and celebration you want.</h1>
-        <p class="mt-7 max-w-2xl text-base leading-7 text-white/80">Start with an intimate weekday wedding, a complete wedding day, a relaxed weekend, or our most inclusive Signature experience. Each collection has a defined included guest setup so you can compare real value before requesting a proposal.</p>
-      </div>
-    </div>
-  </section>
+<section class="relative min-h-[68svh] overflow-hidden bg-[var(--koa-ink)] text-white"><ResponsiveImage {...hero} width={1900} height={1250} sizes="100vw" class="absolute inset-0 h-full w-full object-cover opacity-90" priority /><div class="hero-shade absolute inset-0"></div><Header/><div class="container-shell relative z-10 flex min-h-[68svh] items-end pb-16 pt-40"><div class="max-w-4xl"><p class="eyebrow text-white/60">Big Island wedding packages · Mountain View</p><h1 class="display mt-5 text-6xl leading-[.94] sm:text-7xl">Wedding venue packages with clear starting prices and room to personalize.</h1><p class="mt-7 max-w-2xl text-base leading-7 text-white/80">The venue maximum is {businessRules.venue.maximumOccupancy.value} persons. Each package includes a different base level of access, furniture and services; added rentals can expand a configuration up to that venue maximum.</p></div></div></section>
 
-  <section class="bg-[var(--koa-sand)] py-16 lg:py-20">
-    <div class="container-shell grid gap-8 lg:grid-cols-[.72fr_1.28fr] lg:items-center lg:gap-20">
-      <div>
-        <p class="eyebrow text-[var(--koa-clay)]">Four clear starting points</p>
-        <h2 class="display mt-4 text-4xl leading-[1] sm:text-5xl">Pick the experience first. Personalize the details second.</h2>
-      </div>
-      <div>
-        <p class="text-sm leading-7 text-[var(--koa-ink)]/64">Koa’s specializes in intimate weddings where the property feels private and the day does not become a production line. The packages below intentionally step up through time, guest setup, lodging, coordination and premium services rather than making couples decode a long rental list.</p>
-        <div class="mt-6 flex flex-wrap gap-5">
-          <a href="/weddings/" class="link-arrow text-[var(--koa-forest)]">Explore the wedding venue →</a>
-          <a href="/wedding-inquiry/" class="link-arrow text-[var(--koa-forest)]">Check your date →</a>
-        </div>
-      </div>
-    </div>
-  </section>
+<section class="bg-[var(--koa-sand)] py-16 lg:py-20">
+  <div class="container-shell grid gap-8 lg:grid-cols-[.72fr_1.28fr] lg:items-center lg:gap-20">
+    <div><p class="eyebrow text-[var(--koa-clay)]">What couples are comparing</p><h2 class="display mt-4 text-4xl leading-[1] sm:text-5xl">Compare the starting point, then build the wedding around your priorities.</h2></div>
+    <div><p class="text-sm leading-7 text-[var(--koa-ink)]/64">Couples searching for Big Island wedding packages often need three answers first: the starting price, how much access time is included, and what furniture or services come with the package. The four collections below make those differences visible before you request a proposal.</p><div class="mt-6 flex flex-wrap gap-5"><a href="/weddings/" class="link-arrow text-[var(--koa-forest)]">Explore the wedding venue →</a><a href="/east-hawaii-wedding-venue/" class="link-arrow text-[var(--koa-forest)]">East Hawaiʻi venue guide →</a></div></div>
+  </div>
+</section>
 
-  <section class="py-20 lg:py-28">
-    <div class="container-shell">
-      <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {packages.map((p,i)=>
-          <a href={'#'+packageId(p.name)} class:list={[
-            'card-lift relative rounded-[1.5rem] border bg-white p-6',
-            isRecommended(p.name) ? 'border-[var(--koa-clay)] ring-2 ring-[var(--koa-clay)]/15' : 'border-[var(--koa-line)]'
-          ]}>
-            {isRecommended(p.name) && <span class="absolute right-5 top-5 rounded-full bg-[var(--koa-clay)] px-3 py-1.5 text-[.56rem] font-black uppercase tracking-[.12em] text-white">Recommended</span>}
-            <span class="eyebrow text-[var(--koa-clay)]">0{i+1}</span>
-            <p class="mt-7 text-xs font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{p.position}</p>
-            <h2 class="display mt-2 text-4xl">{p.publicName}</h2>
-            <p class="mt-2 text-sm font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">From {'$'+p.price.toLocaleString()}</p>
-            <p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62">{p.salesDescription}</p>
-            <div class="mt-5 rounded-xl bg-[var(--koa-sand)]/55 p-4">
-              <p class="text-[.55rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Best for</p>
-              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/68">{p.customerFit}</p>
-            </div>
-            <PackageCapacityComparison furnitureCoverage={p.includedFurnitureCoverage} compact />
-          </a>
-        )}
-      </div>
-    </div>
-  </section>
+<section class="py-20 lg:py-28"><div class="container-shell"><div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{packages.map((p,i)=><a href={'#'+p.name.toLowerCase()} class="card-lift rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-6"><span class="eyebrow text-[var(--koa-clay)]">0{i+1}</span><p class="mt-7 text-xs font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{p.position}</p><h2 class="display mt-2 text-4xl">{p.publicName}</h2><p class="mt-2 text-sm font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">From {'$'+p.price.toLocaleString()}</p><p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62">{p.access}</p><PackageCapacityComparison furnitureCoverage={p.includedFurnitureCoverage} compact /></a>)}</div></div></section>
 
-  <section class="bg-[var(--koa-forest)] py-20 text-white lg:py-24">
-    <div class="container-shell">
-      <div class="max-w-3xl">
-        <p class="eyebrow text-[var(--koa-amber-light)]">Compare at a glance</p>
-        <h2 class="display mt-4 text-5xl leading-[1] sm:text-6xl">What changes as you move up the collections.</h2>
-      </div>
-      <div class="mt-10 overflow-x-auto rounded-[1.4rem] border border-white/15">
-        <table class="min-w-[980px] w-full border-collapse text-left">
-          <thead>
-            <tr class="bg-black/15">
-              <th class="p-4 text-[.6rem] font-black uppercase tracking-[.1em] text-white/55">Collection</th>
-              {packages.map((p)=><th class:list={['p-4 align-top',isRecommended(p.name)&&'bg-white/[.07]']}><span class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-amber-light)]">{p.salesLabel}</span><strong class="display mt-1 block text-2xl text-white">{p.publicName}</strong><span class="mt-1 block text-xs text-white/55">From {'$'+p.price.toLocaleString()}</span></th>)}
-            </tr>
-          </thead>
-          <tbody class="[&_tr]:border-t [&_tr]:border-white/12 [&_td]:p-4 [&_td]:text-sm [&_td]:leading-6 [&_td]:text-white/72">
-            <tr><td class="font-bold text-white">Included guest setup</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{p.includedFurnitureCoverage}</td>)}</tr>
-            <tr><td class="font-bold text-white">Access</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{p.access}</td>)}</tr>
-            <tr><td class="font-bold text-white">Cottage</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{includesText(p,['cottage']) ? 'Included' : 'Not included'}</td>)}</tr>
-            <tr><td class="font-bold text-white">Coordination</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{p.name==='Gardenia'?'Venue liaison':p.name==='Orchid'?'Venue + vendor':p.name==='Hibiscus'?'Day-of support':'Premium day-of support'}</td>)}</tr>
-            <tr><td class="font-bold text-white">Mobile Bar</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{includesText(p,['mobile bar']) ? 'Included · defined service window' : 'Optional add-on'}</td>)}</tr>
-            <tr><td class="font-bold text-white">Photo booth</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{includesText(p,['photo booth']) ? 'Included · up to 4 hours' : 'Optional add-on'}</td>)}</tr>
-            <tr><td class="font-bold text-white">Design extras</td>{packages.map((p)=><td class:list={[isRecommended(p.name)&&'bg-white/[.05]']}>{p.name==='Plumeria'?'Floral + cake allowances, upgraded settings + lighting':p.name==='Hibiscus'?'Décor closet access + arch foundation':p.name==='Orchid'?'Arch + standard lighting': 'Simple bouquet, cake + toast'}</td>)}</tr>
-          </tbody>
-        </table>
-      </div>
-      <p class="mt-5 text-xs leading-5 text-white/48">“Recommended” is Koa’s current merchandising recommendation for the most balanced weekend package. It is not presented as a historical booking-popularity claim.</p>
-    </div>
-  </section>
+{packages.map((p,index)=>(
+<section id={p.name.toLowerCase()} class:list={['py-24 lg:py-32', index % 2 === 0 ? 'bg-[var(--koa-sand)]' : 'bg-[var(--koa-ivory)]']}>
+<div class="container-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-24"><div><p class="eyebrow text-[var(--koa-clay)]">0{index+1} · {p.position}</p><h2 class="display mt-5 text-6xl leading-[.95]">{p.publicName}</h2><p class="mt-3 text-sm font-black uppercase tracking-[.13em] text-[var(--koa-forest)]">Starting at {'$'+p.price.toLocaleString()}</p><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">{p.baseConfiguration}</p><PackageCapacityComparison furnitureCoverage={p.includedFurnitureCoverage} /><div class="mt-7 rounded-2xl border border-[var(--koa-line)] bg-white/60 p-5"><p class="eyebrow text-[var(--koa-clay)]">Access</p><p class="mt-2 text-sm leading-6">{p.access}</p><p class="eyebrow mt-5 text-[var(--koa-clay)]">Included furniture / inventory</p><p class="mt-2 text-sm leading-6">{p.includedInventory}</p></div></div><div><p class="eyebrow text-[var(--koa-clay)]">What’s included</p><ul class="mt-6 grid gap-3 sm:grid-cols-2">{p.includes.map(item=><li class="rounded-2xl border border-[var(--koa-line)] bg-white p-4 text-sm leading-6">{item}</li>)}</ul><div class="mt-8 grid gap-4 lg:grid-cols-2"><div class="rounded-2xl border border-[var(--koa-line)] bg-white/70 p-5"><p class="eyebrow text-[var(--koa-clay)]">Package limits</p><ul class="mt-4 grid gap-3">{p.limits.map(item=><li class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/68"><span class="text-[var(--koa-clay)]">—</span><span>{item}</span></li>)}</ul></div><div class="rounded-2xl border border-[var(--koa-line)] bg-white/70 p-5"><p class="eyebrow text-[var(--koa-clay)]">Available upgrades</p><ul class="mt-4 grid gap-3">{p.addOnRules.map(item=><li class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/68"><span class="text-[var(--koa-clay)]">—</span><span>{item}</span></li>)}</ul></div></div><p class="mt-6 text-sm leading-6 text-[var(--koa-ink)]/60">Final availability, quantities, vendor-provided items, service hours and upgrades are confirmed in the event proposal/agreement.</p><a href={'/inquire/?service=venue&package='+p.name.toLowerCase()} class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Ask about {p.publicName}</a></div></div>
+</section>
+))}
 
-  {packages.map((p,index)=>(
-    <section id={packageId(p.name)} class:list={['py-24 lg:py-32', index % 2 === 0 ? 'bg-[var(--koa-sand)]' : 'bg-[var(--koa-ivory)]']}>
-      <div class="container-shell grid gap-12 lg:grid-cols-[.8fr_1.2fr] lg:gap-24">
-        <div>
-          <div class="flex flex-wrap items-center gap-3">
-            <p class="eyebrow text-[var(--koa-clay)]">0{index+1} · {p.position}</p>
-            {isRecommended(p.name) && <span class="rounded-full bg-[var(--koa-clay)] px-3 py-1.5 text-[.56rem] font-black uppercase tracking-[.1em] text-white">Recommended</span>}
-          </div>
-          <h2 class="display mt-5 text-6xl leading-[.95]">{p.publicName}</h2>
-          <p class="mt-3 text-sm font-black uppercase tracking-[.13em] text-[var(--koa-forest)]">Starting at {'$'+p.price.toLocaleString()}</p>
-          <p class="mt-6 text-lg leading-8 text-[var(--koa-ink)]/72">{p.salesDescription}</p>
-          <p class="mt-4 text-sm leading-7 text-[var(--koa-ink)]/58">{p.customerFit}</p>
-          <PackageCapacityComparison furnitureCoverage={p.includedFurnitureCoverage} />
-          <div class="mt-7 rounded-2xl border border-[var(--koa-line)] bg-white/60 p-5">
-            <p class="eyebrow text-[var(--koa-clay)]">Access</p>
-            <p class="mt-2 text-sm leading-6">{p.access}</p>
-            <p class="eyebrow mt-5 text-[var(--koa-clay)]">Included furniture / inventory</p>
-            <p class="mt-2 text-sm leading-6">{p.includedInventory}</p>
-          </div>
-        </div>
-
-        <div>
-          <p class="eyebrow text-[var(--koa-clay)]">What’s included</p>
-          <ul class="mt-6 grid gap-3 sm:grid-cols-2">
-            {p.includes.map((item)=><li class="rounded-2xl border border-[var(--koa-line)] bg-white p-4 text-sm leading-6">{item}</li>)}
-          </ul>
-
-          <div class="mt-8 grid gap-4 lg:grid-cols-2">
-            <div class="rounded-2xl border border-[var(--koa-line)] bg-white/70 p-5">
-              <p class="eyebrow text-[var(--koa-clay)]">Package limits</p>
-              <ul class="mt-4 grid gap-3">{p.limits.map((item)=><li class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/68"><span class="text-[var(--koa-clay)]">—</span><span>{item}</span></li>)}</ul>
-            </div>
-            <div class="rounded-2xl border border-[var(--koa-line)] bg-white/70 p-5">
-              <p class="eyebrow text-[var(--koa-clay)]">Available upgrades</p>
-              <ul class="mt-4 grid gap-3">{p.addOnRules.map((item)=><li class="flex gap-3 text-sm leading-6 text-[var(--koa-ink)]/68"><span class="text-[var(--koa-clay)]">—</span><span>{item}</span></li>)}</ul>
-            </div>
-          </div>
-
-          <p class="mt-6 text-sm leading-6 text-[var(--koa-ink)]/60">Final availability, quantities, vendor-provided items, service hours and upgrades are confirmed in the event proposal/agreement.</p>
-          <a href={'/wedding-inquiry/?package='+packageId(p.name)} class="mt-8 inline-flex rounded-full bg-[var(--koa-forest)] px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-white">Ask about {p.publicName}</a>
-        </div>
-      </div>
-    </section>
-  ))}
-
-  <section class="bg-[var(--koa-ink)] py-20 text-white">
-    <div class="container-shell grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-      <div>
-        <p class="eyebrow text-white/45">Not seeing your exact combination?</p>
-        <h2 class="display mt-4 max-w-3xl text-5xl leading-[1] sm:text-6xl">Build a custom event around the pieces you actually need.</h2>
-      </div>
-      <a href="/wedding-inquiry/" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request a custom quote</a>
-    </div>
-  </section>
-</main>
-<Footer/>
-</BaseLayout>
+<section class="bg-[var(--koa-ink)] py-20 text-white"><div class="container-shell grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end"><div><p class="eyebrow text-white/45">Not seeing your exact combination?</p><h2 class="display mt-4 max-w-3xl text-5xl leading-[1] sm:text-6xl">Build a custom event around the pieces you actually need.</h2></div><a href="/inquire/?service=venue" class="rounded-full bg-white px-6 py-3.5 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-ink)]">Request a custom quote</a></div></section>
+</main><Footer/></BaseLayout>
