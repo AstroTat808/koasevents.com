@@ -5,6 +5,7 @@ import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsF
 import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
 import { appendStaffAudit } from './_shared/staff-audit';
 import { getQuickBooksDepositSettings, type QuickBooksDepositSettings } from './_shared/quickbooks';
+import { readPublishedAddOnPricing } from './_shared/wedding-pricing';
 
 type QuoteItem = {
   id: string;
@@ -898,7 +899,7 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
   return [{ label:'Reservation deposit', dueDate:'', amount:depositAmount }, ...milestones];
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '') {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>()) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
@@ -917,15 +918,19 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   }
 
   (state.selected || []).forEach((item) => {
-    const amount = finite(item.estimatedLineTotal);
+    const id = cleanText(item.id, 80);
     const quantity = Math.max(1, Math.round(finite(item.quantity, 1, 500)));
+    const approvedPrice = finite(publishedPrices.get(id));
+    const savedAmount = finite(item.estimatedLineTotal);
+    const amount = approvedPrice > 0 ? roundMoney(approvedPrice * quantity) : savedAmount;
     lines.push({
-      id: cleanText(item.id, 80),
+      id,
       description: cleanText(item.name, 180),
       quantity,
-      unitPrice: amount > 0 ? amount / quantity : 0,
+      unitPrice: approvedPrice > 0 ? approvedPrice : amount > 0 ? amount / quantity : 0,
       amount,
       custom: amount <= 0,
+      catalogItemId: id || undefined,
     });
   });
 
@@ -933,8 +938,10 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     lines.length = 0;
     inquiryLines.slice(0, 50).forEach((item: any, index: number) => {
       const quantity = Math.max(1, Math.round(finite(item?.quantity, 1, 2000)));
-      const unitPrice = finite(item?.unitPrice);
-      const amount = finite(item?.amount || quantity * unitPrice);
+      const sourceId = cleanText(item?.catalogItemId || item?.id, 80);
+      const approvedPrice = finite(publishedPrices.get(sourceId));
+      const unitPrice = approvedPrice > 0 ? approvedPrice : finite(item?.unitPrice);
+      const amount = approvedPrice > 0 ? roundMoney(quantity * approvedPrice) : finite(item?.amount || quantity * unitPrice);
       const description = cleanText(item?.description, 240);
       if (!description) return;
       lines.push({
@@ -944,7 +951,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
         unitPrice: amount > 0 ? unitPrice || amount / quantity : 0,
         amount,
         custom: Boolean(item?.custom) || amount <= 0,
-        catalogItemId: cleanText(item?.catalogItemId, 80) || undefined,
+        catalogItemId: sourceId || undefined,
         quickBooksItemId: cleanText(item?.quickBooksItemId, 80) || undefined,
         category: ['service','rental','mileage','fee'].includes(String(item?.category || '')) ? item.category : undefined,
         unitLabel: cleanText(item?.unitLabel, 40) || undefined,
@@ -1941,6 +1948,9 @@ export default async (req: Request, context: Context) => {
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
     const eventDate = cleanText(payload.customer?.eventDate, 40);
     const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, undefined, eventDate, now.slice(0,10)) : 10;
+    const publishedPricing = kind === 'proposal'
+      ? new Map((await readPublishedAddOnPricing(context)).map((row) => [row.catalogItemId, row.price]))
+      : new Map<string, number>();
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -1958,7 +1968,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10)) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -1996,6 +2006,9 @@ export default async (req: Request, context: Context) => {
     const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage || source.inquiry?.mobileBarPackage);
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
     const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, source.inquiry, source.customer?.eventDate || '', now.slice(0,10)) : 10;
+    const publishedPricing = kind === 'proposal'
+      ? new Map((await readPublishedAddOnPricing(context)).map((row) => [row.catalogItemId, row.price]))
+      : new Map<string, number>();
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
       kind,
@@ -2020,7 +2033,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined, now.slice(0,10)) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';
