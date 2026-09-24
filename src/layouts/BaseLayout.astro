@@ -304,7 +304,16 @@ const seoSchema = {
         const normalizeAssetPath = (value) => {
           if (!value) return '';
           try {
-            return new URL(value, window.location.origin).pathname;
+            const url = new URL(value, window.location.origin);
+
+            // ResponsiveImage is served through Netlify Image CDN. Decode the original
+            // asset so focal points still match even if data-koa-focal-src is absent.
+            if (url.pathname === '/.netlify/images') {
+              const original = url.searchParams.get('url');
+              if (original) return new URL(original, window.location.origin).pathname;
+            }
+
+            return url.pathname;
           } catch {
             return String(value).split('?')[0].split('#')[0];
           }
@@ -315,45 +324,59 @@ const seoSchema = {
           return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : fallback;
         };
 
+        const focalForImage = (img, focalMap) => {
+          const candidates = [
+            img.getAttribute('data-koa-focal-src'),
+            img.getAttribute('src'),
+            img.currentSrc,
+          ];
+
+          for (const candidate of candidates) {
+            const focal = focalMap.get(normalizeAssetPath(candidate));
+            if (focal) return focal;
+          }
+          return null;
+        };
+
         const applyFocalPoints = (root, focalMap) => {
           const scope = root?.querySelectorAll ? root : document;
           const images = [];
 
           if (root instanceof HTMLImageElement) images.push(root);
-          if (root instanceof Element && root.matches?.('[data-koa-focal-src]') && !(root instanceof HTMLImageElement)) {
-            const src = root.getAttribute('data-koa-focal-src');
-            const focal = focalMap.get(normalizeAssetPath(src));
-            if (focal && !root.hasAttribute('data-koa-focal-ignore')) {
-              root.style.backgroundPosition = focal.x + '% ' + focal.y + '%';
-            }
-          }
-
           scope.querySelectorAll('img[src], img[data-koa-focal-src]').forEach((img) => images.push(img));
 
           images.forEach((img) => {
             if (img.hasAttribute('data-koa-focal-ignore')) return;
-            const declared = img.getAttribute('data-koa-focal-src') || img.getAttribute('src') || img.currentSrc;
-            const focal = focalMap.get(normalizeAssetPath(declared));
+            const focal = focalForImage(img, focalMap);
             if (!focal) return;
+
+            // Inline object-position intentionally wins over utility classes such as
+            // object-top, so one crop adjustment is honored everywhere this asset appears.
             img.style.objectPosition = focal.x + '% ' + focal.y + '%';
             img.dataset.koaFocalApplied = 'true';
           });
 
-          scope.querySelectorAll('[data-koa-focal-src]:not(img)').forEach((element) => {
+          const backgroundElements = [];
+          if (root instanceof Element && root.matches?.('[data-koa-focal-src]:not(img)')) backgroundElements.push(root);
+          scope.querySelectorAll('[data-koa-focal-src]:not(img)').forEach((element) => backgroundElements.push(element));
+
+          backgroundElements.forEach((element) => {
             if (element.hasAttribute('data-koa-focal-ignore')) return;
             const focal = focalMap.get(normalizeAssetPath(element.getAttribute('data-koa-focal-src')));
             if (!focal) return;
             element.style.backgroundPosition = focal.x + '% ' + focal.y + '%';
+            element.dataset.koaFocalApplied = 'true';
           });
         };
 
-        fetch('/api/gallery')
+        fetch('/api/gallery', { cache: 'no-store', headers: { Accept: 'application/json' } })
           .then((response) => response.ok ? response.json() : null)
           .then((gallery) => {
-            if (!gallery?.curatedEdits) return;
+            if (!gallery) return;
 
             const focalMap = new Map();
-            Object.entries(gallery.curatedEdits).forEach(([src, edit]) => {
+
+            Object.entries(gallery.curatedEdits || {}).forEach(([src, edit]) => {
               if (!edit || (edit.focalX == null && edit.focalY == null)) return;
               focalMap.set(normalizeAssetPath(src), {
                 x: clamp(edit.focalX),
@@ -361,8 +384,17 @@ const seoSchema = {
               });
             });
 
+            (Array.isArray(gallery.uploads) ? gallery.uploads : []).forEach((item) => {
+              if (!item?.src || (item.focalX == null && item.focalY == null)) return;
+              focalMap.set(normalizeAssetPath(item.src), {
+                x: clamp(item.focalX),
+                y: clamp(item.focalY),
+              });
+            });
+
             if (!focalMap.size) return;
             window.__koaGalleryFocalPoints = focalMap;
+            window.__koaApplyGalleryFocalPoints = (root = document) => applyFocalPoints(root, focalMap);
             applyFocalPoints(document, focalMap);
 
             const observer = new MutationObserver((mutations) => {
@@ -381,7 +413,7 @@ const seoSchema = {
               childList: true,
               subtree: true,
               attributes: true,
-              attributeFilter: ['src', 'data-koa-focal-src'],
+              attributeFilter: ['src', 'srcset', 'data-koa-focal-src'],
             });
           })
           .catch(() => {});
