@@ -9,7 +9,6 @@ interface Props {
   priority?: boolean;
   fit?: 'cover' | 'contain' | 'fill';
   position?: 'center' | 'top' | 'bottom' | 'left' | 'right';
-  focalIgnore?: boolean;
   quality?: number;
 }
 
@@ -24,7 +23,6 @@ const {
   fit = 'cover',
   position = 'center',
   quality = 84,
-  focalIgnore = false,
 } = Astro.props;
 
 const transform = (targetWidth: number, targetHeight?: number, format = 'webp') => {
@@ -63,5 +61,4 @@ const fallbackSrc = transform(Math.min(width, 1800), Math.round(Math.min(width, 
   fetchpriority={priority ? 'high' : 'auto'}
   decoding="async"
   data-koa-focal-src={src}
-  data-koa-focal-ignore={focalIgnore ? '' : undefined}
 />
