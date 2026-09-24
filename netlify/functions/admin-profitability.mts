@@ -302,7 +302,7 @@ function addOnsForRecord(record:SalesRecord) {
 function isBookedWedding(record:SalesRecord) {
   const packageId = packageIdForRecord(record);
   const booked = record.stage === 'booked' || record.status === 'booked' || record.proposal?.status === 'booked';
-  return booked && isWeddingPackage(packageId);
+  return record.kind === 'proposal' && booked && isWeddingPackage(packageId);
 }
 
 function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent): ActualEvent {
@@ -424,6 +424,27 @@ async function writeState(context:Context,state:ProfitabilityState,actor:string)
   return next;
 }
 
+function rebalanceSchedule(rows:any[] | undefined,total:number,depositAmount:number) {
+  const input = Array.isArray(rows) ? rows : [];
+  if (!input.length) return input;
+  const first = { ...input[0], amount:depositAmount };
+  const remainingRows = input.slice(1);
+  if (!remainingRows.length) return [first];
+  const remaining = Math.max(0,money(total-depositAmount));
+  const weights = remainingRows.map(row=>Math.max(0,finite(row?.amount)));
+  const weightTotal = weights.reduce((sum,value)=>sum+value,0);
+  let allocated = 0;
+  const balanced = remainingRows.map((row,index)=>{
+    const last = index===remainingRows.length-1;
+    const amount = last
+      ? money(Math.max(0,remaining-allocated))
+      : money(weightTotal>0 ? remaining*(weights[index]/weightTotal) : remaining/remainingRows.length);
+    allocated = money(allocated+amount);
+    return { ...row, amount };
+  });
+  return [first,...balanced];
+}
+
 function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:number) {
   if (record.kind!=='proposal' || !record.proposal || record.proposal.status!=='draft' || record.stage==='booked') return false;
   const lines = Array.isArray(record.proposal.lineItems) ? record.proposal.lineItems : [];
@@ -455,6 +476,7 @@ function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:numbe
     taxAmount,
     total,
     depositAmount,
+    paymentSchedule:rebalanceSchedule(record.proposal.paymentSchedule,total,depositAmount),
   };
   record.updatedAt = new Date().toISOString();
   return true;
