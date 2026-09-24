@@ -88,6 +88,7 @@ const PAGE_CHECKS = [
   ['admin-home','Content Admin','/admin/','data-auth-panel'],
   ['business-crm','Business CRM','/admin/crm/','data-crm-watchdog'],
   ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
+  ['wedding-profitability','Wedding Profitability','/admin/profitability/','data-app'],
   ['event-ops','Event Ops','/admin/events/','data-app'],
   ['master-calendar','Master Calendar','/admin/calendar/','data-app'],
   ['blog-admin','Blog Admin','/admin/blog/','data-admin-ui'],
@@ -106,6 +107,7 @@ const API_CHECKS = [
   ['admin-session','Admin session API','/api/admin/session'],
   ['business-crm-api','Business CRM API','/api/admin/crm'],
   ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
+  ['wedding-profitability-api','Wedding Profitability API','/api/admin/profitability'],
   ['event-ops-api','Event Ops API','/api/admin/events'],
   ['calendar-api','Master Calendar API','/api/admin/calendar'],
   ['blog-api','Blog API','/api/blog?admin=1'],
@@ -132,8 +134,8 @@ export function healthComponents() {
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'business-crm','business-crm-startup','netlify-github-sync','sales-crm','event-ops','master-calendar','staff-home',
-    'admin-session','business-crm-api','sales-crm-api','event-ops-api','calendar-api',
+    'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
+    'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
   ]);
   return immediate.has(id)?1:2;
 }
