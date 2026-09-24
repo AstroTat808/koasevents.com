@@ -144,8 +144,23 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     </div>
   </main>
 
-  <script define:vars={{ costFields, packageMeta }}>
+  <script>
     import { getAdminSession } from '../../../lib/admin-session';
+
+    const costFields=[
+      ['laborSetup','Labor / setup'],
+      ['flowers','Flowers'],
+      ['cake','Cake'],
+      ['mobileBar','Mobile Bar'],
+      ['cleaning','Cleaning'],
+      ['cottage','Cottage'],
+      ['rentalsInventory','Rentals / inventory'],
+      ['coordination','Coordination'],
+      ['photoBooth','Photo booth'],
+      ['lightingAv','Lighting / AV'],
+      ['parkingStaffing','Parking / staffing'],
+      ['otherDirect','Other direct cost'],
+    ];
 
     const loading=document.querySelector('[data-loading]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -282,7 +297,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
           '<td class="px-3 py-3"><input data-addon-target type="number" min="5" max="90" step=".5" value="'+(Number(a.targetMargin||0)*100)+'" class="w-24 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
           '<td class="px-3 py-3"><strong data-addon-recommended class="text-[var(--koa-forest)]">'+(Number(a.directCost||0)>0?money(rec):'Enter cost')+'</strong><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">rounded to +Number(a.priceIncrement||1)+'</p></td>'+
           '<td class="px-3 py-3"><input data-addon-price type="number" min="0" step=".01" value="'+Number(a.sellPrice||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
-          '<td class="px-3 py-3"><strong data-addon-margin class="'+(actualMargin>=a.targetMargin?'text-emerald-700':'text-red-700')+'">'+(Number(a.directCost||0)>0?pct(actualMargin):'Cost needed')+'</strong></td>'+
+          '<td class="px-3 py-3"><strong data-addon-margin class="'+(Number(a.directCost||0)>0&&actualMargin>=a.targetMargin?'text-emerald-700':'text-red-700')+'">'+(Number(a.directCost||0)>0?pct(actualMargin):'Cost needed')+'</strong></td>'+
           '<td class="rounded-r-xl px-3 py-3"><p class="font-semibold">'+esc(a.unit)+'</p><p class="mt-1 max-w-sm text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(a.note)+'</p></td>';
         addonEl.appendChild(tr);
       });
@@ -304,7 +319,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
         root.querySelector('[data-addon-recommended]').textContent=a.directCost>0?money(rec):'Enter cost';
         const marginEl=root.querySelector('[data-addon-margin]');
         marginEl.textContent=a.directCost>0?pct(m):'Cost needed';
-        marginEl.className=m>=a.targetMargin?'text-emerald-700':'text-red-700';
+        marginEl.className=a.directCost>0&&m>=a.targetMargin?'text-emerald-700':'text-red-700';
       });
     }
 
