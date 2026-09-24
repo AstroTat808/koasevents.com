@@ -296,8 +296,18 @@ const mediaUsage = mediaUsageBySrc;
       const mapped = Array.isArray(mediaUsage?.[item.src]) ? mediaUsage[item.src] : [];
       if (mapped.length) return mapped;
       return item.kind === 'upload'
-        ? [{ href:'/gallery/', page:'Gallery', section:item.category || 'Uploaded photos' }]
+        ? [{
+            href:'/gallery/',
+            page:'Gallery',
+            section:item.category || 'Uploaded photos',
+            aspectRatio:'4 / 5',
+            aspectLabel:'Mobile gallery card',
+          }]
         : [];
+    }
+
+    function externalUsagesForItem(item) {
+      return usageForItem(item).filter((usage) => usage.href !== '/gallery/');
     }
 
     function renderUsagePreviews(item) {
@@ -324,10 +334,11 @@ const mediaUsage = mediaUsageBySrc;
         link.href = usage.href;
         link.target = '_blank';
         link.rel = 'noreferrer';
-        link.className = 'group overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] transition hover:-translate-y-0.5 hover:shadow-md';
+        link.className = 'group self-start overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] transition hover:-translate-y-0.5 hover:shadow-md';
 
         const frame = document.createElement('div');
-        frame.className = 'relative h-28 overflow-hidden bg-[var(--koa-sand)]';
+        frame.className = 'relative w-full overflow-hidden bg-[var(--koa-sand)]';
+        frame.style.aspectRatio = usage.aspectRatio || '4 / 3';
 
         const image = document.createElement('img');
         image.src = item.src;
@@ -337,11 +348,15 @@ const mediaUsage = mediaUsageBySrc;
         image.className = 'h-full w-full object-cover transition duration-200';
         image.style.objectPosition = (cropSession?.x ?? 50) + '% ' + (cropSession?.y ?? 50) + '%';
 
+        const ratioLabel = document.createElement('span');
+        ratioLabel.className = 'absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-white';
+        ratioLabel.textContent = String(usage.aspectRatio || '4 / 3').replaceAll(' ', '').replace('/', ':');
+
         const openLabel = document.createElement('span');
         openLabel.className = 'absolute right-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-white opacity-0 transition group-hover:opacity-100';
         openLabel.textContent = 'Open page';
 
-        frame.append(image, openLabel);
+        frame.append(image, ratioLabel, openLabel);
 
         const copy = document.createElement('div');
         copy.className = 'p-3';
@@ -351,7 +366,10 @@ const mediaUsage = mediaUsageBySrc;
         const section = document.createElement('span');
         section.className = 'mt-1 block text-[.68rem] leading-4 text-[var(--koa-ink)]/50';
         section.textContent = usage.section;
-        copy.append(page, section);
+        const shape = document.createElement('span');
+        shape.className = 'mt-1 block text-[.62rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        shape.textContent = usage.aspectLabel || String(usage.aspectRatio || '').replaceAll(' ', '').replace('/', ':');
+        copy.append(page, section, shape);
 
         link.append(frame, copy);
         usagePreviews.append(link);
@@ -599,6 +617,14 @@ const mediaUsage = mediaUsageBySrc;
       });
       checkboxLabel.append(checkbox);
 
+      const publicUsages = externalUsagesForItem(item);
+      const usageBadge = document.createElement('span');
+      usageBadge.className = 'absolute bottom-3 right-3 rounded-full border border-white/20 bg-[rgba(6,23,18,.78)] px-3 py-1.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white shadow backdrop-blur';
+      usageBadge.textContent = 'Used in ' + publicUsages.length + (publicUsages.length === 1 ? ' place' : ' places');
+      usageBadge.title = publicUsages.length
+        ? publicUsages.map((usage) => usage.page + ' · ' + usage.section).join('\n')
+        : 'Not reused outside the Gallery page';
+
       if (item.hidden) {
         const hiddenBadge = document.createElement('span');
         hiddenBadge.className = 'absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.1em] text-white';
@@ -607,7 +633,7 @@ const mediaUsage = mediaUsageBySrc;
       }
 
       imageWrap.prepend(img);
-      imageWrap.append(dragHandle, checkboxLabel);
+      imageWrap.append(dragHandle, checkboxLabel, usageBadge);
 
       const body = document.createElement('div');
       body.className = 'space-y-3 p-4';
