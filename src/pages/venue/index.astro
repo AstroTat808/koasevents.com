@@ -34,11 +34,25 @@ const packages = businessRules.venueWeddingPackages;
 
 <section class="koa-grain bg-[var(--koa-sand)] py-24 lg:py-32"><div class="container-shell">
   <div class="grid gap-8 lg:grid-cols-[.75fr_1.25fr] lg:items-end"><div><p class="eyebrow text-[var(--koa-clay)]">Wedding collections</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Different starting points, one venue maximum.</h2></div><p class="max-w-xl text-sm leading-7 text-[var(--koa-ink)]/62 lg:justify-self-end">Included furniture and services vary by package; the venue itself is approved for up to {businessRules.venue.maximumOccupancy.value} persons.</p></div>
-  <div class="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{packages.map((item,index)=><a href={'/venue/packages/#'+item.name.toLowerCase()} class:list={['card-lift relative rounded-[1.4rem] border bg-[var(--koa-ivory)] p-6',item.name==='Hibiscus'?'border-[var(--koa-clay)] ring-2 ring-[var(--koa-clay)]/15':'border-[var(--koa-line)]']}>{item.name==='Hibiscus'&&<span class="absolute right-5 top-5 rounded-full bg-[var(--koa-clay)] px-3 py-1.5 text-[.54rem] font-black uppercase tracking-[.1em] text-white">Recommended</span>}<span class="eyebrow text-[var(--koa-clay)]">0{index+1}</span><p class="mt-8 text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{item.position}</p><h3 class="display mt-2 text-4xl">{item.publicName}</h3><p class="mt-2 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">From {'
-</div></section>
-
-<section class="py-24 lg:py-32"><div class="container-shell grid gap-14 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-20"><div class="relative h-[23rem] overflow-hidden rounded-[1.6rem] sm:h-[29rem] lg:h-[36rem] lg:rounded-[2rem]"><ResponsiveImage {...koaMarketingMedia.pavilionSunsetEvent} width={1200} height={1100} sizes="(min-width:1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover" /></div><div><p class="eyebrow text-[var(--koa-clay)]">Plan with clarity</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Know the important rules before you fall in love with the date.</h2><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Insurance, vendor requirements, alcohol rules, setup timing and music cutoff are all part of the planning conversation. We surface them early because clarity makes better events.</p><div class="mt-8 flex flex-wrap gap-5"><a href="/venue/faq/" class="link-arrow">Venue FAQ →</a><a href="/inquire/?service=venue" class="link-arrow">Check availability →</a></div></div></div></section>
-</main><Footer/></BaseLayout>+item.price.toLocaleString()}</p><p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62">{item.salesDescription}</p><span class="link-arrow mt-7">Compare package →</span></a>)}</div>
+  <div class="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    {packages.map((item,index)=>
+      <a
+        href={'/venue/packages/#'+item.name.toLowerCase()}
+        class:list={[
+          'card-lift relative rounded-[1.4rem] border bg-[var(--koa-ivory)] p-6',
+          item.name==='Hibiscus' ? 'border-[var(--koa-clay)] ring-2 ring-[var(--koa-clay)]/15' : 'border-[var(--koa-line)]'
+        ]}
+      >
+        {item.name==='Hibiscus' && <span class="absolute right-5 top-5 rounded-full bg-[var(--koa-clay)] px-3 py-1.5 text-[.54rem] font-black uppercase tracking-[.1em] text-white">Recommended</span>}
+        <span class="eyebrow text-[var(--koa-clay)]">0{index+1}</span>
+        <p class="mt-8 text-[.62rem] font-bold uppercase tracking-[.14em] text-[var(--koa-forest)]">{item.position}</p>
+        <h3 class="display mt-2 text-4xl">{item.publicName}</h3>
+        <p class="mt-2 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">From <span>$</span>{item.price.toLocaleString()}</p>
+        <p class="mt-5 text-sm leading-6 text-[var(--koa-ink)]/62">{item.salesDescription}</p>
+        <span class="link-arrow mt-7">Compare package →</span>
+      </a>
+    )}
+  </div>
 </div></section>
 
 <section class="py-24 lg:py-32"><div class="container-shell grid gap-14 lg:grid-cols-[1.1fr_.9fr] lg:items-center lg:gap-20"><div class="relative h-[23rem] overflow-hidden rounded-[1.6rem] sm:h-[29rem] lg:h-[36rem] lg:rounded-[2rem]"><ResponsiveImage {...koaMarketingMedia.pavilionSunsetEvent} width={1200} height={1100} sizes="(min-width:1024px) 55vw, 100vw" class="absolute inset-0 h-full w-full object-cover" /></div><div><p class="eyebrow text-[var(--koa-clay)]">Plan with clarity</p><h2 class="display mt-5 text-5xl leading-[1] sm:text-6xl">Know the important rules before you fall in love with the date.</h2><p class="mt-7 text-base leading-7 text-[var(--koa-ink)]/68">Insurance, vendor requirements, alcohol rules, setup timing and music cutoff are all part of the planning conversation. We surface them early because clarity makes better events.</p><div class="mt-8 flex flex-wrap gap-5"><a href="/venue/faq/" class="link-arrow">Venue FAQ →</a><a href="/inquire/?service=venue" class="link-arrow">Check availability →</a></div></div></div></section>
