@@ -1,0 +1,392 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { businessRules } from '../../../data/businessRules';
+
+const costFields = [
+  ['laborSetup','Labor / setup'],
+  ['flowers','Flowers'],
+  ['cake','Cake'],
+  ['mobileBar','Mobile Bar'],
+  ['cleaning','Cleaning'],
+  ['cottage','Cottage'],
+  ['rentalsInventory','Rentals / inventory'],
+  ['coordination','Coordination'],
+  ['photoBooth','Photo booth'],
+  ['lightingAv','Lighting / AV'],
+  ['parkingStaffing','Parking / staffing'],
+  ['otherDirect','Other direct cost'],
+] as const;
+
+const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
+  id: p.name === 'Plumeria' ? 'signature-wedding' : p.name.toLowerCase(),
+  name: p.publicName,
+  price: p.price,
+}));
+---
+<BaseLayout noindex title="Wedding Profitability | Koa’s Events" description="Wedding package and add-on profitability controls for Koa’s Events." canonical="https://koasevents.com/admin/profitability/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-[92rem]">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <h1 class="display mt-3 text-5xl">Wedding profitability</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/55">Loading package economics…</p>
+      </section>
+
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Profitability access required</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/60">This workspace requires the Sales Profit Settings permission.</p>
+      </section>
+
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Sales + finance</p>
+              <h1 class="display mt-3 text-5xl">Wedding profitability</h1>
+              <p class="mt-3 max-w-3xl text-sm leading-6 text-white/68">Model the four wedding collections, price add-ons to a target margin, and record actual event economics so Koa’s can compare planned margin with realized margin over time.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <a href="/admin/quotes/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Sales CRM</a>
+              <button data-reset type="button" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Reset planning assumptions</button>
+            </div>
+          </div>
+          <p data-updated class="mt-4 text-xs text-white/48"></p>
+        </header>
+
+        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Package economics</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Plan margin before you sell it.</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Replace the starting assumptions with actual Koa’s direct costs. Use loaded labor cost rather than wage-only cost. Gross margin = (price − direct cost) ÷ price.</p>
+            </div>
+            <button data-save-packages type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save package costs</button>
+          </div>
+          <p data-package-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
+          <div data-packages class="mt-6 grid gap-5"></div>
+        </section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Profitable add-ons</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Price every upgrade from its cost.</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Enter the incremental direct cost and target margin. The calculator recommends a rounded sell price. You can keep a different actual price and immediately see the resulting margin.</p>
+            </div>
+            <button data-save-addons type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save add-on pricing</button>
+          </div>
+          <p data-addon-message class="mt-3 text-xs text-[var(--koa-ink)]/50"></p>
+          <div class="mt-6 overflow-x-auto">
+            <table class="min-w-[1050px] w-full border-separate border-spacing-y-2 text-sm">
+              <thead><tr class="text-left text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">
+                <th class="px-3">Add-on</th><th class="px-3">Direct cost</th><th class="px-3">Target margin</th><th class="px-3">Recommended price</th><th class="px-3">Actual price</th><th class="px-3">Actual margin</th><th class="px-3">Unit / note</th>
+              </tr></thead>
+              <tbody data-addons></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[.95fr_1.05fr]">
+          <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Actual event economics</p>
+            <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Record what the wedding really cost.</h2>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Use this after each event. Actual results do not overwrite planning assumptions; they create an event-by-event history.</p>
+            <form data-event-form class="mt-5 grid gap-4">
+              <input name="id" type="hidden" />
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="grid gap-2 text-sm font-semibold">Event / couple name<input name="eventName" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Event date<input name="eventDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Package<select name="packageId" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3">
+                  <option value="">Choose package</option>
+                  {packageMeta.map((p)=><option value={p.id}>{p.name}</option>)}
+                </select></label>
+                <label class="grid gap-2 text-sm font-semibold">Actual event revenue<input name="revenue" type="number" min="0" step="0.01" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              </div>
+              <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {costFields.map(([key,label])=><label class="grid gap-2 text-xs font-semibold">{label}<input data-event-cost={key} name={key} type="number" min="0" step="0.01" value="0" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>)}
+              </div>
+              <label class="grid gap-2 text-sm font-semibold">Notes<textarea name="notes" class="min-h-24 rounded-xl border border-[var(--koa-line)] px-4 py-3" placeholder="Vendor overage, overtime, unusual cleanup, staffing changes…"></textarea></label>
+              <div class="rounded-xl bg-[var(--koa-sand)]/55 p-4">
+                <div class="grid gap-3 sm:grid-cols-3">
+                  <div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Direct cost</p><strong data-event-total class="display mt-1 block text-2xl text-[var(--koa-forest)]">$0</strong></div>
+                  <div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Gross profit</p><strong data-event-profit class="display mt-1 block text-2xl text-[var(--koa-forest)]">$0</strong></div>
+                  <div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Gross margin</p><strong data-event-margin class="display mt-1 block text-2xl text-[var(--koa-forest)]">0%</strong></div>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-3">
+                <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save actual event</button>
+                <button data-event-cancel type="button" class="hidden rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Cancel edit</button>
+              </div>
+              <p data-event-message class="text-xs text-[var(--koa-ink)]/50"></p>
+            </form>
+          </section>
+
+          <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <div class="flex items-end justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Realized results</p>
+                <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Actual wedding history</h2>
+              </div>
+              <span data-event-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-bold text-[var(--koa-forest)]">0 events</span>
+            </div>
+            <div data-events class="mt-5 grid gap-3"></div>
+          </section>
+        </section>
+
+        <section class="rounded-[1.6rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6">
+          <p class="eyebrow text-[var(--koa-clay)]">Management rule</p>
+          <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Do not treat owned inventory or owner labor as free.</h2>
+          <p class="mt-3 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/60">For owned furniture and décor, include handling, setup, cleaning, storage, breakage and replacement reserve. For labor performed by owners or salaried staff, assign an internal loaded hourly cost. This keeps package and add-on margins comparable.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script define:vars={{ costFields, packageMeta }}>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const loading=document.querySelector('[data-loading]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const app=document.querySelector('[data-app]');
+    const packageEl=document.querySelector('[data-packages]');
+    const addonEl=document.querySelector('[data-addons]');
+    const summaryEl=document.querySelector('[data-summary]');
+    const updatedEl=document.querySelector('[data-updated]');
+    const packageMessage=document.querySelector('[data-package-message]');
+    const addonMessage=document.querySelector('[data-addon-message]');
+    const eventForm=document.querySelector('[data-event-form]');
+    const eventMessage=document.querySelector('[data-event-message]');
+    const eventList=document.querySelector('[data-events]');
+    const eventCount=document.querySelector('[data-event-count]');
+    const eventCancel=document.querySelector('[data-event-cancel]');
+    let state={packages:[],addOns:[],events:[],updatedAt:'',updatedBy:''};
+
+    const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(value||0));
+    const money2=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',minimumFractionDigits:2,maximumFractionDigits:2}).format(Number(value||0));
+    const pct=(value)=>new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:1}).format(Number(value||0));
+    const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const clampNum=(value,min=0,max=10000000)=>{const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):min;};
+    const sumCosts=(costs)=>costFields.reduce((sum,[key])=>sum+clampNum(costs?.[key]),0);
+    const gp=(price,cost)=>clampNum(price)-clampNum(cost);
+    const gm=(price,cost)=>clampNum(price)>0?gp(price,cost)/clampNum(price):0;
+    const recommended=(cost,target,increment)=>{
+      const c=clampNum(cost),m=Math.min(.9,Math.max(.05,Number(target)||0)),step=Math.max(1,Number(increment)||1);
+      if(c<=0)return 0;
+      return Math.ceil((c/(1-m))/step)*step;
+    };
+    const date=(value)=>value?new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value+'T12:00:00')):'Date not set';
+    const dt=(value)=>value?new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'';
+
+    async function api(body){
+      const res=await fetch('/api/admin/profitability',body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{cache:'no-store'});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||'Profitability request failed.');
+      return data;
+    }
+
+    function card(label,value,detail=''){
+      const el=document.createElement('article');
+      el.className='rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]';
+      el.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="display mt-2 block text-3xl text-[var(--koa-forest)]">'+esc(value)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(detail)+'</p>';
+      return el;
+    }
+
+    function renderSummary(){
+      summaryEl.innerHTML='';
+      const totals=state.packages.reduce((a,p)=>{
+        const cost=sumCosts(p.costs);a.price+=Number(p.price||0);a.cost+=cost;a.profit+=gp(p.price,cost);return a;
+      },{price:0,cost:0,profit:0});
+      const actual=state.events.reduce((a,e)=>{a.revenue+=Number(e.revenue||0);a.cost+=sumCosts(e.costs);return a;},{revenue:0,cost:0});
+      summaryEl.append(
+        card('Package ladder',money(totals.price),'Combined list price across 4 collections'),
+        card('Modeled gross profit',money(totals.profit),pct(totals.price?totals.profit/totals.price:0)+' weighted modeled margin'),
+        card('Actual events recorded',String(state.events.length),state.events.length?money(actual.revenue-actual.cost)+' realized gross profit':'Start recording after each wedding'),
+        card('Actual weighted margin',pct(actual.revenue?(actual.revenue-actual.cost)/actual.revenue:0),actual.revenue?money(actual.revenue)+' recorded revenue':'No actual-event history yet')
+      );
+    }
+
+    function costInputs(costs,prefix){
+      return costFields.map(([key,label])=>'<label class="grid gap-1 text-[.68rem] font-semibold text-[var(--koa-ink)]/65">'+esc(label)+'<input data-cost-key="'+key+'" name="'+prefix+'-'+key+'" type="number" min="0" step="0.01" value="'+Number(costs?.[key]||0)+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm" /></label>').join('');
+    }
+
+    function renderPackages(){
+      packageEl.innerHTML='';
+      state.packages.forEach((p)=>{
+        const cost=sumCosts(p.costs),margin=gm(p.price,cost),gap=margin-Number(p.targetMargin||0);
+        const article=document.createElement('article');
+        article.dataset.packageId=p.id;
+        article.className='rounded-[1.35rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
+        article.innerHTML=
+          '<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">'+
+            '<div><p class="eyebrow text-[var(--koa-clay)]">'+esc(p.id)+'</p><h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">'+esc(p.name)+'</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+Number(p.includedGuests||0)+' included guests</p></div>'+
+            '<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">'+
+              '<div><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Price</p><strong class="text-lg">'+money(p.price)+'</strong></div>'+
+              '<div><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Direct cost</p><strong data-package-cost class="text-lg">'+money(cost)+'</strong></div>'+
+              '<div><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Gross profit</p><strong data-package-profit class="text-lg">'+money(gp(p.price,cost))+'</strong></div>'+
+              '<div><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Margin</p><strong data-package-margin class="text-lg '+(gap>=0?'text-emerald-700':'text-red-700')+'">'+pct(margin)+'</strong></div>'+
+            '</div>'+
+          '</div>'+
+          '<div class="mt-5 grid gap-4 xl:grid-cols-[220px_1fr]">'+
+            '<div class="grid content-start gap-3">'+
+              '<label class="grid gap-1 text-sm font-semibold">Package price<input data-package-price type="number" min="0" step="1" value="'+Number(p.price||0)+'" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>'+
+              '<label class="grid gap-1 text-sm font-semibold">Target margin<input data-package-target type="number" min="5" max="90" step=".5" value="'+(Number(p.targetMargin||0)*100)+'" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>'+
+              '<p data-package-status class="rounded-xl '+(gap>=0?'bg-emerald-50 text-emerald-800':'bg-red-50 text-red-800')+' p-3 text-xs font-semibold">'+(gap>=0?'On target · '+pct(gap)+' above target':'Below target · '+pct(Math.abs(gap))+' gap')+'</p>'+
+            '</div>'+
+            '<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">'+costInputs(p.costs,p.id)+'</div>'+
+          '</div>';
+        packageEl.appendChild(article);
+      });
+      packageEl.querySelectorAll('input').forEach((input)=>input.addEventListener('input',updatePackagePreview));
+    }
+
+    function collectPackages(){
+      return state.packages.map((p)=>{
+        const root=packageEl.querySelector('[data-package-id="'+p.id+'"]');
+        const costs={};
+        root.querySelectorAll('[data-cost-key]').forEach((input)=>costs[input.dataset.costKey]=clampNum(input.value));
+        return {...p,price:clampNum(root.querySelector('[data-package-price]').value),targetMargin:clampNum(root.querySelector('[data-package-target]').value,5,90)/100,costs};
+      });
+    }
+
+    function updatePackagePreview(){
+      state.packages=collectPackages();
+      renderSummary();
+      state.packages.forEach((p)=>{
+        const root=packageEl.querySelector('[data-package-id="'+p.id+'"]');
+        if(!root)return;
+        const cost=sumCosts(p.costs),margin=gm(p.price,cost),gap=margin-p.targetMargin;
+        root.querySelector('[data-package-cost]').textContent=money(cost);
+        root.querySelector('[data-package-profit]').textContent=money(gp(p.price,cost));
+        const marginEl=root.querySelector('[data-package-margin]');
+        marginEl.textContent=pct(margin);
+        marginEl.className='text-lg '+(gap>=0?'text-emerald-700':'text-red-700');
+        const status=root.querySelector('[data-package-status]');
+        status.textContent=gap>=0?'On target · '+pct(gap)+' above target':'Below target · '+pct(Math.abs(gap))+' gap';
+        status.className='rounded-xl '+(gap>=0?'bg-emerald-50 text-emerald-800':'bg-red-50 text-red-800')+' p-3 text-xs font-semibold';
+      });
+    }
+
+    function renderAddOns(){
+      addonEl.innerHTML='';
+      state.addOns.forEach((a)=>{
+        const rec=recommended(a.directCost,a.targetMargin,a.priceIncrement);
+        const actualMargin=gm(a.sellPrice,a.directCost);
+        const tr=document.createElement('tr');
+        tr.dataset.addonId=a.id;
+        tr.className='bg-[var(--koa-ivory)]';
+        tr.innerHTML=
+          '<td class="rounded-l-xl px-3 py-3"><strong class="text-[var(--koa-forest)]">'+esc(a.name)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(a.category)+'</p></td>'+
+          '<td class="px-3 py-3"><input data-addon-cost type="number" min="0" step=".01" value="'+Number(a.directCost||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
+          '<td class="px-3 py-3"><input data-addon-target type="number" min="5" max="90" step=".5" value="'+(Number(a.targetMargin||0)*100)+'" class="w-24 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
+          '<td class="px-3 py-3"><strong data-addon-recommended class="text-[var(--koa-forest)]">'+money(rec)+'</strong><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">rounded to $'+Number(a.priceIncrement||1)+'</p></td>'+
+          '<td class="px-3 py-3"><input data-addon-price type="number" min="0" step=".01" value="'+Number(a.sellPrice||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
+          '<td class="px-3 py-3"><strong data-addon-margin class="'+(actualMargin>=a.targetMargin?'text-emerald-700':'text-red-700')+'">'+pct(actualMargin)+'</strong></td>'+
+          '<td class="rounded-r-xl px-3 py-3"><p class="font-semibold">'+esc(a.unit)+'</p><p class="mt-1 max-w-sm text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(a.note)+'</p></td>';
+        addonEl.appendChild(tr);
+      });
+      addonEl.querySelectorAll('input').forEach((input)=>input.addEventListener('input',updateAddOnPreview));
+    }
+
+    function collectAddOns(){
+      return state.addOns.map((a)=>{
+        const root=addonEl.querySelector('[data-addon-id="'+a.id+'"]');
+        return {...a,directCost:clampNum(root.querySelector('[data-addon-cost]').value),targetMargin:clampNum(root.querySelector('[data-addon-target]').value,5,90)/100,sellPrice:clampNum(root.querySelector('[data-addon-price]').value)};
+      });
+    }
+
+    function updateAddOnPreview(){
+      state.addOns=collectAddOns();
+      state.addOns.forEach((a)=>{
+        const root=addonEl.querySelector('[data-addon-id="'+a.id+'"]');
+        const rec=recommended(a.directCost,a.targetMargin,a.priceIncrement),m=gm(a.sellPrice,a.directCost);
+        root.querySelector('[data-addon-recommended]').textContent=money(rec);
+        const marginEl=root.querySelector('[data-addon-margin]');
+        marginEl.textContent=pct(m);
+        marginEl.className=m>=a.targetMargin?'text-emerald-700':'text-red-700';
+      });
+    }
+
+    function eventCostsFromForm(){
+      const costs={};
+      costFields.forEach(([key])=>costs[key]=clampNum(eventForm.elements[key].value));
+      return costs;
+    }
+    function updateEventPreview(){
+      const revenue=clampNum(eventForm.elements.revenue.value),cost=sumCosts(eventCostsFromForm());
+      document.querySelector('[data-event-total]').textContent=money(cost);
+      document.querySelector('[data-event-profit]').textContent=money(gp(revenue,cost));
+      document.querySelector('[data-event-margin]').textContent=pct(gm(revenue,cost));
+    }
+
+    function resetEventForm(){
+      eventForm.reset();eventForm.elements.id.value='';costFields.forEach(([key])=>eventForm.elements[key].value='0');eventCancel.classList.add('hidden');eventMessage.textContent='';updateEventPreview();
+    }
+
+    function editEvent(event){
+      eventForm.elements.id.value=event.id;
+      eventForm.elements.eventName.value=event.eventName||'';
+      eventForm.elements.eventDate.value=event.eventDate||'';
+      eventForm.elements.packageId.value=event.packageId||'';
+      eventForm.elements.revenue.value=Number(event.revenue||0);
+      eventForm.elements.notes.value=event.notes||'';
+      costFields.forEach(([key])=>eventForm.elements[key].value=Number(event.costs?.[key]||0));
+      eventCancel.classList.remove('hidden');updateEventPreview();eventForm.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+
+    function renderEvents(){
+      eventList.innerHTML='';
+      eventCount.textContent=state.events.length+' '+(state.events.length===1?'event':'events');
+      if(!state.events.length){eventList.innerHTML='<p class="rounded-xl bg-[var(--koa-sand)]/45 p-5 text-sm text-[var(--koa-ink)]/55">No actual wedding economics have been recorded yet.</p>';return;}
+      state.events.forEach((e)=>{
+        const cost=sumCosts(e.costs),margin=gm(e.revenue,cost);
+        const p=state.packages.find((x)=>x.id===e.packageId);
+        const article=document.createElement('article');
+        article.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        article.innerHTML='<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">'+esc(p?.name||e.packageId)+'</p><h3 class="mt-1 text-lg font-bold text-[var(--koa-forest)]">'+esc(e.eventName)+'</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(date(e.eventDate))+'</p></div><div class="text-left sm:text-right"><strong class="display text-2xl text-[var(--koa-forest)]">'+pct(margin)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+money(e.revenue)+' revenue · '+money(cost)+' cost · '+money(gp(e.revenue,cost))+' profit</p></div></div><div class="mt-3 flex flex-wrap gap-2"><button data-edit-event="'+e.id+'" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Edit</button><button data-delete-event="'+e.id+'" type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700">Delete</button></div>';
+        eventList.appendChild(article);
+      });
+      eventList.querySelectorAll('[data-edit-event]').forEach((b)=>b.addEventListener('click',()=>editEvent(state.events.find((e)=>e.id===b.dataset.editEvent))));
+      eventList.querySelectorAll('[data-delete-event]').forEach((b)=>b.addEventListener('click',async()=>{
+        const event=state.events.find((e)=>e.id===b.dataset.deleteEvent);if(!event||!confirm('Delete actual-cost record for '+event.eventName+'?'))return;
+        try{const data=await api({action:'delete-event',id:event.id});state=data;renderAll();}catch(err){eventMessage.textContent=err.message||'Delete failed.';}
+      }));
+    }
+
+    function renderAll(){
+      renderSummary();renderPackages();renderAddOns();renderEvents();
+      updatedEl.textContent=state.updatedAt?'Last saved '+dt(state.updatedAt)+(state.updatedBy?' by '+state.updatedBy:''):'Using starting planning assumptions; save changes to persist them.';
+    }
+
+    document.querySelector('[data-save-packages]')?.addEventListener('click',async()=>{
+      try{packageMessage.textContent='Saving…';state.packages=collectPackages();const data=await api({action:'save-packages',packages:state.packages});state=data;packageMessage.textContent='Package economics saved.';renderAll();}catch(err){packageMessage.textContent=err.message||'Save failed.';}
+    });
+    document.querySelector('[data-save-addons]')?.addEventListener('click',async()=>{
+      try{addonMessage.textContent='Saving…';state.addOns=collectAddOns();const data=await api({action:'save-addons',addOns:state.addOns});state=data;addonMessage.textContent='Add-on pricing saved.';renderAll();}catch(err){addonMessage.textContent=err.message||'Save failed.';}
+    });
+    document.querySelector('[data-reset]')?.addEventListener('click',async()=>{
+      if(!confirm('Reset package and add-on planning assumptions to the original workbook defaults? Actual event history will be kept.'))return;
+      try{const data=await api({action:'reset-planning-assumptions'});state=data;renderAll();}catch(err){packageMessage.textContent=err.message||'Reset failed.';}
+    });
+
+    eventForm?.addEventListener('input',updateEventPreview);
+    eventForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      try{
+        eventMessage.textContent='Saving actual event…';
+        const payload={id:eventForm.elements.id.value,eventName:eventForm.elements.eventName.value,eventDate:eventForm.elements.eventDate.value,packageId:eventForm.elements.packageId.value,revenue:clampNum(eventForm.elements.revenue.value),costs:eventCostsFromForm(),notes:eventForm.elements.notes.value};
+        const data=await api({action:'upsert-event',event:payload});state=data;resetEventForm();renderAll();eventMessage.textContent='Actual event saved.';
+      }catch(err){eventMessage.textContent=err.message||'Save failed.';}
+    });
+    eventCancel?.addEventListener('click',resetEventForm);
+
+    (async()=>{
+      const session=await getAdminSession();
+      loading?.classList.add('hidden');
+      if(!session||!session.capabilities?.includes('sales.profit_settings')){unauthorized?.classList.remove('hidden');return;}
+      app?.classList.remove('hidden');
+      try{state=await api();renderAll();resetEventForm();}catch(err){unauthorized?.classList.remove('hidden');app?.classList.add('hidden');unauthorized.querySelector('p')?.append(' '+(err.message||''));}
+    })();
+  </script>
+</BaseLayout>
