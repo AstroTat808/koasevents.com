@@ -125,6 +125,12 @@ export default async (req: Request, context: Context) => {
       hiddenUploads: state.hiddenUploads,
       curatedEdits: state.curatedEdits,
       categoryOrder: state.categoryOrder,
+    }, {
+      headers: {
+        // Crop/focal-point changes are operational content and should appear across
+        // the public site immediately without waiting for a browser/CDN cache.
+        'Cache-Control': 'no-store, max-age=0',
+      },
     });
   }
 
