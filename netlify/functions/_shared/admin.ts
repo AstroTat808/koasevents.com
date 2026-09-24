@@ -133,6 +133,7 @@ export const PAGE_CAPABILITIES = {
   '/admin/crm/': 'crm.view',
   '/admin/email-preview/': 'crm.view',
   '/admin/quotes/': 'sales.view',
+  '/admin/profitability/': 'sales.profit_settings',
   '/admin/events/': 'events.view',
   '/admin/calendar/': 'calendar.view',
   '/admin/quickbooks/': 'quickbooks.view',
