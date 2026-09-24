@@ -328,9 +328,10 @@ function normalizeAddOn(input: any, fallback: AddOnModel): AddOnModel {
   };
 }
 
-function normalizeEvent(input: any, existing?: ActualEvent): ActualEvent {
+function normalizeEvent(input: any, existing?: ActualEvent, preserveUpdatedAt = false): ActualEvent {
   const now = new Date().toISOString();
   const eventDate = clean(input?.eventDate, 20);
+  const savedUpdatedAt = clean(input?.updatedAt, 60);
   return {
     id: clean(existing?.id || input?.id, 80) || 'event_' + crypto.randomUUID().replaceAll('-', '').slice(0, 16),
     eventName: clean(input?.eventName, 160) || 'Wedding event',
@@ -339,8 +340,8 @@ function normalizeEvent(input: any, existing?: ActualEvent): ActualEvent {
     revenue: money(input?.revenue),
     costs: normalizeCosts(input?.costs),
     notes: clean(input?.notes, 1200),
-    createdAt: existing?.createdAt || now,
-    updatedAt: now,
+    createdAt: existing?.createdAt || clean(input?.createdAt, 60) || now,
+    updatedAt: preserveUpdatedAt && savedUpdatedAt ? savedUpdatedAt : now,
   };
 }
 
@@ -367,7 +368,7 @@ async function readState(context: Context): Promise<ProfitabilityState> {
       costs: normalizeCosts(row?.costs),
       createdAt: clean(row?.createdAt, 60) || new Date().toISOString(),
       updatedAt: clean(row?.updatedAt, 60) || new Date().toISOString(),
-    } as ActualEvent))
+    } as ActualEvent, true))
     .sort((a, b) => (b.eventDate || b.updatedAt).localeCompare(a.eventDate || a.updatedAt));
 
   return {
