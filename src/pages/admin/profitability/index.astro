@@ -120,6 +120,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
                   <option value="">Choose package</option>
                   {packageMeta.map((p)=><option value={p.id}>{p.name}</option>)}
                 </select></label>
+                <label class="grid gap-2 text-sm font-semibold">Package base price<input name="packagePrice" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 disabled:bg-[var(--koa-sand)] disabled:text-[var(--koa-ink)]/55" /></label>
                 <label class="grid gap-2 text-sm font-semibold">Booked revenue<input name="revenue" type="number" min="0" step="0.01" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3 disabled:bg-[var(--koa-sand)] disabled:text-[var(--koa-ink)]/55" /></label>
                 <label class="grid gap-2 text-sm font-semibold">Guest count<input name="guestCount" type="number" min="0" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 disabled:bg-[var(--koa-sand)] disabled:text-[var(--koa-ink)]/55" /></label>
                 <label class="grid gap-2 text-sm font-semibold">Booked add-ons<input name="addOnsSummary" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 text-[var(--koa-ink)]/60" /></label>
@@ -391,12 +392,12 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     }
 
     function setCrmLock(on){
-      ['eventName','eventDate','packageId','revenue','guestCount'].forEach(name=>{eventForm.elements[name].disabled=Boolean(on);});
+      ['eventName','eventDate','packageId','packagePrice','revenue','guestCount'].forEach(name=>{eventForm.elements[name].disabled=Boolean(on);});
       crmEventNote.classList.toggle('hidden',!on);
     }
 
     function resetEventForm(){
-      eventForm.reset();eventForm.elements.id.value='';eventForm.elements.crmRecordId.value='';eventForm.elements.guestCount.value='0';eventForm.elements.addOnsSummary.value='';costFields.forEach(([key])=>eventForm.elements[key].value='0');setCrmLock(false);eventCancel.classList.add('hidden');eventMessage.textContent='';updateEventPreview();
+      eventForm.reset();eventForm.elements.id.value='';eventForm.elements.crmRecordId.value='';eventForm.elements.packagePrice.value='0';eventForm.elements.guestCount.value='0';eventForm.elements.addOnsSummary.value='';costFields.forEach(([key])=>eventForm.elements[key].value='0');setCrmLock(false);eventCancel.classList.add('hidden');eventMessage.textContent='';updateEventPreview();
     }
 
     function editEvent(row){
@@ -406,6 +407,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
       eventForm.elements.eventName.value=row.eventName||'';
       eventForm.elements.eventDate.value=row.eventDate||'';
       eventForm.elements.packageId.value=row.packageId||'';
+      eventForm.elements.packagePrice.value=Number(row.packagePrice||0);
       eventForm.elements.revenue.value=Number(row.revenue||0);
       eventForm.elements.guestCount.value=Number(row.guestCount||0);
       eventForm.elements.addOnsSummary.value=addOnSummary(row.addOns);
@@ -422,7 +424,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
         const article=document.createElement('article'); article.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         article.innerHTML=
           '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div class="flex flex-wrap items-center gap-2"><p class="eyebrow text-[var(--koa-clay)]">'+esc(p?.name||e.packageId)+'</p>'+(e.crmSynced?'<span class="rounded-full bg-emerald-50 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-emerald-800">CRM synced</span>':'<span class="rounded-full bg-[var(--koa-sand)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/55">Manual</span>')+'</div><h3 class="mt-1 text-lg font-bold text-[var(--koa-forest)]">'+esc(e.eventName)+'</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(date(e.eventDate))+' · '+Number(e.guestCount||0)+' guests</p><p class="mt-2 max-w-xl text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(addOnSummary(e.addOns))+'</p></div>'+
-          '<div class="text-left sm:text-right"><strong class="display text-2xl '+(complete?'text-[var(--koa-forest)]':'text-[var(--koa-clay)]')+'">'+(complete?pct(m):'Costs needed')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+money(e.revenue)+' revenue · '+(complete?money(cost)+' cost · '+money(gp(e.revenue,cost))+' profit':'actual costs not entered')+'</p></div></div>'+
+          '<div class="text-left sm:text-right"><strong class="display text-2xl '+(complete?'text-[var(--koa-forest)]':'text-[var(--koa-clay)]')+'">'+(complete?pct(m):'Costs needed')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+money(e.packagePrice)+' package · '+money(e.revenue)+' booked revenue · '+(complete?money(cost)+' cost · '+money(gp(e.revenue,cost))+' profit':'actual costs not entered')+'</p></div></div>'+
           '<div class="mt-3 flex flex-wrap gap-2"><button data-edit-event="'+esc(e.id)+'" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+(complete?'Edit actual costs':'Enter actual costs')+'</button>'+(!e.crmSynced?'<button data-delete-event="'+esc(e.id)+'" type="button" class="rounded-full border border-red-200 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-700">Delete</button>':'')+'</div>';
         eventList.appendChild(article);
       });
@@ -452,6 +454,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
           eventName:eventForm.elements.eventName.value,
           eventDate:eventForm.elements.eventDate.value,
           packageId:eventForm.elements.packageId.value,
+          packagePrice:clampNum(eventForm.elements.packagePrice.value),
           revenue:clampNum(eventForm.elements.revenue.value),
           guestCount:clampNum(eventForm.elements.guestCount.value,0,500),
           addOns:current?.addOns||[],
