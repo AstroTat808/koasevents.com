@@ -1,5 +1,5 @@
 import { blogVisuals } from './blogVisuals';
-import { koaMarketingGallery, koaMarketingMedia } from './media';
+import { galleryMedia, koaMarketingGallery, koaMarketingMedia } from './media';
 
 export type MediaUsage = {
   href: string;
@@ -114,6 +114,14 @@ for (const item of koaMarketingGallery) {
     href: '/gallery/',
     page: 'Gallery',
     section: item.category,
+  });
+}
+
+for (const item of galleryMedia) {
+  addUsage(item.src, {
+    href: '/gallery/',
+    page: 'Gallery',
+    section: 'Legacy Archive',
   });
 }
 
