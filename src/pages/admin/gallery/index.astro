@@ -632,7 +632,7 @@ const allCategories = [...categories, 'Legacy Archive'];
         article.style.margin = '0';
         article.style.pointerEvents = 'none';
         article.style.transition = 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease';
-        article.classList.add('opacity-90', 'scale-[.985]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
+        article.classList.add('opacity-70', 'scale-[.95]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
         setOrderStatus(status, 'Reordering…', 'saving');
       });
 
@@ -654,7 +654,7 @@ const allCategories = [...categories, 'Legacy Archive'];
         session.placeholder.remove();
         if (session.originalStyle == null) article.removeAttribute('style');
         else article.setAttribute('style', session.originalStyle);
-        article.classList.remove('opacity-90', 'scale-[.985]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
+        article.classList.remove('opacity-70', 'scale-[.95]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
         if (dragHandle.hasPointerCapture(event.pointerId)) dragHandle.releasePointerCapture(event.pointerId);
 
         if (cancelled) {
