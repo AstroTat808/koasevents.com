@@ -256,7 +256,7 @@ const badgeClass = {
               >
                 <div class="flex items-start justify-between gap-4">
                   <span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.12em] text-[var(--koa-forest)]">{browseCatalogCategories.find((category) => category.id === item.category)?.label}</span>
-                  <span class="text-right text-[.66rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">{item.priceLabel}</span>
+                  <span data-published-price={item.id} class="text-right text-[.66rem] font-black uppercase tracking-[.11em] text-[var(--koa-clay)]">{item.priceLabel}</span>
                 </div>
                 <span data-item-state class="mt-4 hidden w-fit rounded-full px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.1em]"></span>
                 {item.badges?.length && (
@@ -565,6 +565,24 @@ const badgeClass = {
     let mobileCatalogExpanded = false;
     let activeSavedQuoteId = '';
     let savedStateFingerprint = '';
+
+    async function loadPublishedPricing() {
+      try {
+        const res = await fetch('/api/catalog-pricing', { cache: 'no-store' });
+        if (!res.ok) return;
+        const payload = await res.json();
+        const prices = Array.isArray(payload?.prices) ? payload.prices : [];
+        prices.forEach((row) => {
+          const item = itemById.get(row.catalogItemId);
+          if (!item || !(Number(row.price) > 0)) return;
+          item.priceType = 'fixed';
+          item.publishedUnitPrice = Number(row.price);
+          item.priceLabel = new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(row.price)) + ' / ' + String(row.unit || 'unit').replace(/^per\s+/i,'');
+          const label = document.querySelector('[data-published-price="' + CSS.escape(row.catalogItemId) + '"]');
+          if (label) label.textContent = item.priceLabel;
+        });
+      } catch {}
+    }
 
     function funnelSessionId() {
       try {
@@ -1987,6 +2005,7 @@ const badgeClass = {
     });
 
     async function initializeBuilder() {
+      await loadPublishedPricing();
       await restoreSelectionState();
       if (quoteGuestInput) quoteGuestInput.value = String(guestCount());
       applyFilters();
