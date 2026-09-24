@@ -161,6 +161,7 @@ const allCategories = [...categories, 'Legacy Archive'];
     let cropSession = null;
     let vendorSession = null;
     let vendors = [];
+    const orderUndoTimers = new Map();
     function hasAdminAccess(user) {
       return Boolean(user?.capabilities?.includes('gallery.view') || user?.permissions?.includes('gallery.view'));
     }
@@ -326,12 +327,74 @@ const allCategories = [...categories, 'Legacy Archive'];
     function setOrderStatus(status, message, tone = 'idle') {
       if (!status) return;
       status.textContent = message;
-      status.className = 'mt-1 text-xs font-black uppercase tracking-[.08em] ' + (
+      status.className = 'text-xs font-black uppercase tracking-[.08em] ' + (
         tone === 'saving' ? 'text-[var(--koa-clay)]' :
         tone === 'success' ? 'text-[var(--koa-forest)]' :
         tone === 'error' ? 'text-red-700' :
         'text-[var(--koa-ink)]/40'
       );
+    }
+
+    function clearOrderUndo(category, undoButton) {
+      const timer = orderUndoTimers.get(category);
+      if (timer) window.clearTimeout(timer);
+      orderUndoTimers.delete(category);
+      if (undoButton) {
+        undoButton.hidden = true;
+        undoButton.disabled = false;
+        undoButton.textContent = 'Undo';
+        undoButton.onclick = null;
+      }
+    }
+
+    function armOrderUndo(grid, category, previousKeys, currentKeys, status, undoButton) {
+      if (!undoButton) return;
+      clearOrderUndo(category, undoButton);
+
+      const expireUndo = () => {
+        clearOrderUndo(category, undoButton);
+        if (status?.textContent === 'Order saved') setOrderStatus(status, 'Ready to reorder');
+      };
+
+      undoButton.hidden = false;
+      undoButton.disabled = false;
+      undoButton.textContent = 'Undo';
+      undoButton.onclick = async () => {
+        const timer = orderUndoTimers.get(category);
+        if (timer) window.clearTimeout(timer);
+        orderUndoTimers.delete(category);
+
+        if (grid.dataset.orderSaving === 'true') return;
+        grid.dataset.orderSaving = 'true';
+        undoButton.disabled = true;
+        undoButton.textContent = 'Undoing…';
+        setOrderStatus(status, 'Restoring previous order…', 'saving');
+        restoreGalleryOrder(grid, previousKeys);
+
+        try {
+          await post({ action:'reorder', category, keys:previousKeys });
+          state.categoryOrder[category] = previousKeys;
+          clearOrderUndo(category, undoButton);
+          setOrderStatus(status, 'Previous order restored', 'success');
+          window.setTimeout(() => {
+            if (status?.textContent === 'Previous order restored') setOrderStatus(status, 'Ready to reorder');
+          }, 2400);
+        } catch (error) {
+          restoreGalleryOrder(grid, currentKeys);
+          setOrderStatus(status, 'Undo failed — saved order kept', 'error');
+          undoButton.hidden = false;
+          undoButton.disabled = false;
+          undoButton.textContent = 'Retry undo';
+          const retryTimer = window.setTimeout(expireUndo, 5000);
+          orderUndoTimers.set(category, retryTimer);
+          console.error('Gallery reorder undo failed', error);
+        } finally {
+          delete grid.dataset.orderSaving;
+        }
+      };
+
+      const timer = window.setTimeout(expireUndo, 8000);
+      orderUndoTimers.set(category, timer);
     }
 
     function autoScrollForPointer(clientY) {
@@ -341,7 +404,35 @@ const allCategories = [...categories, 'Legacy Archive'];
       else if (clientY > window.innerHeight - edge) window.scrollBy(0, step);
     }
 
-    function reorderAtPointer(grid, dragging, clientX, clientY) {
+    function createDropPlaceholder(article) {
+      const rect = article.getBoundingClientRect();
+      const placeholder = document.createElement('div');
+      placeholder.dataset.dropPlaceholder = '';
+      placeholder.setAttribute('aria-hidden', 'true');
+      placeholder.className = 'pointer-events-none rounded-[1.2rem] border-2 border-dashed border-[var(--koa-clay)]/50 bg-[var(--koa-clay)]/5 shadow-inner';
+      placeholder.style.minHeight = Math.max(120, rect.height) + 'px';
+      placeholder.style.opacity = '0';
+      placeholder.style.transform = 'scale(.975)';
+      placeholder.style.transition = 'opacity 130ms ease, transform 130ms ease';
+      window.requestAnimationFrame(() => {
+        placeholder.style.opacity = '1';
+        placeholder.style.transform = 'scale(1)';
+      });
+      return placeholder;
+    }
+
+    function pulseDropPlaceholder(placeholder) {
+      if (!placeholder?.animate) return;
+      placeholder.animate(
+        [
+          { opacity:.65, transform:'scale(.985)' },
+          { opacity:1, transform:'scale(1)' },
+        ],
+        { duration:140, easing:'ease-out' }
+      );
+    }
+
+    function moveDropPlaceholder(grid, dragging, placeholder, clientX, clientY) {
       const hit = document.elementFromPoint(clientX, clientY);
       const target = hit?.closest?.('[data-gallery-key]');
       if (!target || target === dragging || target.parentElement !== grid) return false;
@@ -352,12 +443,14 @@ const allCategories = [...categories, 'Legacy Archive'];
         ? clientX < rect.left + rect.width / 2
         : clientY < rect.top + rect.height / 2;
       const reference = before ? target : target.nextSibling;
-      if (reference === dragging || (!before && target.nextSibling === dragging)) return false;
-      grid.insertBefore(dragging, reference);
+
+      if (reference === placeholder || (reference == null && placeholder === grid.lastElementChild)) return false;
+      grid.insertBefore(placeholder, reference);
+      pulseDropPlaceholder(placeholder);
       return true;
     }
 
-    async function saveGalleryOrder(grid, category, originalKeys, status) {
+    async function saveGalleryOrder(grid, category, originalKeys, status, undoButton) {
       const keys = galleryKeys(grid);
       if (keys.join('|') === originalKeys.join('|')) {
         setOrderStatus(status, 'Order unchanged');
@@ -370,11 +463,10 @@ const allCategories = [...categories, 'Legacy Archive'];
         await post({ action:'reorder', category, keys });
         state.categoryOrder[category] = keys;
         setOrderStatus(status, 'Order saved', 'success');
-        window.setTimeout(() => {
-          if (status?.textContent === 'Order saved') setOrderStatus(status, 'Ready to reorder');
-        }, 2400);
+        armOrderUndo(grid, category, originalKeys, keys, status, undoButton);
       } catch (error) {
         restoreGalleryOrder(grid, originalKeys);
+        clearOrderUndo(category, undoButton);
         setOrderStatus(status, 'Save failed — order restored', 'error');
         console.error('Gallery reorder failed', error);
       } finally {
@@ -509,18 +601,38 @@ const allCategories = [...categories, 'Legacy Archive'];
         event.preventDefault();
         const section = grid.closest('section');
         const status = section?.querySelector('[data-order-status]');
+        const undoButton = section?.querySelector('[data-order-undo]');
+        clearOrderUndo(grid.dataset.adminCategory, undoButton);
+
+        const rect = article.getBoundingClientRect();
+        const placeholder = createDropPlaceholder(article);
+        const originalStyle = article.getAttribute('style');
+        grid.insertBefore(placeholder, article);
+
         dragSession = {
           pointerId: event.pointerId,
           grid,
           category: grid.dataset.adminCategory,
           originalKeys: galleryKeys(grid),
           status,
-          moved: false,
+          undoButton,
+          placeholder,
+          originalStyle,
+          pointerOffsetX: event.clientX - rect.left,
+          pointerOffsetY: event.clientY - rect.top,
         };
 
         dragHandle.setPointerCapture(event.pointerId);
+        article.style.position = 'fixed';
+        article.style.left = rect.left + 'px';
+        article.style.top = rect.top + 'px';
+        article.style.width = rect.width + 'px';
+        article.style.height = rect.height + 'px';
+        article.style.zIndex = '80';
+        article.style.margin = '0';
         article.style.pointerEvents = 'none';
-        article.classList.add('opacity-70', 'scale-[.98]', 'ring-2', 'ring-[var(--koa-clay)]');
+        article.style.transition = 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease';
+        article.classList.add('opacity-90', 'scale-[.985]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
         setOrderStatus(status, 'Reordering…', 'saving');
       });
 
@@ -528,7 +640,9 @@ const allCategories = [...categories, 'Legacy Archive'];
         if (!dragSession || event.pointerId !== dragSession.pointerId) return;
         event.preventDefault();
         autoScrollForPointer(event.clientY);
-        if (reorderAtPointer(dragSession.grid, article, event.clientX, event.clientY)) dragSession.moved = true;
+        article.style.left = (event.clientX - dragSession.pointerOffsetX) + 'px';
+        article.style.top = (event.clientY - dragSession.pointerOffsetY) + 'px';
+        moveDropPlaceholder(dragSession.grid, article, dragSession.placeholder, event.clientX, event.clientY);
       });
 
       const finishPointerDrag = async (event, cancelled = false) => {
@@ -536,8 +650,11 @@ const allCategories = [...categories, 'Legacy Archive'];
         const session = dragSession;
         dragSession = null;
 
-        article.style.pointerEvents = '';
-        article.classList.remove('opacity-70', 'scale-[.98]', 'ring-2', 'ring-[var(--koa-clay)]');
+        session.grid.insertBefore(article, session.placeholder);
+        session.placeholder.remove();
+        if (session.originalStyle == null) article.removeAttribute('style');
+        else article.setAttribute('style', session.originalStyle);
+        article.classList.remove('opacity-90', 'scale-[.985]', 'ring-2', 'ring-[var(--koa-clay)]', 'shadow-2xl');
         if (dragHandle.hasPointerCapture(event.pointerId)) dragHandle.releasePointerCapture(event.pointerId);
 
         if (cancelled) {
@@ -546,7 +663,7 @@ const allCategories = [...categories, 'Legacy Archive'];
           return;
         }
 
-        await saveGalleryOrder(session.grid, session.category, session.originalKeys, session.status);
+        await saveGalleryOrder(session.grid, session.category, session.originalKeys, session.status, session.undoButton);
       };
 
       dragHandle.addEventListener('pointerup', (event) => { void finishPointerDrag(event); });
@@ -571,12 +688,21 @@ const allCategories = [...categories, 'Legacy Archive'];
         const note = document.createElement('p');
         note.className = 'text-xs font-semibold text-[var(--koa-ink)]/45';
         note.textContent = category === 'Legacy Archive' ? 'Archive items can be moved into a public category.' : 'Drag by ↕ Order to control public sequence.';
+        const orderFeedback = document.createElement('div');
+        orderFeedback.className = 'mt-1 flex items-center gap-2 sm:justify-end';
         const orderStatus = document.createElement('p');
         orderStatus.dataset.orderStatus = '';
         orderStatus.setAttribute('role', 'status');
         orderStatus.setAttribute('aria-live', 'polite');
         setOrderStatus(orderStatus, 'Ready to reorder');
-        meta.append(note, orderStatus);
+        const undoButton = document.createElement('button');
+        undoButton.type = 'button';
+        undoButton.dataset.orderUndo = '';
+        undoButton.hidden = true;
+        undoButton.className = 'rounded-full border border-[var(--koa-line)] bg-white px-3 py-1 text-[.64rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] shadow-sm disabled:cursor-wait disabled:opacity-50';
+        undoButton.textContent = 'Undo';
+        orderFeedback.append(orderStatus, undoButton);
+        meta.append(note, orderFeedback);
         header.append(copy, meta);
 
         const grid = document.createElement('div');
