@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 import { galleryMedia, koaMarketingGallery } from '../../../data/media';
+import { mediaUsageBySrc } from '../../../data/mediaUsage';
 
 const curated = [
   ...koaMarketingGallery.map((item) => ({ src: item.src, alt: item.alt, category: item.category })),
@@ -8,6 +9,7 @@ const curated = [
 ];
 const categories = ['Venue','Ceremony','Reception','Mobile Bar','Enhancements','Hospitality','Stay'];
 const allCategories = [...categories, 'Legacy Archive'];
+const mediaUsage = mediaUsageBySrc;
 ---
 <BaseLayout noindex title="Gallery Admin | Koa’s Events" description="Manage Koa’s Events gallery." canonical="https://www.koasevents.com/admin/gallery/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-10 sm:py-12">
@@ -108,6 +110,18 @@ const allCategories = [...categories, 'Legacy Archive'];
         </div>
       </div>
 
+      <section class="mt-6 border-t border-[var(--koa-line)] pt-5" data-usage-preview-section>
+        <div class="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Used across the website</p>
+            <h3 class="display mt-2 text-2xl">Live placement previews</h3>
+          </div>
+          <p class="text-xs font-semibold text-[var(--koa-ink)]/45" data-usage-preview-count></p>
+        </div>
+        <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/50">These previews use the focal point you are adjusting now. Open a placement to inspect its full page before saving.</p>
+        <div class="mt-4 grid max-h-[20rem] gap-3 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-3" data-usage-previews></div>
+      </section>
+
       <div class="mt-5 flex flex-wrap items-center gap-3">
         <p class="mr-auto text-sm font-semibold text-[var(--koa-ink)]/55" data-crop-position>50% × 50%</p>
         <button type="button" data-crop-reset class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Center</button>
@@ -120,6 +134,7 @@ const allCategories = [...categories, 'Legacy Archive'];
   <script id="curated-data" type="application/json" set:html={JSON.stringify(curated)}></script>
   <script id="categories-data" type="application/json" set:html={JSON.stringify(categories)}></script>
   <script id="all-categories-data" type="application/json" set:html={JSON.stringify(allCategories)}></script>
+  <script id="media-usage-data" type="application/json" set:html={JSON.stringify(mediaUsage)}></script>
 
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
@@ -127,6 +142,7 @@ const allCategories = [...categories, 'Legacy Archive'];
     const curated = JSON.parse(document.getElementById('curated-data')?.textContent || '[]');
     const categories = JSON.parse(document.getElementById('categories-data')?.textContent || '[]');
     const allCategories = JSON.parse(document.getElementById('all-categories-data')?.textContent || '[]');
+    const mediaUsage = JSON.parse(document.getElementById('media-usage-data')?.textContent || '{}');
 
     const ui = document.querySelector('[data-admin-ui]');
     const unauthorized = document.querySelector('[data-unauthorized]');
@@ -142,6 +158,8 @@ const allCategories = [...categories, 'Legacy Archive'];
     const cropPosition = document.querySelector('[data-crop-position]');
     const cropTitle = document.querySelector('[data-crop-title]');
     const previewShell = document.querySelector('[data-preview-shell]');
+    const usagePreviews = document.querySelector('[data-usage-previews]');
+    const usagePreviewCount = document.querySelector('[data-usage-preview-count]');
     const vendorDialog = document.querySelector('[data-vendor-dialog]');
     const vendorOptions = document.querySelector('[data-vendor-options]');
     const vendorSearch = document.querySelector('[data-vendor-search]');
@@ -274,6 +292,72 @@ const allCategories = [...categories, 'Legacy Archive'];
       vendorDialog?.showModal();
     }
 
+    function usageForItem(item) {
+      const mapped = Array.isArray(mediaUsage?.[item.src]) ? mediaUsage[item.src] : [];
+      if (mapped.length) return mapped;
+      return item.kind === 'upload'
+        ? [{ href:'/gallery/', page:'Gallery', section:item.category || 'Uploaded photos' }]
+        : [];
+    }
+
+    function renderUsagePreviews(item) {
+      if (!usagePreviews) return;
+      usagePreviews.innerHTML = '';
+      const usages = usageForItem(item);
+
+      if (usagePreviewCount) {
+        usagePreviewCount.textContent = usages.length
+          ? usages.length + (usages.length === 1 ? ' placement' : ' placements')
+          : 'No mapped placements';
+      }
+
+      if (!usages.length) {
+        const empty = document.createElement('p');
+        empty.className = 'rounded-xl border border-dashed border-[var(--koa-line)] p-4 text-xs leading-5 text-[var(--koa-ink)]/50 sm:col-span-2 lg:col-span-3';
+        empty.textContent = 'No public page reuse is mapped for this image yet.';
+        usagePreviews.append(empty);
+        return;
+      }
+
+      usages.forEach((usage) => {
+        const link = document.createElement('a');
+        link.href = usage.href;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.className = 'group overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] transition hover:-translate-y-0.5 hover:shadow-md';
+
+        const frame = document.createElement('div');
+        frame.className = 'relative h-28 overflow-hidden bg-[var(--koa-sand)]';
+
+        const image = document.createElement('img');
+        image.src = item.src;
+        image.alt = '';
+        image.draggable = false;
+        image.dataset.usagePreviewImage = '';
+        image.className = 'h-full w-full object-cover transition duration-200';
+        image.style.objectPosition = (cropSession?.x ?? 50) + '% ' + (cropSession?.y ?? 50) + '%';
+
+        const openLabel = document.createElement('span');
+        openLabel.className = 'absolute right-2 top-2 rounded-full bg-black/65 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-white opacity-0 transition group-hover:opacity-100';
+        openLabel.textContent = 'Open page';
+
+        frame.append(image, openLabel);
+
+        const copy = document.createElement('div');
+        copy.className = 'p-3';
+        const page = document.createElement('strong');
+        page.className = 'block text-xs';
+        page.textContent = usage.page;
+        const section = document.createElement('span');
+        section.className = 'mt-1 block text-[.68rem] leading-4 text-[var(--koa-ink)]/50';
+        section.textContent = usage.section;
+        copy.append(page, section);
+
+        link.append(frame, copy);
+        usagePreviews.append(link);
+      });
+    }
+
     function openCrop(item) {
       cropSession = {
         item,
@@ -285,6 +369,7 @@ const allCategories = [...categories, 'Legacy Archive'];
       cropTitle.textContent = item.alt || 'Reposition photo';
       cropImage.src = item.src;
       cropImage.alt = item.alt || '';
+      renderUsagePreviews(item);
       setCropPoint(cropSession.x, cropSession.y);
       setPreviewMode('desktop');
       cropDialog?.showModal();
@@ -298,6 +383,9 @@ const allCategories = [...categories, 'Legacy Archive'];
       cropCrosshair.style.left = cropSession.x + '%';
       cropCrosshair.style.top = cropSession.y + '%';
       cropPosition.textContent = Math.round(cropSession.x) + '% × ' + Math.round(cropSession.y) + '%';
+      usagePreviews?.querySelectorAll('[data-usage-preview-image]').forEach((image) => {
+        image.style.objectPosition = cropSession.x + '% ' + cropSession.y + '%';
+      });
     }
 
     function setPreviewMode(mode) {
