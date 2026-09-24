@@ -346,7 +346,6 @@ const seoSchema = {
           scope.querySelectorAll('img[src], img[data-koa-focal-src]').forEach((img) => images.push(img));
 
           images.forEach((img) => {
-            if (img.hasAttribute('data-koa-focal-ignore')) return;
             const focal = focalForImage(img, focalMap);
             if (!focal) return;
 
@@ -361,7 +360,6 @@ const seoSchema = {
           scope.querySelectorAll('[data-koa-focal-src]:not(img)').forEach((element) => backgroundElements.push(element));
 
           backgroundElements.forEach((element) => {
-            if (element.hasAttribute('data-koa-focal-ignore')) return;
             const focal = focalMap.get(normalizeAssetPath(element.getAttribute('data-koa-focal-src')));
             if (!focal) return;
             element.style.backgroundPosition = focal.x + '% ' + focal.y + '%';
