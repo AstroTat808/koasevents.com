@@ -28,6 +28,10 @@ export type HealthCheck = {
     verificationSourceLabel: string;
     githubMetadataSource: string;
     fallbackUsed: boolean;
+    commitsBehind?: number | null;
+    mainCommitMessage?: string;
+    emailRenderingBehind?: boolean;
+    emailRenderingChangedFiles?: string[];
   };
 };
 
@@ -132,6 +136,7 @@ export function healthComponents() {
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
     {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
     {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
+    {id:'email-release-sync',name:'Email rendering release sync',path:'email rendering main → production',kind:'api' as const},
     ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
   ];
 }
@@ -140,7 +145,7 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
     'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
-    'email-logo','email-delivery','email-template-compatibility',
+    'email-logo','email-delivery','email-template-compatibility','email-release-sync',
   ]);
   return immediate.has(id)?1:2;
 }
@@ -343,6 +348,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   let releasePolicyReason='';
   let publishedDeployId='';
   let productionRows:any[]=[];
+  let changedFilesBetween:string[]=[];
 
   if(!liveCommit||!deployId){
     const home=await timedFetch(origin+'/');
@@ -611,6 +617,9 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
           compareStatus=clean(body?.status,40);
           const ahead=Math.max(0,Number(body?.ahead_by||0));
           commitsBehind=Number.isFinite(ahead)?ahead:null;
+          changedFilesBetween=Array.isArray(body?.files)
+            ? body.files.map((file:any)=>clean(file?.filename,300)).filter(Boolean)
+            : [];
         }
       }catch{}
     }
@@ -633,6 +642,21 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
       fallbackUsed=true;
     }
   }
+
+  const emailRenderingPathPatterns=[
+    /^netlify\/functions\/_shared\/(?:email-brand|lead-email|review-email|vendor-email|accounting-alerts|auth-security|system-health|email-health)\.ts$/,
+    /^netlify\/functions\/admin-email-preview\.mts$/,
+    /^netlify\/functions\/resend-webhook\.mts$/,
+    /^src\/pages\/admin\/email-preview\/index\.astro$/,
+    /^src\/pages\/admin\/health\/index\.astro$/,
+    /^scripts\/build_safety_check\.mjs$/,
+  ];
+  const emailRenderingChangedFiles=changedFilesBetween.filter((file)=>emailRenderingPathPatterns.some((pattern)=>pattern.test(file)));
+  const emailRenderingMessage=/\b(email|resend|mail|logo|template)\b/i.test(mainCommitMessage);
+  const emailRenderingBehind=Boolean(
+    commitsBehind!=null&&commitsBehind>0&&
+    (emailRenderingChangedFiles.length>0||(!changedFilesBetween.length&&emailRenderingMessage))
+  );
 
   const lagTooHigh=commitsBehind!=null&&commitsBehind>1;
   const lagUnknown=commitsBehind==null;
@@ -786,6 +810,9 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     releasePolicyReason,
     releasePolicySkipped,
     targetDeployCreatedAt,
+    changedFilesBetween,
+    emailRenderingBehind,
+    emailRenderingChangedFiles,
     detail:clean(detail,1200),
     ms:Date.now()-started,
   };
@@ -865,8 +892,56 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       verificationSourceLabel:clean(deploymentSync.verificationSourceLabel,120),
       githubMetadataSource:clean(deploymentSync.githubMetadataSource,120),
       fallbackUsed:Boolean(deploymentSync.fallbackUsed),
+      commitsBehind:Number.isFinite(Number(deploymentSync.commitsBehind))?Number(deploymentSync.commitsBehind):null,
+      mainCommitMessage:clean(deploymentSync.mainCommitMessage,500),
+      emailRenderingBehind:Boolean(deploymentSync.emailRenderingBehind),
+      emailRenderingChangedFiles:Array.isArray(deploymentSync.emailRenderingChangedFiles)?deploymentSync.emailRenderingChangedFiles.slice(0,20):[],
     },
   };
+  const emailReleaseBehind=Boolean(deploymentSync.emailRenderingBehind);
+  const emailReleaseState=String(deploymentSync.deploymentState||'unknown');
+  const emailReleaseSeverity:HealthCheck['severity']=emailReleaseBehind
+    ? (emailReleaseState==='deploying'||emailReleaseState==='waiting'?'yellow':'red')
+    : (deploymentSync.commitsBehind==null?'yellow':'green');
+  const emailReleaseChangedFiles=Array.isArray(deploymentSync.emailRenderingChangedFiles)?deploymentSync.emailRenderingChangedFiles:[];
+  const emailReleaseDetail=emailReleaseBehind
+    ? 'Production is '+Number(deploymentSync.commitsBehind||1)+' commit'+(Number(deploymentSync.commitsBehind||1)===1?'':'s')+' behind GitHub main and the pending release includes email-rendering changes'
+      +(emailReleaseChangedFiles.length?' · '+emailReleaseChangedFiles.slice(0,6).join(', '):'')
+      +(emailReleaseState==='deploying'||emailReleaseState==='waiting'?' · Netlify is '+emailReleaseState+'.':' · Production is still serving the older email renderer.')
+    : deploymentSync.commitsBehind==null
+      ? 'Email rendering release sync could not be verified because production/main commit lag is unknown.'
+      : 'Production is not behind any email-rendering changes on GitHub main.';
+  const emailReleaseCheck:HealthCheck={
+    id:'email-release-sync',
+    name:'Email rendering release sync',
+    kind:'api',
+    path:'email rendering main → production',
+    ok:emailReleaseSeverity!=='red',
+    status:emailReleaseSeverity==='red'?503:200,
+    ms:Number(deploymentSync.ms||0),
+    severity:emailReleaseSeverity,
+    deploymentState:deploymentSync.deploymentState,
+    detail:clean(emailReleaseDetail,1200),
+    deploymentDetails:{
+      githubCommit:clean(deploymentSync.githubCommit||deploymentSync.mainCommit,80),
+      netlifyCommit:clean(deploymentSync.liveCommit,80),
+      netlifyDeployId:clean(deploymentSync.deployId,120),
+      deployStatus:clean(deploymentSync.deployStatus,40),
+      deployTime:clean(deploymentSync.deployTime,80),
+      deployDurationSeconds:Number.isFinite(Number(deploymentSync.deployDurationSeconds))?Number(deploymentSync.deployDurationSeconds):null,
+      repositoryPrivate:typeof deploymentSync.repositoryPrivate==='boolean'?deploymentSync.repositoryPrivate:null,
+      verificationSource:clean(deploymentSync.verificationSource,120),
+      verificationSourceKey:deploymentSync.verificationSourceKey,
+      verificationSourceLabel:clean(deploymentSync.verificationSourceLabel,120),
+      githubMetadataSource:clean(deploymentSync.githubMetadataSource,120),
+      fallbackUsed:Boolean(deploymentSync.fallbackUsed),
+      commitsBehind:Number.isFinite(Number(deploymentSync.commitsBehind))?Number(deploymentSync.commitsBehind):null,
+      mainCommitMessage:clean(deploymentSync.mainCommitMessage,500),
+      emailRenderingBehind:emailReleaseBehind,
+      emailRenderingChangedFiles:emailReleaseChangedFiles.slice(0,20),
+    },
+  };
+
   const emailLogoCheck:HealthCheck={
     id:'email-logo',
     name:'Email logo availability',
@@ -915,7 +990,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailLogoCheck,emailDeliveryCheck,emailTemplateCheck];
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailDeliveryCheck,emailTemplateCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),

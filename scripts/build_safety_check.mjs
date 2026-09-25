@@ -39,7 +39,7 @@ function checkEmailCompatibility() {
 
   const brand = fs.readFileSync(brandPath, 'utf8');
   const brandChecks = [
-    ['compact explicit logo dimensions', /width="52" height="52"/],
+    ['compact explicit logo dimensions', /width="64" height="64"/],
     ['CID logo URL', /return 'cid:' \+ EMAIL_LOGO_CONTENT_ID/],
     ['embedded logo attachment helper', /export function emailLogoAttachment/],
     ['embedded logo content ID', /content_id: EMAIL_LOGO_CONTENT_ID/],
@@ -91,9 +91,12 @@ function checkEmailFeatureContracts() {
       ['email logo component', "id:'email-logo'"],
       ['email delivery component', "id:'email-delivery'"],
       ['email compatibility component', "id:'email-template-compatibility'"],
+      ['email release sync component', "id:'email-release-sync'"],
     ]],
     ['src/pages/admin/health/index.astro', [
       ['Email Health dashboard', 'data-email-health-overall'],
+      ['email release warning', 'data-email-health-release-alert'],
+      ['email release status', 'data-email-health-release'],
       ['email issue list', 'data-email-health-issues'],
       ['email 24-hour delivery stats', 'data-email-health-24-delivered'],
     ]],
