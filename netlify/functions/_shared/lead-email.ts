@@ -243,7 +243,7 @@ function buildHtml(record: LeadRecord) {
 
   return (
     '<!DOCTYPE html>' +
-    '<html>' +
+    '<html lang="en">' +
       '<head>' +
         '<meta charset="UTF-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
@@ -493,7 +493,7 @@ function clientConfirmationCopy(record: LeadRecord) {
 function clientConfirmationHtml(record: LeadRecord) {
   const copy = clientConfirmationCopy(record);
   return (
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
     '<body style="margin:0;padding:0;background-color:#f5f0e7;">' +
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7">' +
         '<tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
@@ -602,7 +602,7 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
   const clientName = String(record.customer?.name || 'Client name TBD');
   const subject = 'Follow-up due — ' + clientName + ' · ' + title.replace(/^New /, '');
   const html =
-    '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f0e7;">' +
+    '<!DOCTYPE html><html lang="en"><body style="margin:0;padding:0;background:#f5f0e7;">' +
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #e7dfd0;border-radius:20px;">' +
           emailHeader({ brand: emailBrandForRecord(record), eyebrow: emailBrandName(emailBrandForRecord(record)) }) +
@@ -707,7 +707,7 @@ export async function sendClientFollowUp(record: LeadRecord) {
     : '';
 
   const html =
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
     '<body style="margin:0;padding:0;background:#f5f0e7;">' +
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:650px;background:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
