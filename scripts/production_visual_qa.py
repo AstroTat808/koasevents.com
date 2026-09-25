@@ -193,6 +193,25 @@ def source_mode():
    failures.append("Protected admin workspace directly imports @netlify/identity instead of the resilient server-backed session helper: "+str(path.relative_to(ROOT)))
   if "getAdminSession" not in text:
    failures.append("Protected admin workspace is missing getAdminSession startup authorization: "+str(path.relative_to(ROOT)))
+ gallery_admin=(SRC/"pages/admin/gallery/index.astro").read_text(encoding="utf-8",errors="ignore")
+ gallery_api=(ROOT/"netlify/functions/gallery.mts").read_text(encoding="utf-8",errors="ignore")
+ base_layout=(SRC/"layouts/BaseLayout.astro").read_text(encoding="utf-8",errors="ignore")
+ system_health=(ROOT/"netlify/functions/_shared/system-health.ts").read_text(encoding="utf-8",errors="ignore")
+ health_page=(SRC/"pages/admin/health/index.astro").read_text(encoding="utf-8",errors="ignore")
+ for label,needle,text in [
+  ("Gallery High Impact filter","data-impact-filter-value=\"high\"",gallery_admin),
+  ("Gallery Standard filter","data-impact-filter-value=\"standard\"",gallery_admin),
+  ("Gallery Lower Impact filter","data-impact-filter-value=\"low\"",gallery_admin),
+  ("Gallery Unused filter","data-impact-filter-value=\"unused\"",gallery_admin),
+  ("Gallery placement override editor","data-placement-override-options",gallery_admin),
+  ("Gallery placement crop save action","update-placement-crop",gallery_api),
+  ("Gallery placement crop reset action","reset-placement-crop",gallery_api),
+  ("Sitewide placement crop runtime","applyPlacementCropOverrides",base_layout),
+  ("Release policy skipped health state","release-policy-skipped",system_health),
+  ("Release prefix health explanation","Commit skipped because it needs a [release] prefix",health_page),
+ ]:
+  if needle not in text:failures.append(label+" is missing: "+needle)
+
  crm_page=(SRC/"pages/admin/crm/index.astro").read_text(encoding="utf-8",errors="ignore")
  if "@netlify/identity" in crm_page:
   failures.append("Business CRM must not depend on browser-side Netlify Identity during startup.")
@@ -654,7 +673,15 @@ def admin_mode(browser_name):
   }
   gallery_fixture={
    "uploads":[],"hiddenUploads":[],"hiddenCurated":[],
-   "curatedEdits":{},"categoryOrder":{}
+   "curatedEdits":{
+    "/media/koa/ceremony-vows-closeup.webp":{"category":"Ceremony","focalX":50,"focalY":50}
+   },
+   "categoryOrder":{},
+   "placementCrops":{
+    "/media/koa/ceremony-vows-closeup.webp":{
+     "home__flagship-experience__4-3":{"focalX":28,"focalY":42,"updatedAt":"2026-09-25T00:00:00Z"}
+    }
+   }
   }
   page=ctx.new_page()
   page_errors=[];console_errors=[]
@@ -670,6 +697,22 @@ def admin_mode(browser_name):
    page.wait_for_selector("[data-admin-ui]:not(.hidden)",state="visible",timeout=8000)
    card=page.locator('[data-gallery-key="curated:/media/koa/ceremony-vows-closeup.webp"]')
    card.wait_for(state="visible",timeout=8000)
+
+   high_filter=page.locator('[data-impact-filter-value="high"]')
+   unused_filter=page.locator('[data-impact-filter-value="unused"]')
+   all_filter=page.locator('[data-impact-filter-value="all"]')
+   if not high_filter.locator('[data-impact-count="high"]').inner_text().strip():
+    raise RuntimeError("High Impact Gallery filter did not render its photo count.")
+   high_filter.click()
+   card.wait_for(state="visible",timeout=5000)
+   unused_filter.click()
+   page.wait_for_function(
+    """() => !document.querySelector('[data-gallery-key="curated:/media/koa/ceremony-vows-closeup.webp"]')""",
+    timeout=5000,
+   )
+   all_filter.click()
+   card.wait_for(state="visible",timeout=5000)
+
    usage_button=card.get_by_role("button",name=re.compile(r"^Used in \d+ places?$"))
    if usage_button.count()!=1:
     raise RuntimeError("Gallery usage badge did not render for the ceremony focal image.")
@@ -688,6 +731,7 @@ def admin_mode(browser_name):
    impact_title=page.locator("[data-crop-impact-title]").inner_text()
    preview_text=page.locator("[data-usage-previews]").inner_text()
    save_label=page.locator("[data-crop-save]").inner_text()
+   override_options=page.locator("[data-placement-override-options]").inner_text()
    impact_title_lower=impact_title.lower()
    preview_text_lower=preview_text.lower()
    save_label_lower=save_label.lower()
@@ -699,14 +743,61 @@ def admin_mode(browser_name):
     detail="Gallery placement previews did not distinguish lower-impact usage. Preview text: "+preview_text[:700]
    elif "save crop to" not in save_label_lower:
     detail="Gallery crop save button did not display the affected-placement count. Label: "+save_label
-   elif page_errors:
-    detail="Gallery usage/crop JavaScript errors: "+" | ".join(page_errors[:5])
+   elif "Home · Flagship experience" not in override_options or "Override saved" not in override_options:
+    detail="Gallery high-impact placement override controls did not show the saved Homepage placement. Options: "+override_options[:700]
+   else:
+    override_button=page.locator("[data-placement-override-options] button").filter(has_text="Home · Flagship experience")
+    if override_button.count()!=1:
+     detail="Gallery did not expose exactly one Homepage Flagship crop override control."
+    else:
+     override_button.click()
+     override_title=page.locator("[data-crop-title]").inner_text()
+     override_save=page.locator("[data-crop-save]").inner_text()
+     remove_override=page.locator("[data-crop-use-global]")
+     if "Override crop" not in override_title:
+      detail="Placement-specific crop editor did not switch into override mode. Title: "+override_title
+     elif "Save override" not in override_save:
+      detail="Placement-specific crop editor did not expose its override save action. Label: "+override_save
+     elif not remove_override.is_visible():
+      detail="Saved placement override did not expose the Remove override action."
+     elif page_errors:
+      detail="Gallery usage/crop JavaScript errors: "+" | ".join(page_errors[:5])
   except Exception as exc:
    detail="Gallery usage/crop production regression: "+str(exc)
   try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
   except Exception:pass
   results.append({"name":"gallery-usage-crop-impact","path":"/admin/gallery/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
   if detail:failures.append({"route":"/admin/gallery/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
+  # Prove that the saved per-placement focal point wins over the global focal point
+  # on the real deployed Homepage JavaScript.
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.route("**/api/gallery",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_fixture)))
+  detail=""
+  try:
+   response=page.goto(BASE+"/",wait_until="domcontentloaded",timeout=45000)
+   hero_usage=page.locator('img[data-koa-focal-src="/media/koa/ceremony-vows-closeup.webp"]')
+   hero_usage.first.wait_for(state="visible",timeout=8000)
+   page.wait_for_function(
+    """() => {
+      const img=document.querySelector('img[data-koa-focal-src="/media/koa/ceremony-vows-closeup.webp"]');
+      return img && img.dataset.koaPlacementCropApplied === 'home__flagship-experience__4-3';
+    }""",
+    timeout=5000,
+   )
+   position=hero_usage.first.evaluate("(img) => img.style.objectPosition")
+   if position!="28% 42%":
+    detail="Homepage placement crop override did not win over the global focal point. object-position: "+str(position)
+   elif page_errors:
+    detail="Homepage placement crop runtime JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Homepage placement crop runtime regression: "+str(exc)
+  results.append({"name":"homepage-placement-crop-override","path":"/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":""})
+  if detail:failures.append({"route":"/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
   ctx.close();browser.close()
