@@ -13,7 +13,7 @@ export type HealthCheck = {
   ms: number;
   detail: string;
   severity?: 'green' | 'yellow' | 'red' | 'info';
-  deploymentState?: 'synced' | 'deploying' | 'waiting' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
+  deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
     githubCommit: string;
     netlifyCommit: string;
@@ -332,6 +332,10 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   let githubMainLookupStatus=0;
   let githubMainLookupDetail='';
   let githubMetadataSource='';
+  let mainCommitMessage='';
+  let mainCommitParentCount:number|null=null;
+  let releasePolicyApproved:boolean|null=null;
+  let releasePolicyReason='';
   let publishedDeployId='';
   let productionRows:any[]=[];
 
@@ -379,6 +383,8 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
         const body:any=await response.json();
         mainCommit=clean(body?.sha,80);
         mainCommitAt=clean(body?.commit?.committer?.date||body?.commit?.author?.date,80);
+        mainCommitMessage=clean(body?.commit?.message,500);
+        mainCommitParentCount=Array.isArray(body?.parents)?body.parents.length:null;
         githubMetadataSource='GitHub commits/main';
       }else{
         githubMainLookupDetail='GitHub main lookup returned HTTP '+response.status+'.'+(!githubToken&&response.status===404?' KOA_GITHUB_READ_TOKEN is not configured; private repositories return 404 to unauthenticated GitHub API requests.':'');
@@ -399,6 +405,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
           const branchBody:any=await branchResponse.json();
           mainCommit=clean(branchBody?.commit?.sha,80);
           mainCommitAt=clean(branchBody?.commit?.commit?.committer?.date||branchBody?.commit?.commit?.author?.date,80);
+          mainCommitMessage=clean(branchBody?.commit?.commit?.message,500);
           githubMetadataSource='GitHub branches/main';
           githubMainLookupDetail='GitHub main recovered from the branch endpoint.';
         }else if(!githubMainLookupDetail){
@@ -408,6 +415,34 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
         if(!githubMainLookupDetail) githubMainLookupDetail='GitHub main branch lookup failed: '+(error instanceof Error?clean(error.message,180):'request failed');
       }
     }
+  }
+
+  if(mainCommit && (!mainCommitMessage || mainCommitParentCount==null)){
+    try{
+      const commitResponse=await fetch(
+        'https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(mainCommit),
+        {headers:githubHeaders,signal:AbortSignal.timeout(12_000)},
+      );
+      if(commitResponse.ok){
+        const commitBody:any=await commitResponse.json();
+        mainCommitMessage=mainCommitMessage||clean(commitBody?.commit?.message,500);
+        mainCommitParentCount=Array.isArray(commitBody?.parents)?commitBody.parents.length:mainCommitParentCount;
+      }
+    }catch{}
+  }
+
+  if(mainCommit){
+    const explicitRelease=/^(?:\[release\]|release:)/i.test(mainCommitMessage);
+    const mergeCommit=(mainCommitParentCount!=null&&mainCommitParentCount>=2)||/^Merge pull request #\d+/m.test(mainCommitMessage);
+    const squashPullRequest=/\(#\d+\)\s*$/m.test(mainCommitMessage);
+    releasePolicyApproved=Boolean(explicitRelease||mergeCommit||squashPullRequest);
+    releasePolicyReason=explicitRelease
+      ? 'explicit-release-prefix'
+      : mergeCommit
+        ? 'merge-commit'
+        : squashPullRequest
+          ? 'squash-pull-request'
+          : 'release-prefix-required';
   }
 
   const netlifyToken=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
@@ -602,8 +637,15 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   const mainAgeMs=Number.isFinite(mainCommitMs)?Math.max(0,Date.now()-mainCommitMs):null;
   const triggerGraceMs=5*60*1000;
 
-  let deploymentState:'synced'|'deploying'|'waiting'|'auto-deploy-broken'|'deploy-failed'|'unknown'='unknown';
+  let deploymentState:'synced'|'deploying'|'waiting'|'release-policy-skipped'|'auto-deploy-broken'|'deploy-failed'|'unknown'='unknown';
   let severity:'green'|'yellow'|'red'='red';
+
+  const releasePolicySkipped=Boolean(
+    commitsBehind!=null&&commitsBehind>0&&
+    linked&&
+    releasePolicyApproved===false&&
+    !targetDeployActive&&!anyDeployActive&&!targetDeployFailed
+  );
 
   if(!metadataReady||lagUnknown){
     deploymentState='unknown';
@@ -620,6 +662,9 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   }else if(targetDeployFailed){
     deploymentState='deploy-failed';
     severity='red';
+  }else if(releasePolicySkipped){
+    deploymentState='release-policy-skipped';
+    severity='yellow';
   }else if(mainAgeMs!=null&&mainAgeMs<triggerGraceMs){
     deploymentState='waiting';
     severity=commitsBehind===1?'yellow':'red';
@@ -665,6 +710,8 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     detail+=(detail?' ':'')+'The production deploy for the newest observed commit ended in '+targetDeployState+
       (targetDeployId?' · deploy '+targetDeployId.slice(0,12):'')+
       (targetDeployError?' · '+targetDeployError:'')+'.';
+  }else if(deploymentState==='release-policy-skipped'){
+    detail+=(detail?' ':'')+'Commit skipped because it needs a [release] prefix (or must be merged through a pull request). This is an intentional production-release policy decision, not a broken Netlify Git connection.';
   }else if(deploymentState==='auto-deploy-broken'&&linked&&commitsBehind!=null&&commitsBehind>0){
     detail+=(detail?' ':'')+'No active production deploy for main is visible after the Git trigger grace period; Git auto-deploy appears stalled.';
   }
@@ -728,6 +775,11 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     targetDeployId,
     targetDeployCommit,
     targetDeployState,
+    mainCommitMessage,
+    mainCommitParentCount,
+    releasePolicyApproved,
+    releasePolicyReason,
+    releasePolicySkipped,
     targetDeployCreatedAt,
     detail:clean(detail,1200),
     ms:Date.now()-started,
