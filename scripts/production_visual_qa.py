@@ -688,13 +688,16 @@ def admin_mode(browser_name):
    impact_title=page.locator("[data-crop-impact-title]").inner_text()
    preview_text=page.locator("[data-usage-previews]").inner_text()
    save_label=page.locator("[data-crop-save]").inner_text()
-   if "High-impact crop change" not in impact_title:
+   impact_title_lower=impact_title.lower()
+   preview_text_lower=preview_text.lower()
+   save_label_lower=save_label.lower()
+   if "high-impact crop change" not in impact_title_lower:
     detail="Gallery crop warning did not identify the high-impact placement set. Title: "+impact_title
-   elif "High impact" not in preview_text:
+   elif "high impact" not in preview_text_lower:
     detail="Gallery placement previews did not visually label high-impact usage. Preview text: "+preview_text[:700]
-   elif "Lower impact" not in preview_text:
+   elif "lower impact" not in preview_text_lower:
     detail="Gallery placement previews did not distinguish lower-impact usage. Preview text: "+preview_text[:700]
-   elif "Save crop to" not in save_label:
+   elif "save crop to" not in save_label_lower:
     detail="Gallery crop save button did not display the affected-placement count. Label: "+save_label
    elif page_errors:
     detail="Gallery usage/crop JavaScript errors: "+" | ".join(page_errors[:5])
