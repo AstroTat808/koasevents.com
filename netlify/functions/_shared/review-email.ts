@@ -1,4 +1,4 @@
-import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
+import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
 
 type ReviewRecord = {
   id: string;
@@ -122,6 +122,7 @@ export async function sendReviewRequest(record: ReviewRecord) {
         subject: 'Mahalo from ' + brandName + ' — would you share your experience?',
         html: html(record),
         text: text(record),
+        attachments: [emailLogoAttachment()],
         reply_to: replyTo,
       }),
       signal: AbortSignal.timeout(12_000),
