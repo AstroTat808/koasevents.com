@@ -48,6 +48,57 @@ export function emailLogoUrl(_brand: EmailBrandKey) {
   return 'https://koasevents.com/brand/koa-mark.png';
 }
 
+export function emailDocumentOpen(args: {
+  title: string;
+  previewText?: string;
+  maxWidth?: number;
+}) {
+  const width = Math.max(520, Math.min(700, Number(args.maxWidth || 600)));
+  const preview = String(args.previewText || '').trim();
+  return (
+    '<!DOCTYPE html><html lang="en"><head>' +
+      '<meta charset="UTF-8">' +
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+      '<meta http-equiv="X-UA-Compatible" content="IE=edge">' +
+      '<meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no">' +
+      '<title>' + esc(args.title) + '</title>' +
+    '</head>' +
+    '<body style="margin:0;padding-top:0;padding-right:0;padding-bottom:0;padding-left:0;background-color:#f5f0e7;">' +
+      (preview
+        ? '<div style="display:none;max-height:0px;overflow:hidden;opacity:0;color:transparent;font-family:Arial,Helvetica,sans-serif;font-size:1px;line-height:1px;">' + esc(preview) + '</div>'
+        : '') +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7" style="width:100%;background-color:#f5f0e7;border-collapse:collapse;">' +
+        '<tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
+          '<!--[if mso]><table role="presentation" width="' + width + '" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->' +
+          '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:' + width + 'px;background-color:#ffffff;border:1px solid #e7dfd0;border-radius:18px;border-collapse:separate;">'
+  );
+}
+
+export function emailDocumentClose() {
+  return (
+          '</table>' +
+          '<!--[if mso]></td></tr></table><![endif]-->' +
+        '</td></tr>' +
+      '</table>' +
+    '</body></html>'
+  );
+}
+
+export function emailButton(args: {
+  href: string;
+  label: string;
+  marginTop?: number;
+}) {
+  const marginTop = Math.max(0, Math.min(48, Number(args.marginTop ?? 22)));
+  return (
+    '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:' + marginTop + 'px;border-collapse:separate;">' +
+      '<tr><td align="center" bgcolor="#173d30" style="background-color:#173d30;border-radius:999px;mso-padding-alt:12px 20px;">' +
+        '<a href="' + esc(args.href) + '" style="display:inline-block;padding-top:12px;padding-right:20px;padding-bottom:12px;padding-left:20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;font-weight:800;letter-spacing:0.8px;text-transform:uppercase;text-decoration:none;color:#ffffff;">' + esc(args.label) + '</a>' +
+      '</td></tr>' +
+    '</table>'
+  );
+}
+
 export function emailHeader(args: {
   brand: EmailBrandKey;
   eyebrow?: string;
@@ -55,14 +106,14 @@ export function emailHeader(args: {
 }) {
   const brandName = emailBrandName(args.brand);
   return (
-    '<tr><td align="center" bgcolor="#fbf8f2" style="padding:24px 28px 22px;background:#fbf8f2;border-radius:22px 22px 0 0;">' +
-      '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="64" height="64" alt="' + esc(brandName) + '" style="display:block;width:64px;height:64px;border:0;outline:none;text-decoration:none;">' +
-      '<div style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#173d30;">' + esc(brandName) + '</div>' +
+    '<tr><td align="center" bgcolor="#fbf8f2" style="padding-top:16px;padding-right:20px;padding-bottom:16px;padding-left:20px;background-color:#fbf8f2;border-radius:18px 18px 0 0;">' +
+      '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="52" height="52" border="0" alt="' + esc(brandName) + '" style="display:block;width:52px;height:52px;border:0;outline:none;text-decoration:none;">' +
+      '<div style="padding-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;color:#173d30;mso-line-height-rule:exactly;">' + esc(brandName) + '</div>' +
       (args.eyebrow
-        ? '<div style="padding-top:15px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#a96d4a;">' + esc(args.eyebrow) + '</div>'
+        ? '<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;mso-line-height-rule:exactly;">' + esc(args.eyebrow) + '</div>'
         : '') +
       (args.title
-        ? '<div style="padding-top:5px;font-family:Georgia,Times New Roman,serif;font-size:27px;line-height:33px;font-weight:700;color:#173d30;">' + esc(args.title) + '</div>'
+        ? '<div style="padding-top:3px;font-family:Georgia,Times New Roman,serif;font-size:24px;line-height:29px;font-weight:700;color:#173d30;mso-line-height-rule:exactly;">' + esc(args.title) + '</div>'
         : '') +
     '</td></tr>'
   );
@@ -112,11 +163,11 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
     : '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">Koa’s Events Team</div>';
 
   return (
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc;">' +
-      '<tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30;">' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;border-top:1px solid #ece7dc;border-collapse:collapse;">' +
+      '<tr><td style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;color:#173d30;">' +
         '<div style="font-size:14px;line-height:22px;">Mahalo,</div>' +
         identity +
-        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">' +
+        '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;border-collapse:collapse;">' +
           '<tr>' +
             '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#a96d4a;">&#9993;</td>' +
             '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="mailto:aloha@koasevents.com" style="color:#173d30;text-decoration:none;">aloha@koasevents.com</a></td>' +

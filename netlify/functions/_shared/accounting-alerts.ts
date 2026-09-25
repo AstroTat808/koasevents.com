@@ -1,4 +1,4 @@
-import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
 type AccountingTransition = {
   recordId?: string;
   clientName?: string;
@@ -63,17 +63,17 @@ export async function sendAccountingTransitionAlerts(
       || clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
       || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
       || 'Koa’s Events <leads@koasevents.com>';
-    const html='<!doctype html><html><body style="margin:0;background:#f5f0e7;font-family:Arial,sans-serif;color:#173d30">'
-      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+    const html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>'+esc(subject)+'</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
+      +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
       +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
       +emailHeader({brand:'events',eyebrow:'Accounting Reconciliation',title:subject})
-      +'<tr><td style="padding:28px">'
+      +'<tr><td style="padding-top:24px;padding-right:22px;padding-bottom:24px;padding-left:22px">'
       +emailGreeting('Team')
       +'<p style="line-height:1.6;color:#52635b">'+esc(summaryLines.join(' '))+'</p>'
       +details.map((entry)=>'<div style="margin:14px 0;padding:14px;border:1px solid #e7dfd0;border-radius:12px"><strong>'+esc(entry.heading)+': '+esc(entry.name)+'</strong>'
         +(entry.issues.length?'<ul>'+entry.issues.map((line)=>'<li>'+esc(line)+'</li>').join('')+'</ul>':'')
         +'</div>').join('')
-      +'<p><a href="https://koasevents.com/admin/quotes/" style="display:inline-block;background:#173d30;color:white;text-decoration:none;border-radius:999px;padding:12px 18px;font-size:12px;font-weight:800">Open Sales CRM</a></p>'
+      +emailButton({href:'https://koasevents.com/admin/quotes/',label:'Open Sales CRM',marginTop:20})
       +emailSignature()
       +'</td></tr></table></td></tr></table></body></html>';
     const textBody=[emailGreetingText('Team'),'',

@@ -19,6 +19,53 @@ function lineOf(sourceFile, pos) {
   return sourceFile.getLineAndCharacterOfPosition(pos).line + 1;
 }
 
+
+const emailTemplateFiles = [
+  'netlify/functions/_shared/lead-email.ts',
+  'netlify/functions/_shared/review-email.ts',
+  'netlify/functions/_shared/vendor-email.ts',
+  'netlify/functions/_shared/accounting-alerts.ts',
+  'netlify/functions/_shared/auth-security.ts',
+  'netlify/functions/_shared/system-health.ts',
+  'netlify/functions/admin-email-preview.mts',
+];
+
+function checkEmailCompatibility() {
+  const brandPath = 'netlify/functions/_shared/email-brand.ts';
+  if (!fs.existsSync(brandPath)) {
+    failures.push(brandPath + ': shared email-brand module is missing');
+    return;
+  }
+
+  const brand = fs.readFileSync(brandPath, 'utf8');
+  const brandChecks = [
+    ['compact explicit logo dimensions', /width="52" height="52"/],
+    ['absolute HTTPS logo URL', /https:\/\/koasevents\.com\/brand\/koa-mark\.png/],
+    ['Outlook-safe button padding', /mso-padding-alt:/],
+    ['table-based email button helper', /export function emailButton/],
+    ['standard email document helper', /export function emailDocumentOpen/],
+  ];
+  for (const [label, pattern] of brandChecks) {
+    if (!pattern.test(brand)) failures.push(brandPath + ': missing ' + label);
+  }
+
+  for (const file of emailTemplateFiles) {
+    if (!fs.existsSync(file)) {
+      failures.push(file + ': automated email template source is missing');
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    if (!/emailHeader\(/.test(text)) failures.push(file + ': does not use the shared branded email header');
+    if (!/emailSignature\(/.test(text)) failures.push(file + ': does not use the shared branded email signature');
+    if (/background-image\s*:/.test(text)) failures.push(file + ': CSS background-image is not Outlook-safe');
+    if (/<button\b/i.test(text)) failures.push(file + ': HTML <button> found; email actions must use linked table buttons');
+    if (/(display\s*:\s*flex|display\s*:\s*grid)/i.test(text)) failures.push(file + ': flex/grid layout found in email HTML');
+    if (/src=["']\//i.test(text)) failures.push(file + ': relative image URL found in email HTML');
+    if (!/viewport/.test(text)) failures.push(file + ': viewport metadata is missing');
+    if (!/X-UA-Compatible/.test(text)) failures.push(file + ': Outlook compatibility metadata is missing');
+  }
+}
+
 function checkScript(file) {
   const text = fs.readFileSync(file, 'utf8');
   const kind = file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -85,6 +132,8 @@ for (const file of roots.flatMap(walk)) {
   }
   checkScript(file);
 }
+
+checkEmailCompatibility();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');

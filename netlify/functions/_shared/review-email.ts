@@ -1,4 +1,4 @@
-import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
+import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
 
 type ReviewRecord = {
   id: string;
@@ -52,19 +52,17 @@ function html(record: ReviewRecord) {
   const brandName = emailBrandName(brand);
 
   return (
-    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>' +
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
     '<body style="margin:0;padding:0;background:#f5f0e7;">' +
       '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7">' +
-        '<tr><td align="center" style="padding:28px 12px;">' +
+        '<tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:650px;background:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
             emailHeader({ brand, eyebrow: brandName, title: 'Mahalo for celebrating with us.' }) +
-            '<tr><td style="padding:32px 30px;">' +
+            '<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px;">' +
               emailGreeting(firstName(record)) +
               '<div style="padding-top:10px;font-family:Georgia,Times New Roman,serif;font-size:34px;line-height:40px;font-weight:700;color:#173d30;">Would you share your Koa’s experience?</div>' +
               '<div style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">Thank you for trusting ' + esc(brandName) + ' with your celebration' + (eventDate ? ' on ' + esc(eventDate) : '') + '. If you have a moment, we would be grateful if you shared an honest Google review. Your feedback helps future couples and hosts understand what it is actually like to celebrate with Koa’s.</div>' +
-              '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:26px;"><tr><td bgcolor="#173d30" style="background-color:#173d30;border-radius:999px;">' +
-                '<a href="' + esc(url) + '" style="display:inline-block;padding:14px 22px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;font-weight:800;letter-spacing:1px;text-transform:uppercase;text-decoration:none;color:#ffffff;">Share a Google review →</a>' +
-              '</td></tr></table>' +
+              emailButton({ href: url, label: 'Share a Google review →', marginTop: 22 }) +
               '<div style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">If there is anything you would rather tell us directly, simply reply to this email. We read every note.</div>' +
               emailSignature() +
               '<div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#8a918d;">This is a one-time post-event feedback request from ' + esc(brandName) + '.</div>' +

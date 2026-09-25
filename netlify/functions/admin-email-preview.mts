@@ -1,6 +1,6 @@
 import type { Config } from '@netlify/functions';
 import { requireCapability, operationsRole, ROLE_LABELS } from './_shared/admin';
-import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
 
 type PreviewTemplate = {
   id:string;
@@ -54,15 +54,15 @@ function renderTemplate(template:PreviewTemplate,brand:EmailBrandKey,person:Retu
     template.id==='client-confirmation'
       ? '<div style="margin-top:20px;padding:16px 18px;background:#f5f0e7;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:21px;font-weight:700;color:#173d30;">Event date: June 12, 2027 · Guest count: 42 · Package interest: Gardenia Wedding Collection</div>'
       : template.id==='vendor-brief'
-      ? '<p style="margin:24px 0 0;"><a href="https://koasevents.com/admin/vendors/" style="display:inline-block;background:#173d30;color:#fff;text-decoration:none;border-radius:999px;padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;">Open event brief →</a></p>'
+      ? emailButton({href:'https://koasevents.com/admin/vendors/',label:'Open event brief →',marginTop:22})
       : template.id==='review-request'
-      ? '<p style="margin:24px 0 0;"><a href="https://koasevents.com" style="display:inline-block;background:#173d30;color:#fff;text-decoration:none;border-radius:999px;padding:13px 20px;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;text-transform:uppercase;">Share a Google review →</a></p>'
+      ? emailButton({href:'https://koasevents.com',label:'Share a Google review →',marginTop:22})
       : '';
-  const html='<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f0e7;">'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px;">'
+  const html='<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head><body style="margin:0;background:#f5f0e7;">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:22px;">'
     +emailHeader({brand,eyebrow:template.category,title:template.title})
-    +'<tr><td style="padding:32px 30px;">'
+    +'<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px;">'
     +emailGreeting(recipient)
     +'<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">'+esc(template.body)+'</p>'
     +extra
