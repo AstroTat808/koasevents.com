@@ -677,7 +677,8 @@ def admin_mode(browser_name):
    page.wait_for_function(
     """() => {
       const card=document.querySelector('[data-gallery-key="curated:/media/koa/ceremony-vows-closeup.webp"]');
-      return card && card.innerText.includes('Website placements') && card.innerText.includes('Flagship experience');
+      const text=(card?.textContent||'').toLowerCase();
+      return text.includes('website placements') && text.includes('flagship experience');
     }""",
     timeout=5000,
    )
