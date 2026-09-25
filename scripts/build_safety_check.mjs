@@ -91,9 +91,12 @@ function checkEmailFeatureContracts() {
       ['email logo component', "id:'email-logo'"],
       ['email delivery component', "id:'email-delivery'"],
       ['email compatibility component', "id:'email-template-compatibility'"],
+      ['email release sync component', "id:'email-release-sync'"],
     ]],
     ['src/pages/admin/health/index.astro', [
       ['Email Health dashboard', 'data-email-health-overall'],
+      ['email release warning', 'data-email-health-release-alert'],
+      ['email release status', 'data-email-health-release'],
       ['email issue list', 'data-email-health-issues'],
       ['email 24-hour delivery stats', 'data-email-health-24-delivered'],
     ]],
