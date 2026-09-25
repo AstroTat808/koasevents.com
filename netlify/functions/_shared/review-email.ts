@@ -52,9 +52,9 @@ function html(record: ReviewRecord) {
   const brandName = emailBrandName(brand);
 
   return (
-    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head>' +
+    '<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Mahalo from ' + esc(brandName) + '</title></head>' +
     '<body style="margin:0;padding:0;background:#f5f0e7;">' +
-      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7">' +
+      '<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7">' +
         '<tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:650px;background:#ffffff;border:1px solid #e7dfd0;border-radius:22px;">' +
             emailHeader({ brand, eyebrow: brandName, title: 'Mahalo for celebrating with us.' }) +
@@ -65,7 +65,7 @@ function html(record: ReviewRecord) {
               emailButton({ href: url, label: 'Share a Google review →', marginTop: 22 }) +
               '<div style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">If there is anything you would rather tell us directly, simply reply to this email. We read every note.</div>' +
               emailSignature() +
-              '<div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#8a918d;">This is a one-time post-event feedback request from ' + esc(brandName) + '.</div>' +
+              '<div style="padding-top:18px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:18px;color:#66736d;">This is a one-time post-event feedback request from ' + esc(brandName) + '.</div>' +
             '</td></tr>' +
           '</table>' +
         '</td></tr>' +

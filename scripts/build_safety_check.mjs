@@ -63,6 +63,9 @@ function checkEmailCompatibility() {
     if (/src=["']\//i.test(text)) failures.push(file + ': relative image URL found in email HTML');
     if (!/viewport/.test(text)) failures.push(file + ': viewport metadata is missing');
     if (!/X-UA-Compatible/.test(text)) failures.push(file + ': Outlook compatibility metadata is missing');
+    if (!/<title>/.test(text)) failures.push(file + ': email document title is missing');
+    if (!/dir="ltr"/.test(text)) failures.push(file + ': left-to-right direction metadata is missing');
+    if (/#(?:a96d4a|8a918d|78827d|7a857f)/i.test(text)) failures.push(file + ': low-contrast legacy email color remains');
   }
 }
 
