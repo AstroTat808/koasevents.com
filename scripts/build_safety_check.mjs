@@ -40,7 +40,10 @@ function checkEmailCompatibility() {
   const brand = fs.readFileSync(brandPath, 'utf8');
   const brandChecks = [
     ['compact explicit logo dimensions', /width="52" height="52"/],
-    ['absolute HTTPS logo URL', /https:\/\/koasevents\.com\/brand\/koa-mark\.png/],
+    ['CID logo URL', /return 'cid:' \+ EMAIL_LOGO_CONTENT_ID/],
+    ['embedded logo attachment helper', /export function emailLogoAttachment/],
+    ['embedded logo content ID', /content_id: EMAIL_LOGO_CONTENT_ID/],
+    ['embedded PNG content type', /content_type: 'image\/png'/],
     ['Outlook-safe button padding', /mso-padding-alt:/],
     ['table-based email button helper', /export function emailButton/],
     ['standard email document helper', /export function emailDocumentOpen/],
@@ -56,6 +59,7 @@ function checkEmailCompatibility() {
     }
     const text = fs.readFileSync(file, 'utf8');
     if (!/emailHeader\(/.test(text)) failures.push(file + ': does not use the shared branded email header');
+    if (!/emailLogoAttachment\(/.test(text)) failures.push(file + ': does not attach the embedded email logo');
     if (!/emailSignature\(/.test(text)) failures.push(file + ': does not use the shared branded email signature');
     if (/background-image\s*:/.test(text)) failures.push(file + ': CSS background-image is not Outlook-safe');
     if (/<button\b/i.test(text)) failures.push(file + ': HTML <button> found; email actions must use linked table buttons');
