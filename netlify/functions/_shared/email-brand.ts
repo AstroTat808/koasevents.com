@@ -105,12 +105,14 @@ export function emailHeader(args: {
   title?: string;
 }) {
   const brandName = emailBrandName(args.brand);
+  const eyebrow = String(args.eyebrow || '').trim();
+  const showEyebrow = Boolean(eyebrow) && eyebrow.toLowerCase() !== brandName.toLowerCase();
   return (
     '<tr><td align="center" bgcolor="#fbf8f2" style="padding-top:16px;padding-right:20px;padding-bottom:16px;padding-left:20px;background-color:#fbf8f2;border-radius:18px 18px 0 0;">' +
       '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="52" height="52" border="0" alt="' + esc(brandName) + '" style="display:block;width:52px;height:52px;border:0;outline:none;text-decoration:none;">' +
       '<div style="padding-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;color:#173d30;mso-line-height-rule:exactly;">' + esc(brandName) + '</div>' +
-      (args.eyebrow
-        ? '<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;mso-line-height-rule:exactly;">' + esc(args.eyebrow) + '</div>'
+      (showEyebrow
+        ? '<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;mso-line-height-rule:exactly;">' + esc(eyebrow) + '</div>'
         : '') +
       (args.title
         ? '<div style="padding-top:3px;font-family:Georgia,Times New Roman,serif;font-size:24px;line-height:29px;font-weight:700;color:#173d30;mso-line-height-rule:exactly;">' + esc(args.title) + '</div>'
