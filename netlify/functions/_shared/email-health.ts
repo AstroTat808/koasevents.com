@@ -29,7 +29,7 @@ const COMPATIBILITY_TEMPLATES = [
 ] as const;
 
 const COMPATIBILITY_CHECKS = [
-  'absolute PNG logo URL',
+  'embedded CID PNG logo',
   'explicit image width and height',
   'table-based layout',
   'Outlook-safe linked buttons',
@@ -109,7 +109,7 @@ async function checkLogo() {
       ms: Date.now() - started,
       contentType,
       contentLength: Number.isFinite(contentLength) ? contentLength : 0,
-      detail: ok ? 'Koa email logo is reachable as PNG.' : 'Koa email logo did not return a healthy PNG response.',
+      detail: ok ? 'Koa source logo asset is reachable as PNG; sent emails embed this PNG inline via CID.' : 'Koa source logo asset did not return a healthy PNG response.',
     };
   } catch (error) {
     return {
