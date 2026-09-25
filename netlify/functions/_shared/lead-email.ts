@@ -602,7 +602,7 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
   const clientName = String(record.customer?.name || 'Client name TBD');
   const subject = 'Follow-up due — ' + clientName + ' · ' + title.replace(/^New /, '');
   const html =
-    '<!DOCTYPE html><html lang="en" dir="ltr"><body style="margin:0;padding:0;background:#f5f0e7;">' +
+    '<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>' + esc(subject) + '</title></head><body style="margin:0;padding:0;background:#f5f0e7;">' +
       '<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;background:#ffffff;border:1px solid #e7dfd0;border-radius:20px;">' +
           emailHeader({ brand: emailBrandForRecord(record), eyebrow: emailBrandName(emailBrandForRecord(record)) }) +
