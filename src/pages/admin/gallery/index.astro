@@ -107,7 +107,7 @@ const mediaUsage = mediaUsageBySrc;
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Crop editor</p>
           <h2 class="display mt-2 text-3xl" data-crop-title>Reposition photo</h2>
-          <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Drag inside the preview. Nothing changes publicly until you press Save crop.</p>
+          <p data-crop-mode-copy class="mt-2 text-sm text-[var(--koa-ink)]/55">Drag inside the preview. Nothing changes publicly until you press Save crop.</p>
         </div>
         <button type="button" data-crop-close class="grid size-10 shrink-0 place-items-center rounded-full border border-[var(--koa-line)] text-xl">×</button>
       </div>
@@ -126,6 +126,17 @@ const mediaUsage = mediaUsageBySrc;
           <span class="pointer-events-none absolute left-3 top-3 rounded-full bg-black/65 px-3 py-1.5 text-[.6rem] font-black uppercase tracking-[.12em] text-white">Drag focal point</span>
         </div>
       </div>
+
+      <section data-placement-override-section class="mt-6 rounded-[1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">High-impact placement overrides</p>
+            <h3 class="display mt-2 text-2xl">Fix one hero without changing the rest</h3>
+            <p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/50">Choose a high-impact placement to give it its own focal point. Global crop changes will continue to control every placement without an override.</p>
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2" data-placement-override-options></div>
+      </section>
 
       <section class="mt-6 border-t border-[var(--koa-line)] pt-5" data-usage-preview-section>
         <div class="flex flex-wrap items-end justify-between gap-3">
@@ -151,6 +162,7 @@ const mediaUsage = mediaUsageBySrc;
 
       <div class="mt-5 flex flex-wrap items-center gap-3">
         <p class="mr-auto text-sm font-semibold text-[var(--koa-ink)]/55" data-crop-position>50% × 50%</p>
+        <button type="button" data-crop-use-global hidden class="rounded-full border border-[var(--koa-clay)]/35 bg-[var(--koa-sand)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Remove override</button>
         <button type="button" data-crop-reset class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Center</button>
         <button type="button" data-crop-cancel class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Cancel</button>
         <button type="button" data-crop-save class="rounded-full bg-[var(--koa-forest)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em] text-white">Save crop</button>
@@ -184,6 +196,10 @@ const mediaUsage = mediaUsageBySrc;
     const cropCrosshair = document.querySelector('[data-crop-crosshair]');
     const cropPosition = document.querySelector('[data-crop-position]');
     const cropTitle = document.querySelector('[data-crop-title]');
+    const cropModeCopy = document.querySelector('[data-crop-mode-copy]');
+    const placementOverrideSection = document.querySelector('[data-placement-override-section]');
+    const placementOverrideOptions = document.querySelector('[data-placement-override-options]');
+    const cropUseGlobalButton = document.querySelector('[data-crop-use-global]');
     const previewShell = document.querySelector('[data-preview-shell]');
     const usagePreviews = document.querySelector('[data-usage-previews]');
     const usagePreviewCount = document.querySelector('[data-usage-preview-count]');
@@ -205,6 +221,7 @@ const mediaUsage = mediaUsageBySrc;
       hiddenCurated: [],
       curatedEdits: {},
       categoryOrder: {},
+      placementCrops: {},
     };
     let selected = new Set();
     let impactFilter = 'all';
@@ -342,6 +359,57 @@ const mediaUsage = mediaUsageBySrc;
       return usageForItem(item).filter((usage) => usage.href !== '/gallery/');
     }
 
+    function placementCropFor(item, usage) {
+      const placementId = String(usage?.placementId || '');
+      if (!placementId) return null;
+      return state.placementCrops?.[item.src]?.[placementId] || null;
+    }
+
+    function effectiveCropForUsage(item, usage) {
+      if (cropSession?.mode === 'placement' && cropSession?.usage?.placementId === usage?.placementId) {
+        return { x: cropSession.x, y: cropSession.y, override:true };
+      }
+
+      const saved = placementCropFor(item, usage);
+      if (saved) return { x:Number(saved.focalX ?? 50), y:Number(saved.focalY ?? 50), override:true };
+
+      if (cropSession?.mode === 'global' && cropSession?.item?.src === item.src) {
+        return { x:cropSession.x, y:cropSession.y, override:false };
+      }
+
+      return { x:Number(item.focalX ?? 50), y:Number(item.focalY ?? 50), override:false };
+    }
+
+    function renderPlacementOverrideOptions(item) {
+      if (!placementOverrideOptions || !placementOverrideSection) return;
+      placementOverrideOptions.innerHTML = '';
+      const highImpactUsages = externalUsagesForItem(item).filter((usage) => usage.impact === 'high' && usage.placementId);
+      placementOverrideSection.hidden = highImpactUsages.length === 0;
+      if (!highImpactUsages.length) return;
+
+      highImpactUsages.forEach((usage) => {
+        const saved = placementCropFor(item, usage);
+        const selected = cropSession?.mode === 'placement' && cropSession?.usage?.placementId === usage.placementId;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'rounded-xl border px-3 py-2 text-left transition ' +
+          (selected
+            ? 'border-[var(--koa-clay)] bg-[var(--koa-clay)] text-white shadow-sm'
+            : saved
+              ? 'border-[var(--koa-clay)]/30 bg-white text-[var(--koa-clay)]'
+              : 'border-[var(--koa-line)] bg-white text-[var(--koa-ink)]');
+        const name = document.createElement('strong');
+        name.className = 'block text-xs';
+        name.textContent = usage.page + ' · ' + usage.section;
+        const status = document.createElement('span');
+        status.className = 'mt-1 block text-[.58rem] font-black uppercase tracking-[.07em] opacity-70';
+        status.textContent = selected ? 'Editing this placement' : saved ? 'Override saved' : 'Uses global crop';
+        button.append(name, status);
+        button.addEventListener('click', () => startPlacementOverride(item, usage));
+        placementOverrideOptions.append(button);
+      });
+    }
+
     function impactBucketForItem(item) {
       const usages = externalUsagesForItem(item);
       if (!usages.length) return 'unused';
@@ -394,13 +462,28 @@ const mediaUsage = mediaUsageBySrc;
     }
 
     function updateCropImpact(item) {
-      const usages = externalUsagesForItem(item);
+      if (cropSession?.mode === 'placement' && cropSession.usage) {
+        const usage = cropSession.usage;
+        if (cropSaveButton) cropSaveButton.textContent = 'Save override';
+        if (cropImpact && cropImpactTitle && cropImpactCopy) {
+          cropImpactTitle.textContent = 'Only ' + usage.page + ' · ' + usage.section + ' will change';
+          cropImpactCopy.textContent = 'This placement gets its own focal point. Every other website placement keeps its current global crop or its own saved override.';
+          cropImpact.hidden = false;
+        }
+        if (cropUseGlobalButton) cropUseGlobalButton.hidden = !placementCropFor(item, usage);
+        return;
+      }
+
+      const allUsages = externalUsagesForItem(item);
+      const usages = allUsages.filter((usage) => !placementCropFor(item, usage));
+      const overrideCount = allUsages.length - usages.length;
       const count = usages.length;
 
       if (cropSaveButton) cropSaveButton.textContent = count > 1 ? 'Save crop to ' + count + ' places' : 'Save crop';
+      if (cropUseGlobalButton) cropUseGlobalButton.hidden = true;
 
       if (!cropImpact || !cropImpactTitle || !cropImpactCopy) return;
-      if (count < 2) {
+      if (count < 2 && overrideCount === 0) {
         cropImpact.hidden = true;
         cropImpactCopy.textContent = '';
         return;
@@ -416,10 +499,13 @@ const mediaUsage = mediaUsageBySrc;
         (highImpact.length
           ? highImpact.length + (highImpact.length === 1 ? ' high-impact placement is included. ' : ' high-impact placements are included. ')
           : '') +
-        'The same focal point will update ' +
-        examples.join(', ') +
-        (remainder > 0 ? ', and ' + remainder + ' more.' : '.') +
-        ' Review the placement previews above before saving.';
+        (count
+          ? 'The same focal point will update ' + examples.join(', ') + (remainder > 0 ? ', and ' + remainder + ' more.' : '.') + ' '
+          : '') +
+        (overrideCount
+          ? overrideCount + (overrideCount === 1 ? ' saved placement override will stay unchanged. ' : ' saved placement overrides will stay unchanged. ')
+          : '') +
+        'Review the placement previews above before saving.';
       cropImpact.hidden = false;
     }
 
@@ -458,8 +544,10 @@ const mediaUsage = mediaUsageBySrc;
         image.alt = '';
         image.draggable = false;
         image.dataset.usagePreviewImage = '';
+        image.dataset.placementId = usage.placementId || '';
         image.className = 'h-full w-full object-cover transition duration-200';
-        image.style.objectPosition = (cropSession?.x ?? 50) + '% ' + (cropSession?.y ?? 50) + '%';
+        const effectiveCrop = effectiveCropForUsage(item, usage);
+        image.style.objectPosition = effectiveCrop.x + '% ' + effectiveCrop.y + '%';
 
         const ratioLabel = document.createElement('span');
         ratioLabel.className = 'absolute bottom-2 left-2 rounded-full bg-black/65 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-white';
@@ -488,6 +576,12 @@ const mediaUsage = mediaUsageBySrc;
         shape.className = 'rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.55rem] font-bold uppercase tracking-[.07em] text-[var(--koa-clay)]';
         shape.textContent = usage.aspectLabel || String(usage.aspectRatio || '').replaceAll(' ', '').replace('/', ':');
         meta.append(impact, shape);
+        if (placementCropFor(item, usage) || (cropSession?.mode === 'placement' && cropSession?.usage?.placementId === usage.placementId)) {
+          const override = document.createElement('span');
+          override.className = 'rounded-full border border-[var(--koa-clay)]/30 bg-white px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]';
+          override.textContent = 'Crop override';
+          meta.append(override);
+        }
         copy.append(page, section, meta);
 
         link.append(frame, copy);
@@ -497,20 +591,43 @@ const mediaUsage = mediaUsageBySrc;
 
     function openCrop(item) {
       cropSession = {
+        mode:'global',
         item,
+        usage:null,
         x: Number(item.focalX ?? 50),
         y: Number(item.focalY ?? 50),
         initialX: Number(item.focalX ?? 50),
         initialY: Number(item.focalY ?? 50),
       };
       cropTitle.textContent = item.alt || 'Reposition photo';
+      if (cropModeCopy) cropModeCopy.textContent = 'Editing the global crop. Placements with saved overrides will not move.';
       cropImage.src = item.src;
       cropImage.alt = item.alt || '';
+      renderPlacementOverrideOptions(item);
       renderUsagePreviews(item);
       updateCropImpact(item);
       setCropPoint(cropSession.x, cropSession.y);
       setPreviewMode('desktop');
       cropDialog?.showModal();
+    }
+
+    function startPlacementOverride(item, usage) {
+      const saved = placementCropFor(item, usage);
+      cropSession = {
+        mode:'placement',
+        item,
+        usage,
+        x:Number(saved?.focalX ?? item.focalX ?? 50),
+        y:Number(saved?.focalY ?? item.focalY ?? 50),
+        initialX:Number(saved?.focalX ?? item.focalX ?? 50),
+        initialY:Number(saved?.focalY ?? item.focalY ?? 50),
+      };
+      cropTitle.textContent = 'Override crop · ' + usage.page + ' · ' + usage.section;
+      if (cropModeCopy) cropModeCopy.textContent = 'Editing only this high-impact placement. The global crop and every other placement stay unchanged.';
+      renderPlacementOverrideOptions(item);
+      renderUsagePreviews(item);
+      updateCropImpact(item);
+      setCropPoint(cropSession.x, cropSession.y);
     }
 
     function setCropPoint(x, y) {
@@ -522,7 +639,14 @@ const mediaUsage = mediaUsageBySrc;
       cropCrosshair.style.top = cropSession.y + '%';
       cropPosition.textContent = Math.round(cropSession.x) + '% × ' + Math.round(cropSession.y) + '%';
       usagePreviews?.querySelectorAll('[data-usage-preview-image]').forEach((image) => {
-        image.style.objectPosition = cropSession.x + '% ' + cropSession.y + '%';
+        const placementId = image.dataset.placementId || '';
+        const usage = usageForItem(cropSession.item).find((entry) => entry.placementId === placementId);
+        if (!usage) {
+          image.style.objectPosition = cropSession.x + '% ' + cropSession.y + '%';
+          return;
+        }
+        const effective = effectiveCropForUsage(cropSession.item, usage);
+        image.style.objectPosition = effective.x + '% ' + effective.y + '%';
       });
     }
 
@@ -1043,6 +1167,7 @@ const mediaUsage = mediaUsageBySrc;
         hiddenCurated: Array.isArray(galleryPayload.hiddenCurated) ? galleryPayload.hiddenCurated : [],
         curatedEdits: galleryPayload.curatedEdits && typeof galleryPayload.curatedEdits === 'object' ? galleryPayload.curatedEdits : {},
         categoryOrder: galleryPayload.categoryOrder && typeof galleryPayload.categoryOrder === 'object' ? galleryPayload.categoryOrder : {},
+        placementCrops: galleryPayload.placementCrops && typeof galleryPayload.placementCrops === 'object' ? galleryPayload.placementCrops : {},
       };
       const vendorPayload = vendorResponse.ok ? await vendorResponse.json() : { vendors: [] };
       vendors = Array.isArray(vendorPayload.vendors) ? vendorPayload.vendors : [];
@@ -1119,11 +1244,21 @@ const mediaUsage = mediaUsageBySrc;
     cropSaveButton?.addEventListener('click', async () => {
       if (!cropSession) return;
       const item = cropSession.item;
-      const affectedCount = externalUsagesForItem(item).length;
+      const affectedCount = externalUsagesForItem(item).filter((usage) => !placementCropFor(item, usage)).length;
       cropSaveButton.disabled = true;
-      cropSaveButton.textContent = affectedCount > 1 ? 'Saving to ' + affectedCount + ' places…' : 'Saving crop…';
+      cropSaveButton.textContent = cropSession.mode === 'placement'
+        ? 'Saving override…'
+        : affectedCount > 1 ? 'Saving to ' + affectedCount + ' places…' : 'Saving crop…';
       try {
-        if (item.kind === 'upload') {
+        if (cropSession.mode === 'placement' && cropSession.usage?.placementId) {
+          await post({
+            action:'update-placement-crop',
+            src:item.src,
+            placementId:cropSession.usage.placementId,
+            focalX:cropSession.x,
+            focalY:cropSession.y,
+          });
+        } else if (item.kind === 'upload') {
           await post({ action:'update-upload', id:item.id, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
         } else {
           await post({ action:'update-curated', src:item.src, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
@@ -1134,6 +1269,25 @@ const mediaUsage = mediaUsageBySrc;
       } finally {
         cropSaveButton.disabled = false;
         cropSaveButton.textContent = 'Save crop';
+      }
+    });
+
+    cropUseGlobalButton?.addEventListener('click', async () => {
+      if (!cropSession || cropSession.mode !== 'placement' || !cropSession.usage?.placementId) return;
+      cropUseGlobalButton.disabled = true;
+      cropUseGlobalButton.textContent = 'Removing…';
+      try {
+        await post({
+          action:'reset-placement-crop',
+          src:cropSession.item.src,
+          placementId:cropSession.usage.placementId,
+        });
+        cropDialog?.close();
+        cropSession = null;
+        await load();
+      } finally {
+        cropUseGlobalButton.disabled = false;
+        cropUseGlobalButton.textContent = 'Remove override';
       }
     });
 
@@ -1160,6 +1314,12 @@ const mediaUsage = mediaUsageBySrc;
         cropSaveButton.disabled = false;
         cropSaveButton.textContent = 'Save crop';
       }
+      if (cropUseGlobalButton) {
+        cropUseGlobalButton.hidden = true;
+        cropUseGlobalButton.disabled = false;
+        cropUseGlobalButton.textContent = 'Remove override';
+      }
+      if (cropModeCopy) cropModeCopy.textContent = 'Drag inside the preview. Nothing changes publicly until you press Save crop.';
     });
 
     load();
