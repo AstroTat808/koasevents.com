@@ -8,6 +8,8 @@ export type MediaUsage = {
   section: string;
   aspectRatio: string;
   aspectLabel: string;
+  impact?: 'high' | 'standard' | 'low';
+  impactLabel?: string;
 };
 
 const u = (
@@ -100,14 +102,43 @@ const directUsages: Array<[string, MediaUsage]> = [
 
 const usageMap: Record<string, MediaUsage[]> = {};
 
+function classifyImpact(usage: MediaUsage): Pick<MediaUsage, 'impact' | 'impactLabel'> {
+  if (usage.page === 'Blog' || usage.page === 'Gallery') {
+    return { impact: 'low', impactLabel: 'Lower impact' };
+  }
+
+  const highImpactSection =
+    usage.section.includes('Hero') ||
+    (usage.page === 'Home' && (
+      usage.section === 'Flagship experience' ||
+      usage.section.startsWith('Choose the experience') ||
+      usage.section.startsWith('Reasons to gather')
+    )) ||
+    (usage.page === 'Weddings' && (
+      usage.section === 'Signature Wedding' ||
+      usage.section.includes('option') ||
+      usage.section.startsWith('A slower kind of luxury')
+    )) ||
+    (usage.page === 'Signature Wedding' && usage.section.startsWith('Your ')) ||
+    (usage.page === 'East Hawaiʻi Wedding Venue' && usage.section === 'Wedding experience') ||
+    (usage.page === 'Private Events' && (usage.section === 'Host here' || usage.section === 'Bring us to you')) ||
+    (usage.page === 'Mobile Bar' && usage.section === 'Dry-bar model') ||
+    (usage.page === 'Venue' && usage.section === 'Plan with clarity');
+
+  return highImpactSection
+    ? { impact: 'high', impactLabel: 'High impact' }
+    : { impact: 'standard', impactLabel: 'Standard' };
+}
+
 function addUsage(src: string, usage: MediaUsage) {
   if (!usageMap[src]) usageMap[src] = [];
+  const classified = { ...usage, ...classifyImpact(usage) };
   if (!usageMap[src].some((item) =>
-    item.href === usage.href &&
-    item.section === usage.section &&
-    item.aspectRatio === usage.aspectRatio
+    item.href === classified.href &&
+    item.section === classified.section &&
+    item.aspectRatio === classified.aspectRatio
   )) {
-    usageMap[src].push(usage);
+    usageMap[src].push(classified);
   }
 }
 
