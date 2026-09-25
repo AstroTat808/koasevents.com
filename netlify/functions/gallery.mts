@@ -27,12 +27,19 @@ type CuratedEdit = {
   updatedAt?: string;
 };
 
+type PlacementCrop = {
+  focalX: number;
+  focalY: number;
+  updatedAt: string;
+};
+
 type GalleryState = {
   uploads: GalleryItem[];
   hiddenCurated: string[];
   hiddenUploads: string[];
   curatedEdits: Record<string, CuratedEdit>;
   categoryOrder: Record<string, string[]>;
+  placementCrops: Record<string, Record<string, PlacementCrop>>;
 };
 
 function storeFor(context: Context) {
@@ -80,6 +87,7 @@ async function readState(context: Context): Promise<GalleryState> {
     hiddenUploads: Array.isArray(saved?.hiddenUploads) ? saved.hiddenUploads : [],
     curatedEdits: saved?.curatedEdits && typeof saved.curatedEdits === 'object' ? saved.curatedEdits : {},
     categoryOrder: saved?.categoryOrder && typeof saved.categoryOrder === 'object' ? saved.categoryOrder : {},
+    placementCrops: saved?.placementCrops && typeof saved.placementCrops === 'object' ? saved.placementCrops : {},
   };
 }
 
@@ -125,6 +133,7 @@ export default async (req: Request, context: Context) => {
       hiddenUploads: state.hiddenUploads,
       curatedEdits: state.curatedEdits,
       categoryOrder: state.categoryOrder,
+      placementCrops: state.placementCrops,
     }, {
       headers: {
         // Crop/focal-point changes are operational content and should appear across
@@ -231,6 +240,50 @@ export default async (req: Request, context: Context) => {
       };
       await store.setJSON('gallery/index', next);
       return Response.json({ ok: true, edit: nextEdit });
+    }
+
+    if (payload.action === 'update-placement-crop') {
+      const src = String(payload.src || '');
+      const placementId = String(payload.placementId || '').trim().slice(0, 220);
+      if (!src.startsWith('/')) return Response.json({ error: 'Image source is required.' }, { status: 400 });
+      if (!/^[a-z0-9_-]+$/i.test(placementId)) return Response.json({ error: 'Valid placement ID is required.' }, { status: 400 });
+
+      const existingForSource = state.placementCrops[src] && typeof state.placementCrops[src] === 'object'
+        ? state.placementCrops[src]
+        : {};
+      const placementCrops = {
+        ...state.placementCrops,
+        [src]: {
+          ...existingForSource,
+          [placementId]: {
+            focalX: clampFocal(payload.focalX),
+            focalY: clampFocal(payload.focalY),
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+      const next: GalleryState = { ...state, placementCrops };
+      await store.setJSON('gallery/index', next);
+      return Response.json({ ok: true, crop: placementCrops[src][placementId] });
+    }
+
+    if (payload.action === 'reset-placement-crop') {
+      const src = String(payload.src || '');
+      const placementId = String(payload.placementId || '').trim().slice(0, 220);
+      if (!src.startsWith('/')) return Response.json({ error: 'Image source is required.' }, { status: 400 });
+      if (!placementId) return Response.json({ error: 'Placement ID is required.' }, { status: 400 });
+
+      const placementCrops = { ...state.placementCrops };
+      const existingForSource = placementCrops[src] && typeof placementCrops[src] === 'object'
+        ? { ...placementCrops[src] }
+        : {};
+      delete existingForSource[placementId];
+      if (Object.keys(existingForSource).length) placementCrops[src] = existingForSource;
+      else delete placementCrops[src];
+
+      const next: GalleryState = { ...state, placementCrops };
+      await store.setJSON('gallery/index', next);
+      return Response.json({ ok: true });
     }
 
     if (payload.action === 'reorder') {
