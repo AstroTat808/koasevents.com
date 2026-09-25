@@ -130,17 +130,17 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
   const recipients=clean(Netlify.env.get('KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
   if(!recipients.length)recipients.push('chris@sibel.org','koasadmin@koasevents.com');
   const from=clean(Netlify.env.get('KOA_FROM_EMAIL'),240)||"Koa's Events <aloha@koasevents.com>";
-  const html='<!doctype html><html><body style="margin:0;background:#f5f0e7">'
-    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
+  const html='<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Suspicious Koa’s sign-in</title></head><body style="margin:0;padding:0;background:#f5f0e7">'
+    +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
     +emailHeader({brand:'events',eyebrow:'Security',title:'Suspicious Koa’s sign-in'})
-    +'<tr><td style="padding:28px">'
+    +'<tr><td style="padding-top:24px;padding-right:22px;padding-bottom:24px;padding-left:22px">'
     +emailGreeting('Team')
-    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Account:</strong> '+input.email+'</p>'
-    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Device:</strong> '+input.device+'</p>'
-    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Time:</strong> '+input.createdAt+'</p>'
-    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f"><strong>Reasons:</strong> '+input.reasons.join('; ')+'</p>'
-    +'<p style="font:15px/24px Arial,sans-serif;color:#46564f">Review User Management → Security activity and active sessions.</p>'
+    +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f"><strong>Account:</strong> '+input.email+'</p>'
+    +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f"><strong>Device:</strong> '+input.device+'</p>'
+    +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f"><strong>Time:</strong> '+input.createdAt+'</p>'
+    +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f"><strong>Reasons:</strong> '+input.reasons.join('; ')+'</p>'
+    +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f">Review User Management → Security activity and active sessions.</p>'
     +emailSignature()
     +'</td></tr></table></td></tr></table></body></html>';
   const text=[
