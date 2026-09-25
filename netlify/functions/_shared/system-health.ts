@@ -431,7 +431,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     }catch{}
   }
 
-  if(mainCommit){
+  if(mainCommit && (mainCommitMessage || (mainCommitParentCount!=null&&mainCommitParentCount>=2))){
     const explicitRelease=/^(?:\[release\]|release:)/i.test(mainCommitMessage);
     const mergeCommit=(mainCommitParentCount!=null&&mainCommitParentCount>=2)||/^Merge pull request #\d+/m.test(mainCommitMessage);
     const squashPullRequest=/\(#\d+\)\s*$/m.test(mainCommitMessage);
