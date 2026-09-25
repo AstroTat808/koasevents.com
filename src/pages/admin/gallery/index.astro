@@ -51,6 +51,23 @@ const mediaUsage = mediaUsageBySrc;
           <p data-upload-message class="text-sm text-[var(--koa-ink)]/58 md:col-span-2"></p>
         </form>
 
+        <section class="mt-7 rounded-[1.4rem] border border-[var(--koa-line)] bg-white/85 p-4 shadow-sm sm:p-5" data-impact-filter-panel>
+          <div class="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Placement importance</p>
+              <h2 class="display mt-2 text-2xl">Filter photos by website impact</h2>
+              <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">High Impact surfaces heroes and major sales sections first. Unused shows photos that are not reused outside the Gallery.</p>
+            </div>
+            <button type="button" data-impact-filter-value="all" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-white">All <span data-impact-count="all"></span></button>
+          </div>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button type="button" data-impact-filter-value="high" class="rounded-full border border-[var(--koa-clay)]/35 bg-[var(--koa-clay)] px-4 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-white">High Impact <span data-impact-count="high"></span></button>
+            <button type="button" data-impact-filter-value="standard" class="rounded-full border border-[var(--koa-forest)]/25 bg-[var(--koa-forest)]/8 px-4 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Standard <span data-impact-count="standard"></span></button>
+            <button type="button" data-impact-filter-value="low" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/60">Lower Impact <span data-impact-count="low"></span></button>
+            <button type="button" data-impact-filter-value="unused" class="rounded-full border border-dashed border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-2.5 text-[.65rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/60">Unused <span data-impact-count="unused"></span></button>
+          </div>
+        </section>
+
         <section class="sticky top-3 z-30 mt-7 hidden rounded-[1.3rem] border border-[var(--koa-line)] bg-white/95 p-4 shadow-[var(--shadow-soft)] backdrop-blur" data-bulk-bar>
           <div class="flex flex-wrap items-center gap-3">
             <strong class="mr-auto text-sm" data-selected-count>0 photos selected</strong>
@@ -190,6 +207,7 @@ const mediaUsage = mediaUsageBySrc;
       categoryOrder: {},
     };
     let selected = new Set();
+    let impactFilter = 'all';
     let cropSession = null;
     let vendorSession = null;
     let vendors = [];
@@ -322,6 +340,42 @@ const mediaUsage = mediaUsageBySrc;
 
     function externalUsagesForItem(item) {
       return usageForItem(item).filter((usage) => usage.href !== '/gallery/');
+    }
+
+    function impactBucketForItem(item) {
+      const usages = externalUsagesForItem(item);
+      if (!usages.length) return 'unused';
+      if (usages.some((usage) => usage.impact === 'high')) return 'high';
+      if (usages.some((usage) => usage.impact === 'standard')) return 'standard';
+      return 'low';
+    }
+
+    function matchesImpactFilter(item) {
+      return impactFilter === 'all' || impactBucketForItem(item) === impactFilter;
+    }
+
+    function renderImpactFilters() {
+      const items = allItems();
+      const counts = {
+        all: items.length,
+        high: items.filter((item) => impactBucketForItem(item) === 'high').length,
+        standard: items.filter((item) => impactBucketForItem(item) === 'standard').length,
+        low: items.filter((item) => impactBucketForItem(item) === 'low').length,
+        unused: items.filter((item) => impactBucketForItem(item) === 'unused').length,
+      };
+
+      document.querySelectorAll('[data-impact-count]').forEach((element) => {
+        const key = element.dataset.impactCount;
+        element.textContent = key && key in counts ? '(' + counts[key] + ')' : '';
+      });
+
+      document.querySelectorAll('[data-impact-filter-value]').forEach((button) => {
+        const active = button.dataset.impactFilterValue === impactFilter;
+        button.setAttribute('aria-pressed', String(active));
+        button.classList.toggle('ring-2', active);
+        button.classList.toggle('ring-[var(--koa-amber)]', active);
+        button.classList.toggle('ring-offset-2', active);
+      });
     }
 
     function impactClass(impact, surface = 'badge') {
@@ -923,14 +977,16 @@ const mediaUsage = mediaUsageBySrc;
     function renderBoards() {
       boards.innerHTML = '';
       allCategories.forEach((category) => {
-        const items = orderedItems(category);
+        const allCategoryItems = orderedItems(category);
+        const items = allCategoryItems.filter(matchesImpactFilter);
         const section = document.createElement('section');
         section.className = 'rounded-[1.5rem] border border-[var(--koa-line)] bg-white/55 p-4 sm:p-5';
 
         const header = document.createElement('div');
         header.className = 'mb-4 flex flex-wrap items-end justify-between gap-3';
         const copy = document.createElement('div');
-        copy.innerHTML = '<p class="eyebrow text-[var(--koa-clay)]">' + category + '</p><h2 class="display mt-2 text-3xl">' + items.length + (items.length === 1 ? ' photo' : ' photos') + '</h2>';
+        copy.innerHTML = '<p class="eyebrow text-[var(--koa-clay)]">' + category + '</p><h2 class="display mt-2 text-3xl">' + items.length + (items.length === 1 ? ' photo' : ' photos') + (impactFilter === 'all' ? '' : ' shown') + '</h2>' +
+          (impactFilter === 'all' ? '' : '<p class="mt-1 text-xs text-[var(--koa-ink)]/45">' + allCategoryItems.length + ' total in this category</p>');
         const meta = document.createElement('div');
         meta.className = 'text-left sm:text-right';
         const note = document.createElement('p');
@@ -960,11 +1016,13 @@ const mediaUsage = mediaUsageBySrc;
         items.forEach((item) => grid.append(makeCard(item)));
 
         section.append(header, grid);
+        if (impactFilter !== 'all' && items.length === 0) section.classList.add('hidden');
         boards.append(section);
       });
     }
 
     function render() {
+      renderImpactFilters();
       renderBoards();
       updateBulkBar();
     }
@@ -1047,6 +1105,12 @@ const mediaUsage = mediaUsageBySrc;
       await load();
     });
     vendorDialog?.addEventListener('close', () => { vendorSession = null; });
+
+    document.querySelectorAll('[data-impact-filter-value]').forEach((button) => button.addEventListener('click', () => {
+      impactFilter = button.dataset.impactFilterValue || 'all';
+      selected.clear();
+      render();
+    }));
 
     document.querySelectorAll('[data-preview-mode]').forEach((button) => button.addEventListener('click', () => setPreviewMode(button.dataset.previewMode)));
     document.querySelector('[data-crop-close]')?.addEventListener('click', () => cropDialog?.close());
