@@ -1,4 +1,4 @@
-import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
+import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
 
 type LeadRecord = {
   id: string;
@@ -381,6 +381,7 @@ export async function sendLeadNotification(record: LeadRecord) {
     subject,
     html: buildHtml(record),
     text: buildText(record),
+    attachments: [emailLogoAttachment()],
     reply_to: record.customer?.email || undefined,
   });
   const idempotencyKey = ('koa-lead-' + record.id + '-' + String(record.source || 'website')).slice(0, 256);
@@ -559,6 +560,7 @@ async function sendWithResend(args: {
         subject: args.subject,
         html: args.html,
         text: args.text,
+        attachments: [emailLogoAttachment()],
         reply_to: args.replyTo || undefined,
       }),
       signal: AbortSignal.timeout(12_000),
