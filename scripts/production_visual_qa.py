@@ -643,6 +643,68 @@ def admin_mode(browser_name):
   if detail:failures.append({"route":"/admin/quotes/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
+  # Live Gallery crop-impact regression test. The protected session and data APIs
+  # are mocked in-browser so this exercises the exact production JavaScript without
+  # reading or changing real gallery records.
+  gallery_session_fixture={
+   **session_fixture,
+   "permissions":["gallery.view"],"capabilities":["gallery.view"],
+   "app_metadata":{"roles":["admin"],"permissions":["gallery.view"]},
+   "appMetadata":{"roles":["admin"],"permissions":["gallery.view"]}
+  }
+  gallery_fixture={
+   "uploads":[],"hiddenUploads":[],"hiddenCurated":[],
+   "curatedEdits":{},"categoryOrder":{}
+  }
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_session_fixture)))
+  page.route("**/api/gallery",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_fixture)) if route.request.method=="GET" else route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True})))
+  page.route("**/api/admin/vendors",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"vendors":[]})))
+  detail=""
+  shot=root/"admin-gallery-authorized-usage.png"
+  try:
+   response=page.goto(BASE+"/admin/gallery/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-admin-ui]:not(.hidden)",state="visible",timeout=8000)
+   card=page.locator('[data-gallery-key="curated:/media/koa/ceremony-vows-closeup.webp"]')
+   card.wait_for(state="visible",timeout=8000)
+   usage_button=card.get_by_role("button",name=re.compile(r"^Used in \d+ places?$"))
+   if usage_button.count()!=1:
+    raise RuntimeError("Gallery usage badge did not render for the ceremony focal image.")
+   usage_button.click()
+   page.wait_for_function(
+    """() => {
+      const card=document.querySelector('[data-gallery-key="curated:/media/koa/ceremony-vows-closeup.webp"]');
+      return card && card.innerText.includes('Website placements') && card.innerText.includes('Flagship experience');
+    }""",
+    timeout=5000,
+   )
+   card.get_by_role("button",name="Edit crop",exact=True).click()
+   page.wait_for_selector("[data-crop-dialog][open]",state="visible",timeout=5000)
+   page.wait_for_selector("[data-crop-impact]:not([hidden])",state="visible",timeout=5000)
+   impact_title=page.locator("[data-crop-impact-title]").inner_text()
+   preview_text=page.locator("[data-usage-previews]").inner_text()
+   save_label=page.locator("[data-crop-save]").inner_text()
+   if "High-impact crop change" not in impact_title:
+    detail="Gallery crop warning did not identify the high-impact placement set. Title: "+impact_title
+   elif "High impact" not in preview_text:
+    detail="Gallery placement previews did not visually label high-impact usage. Preview text: "+preview_text[:700]
+   elif "Lower impact" not in preview_text:
+    detail="Gallery placement previews did not distinguish lower-impact usage. Preview text: "+preview_text[:700]
+   elif "Save crop to" not in save_label:
+    detail="Gallery crop save button did not display the affected-placement count. Label: "+save_label
+   elif page_errors:
+    detail="Gallery usage/crop JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Gallery usage/crop production regression: "+str(exc)
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"gallery-usage-crop-impact","path":"/admin/gallery/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/gallery/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
   ctx.close();browser.close()
 
  api_results=[]
