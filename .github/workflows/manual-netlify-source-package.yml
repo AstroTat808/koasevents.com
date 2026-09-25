@@ -37,7 +37,7 @@ jobs:
           mkdir -p /tmp/netlify-mcp-runtime
           cd /tmp/netlify-mcp-runtime
           npm init -y >/dev/null 2>&1
-          npm install --no-audit --no-fund @netlify/mcp@1.16.0
+          npm install --no-audit --no-fund @netlify/mcp@1.15.1
           tar -czf /tmp/netlify-mcp-runtime.tgz node_modules package.json package-lock.json
 
       - uses: actions/upload-artifact@v4
