@@ -22,6 +22,7 @@ import {
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
+import { emailHealthSummary } from './_shared/email-health';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -393,12 +394,15 @@ export default async (req:Request,context:Context) => {
       cachedDeploymentHistory(context),
       readProductionReleases(context,50),
     ]);
-    const office365=await office365HealthSummary(context,deployments);
+    const [office365,emailHealth]=await Promise.all([
+      office365HealthSummary(context,deployments),
+      emailHealthSummary(context,{force:true}),
+    ]);
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
     deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -424,7 +428,10 @@ export default async (req:Request,context:Context) => {
     readHealthAlertPolicy(context),
     readProductionReleases(context,50),
   ]);
-  const office365=await office365HealthSummary(context,deployments);
+  const [office365,emailHealth]=await Promise.all([
+    office365HealthSummary(context,deployments),
+    emailHealthSummary(context),
+  ]);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
   const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
@@ -438,6 +445,7 @@ export default async (req:Request,context:Context) => {
     components:healthComponents(),
     deployments,
     office365,
+    emailHealth,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
