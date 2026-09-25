@@ -366,8 +366,7 @@ const seoSchema = {
         const placementElementsForSource = (src) => {
           const normalizedSrc = normalizeAssetPath(src);
           const elements = [
-            ...document.querySelectorAll('img[src], img[data-koa-focal-src]'),
-            ...document.querySelectorAll('[data-koa-focal-src]:not(img)'),
+            ...document.querySelectorAll('img[src], img[data-koa-focal-src], [data-koa-focal-src]:not(img)'),
           ];
           return elements.filter((element) => elementSource(element) === normalizedSrc);
         };
