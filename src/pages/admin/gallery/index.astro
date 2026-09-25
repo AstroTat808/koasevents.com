@@ -122,6 +122,16 @@ const mediaUsage = mediaUsageBySrc;
         <div class="mt-4 grid max-h-[20rem] gap-3 overflow-auto pr-1 sm:grid-cols-2 lg:grid-cols-3" data-usage-previews></div>
       </section>
 
+      <div data-crop-impact hidden class="mt-5 rounded-[1rem] border border-[var(--koa-clay)]/35 bg-[var(--koa-sand)] px-4 py-3">
+        <div class="flex items-start gap-3">
+          <span aria-hidden="true" class="mt-0.5 grid size-7 shrink-0 place-items-center rounded-full bg-[var(--koa-clay)] text-sm font-black text-white">!</span>
+          <div>
+            <strong data-crop-impact-title class="block text-sm text-[var(--koa-ink)]">This crop affects multiple website placements</strong>
+            <p data-crop-impact-copy class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/58"></p>
+          </div>
+        </div>
+      </div>
+
       <div class="mt-5 flex flex-wrap items-center gap-3">
         <p class="mr-auto text-sm font-semibold text-[var(--koa-ink)]/55" data-crop-position>50% × 50%</p>
         <button type="button" data-crop-reset class="rounded-full border border-[var(--koa-line)] px-5 py-2.5 text-xs font-black uppercase tracking-[.1em]">Center</button>
@@ -160,6 +170,10 @@ const mediaUsage = mediaUsageBySrc;
     const previewShell = document.querySelector('[data-preview-shell]');
     const usagePreviews = document.querySelector('[data-usage-previews]');
     const usagePreviewCount = document.querySelector('[data-usage-preview-count]');
+    const cropImpact = document.querySelector('[data-crop-impact]');
+    const cropImpactTitle = document.querySelector('[data-crop-impact-title]');
+    const cropImpactCopy = document.querySelector('[data-crop-impact-copy]');
+    const cropSaveButton = document.querySelector('[data-crop-save]');
     const vendorDialog = document.querySelector('[data-vendor-dialog]');
     const vendorOptions = document.querySelector('[data-vendor-options]');
     const vendorSearch = document.querySelector('[data-vendor-search]');
@@ -310,6 +324,30 @@ const mediaUsage = mediaUsageBySrc;
       return usageForItem(item).filter((usage) => usage.href !== '/gallery/');
     }
 
+    function updateCropImpact(item) {
+      const usages = externalUsagesForItem(item);
+      const count = usages.length;
+
+      if (cropSaveButton) cropSaveButton.textContent = count > 1 ? 'Save crop to ' + count + ' places' : 'Save crop';
+
+      if (!cropImpact || !cropImpactTitle || !cropImpactCopy) return;
+      if (count < 2) {
+        cropImpact.hidden = true;
+        cropImpactCopy.textContent = '';
+        return;
+      }
+
+      const examples = usages.slice(0, 3).map((usage) => usage.page + ' · ' + usage.section);
+      const remainder = count - examples.length;
+      cropImpactTitle.textContent = 'This change will affect ' + count + ' website placements';
+      cropImpactCopy.textContent =
+        'The same focal point will update ' +
+        examples.join(', ') +
+        (remainder > 0 ? ', and ' + remainder + ' more.' : '.') +
+        ' Review the placement previews above before saving.';
+      cropImpact.hidden = false;
+    }
+
     function renderUsagePreviews(item) {
       if (!usagePreviews) return;
       usagePreviews.innerHTML = '';
@@ -388,6 +426,7 @@ const mediaUsage = mediaUsageBySrc;
       cropImage.src = item.src;
       cropImage.alt = item.alt || '';
       renderUsagePreviews(item);
+      updateCropImpact(item);
       setCropPoint(cropSession.x, cropSession.y);
       setPreviewMode('desktop');
       cropDialog?.showModal();
@@ -618,12 +657,16 @@ const mediaUsage = mediaUsageBySrc;
       checkboxLabel.append(checkbox);
 
       const publicUsages = externalUsagesForItem(item);
-      const usageBadge = document.createElement('span');
-      usageBadge.className = 'absolute bottom-3 right-3 rounded-full border border-white/20 bg-[rgba(6,23,18,.78)] px-3 py-1.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white shadow backdrop-blur';
+      const usageDetailsId = 'usage-' + key.replace(/[^a-z0-9_-]+/gi, '-');
+      const usageBadge = document.createElement('button');
+      usageBadge.type = 'button';
+      usageBadge.className = 'absolute bottom-3 right-3 rounded-full border border-white/20 bg-[rgba(6,23,18,.82)] px-3 py-1.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white shadow backdrop-blur transition hover:bg-[rgba(6,23,18,.94)] focus:outline-none focus:ring-2 focus:ring-white';
       usageBadge.textContent = 'Used in ' + publicUsages.length + (publicUsages.length === 1 ? ' place' : ' places');
+      usageBadge.setAttribute('aria-expanded', 'false');
+      usageBadge.setAttribute('aria-controls', usageDetailsId);
       usageBadge.title = publicUsages.length
-        ? publicUsages.map((usage) => usage.page + ' · ' + usage.section).join('\n')
-        : 'Not reused outside the Gallery page';
+        ? 'Show every website placement using this photo'
+        : 'This photo is not reused outside the Gallery page';
 
       if (item.hidden) {
         const hiddenBadge = document.createElement('span');
@@ -637,6 +680,64 @@ const mediaUsage = mediaUsageBySrc;
 
       const body = document.createElement('div');
       body.className = 'space-y-3 p-4';
+
+      const usageDetails = document.createElement('div');
+      usageDetails.id = usageDetailsId;
+      usageDetails.hidden = true;
+      usageDetails.className = 'rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+
+      const usageHeading = document.createElement('div');
+      usageHeading.className = 'flex items-center justify-between gap-3';
+      const usageTitle = document.createElement('strong');
+      usageTitle.className = 'text-[.65rem] uppercase tracking-[.1em] text-[var(--koa-forest)]';
+      usageTitle.textContent = 'Website placements';
+      const usageCount = document.createElement('span');
+      usageCount.className = 'text-[.62rem] font-semibold text-[var(--koa-ink)]/42';
+      usageCount.textContent = publicUsages.length + (publicUsages.length === 1 ? ' placement' : ' placements');
+      usageHeading.append(usageTitle, usageCount);
+      usageDetails.append(usageHeading);
+
+      if (publicUsages.length) {
+        const usageList = document.createElement('div');
+        usageList.className = 'mt-2 grid gap-1.5';
+        publicUsages.forEach((usage) => {
+          const usageLink = document.createElement('a');
+          usageLink.href = usage.href;
+          usageLink.target = '_blank';
+          usageLink.rel = 'noreferrer';
+          usageLink.className = 'flex items-start justify-between gap-3 rounded-lg border border-transparent px-2 py-2 text-left transition hover:border-[var(--koa-line)] hover:bg-white';
+          const usageCopy = document.createElement('span');
+          const usagePage = document.createElement('strong');
+          usagePage.className = 'block text-xs';
+          usagePage.textContent = usage.page;
+          const usageSection = document.createElement('span');
+          usageSection.className = 'mt-0.5 block text-[.68rem] leading-4 text-[var(--koa-ink)]/50';
+          usageSection.textContent = usage.section;
+          usageCopy.append(usagePage, usageSection);
+          const usageShape = document.createElement('span');
+          usageShape.className = 'shrink-0 rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
+          usageShape.textContent = String(usage.aspectRatio || '').replaceAll(' ', '').replace('/', ':') || 'View';
+          usageLink.append(usageCopy, usageShape);
+          usageList.append(usageLink);
+        });
+        usageDetails.append(usageList);
+      } else {
+        const usageEmpty = document.createElement('p');
+        usageEmpty.className = 'mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/48';
+        usageEmpty.textContent = 'This photo is only used in the Gallery right now.';
+        usageDetails.append(usageEmpty);
+      }
+
+      usageBadge.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const opening = usageDetails.hidden;
+        usageDetails.hidden = !opening;
+        usageBadge.setAttribute('aria-expanded', String(opening));
+        usageBadge.textContent = opening
+          ? 'Hide usage'
+          : 'Used in ' + publicUsages.length + (publicUsages.length === 1 ? ' place' : ' places');
+      });
 
       const alt = document.createElement('p');
       alt.className = 'line-clamp-2 min-h-10 text-xs leading-5 text-[var(--koa-ink)]/58';
@@ -701,7 +802,7 @@ const mediaUsage = mediaUsageBySrc;
       });
 
       actions.append(crop, vendorAssign, visibility, remove);
-      body.append(alt, select, actions);
+      body.append(usageDetails, alt, select, actions);
       article.append(imageWrap, body);
 
       let dragSession = null;
@@ -918,17 +1019,25 @@ const mediaUsage = mediaUsageBySrc;
     document.querySelector('[data-crop-close]')?.addEventListener('click', () => cropDialog?.close());
     document.querySelector('[data-crop-cancel]')?.addEventListener('click', () => cropDialog?.close());
     document.querySelector('[data-crop-reset]')?.addEventListener('click', () => setCropPoint(50, 50));
-    document.querySelector('[data-crop-save]')?.addEventListener('click', async () => {
+    cropSaveButton?.addEventListener('click', async () => {
       if (!cropSession) return;
       const item = cropSession.item;
-      if (item.kind === 'upload') {
-        await post({ action:'update-upload', id:item.id, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
-      } else {
-        await post({ action:'update-curated', src:item.src, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
+      const affectedCount = externalUsagesForItem(item).length;
+      cropSaveButton.disabled = true;
+      cropSaveButton.textContent = affectedCount > 1 ? 'Saving to ' + affectedCount + ' places…' : 'Saving crop…';
+      try {
+        if (item.kind === 'upload') {
+          await post({ action:'update-upload', id:item.id, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
+        } else {
+          await post({ action:'update-curated', src:item.src, category:item.category, focalX:cropSession.x, focalY:cropSession.y });
+        }
+        cropDialog?.close();
+        cropSession = null;
+        await load();
+      } finally {
+        cropSaveButton.disabled = false;
+        cropSaveButton.textContent = 'Save crop';
       }
-      cropDialog?.close();
-      cropSession = null;
-      await load();
     });
 
     cropFrame?.addEventListener('pointerdown', (event) => {
@@ -946,7 +1055,15 @@ const mediaUsage = mediaUsageBySrc;
       if (cropFrame.hasPointerCapture(event.pointerId)) cropFrame.releasePointerCapture(event.pointerId);
     });
 
-    cropDialog?.addEventListener('close', () => { cropSession = null; });
+    cropDialog?.addEventListener('close', () => {
+      cropSession = null;
+      if (cropImpact) cropImpact.hidden = true;
+      if (cropImpactCopy) cropImpactCopy.textContent = '';
+      if (cropSaveButton) {
+        cropSaveButton.disabled = false;
+        cropSaveButton.textContent = 'Save crop';
+      }
+    });
 
     load();
   </script>
