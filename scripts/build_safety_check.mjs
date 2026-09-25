@@ -39,7 +39,7 @@ function checkEmailCompatibility() {
 
   const brand = fs.readFileSync(brandPath, 'utf8');
   const brandChecks = [
-    ['compact explicit logo dimensions', /width="52" height="52"/],
+    ['compact explicit logo dimensions', /width="64" height="64"/],
     ['CID logo URL', /return 'cid:' \+ EMAIL_LOGO_CONTENT_ID/],
     ['embedded logo attachment helper', /export function emailLogoAttachment/],
     ['embedded logo content ID', /content_id: EMAIL_LOGO_CONTENT_ID/],
