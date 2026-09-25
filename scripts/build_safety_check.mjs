@@ -69,6 +69,47 @@ function checkEmailCompatibility() {
   }
 }
 
+function checkEmailFeatureContracts() {
+  const contracts = [
+    ['src/pages/admin/email-preview/index.astro', [
+      ['iPhone email preview', 'data-preview-frame="iphone"'],
+      ['Gmail email preview', 'data-preview-frame="gmail"'],
+      ['Outlook email preview', 'data-preview-frame="outlook"'],
+    ]],
+    ['netlify/functions/_shared/email-health.ts', [
+      ['email logo health probe', 'async function checkLogo()'],
+      ['Resend delivery health query', 'async function listResendEmails()'],
+      ['signed delivery event storage', 'export async function recordEmailHealthEvent'],
+      ['email health summary', 'export async function emailHealthSummary'],
+    ]],
+    ['netlify/functions/_shared/system-health.ts', [
+      ['Email Health integration', "import { emailHealthSummary } from './email-health'"],
+      ['email logo component', "id:'email-logo'"],
+      ['email delivery component', "id:'email-delivery'"],
+      ['email compatibility component', "id:'email-template-compatibility'"],
+    ]],
+    ['src/pages/admin/health/index.astro', [
+      ['Email Health dashboard', 'data-email-health-overall'],
+      ['email issue list', 'data-email-health-issues'],
+      ['email 24-hour delivery stats', 'data-email-health-24-delivered'],
+    ]],
+    ['netlify/functions/resend-webhook.mts', [
+      ['Email Health webhook recording', 'recordEmailHealthEvent'],
+    ]],
+  ];
+
+  for (const [file, requirements] of contracts) {
+    if (!fs.existsSync(file)) {
+      failures.push(file + ': required Email Health/preview source is missing');
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    for (const [label, needle] of requirements) {
+      if (!text.includes(needle)) failures.push(file + ': missing ' + label + ' contract: ' + needle);
+    }
+  }
+}
+
 function checkScript(file) {
   const text = fs.readFileSync(file, 'utf8');
   const kind = file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -137,6 +178,7 @@ for (const file of roots.flatMap(walk)) {
 }
 
 checkEmailCompatibility();
+checkEmailFeatureContracts();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
