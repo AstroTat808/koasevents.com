@@ -10,6 +10,8 @@ export type MediaUsage = {
   aspectLabel: string;
   impact?: 'high' | 'standard' | 'low';
   impactLabel?: string;
+  placementId?: string;
+  occurrence?: number;
 };
 
 const u = (
@@ -130,16 +132,41 @@ function classifyImpact(usage: MediaUsage): Pick<MediaUsage, 'impact' | 'impactL
     : { impact: 'standard', impactLabel: 'Standard' };
 }
 
+const occurrenceBySourceAndPage = new Map<string, number>();
+
+function placementSlug(value: string) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'placement';
+}
+
+function placementIdForUsage(usage: MediaUsage) {
+  const pageKey = usage.href === '/' ? 'home' : placementSlug(usage.href);
+  return [pageKey, placementSlug(usage.section), placementSlug(usage.aspectRatio)].join('__');
+}
+
 function addUsage(src: string, usage: MediaUsage) {
   if (!usageMap[src]) usageMap[src] = [];
   const classified = { ...usage, ...classifyImpact(usage) };
-  if (!usageMap[src].some((item) =>
+  const duplicate = usageMap[src].some((item) =>
     item.href === classified.href &&
     item.section === classified.section &&
     item.aspectRatio === classified.aspectRatio
-  )) {
-    usageMap[src].push(classified);
-  }
+  );
+  if (duplicate) return;
+
+  const occurrenceKey = src + '|' + classified.href;
+  const occurrence = occurrenceBySourceAndPage.get(occurrenceKey) || 0;
+  occurrenceBySourceAndPage.set(occurrenceKey, occurrence + 1);
+
+  usageMap[src].push({
+    ...classified,
+    placementId: placementIdForUsage(classified),
+    occurrence,
+  });
 }
 
 for (const [src, usage] of directUsages) addUsage(src, usage);
