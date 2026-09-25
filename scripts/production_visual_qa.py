@@ -481,6 +481,24 @@ def admin_mode(browser_name):
     response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
     status=response.status if response else 0
     page.wait_for_timeout(800)
+    if path=="/admin/crm/":
+     try:
+      page.wait_for_function(
+       """() => {
+         const visible=(el)=>{
+           if(!el)return false;
+           const s=getComputedStyle(el),r=el.getBoundingClientRect();
+           return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
+         };
+         return visible(document.querySelector('[data-unauthorized]')) ||
+                visible(document.querySelector('[data-admin-ui]')) ||
+                (visible(document.querySelector('[data-crm-status]')) &&
+                 !String(document.querySelector('[data-crm-status-message]')?.textContent||'').includes('Loading client workspace'));
+       }""",
+       timeout=4000,
+      )
+     except Exception:
+      pass
     state=page.evaluate("""() => {
       const visible=(el)=>{
         if(!el)return false;
@@ -732,6 +750,7 @@ def admin_mode(browser_name):
    preview_text=page.locator("[data-usage-previews]").inner_text()
    save_label=page.locator("[data-crop-save]").inner_text()
    override_options=page.locator("[data-placement-override-options]").inner_text()
+   override_options_lower=override_options.lower()
    impact_title_lower=impact_title.lower()
    preview_text_lower=preview_text.lower()
    save_label_lower=save_label.lower()
@@ -743,7 +762,7 @@ def admin_mode(browser_name):
     detail="Gallery placement previews did not distinguish lower-impact usage. Preview text: "+preview_text[:700]
    elif "save crop to" not in save_label_lower:
     detail="Gallery crop save button did not display the affected-placement count. Label: "+save_label
-   elif "Home · Flagship experience" not in override_options or "Override saved" not in override_options:
+   elif "home · flagship experience" not in override_options_lower or "override saved" not in override_options_lower:
     detail="Gallery high-impact placement override controls did not show the saved Homepage placement. Options: "+override_options[:700]
    else:
     override_button=page.locator("[data-placement-override-options] button").filter(has_text="Home · Flagship experience")
