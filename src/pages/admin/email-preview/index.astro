@@ -94,7 +94,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     const esc=(value)=>String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
     const brandName=(brand)=>brand==='mobile'?'Koa’s Mobile Bar':'Koa’s Events';
-    const logo=(brand)=>brand==='mobile'?'/brand/koa-mobile-bar-email-logo.png':'/brand/koa-events-email-logo.png';
+    const logo=()=>'/brand/koa-mark.png';
 
     function roleLabel(role){const labels={admin:'Administrator',manager:'Manager',sales:'Sales Rep',event_coordinator:'Event Coordinator',vendor_manager:'Vendor Manager',content_editor:'Content Editor',accounting:'Accounting',read_only:'Read Only',custom:'Custom Role'};return labels[role]||'Koa’s Events Team';}
     let currentSession=null;
@@ -124,7 +124,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f0e7">'
         +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">'
         +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:22px">'
-        +'<tr><td align="center" style="padding:24px 28px 22px;background:#fbf8f2;border-radius:22px 22px 0 0"><img src="'+logo(brand)+'" width="170" alt="'+esc(name)+'" style="display:block;width:170px;max-width:100%;height:auto;border:0"><div style="padding-top:15px;font:800 10px/15px Arial,sans-serif;letter-spacing:1.8px;text-transform:uppercase;color:#a96d4a">'+esc(template.category)+'</div><div style="padding-top:5px;font:700 27px/33px Georgia,serif;color:#173d30">'+esc(template.title)+'</div></td></tr>'
+        +'<tr><td align="center" style="padding:24px 28px 22px;background:#fbf8f2;border-radius:22px 22px 0 0"><img src="'+logo()+'" width="64" height="64" alt="'+esc(name)+'" style="display:block;width:64px;height:64px;border:0"><div style="padding-top:10px;font:800 11px/16px Arial,sans-serif;letter-spacing:2px;text-transform:uppercase;color:#173d30">'+esc(name)+'</div><div style="padding-top:15px;font:800 10px/15px Arial,sans-serif;letter-spacing:1.8px;text-transform:uppercase;color:#a96d4a">'+esc(template.category)+'</div><div style="padding-top:5px;font:700 27px/33px Georgia,serif;color:#173d30">'+esc(template.title)+'</div></td></tr>'
         +'<tr><td style="padding:32px 30px"><div style="font:15px/24px Arial,sans-serif;color:#46564f">Aloha '+recipient+',</div>'
         +'<p style="margin:16px 0 0;font:15px/25px Arial,sans-serif;color:#46564f">'+esc(template.body)+'</p>'
         +(template.id==='client-confirmation'?'<div style="margin-top:20px;padding:16px 18px;background:#f5f0e7;border-radius:14px;font:700 13px/21px Arial,sans-serif;color:#173d30">Event date: June 12, 2027 · Guest count: 42 · Package interest: Gardenia Wedding Collection</div>':'')
