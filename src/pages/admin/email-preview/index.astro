@@ -16,7 +16,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </div>
 
         <section class="mt-7 rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
-          <div class="grid gap-4 lg:grid-cols-[1fr_220px_220px]">
+          <div class="grid gap-4 lg:grid-cols-[1fr_220px]">
             <label class="grid gap-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Email template
               <select data-preview-template class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold normal-case tracking-normal text-[var(--koa-ink)]"></select>
             </label>
@@ -26,13 +26,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <option value="mobile">Koa’s Mobile Bar</option>
               </select>
             </label>
-            <div class="grid gap-2">
-              <span class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Viewport</span>
-              <div class="flex rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-1">
-                <button data-preview-device="desktop" type="button" class="flex-1 rounded-lg bg-[var(--koa-forest)] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Desktop</button>
-                <button data-preview-device="mobile" type="button" class="flex-1 rounded-lg px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Mobile</button>
-              </div>
-            </div>
           </div>
           <div class="mt-4 grid gap-3 sm:grid-cols-3">
             <div class="rounded-xl bg-[var(--koa-sand)] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Greeting</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">Always “Aloha”</strong></div>
@@ -59,11 +52,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <span data-preview-subject class="max-w-2xl rounded-full border border-white/15 bg-white/[.06] px-4 py-2 text-xs font-semibold text-white/70"></span>
           </div>
-          <div class="mt-5 overflow-auto rounded-[1.2rem] bg-[#d8d3ca] p-5">
-            <div data-preview-frame-wrap class="mx-auto w-full max-w-[760px] transition-all">
-              <iframe data-preview-frame title="Email preview" class="h-[860px] w-full rounded-xl border-0 bg-white shadow-xl"></iframe>
-            </div>
+          <div class="mt-5 grid gap-5 xl:grid-cols-3">
+            <article class="rounded-[1.2rem] bg-[#111827] p-4">
+              <div class="mb-3 flex items-center justify-between gap-3 text-white">
+                <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-white/55">Apple Mail · iPhone</p><p class="mt-1 text-xs text-white/75">390 px mobile canvas</p></div>
+                <span class="rounded-full bg-white/10 px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em]">Mobile</span>
+              </div>
+              <div class="mx-auto max-w-[390px] overflow-hidden rounded-[2rem] border-[8px] border-black bg-white shadow-2xl">
+                <div class="flex items-center justify-between bg-black px-5 py-2 text-[.62rem] font-semibold text-white"><span>9:41</span><span>●●●</span></div>
+                <iframe data-preview-frame="iphone" title="iPhone Apple Mail email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
+              </div>
+            </article>
+            <article class="rounded-[1.2rem] bg-[#f1f3f4] p-4">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[#5f6368]">Gmail</p><p class="mt-1 text-xs text-[#5f6368]">Web-style reading pane</p></div>
+                <span class="rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#5f6368] shadow-sm">Web</span>
+              </div>
+              <div class="overflow-hidden rounded-xl border border-[#dadce0] bg-white shadow-lg">
+                <div class="flex items-center gap-3 border-b border-[#dadce0] px-4 py-3 text-xs text-[#5f6368]"><span class="font-black text-[#d93025]">M</span><span>Inbox</span><span class="ml-auto">⋮</span></div>
+                <iframe data-preview-frame="gmail" title="Gmail-style email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
+              </div>
+            </article>
+            <article class="rounded-[1.2rem] bg-[#f3f6fb] p-4">
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[#0f6cbd]">Microsoft Outlook</p><p class="mt-1 text-xs text-[#4b5563]">Desktop-style reading pane</p></div>
+                <span class="rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#0f6cbd] shadow-sm">Desktop</span>
+              </div>
+              <div class="overflow-hidden rounded-xl border border-[#d5dbe5] bg-white shadow-lg">
+                <div class="flex items-center gap-3 bg-[#0f6cbd] px-4 py-3 text-xs text-white"><span class="font-black">O</span><span>Outlook</span><span class="ml-auto">•••</span></div>
+                <iframe data-preview-frame="outlook" title="Outlook-style email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
+              </div>
+            </article>
           </div>
+          <p class="mt-3 text-xs leading-5 text-white/55">These are layout simulations using Koa’s production email HTML. Final rendering still depends on the actual Apple Mail, Gmail, or Outlook engine.</p>
         </section>
       </section>
 
@@ -106,7 +127,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const settings=currentSession?.signature||{};
       const identity=personalized
         ? '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800">'+name+'</div>'
-          +(settings.showPronouns&&pronouns?'<div style="font-size:12px;line-height:18px;color:#7a857f">'+pronouns+'</div>':'')
+          +(settings.showPronouns&&pronouns?'<div style="font-size:12px;line-height:18px;color:#66736d">'+pronouns+'</div>':'')
           +(settings.showTitle!==false&&title?'<div style="font-size:13px;line-height:20px;color:#66736d">'+title+'</div>':'')
           +(settings.showRoleDescription&&roleDescription?'<div style="padding-top:2px;font-size:12px;line-height:18px;color:#66736d">'+roleDescription+'</div>':'')
           +(settings.showTeamTitle!==false?'<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700">Koa’s Events Team</div>':'')
@@ -114,17 +135,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:28px;border-top:1px solid #ece7dc"><tr><td style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
         +'<div style="font-size:14px;line-height:22px">Mahalo,</div>'
         +identity
-        +'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;font:13px/20px Arial,sans-serif"><tr><td width="24" style="color:#a96d4a">✉</td><td>aloha@koasevents.com</td></tr><tr><td style="color:#a96d4a">☎</td><td>(844) 808-KOAS</td></tr><tr><td style="color:#a96d4a">↗</td><td>www.koasevents.com</td></tr></table>'
+        +'<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;font:13px/20px Arial,sans-serif"><tr><td width="24" style="color:#8b5a3c">✉</td><td>aloha@koasevents.com</td></tr><tr><td style="color:#8b5a3c">☎</td><td>(844) 808-KOAS</td></tr><tr><td style="color:#8b5a3c">↗</td><td>www.koasevents.com</td></tr></table>'
         +'</td></tr></table>';
     }
 
     function renderEmail(template,brand){
       const name=brandName(brand);
       const recipient=template.staff?'Team':'Malia';
-      return '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f5f0e7">'
+      return '<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>'+esc(template.subject)+'</title></head><body style="margin:0;background:#f5f0e7">'
         +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:20px 10px">'
         +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:22px">'
-        +'<tr><td align="center" style="padding:16px 20px;background:#fbf8f2;border-radius:18px 18px 0 0"><img src="'+logo()+'" width="52" height="52" alt="'+esc(name)+'" style="display:block;width:52px;height:52px;border:0"><div style="padding-top:7px;font:800 10px/14px Arial,sans-serif;letter-spacing:1.7px;text-transform:uppercase;color:#173d30">'+esc(name)+'</div><div style="padding-top:8px;font:800 9px/13px Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a">'+esc(template.category)+'</div><div style="padding-top:3px;font:700 24px/29px Georgia,serif;color:#173d30">'+esc(template.title)+'</div></td></tr>'
+        +'<tr><td align="center" style="padding:16px 20px;background:#fbf8f2;border-radius:18px 18px 0 0"><img src="'+logo()+'" width="52" height="52" alt="'+esc(name)+'" style="display:block;width:52px;height:52px;border:0"><div style="padding-top:7px;font:800 10px/14px Arial,sans-serif;letter-spacing:1.7px;text-transform:uppercase;color:#173d30">'+esc(name)+'</div><div style="padding-top:8px;font:800 9px/13px Arial,sans-serif;letter-spacing:1.5px;text-transform:uppercase;color:#8b5a3c">'+esc(template.category)+'</div><div style="padding-top:3px;font:700 24px/29px Georgia,serif;color:#173d30">'+esc(template.title)+'</div></td></tr>'
         +'<tr><td style="padding:26px 22px"><div style="font:15px/24px Arial,sans-serif;color:#46564f">Aloha '+recipient+',</div>'
         +'<p style="margin:16px 0 0;font:15px/25px Arial,sans-serif;color:#46564f">'+esc(template.body)+'</p>'
         +(template.id==='client-confirmation'?'<div style="margin-top:20px;padding:16px 18px;background:#f5f0e7;border-radius:14px;font:700 13px/21px Arial,sans-serif;color:#173d30">Event date: June 12, 2027 · Guest count: 42 · Package interest: Gardenia Wedding Collection</div>':'')
@@ -136,23 +157,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     const select=document.querySelector('[data-preview-template]');
     const brand=document.querySelector('[data-preview-brand]');
-    const frame=document.querySelector('[data-preview-frame]');
-    const wrap=document.querySelector('[data-preview-frame-wrap]');
-    let device='desktop';
+    const previewFrames=[...document.querySelectorAll('[data-preview-frame]')];
 
     function render(){
       const template=templates.find((row)=>row.id===select.value)||templates[0];
       document.querySelector('[data-preview-category]').textContent=template.category;
       document.querySelector('[data-preview-name]').textContent=template.name;
       document.querySelector('[data-preview-subject]').textContent='Subject: '+template.subject;
-      frame.srcdoc=renderEmail(template,brand.value);
-      wrap.style.maxWidth=device==='mobile'?'390px':'760px';
-      document.querySelectorAll('[data-preview-device]').forEach((button)=>{
-        const active=button.dataset.previewDevice===device;
-        button.classList.toggle('bg-[var(--koa-forest)]',active);
-        button.classList.toggle('text-white',active);
-        button.classList.toggle('text-[var(--koa-forest)]',!active);
-      });
+      const html=renderEmail(template,brand.value);
+      previewFrames.forEach((previewFrame)=>{previewFrame.srcdoc=html;});
     }
 
     async function init(){
@@ -171,7 +184,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     select?.addEventListener('change',render);
     brand?.addEventListener('change',render);
-    document.querySelectorAll('[data-preview-device]').forEach((button)=>button.addEventListener('click',()=>{device=button.dataset.previewDevice||'desktop';render();}));
     document.querySelector('[data-send-test]')?.addEventListener('click',async(event)=>{
       const button=event.currentTarget;
       const status=document.querySelector('[data-preview-test-status]');
