@@ -38,8 +38,8 @@ export async function sendVendorEmail(args:{
     :'';
 
   const html=
-    '<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head><body style="margin:0;background:#f5f0e7">' +
-      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">' +
+    '<!doctype html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head><body style="margin:0;background:#f5f0e7">' +
+      '<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">' +
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">' +
           emailHeader({brand,eyebrow:brandName,title:'Vendor Event Brief'}) +
           '<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px">' +
@@ -49,7 +49,7 @@ export async function sendVendorEmail(args:{
             detail +
             action +
             emailSignature() +
-            '<p style="font:11px/18px Arial,sans-serif;color:#8a918d;margin:18px 0 0">This operational message was sent by '+esc(brandName)+' for an upcoming event.</p>' +
+            '<p style="font:11px/18px Arial,sans-serif;color:#66736d;margin:18px 0 0">This operational message was sent by '+esc(brandName)+' for an upcoming event.</p>' +
           '</td></tr>' +
         '</table>' +
       '</td></tr></table>' +
