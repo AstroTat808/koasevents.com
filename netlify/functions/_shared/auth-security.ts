@@ -1,4 +1,4 @@
-import { emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand';
+import { emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
@@ -154,7 +154,7 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
     emailSignatureText(),
   ].join('\n');
   const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({
-    from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',html,text
+    from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',html,text,attachments:[emailLogoAttachment()]
   })});
   return r.ok?{sent:true}:{sent:false,error:'Alert delivery failed'};
 }
