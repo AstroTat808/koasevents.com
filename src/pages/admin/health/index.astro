@@ -620,6 +620,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(deploymentState==='waiting'){
         cause='A new main-branch commit is waiting for Netlify Git auto-deploy to begin within the normal trigger grace period.';
         fix='Give Netlify a few minutes to start the build. If no build appears after the grace period, check the Git-linked site and auto-deploy configuration.';
+      }else if(deploymentState==='release-policy-skipped'){
+        cause='The newest main-branch commit was intentionally skipped by the production release policy because it was a direct commit without a [release] prefix.';
+        fix='For an intentional direct production release, prefix the commit message with [release]. Normal pull-request merges and squash merges are already approved by policy.';
       }else if(deploymentState==='auto-deploy-broken'){
         cause='Git auto-deploy appears stalled or the Netlify site is no longer linked correctly to the production repository/branch.';
         fix='Verify the Netlify site is linked to AstroTat808/koasevents.com, production branch main, and automatic Git deploys are enabled. Then trigger or retry a production deploy.';
@@ -1620,6 +1623,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           syncEl.textContent=lag+' · build in progress';
         }else if(deploymentState==='waiting'){
           syncEl.textContent=lag+' · waiting for Git trigger';
+        }else if(deploymentState==='release-policy-skipped'){
+          syncEl.textContent=lag+' · commit skipped by release policy';
         }else if(deploymentState==='auto-deploy-broken'){
           syncEl.textContent=lag+' · Git auto-deploy stalled';
         }else if(deploymentState==='deploy-failed'){
@@ -1652,6 +1657,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(deploymentState==='deploy-failed'){
         gitLinkEl.textContent='Production deploy failed';
         gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
+      }else if(deploymentState==='release-policy-skipped'){
+        gitLinkEl.textContent='Commit skipped · [release] prefix required';
+        gitLinkEl.className='mt-2 text-sm font-semibold text-amber-800';
       }else if(deploymentState==='auto-deploy-broken'){
         gitLinkEl.textContent=connectionHealth.githubLinked===false?'Disconnected or mislinked':'Git auto-deploy stalled';
         gitLinkEl.className='mt-2 text-sm font-semibold text-red-800';
@@ -1678,6 +1686,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           healthEl.className='mt-2 text-sm font-semibold '+(connectionHealth.severity==='red'?'text-red-800':'text-amber-800');
         }else if(deploymentState==='waiting'){
           healthEl.textContent='Waiting for Git auto-deploy to start';
+          healthEl.className='mt-2 text-sm font-semibold text-amber-800';
+        }else if(deploymentState==='release-policy-skipped'){
+          healthEl.textContent='Commit skipped because it needs a [release] prefix';
           healthEl.className='mt-2 text-sm font-semibold text-amber-800';
         }else if(deploymentState==='auto-deploy-broken'){
           healthEl.textContent='Git auto-deploy stalled';
