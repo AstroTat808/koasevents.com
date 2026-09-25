@@ -1,4 +1,4 @@
-import { type EmailBrandKey, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
+import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
 
 function esc(value:unknown){
   return String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m));
@@ -31,21 +31,21 @@ export async function sendVendorEmail(args:{
   const brand=args.brand||'events';
   const brandName=emailBrandName(brand);
   const action=args.actionUrl
-    ? '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;"><tr><td bgcolor="#173d30" style="background:#173d30;border-radius:999px;"><a href="'+esc(args.actionUrl)+'" style="display:inline-block;background:#173d30;color:#fff;text-decoration:none;border-radius:999px;padding:13px 20px;font:700 12px Arial,sans-serif;letter-spacing:.7px;text-transform:uppercase">'+esc(args.actionLabel||'Open')+'</a></td></tr></table>'
+    ? emailButton({href:args.actionUrl,label:args.actionLabel||'Open',marginTop:22})
     :'';
   const detail=args.detail
-    ? '<div style="margin-top:18px;padding:14px 16px;background:#f5f0e7;border-radius:12px;font:700 13px/21px Arial,sans-serif;color:#173d30">'+esc(args.detail)+'</div>'
+    ? '<div style="margin-top:18px;padding:14px 16px;background:#f5f0e7;border-radius:12px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:21px;font-weight:700;color:#173d30">'+esc(args.detail)+'</div>'
     :'';
 
   const html=
-    '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head><body style="margin:0;background:#f5f0e7">' +
-      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding:28px 12px">' +
+    '<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"></head><body style="margin:0;background:#f5f0e7">' +
+      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">' +
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:640px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">' +
           emailHeader({brand,eyebrow:brandName,title:'Vendor Event Brief'}) +
-          '<tr><td style="padding:30px">' +
+          '<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px">' +
             emailGreeting(args.recipientName) +
-            '<h1 style="font:700 32px/39px Georgia,serif;color:#173d30;margin:10px 0 0">'+esc(args.title)+'</h1>' +
-            '<p style="font:15px/24px Arial,sans-serif;color:#46564f;margin:16px 0 0">'+esc(args.body)+'</p>' +
+            '<h1 style="font-family:Georgia,Times New Roman,serif;font-size:32px;line-height:39px;font-weight:700;color:#173d30;margin:10px 0 0">'+esc(args.title)+'</h1>' +
+            '<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f;margin:16px 0 0">'+esc(args.body)+'</p>' +
             detail +
             action +
             emailSignature() +
