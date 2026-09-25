@@ -42,10 +42,10 @@ export function emailBrandName(brand: EmailBrandKey) {
   return brand === 'mobile' ? 'Koa’s Mobile Bar' : 'Koa’s Events';
 }
 
-export function emailLogoUrl(brand: EmailBrandKey) {
-  return brand === 'mobile'
-    ? 'https://koasevents.com/brand/koa-mobile-bar-email-logo.png'
-    : 'https://koasevents.com/brand/koa-events-email-logo.png';
+export function emailLogoUrl(_brand: EmailBrandKey) {
+  // Use the compact Koa mark in email clients. The previous tall lockup assets
+  // reserve a large transparent area in Apple Mail and can appear blank.
+  return 'https://koasevents.com/brand/koa-mark.png';
 }
 
 export function emailHeader(args: {
@@ -56,7 +56,8 @@ export function emailHeader(args: {
   const brandName = emailBrandName(args.brand);
   return (
     '<tr><td align="center" bgcolor="#fbf8f2" style="padding:24px 28px 22px;background:#fbf8f2;border-radius:22px 22px 0 0;">' +
-      '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="170" alt="' + esc(brandName) + '" style="display:block;width:170px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">' +
+      '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="64" height="64" alt="' + esc(brandName) + '" style="display:block;width:64px;height:64px;border:0;outline:none;text-decoration:none;">' +
+      '<div style="padding-top:10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#173d30;">' + esc(brandName) + '</div>' +
       (args.eyebrow
         ? '<div style="padding-top:15px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:15px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:#a96d4a;">' + esc(args.eyebrow) + '</div>'
         : '') +
