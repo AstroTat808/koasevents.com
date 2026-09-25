@@ -773,9 +773,9 @@ def admin_mode(browser_name):
      override_title=page.locator("[data-crop-title]").inner_text()
      override_save=page.locator("[data-crop-save]").inner_text()
      remove_override=page.locator("[data-crop-use-global]")
-     if "Override crop" not in override_title:
+     if "override crop" not in override_title.lower():
       detail="Placement-specific crop editor did not switch into override mode. Title: "+override_title
-     elif "Save override" not in override_save:
+     elif "save override" not in override_save.lower():
       detail="Placement-specific crop editor did not expose its override save action. Label: "+override_save
      elif not remove_override.is_visible():
       detail="Saved placement override did not expose the Remove override action."
