@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import { businessRules } from '../data/businessRules';
+import { mediaUsageBySrc } from '../data/mediaUsage';
 import StaffUtilityNav from '../components/StaffUtilityNav.astro';
 
 interface Props {
@@ -45,6 +46,17 @@ const buildCommit = String(process.env.COMMIT_REF || '').trim();
 const deployId = String(process.env.DEPLOY_ID || '').trim();
 const buildTime = new Date().toISOString();
 const showWorkspaceNav = canonicalPath === '/staff/' || canonicalPath.startsWith('/admin/');
+const pagePlacementUsage = Object.entries(mediaUsageBySrc).flatMap(([src, usages]) =>
+  usages
+    .filter((usage) => usage.href === canonicalPath && usage.placementId)
+    .map((usage) => ({
+      src,
+      placementId: usage.placementId,
+      occurrence: Number(usage.occurrence || 0),
+      section: usage.section,
+      impact: usage.impact || 'standard',
+    })),
+);
 
 const breadcrumbLabelMap: Record<string, string> = {
   about: 'About',
@@ -299,6 +311,7 @@ const seoSchema = {
     </script>
     {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
+    <script id="koa-media-placement-data" type="application/json" set:html={JSON.stringify(pagePlacementUsage)}></script>
     <script is:inline>
       (() => {
         const normalizeAssetPath = (value) => {
@@ -322,6 +335,71 @@ const seoSchema = {
         const clamp = (value, fallback = 50) => {
           const number = Number(value);
           return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : fallback;
+        };
+
+        const placementDefinitions = (() => {
+          try {
+            const raw = document.getElementById('koa-media-placement-data')?.textContent || '[]';
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })();
+
+        const elementSource = (element) => {
+          if (element instanceof HTMLImageElement) {
+            const candidates = [
+              element.getAttribute('data-koa-focal-src'),
+              element.getAttribute('src'),
+              element.currentSrc,
+            ];
+            for (const candidate of candidates) {
+              const normalized = normalizeAssetPath(candidate);
+              if (normalized) return normalized;
+            }
+            return '';
+          }
+          return normalizeAssetPath(element?.getAttribute?.('data-koa-focal-src'));
+        };
+
+        const placementElementsForSource = (src) => {
+          const normalizedSrc = normalizeAssetPath(src);
+          const elements = [
+            ...document.querySelectorAll('img[src], img[data-koa-focal-src]'),
+            ...document.querySelectorAll('[data-koa-focal-src]:not(img)'),
+          ];
+          return elements.filter((element) => elementSource(element) === normalizedSrc);
+        };
+
+        const applyPlacementCropOverrides = (placementCrops) => {
+          if (!placementDefinitions.length || !placementCrops || typeof placementCrops !== 'object') return;
+
+          const bySource = new Map();
+          placementDefinitions.forEach((definition) => {
+            const src = normalizeAssetPath(definition?.src);
+            if (!src || !definition?.placementId) return;
+            if (!bySource.has(src)) bySource.set(src, []);
+            bySource.get(src).push(definition);
+          });
+
+          bySource.forEach((definitions, src) => {
+            const elements = placementElementsForSource(src);
+            definitions
+              .slice()
+              .sort((a, b) => Number(a?.occurrence || 0) - Number(b?.occurrence || 0))
+              .forEach((definition) => {
+                const override = placementCrops?.[src]?.[definition.placementId];
+                if (!override) return;
+                const element = elements[Number(definition?.occurrence || 0)];
+                if (!element) return;
+                const x = clamp(override.focalX);
+                const y = clamp(override.focalY);
+                if (element instanceof HTMLImageElement) element.style.objectPosition = x + '% ' + y + '%';
+                else element.style.backgroundPosition = x + '% ' + y + '%';
+                element.dataset.koaPlacementCropApplied = definition.placementId;
+              });
+          });
         };
 
         const focalForImage = (img, focalMap) => {
@@ -390,10 +468,19 @@ const seoSchema = {
               });
             });
 
-            if (!focalMap.size) return;
+            const placementCrops = gallery.placementCrops && typeof gallery.placementCrops === 'object'
+              ? gallery.placementCrops
+              : {};
+
+            if (!focalMap.size && !Object.keys(placementCrops).length) return;
             window.__koaGalleryFocalPoints = focalMap;
-            window.__koaApplyGalleryFocalPoints = (root = document) => applyFocalPoints(root, focalMap);
+            window.__koaGalleryPlacementCrops = placementCrops;
+            window.__koaApplyGalleryFocalPoints = (root = document) => {
+              applyFocalPoints(root, focalMap);
+              applyPlacementCropOverrides(placementCrops);
+            };
             applyFocalPoints(document, focalMap);
+            applyPlacementCropOverrides(placementCrops);
 
             const observer = new MutationObserver((mutations) => {
               mutations.forEach((mutation) => {
@@ -405,6 +492,7 @@ const seoSchema = {
                   applyFocalPoints(mutation.target, focalMap);
                 }
               });
+              applyPlacementCropOverrides(placementCrops);
             });
 
             observer.observe(document.documentElement, {
