@@ -56,7 +56,7 @@ export function emailDocumentOpen(args: {
   const width = Math.max(520, Math.min(700, Number(args.maxWidth || 600)));
   const preview = String(args.previewText || '').trim();
   return (
-    '<!DOCTYPE html><html lang="en"><head>' +
+    '<!DOCTYPE html><html lang="en" dir="ltr"><head>' +
       '<meta charset="UTF-8">' +
       '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
       '<meta http-equiv="X-UA-Compatible" content="IE=edge">' +
@@ -67,7 +67,7 @@ export function emailDocumentOpen(args: {
       (preview
         ? '<div style="display:none;max-height:0px;overflow:hidden;opacity:0;color:transparent;font-family:Arial,Helvetica,sans-serif;font-size:1px;line-height:1px;">' + esc(preview) + '</div>'
         : '') +
-      '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7" style="width:100%;background-color:#f5f0e7;border-collapse:collapse;">' +
+      '<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f5f0e7" style="width:100%;background-color:#f5f0e7;border-collapse:collapse;">' +
         '<tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px;">' +
           '<!--[if mso]><table role="presentation" width="' + width + '" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->' +
           '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:' + width + 'px;background-color:#ffffff;border:1px solid #e7dfd0;border-radius:18px;border-collapse:separate;">'
@@ -112,7 +112,7 @@ export function emailHeader(args: {
       '<img src="' + esc(emailLogoUrl(args.brand)) + '" width="52" height="52" border="0" alt="' + esc(brandName) + '" style="display:block;width:52px;height:52px;border:0;outline:none;text-decoration:none;">' +
       '<div style="padding-top:7px;font-family:Arial,Helvetica,sans-serif;font-size:10px;line-height:14px;font-weight:800;letter-spacing:1.7px;text-transform:uppercase;color:#173d30;mso-line-height-rule:exactly;">' + esc(brandName) + '</div>' +
       (showEyebrow
-        ? '<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a96d4a;mso-line-height-rule:exactly;">' + esc(eyebrow) + '</div>'
+        ? '<div style="padding-top:8px;font-family:Arial,Helvetica,sans-serif;font-size:9px;line-height:13px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#8b5a3c;mso-line-height-rule:exactly;">' + esc(eyebrow) + '</div>'
         : '') +
       (args.title
         ? '<div style="padding-top:3px;font-family:Georgia,Times New Roman,serif;font-size:24px;line-height:29px;font-weight:700;color:#173d30;mso-line-height-rule:exactly;">' + esc(args.title) + '</div>'
@@ -158,7 +158,7 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
 
   const identity = name
     ? '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">' + esc(name) + '</div>' +
-      (showPronouns && pronouns ? '<div style="font-size:12px;line-height:18px;color:#7a857f;">' + esc(pronouns) + '</div>' : '') +
+      (showPronouns && pronouns ? '<div style="font-size:12px;line-height:18px;color:#66736d;">' + esc(pronouns) + '</div>' : '') +
       (showTitle && title ? '<div style="font-size:13px;line-height:20px;color:#66736d;">' + esc(title) + '</div>' : '') +
       (showRoleDescription && roleDescription ? '<div style="padding-top:2px;font-size:12px;line-height:18px;color:#66736d;">' + esc(roleDescription) + '</div>' : '') +
       (showTeamTitle ? '<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700;color:#173d30;">Koa’s Events Team</div>' : '')
@@ -171,15 +171,15 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
         identity +
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;border-collapse:collapse;">' +
           '<tr>' +
-            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#a96d4a;">&#9993;</td>' +
+            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#9993;</td>' +
             '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="mailto:aloha@koasevents.com" style="color:#173d30;text-decoration:none;">aloha@koasevents.com</a></td>' +
           '</tr>' +
           '<tr>' +
-            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#a96d4a;">&#9742;</td>' +
+            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#9742;</td>' +
             '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="tel:+18448085627" style="color:#173d30;text-decoration:none;">(844) 808-KOAS</a></td>' +
           '</tr>' +
           '<tr>' +
-            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#a96d4a;">&#8599;</td>' +
+            '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#8599;</td>' +
             '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="https://www.koasevents.com" style="color:#173d30;text-decoration:none;">www.koasevents.com</a></td>' +
           '</tr>' +
         '</table>' +
