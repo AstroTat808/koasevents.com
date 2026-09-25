@@ -1,4 +1,4 @@
-import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './email-brand.ts';
+import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
 
 function esc(value:unknown){
   return String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m));
@@ -81,6 +81,7 @@ export async function sendVendorEmail(args:{
         subject:args.subject,
         html,
         text,
+        attachments:[emailLogoAttachment()],
         reply_to:replyTo()
       }),
       signal:AbortSignal.timeout(12000)

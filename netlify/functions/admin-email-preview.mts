@@ -1,6 +1,6 @@
 import type { Config } from '@netlify/functions';
 import { requireCapability, operationsRole, ROLE_LABELS } from './_shared/admin';
-import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
 
 type PreviewTemplate = {
   id:string;
@@ -105,7 +105,7 @@ export default async(req:Request)=>{
     const response=await fetch('https://api.resend.com/emails',{
       method:'POST',
       headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
-      body:JSON.stringify({from,to:[to],subject,html:rendered.html,text:rendered.text,reply_to:replyTo}),
+      body:JSON.stringify({from,to:[to],subject,html:rendered.html,text:rendered.text,attachments:[emailLogoAttachment()],reply_to:replyTo}),
       signal:AbortSignal.timeout(12_000),
     });
     const result:any=await response.json().catch(()=>({}));
