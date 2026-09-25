@@ -324,6 +324,21 @@ const mediaUsage = mediaUsageBySrc;
       return usageForItem(item).filter((usage) => usage.href !== '/gallery/');
     }
 
+    function impactClass(impact, surface = 'badge') {
+      if (surface === 'card') {
+        return impact === 'high'
+          ? 'border-[var(--koa-clay)]/55 bg-[color-mix(in_srgb,var(--koa-clay)_8%,white)]'
+          : impact === 'low'
+            ? 'border-[var(--koa-line)] bg-white'
+            : 'border-[var(--koa-forest)]/22 bg-[color-mix(in_srgb,var(--koa-forest)_4%,white)]';
+      }
+      return impact === 'high'
+        ? 'border-[var(--koa-clay)]/35 bg-[var(--koa-clay)] text-white'
+        : impact === 'low'
+          ? 'border-[var(--koa-line)] bg-white text-[var(--koa-ink)]/55'
+          : 'border-[var(--koa-forest)]/25 bg-[var(--koa-forest)]/8 text-[var(--koa-forest)]';
+    }
+
     function updateCropImpact(item) {
       const usages = externalUsagesForItem(item);
       const count = usages.length;
@@ -337,10 +352,16 @@ const mediaUsage = mediaUsageBySrc;
         return;
       }
 
+      const highImpact = usages.filter((usage) => usage.impact === 'high');
       const examples = usages.slice(0, 3).map((usage) => usage.page + ' · ' + usage.section);
       const remainder = count - examples.length;
-      cropImpactTitle.textContent = 'This change will affect ' + count + ' website placements';
+      cropImpactTitle.textContent = highImpact.length
+        ? 'High-impact crop change: ' + count + ' website placements'
+        : 'This change will affect ' + count + ' website placements';
       cropImpactCopy.textContent =
+        (highImpact.length
+          ? highImpact.length + (highImpact.length === 1 ? ' high-impact placement is included. ' : ' high-impact placements are included. ')
+          : '') +
         'The same focal point will update ' +
         examples.join(', ') +
         (remainder > 0 ? ', and ' + remainder + ' more.' : '.') +
@@ -372,7 +393,7 @@ const mediaUsage = mediaUsageBySrc;
         link.href = usage.href;
         link.target = '_blank';
         link.rel = 'noreferrer';
-        link.className = 'group self-start overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] transition hover:-translate-y-0.5 hover:shadow-md';
+        link.className = 'group self-start overflow-hidden rounded-xl border transition hover:-translate-y-0.5 hover:shadow-md ' + impactClass(usage.impact, 'card');
 
         const frame = document.createElement('div');
         frame.className = 'relative w-full overflow-hidden bg-[var(--koa-sand)]';
@@ -404,10 +425,16 @@ const mediaUsage = mediaUsageBySrc;
         const section = document.createElement('span');
         section.className = 'mt-1 block text-[.68rem] leading-4 text-[var(--koa-ink)]/50';
         section.textContent = usage.section;
+        const meta = document.createElement('div');
+        meta.className = 'mt-2 flex flex-wrap items-center gap-1.5';
+        const impact = document.createElement('span');
+        impact.className = 'rounded-full border px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] ' + impactClass(usage.impact);
+        impact.textContent = usage.impactLabel || 'Standard';
         const shape = document.createElement('span');
-        shape.className = 'mt-1 block text-[.62rem] font-bold uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        shape.className = 'rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.55rem] font-bold uppercase tracking-[.07em] text-[var(--koa-clay)]';
         shape.textContent = usage.aspectLabel || String(usage.aspectRatio || '').replaceAll(' ', '').replace('/', ':');
-        copy.append(page, section, shape);
+        meta.append(impact, shape);
+        copy.append(page, section, meta);
 
         link.append(frame, copy);
         usagePreviews.append(link);
@@ -714,10 +741,16 @@ const mediaUsage = mediaUsageBySrc;
           usageSection.className = 'mt-0.5 block text-[.68rem] leading-4 text-[var(--koa-ink)]/50';
           usageSection.textContent = usage.section;
           usageCopy.append(usagePage, usageSection);
+          const usageMeta = document.createElement('span');
+          usageMeta.className = 'flex shrink-0 flex-col items-end gap-1';
+          const usageImpact = document.createElement('span');
+          usageImpact.className = 'rounded-full border px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] ' + impactClass(usage.impact);
+          usageImpact.textContent = usage.impactLabel || 'Standard';
           const usageShape = document.createElement('span');
-          usageShape.className = 'shrink-0 rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
+          usageShape.className = 'rounded-full bg-[var(--koa-sand)] px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
           usageShape.textContent = String(usage.aspectRatio || '').replaceAll(' ', '').replace('/', ':') || 'View';
-          usageLink.append(usageCopy, usageShape);
+          usageMeta.append(usageImpact, usageShape);
+          usageLink.append(usageCopy, usageMeta);
           usageList.append(usageLink);
         });
         usageDetails.append(usageList);
