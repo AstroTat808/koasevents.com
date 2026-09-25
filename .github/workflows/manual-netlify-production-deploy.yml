@@ -1,0 +1,65 @@
+name: Manual Netlify production deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/manual-netlify-production-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: koa-manual-netlify-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and deploy production
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Confirm Netlify deployment credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${NETLIFY_AUTH_TOKEN:-}" ]; then
+            echo "NETLIFY_AUTH_TOKEN GitHub Actions secret is not configured."
+            exit 2
+          fi
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Run structural safety gate
+        run: npm run build:safety
+
+      - name: Deploy current main to Netlify production
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes netlify-cli@latest deploy             --prod             --build             --site "$NETLIFY_SITE_ID"             --auth "$NETLIFY_AUTH_TOKEN"             --message "GitHub recovery deploy ${GITHUB_SHA}"
+
+      - name: Verify deployed commit marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Requested production deployment for ${GITHUB_SHA}"
