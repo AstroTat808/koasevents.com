@@ -52,7 +52,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
 
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div data-email-health-release-alert class="mt-5 hidden rounded-[1.2rem] border p-5">
+            <p class="text-[.56rem] font-black uppercase tracking-[.09em]">Production email release</p>
+            <h3 data-email-health-release-title class="mt-1 text-lg font-semibold">—</h3>
+            <p data-email-health-release-detail class="mt-1 text-xs leading-5"></p>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Logo availability</p>
               <p data-email-health-logo class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
@@ -67,6 +73,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Template compatibility</p>
               <p data-email-health-templates class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
               <p data-email-health-template-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Production email release</p>
+              <p data-email-health-release class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-release-meta class="mt-1 break-all text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
             </article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last checked</p>
@@ -583,6 +594,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealthTemplates=document.querySelector('[data-email-health-templates]');
     const emailHealthTemplateDetail=document.querySelector('[data-email-health-template-detail]');
     const emailHealthChecked=document.querySelector('[data-email-health-checked]');
+    const emailHealthRelease=document.querySelector('[data-email-health-release]');
+    const emailHealthReleaseMeta=document.querySelector('[data-email-health-release-meta]');
+    const emailHealthReleaseAlert=document.querySelector('[data-email-health-release-alert]');
+    const emailHealthReleaseTitle=document.querySelector('[data-email-health-release-title]');
+    const emailHealthReleaseDetail=document.querySelector('[data-email-health-release-detail]');
     const emailHealth24Total=document.querySelector('[data-email-health-24-total]');
     const emailHealth24Delivered=document.querySelector('[data-email-health-24-delivered]');
     const emailHealth24Bounced=document.querySelector('[data-email-health-24-bounced]');
@@ -1052,9 +1068,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       releaseDialog.showModal();
     }
 
-    function renderEmailHealth(summary){
+    function renderEmailHealth(summary,current){
       const email=summary||{};
-      const overallState=String(email.overall||'yellow');
+      const releaseCheck=(current?.checks||[]).find((row)=>row.id==='email-release-sync')||null;
+      const releaseSeverity=String(releaseCheck?.severity||'green');
+      const releaseDetails=releaseCheck?.deploymentDetails||{};
+      let overallState=String(email.overall||'yellow');
+      if(releaseSeverity==='red')overallState='red';
+      else if(releaseSeverity==='yellow'&&overallState==='green')overallState='yellow';
       const overallMap={
         green:['Healthy','bg-emerald-100 text-emerald-800'],
         yellow:['Attention','bg-amber-100 text-amber-900'],
@@ -1090,6 +1111,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       if(emailHealthTemplateDetail)emailHealthTemplateDetail.textContent=templates.detail||'';
       if(emailHealthChecked)emailHealthChecked.textContent=email.generatedAt?new Date(email.generatedAt).toLocaleString():'—';
+
+      if(emailHealthRelease){
+        const behind=Boolean(releaseDetails.emailRenderingBehind);
+        const commitsBehind=Number(releaseDetails.commitsBehind||0);
+        emailHealthRelease.textContent=behind
+          ? commitsBehind+' commit'+(commitsBehind===1?'':'s')+' behind'
+          : releaseSeverity==='yellow'
+            ? 'Verification attention'
+            : 'Current';
+        emailHealthRelease.className='mt-2 text-sm font-semibold '+(releaseSeverity==='red'?'text-red-800':releaseSeverity==='yellow'?'text-amber-800':'text-emerald-800');
+      }
+      if(emailHealthReleaseMeta){
+        const live=String(releaseDetails.netlifyCommit||'').slice(0,12);
+        const main=String(releaseDetails.githubCommit||'').slice(0,12);
+        emailHealthReleaseMeta.textContent=(live?'Production '+live:'Production commit unavailable')+(main?' · Main '+main:'');
+      }
+      if(emailHealthReleaseAlert){
+        const show=releaseSeverity==='yellow'||releaseSeverity==='red';
+        emailHealthReleaseAlert.classList.toggle('hidden',!show);
+        emailHealthReleaseAlert.className='mt-5 rounded-[1.2rem] border p-5 '+(show?'':'hidden ')+(releaseSeverity==='red'?'border-red-200 bg-red-50 text-red-900':'border-amber-200 bg-amber-50 text-amber-900');
+        if(emailHealthReleaseTitle)emailHealthReleaseTitle.textContent=releaseSeverity==='red'
+          ? 'Production is serving an older email renderer.'
+          : 'A newer email-rendering release is waiting to reach production.';
+        if(emailHealthReleaseDetail){
+          const changed=Array.isArray(releaseDetails.emailRenderingChangedFiles)?releaseDetails.emailRenderingChangedFiles:[];
+          emailHealthReleaseDetail.textContent=String(releaseCheck?.detail||'')
+            +(changed.length?' Pending email files: '+changed.join(', '):'');
+        }
+      }
 
       const p24=delivery.period24h||{};
       if(emailHealth24Total)emailHealth24Total.textContent=Number(p24.total||0)+' lifecycle events';
@@ -1219,7 +1269,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         historyEl.appendChild(card);
       });
 
-      renderEmailHealth(data.emailHealth||{});
+      renderEmailHealth(data.emailHealth||{},data.current||null);
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
