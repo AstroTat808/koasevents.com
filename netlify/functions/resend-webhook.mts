@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { getStore } from '@netlify/blobs';
+import { recordEmailHealthEvent } from './_shared/email-health';
 
 type CommunicationState = {
   messageId?: string;
@@ -119,6 +120,14 @@ export default async (req: Request, context: Context) => {
 
   const emailId = String(payload?.data?.email_id || payload?.data?.id || '').trim();
   if (!emailId) return new Response(null, { status: 204 });
+
+  // Record every signed Resend lifecycle event for System Health, even when the
+  // email is not associated with a CRM record.
+  await recordEmailHealthEvent(context, {
+    emailId,
+    type: payload?.type,
+    createdAt: payload?.created_at || payload?.createdAt,
+  }).catch(() => null);
 
   // The payload is authoritative only after Svix signature verification above.
   // Using the signed event type also keeps this endpoint compatible with a

@@ -2,6 +2,7 @@ import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailSignat
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
+import { emailHealthSummary } from './email-health';
 
 export type HealthCheck = {
   id: string;
@@ -128,6 +129,9 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
+    {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
+    {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
     ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
   ];
 }
@@ -136,6 +140,7 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
     'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
+    'email-logo','email-delivery','email-template-compatibility',
   ]);
   return immediate.has(id)?1:2;
 }
@@ -808,10 +813,11 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       severity:ok?'green':(defaultAlertAfter(id)===1?'red':'yellow'),
     };
   });
-  const [baseChecks,startupSignal,deploymentSync]=await Promise.all([
+  const [baseChecks,startupSignal,deploymentSync,emailHealth]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
+    emailHealthSummary(context,{force:source==='manual'}),
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -861,7 +867,55 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       fallbackUsed:Boolean(deploymentSync.fallbackUsed),
     },
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck];
+  const emailLogoCheck:HealthCheck={
+    id:'email-logo',
+    name:'Email logo availability',
+    kind:'api',
+    path:'/brand/koa-mark.png',
+    ok:Boolean(emailHealth?.logo?.ok),
+    status:Number(emailHealth?.logo?.status||0),
+    ms:Number(emailHealth?.logo?.ms||0),
+    severity:emailHealth?.logo?.ok?'green':'red',
+    detail:clean(emailHealth?.logo?.detail||'Email logo health unavailable.',1200),
+  };
+  const emailDelivery= emailHealth?.delivery || {};
+  const delivery24h=emailDelivery?.period24h||{};
+  const emailDeliveryCheck:HealthCheck={
+    id:'email-delivery',
+    name:'Email delivery health',
+    kind:'api',
+    path:'Resend delivery lifecycle',
+    ok:String(emailDelivery?.severity||'yellow')!=='red',
+    status:Number(emailDelivery?.apiStatus||0) || (emailDelivery?.webhookConfigured?200:503),
+    ms:0,
+    severity:String(emailDelivery?.severity||'yellow')==='red'?'red':String(emailDelivery?.severity||'yellow')==='yellow'?'yellow':'green',
+    detail:clean(
+      '24h: '+Number(delivery24h.total||0)+' lifecycle events · '
+      +Number(delivery24h.bounced||0)+' bounced · '
+      +Number(delivery24h.complained||0)+' complaints · '
+      +Number(delivery24h.failed||0)+' failed · '
+      +Number(delivery24h.suppressed||0)+' suppressed'
+      +(emailDelivery?.apiDetail?' · '+String(emailDelivery.apiDetail):''),
+      1200,
+    ),
+  };
+  const templateCompatibility=emailHealth?.templateCompatibility||{};
+  const emailTemplateCheck:HealthCheck={
+    id:'email-template-compatibility',
+    name:'Email template compatibility',
+    kind:'api',
+    path:'build-safety email gate',
+    ok:Boolean(templateCompatibility?.passed),
+    status:templateCompatibility?.passed?200:503,
+    ms:0,
+    severity:templateCompatibility?.passed?'green':'red',
+    detail:clean(
+      (templateCompatibility?.detail||'Email compatibility gate unavailable.')
+      +' · '+Number(templateCompatibility?.templateCount||0)+' automated templates covered',
+      1200,
+    ),
+  };
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailLogoCheck,emailDeliveryCheck,emailTemplateCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),

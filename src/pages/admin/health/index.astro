@@ -42,6 +42,81 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Email delivery + rendering</p>
+              <h2 class="display mt-2 text-4xl">Email Health</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Automatic checks for the production logo, Resend delivery problems, complaints and bounces, webhook coverage, and the email template compatibility gate.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span data-email-health-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking</span>
+              <a href="/admin/email-preview/" class="w-fit rounded-full border border-[var(--koa-line)] px-4 py-3 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open Email Preview</a>
+            </div>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Logo availability</p>
+              <p data-email-health-logo class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-logo-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delivery source</p>
+              <p data-email-health-source class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-source-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Template compatibility</p>
+              <p data-email-health-templates class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-template-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last checked</p>
+              <p data-email-health-checked class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+            </article>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Last 24 hours</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Delivery lifecycle</h3></div>
+                <span data-email-health-24-total class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delivered</p><p data-email-health-24-delivered class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Bounced</p><p data-email-health-24-bounced class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Complaints</p><p data-email-health-24-complained class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Failed</p><p data-email-health-24-failed class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delayed</p><p data-email-health-24-delayed class="mt-1 text-xl font-semibold text-amber-800">0</p></div>
+              </div>
+            </article>
+
+            <article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+              <div class="flex items-center justify-between gap-3">
+                <div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Rolling 7 days</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Delivery problem rate</h3></div>
+                <span data-email-health-7-total class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
+              </div>
+              <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Failure rate</p><p data-email-health-7-rate class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">—</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Bounced</p><p data-email-health-7-bounced class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Complaints</p><p data-email-health-7-complained class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+                <div><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Suppressed</p><p data-email-health-7-suppressed class="mt-1 text-xl font-semibold text-red-800">0</p></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Recent delivery issues</p>
+                <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Bounces, complaints, failures, suppression + delays</h3>
+              </div>
+            </div>
+            <div data-email-health-issues class="mt-4 grid gap-2"></div>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
               <p class="eyebrow text-[var(--koa-clay)]">Microsoft 365 integration</p>
               <h2 class="display mt-2 text-4xl">Office 365 calendar sync</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Production synchronization health for the shared Koa’s Events calendar.</p>
@@ -500,6 +575,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const publicStatusEnabled=document.querySelector('[data-public-status-enabled]');
     const savePolicy=document.querySelector('[data-save-policy]');
     const policyMessage=document.querySelector('[data-policy-message]');
+    const emailHealthOverall=document.querySelector('[data-email-health-overall]');
+    const emailHealthLogo=document.querySelector('[data-email-health-logo]');
+    const emailHealthLogoDetail=document.querySelector('[data-email-health-logo-detail]');
+    const emailHealthSource=document.querySelector('[data-email-health-source]');
+    const emailHealthSourceDetail=document.querySelector('[data-email-health-source-detail]');
+    const emailHealthTemplates=document.querySelector('[data-email-health-templates]');
+    const emailHealthTemplateDetail=document.querySelector('[data-email-health-template-detail]');
+    const emailHealthChecked=document.querySelector('[data-email-health-checked]');
+    const emailHealth24Total=document.querySelector('[data-email-health-24-total]');
+    const emailHealth24Delivered=document.querySelector('[data-email-health-24-delivered]');
+    const emailHealth24Bounced=document.querySelector('[data-email-health-24-bounced]');
+    const emailHealth24Complained=document.querySelector('[data-email-health-24-complained]');
+    const emailHealth24Failed=document.querySelector('[data-email-health-24-failed]');
+    const emailHealth24Delayed=document.querySelector('[data-email-health-24-delayed]');
+    const emailHealth7Total=document.querySelector('[data-email-health-7-total]');
+    const emailHealth7Rate=document.querySelector('[data-email-health-7-rate]');
+    const emailHealth7Bounced=document.querySelector('[data-email-health-7-bounced]');
+    const emailHealth7Complained=document.querySelector('[data-email-health-7-complained]');
+    const emailHealth7Suppressed=document.querySelector('[data-email-health-7-suppressed]');
+    const emailHealthIssues=document.querySelector('[data-email-health-issues]');
     const office365Operational=document.querySelector('[data-office365-operational]');
     const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
     const office365OperationalDetail=document.querySelector('[data-office365-operational-detail]');
@@ -957,6 +1052,88 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       releaseDialog.showModal();
     }
 
+    function renderEmailHealth(summary){
+      const email=summary||{};
+      const overallState=String(email.overall||'yellow');
+      const overallMap={
+        green:['Healthy','bg-emerald-100 text-emerald-800'],
+        yellow:['Attention','bg-amber-100 text-amber-900'],
+        red:['Critical','bg-red-100 text-red-800'],
+      };
+      const overallChoice=overallMap[overallState]||overallMap.yellow;
+      if(emailHealthOverall){
+        emailHealthOverall.textContent=overallChoice[0];
+        emailHealthOverall.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+overallChoice[1];
+      }
+
+      const logo=email.logo||{};
+      if(emailHealthLogo){
+        emailHealthLogo.textContent=logo.ok?'Available':'Unavailable';
+        emailHealthLogo.className='mt-2 text-sm font-semibold '+(logo.ok?'text-emerald-800':'text-red-800');
+      }
+      if(emailHealthLogoDetail)emailHealthLogoDetail.textContent=(logo.status?'HTTP '+logo.status+' · ':'')+(logo.contentType||'')+(logo.ms!=null?' · '+logo.ms+' ms':'');
+
+      const delivery=email.delivery||{};
+      if(emailHealthSource)emailHealthSource.textContent=delivery.source==='resend-api'?'Resend API':delivery.source==='signed-webhook-history'?'Signed webhook history':'No delivery history';
+      if(emailHealthSourceDetail){
+        const parts=[];
+        parts.push(delivery.apiConfigured?'API key configured':'API key missing');
+        parts.push(delivery.webhookConfigured?'webhook configured':'webhook missing');
+        if(delivery.apiDetail)parts.push(delivery.apiDetail);
+        emailHealthSourceDetail.textContent=parts.join(' · ');
+      }
+
+      const templates=email.templateCompatibility||{};
+      if(emailHealthTemplates){
+        emailHealthTemplates.textContent=templates.passed?Number(templates.templateCount||0)+' templates passing':'Compatibility gate failed';
+        emailHealthTemplates.className='mt-2 text-sm font-semibold '+(templates.passed?'text-emerald-800':'text-red-800');
+      }
+      if(emailHealthTemplateDetail)emailHealthTemplateDetail.textContent=templates.detail||'';
+      if(emailHealthChecked)emailHealthChecked.textContent=email.generatedAt?new Date(email.generatedAt).toLocaleString():'—';
+
+      const p24=delivery.period24h||{};
+      if(emailHealth24Total)emailHealth24Total.textContent=Number(p24.total||0)+' lifecycle events';
+      if(emailHealth24Delivered)emailHealth24Delivered.textContent=String(Number(p24.delivered||0));
+      if(emailHealth24Bounced)emailHealth24Bounced.textContent=String(Number(p24.bounced||0));
+      if(emailHealth24Complained)emailHealth24Complained.textContent=String(Number(p24.complained||0));
+      if(emailHealth24Failed)emailHealth24Failed.textContent=String(Number(p24.failed||0)+Number(p24.suppressed||0));
+      if(emailHealth24Delayed)emailHealth24Delayed.textContent=String(Number(p24.delayed||0));
+
+      const p7=delivery.period7d||{};
+      if(emailHealth7Total)emailHealth7Total.textContent=Number(p7.total||0)+' lifecycle events';
+      if(emailHealth7Rate)emailHealth7Rate.textContent=Number(p7.failureRate||0).toFixed(1)+'%';
+      if(emailHealth7Bounced)emailHealth7Bounced.textContent=String(Number(p7.bounced||0));
+      if(emailHealth7Complained)emailHealth7Complained.textContent=String(Number(p7.complained||0));
+      if(emailHealth7Suppressed)emailHealth7Suppressed.textContent=String(Number(p7.suppressed||0));
+
+      if(emailHealthIssues){
+        emailHealthIssues.innerHTML='';
+        const issues=Array.isArray(delivery.recentIssues)?delivery.recentIssues:[];
+        if(!issues.length){
+          emailHealthIssues.innerHTML='<p class="text-sm text-emerald-800">No recent bounced, complained, failed, suppressed, or delayed email events were found.</p>';
+        }else{
+          issues.forEach((issue)=>{
+            const row=document.createElement('div');
+            const red=['bounced','complained','failed','suppressed'].includes(String(issue.status||''));
+            row.className='flex flex-col gap-1 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between '+(red?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50');
+            const left=document.createElement('div');
+            const status=document.createElement('strong');
+            status.className='text-sm '+(red?'text-red-900':'text-amber-900');
+            status.textContent=String(issue.status||'issue').replaceAll('_',' ');
+            const id=document.createElement('p');
+            id.className='mt-1 break-all text-[.68rem] text-[var(--koa-ink)]/50';
+            id.textContent=String(issue.emailId||'');
+            left.append(status,id);
+            const when=document.createElement('span');
+            when.className='text-xs text-[var(--koa-ink)]/48';
+            when.textContent=issue.createdAt?new Date(issue.createdAt).toLocaleString():'';
+            row.append(left,when);
+            emailHealthIssues.appendChild(row);
+          });
+        }
+      }
+    }
+
     function renderOffice365Trend(rows){
       if(!office365Trend)return;
       const data=Array.isArray(rows)?rows:[];
@@ -1042,6 +1219,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         historyEl.appendChild(card);
       });
 
+      renderEmailHealth(data.emailHealth||{});
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
