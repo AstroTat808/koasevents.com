@@ -104,6 +104,23 @@ export async function syncCredentialWorkspaceAlerts(context: Context, rows: any[
   ]);
 }
 
+export async function readCredentialWorkspaceAlertTimeline(context: Context) {
+  const alerts = storeFor(context);
+  const state: any = (await alerts.get('lifecycle/state', { type: 'json' })) || { active: {} };
+  const active: Record<string, LifecycleRecord> = state?.active && typeof state.active === 'object' ? state.active : {};
+  const historyRaw: any = await alerts.get('lifecycle/history', { type: 'json' });
+  const history: LifecycleRecord[] = Array.isArray(historyRaw) ? historyRaw : [];
+  const credentialActive = Object.values(active)
+    .filter((row) => String(row?.id || '').startsWith('credential:'))
+    .map((row) => ({ ...row, status: 'active' as const }));
+  const credentialHistory = history
+    .filter((row) => String(row?.id || '').startsWith('credential:'))
+    .map((row) => ({ ...row, status: 'resolved' as const }));
+  return [...credentialActive, ...credentialHistory]
+    .sort((a, b) => Date.parse(String(b.resolvedAt || b.lastSeenAt || b.firstAppearedAt || '')) - Date.parse(String(a.resolvedAt || a.lastSeenAt || a.firstAppearedAt || '')))
+    .slice(0, 300);
+}
+
 export async function syncCredentialWorkspaceAlert(context: Context, row: any) {
   await syncCredentialWorkspaceAlerts(context, [row]);
 }
