@@ -137,6 +137,44 @@ async function calendarPath(accessToken:string){
   cachedCalendarPath='/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars/'+encodeURIComponent(calendarId);
   return cachedCalendarPath;
 }
+
+export async function verifyOffice365Credentials(){
+  const cfg=env();
+  const missing=[
+    !cfg.tenantId?'MICROSOFT_GRAPH_TENANT_ID':'',
+    !cfg.clientId?'MICROSOFT_GRAPH_CLIENT_ID':'',
+    !cfg.clientSecret?'MICROSOFT_GRAPH_CLIENT_SECRET':'',
+    !cfg.calendarOwner?'MICROSOFT_GRAPH_CALENDAR_OWNER':'',
+  ].filter(Boolean);
+  if(missing.length){
+    return {
+      ok:false,
+      configured:false,
+      status:0,
+      detail:'Missing Microsoft Graph configuration: '+missing.join(', ')+'.',
+    };
+  }
+  try{
+    const accessToken=await token();
+    const path=await calendarPath(accessToken);
+    await graph(path+'?$select=id,name',accessToken);
+    return {
+      ok:true,
+      configured:true,
+      status:200,
+      detail:'Microsoft Graph client credentials and calendar access are valid.',
+    };
+  }catch(error){
+    const detail=error instanceof Error?clean(error.message,800):'Microsoft Graph credential verification failed.';
+    const statusMatch=detail.match(/Microsoft Graph\s+(\d{3})/i);
+    return {
+      ok:false,
+      configured:true,
+      status:statusMatch?Number(statusMatch[1]):0,
+      detail,
+    };
+  }
+}
 async function listEvents(accessToken:string,start:string,end:string){
   let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
   const rows:GraphEvent[]=[];

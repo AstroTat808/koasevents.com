@@ -4,6 +4,14 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
 
+export type HealthIssueType =
+  | 'Service Failure'
+  | 'Authentication Expected'
+  | 'Configuration Problem'
+  | 'Permission Problem'
+  | 'Deployment Problem'
+  | 'External Dependency Problem';
+
 export type HealthCheck = {
   id: string;
   name: string;
@@ -14,6 +22,7 @@ export type HealthCheck = {
   ms: number;
   detail: string;
   severity?: 'green' | 'yellow' | 'red' | 'info';
+  issueType?: HealthIssueType | null;
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
     githubCommit: string;
@@ -134,6 +143,8 @@ export function healthComponents() {
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
+    {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
+    {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
     {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
     {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
     {id:'email-release-sync',name:'Email rendering release sync',path:'email rendering main → production',kind:'api' as const},
@@ -145,7 +156,7 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
     'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
-    'email-logo','email-delivery','email-template-compatibility','email-release-sync',
+    'email-logo','email-send-access','email-delivery','email-template-compatibility','email-release-sync',
   ]);
   return immediate.has(id)?1:2;
 }
@@ -237,6 +248,41 @@ function healthStore(context: Context) {
 
 function clean(value: unknown, max=500) {
   return String(value || '').trim().slice(0,max);
+}
+
+export function classifyHealthIssue(row: HealthCheck): HealthIssueType | null {
+  const status=Number(row?.status||0);
+  const detail=clean(row?.detail,1400).toLowerCase();
+  const id=clean(row?.id,120);
+  const deploymentState=clean(row?.deploymentState,80);
+
+  if((status===401||status===403)&&row?.ok) return 'Authentication Expected';
+
+  if(
+    /not configured|is not configured|missing configuration|environment variable|configuration problem|credential.*missing|startup marker missing|expected startup marker missing/.test(detail)
+  ) return 'Configuration Problem';
+
+  if(
+    status===401
+    || status===403
+    || /permission|forbidden|consent|access denied|insufficient scope|restricted to only send|authorization denied|github.*http 404|private repositories return 404/.test(detail)
+  ) return 'Permission Problem';
+
+  if(
+    status===408
+    || status===429
+    || status>=500
+    || /timeout|timed out|network|fetch failed|temporarily unavailable|service unavailable|upstream|direct github main metadata is unavailable|github main lookup failed/.test(detail)
+  ) return 'External Dependency Problem';
+
+  if(
+    id==='netlify-github-sync'
+    || id==='email-release-sync'
+    || ['deploying','waiting','release-policy-skipped','auto-deploy-broken','deploy-failed'].includes(deploymentState)
+  ) return row?.severity==='green'&&row?.ok?null:'Deployment Problem';
+
+  if(row?.severity==='yellow'||row?.severity==='red'||!row?.ok) return 'Service Failure';
+  return null;
 }
 
 export async function recordCrmStartupSignal(context:Context,input:Partial<CrmStartupSignal>) {
@@ -953,6 +999,36 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     severity:emailHealth?.logo?.ok?'green':'red',
     detail:clean(emailHealth?.logo?.detail||'Email logo health unavailable.',1200),
   };
+  const emailSendAccess=emailHealth?.sendAccess||{};
+  const emailSendAccessCheck:HealthCheck={
+    id:'email-send-access',
+    name:'Email sending access',
+    kind:'api',
+    path:'Resend send credential',
+    ok:Boolean(emailSendAccess?.ok),
+    status:Number(emailSendAccess?.status||0) || (emailSendAccess?.ok?200:503),
+    ms:0,
+    severity:emailSendAccess?.ok?'green':'red',
+    detail:clean(emailSendAccess?.detail||'Email sending credential verification is unavailable.',1200),
+  };
+  const emailMonitoringAccess=emailHealth?.monitoringAccess||{};
+  const emailMonitoringAccessCheck:HealthCheck={
+    id:'email-monitoring-access',
+    name:'Email monitoring access',
+    kind:'api',
+    path:'Resend delivery-read credential',
+    ok:true,
+    status:Number(emailMonitoringAccess?.status||0) || (emailMonitoringAccess?.reachable?200:503),
+    ms:0,
+    severity:emailMonitoringAccess?.reachable?'green':'yellow',
+    detail:clean(
+      emailMonitoringAccess?.detail
+      || (emailMonitoringAccess?.configured
+        ? 'The dedicated Resend monitoring credential is configured but delivery history could not be read.'
+        : 'RESEND_MONITORING_API_KEY is not configured. Sending is evaluated separately and signed webhook history remains available when configured.'),
+      1200,
+    ),
+  };
   const emailDelivery= emailHealth?.delivery || {};
   const delivery24h=emailDelivery?.period24h||{};
   const emailDeliveryCheck:HealthCheck={
@@ -990,7 +1066,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailDeliveryCheck,emailTemplateCheck];
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,emailTemplateCheck]
+    .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
@@ -1006,18 +1083,31 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   };
 }
 
+function hydrateIssueTypes(snapshot:HealthSnapshot|null):HealthSnapshot|null {
+  if(!snapshot)return null;
+  return {
+    ...snapshot,
+    checks:(Array.isArray(snapshot.checks)?snapshot.checks:[]).map((row)=>({
+      ...row,
+      issueType:row.issueType??classifyHealthIssue(row),
+    })),
+  };
+}
+
 export async function readLatestHealth(context:Context):Promise<HealthSnapshot|null> {
-  return ((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
+  const snapshot=((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
+  return hydrateIssueTypes(snapshot);
 }
 
 export async function readLatestHourlyHealth(context:Context):Promise<HealthSnapshot|null> {
   const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
-  return rows.find(row=>row?.source==='hourly') || null;
+  const snapshot=rows.find(row=>row?.source==='hourly') || null;
+  return hydrateIssueTypes(snapshot);
 }
 
 export async function readHealthHistory(context:Context,limit=100):Promise<HealthSnapshot[]> {
   const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
-  return rows.slice(0,Math.max(1,Math.min(500,limit)));
+  return rows.slice(0,Math.max(1,Math.min(500,limit))).map((row)=>hydrateIssueTypes(row) as HealthSnapshot);
 }
 
 export async function applyHealthAlertPolicy(context:Context,current:HealthSnapshot,previousHourly:HealthSnapshot|null) {
