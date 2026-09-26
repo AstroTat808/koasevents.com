@@ -1286,7 +1286,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
-    function setHealthSectionStatus(section,status,count=0){
+    function setHealthSectionStatus(section,status,count=0,summary=''){
       if(!(section instanceof HTMLElement))return;
       const normalized=['red','yellow','green'].includes(status)?status:'green';
       const previous=String(section.dataset.healthSectionStatus||'');
@@ -1301,6 +1301,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const selected=map[normalized]||map.green;
       badge.className='inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[.56rem] font-black uppercase tracking-[.07em] '+selected[1];
       badge.textContent=selected[0]+(count>0?' · '+count:'');
+      const summaryNode=section.querySelector('[data-health-section-summary]');
+      if(summaryNode instanceof HTMLElement){
+        summaryNode.textContent=String(summary||'');
+        summaryNode.classList.toggle('hidden',!summary);
+      }
       if(mobileHealthQuery.matches&&section.dataset.mobileCollapsible==='true'){
         if(normalized==='red'){
           setMobileCollapsed(section,false);
@@ -1330,7 +1335,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         event.stopPropagation();
         setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
       });
-      controls.append(badge,button);
+      const summary=document.createElement('p');
+      summary.dataset.healthSectionSummary='';
+      summary.className='health-section-mobile-summary hidden';
+      controls.append(badge,button,summary);
       header.appendChild(controls);
       header.classList.add('health-section-mobile-header');
       header.addEventListener('click',(event)=>{
@@ -1443,40 +1451,131 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function refreshHealthSectionStatuses(data){
       const currentChecks=Array.isArray(data?.current?.checks)?data.current.checks:[];
       const allStatus=healthStatusFromChecks(currentChecks);
-      const configChecks=currentChecks.filter((row)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||'')));
+      const problemChecks=currentChecks.filter((row)=>['critical','warning'].includes(normalizedSeverity(row)));
+      const configChecks=problemChecks.filter((row)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||'')));
       const configStatus=healthStatusFromChecks(configChecks);
       const deploymentChecks=currentChecks.filter((row)=>/deploy|netlify|github|release/i.test(String(row?.id||'')+' '+String(row?.name||'')));
       const deploymentStatus=healthStatusFromChecks(deploymentChecks);
+      const apiProblems=problemChecks.filter((row)=>String(row?.kind||'').toLowerCase()==='api'||String(row?.path||'').startsWith('/api/'));
+      const pageProblems=problemChecks.filter((row)=>!apiProblems.includes(row));
+      const rootCauseGroups=new Set(problemChecks.map((row)=>String(row?.issueType||'').trim()).filter(Boolean));
 
-      setHealthSectionStatus(document.querySelector('#health-needs-action'),configStatus.status,configStatus.count);
-      setHealthSectionStatus(document.querySelector('#health-root-causes'),allStatus.status,allStatus.count);
-      setHealthSectionStatus(document.querySelector('#health-pages-apis'),allStatus.status,allStatus.count);
+      const actionItems=[...document.querySelectorAll('[data-needs-action-item]')];
+      const actionRed=actionItems.filter((item)=>item instanceof HTMLElement&&item.dataset.needsActionSeverity==='red').length;
+      const actionSummary=actionItems.length
+        ? actionItems.length+' item'+(actionItems.length===1?'':'s')+' need'+(actionItems.length===1?'s':'')+' manual action'
+        : 'No manual action needed';
+      setHealthSectionStatus(
+        document.querySelector('#health-needs-action'),
+        actionRed?'red':actionItems.length?'yellow':'green',
+        actionItems.length,
+        actionSummary
+      );
+
+      const rootSummary=rootCauseGroups.size
+        ? rootCauseGroups.size+' active root-cause '+(rootCauseGroups.size===1?'category':'categories')
+        : 'No active root causes';
+      setHealthSectionStatus(document.querySelector('#health-root-causes'),allStatus.status,allStatus.count,rootSummary);
+
+      let pagesSummary='All monitored pages and APIs healthy';
+      if(problemChecks.length){
+        const parts=[];
+        if(apiProblems.length)parts.push(apiProblems.length+' API '+(apiProblems.length===1?'check':'checks'));
+        if(pageProblems.length)parts.push(pageProblems.length+' page '+(pageProblems.length===1?'check':'checks'));
+        pagesSummary=parts.join(' + ')+' need attention';
+      }
+      setHealthSectionStatus(document.querySelector('#health-pages-apis'),allStatus.status,allStatus.count,pagesSummary);
 
       const credentialState=String(data?.credentialHealth?.overall||'green');
       const credentialRows=Array.isArray(data?.credentialHealth?.rows)?data.credentialHealth.rows:[];
-      setHealthSectionStatus(document.querySelector('#credential-health'),credentialState==='red'?'red':credentialState==='yellow'?'yellow':'green',credentialRows.filter((row)=>!row?.ok).length);
+      const credentialProblems=credentialRows.filter((row)=>!row?.ok);
+      const credentialSummary=credentialProblems.length
+        ? credentialProblems.length+' credential '+(credentialProblems.length===1?'warning':'warnings')
+        : credentialRows.length?'All credentials healthy':'Credential checks not available yet';
+      setHealthSectionStatus(
+        document.querySelector('#credential-health'),
+        credentialState==='red'?'red':credentialState==='yellow'?'yellow':'green',
+        credentialProblems.length,
+        credentialSummary
+      );
 
       const releaseCheck=currentChecks.find((row)=>row?.id==='email-release-sync');
       let emailState=String(data?.emailHealth?.overall||'green');
       if(String(releaseCheck?.severity||'')==='red')emailState='red';
       else if(String(releaseCheck?.severity||'')==='yellow'&&emailState==='green')emailState='yellow';
-      setHealthSectionStatus(document.querySelector('#health-email'),emailState==='red'?'red':emailState==='yellow'?'yellow':'green',emailState==='green'?0:1);
+      const emailSummary=emailState==='green'
+        ? 'Email delivery, templates, and renderer healthy'
+        : String(releaseCheck?.deploymentDetails?.emailRenderingBehind?'Production email renderer is behind GitHub main':'Email Health needs attention');
+      setHealthSectionStatus(document.querySelector('#health-email'),emailState==='red'?'red':emailState==='yellow'?'yellow':'green',emailState==='green'?0:1,emailSummary);
 
       const officeState=String(data?.office365?.severity||'green');
-      setHealthSectionStatus(document.querySelector('#health-office365'),officeState==='red'?'red':officeState==='yellow'?'yellow':'green',officeState==='green'?0:1);
-      setHealthSectionStatus(document.querySelector('#health-deployment'),deploymentStatus.status,deploymentStatus.count);
-      setHealthSectionStatus(document.querySelector('#health-weekly'),allStatus.status,allStatus.count);
+      const officeOperational=String(data?.office365?.operationalStatus||'unknown');
+      const officeSummaryMap={
+        scheduled:'Calendar sync scheduled and healthy',
+        paused:'Calendar sync intentionally paused',
+        saver:'Calendar sync running in Saver mode',
+        authentication_failed:'Microsoft Graph authentication failed',
+        production_behind:'Calendar verification blocked by production version',
+        schedule_missing:'Office 365 scheduled sync is missing',
+        not_configured:'Office 365 configuration is incomplete',
+        deployment_catching_up:'Calendar verification waiting for deployment',
+        unknown:'Office 365 status is unavailable',
+      };
+      const officeSummary=officeSummaryMap[officeOperational]||'Office 365 calendar sync needs attention';
+      setHealthSectionStatus(document.querySelector('#health-office365'),officeState==='red'?'red':officeState==='yellow'?'yellow':'green',officeState==='green'?0:1,officeSummary);
+
+      const deploymentSummary=deploymentStatus.count
+        ? deploymentStatus.count+' deployment '+(deploymentStatus.count===1?'check':'checks')+' need attention'
+        : 'Production deployment checks are healthy';
+      setHealthSectionStatus(document.querySelector('#health-deployment'),deploymentStatus.status,deploymentStatus.count,deploymentSummary);
+
+      const weeklySummary=allStatus.count
+        ? allStatus.count+' current '+(allStatus.count===1?'issue is':'issues are')+' reflected in this summary'
+        : 'Current reliability signals are healthy';
+      setHealthSectionStatus(document.querySelector('#health-weekly'),allStatus.status,allStatus.count,weeklySummary);
 
       const incidentRows=Array.isArray(data?.incidents?.rows)?data.incidents.rows:[];
       const ongoing=incidentRows.filter((row)=>row?.currentIncident).length;
       const recent=Array.isArray(data?.incidents?.recentIncidents)?data.incidents.recentIncidents:[];
-      setHealthSectionStatus(document.querySelector('#health-incidents'),ongoing?'red':recent.length?'yellow':'green',ongoing||recent.length);
-      setHealthSectionStatus(document.querySelector('#health-uptime'),allStatus.status,allStatus.count);
-      setHealthSectionStatus(document.querySelector('#health-notifications'),'green',0);
-      setHealthSectionStatus(document.querySelector('#health-history'),allStatus.status,allStatus.count);
+      const incidentSummary=ongoing
+        ? ongoing+' ongoing '+(ongoing===1?'incident':'incidents')
+        : recent.length
+          ? recent.length+' recent '+(recent.length===1?'incident':'incidents')+' · none ongoing'
+          : 'No observed incidents';
+      setHealthSectionStatus(document.querySelector('#health-incidents'),ongoing?'red':recent.length?'yellow':'green',ongoing||recent.length,incidentSummary);
 
-      const credit=String(data?.deployments?.creditUsage?.warningSeverity||data?.deployments?.creditUsage?.severity||'green');
-      setHealthSectionStatus(document.querySelector('[data-credit-panel]'),credit==='red'?'red':['orange','yellow'].includes(credit)?'yellow':'green',credit==='green'?0:1);
+      const uptimeRows=Array.isArray(data?.uptime?.rows)?data.uptime.rows:[];
+      const degraded24=uptimeRows.filter((row)=>{
+        const value=Number(row?.periods?.['24h']?.uptime);
+        return Number.isFinite(value)&&value<100;
+      });
+      const uptimeSummary=!uptimeRows.length
+        ? 'Uptime history is still collecting'
+        : degraded24.length
+          ? degraded24.length+' service'+(degraded24.length===1?'':'s')+' below 100% uptime in the last 24h'
+          : 'All monitored services at 100% uptime in the last 24h';
+      setHealthSectionStatus(document.querySelector('#health-uptime'),degraded24.length?'yellow':'green',degraded24.length,uptimeSummary);
+
+      const publicStatusOn=Boolean(data?.policy?.publicStatusEnabled);
+      setHealthSectionStatus(
+        document.querySelector('#health-notifications'),
+        'green',
+        0,
+        publicStatusOn?'Alert policy active · public status enabled':'Alert policy active · public status off'
+      );
+
+      const historySummary=allStatus.count
+        ? 'Latest health check has '+allStatus.count+' '+(allStatus.count===1?'issue':'issues')
+        : data?.current?.checkedAt?'Latest health check is healthy':'No health snapshot recorded yet';
+      setHealthSectionStatus(document.querySelector('#health-history'),allStatus.status,allStatus.count,historySummary);
+
+      const creditUsage=data?.deployments?.creditUsage||{};
+      const credit=String(creditUsage?.warningSeverity||creditUsage?.severity||'green');
+      const projected=creditUsage?.projectedAllowancePercent??creditUsage?.projection?.projectedAllowancePercent??null;
+      const creditSummary=projected!=null
+        ? 'Projected '+String(projected)+'% of monthly Netlify credit allowance'
+        : credit==='green'?'Netlify credit usage is within the configured allowance':'Netlify credit usage needs attention';
+      setHealthSectionStatus(document.querySelector('[data-credit-panel]'),credit==='red'?'red':['orange','yellow'].includes(credit)?'yellow':'green',credit==='green'?0:1,creditSummary);
     }
 
     function goToHighestPriorityProblem(){

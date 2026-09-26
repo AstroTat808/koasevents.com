@@ -1001,3 +1001,35 @@ main p.text-sm {
     background: white;
   }
 }
+
+
+/* Collapsed System Health one-line summaries */
+@media (max-width: 767px) {
+  body.koa-admin-page main .health-section-mobile-summary {
+    flex: 1 0 100%;
+    margin: .05rem 0 0;
+    overflow: hidden;
+    color: color-mix(in srgb, var(--koa-ink) 64%, transparent);
+    font-size: .72rem;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  body.koa-admin-page main [data-health-section-status="red"] .health-section-mobile-summary {
+    color: rgb(153 27 27);
+  }
+
+  body.koa-admin-page main [data-health-section-status="yellow"] .health-section-mobile-summary {
+    color: rgb(146 64 14);
+  }
+
+  body.koa-admin-page main [data-health-section-status="green"] .health-section-mobile-summary {
+    color: rgb(6 95 70);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsed="false"] .health-section-mobile-summary {
+    display: none !important;
+  }
+}
