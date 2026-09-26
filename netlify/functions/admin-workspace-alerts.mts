@@ -198,7 +198,9 @@ async function computeAlerts(context:Context,user:any){
   const healthDetails:AlertDetail[]=canHealth&&latestHealth
     ? (Array.isArray(latestHealth?.checks)?latestHealth.checks:[])
         .filter((check:any)=>{
-          if(String(check?.id||'')==='netlify-github-sync'){
+          const checkId=String(check?.id||'');
+          if(credentialHealth&&['email-send-access','email-monitoring-access'].includes(checkId))return false;
+          if(checkId==='netlify-github-sync'){
             return Boolean(deploymentSync && (deploymentSync.severity==='yellow' || deploymentSync.severity==='red'));
           }
           return !check?.ok || String(check?.severity||'')==='yellow';
