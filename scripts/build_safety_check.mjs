@@ -96,7 +96,12 @@ function checkEmailFeatureContracts() {
     ['src/pages/admin/health/index.astro', [
       ['Email Health dashboard', 'data-email-health-overall'],
       ['email release warning', 'data-email-health-release-alert'],
+      ['email release warning links', 'data-email-health-release-actions'],
       ['email release status', 'data-email-health-release'],
+      ['production email renderer card', 'data-email-renderer-match'],
+      ['renderer live commit link', 'data-email-renderer-live'],
+      ['renderer GitHub main link', 'data-email-renderer-main'],
+      ['renderer deploy link', 'data-email-renderer-deploy'],
       ['email issue list', 'data-email-health-issues'],
       ['email 24-hour delivery stats', 'data-email-health-24-delivered'],
     ]],

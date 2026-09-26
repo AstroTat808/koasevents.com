@@ -56,6 +56,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <p class="text-[.56rem] font-black uppercase tracking-[.09em]">Production email release</p>
             <h3 data-email-health-release-title class="mt-1 text-lg font-semibold">—</h3>
             <p data-email-health-release-detail class="mt-1 text-xs leading-5"></p>
+            <div data-email-health-release-actions class="mt-4 flex flex-wrap gap-2"></div>
           </div>
 
           <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -84,6 +85,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p data-email-health-checked class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
             </article>
           </div>
+
+          <article class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Production email renderer</p>
+                <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Live deployment identity</h3>
+                <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Shows the exact production commit serving email code compared with GitHub main.</p>
+              </div>
+              <span data-email-renderer-match class="w-fit rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking</span>
+            </div>
+            <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Live commit</p>
+                <a data-email-renderer-live href="#" target="_blank" rel="noreferrer" class="mt-2 block break-all text-sm font-semibold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4">—</a>
+              </div>
+              <div class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">GitHub main</p>
+                <a data-email-renderer-main href="#" target="_blank" rel="noreferrer" class="mt-2 block break-all text-sm font-semibold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4">—</a>
+              </div>
+              <div class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Netlify deploy ID</p>
+                <a data-email-renderer-deploy href="#" target="_blank" rel="noreferrer" class="mt-2 block break-all text-sm font-semibold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4">—</a>
+              </div>
+              <div class="rounded-xl bg-white p-4">
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Status</p>
+                <p data-email-renderer-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+                <p data-email-renderer-status-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+              </div>
+            </div>
+          </article>
 
           <div class="mt-5 grid gap-4 lg:grid-cols-2">
             <article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
@@ -599,6 +630,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealthReleaseAlert=document.querySelector('[data-email-health-release-alert]');
     const emailHealthReleaseTitle=document.querySelector('[data-email-health-release-title]');
     const emailHealthReleaseDetail=document.querySelector('[data-email-health-release-detail]');
+    const emailHealthReleaseActions=document.querySelector('[data-email-health-release-actions]');
+    const emailRendererMatch=document.querySelector('[data-email-renderer-match]');
+    const emailRendererLive=document.querySelector('[data-email-renderer-live]');
+    const emailRendererMain=document.querySelector('[data-email-renderer-main]');
+    const emailRendererDeploy=document.querySelector('[data-email-renderer-deploy]');
+    const emailRendererStatus=document.querySelector('[data-email-renderer-status]');
+    const emailRendererStatusDetail=document.querySelector('[data-email-renderer-status-detail]');
     const emailHealth24Total=document.querySelector('[data-email-health-24-total]');
     const emailHealth24Delivered=document.querySelector('[data-email-health-24-delivered]');
     const emailHealth24Bounced=document.querySelector('[data-email-health-24-bounced]');
@@ -1129,15 +1167,80 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       if(emailHealthReleaseAlert){
         const show=releaseSeverity==='yellow'||releaseSeverity==='red';
+        const changed=Array.isArray(releaseDetails.emailRenderingChangedFiles)?releaseDetails.emailRenderingChangedFiles:[];
+        const liveCommit=String(releaseDetails.netlifyCommit||'');
+        const mainCommit=String(releaseDetails.githubCommit||'');
+        const deployId=String(releaseDetails.netlifyDeployId||'');
         emailHealthReleaseAlert.classList.toggle('hidden',!show);
         emailHealthReleaseAlert.className='mt-5 rounded-[1.2rem] border p-5 '+(show?'':'hidden ')+(releaseSeverity==='red'?'border-red-200 bg-red-50 text-red-900':'border-amber-200 bg-amber-50 text-amber-900');
         if(emailHealthReleaseTitle)emailHealthReleaseTitle.textContent=releaseSeverity==='red'
           ? 'Production is serving an older email renderer.'
           : 'A newer email-rendering release is waiting to reach production.';
         if(emailHealthReleaseDetail){
-          const changed=Array.isArray(releaseDetails.emailRenderingChangedFiles)?releaseDetails.emailRenderingChangedFiles:[];
           emailHealthReleaseDetail.textContent=String(releaseCheck?.detail||'')
             +(changed.length?' Pending email files: '+changed.join(', '):'');
+        }
+        if(emailHealthReleaseActions){
+          emailHealthReleaseActions.innerHTML='';
+          if(deployId){
+            const deployment=document.createElement('a');
+            deployment.href='https://app.netlify.com/projects/koasevents-website/deploys/'+encodeURIComponent(deployId);
+            deployment.target='_blank';deployment.rel='noreferrer';
+            deployment.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.08em] text-white';
+            deployment.textContent='Open affected deploy';
+            emailHealthReleaseActions.appendChild(deployment);
+          }
+          const fileRef=mainCommit||liveCommit||'main';
+          changed.slice(0,8).forEach((file)=>{
+            const link=document.createElement('a');
+            link.href='https://github.com/AstroTat808/koasevents.com/blob/'+encodeURIComponent(fileRef)+'/'+String(file).split('/').map(encodeURIComponent).join('/');
+            link.target='_blank';link.rel='noreferrer';
+            link.className='rounded-full border border-current px-3 py-2 text-[.58rem] font-black uppercase tracking-[.06em]';
+            link.textContent=String(file).split('/').pop()||String(file);
+            emailHealthReleaseActions.appendChild(link);
+          });
+        }
+      }
+
+      if(emailRendererMatch||emailRendererLive||emailRendererMain||emailRendererDeploy){
+        const liveCommit=String(releaseDetails.netlifyCommit||'');
+        const mainCommit=String(releaseDetails.githubCommit||'');
+        const deployId=String(releaseDetails.netlifyDeployId||'');
+        const commitsKnown=Boolean(liveCommit&&mainCommit);
+        const match=commitsKnown&&liveCommit===mainCommit;
+        if(emailRendererMatch){
+          emailRendererMatch.textContent=match?'Matched':commitsKnown?'Behind / different':'Unverified';
+          emailRendererMatch.className='w-fit rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+(match?'bg-emerald-100 text-emerald-800':commitsKnown?'bg-red-100 text-red-800':'bg-amber-100 text-amber-900');
+        }
+        if(emailRendererLive){
+          emailRendererLive.textContent=liveCommit?liveCommit.slice(0,12):'Unavailable';
+          emailRendererLive.href=liveCommit?'https://github.com/AstroTat808/koasevents.com/commit/'+encodeURIComponent(liveCommit):'#';
+          emailRendererLive.classList.toggle('pointer-events-none',!liveCommit);
+          emailRendererLive.classList.toggle('no-underline',!liveCommit);
+        }
+        if(emailRendererMain){
+          emailRendererMain.textContent=mainCommit?mainCommit.slice(0,12):'Unavailable';
+          emailRendererMain.href=mainCommit?'https://github.com/AstroTat808/koasevents.com/commit/'+encodeURIComponent(mainCommit):'#';
+          emailRendererMain.classList.toggle('pointer-events-none',!mainCommit);
+          emailRendererMain.classList.toggle('no-underline',!mainCommit);
+        }
+        if(emailRendererDeploy){
+          emailRendererDeploy.textContent=deployId||'Unavailable';
+          emailRendererDeploy.href=deployId?'https://app.netlify.com/projects/koasevents-website/deploys/'+encodeURIComponent(deployId):'#';
+          emailRendererDeploy.classList.toggle('pointer-events-none',!deployId);
+          emailRendererDeploy.classList.toggle('no-underline',!deployId);
+        }
+        if(emailRendererStatus){
+          emailRendererStatus.textContent=match?'Production matches GitHub main':commitsKnown?'Production differs from GitHub main':'Commit comparison unavailable';
+          emailRendererStatus.className='mt-2 text-sm font-semibold '+(match?'text-emerald-800':commitsKnown?'text-red-800':'text-amber-800');
+        }
+        if(emailRendererStatusDetail){
+          const behindCount=Number(releaseDetails.commitsBehind||0);
+          emailRendererStatusDetail.textContent=match
+            ? 'The live email renderer is current.'
+            : commitsKnown
+              ? (behindCount?behindCount+' commit'+(behindCount===1?'':'s')+' behind.':'The commit identities differ.')
+              : 'System Health could not verify both commit identities.';
         }
       }
 
