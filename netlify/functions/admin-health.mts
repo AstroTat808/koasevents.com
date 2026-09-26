@@ -23,6 +23,7 @@ import {
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import { emailHealthSummary } from './_shared/email-health';
+import { credentialHealthSummary } from './_shared/credential-health';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -398,11 +399,12 @@ export default async (req:Request,context:Context) => {
       office365HealthSummary(context,deployments),
       emailHealthSummary(context,{force:true}),
     ]);
+    const credentialHealth=await credentialHealthSummary(context,{force:true,emailHealth});
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
     deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -416,7 +418,7 @@ export default async (req:Request,context:Context) => {
         passed:latest.passed,
         failed:latest.failed,
         failedIds:latest.failedIds,
-        checks:latest.checks.map(row=>({id:row.id,name:row.name,kind:row.kind,ok:row.ok,status:row.status,detail:row.detail})),
+        checks:latest.checks.map(row=>({id:row.id,name:row.name,kind:row.kind,ok:row.ok,status:row.status,detail:row.detail,severity:row.severity,issueType:row.issueType||null})),
       }:null,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -432,6 +434,7 @@ export default async (req:Request,context:Context) => {
     office365HealthSummary(context,deployments),
     emailHealthSummary(context),
   ]);
+  const credentialHealth=await credentialHealthSummary(context,{emailHealth});
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
   const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
@@ -446,6 +449,7 @@ export default async (req:Request,context:Context) => {
     deployments,
     office365,
     emailHealth,
+    credentialHealth,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
