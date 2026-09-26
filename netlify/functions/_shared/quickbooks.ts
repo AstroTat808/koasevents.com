@@ -793,6 +793,57 @@ export function configuredServiceItemId() {
 }
 
 
+export async function verifyQuickBooksCredentials(context: Context) {
+  const cfg = quickBooksConfiguration();
+  if (!cfg.configured) {
+    return {
+      ok: false,
+      configured: false,
+      connected: false,
+      status: 0,
+      detail: 'QuickBooks OAuth client credentials are not fully configured for the active environment.',
+    };
+  }
+
+  const connection = await getQuickBooksConnection(context);
+  if (!connection?.realmId) {
+    return {
+      ok: false,
+      configured: true,
+      connected: false,
+      status: 0,
+      detail: 'QuickBooks OAuth credentials are configured, but no company connection is stored for the active environment.',
+    };
+  }
+
+  try {
+    await qboRequest(
+      context,
+      '/v3/company/' + encodeURIComponent(connection.realmId) + '/companyinfo/' + encodeURIComponent(connection.realmId),
+      { method: 'GET' },
+    );
+    return {
+      ok: true,
+      configured: true,
+      connected: true,
+      status: 200,
+      detail: 'QuickBooks OAuth credentials, stored tokens, and company access are valid.',
+      companyName: String(connection.companyName || ''),
+      environment: cfg.environment,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      configured: true,
+      connected: true,
+      status: 0,
+      detail: error instanceof Error ? String(error.message || '').slice(0, 800) : 'QuickBooks credential verification failed.',
+      companyName: String(connection.companyName || ''),
+      environment: cfg.environment,
+    };
+  }
+}
+
 export function quickBooksWebhookVerifierToken() {
   return config().webhookVerifierToken;
 }
