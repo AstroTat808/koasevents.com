@@ -108,6 +108,7 @@ function checkEmailFeatureContracts() {
     ]],
     ['netlify/functions/_shared/system-health.ts', [
       ['Email Health integration', "import { emailHealthSummary } from './email-health'"],
+      ['Credential Health scheduled integration', 'credentialHealthPromise'],
       ['health issue classification', 'export function classifyHealthIssue'],
       ['email logo component', "id:'email-logo'"],
       ['email send access component', "id:'email-send-access'"],
