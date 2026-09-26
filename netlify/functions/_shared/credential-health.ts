@@ -86,6 +86,20 @@ type CredentialReliabilityEvent = {
   detail: string;
 };
 
+export type CredentialSafeRepairAudit = {
+  id: string;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  actor: string;
+  attempted: number;
+  fixed: number;
+  remaining: number;
+  fixedIds: string[];
+  retested: any[];
+  stillRequiresMe: any[];
+};
+
 type CredentialHealthOptions = {
   force?: boolean;
   emailHealth?: any;
@@ -498,6 +512,92 @@ async function readSamples(context: Context, limit = 2300): Promise<CredentialHe
   return rows.slice(0, Math.max(1, Math.min(2300, limit)));
 }
 
+export async function readCredentialSafeRepairHistory(context: Context, limit = 200): Promise<CredentialSafeRepairAudit[]> {
+  const rows = ((await storeFor(context).get('credential-health/safe-repair-history', { type: 'json' })) || []) as CredentialSafeRepairAudit[];
+  return rows.slice(0, Math.max(1, Math.min(500, limit)));
+}
+
+export async function recordCredentialSafeRepairAudit(context: Context, input: any, actor: string) {
+  const store = storeFor(context);
+  const history = await readCredentialSafeRepairHistory(context, 500);
+  const audit: CredentialSafeRepairAudit = {
+    id: 'CRF-' + crypto.randomUUID().replaceAll('-', '').slice(0, 14).toUpperCase(),
+    startedAt: clean(input?.startedAt, 100) || new Date().toISOString(),
+    completedAt: clean(input?.completedAt, 100) || new Date().toISOString(),
+    durationMs: Math.max(0, Number(input?.durationMs || 0)),
+    actor: clean(actor || 'admin', 180),
+    attempted: Math.max(0, Number(input?.attempted || 0)),
+    fixed: Math.max(0, Number(input?.fixed || 0)),
+    remaining: Math.max(0, Number(input?.remaining || 0)),
+    fixedIds: (Array.isArray(input?.fixedIds) ? input.fixedIds : []).map((value: any) => clean(value, 100)).filter(Boolean).slice(0, 30),
+    retested: (Array.isArray(input?.retested) ? input.retested : []).map((row: any) => ({
+      id: clean(row?.id, 100),
+      provider: clean(row?.provider, 100),
+      credential: clean(row?.credential, 140),
+      fixed: Boolean(row?.fixed),
+      changed: Boolean(row?.changed),
+      before: {
+        ok: Boolean(row?.before?.ok),
+        severity: clean(row?.before?.severity, 30),
+        issueType: clean(row?.before?.issueType, 100),
+        status: Number(row?.before?.status || 0),
+      },
+      after: {
+        ok: Boolean(row?.after?.ok),
+        severity: clean(row?.after?.severity, 30),
+        issueType: clean(row?.after?.issueType, 100),
+        status: Number(row?.after?.status || 0),
+      },
+    })).slice(0, 30),
+    stillRequiresMe: (Array.isArray(input?.stillRequiresMe) ? input.stillRequiresMe : []).map((row: any) => ({
+      id: clean(row?.id, 100),
+      source: clean(row?.source, 40),
+      provider: clean(row?.provider, 100),
+      credential: clean(row?.credential, 140),
+      name: clean(row?.name, 180),
+      issueType: clean(row?.issueType, 100),
+      severity: clean(row?.severity, 30),
+      requires: clean(row?.requires, 300),
+    })).slice(0, 60),
+  };
+  await store.setJSON('credential-health/safe-repair-history', [audit, ...history].slice(0, 500));
+  return audit;
+}
+
+export async function credentialReliabilityForRange(context: Context, startAt: string, endAt: string) {
+  const samples = await readSamples(context, 2300);
+  const start = Date.parse(startAt);
+  const end = Date.parse(endAt);
+  const providers = RELIABILITY_PROVIDERS.map((provider) => {
+    const observed = samples.filter((sample) => {
+      const at = Date.parse(String(sample?.at || sample?.hour || ''));
+      return Number.isFinite(at)
+        && at >= start
+        && at < end
+        && provider.credentialIds.every((id) => Boolean(sample?.rows?.[id]));
+    });
+    const healthy = observed.filter((sample) =>
+      provider.credentialIds.every((id) => Boolean(sample.rows[id]?.ok))
+    ).length;
+    const sampleCount = observed.length;
+    return {
+      id: provider.id,
+      label: provider.label,
+      healthySamples: healthy,
+      failedSamples: Math.max(0, sampleCount - healthy),
+      samples: sampleCount,
+      percentage: sampleCount ? Math.round((healthy / sampleCount) * 1000) / 10 : null,
+    };
+  });
+  const values = providers.map((provider) => provider.percentage).filter((value): value is number => typeof value === 'number');
+  return {
+    startAt,
+    endAt,
+    providers,
+    averagePercentage: values.length ? Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 : null,
+  };
+}
+
 function defaultReliabilityPolicy(): CredentialReliabilityPolicy {
   return {
     evaluationPeriod: '7d',
@@ -865,6 +965,16 @@ function combinedCredentialOverall(currentOverall: unknown, reliabilityOverall: 
   return 'green';
 }
 
+function providerIdForCredential(credentialId: unknown) {
+  const id = clean(credentialId, 120);
+  if (id.startsWith('resend-')) return 'resend';
+  if (id === 'microsoft-graph') return 'microsoft-graph';
+  if (id === 'quickbooks') return 'quickbooks';
+  if (id === 'github') return 'github';
+  if (id === 'netlify') return 'netlify';
+  return '';
+}
+
 function buildCredentialIncidentTimeline(
   history: CredentialHealthHistoryEvent[],
   reliabilityEvents: CredentialReliabilityEvent[],
@@ -883,6 +993,7 @@ function buildCredentialIncidentTimeline(
       source: 'credential',
       kind: event.event,
       occurredAt: event.occurredAt,
+      providerId: providerIdForCredential(event.credentialId),
       provider: event.provider,
       title: event.provider + ' · ' + event.credential,
       label,
@@ -903,6 +1014,7 @@ function buildCredentialIncidentTimeline(
       source: 'reliability',
       kind: event.event,
       occurredAt: event.occurredAt,
+      providerId: event.providerId,
       provider: event.provider,
       title: event.provider + ' reliability',
       label,
@@ -923,6 +1035,7 @@ function buildCredentialIncidentTimeline(
         source: 'alert',
         kind: 'alert_opened',
         occurredAt: String(alert.firstAppearedAt),
+        providerId: providerIdForCredential(String(alert?.id || '').replace(/^credential:/, '')),
         provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
         title: clean(alert?.title || 'Credential alert', 180),
         label: 'Workspace Alert opened',
@@ -936,6 +1049,7 @@ function buildCredentialIncidentTimeline(
         source: 'alert',
         kind: 'alert_severity_changed',
         occurredAt: String(change?.at || ''),
+        providerId: providerIdForCredential(String(alert?.id || '').replace(/^credential:/, '')),
         provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
         title: clean(alert?.title || 'Credential alert', 180),
         label: 'Workspace Alert severity changed',
@@ -949,6 +1063,7 @@ function buildCredentialIncidentTimeline(
         source: 'alert',
         kind: 'alert_resolved',
         occurredAt: String(alert.resolvedAt),
+        providerId: providerIdForCredential(String(alert?.id || '').replace(/^credential:/, '')),
         provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
         title: clean(alert?.title || 'Credential alert', 180),
         label: 'Workspace Alert resolved',
