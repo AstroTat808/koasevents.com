@@ -414,9 +414,9 @@ export default async (req:Request,context:Context) => {
     ]);
     const [office365,emailHealth]=await Promise.all([
       office365HealthSummary(context,deployments),
-      emailHealthSummary(context,{force:true}),
+      emailHealthSummary(context),
     ]);
-    const credentialHealth=await credentialHealthSummary(context,{force:true,emailHealth});
+    const credentialHealth=await credentialHealthSummary(context,{emailHealth});
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
