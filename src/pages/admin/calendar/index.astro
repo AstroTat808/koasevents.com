@@ -23,10 +23,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="calendar-shell rounded-[1.75rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-7">
-          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div class="flex flex-wrap items-center gap-3">
+          <div class="calendar-toolbar flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div class="calendar-period-controls flex flex-wrap items-center gap-3">
               <button data-prev type="button" aria-label="Previous period" class="calendar-nav">←</button>
-              <div class="min-w-[15rem]">
+              <div class="calendar-period-title min-w-[15rem]">
                 <p data-period-eyebrow class="eyebrow text-[var(--koa-clay)]">Calendar month</p>
                 <h2 data-month-title class="display mt-1 text-4xl sm:text-5xl"></h2>
               </div>
@@ -39,7 +39,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <button data-view="staff" type="button" class="calendar-view-button">Staff Schedule</button>
               </div>
             </div>
-            <div class="flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
+            <div class="calendar-legends flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
               <span class="legend legend-event"><span aria-hidden="true">💍</span> Wedding</span>
               <span class="legend legend-event"><span aria-hidden="true">◆</span> Event</span>
               <span class="legend legend-payment"><span aria-hidden="true">＄</span> Payment</span>
@@ -51,7 +51,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
 
-          <div class="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--koa-line)] pt-4">
+          <div class="calendar-filter-bar mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--koa-line)] pt-4">
             <span class="mr-1 text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Show</span>
             <button data-filter="all" type="button" class="calendar-filter is-active">All</button>
             <button data-filter="wedding" type="button" class="calendar-filter">💍 Weddings</button>
@@ -61,7 +61,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <button data-filter="deadline" type="button" class="calendar-filter">! Deadlines</button>
             <button data-filter="task" type="button" class="calendar-filter">☑ Tasks</button>
             <button data-filter="office365" type="button" class="calendar-filter">📅 Office 365</button>
-            <div class="ml-auto flex flex-wrap items-center gap-2">
+            <div class="calendar-office-actions ml-auto flex flex-wrap items-center gap-2">
               <span data-office365-status class="text-[.6rem] font-bold text-[var(--koa-ink)]/45">Office 365 sync status loading…</span>
               <button data-office365-sync type="button" class="calendar-sync-button">Sync now</button>
               <button data-office365-sync-verify type="button" class="calendar-sync-button">Sync now + verify</button>
@@ -69,7 +69,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
           <div data-office365-verify-result class="mt-3 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"></div>
 
-          <div class="mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
+          <div class="calendar-view-frame mt-6 overflow-x-auto rounded-[1.15rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)]">
             <div data-month-view class="calendar-grid-wrap">
               <div class="calendar-weekdays grid grid-cols-7 text-center text-[.6rem] font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">
                 <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
@@ -298,7 +298,234 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-day:hover{background:color-mix(in srgb,var(--koa-amber-light) 9%,white)}
     .calendar-item.is-overdue{outline:2px solid var(--koa-clay);outline-offset:1px}
     @media(min-width:1536px){.calendar-day{min-height:14rem}.calendar-grid-wrap{min-width:76rem}.calendar-item{font-size:.7rem}}
-    @media(max-width:800px){.calendar-shell{margin-inline:-.25rem}.calendar-grid-wrap{min-width:62rem}.calendar-day{min-height:10.5rem;padding:.55rem}.calendar-item{font-size:.62rem}}
+
+    @media(max-width:800px){
+      .calendar-shell{
+        margin-inline:0;
+        border-radius:1.1rem!important;
+        padding:.8rem!important;
+      }
+
+      .calendar-toolbar{gap:.8rem}
+
+      .calendar-period-controls{
+        display:grid!important;
+        width:100%;
+        grid-template-columns:2.65rem minmax(0,1fr) 2.65rem;
+        align-items:center;
+        gap:.5rem;
+      }
+
+      .calendar-period-title{
+        min-width:0!important;
+        text-align:center;
+      }
+
+      .calendar-period-title [data-period-eyebrow]{
+        font-size:.5rem;
+        letter-spacing:.12em;
+      }
+
+      .calendar-period-title [data-month-title]{
+        margin-top:.2rem;
+        overflow:hidden;
+        font-size:clamp(1.75rem,8.5vw,2.3rem)!important;
+        line-height:1!important;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+
+      .calendar-period-controls>[data-prev]{grid-column:1;grid-row:1}
+      .calendar-period-controls>.calendar-period-title{grid-column:2;grid-row:1}
+      .calendar-period-controls>[data-next]{grid-column:3;grid-row:1}
+
+      .calendar-period-controls>[data-today]{
+        grid-column:1/-1;
+        grid-row:2;
+        justify-self:center;
+        min-height:2.4rem;
+        padding:.55rem .85rem;
+      }
+
+      .calendar-period-controls>.calendar-view-switch{
+        grid-column:1/-1;
+        grid-row:3;
+        width:100%;
+        justify-content:flex-start;
+        overflow-x:auto;
+        scrollbar-width:none;
+      }
+
+      .calendar-period-controls>.calendar-view-switch::-webkit-scrollbar{display:none}
+      .calendar-view-button{flex:0 0 auto;padding:.52rem .72rem}
+
+      .calendar-nav{
+        width:2.65rem;
+        height:2.65rem;
+        min-height:2.65rem;
+      }
+
+      .calendar-legends{
+        max-width:100%;
+        flex-wrap:nowrap!important;
+        overflow-x:auto;
+        padding-bottom:.2rem;
+        scrollbar-width:none;
+      }
+
+      .calendar-legends::-webkit-scrollbar{display:none}
+      .calendar-legends .legend{flex:0 0 auto}
+
+      .calendar-filter-bar{
+        flex-wrap:nowrap!important;
+        overflow-x:auto;
+        margin-inline:-.15rem;
+        padding-inline:.15rem;
+        padding-bottom:.35rem;
+        scrollbar-width:none;
+      }
+
+      .calendar-filter-bar::-webkit-scrollbar{display:none}
+      .calendar-filter-bar>span,
+      .calendar-filter-bar>.calendar-filter{flex:0 0 auto}
+
+      .calendar-office-actions{
+        flex:0 0 auto;
+        margin-left:.5rem!important;
+        flex-wrap:nowrap!important;
+      }
+
+      .calendar-office-actions [data-office365-status]{
+        display:none;
+      }
+
+      .calendar-view-frame{
+        margin-top:1rem!important;
+        overflow-x:hidden!important;
+        border-radius:.9rem!important;
+      }
+
+      .calendar-grid-wrap{
+        width:100%;
+        min-width:0;
+      }
+
+      .calendar-weekdays{
+        width:100%;
+        font-size:.48rem!important;
+        letter-spacing:.035em!important;
+      }
+
+      .calendar-weekdays>div{
+        min-width:0;
+        padding:.5rem .05rem;
+      }
+
+      .calendar-grid{
+        width:100%;
+        min-width:0;
+      }
+
+      .calendar-day{
+        min-width:0;
+        min-height:5.35rem;
+        overflow:hidden;
+        padding:.3rem .24rem;
+      }
+
+      .calendar-day>div:first-child{
+        margin-bottom:.32rem!important;
+      }
+
+      .calendar-date-number{
+        font-size:.66rem!important;
+        line-height:1;
+      }
+
+      .calendar-day.is-today .calendar-date-number{
+        width:1.45rem;
+        min-width:1.45rem;
+        height:1.45rem;
+        padding:0;
+      }
+
+      .calendar-conflict-badge{
+        display:grid;
+        width:.48rem;
+        height:.48rem;
+        min-width:.48rem;
+        place-items:center;
+        overflow:hidden;
+        border-radius:9999px;
+        padding:0!important;
+        font-size:0!important;
+      }
+
+      .calendar-conflict-badge::after{
+        content:"";
+        width:.48rem;
+        height:.48rem;
+        border-radius:9999px;
+        background:var(--koa-clay);
+      }
+
+      .calendar-day-items{
+        display:flex!important;
+        flex-wrap:wrap;
+        align-content:flex-start;
+        gap:.2rem!important;
+      }
+
+      .calendar-grid .calendar-item{
+        display:block;
+        width:.5rem;
+        height:.5rem;
+        min-height:0!important;
+        flex:0 0 .5rem;
+        border:0;
+        border-radius:9999px;
+        padding:0;
+        outline-offset:1px;
+      }
+
+      .calendar-grid .calendar-item .calendar-icon,
+      .calendar-grid .calendar-item .calendar-item-label{
+        display:none;
+      }
+
+      .calendar-grid .calendar-item.event{background:var(--koa-forest)}
+      .calendar-grid .calendar-item.payment{background:var(--koa-clay)}
+      .calendar-grid .calendar-item.deadline{background:var(--koa-amber-light)}
+      .calendar-grid .calendar-item.vendor{background:color-mix(in srgb,var(--koa-clay) 72%,white)}
+      .calendar-grid .calendar-item.task,
+      .calendar-grid .calendar-item.timeline{background:var(--koa-ink)}
+      .calendar-grid .calendar-item.staffing{background:var(--koa-sage)}
+      .calendar-grid .calendar-item.office365{background:var(--koa-champagne)}
+
+      .calendar-more{
+        min-height:1.25rem!important;
+        padding:.08rem .1rem!important;
+        font-size:.48rem!important;
+        line-height:1;
+        white-space:nowrap;
+      }
+
+      .calendar-view-frame+[class*="mt-4"]{
+        gap:.4rem;
+        font-size:.68rem;
+      }
+
+      .day-panel-card{
+        top:auto;
+        bottom:0;
+        width:100%;
+        height:min(82dvh,44rem);
+        border-radius:1.25rem 1.25rem 0 0;
+        transform:translateY(100%);
+      }
+
+      .day-panel.is-open .day-panel-card{transform:translateY(0)}
+    }
   </style>
 
   <script>
@@ -487,11 +714,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const head=document.createElement('div');head.className='mb-2 flex items-center justify-between gap-1';
         head.appendChild(text('span','calendar-date-number text-xs font-bold',String(date.getDate())));
         const dayConflicts=(data.conflicts||[]).filter((c)=>c.date===key);
-        if(dayConflicts.length)head.appendChild(text('span','rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
+        if(dayConflicts.length)head.appendChild(text('span','calendar-conflict-badge rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
         cell.appendChild(head);
-        const list=document.createElement('div');list.className='grid gap-1';
+        const list=document.createElement('div');list.className='calendar-day-items grid gap-1';
         (itemsByDate.get(key)||[]).slice(0,5).forEach((item)=>{const a=itemLink(item);a.addEventListener('click',(event)=>event.stopPropagation());list.appendChild(a);});
-        const extra=(itemsByDate.get(key)||[]).length-5;if(extra>0){const more=text('button','text-left text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more');more.type='button';more.addEventListener('click',(event)=>{event.stopPropagation();openDayPanel(key);});list.appendChild(more);}
+        const extra=(itemsByDate.get(key)||[]).length-5;if(extra>0){const more=text('button','calendar-more text-left text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more');more.type='button';more.addEventListener('click',(event)=>{event.stopPropagation();openDayPanel(key);});list.appendChild(more);}
         cell.appendChild(list);cell.addEventListener('click',()=>openDayPanel(key));calendar.appendChild(cell);
       }
     }
