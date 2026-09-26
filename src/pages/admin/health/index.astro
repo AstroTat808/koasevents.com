@@ -88,6 +88,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
           <p data-fix-all-safe-message class="mt-3 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/60"></p>
+          <div data-fix-all-safe-report class="mt-4 hidden rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"></div>
           <div data-needs-action-list class="mt-5 grid gap-3 lg:grid-cols-2"></div>
         </section>
 
@@ -232,11 +233,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
           <div data-credential-health-grid class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
           <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Credential reliability</p>
                 <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">7-day · 30-day · 90-day health</h3>
                 <p data-credential-reliability-note class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Hourly reliability history is building.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button data-save-credential-thresholds type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white">Save thresholds</button>
+                <span data-credential-threshold-message class="text-xs text-[var(--koa-ink)]/45"></span>
               </div>
             </div>
             <div data-credential-reliability-grid class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"></div>
@@ -248,6 +253,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Records when a credential problem starts, changes classification, recovers, and how long the problem lasted.</p>
             </div>
             <div data-credential-health-history class="mt-4 grid gap-2"></div>
+          </div>
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5">
+            <div>
+              <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Credential incident timeline</p>
+              <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Reliability + alerts + credential transitions</h3>
+              <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">One chronological view of reliability threshold changes, Workspace Alert incidents, credential failures, and recoveries.</p>
+            </div>
+            <div data-credential-incident-timeline class="mt-4 grid gap-2"></div>
           </div>
         </section>
 
