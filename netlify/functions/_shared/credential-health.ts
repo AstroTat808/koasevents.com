@@ -3,7 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './email-health';
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
-import { syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
+import { readCredentialWorkspaceAlertTimeline, syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
 
 export type CredentialIssueType =
   | 'Service Failure'
@@ -58,6 +58,34 @@ type CredentialHealthSample = {
   }>;
 };
 
+export type CredentialReliabilityThresholds = {
+  yellowBelow: number;
+  redBelow: number;
+};
+
+export type CredentialReliabilityPolicy = {
+  evaluationPeriod: '7d';
+  minimumSamples: number;
+  providers: Record<string, CredentialReliabilityThresholds>;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+type CredentialReliabilityEvent = {
+  id: string;
+  providerId: string;
+  provider: string;
+  event: 'reliability_drop' | 'reliability_changed' | 'reliability_recovered';
+  occurredAt: string;
+  fromSeverity: 'green' | 'yellow' | 'red' | 'insufficient';
+  toSeverity: 'green' | 'yellow' | 'red' | 'insufficient';
+  percentage: number | null;
+  samples: number;
+  thresholdYellow: number;
+  thresholdRed: number;
+  detail: string;
+};
+
 type CredentialHealthOptions = {
   force?: boolean;
   emailHealth?: any;
@@ -82,6 +110,14 @@ const RELIABILITY_PROVIDERS = [
   { id: 'github', label: 'GitHub', credentialIds: ['github'] },
   { id: 'netlify', label: 'Netlify', credentialIds: ['netlify'] },
 ] as const;
+
+const DEFAULT_RELIABILITY_THRESHOLDS: CredentialReliabilityThresholds = {
+  yellowBelow: 99,
+  redBelow: 95,
+};
+
+const DEFAULT_RELIABILITY_MINIMUM_SAMPLES = 24;
+const RELIABILITY_EVENT_LIMIT = 500;
 
 function clean(value: unknown, max=800) {
   return String(value ?? '').trim().slice(0, max);
