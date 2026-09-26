@@ -1271,6 +1271,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     const mobileHealthQuery=window.matchMedia('(max-width: 767px)');
+    let healthSectionStatusesReady=false;
 
     function setMobileCollapsed(section,collapsed){
       if(!(section instanceof HTMLElement))return;
@@ -1305,6 +1306,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(summaryNode instanceof HTMLElement){
         summaryNode.textContent=String(summary||'');
         summaryNode.classList.toggle('hidden',!summary);
+        const title=String(section.querySelector('h2,h3')?.textContent||'System Health section').trim();
+        summaryNode.setAttribute('aria-label','Expand '+title+(summary?': '+summary:''));
       }
       if(mobileHealthQuery.matches&&section.dataset.mobileCollapsible==='true'){
         if(normalized==='red'){
@@ -1335,9 +1338,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         event.stopPropagation();
         setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
       });
-      const summary=document.createElement('p');
+      const summary=document.createElement('button');
+      summary.type='button';
       summary.dataset.healthSectionSummary='';
       summary.className='health-section-mobile-summary hidden';
+      summary.addEventListener('click',(event)=>{
+        event.stopPropagation();
+        if(section.dataset.mobileCollapsed==='true')setMobileCollapsed(section,false);
+      });
       controls.append(badge,button,summary);
       header.appendChild(controls);
       header.classList.add('health-section-mobile-header');
@@ -1350,6 +1358,50 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       section.dataset.mobileCollapseReady='true';
       setHealthSectionStatus(section,'green',0);
       setMobileCollapsed(section,mobileHealthQuery.matches);
+    }
+
+
+    function ensureAllSystemsGoodBanner(){
+      if(!(app instanceof HTMLElement))return null;
+      let banner=app.querySelector('[data-health-all-good]');
+      if(banner instanceof HTMLElement)return banner;
+      banner=document.createElement('div');
+      banner.dataset.healthAllGood='';
+      banner.dataset.mobileOrder='1';
+      banner.className='health-all-good-banner hidden';
+      banner.innerHTML='<span class="health-all-good-dot" aria-hidden="true"></span><div><strong>All systems good</strong><span> Every monitored System Health section is green.</span></div>';
+      const summarySection=document.querySelector('#health-summary');
+      if(summarySection instanceof HTMLElement)summarySection.insertAdjacentElement('afterend',banner);
+      else app.prepend(banner);
+      return banner;
+    }
+
+    function refreshMobileHealthPresentation(){
+      if(!(app instanceof HTMLElement)||!healthSectionStatusesReady)return;
+      const directSections=[...app.children].filter((node)=>
+        node instanceof HTMLElement&&
+        node.dataset.mobileCollapsible==='true'&&
+        node.hasAttribute('data-mobile-order')
+      );
+      const severityRank={red:0,yellow:1,green:2};
+
+      directSections.forEach((section)=>{
+        if(!mobileHealthQuery.matches){
+          section.style.removeProperty('order');
+          return;
+        }
+        const severity=String(section.dataset.healthSectionStatus||'green');
+        const baseOrder=Number(section.dataset.mobileOrder||99);
+        section.style.order=String(10+(severityRank[severity]??3)*100+baseOrder);
+      });
+
+      const allSections=[...document.querySelectorAll('[data-mobile-collapsible]')]
+        .filter((section)=>section instanceof HTMLElement);
+      const allGreen=allSections.length>0&&allSections.every((section)=>section.dataset.healthSectionStatus==='green');
+      const banner=ensureAllSystemsGoodBanner();
+      if(banner instanceof HTMLElement){
+        banner.classList.toggle('hidden',!mobileHealthQuery.matches||!allGreen);
+      }
     }
 
     function jumpToHealthSection(selector){
@@ -1435,6 +1487,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelectorAll('[data-mobile-collapsible]').forEach((section)=>{
         if(section instanceof HTMLElement)setMobileCollapsed(section,event.matches);
       });
+      refreshMobileHealthPresentation();
     });
 
     initializeMobileHealthExperience();
@@ -1576,6 +1629,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ? 'Projected '+String(projected)+'% of monthly Netlify credit allowance'
         : credit==='green'?'Netlify credit usage is within the configured allowance':'Netlify credit usage needs attention';
       setHealthSectionStatus(document.querySelector('[data-credit-panel]'),credit==='red'?'red':['orange','yellow'].includes(credit)?'yellow':'green',credit==='green'?0:1,creditSummary);
+
+      healthSectionStatusesReady=true;
+      refreshMobileHealthPresentation();
     }
 
     function goToHighestPriorityProblem(){

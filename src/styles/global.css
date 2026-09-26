@@ -1033,3 +1033,64 @@ main p.text-sm {
     display: none !important;
   }
 }
+
+
+/* Mobile System Health severity sorting and all-green banner */
+.health-all-good-banner {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  body.koa-admin-page main .health-section-mobile-summary {
+    width: 100%;
+    min-height: 2.2rem;
+    border: 0;
+    border-radius: .55rem;
+    background: transparent;
+    padding: .32rem .2rem;
+    text-align: left;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  body.koa-admin-page main .health-section-mobile-summary:focus-visible {
+    outline: 2px solid var(--koa-clay);
+    outline-offset: 2px;
+  }
+
+  body.koa-admin-page main .health-section-mobile-summary:active {
+    background: rgba(255,255,255,.48);
+  }
+
+  body.koa-admin-page main .health-all-good-banner {
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: .65rem;
+    border: 1px solid rgb(167 243 208);
+    border-radius: .95rem;
+    background: rgb(236 253 245);
+    padding: .78rem .9rem;
+    color: rgb(6 95 70);
+    box-shadow: 0 8px 22px rgba(6,95,70,.06);
+    font-size: .75rem;
+    line-height: 1.35;
+  }
+
+  body.koa-admin-page main .health-all-good-banner.hidden {
+    display: none !important;
+  }
+
+  body.koa-admin-page main .health-all-good-banner strong {
+    font-weight: 900;
+  }
+
+  body.koa-admin-page main .health-all-good-dot {
+    width: .62rem;
+    height: .62rem;
+    flex: 0 0 auto;
+    border-radius: 9999px;
+    background: rgb(5 150 105);
+    box-shadow: 0 0 0 .24rem rgba(5,150,105,.12);
+  }
+}
