@@ -302,6 +302,23 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy,office365:await office365HealthSummary(context,deployments)},{headers:{'Cache-Control':'private, no-store'}});
     }
 
+    if(body?.action==='retest-credential'){
+      try{
+        const credentialId=String(body?.credentialId||'').trim();
+        if(!credentialId)return Response.json({error:'Credential id is required.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+        const credentialHealth=await credentialHealthSummary(context,{force:true,credentialId});
+        return Response.json({
+          ok:true,
+          retestedCredentialId:credentialId,
+          credentialHealth,
+        },{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'Unable to re-test credential.',
+        },{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
     if(body?.action==='compare-releases'){
       try{
         const comparison=await compareProductionReleaseCommits(String(body.baseCommit||''),String(body.headCommit||''));
