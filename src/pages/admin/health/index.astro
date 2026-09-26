@@ -75,6 +75,68 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section data-weekly-executive-summary class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Executive view</p>
+              <h2 class="display mt-2 text-4xl">Weekly System Health summary</h2>
+              <p data-weekly-summary-basis class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Rolling 7 days compared with the immediately preceding 7 days.</p>
+            </div>
+            <span data-weekly-summary-generated class="text-xs text-[var(--koa-ink)]/45">—</span>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Observed uptime</p>
+              <p data-weekly-uptime class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p>
+              <p data-weekly-uptime-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Credential reliability</p>
+              <p data-weekly-credential-reliability class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p>
+              <p data-weekly-credential-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Incidents</p>
+              <p data-weekly-incidents class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-incidents-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Automatic repairs</p>
+              <p data-weekly-repairs class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-repairs-detail class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unresolved now</p>
+              <p data-weekly-unresolved class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-unresolved-detail class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.1rem] border border-emerald-200 bg-emerald-50 p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-emerald-800">Improved from prior week</p>
+              <div data-weekly-improved class="mt-3 grid gap-2"></div>
+            </article>
+            <article class="rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-amber-900">Worsened from prior week</p>
+              <div data-weekly-worsened class="mt-3 grid gap-2"></div>
+            </article>
+          </div>
+
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current credential reliability by provider</p>
+              <div data-weekly-provider-reliability class="mt-3 grid gap-2"></div>
+            </article>
+            <article class="rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unresolved problems</p>
+              <div data-weekly-unresolved-list class="mt-3 grid gap-2"></div>
+            </article>
+          </div>
+          <p data-weekly-summary-coverage class="mt-4 text-[.66rem] leading-5 text-[var(--koa-ink)]/45"></p>
+        </section>
+
         <section data-needs-action class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -260,6 +322,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Reliability + alerts + credential transitions</h3>
               <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">One chronological view of reliability threshold changes, Workspace Alert incidents, credential failures, and recoveries.</p>
             </div>
+            <div class="mt-4 grid gap-3">
+              <div>
+                <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Provider</p>
+                <div data-credential-timeline-provider-filters class="mt-2 flex flex-wrap gap-2">
+                  <button data-credential-timeline-provider="all" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">All providers</button>
+                  <button data-credential-timeline-provider="resend" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Resend</button>
+                  <button data-credential-timeline-provider="quickbooks" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">QuickBooks</button>
+                  <button data-credential-timeline-provider="microsoft-graph" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Microsoft Graph</button>
+                  <button data-credential-timeline-provider="github" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">GitHub</button>
+                  <button data-credential-timeline-provider="netlify" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Netlify</button>
+                </div>
+              </div>
+              <div>
+                <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Event type</p>
+                <div data-credential-timeline-source-filters class="mt-2 flex flex-wrap gap-2">
+                  <button data-credential-timeline-source="all" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">All events</button>
+                  <button data-credential-timeline-source="reliability" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Reliability</button>
+                  <button data-credential-timeline-source="credential" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Credential Changes</button>
+                  <button data-credential-timeline-source="alert" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Alert Center</button>
+                </div>
+              </div>
+            </div>
+            <p data-credential-timeline-count class="mt-3 text-xs text-[var(--koa-ink)]/45"></p>
             <div data-credential-incident-timeline class="mt-4 grid gap-2"></div>
           </div>
         </section>
@@ -762,11 +847,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealth7Complained=document.querySelector('[data-email-health-7-complained]');
     const emailHealth7Suppressed=document.querySelector('[data-email-health-7-suppressed]');
     const emailHealthIssues=document.querySelector('[data-email-health-issues]');
+    const weeklySummaryBasis=document.querySelector('[data-weekly-summary-basis]');
+    const weeklySummaryGenerated=document.querySelector('[data-weekly-summary-generated]');
+    const weeklyUptime=document.querySelector('[data-weekly-uptime]');
+    const weeklyUptimeDelta=document.querySelector('[data-weekly-uptime-delta]');
+    const weeklyCredentialReliability=document.querySelector('[data-weekly-credential-reliability]');
+    const weeklyCredentialDelta=document.querySelector('[data-weekly-credential-delta]');
+    const weeklyIncidents=document.querySelector('[data-weekly-incidents]');
+    const weeklyIncidentsDelta=document.querySelector('[data-weekly-incidents-delta]');
+    const weeklyRepairs=document.querySelector('[data-weekly-repairs]');
+    const weeklyRepairsDetail=document.querySelector('[data-weekly-repairs-detail]');
+    const weeklyUnresolved=document.querySelector('[data-weekly-unresolved]');
+    const weeklyUnresolvedDetail=document.querySelector('[data-weekly-unresolved-detail]');
+    const weeklyImproved=document.querySelector('[data-weekly-improved]');
+    const weeklyWorsened=document.querySelector('[data-weekly-worsened]');
+    const weeklyProviderReliability=document.querySelector('[data-weekly-provider-reliability]');
+    const weeklyUnresolvedList=document.querySelector('[data-weekly-unresolved-list]');
+    const weeklySummaryCoverage=document.querySelector('[data-weekly-summary-coverage]');
     const credentialHealthOverall=document.querySelector('[data-credential-health-overall]');
     const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
     const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
     const credentialHealthHistory=document.querySelector('[data-credential-health-history]');
     const credentialIncidentTimeline=document.querySelector('[data-credential-incident-timeline]');
+    const credentialTimelineCount=document.querySelector('[data-credential-timeline-count]');
+    const credentialTimelineProviderButtons=[...document.querySelectorAll('[data-credential-timeline-provider]')];
+    const credentialTimelineSourceButtons=[...document.querySelectorAll('[data-credential-timeline-source]')];
+    let credentialTimelineProvider='all';
+    let credentialTimelineSource='all';
     const credentialReliabilityGrid=document.querySelector('[data-credential-reliability-grid]');
     const credentialReliabilityNote=document.querySelector('[data-credential-reliability-note]');
     const saveCredentialThresholds=document.querySelector('[data-save-credential-thresholds]');
@@ -1736,9 +1843,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderCredentialTimelineFilterButtons(){
+      credentialTimelineProviderButtons.forEach((button)=>{
+        const active=String(button.dataset.credentialTimelineProvider||'all')===credentialTimelineProvider;
+        button.setAttribute('aria-pressed',String(active));
+        button.className='rounded-full border px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em] '+(
+          active
+            ? 'border-[var(--koa-forest)] bg-[var(--koa-forest)] text-white'
+            : 'border-[var(--koa-line)] bg-white text-[var(--koa-forest)]'
+        );
+      });
+      credentialTimelineSourceButtons.forEach((button)=>{
+        const active=String(button.dataset.credentialTimelineSource||'all')===credentialTimelineSource;
+        button.setAttribute('aria-pressed',String(active));
+        button.className='rounded-full border px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em] '+(
+          active
+            ? 'border-[var(--koa-forest)] bg-[var(--koa-forest)] text-white'
+            : 'border-[var(--koa-line)] bg-white text-[var(--koa-forest)]'
+        );
+      });
+    }
+
     function renderCredentialIncidentTimeline(rows){
       if(!credentialIncidentTimeline)return;
-      const events=Array.isArray(rows)?rows:[];
+      const allEvents=Array.isArray(rows)?rows:[];
+      const events=allEvents.filter((event)=>{
+        if(credentialTimelineProvider!=='all'&&String(event?.providerId||'')!==credentialTimelineProvider)return false;
+        if(credentialTimelineSource!=='all'&&String(event?.source||'credential')!==credentialTimelineSource)return false;
+        return true;
+      });
+      renderCredentialTimelineFilterButtons();
+      if(credentialTimelineCount){
+        credentialTimelineCount.textContent=events.length+' matching event'+(events.length===1?'':'s')+' · '+allEvents.length+' total';
+      }
       credentialIncidentTimeline.innerHTML='';
       events.slice(0,60).forEach((event)=>{
         const source=String(event.source||'credential');
@@ -1755,7 +1892,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const left=document.createElement('div');
         const sourceLabel=document.createElement('p');
         sourceLabel.className='text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
-        sourceLabel.textContent=source==='reliability'?'Reliability':source==='alert'?'Alert Center':'Credential';
+        sourceLabel.textContent=source==='reliability'?'Reliability':source==='alert'?'Alert Center':'Credential Changes';
         const title=document.createElement('strong');
         title.className='mt-1 block text-sm text-[var(--koa-forest)]';
         title.textContent=String(event.title||event.provider||'Credential incident');
@@ -1780,7 +1917,131 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         credentialIncidentTimeline.appendChild(card);
       });
       if(!events.length){
-        credentialIncidentTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No combined credential incidents have been recorded yet.</p>';
+        credentialIncidentTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No credential incidents match the selected filters.</p>';
+      }
+    }
+
+    function weeklyPercent(value){
+      return value==null?'—':Number(value).toFixed(2)+'%';
+    }
+
+    function weeklyDelta(value,unit='pp'){
+      if(value==null)return 'No prior-week comparison yet';
+      const number=Number(value);
+      const sign=number>0?'+':'';
+      return sign+number.toFixed(unit==='pp'?2:0)+' '+unit+' vs prior week';
+    }
+
+    function renderWeeklyExecutiveSummary(summary){
+      const data=summary||{};
+      const uptime=data.uptime||{};
+      const credential=data.credentialReliability||{};
+      const incidents=data.incidents||{};
+      const repairs=data.automaticRepairs||{};
+      const unresolved=data.unresolved||{};
+      if(weeklySummaryBasis)weeklySummaryBasis.textContent=String(data.basis||'Rolling 7 days compared with the immediately preceding 7 days.');
+      if(weeklySummaryGenerated)weeklySummaryGenerated.textContent=data.generatedAt?'Updated '+new Date(data.generatedAt).toLocaleString():'—';
+      if(weeklyUptime)weeklyUptime.textContent=weeklyPercent(uptime?.current?.percentage);
+      if(weeklyUptimeDelta)weeklyUptimeDelta.textContent=weeklyDelta(uptime?.deltaPercentagePoints,'pp');
+      if(weeklyCredentialReliability)weeklyCredentialReliability.textContent=weeklyPercent(credential?.currentAverage);
+      if(weeklyCredentialDelta)weeklyCredentialDelta.textContent=weeklyDelta(credential?.deltaPercentagePoints,'pp');
+      if(weeklyIncidents)weeklyIncidents.textContent=String(incidents?.current?.incidentCount||0);
+      if(weeklyIncidentsDelta){
+        const delta=Number(incidents?.incidentDelta||0);
+        const downtime=Number(incidents?.current?.downtimeMinutes||0);
+        weeklyIncidentsDelta.textContent=(delta===0?'No change':(delta>0?'+':'')+delta+' vs prior week')+' · '+formatDuration(downtime)+' downtime';
+      }
+      if(weeklyRepairs)weeklyRepairs.textContent=String(repairs?.current?.fixed||0);
+      if(weeklyRepairsDetail){
+        weeklyRepairsDetail.textContent=Number(repairs?.current?.runs||0)+' repair run'+(Number(repairs?.current?.runs||0)===1?'':'s')+' · '+Number(repairs?.current?.attempted||0)+' credential re-test'+(Number(repairs?.current?.attempted||0)===1?'':'s');
+      }
+      if(weeklyUnresolved)weeklyUnresolved.textContent=String(unresolved?.count||0);
+      if(weeklyUnresolvedDetail)weeklyUnresolvedDetail.textContent=Number(unresolved?.critical||0)+' critical · '+Number(unresolved?.attention||0)+' attention';
+
+      const renderComparisonList=(target,rows,empty)=>{
+        if(!target)return;
+        target.innerHTML='';
+        (Array.isArray(rows)?rows:[]).slice(0,10).forEach((row)=>{
+          const item=document.createElement('div');
+          item.className='rounded-lg bg-white/75 p-3';
+          const title=document.createElement('strong');
+          title.className='block text-xs text-[var(--koa-forest)]';
+          title.textContent=String(row.metric||'Metric');
+          const detail=document.createElement('p');
+          detail.className='mt-1 text-[.65rem] leading-4 text-[var(--koa-ink)]/52';
+          const unit=String(row.unit||'');
+          const current=Number(row.current);
+          const previous=Number(row.previous);
+          if(unit==='%'){
+            const delta=Number(row.delta||0);
+            detail.textContent=current.toFixed(1)+'% now · '+previous.toFixed(1)+'% prior · '+(delta>0?'+':'')+delta.toFixed(1)+' pp';
+          }else if(unit===' incidents'){
+            const delta=Number(row.delta||0);
+            detail.textContent=current+' now · '+previous+' prior · '+(delta>0?'+':'')+delta+' incidents';
+          }else if(unit===' minutes'){
+            const delta=Number(row.delta||0);
+            detail.textContent=formatDuration(current)+' now · '+formatDuration(previous)+' prior · '+(delta>0?'+':'')+delta+' min';
+          }else{
+            detail.textContent=String(current)+' now · '+String(previous)+' prior';
+          }
+          item.append(title,detail);
+          target.appendChild(item);
+        });
+        if(!(Array.isArray(rows)&&rows.length)){
+          target.innerHTML='<p class="text-xs leading-5 text-[var(--koa-ink)]/50">'+empty+'</p>';
+        }
+      };
+      renderComparisonList(weeklyImproved,data.improved||[],'No measurable improvement is available yet for the observed comparison window.');
+      renderComparisonList(weeklyWorsened,data.worsened||[],'No measured regression versus the prior 7-day period.');
+
+      if(weeklyProviderReliability){
+        weeklyProviderReliability.innerHTML='';
+        const providers=Array.isArray(credential?.providers)?credential.providers:[];
+        providers.forEach((provider)=>{
+          const row=document.createElement('div');
+          row.className='flex items-center justify-between gap-3 rounded-lg bg-white p-3';
+          const left=document.createElement('div');
+          const title=document.createElement('strong');
+          title.className='block text-xs text-[var(--koa-forest)]';
+          title.textContent=String(provider.label||provider.id||'Provider');
+          const detail=document.createElement('p');
+          detail.className='mt-1 text-[.62rem] text-[var(--koa-ink)]/45';
+          const previous=provider.previousPercentage==null?'—':Number(provider.previousPercentage).toFixed(1)+'%';
+          detail.textContent='Prior '+previous+' · '+Number(provider.samples||0)+' observed hourly samples';
+          left.append(title,detail);
+          const value=document.createElement('strong');
+          value.className='text-sm '+(
+            provider.trend==='worsened'?'text-red-800':
+            provider.trend==='improved'?'text-emerald-800':'text-[var(--koa-forest)]'
+          );
+          value.textContent=provider.percentage==null?'—':Number(provider.percentage).toFixed(1)+'%';
+          row.append(left,value);
+          weeklyProviderReliability.appendChild(row);
+        });
+        if(!providers.length)weeklyProviderReliability.innerHTML='<p class="text-xs text-[var(--koa-ink)]/45">Credential reliability history is still building.</p>';
+      }
+
+      if(weeklyUnresolvedList){
+        weeklyUnresolvedList.innerHTML='';
+        const rows=Array.isArray(unresolved?.rows)?unresolved.rows:[];
+        rows.slice(0,12).forEach((problem)=>{
+          const item=document.createElement('div');
+          item.className='rounded-lg border p-3 '+(problem.severity==='red'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50');
+          const title=document.createElement('strong');
+          title.className='block text-xs text-[var(--koa-forest)]';
+          title.textContent=String(problem.name||problem.id||'Health problem');
+          const detail=document.createElement('p');
+          detail.className='mt-1 text-[.62rem] leading-4 text-[var(--koa-ink)]/50';
+          detail.textContent=String(problem.issueType||'Problem')+' · '+String(problem.source||'system');
+          item.append(title,detail);
+          weeklyUnresolvedList.appendChild(item);
+        });
+        if(!rows.length)weeklyUnresolvedList.innerHTML='<p class="text-xs text-emerald-800">No unresolved System Health or Credential Health problems.</p>';
+      }
+
+      if(weeklySummaryCoverage){
+        const coverage=data.coverage||{};
+        weeklySummaryCoverage.textContent='Coverage: '+Number(coverage.systemHourlyCurrent||0)+' / '+Number(coverage.expectedHoursPerPeriod||168)+' hourly System Health samples this week · '+Number(coverage.systemHourlyPrevious||0)+' prior week · '+String(coverage.note||'');
       }
     }
 
@@ -2169,6 +2430,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       renderEmailHealth(data.emailHealth||{},data.current||null);
       renderCredentialHealth(data.credentialHealth||{});
+      renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
@@ -3133,6 +3395,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to complete safe automatic repairs.');
         renderCredentialHealth(data.credentialHealth||{});
+        renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
         const result=data.safeRepair||{};
         renderSafeRepairReport(result);
         if(fixAllSafeMessage){
@@ -3156,6 +3419,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderNeedsMyAction();
       }
     });
+
+    credentialTimelineProviderButtons.forEach((button)=>button.addEventListener('click',()=>{
+      credentialTimelineProvider=String(button.dataset.credentialTimelineProvider||'all');
+      renderCredentialIncidentTimeline(latestCredentialHealth?.incidentTimeline||[]);
+    }));
+    credentialTimelineSourceButtons.forEach((button)=>button.addEventListener('click',()=>{
+      credentialTimelineSource=String(button.dataset.credentialTimelineSource||'all');
+      renderCredentialIncidentTimeline(latestCredentialHealth?.incidentTimeline||[]);
+    }));
 
     document.addEventListener('click',(event)=>{
       const action=event.target?.closest?.('[data-credential-health-action]');
