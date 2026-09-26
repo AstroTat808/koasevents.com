@@ -259,30 +259,27 @@ export function classifyHealthIssue(row: HealthCheck): HealthIssueType | null {
   if((status===401||status===403)&&row?.ok) return 'Authentication Expected';
 
   if(
-    id==='netlify-github-sync'
-    || id==='email-release-sync'
-    || ['deploying','waiting','release-policy-skipped','auto-deploy-broken','deploy-failed'].includes(deploymentState)
-  ) return row?.severity==='green'&&row?.ok?null:'Deployment Problem';
-
-  if(
-    status===401
-    || status===403
-    || /permission|forbidden|consent|access denied|insufficient scope|restricted to only send|authorization denied/.test(detail)
-  ) return 'Permission Problem';
-
-  if(
     /not configured|is not configured|missing configuration|environment variable|configuration problem|credential.*missing|startup marker missing|expected startup marker missing/.test(detail)
   ) return 'Configuration Problem';
 
   if(
-    (id==='email-delivery' || /resend|github api|netlify api|microsoft graph|quickbooks api/.test(detail))
-    && (
-      status===408
-      || status===429
-      || status>=500
-      || /timeout|timed out|network|fetch failed|temporarily unavailable|service unavailable|upstream/.test(detail)
-    )
+    status===401
+    || status===403
+    || /permission|forbidden|consent|access denied|insufficient scope|restricted to only send|authorization denied|github.*http 404|private repositories return 404/.test(detail)
+  ) return 'Permission Problem';
+
+  if(
+    status===408
+    || status===429
+    || status>=500
+    || /timeout|timed out|network|fetch failed|temporarily unavailable|service unavailable|upstream|direct github main metadata is unavailable|github main lookup failed/.test(detail)
   ) return 'External Dependency Problem';
+
+  if(
+    id==='netlify-github-sync'
+    || id==='email-release-sync'
+    || ['deploying','waiting','release-policy-skipped','auto-deploy-broken','deploy-failed'].includes(deploymentState)
+  ) return row?.severity==='green'&&row?.ok?null:'Deployment Problem';
 
   if(row?.severity==='yellow'||row?.severity==='red'||!row?.ok) return 'Service Failure';
   return null;
