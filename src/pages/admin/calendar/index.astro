@@ -22,6 +22,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-clay)] p-5 text-white"><p class="eyebrow text-white/70">Potential conflicts</p><p data-total-potential class="display mt-2 text-4xl">0</p></article>
         </section>
 
+        <section data-today-schedule class="mobile-today-schedule hidden">
+          <div class="mobile-today-schedule-head">
+            <div class="min-w-0">
+              <p class="eyebrow text-[var(--koa-clay)]">Today’s schedule</p>
+              <h2 data-today-schedule-title class="display mt-1 text-3xl text-[var(--koa-forest)]"></h2>
+              <p data-today-schedule-summary class="mt-1 text-xs text-[var(--koa-ink)]/50"></p>
+            </div>
+            <span data-today-schedule-count class="mobile-today-schedule-count">0</span>
+          </div>
+          <div data-today-schedule-breakdown class="mobile-today-schedule-breakdown"></div>
+          <div data-today-schedule-items class="mobile-today-schedule-items"></div>
+          <div class="mobile-today-schedule-actions">
+            <button data-today-schedule-open type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Open today in calendar</button>
+          </div>
+        </section>
+
         <section class="calendar-shell rounded-[1.75rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="calendar-toolbar flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div class="calendar-period-controls flex flex-wrap items-center gap-3">
@@ -264,6 +280,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-day.is-today .calendar-date-number{display:grid;height:1.8rem;min-width:1.8rem;place-items:center;border-radius:9999px;background:var(--koa-forest);padding:0 .35rem;color:white}
     .calendar-day-count{display:none}
     .mobile-day-preview{display:none}
+    .mobile-today-schedule{display:none}
     .calendar-item{display:flex;width:100%;align-items:center;gap:.35rem;overflow:hidden;border-radius:.55rem;padding:.42rem .5rem;text-align:left;font-size:.67rem;font-weight:700;line-height:1.3;transition:transform .12s ease,filter .12s ease}
     .calendar-item-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .calendar-icon{flex:0 0 auto;font-size:.72rem;line-height:1}
@@ -538,6 +555,137 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         box-shadow:inset 0 0 0 2px var(--koa-forest);
       }
 
+      .calendar-day.has-conflict{
+        z-index:1;
+        background:color-mix(in srgb,rgb(254 242 242) 62%,white);
+        box-shadow:inset 0 0 0 2px rgb(220 38 38);
+      }
+
+      .calendar-day.has-conflict.is-selected{
+        box-shadow:inset 0 0 0 2px rgb(185 28 28), inset 0 0 0 4px rgba(255,255,255,.82);
+      }
+
+      .calendar-day.has-conflict.is-today::after{
+        box-shadow:inset 0 0 0 2px rgb(185 28 28);
+      }
+
+      .mobile-today-schedule{
+        display:block;
+        overflow:hidden;
+        border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line));
+        border-radius:1.1rem;
+        background:white;
+        box-shadow:0 12px 32px rgba(7,30,23,.08);
+      }
+
+      .mobile-today-schedule.hidden{display:none!important}
+
+      .mobile-today-schedule-head{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:.75rem;
+        padding:.9rem .9rem .7rem;
+      }
+
+      .mobile-today-schedule-count{
+        display:grid;
+        width:2rem;
+        height:2rem;
+        flex:0 0 2rem;
+        place-items:center;
+        border-radius:9999px;
+        background:var(--koa-forest);
+        color:white;
+        font-size:.72rem;
+        font-weight:900;
+      }
+
+      .mobile-today-schedule-breakdown{
+        display:flex;
+        gap:.35rem;
+        overflow-x:auto;
+        padding:0 .9rem .65rem;
+        scrollbar-width:none;
+      }
+
+      .mobile-today-schedule-breakdown::-webkit-scrollbar{display:none}
+
+      .mobile-today-chip{
+        flex:0 0 auto;
+        border:1px solid var(--koa-line);
+        border-radius:9999px;
+        background:var(--koa-ivory);
+        padding:.36rem .55rem;
+        color:var(--koa-forest);
+        font-size:.52rem;
+        font-weight:900;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+      }
+
+      .mobile-today-schedule-items{
+        display:grid;
+        gap:.45rem;
+        border-top:1px solid var(--koa-line);
+        padding:.7rem .75rem;
+      }
+
+      .mobile-today-schedule-row{
+        display:grid;
+        grid-template-columns:auto minmax(0,1fr) auto;
+        align-items:center;
+        gap:.55rem;
+        width:100%;
+        border:1px solid color-mix(in srgb,var(--koa-line) 82%,transparent);
+        border-radius:.75rem;
+        background:white;
+        padding:.6rem .65rem;
+        text-align:left;
+      }
+
+      .mobile-today-schedule-row .today-icon{
+        font-size:.85rem;
+      }
+
+      .mobile-today-schedule-row .today-title{
+        overflow:hidden;
+        color:var(--koa-forest);
+        font-size:.7rem;
+        font-weight:800;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+
+      .mobile-today-schedule-row .today-meta{
+        margin-top:.08rem;
+        color:color-mix(in srgb,var(--koa-ink) 50%,transparent);
+        font-size:.56rem;
+        font-weight:700;
+      }
+
+      .mobile-today-schedule-row .today-time{
+        color:var(--koa-clay);
+        font-size:.56rem;
+        font-weight:900;
+        white-space:nowrap;
+      }
+
+      .mobile-today-schedule-empty{
+        border-radius:.75rem;
+        background:var(--koa-ivory);
+        padding:.8rem;
+        color:color-mix(in srgb,var(--koa-ink) 48%,transparent);
+        font-size:.72rem;
+      }
+
+      .mobile-today-schedule-actions{
+        display:flex;
+        justify-content:flex-end;
+        border-top:1px solid var(--koa-line);
+        padding:.7rem .75rem;
+      }
+
       .calendar-day-count{
         display:inline-flex;
         min-width:1.05rem;
@@ -746,6 +894,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const approvedAdminEmails=new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
+    const todaySchedule=document.querySelector('[data-today-schedule]');
+    const todayScheduleTitle=document.querySelector('[data-today-schedule-title]');
+    const todayScheduleSummary=document.querySelector('[data-today-schedule-summary]');
+    const todayScheduleCount=document.querySelector('[data-today-schedule-count]');
+    const todayScheduleBreakdown=document.querySelector('[data-today-schedule-breakdown]');
+    const todayScheduleItems=document.querySelector('[data-today-schedule-items]');
+    const todayScheduleOpen=document.querySelector('[data-today-schedule-open]');
     const calendar=document.querySelector('[data-calendar]');
     const agenda=document.querySelector('[data-agenda]');
     const conflictsEl=document.querySelector('[data-conflicts]');
@@ -802,6 +957,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let previewItem=null;
     let mobileDayPreviewKey='';
     let data={items:[],conflicts:[],totals:{}};
+    let todayData={items:[],conflicts:[]};
 
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
     function pad(n){return String(n).padStart(2,'0');}
@@ -850,6 +1006,79 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return 'other';
     }
     function filteredItems(){return activeFilters.size?(data.items||[]).filter((item)=>activeFilters.has(filterKey(item))):(data.items||[]);}
+
+    function todayOperationalItems(){
+      const allowedTypes=new Set(['event','payment','vendor','task','timeline']);
+      return (todayData.items||[])
+        .filter((item)=>allowedTypes.has(String(item?.type||'')))
+        .sort((a,b)=>{
+          const at=String(a?.time||'99:99');
+          const bt=String(b?.time||'99:99');
+          return at.localeCompare(bt)||String(a?.title||'').localeCompare(String(b?.title||''));
+        });
+    }
+
+    function renderTodaySchedule(){
+      if(!todaySchedule)return;
+      todaySchedule.classList.toggle('hidden',!calendarMobileQuery.matches);
+      if(!calendarMobileQuery.matches)return;
+
+      const key=today();
+      const rows=todayOperationalItems();
+      const conflicts=(todayData.conflicts||[]).filter((row)=>row?.date===key);
+      const date=new Date(key+'T12:00:00');
+
+      if(todayScheduleTitle)todayScheduleTitle.textContent=new Intl.DateTimeFormat('en-US',{weekday:'long',month:'short',day:'numeric'}).format(date);
+      if(todayScheduleCount)todayScheduleCount.textContent=String(rows.length);
+      if(todayScheduleSummary)todayScheduleSummary.textContent=rows.length
+        ? rows.length+' operational item'+(rows.length===1?'':'s')+(conflicts.length?' · '+conflicts.length+' conflict'+(conflicts.length===1?'':'s'):'')
+        : conflicts.length
+          ? conflicts.length+' conflict'+(conflicts.length===1?'':'s')+' · no scheduled operational items'
+          : 'No events, tasks, vendor arrivals, payments, or staffing items today';
+
+      if(todayScheduleBreakdown){
+        todayScheduleBreakdown.innerHTML='';
+        const groups=[
+          ['Events',rows.filter((item)=>item.type==='event').length],
+          ['Tasks',rows.filter((item)=>item.type==='task'||item.type==='timeline').length],
+          ['Vendors',rows.filter((item)=>item.type==='vendor').length],
+          ['Payments',rows.filter((item)=>item.type==='payment').length],
+          ['Staffing',rows.filter((item)=>item.type==='task'&&item.subtype==='staffing').length],
+        ].filter(([,count])=>Number(count)>0);
+        groups.forEach(([label,count])=>todayScheduleBreakdown.appendChild(text('span','mobile-today-chip',String(count)+' '+label)));
+        if(conflicts.length)todayScheduleBreakdown.appendChild(text('span','mobile-today-chip',String(conflicts.length)+' conflict'+(conflicts.length===1?'':'s')));
+      }
+
+      if(todayScheduleItems){
+        todayScheduleItems.innerHTML='';
+        rows.slice(0,5).forEach((item)=>{
+          const visual=visualFor(item);
+          const button=document.createElement('button');
+          button.type='button';
+          button.className='mobile-today-schedule-row';
+          const icon=text('span','today-icon',visual.icon);
+          const copy=document.createElement('div');copy.className='min-w-0';
+          copy.append(text('div','today-title',item.title||visual.label),text('div','today-meta',[visual.label,item.customerName||item.owner||''].filter(Boolean).join(' · ')));
+          const when=text('span','today-time',item.time?timeLabel(item.time):'All day');
+          button.append(icon,copy,when);
+          button.addEventListener('click',()=>openPreview(item));
+          todayScheduleItems.appendChild(button);
+        });
+        if(rows.length>5)todayScheduleItems.appendChild(text('p','px-1 text-xs font-semibold text-[var(--koa-ink)]/45','+'+(rows.length-5)+' more item'+(rows.length-5===1?'':'s')+' today'));
+        if(!rows.length)todayScheduleItems.appendChild(text('p','mobile-today-schedule-empty','Nothing operational is scheduled for today.'));
+      }
+    }
+
+    async function goToTodaySchedule(){
+      const now=new Date();
+      activeView='month';
+      cursor=new Date(now.getFullYear(),now.getMonth(),1);
+      closeMobileDayPreview();
+      await load();
+      if(calendarMobileQuery.matches)renderMobileDayPreview(today(),true);
+      else openDayPanel(today());
+    }
+
     function openPreview(item){
       previewItem=item;const visual=visualFor(item);
       previewType.textContent=visual.icon+' '+visual.label;
@@ -965,9 +1194,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       for(let i=0;i<42;i++){
         const date=addDays(gridStart,i);const key=ymd(date);const cell=document.createElement('div');
         cell.dataset.dayKey=key;
-        cell.className='calendar-day'+(date.getMonth()!==cursor.getMonth()?' is-other':'')+([0,6].includes(date.getDay())?' is-weekend':'')+(key===today()?' is-today':'')+(key===mobileDayPreviewKey?' is-selected':'');
         const dayItems=itemsByDate.get(key)||[];
         const dayConflicts=(data.conflicts||[]).filter((c)=>c.date===key);
+        cell.className='calendar-day'
+          +(date.getMonth()!==cursor.getMonth()?' is-other':'')
+          +([0,6].includes(date.getDay())?' is-weekend':'')
+          +(key===today()?' is-today':'')
+          +(dayConflicts.length?' has-conflict':'')
+          +(key===mobileDayPreviewKey?' is-selected':'');
         const head=document.createElement('div');head.className='mb-2 flex items-center justify-between gap-1';
         head.appendChild(text('span','calendar-date-number text-xs font-bold',String(date.getDate())));
         const meta=document.createElement('div');meta.className='flex items-center gap-1';
@@ -1545,16 +1779,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
       currentSession=user;app.classList.remove('hidden');
       const range=rangeForView();
-      const [res,staffRes,availabilityRes]=await Promise.all([
+      const todayKey=today();
+      const rangeIncludesToday=todayKey>=range.start&&todayKey<=range.end;
+      const [res,staffRes,availabilityRes,todayRes]=await Promise.all([
         fetch('/api/admin/calendar?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'}),
         fetch('/api/staff/directory',{cache:'no-store'}),
-        fetch('/api/admin/staff-availability?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'})
+        fetch('/api/admin/staff-availability?start='+encodeURIComponent(range.start)+'&end='+encodeURIComponent(range.end),{cache:'no-store'}),
+        rangeIncludesToday
+          ? Promise.resolve(null)
+          : fetch('/api/admin/calendar?start='+encodeURIComponent(todayKey)+'&end='+encodeURIComponent(todayKey),{cache:'no-store'})
       ]);
       if(!res.ok)return;
       data=await res.json();
+      if(rangeIncludesToday){
+        todayData={
+          items:(data.items||[]).filter((item)=>item.date===todayKey),
+          conflicts:(data.conflicts||[]).filter((item)=>item.date===todayKey),
+        };
+      }else if(todayRes?.ok){
+        const result=await todayRes.json();
+        todayData={items:result.items||[],conflicts:result.conflicts||[]};
+      }else{
+        todayData={items:[],conflicts:[]};
+      }
       if(staffRes.ok){const staffData=await staffRes.json();staffDirectory=staffData.staff||[];}
       if(availabilityRes.ok){const availabilityData=await availabilityRes.json();availabilityRows=availabilityData.availability||[];}
-      renderTotals();renderActiveView();renderConflicts();renderAgenda();loadOffice365Status();
+      renderTotals();renderTodaySchedule();renderActiveView();renderConflicts();renderAgenda();loadOffice365Status();
     }
 
     document.querySelector('[data-prev]')?.addEventListener('click',()=>{closeMobileDayPreview();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
@@ -1563,6 +1813,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{closeMobileDayPreview();activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
     staffScaleButtons.forEach((button)=>button.addEventListener('click',()=>{staffScale=button.dataset.staffScale||'week';const nowDate=new Date(cursor);cursor=staffScale==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
     staffScheduleSearch?.addEventListener('input',renderStaffSchedule);
+    todayScheduleOpen?.addEventListener('click',()=>void goToTodaySchedule());
     document.querySelector('[data-day-close]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-mobile-day-preview-close]')?.addEventListener('click',closeMobileDayPreview);
@@ -1600,9 +1851,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         filterButton.classList.toggle('is-active',filterKeyValue==='all'?activeFilters.size===0:Boolean(filterKeyValue&&activeFilters.has(filterKeyValue)));
       });
       renderActiveView();renderAgenda();
+      if(calendarMobileQuery.matches&&activeView==='month'&&mobileDayPreviewKey){
+        renderMobileDayPreview(mobileDayPreviewKey,false);
+      }
+      renderTodaySchedule();
     }));
     calendarMobileQuery.addEventListener?.('change',()=>{
       closeMobileDayPreview();
+      renderTodaySchedule();
       renderActiveView();
     });
     document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closePreview();closeDayPanel();closeMobileDayPreview();}});
