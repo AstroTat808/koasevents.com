@@ -514,3 +514,196 @@ main p.text-sm {
   background: linear-gradient(180deg, rgba(184,117,63,.08), rgba(255,255,255,.98)) !important;
   box-shadow: 0 14px 38px rgba(10,33,26,.10), inset 4px 0 0 rgba(147,80,45,.82);
 }
+
+
+/* Admin workspace mobile system
+   Keeps the desktop dashboards dense while making every /admin module touch-first,
+   edge-safe, and readable on small screens. */
+@media (max-width: 767px) {
+  body.koa-admin-page {
+    background: var(--koa-sand);
+  }
+
+  body.koa-admin-page main {
+    overflow-x: clip;
+    padding-top: 1.25rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  body.koa-admin-page main > .container-shell {
+    width: calc(100% - 1rem);
+    max-width: none;
+  }
+
+  body.koa-admin-page main h1.display {
+    font-size: clamp(2.15rem, 10.5vw, 2.7rem) !important;
+    line-height: .98 !important;
+    letter-spacing: -.04em;
+  }
+
+  body.koa-admin-page main h2.display {
+    font-size: clamp(1.8rem, 8.2vw, 2.2rem) !important;
+    line-height: 1.02 !important;
+  }
+
+  body.koa-admin-page main h3.display {
+    font-size: clamp(1.55rem, 7vw, 1.95rem) !important;
+    line-height: 1.05 !important;
+  }
+
+  body.koa-admin-page main .eyebrow {
+    font-size: .6rem;
+    letter-spacing: .16em;
+  }
+
+  body.koa-admin-page main p.text-sm,
+  body.koa-admin-page main span.text-sm,
+  body.koa-admin-page main div.text-sm {
+    line-height: 1.55;
+  }
+
+  body.koa-admin-page main [class~="p-7"],
+  body.koa-admin-page main [class~="p-6"] {
+    padding: 1rem !important;
+  }
+
+  body.koa-admin-page main [class~="p-5"] {
+    padding: .9rem !important;
+  }
+
+  body.koa-admin-page main [class*="rounded-[1.6rem]"],
+  body.koa-admin-page main [class*="rounded-[1.5rem]"],
+  body.koa-admin-page main [class*="rounded-[1.4rem]"],
+  body.koa-admin-page main [class*="rounded-[1.3rem]"] {
+    border-radius: 1rem !important;
+  }
+
+  body.koa-admin-page main input:not([type="checkbox"]):not([type="radio"]),
+  body.koa-admin-page main select,
+  body.koa-admin-page main textarea {
+    min-height: 2.75rem;
+    font-size: 16px !important;
+  }
+
+  body.koa-admin-page main button,
+  body.koa-admin-page main a[class~="rounded-full"] {
+    min-height: 2.75rem;
+  }
+
+  body.koa-admin-page main button {
+    touch-action: manipulation;
+  }
+
+  body.koa-admin-page main > .container-shell > .flex:first-child {
+    gap: .85rem;
+  }
+
+  body.koa-admin-page main > .container-shell > .flex:first-child > .flex:last-child {
+    width: 100%;
+  }
+
+  body.koa-admin-page main > .container-shell > .flex:first-child > .flex:last-child > button,
+  body.koa-admin-page main > .container-shell > .flex:first-child > .flex:last-child > a {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  body.koa-admin-page main [data-app] {
+    gap: 1rem;
+  }
+
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .65rem;
+  }
+
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] > article,
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] > button {
+    min-width: 0;
+  }
+
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] .display {
+    font-size: 2rem !important;
+  }
+
+  body.koa-admin-page main [data-root-cause-summary] > div:last-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .6rem;
+  }
+
+  body.koa-admin-page main [data-root-cause-summary] > div:last-child button {
+    min-width: 0;
+    padding: .8rem !important;
+  }
+
+  body.koa-admin-page main [class~="overflow-x-auto"] {
+    margin-right: -.5rem;
+    margin-left: -.5rem;
+    padding-right: .5rem;
+    padding-left: .5rem;
+    overscroll-behavior-inline: contain;
+    scroll-padding-inline: .5rem;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body.koa-admin-page main table {
+    font-size: .78rem;
+  }
+
+  body.koa-admin-page main th,
+  body.koa-admin-page main td {
+    line-height: 1.35;
+  }
+
+  body.koa-admin-page main [class~="fixed"][class~="inset-0"][class*="items-center"] {
+    align-items: flex-end !important;
+    padding: .5rem !important;
+  }
+
+  body.koa-admin-page main [class~="fixed"][class~="inset-0"][class*="items-center"] > div,
+  body.koa-admin-page main [class~="fixed"][class~="inset-0"][class*="items-center"] > form {
+    width: 100% !important;
+    max-height: 92dvh !important;
+    border-radius: 1.25rem 1.25rem .55rem .55rem !important;
+  }
+
+  body.koa-admin-page main [data-tabs] {
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  body.koa-admin-page main [data-tabs]::-webkit-scrollbar {
+    display: none;
+  }
+
+  body.koa-admin-page main [data-tabs] > * {
+    flex: 0 0 auto;
+    min-height: 2.75rem;
+    scroll-snap-align: start;
+  }
+
+  body.koa-admin-page main [data-needs-action] > div:first-child > div:last-child,
+  body.koa-admin-page main [data-weekly-executive-summary] > div:first-child > *:last-child {
+    width: 100%;
+  }
+
+  body.koa-admin-page main [data-needs-action] [data-fix-all-safe] {
+    flex: 1 1 12rem;
+  }
+}
+
+@media (max-width: 420px) {
+  body.koa-admin-page main > .container-shell {
+    width: calc(100% - .75rem);
+  }
+
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] {
+    gap: .5rem;
+  }
+
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] > article,
+  body.koa-admin-page main [data-app] > section:first-child[class~="grid"] > button {
+    padding: .78rem !important;
+  }
+}
