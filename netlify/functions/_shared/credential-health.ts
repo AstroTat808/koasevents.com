@@ -506,6 +506,21 @@ async function persistRowsWithHistory(
         issueType: null,
         detail: 'Credential verification recovered successfully.',
       });
+    } else if (previous && !previous.ok && !row.ok && !previousProblemSince) {
+      events.push({
+        id: 'CRH-' + crypto.randomUUID().replaceAll('-', '').slice(0, 14).toUpperCase(),
+        credentialId: row.id,
+        provider: row.provider,
+        credential: row.credential,
+        event: 'became_invalid',
+        occurredAt: generatedAt,
+        startedAt: generatedAt,
+        endedAt: '',
+        durationMinutes: null,
+        severity: row.severity,
+        issueType: row.issueType,
+        detail: row.detail,
+      });
     } else if (previous && !previous.ok && !row.ok && stateSignature(previous) !== stateSignature(row)) {
       const startedAt = previousProblemSince || clean(previous.lastCheckedAt, 100) || generatedAt;
       events.push({
@@ -585,7 +600,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
     context,
     previousRows,
     incomingRows,
-    new Set(CREDENTIAL_IDS),
+    new Set<string>(CREDENTIAL_IDS),
     generatedAt,
   );
   const summary = healthSummaryFromRows(rows, generatedAt);
