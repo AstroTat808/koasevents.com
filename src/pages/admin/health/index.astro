@@ -2430,6 +2430,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       renderEmailHealth(data.emailHealth||{},data.current||null);
       renderCredentialHealth(data.credentialHealth||{});
+      renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
@@ -3394,6 +3395,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to complete safe automatic repairs.');
         renderCredentialHealth(data.credentialHealth||{});
+        renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
         const result=data.safeRepair||{};
         renderSafeRepairReport(result);
         if(fixAllSafeMessage){
@@ -3417,6 +3419,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderNeedsMyAction();
       }
     });
+
+    credentialTimelineProviderButtons.forEach((button)=>button.addEventListener('click',()=>{
+      credentialTimelineProvider=String(button.dataset.credentialTimelineProvider||'all');
+      renderCredentialIncidentTimeline(latestCredentialHealth?.incidentTimeline||[]);
+    }));
+    credentialTimelineSourceButtons.forEach((button)=>button.addEventListener('click',()=>{
+      credentialTimelineSource=String(button.dataset.credentialTimelineSource||'all');
+      renderCredentialIncidentTimeline(latestCredentialHealth?.incidentTimeline||[]);
+    }));
 
     document.addEventListener('click',(event)=>{
       const action=event.target?.closest?.('[data-credential-health-action]');
