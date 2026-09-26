@@ -4,6 +4,14 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
 
+export type HealthIssueType =
+  | 'Service Failure'
+  | 'Authentication Expected'
+  | 'Configuration Problem'
+  | 'Permission Problem'
+  | 'Deployment Problem'
+  | 'External Dependency Problem';
+
 export type HealthCheck = {
   id: string;
   name: string;
@@ -14,6 +22,7 @@ export type HealthCheck = {
   ms: number;
   detail: string;
   severity?: 'green' | 'yellow' | 'red' | 'info';
+  issueType?: HealthIssueType | null;
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
     githubCommit: string;
@@ -239,6 +248,44 @@ function healthStore(context: Context) {
 
 function clean(value: unknown, max=500) {
   return String(value || '').trim().slice(0,max);
+}
+
+export function classifyHealthIssue(row: HealthCheck): HealthIssueType | null {
+  const status=Number(row?.status||0);
+  const detail=clean(row?.detail,1400).toLowerCase();
+  const id=clean(row?.id,120);
+  const deploymentState=clean(row?.deploymentState,80);
+
+  if((status===401||status===403)&&row?.ok) return 'Authentication Expected';
+
+  if(
+    id==='netlify-github-sync'
+    || id==='email-release-sync'
+    || ['deploying','waiting','release-policy-skipped','auto-deploy-broken','deploy-failed'].includes(deploymentState)
+  ) return row?.severity==='green'&&row?.ok?null:'Deployment Problem';
+
+  if(
+    status===401
+    || status===403
+    || /permission|forbidden|consent|access denied|insufficient scope|restricted to only send|authorization denied/.test(detail)
+  ) return 'Permission Problem';
+
+  if(
+    /not configured|is not configured|missing configuration|environment variable|configuration problem|credential.*missing|startup marker missing|expected startup marker missing/.test(detail)
+  ) return 'Configuration Problem';
+
+  if(
+    (id==='email-delivery' || /resend|github api|netlify api|microsoft graph|quickbooks api/.test(detail))
+    && (
+      status===408
+      || status===429
+      || status>=500
+      || /timeout|timed out|network|fetch failed|temporarily unavailable|service unavailable|upstream/.test(detail)
+    )
+  ) return 'External Dependency Problem';
+
+  if(row?.severity==='yellow'||row?.severity==='red'||!row?.ok) return 'Service Failure';
+  return null;
 }
 
 export async function recordCrmStartupSignal(context:Context,input:Partial<CrmStartupSignal>) {
@@ -1022,7 +1069,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,emailTemplateCheck];
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,emailTemplateCheck]
+    .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
