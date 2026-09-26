@@ -1274,6 +1274,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function setMobileCollapsed(section,collapsed){
       if(!(section instanceof HTMLElement))return;
+      if(mobileHealthQuery.matches&&collapsed&&section.dataset.healthSectionStatus==='red')collapsed=false;
       const content=[...section.children].filter((child,index)=>index>0&&!(child instanceof HTMLButtonElement&&child.hasAttribute('data-mobile-collapse-toggle')));
       content.forEach((child)=>child.classList.toggle('koa-mobile-collapsed-content',collapsed));
       section.dataset.mobileCollapsed=collapsed?'true':'false';
@@ -1288,6 +1289,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function setHealthSectionStatus(section,status,count=0){
       if(!(section instanceof HTMLElement))return;
       const normalized=['red','yellow','green'].includes(status)?status:'green';
+      const previous=String(section.dataset.healthSectionStatus||'');
       section.dataset.healthSectionStatus=normalized;
       const badge=section.querySelector('[data-health-section-status-badge]');
       if(!(badge instanceof HTMLElement))return;
@@ -1299,6 +1301,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const selected=map[normalized]||map.green;
       badge.className='inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[.56rem] font-black uppercase tracking-[.07em] '+selected[1];
       badge.textContent=selected[0]+(count>0?' · '+count:'');
+      if(mobileHealthQuery.matches&&section.dataset.mobileCollapsible==='true'){
+        if(normalized==='red'){
+          setMobileCollapsed(section,false);
+        }else if(!previous||previous!==normalized){
+          setMobileCollapsed(section,true);
+        }
+      }
     }
 
     function prepareMobileCollapsible(section){

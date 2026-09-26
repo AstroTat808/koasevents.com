@@ -982,3 +982,22 @@ main p.text-sm {
     display: none !important;
   }
 }
+
+
+/* System Health severity-aware collapsed emphasis */
+@media (max-width: 767px) {
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="yellow"][data-mobile-collapsed="true"] {
+    border-color: rgb(245 198 93 / .68);
+    background: color-mix(in srgb, rgb(254 243 199) 22%, white);
+    box-shadow: inset 4px 0 0 rgb(217 119 6), 0 10px 28px rgba(146, 96, 15, .08);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="red"] {
+    border-color: rgb(254 202 202);
+    background: color-mix(in srgb, rgb(254 226 226) 16%, white);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="green"][data-mobile-collapsed="true"] {
+    background: white;
+  }
+}

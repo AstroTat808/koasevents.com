@@ -57,7 +57,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </select>
             </label>
           </div>
-          <p data-preference-status class="mt-3 text-xs text-[var(--koa-ink)]/42"></p>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <p data-preference-status class="text-xs text-[var(--koa-ink)]/42"></p>
+            <button data-staff-filter-clear type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]"></button>
+          </div>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -68,7 +71,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-team-dashboard class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
         </section>
 
-        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+        <section data-inbox-section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Prioritized inbox</p><h2 class="display mt-2 text-4xl">What needs action now</h2></div>
             <span data-total class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 items</span>
@@ -78,7 +81,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <strong data-selected-count class="mr-auto text-sm text-[var(--koa-forest)]">0 selected</strong>
               <button data-select-visible type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Select visible safe</button>
               <button data-clear-selection type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Clear</button>
-              <button data-run-selected type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Run selected safe actions</button>
+              <button data-run-selected-type="complete_crm_task" type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Complete all selected CRM tasks</button>
+              <button data-run-selected-type="mark_lead_responded" type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Mark all selected leads responded</button>
+              <button data-run-selected-type="recheck_quickbooks" type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Sync & recheck selected QuickBooks</button>
+              <button data-run-selected-type="rerun_health" type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Re-run System Health</button>
             </div>
             <p data-bulk-status class="mt-2 text-xs text-[var(--koa-ink)]/50"></p>
           </div>
@@ -109,13 +115,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const bulkBar=document.querySelector('[data-bulk-bar]');
     const selectedCount=document.querySelector('[data-selected-count]');
     const bulkStatus=document.querySelector('[data-bulk-status]');
-    const runSelected=document.querySelector('[data-run-selected]');
+    const staffFilterClear=document.querySelector('[data-staff-filter-clear]');
+    const inboxSection=document.querySelector('[data-inbox-section]');
     let payload={alerts:[],severityCounts:{urgent:0,upcoming:0,info:0},total:0,mineCount:0};
     let filter='all';
     let sort='priority';
     let scope='everyone';
     let session=null;
     let capabilities=new Set();
+    let staffFilter='';
+    let staffFilterName='';
     const selectedAlerts=new Set();
 
     const categoryLabel={
@@ -250,58 +259,84 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
-    async function runSelectedActions(){
-      const alerts=(payload?.alerts||[]).filter((row)=>selectedAlerts.has(row.occurrenceId)&&canRunQuickAction(row));
+    async function runSelectedType(type,button){
+      const alerts=(payload?.alerts||[]).filter((row)=>selectedAlerts.has(row.occurrenceId)&&canRunQuickAction(row)&&row.quickAction?.type===type);
       if(!alerts.length)return;
-      runSelected.disabled=true;
-      if(bulkStatus)bulkStatus.textContent='Running '+alerts.length+' safe action'+(alerts.length===1?'':'s')+'…';
+      const previous=button.textContent;
+      button.disabled=true;
+      button.textContent='Working…';
+      if(bulkStatus)bulkStatus.textContent='Running '+alerts.length+' '+(alerts.length===1?'action':'actions')+'…';
       try{
-        const crmTaskIds=alerts.filter(row=>row.quickAction?.type==='complete_crm_task').map(row=>row.quickAction.resourceId).filter(Boolean);
-        if(crmTaskIds.length){
-          const response=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'complete-tasks',taskIds:crmTaskIds})});
+        if(type==='complete_crm_task'){
+          const taskIds=alerts.map(row=>row.quickAction.resourceId).filter(Boolean);
+          const response=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'complete-tasks',taskIds})});
           const data=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(data.error||'Unable to complete selected CRM tasks.');
-        }
-
-        for(const alert of alerts.filter(row=>row.quickAction?.type==='mark_lead_responded')){
-          const response=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'log-activity',recordId:alert.quickAction.resourceId,type:'responded',detail:'Lead marked responded from Action Center bulk action.'})});
-          const data=await response.json().catch(()=>({}));
-          if(!response.ok)throw new Error(data.error||'Unable to mark a selected lead responded.');
-        }
-
-        for(const alert of alerts.filter(row=>row.quickAction?.type==='recheck_quickbooks')){
-          const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sync-and-recheck',recordId:alert.quickAction.resourceId})});
-          const data=await response.json().catch(()=>({}));
-          if(!response.ok)throw new Error(data.error||'Unable to recheck a selected QuickBooks item.');
-        }
-
-        if(alerts.some(row=>row.quickAction?.type==='rerun_health')){
+        }else if(type==='mark_lead_responded'){
+          for(const alert of alerts){
+            const response=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'log-activity',recordId:alert.quickAction.resourceId,type:'responded',detail:'Lead marked responded from Action Center bulk action.'})});
+            const data=await response.json().catch(()=>({}));
+            if(!response.ok)throw new Error(data.error||'Unable to mark a selected lead responded.');
+          }
+        }else if(type==='recheck_quickbooks'){
+          for(const alert of alerts){
+            const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sync-and-recheck',recordId:alert.quickAction.resourceId})});
+            const data=await response.json().catch(()=>({}));
+            if(!response.ok)throw new Error(data.error||'Unable to recheck a selected QuickBooks item.');
+          }
+        }else if(type==='rerun_health'){
           const response=await fetch('/api/admin/health',{method:'POST'});
           const data=await response.json().catch(()=>({}));
           if(!response.ok)throw new Error(data.error||'Unable to re-run System Health.');
         }
 
-        selectedAlerts.clear();
-        if(bulkStatus)bulkStatus.textContent='Selected safe actions completed.';
+        alerts.forEach((alert)=>selectedAlerts.delete(alert.occurrenceId));
+        if(bulkStatus){
+          const labels={
+            complete_crm_task:'Selected CRM tasks completed.',
+            mark_lead_responded:'Selected leads marked responded.',
+            recheck_quickbooks:'Selected QuickBooks items synced and rechecked.',
+            rerun_health:'System Health checks completed.',
+          };
+          bulkStatus.textContent=labels[type]||'Selected action completed.';
+        }
         await load();
         window.dispatchEvent(new Event('koa:workspace-alerts-refresh'));
       }catch(error){
         if(bulkStatus)bulkStatus.textContent=error instanceof Error?error.message:'Bulk action failed.';
       }finally{
-        runSelected.disabled=false;
+        button.disabled=false;
+        button.textContent=previous;
         updateBulkBar();
       }
     }
 
     function updateBulkBar(){
-      const count=selectedAlerts.size;
+      const selected=(payload?.alerts||[]).filter((row)=>selectedAlerts.has(row.occurrenceId)&&canRunQuickAction(row));
+      const count=selected.length;
       if(selectedCount)selectedCount.textContent=count+' selected';
       bulkBar?.classList.toggle('hidden',count===0);
-      if(runSelected)runSelected.disabled=count===0;
+      const labels={
+        complete_crm_task:'Complete all selected CRM tasks',
+        mark_lead_responded:'Mark all selected leads responded',
+        recheck_quickbooks:'Sync & recheck selected QuickBooks',
+        rerun_health:'Re-run System Health',
+      };
+      document.querySelectorAll('[data-run-selected-type]').forEach((button)=>{
+        if(!(button instanceof HTMLButtonElement))return;
+        const type=String(button.dataset.runSelectedType||'');
+        const typeCount=selected.filter((row)=>row.quickAction?.type===type).length;
+        button.classList.toggle('hidden',typeCount===0);
+        button.disabled=typeCount===0;
+        button.textContent=(labels[type]||'Run selected')+(type==='rerun_health'?'':(' ('+typeCount+')'));
+      });
     }
 
     function rowsForView(){
-      const scoped=(payload?.alerts||[]).filter((row)=>scope==='everyone'||row.assignedToMe);
+      const scoped=(payload?.alerts||[]).filter((row)=>{
+        if(staffFilter)return String(row?.assigneeEmail||'').toLowerCase()===staffFilter.toLowerCase();
+        return scope==='everyone'||row.assignedToMe;
+      });
       const mineCount=(payload?.alerts||[]).filter((row)=>row.assignedToMe).length;
       const mineNode=document.querySelector('[data-mine-count]');
       if(mineNode)mineNode.textContent='('+mineCount+')';
@@ -334,9 +369,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       teamDashboard.innerHTML='';
       const rows=Array.isArray(payload?.teamDashboard)?payload.teamDashboard:[];
       rows.forEach((row)=>{
-        const card=document.createElement('article');
-        card.className='rounded-xl border '+(Number(row.overdue||0)>0?'border-red-200 bg-red-50':Number(row.approachingSla||0)>0?'border-amber-200 bg-amber-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]')+' p-4';
-        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Staff workload</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(row.name||row.email)+'</h3><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">'+escapeHtml(row.email||'')+'</p></div><span class="rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">'+Number(row.assigned||0)+' active</span></div><div class="mt-4 grid grid-cols-3 gap-2 text-center"><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-red-800">'+Number(row.overdue||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Overdue</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-emerald-800">'+Number(row.completedThisWeek||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Done 7d</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-amber-800">'+Number(row.approachingSla||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">SLA soon</span></div></div>';
+        const card=document.createElement('button');
+        card.type='button';
+        const active=staffFilter&&String(row.email||'').toLowerCase()===staffFilter.toLowerCase();
+        card.className='w-full rounded-xl border p-4 text-left transition '+(
+          active?'border-[var(--koa-forest)] bg-white ring-2 ring-[var(--koa-forest)] ring-offset-2':
+          Number(row.overdue||0)>0?'border-red-200 bg-red-50':
+          Number(row.approachingSla||0)>0?'border-amber-200 bg-amber-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]'
+        );
+        card.setAttribute('aria-pressed',active?'true':'false');
+        card.setAttribute('aria-label',(active?'Clear ':'Filter Action Center to ')+(row.name||row.email));
+        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Staff workload'+(active?' · Filtered':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(row.name||row.email)+'</h3><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">'+escapeHtml(row.email||'')+'</p></div><span class="rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">'+Number(row.assigned||0)+' active</span></div><div class="mt-4 grid grid-cols-3 gap-2 text-center"><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-red-800">'+Number(row.overdue||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Overdue</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-emerald-800">'+Number(row.completedThisWeek||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Done 7d</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-amber-800">'+Number(row.approachingSla||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">SLA soon</span></div></div>';
+        card.addEventListener('click',()=>{
+          const email=String(row.email||'').toLowerCase();
+          if(staffFilter===email){
+            staffFilter='';
+            staffFilterName='';
+          }else{
+            staffFilter=email;
+            staffFilterName=String(row.name||row.email||'Staff member');
+            scope='everyone';
+          }
+          selectedAlerts.clear();
+          render();
+          inboxSection?.scrollIntoView({behavior:'smooth',block:'start'});
+        });
         teamDashboard.appendChild(card);
       });
       if(!rows.length)teamDashboard.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No assigned workload is available yet.</p>';
@@ -345,6 +402,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function render(){
       syncControls();
       renderTeamDashboard();
+      if(staffFilterClear instanceof HTMLButtonElement){
+        staffFilterClear.classList.toggle('hidden',!staffFilter);
+        staffFilterClear.textContent=staffFilter?'Showing '+staffFilterName+' · Clear':'';
+      }
       const rows=rowsForView();
       total.textContent=rows.length+' item'+(rows.length===1?'':'s');
       list.innerHTML='';
@@ -418,6 +479,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       void savePreferences();
     }));
     document.querySelectorAll('[data-scope]').forEach((button)=>button.addEventListener('click',()=>{
+      staffFilter='';
+      staffFilterName='';
+      selectedAlerts.clear();
       scope=button.dataset.scope||'everyone';
       render();
       void savePreferences();
@@ -432,7 +496,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       render();
     });
     document.querySelector('[data-clear-selection]')?.addEventListener('click',()=>{selectedAlerts.clear();render();});
-    runSelected?.addEventListener('click',()=>void runSelectedActions());
+    document.querySelectorAll('[data-run-selected-type]').forEach((button)=>button.addEventListener('click',()=>{
+      if(button instanceof HTMLButtonElement)void runSelectedType(String(button.dataset.runSelectedType||''),button);
+    }));
+    staffFilterClear?.addEventListener('click',()=>{
+      staffFilter='';
+      staffFilterName='';
+      selectedAlerts.clear();
+      render();
+    });
     refresh?.addEventListener('click',()=>void load());
 
     session=await getAdminSession();
