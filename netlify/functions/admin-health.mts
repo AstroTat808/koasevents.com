@@ -23,7 +23,7 @@ import {
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import { emailHealthSummary } from './_shared/email-health';
-import { credentialHealthSummary } from './_shared/credential-health';
+import { credentialHealthSummary, readCredentialHealthSummary } from './_shared/credential-health';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -315,6 +315,62 @@ export default async (req:Request,context:Context) => {
       }catch(error){
         return Response.json({
           error:error instanceof Error?error.message:'Unable to re-test credential.',
+        },{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
+    if(body?.action==='fix-all-safe-problems'){
+      try{
+        let before=await readCredentialHealthSummary(context);
+        if(!before)before=await credentialHealthSummary(context,{force:true});
+        const beforeRows=Array.isArray(before?.rows)?before.rows:[];
+        const attemptedIds=beforeRows.filter((row:any)=>!row?.ok).map((row:any)=>String(row?.id||'')).filter(Boolean);
+
+        let credentialHealth=before;
+        for(const credentialId of attemptedIds){
+          credentialHealth=await credentialHealthSummary(context,{force:true,credentialId});
+        }
+
+        const afterRows=Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[];
+        const afterById=new Map(afterRows.map((row:any)=>[String(row?.id||''),row]));
+        const fixed=attemptedIds.filter((id:string)=>Boolean(afterById.get(id)?.ok));
+        const remainingCredentials=afterRows.filter((row:any)=>!row?.ok).map((row:any)=>({
+          id:String(row?.id||''),
+          provider:String(row?.provider||'Credential'),
+          issueType:String(row?.issueType||'Credential problem'),
+          severity:String(row?.severity||'yellow'),
+          detail:String(row?.detail||''),
+          recommendedAction:row?.recommendedAction||null,
+        }));
+        const latest=await readLatestHealth(context);
+        const remainingSystemIssues=(Array.isArray(latest?.checks)?latest.checks:[])
+          .filter((row:any)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&(!row?.ok||String(row?.severity||'')==='yellow'||String(row?.severity||'')==='red'))
+          .map((row:any)=>({
+            id:String(row?.id||''),
+            name:String(row?.name||row?.id||'System Health check'),
+            issueType:String(row?.issueType||''),
+            severity:String(row?.severity||'yellow'),
+            detail:String(row?.detail||''),
+          }));
+
+        return Response.json({
+          ok:true,
+          credentialHealth,
+          safeRepair:{
+            attempted:attemptedIds.length,
+            fixed:fixed.length,
+            fixedIds:fixed,
+            remaining:remainingCredentials.length+remainingSystemIssues.length,
+            remainingCredentials,
+            remainingSystemIssues,
+            detail:attemptedIds.length
+              ? 'Safe automatic repair re-tested failed credentials, refreshed derived health state, and closed any resolved credential alerts without changing secrets or external account permissions.'
+              : 'No failed credentials needed a safe automatic re-test. Remaining configuration or permission items require staff action.',
+          },
+        },{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'Unable to complete safe automatic repairs.',
         },{status:400,headers:{'Cache-Control':'private, no-store'}});
       }
     }
