@@ -23,7 +23,11 @@ import {
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import { emailHealthSummary } from './_shared/email-health';
-import { credentialHealthSummary, readCredentialHealthSummary } from './_shared/credential-health';
+import {
+  credentialHealthSummary,
+  readCredentialHealthSummary,
+  saveCredentialReliabilityPolicy,
+} from './_shared/credential-health';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
