@@ -1391,6 +1391,48 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     initializeMobileHealthExperience();
 
+
+    function goToHighestPriorityProblem(){
+      const actionItems=[...document.querySelectorAll('[data-needs-action-item]')];
+      const redAction=actionItems.find((item)=>item instanceof HTMLElement&&item.dataset.needsActionSeverity==='red');
+      const firstAction=redAction||actionItems[0];
+      if(firstAction instanceof HTMLElement){
+        jumpToHealthSection('#health-needs-action');
+        window.setTimeout(()=>{
+          firstAction.scrollIntoView({behavior:'smooth',block:'center'});
+          firstAction.classList.add('ring-2','ring-red-700','ring-offset-2');
+          window.setTimeout(()=>firstAction.classList.remove('ring-2','ring-red-700','ring-offset-2'),1800);
+        },320);
+        return;
+      }
+
+      activeRootCause='';
+      if(failuresOnly)failuresOnly.checked=true;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+      const firstProblem=results.querySelector('[data-health-severity="critical"], [data-health-severity="warning"]');
+      if(firstProblem instanceof HTMLElement){
+        jumpToHealthSection('#health-pages-apis');
+        window.setTimeout(()=>{
+          firstProblem.scrollIntoView({behavior:'smooth',block:'center'});
+          firstProblem.focus({preventScroll:true});
+          firstProblem.classList.add('ring-2','ring-red-700','ring-offset-2');
+          window.setTimeout(()=>firstProblem.classList.remove('ring-2','ring-red-700','ring-offset-2'),1800);
+        },320);
+        return;
+      }
+
+      jumpToHealthSection('#health-summary');
+    }
+
+    function handleHealthPriorityHash(){
+      if(window.location.hash==='#health-priority'){
+        window.setTimeout(goToHighestPriorityProblem,80);
+      }
+    }
+
+    window.addEventListener('hashchange',handleHealthPriorityHash);
+
     function formatDuration(minutes){
       const value=Math.max(0,Number(minutes||0));
       const days=Math.floor(value/1440);
@@ -2337,6 +2379,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       needsActionList.innerHTML='';
       items.forEach((item,index)=>{
         const card=document.createElement('article');
+        card.dataset.needsActionItem='';
+        card.dataset.needsActionSeverity=String(item.severity||'yellow');
         card.className='rounded-[1.1rem] border p-4 '+(item.severity==='red'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50');
         const top=document.createElement('div');
         top.className='flex items-start justify-between gap-3';
@@ -3689,6 +3733,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     unauthorized?.classList.toggle('hidden',ok);
     if(ok){
       await load();
+      handleHealthPriorityHash();
       await maybeRetestPendingCredential();
     }
   </script>

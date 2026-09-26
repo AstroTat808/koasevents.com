@@ -316,6 +316,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return Math.round(rows.filter((row)=>row.status==='complete'||row.status==='not_applicable').length/rows.length*100);
     }
 
+
+    function mobilePriorityTab(entry){
+      if(window.innerWidth>=768)return 'overview';
+      const ops=entry?.ops||{};
+      const openTasks=(ops.tasks||[]).filter((task)=>String(task?.status||'not_started')!=='complete');
+      if(String(ops.status||'planning')==='event_day'&&openTasks.length)return 'tasks';
+
+      const checklist=ops.checklist||[];
+      const checklistDone=checklist.length
+        ? Math.round(checklist.filter((row)=>row.status==='complete'||row.status==='not_applicable').length/checklist.length*100)
+        : 100;
+      if(checklistDone<100)return 'checklist';
+
+      const vendors=ops.vendors||[];
+      if(vendors.some((vendor)=>String(vendor?.insuranceStatus||'').toLowerCase()!=='approved'))return 'vendor-ops';
+
+      const questionnaire=ops.questionnaire||[];
+      if(questionnaire.some((row)=>String(row?.status||'open')==='open'))return 'questionnaire';
+
+      if(openTasks.length)return 'tasks';
+      return 'overview';
+    }
+
     function renderSummary(){
       if(!selected)return;
       document.querySelector('[data-summary-guests]').textContent=String(selected.ops.finalGuestCount||0);
@@ -343,7 +366,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function selectEvent(entry){
-      selected=entry; empty.classList.add('hidden'); detail.classList.remove('hidden');
+      const shouldChoosePriority=window.innerWidth<768&&activeTab==='overview';
+      selected=entry;
+      if(shouldChoosePriority)activeTab=mobilePriorityTab(entry);
+      empty.classList.add('hidden'); detail.classList.remove('hidden');
       document.querySelector('[data-title]').textContent=entry.record.customer?.name||entry.record.id;
       document.querySelector('[data-meta]').textContent=[entry.record.customer?.eventDate?dateLabel(entry.record.customer.eventDate):'',packageLabel(entry.record.packageId),entry.record.id].filter(Boolean).join(' · ');
       overviewForm.elements.status.value=entry.ops.status||'planning';
@@ -529,6 +555,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     document.querySelectorAll('[data-tab]').forEach((button)=>button.addEventListener('click',()=>showTab(button.dataset.tab)));
+    document.querySelector('[data-summary-checklist]')?.closest('article')?.addEventListener('click',()=>showTab('checklist'));
+    document.querySelector('[data-summary-insurance]')?.closest('article')?.addEventListener('click',()=>showTab('vendor-ops'));
+    document.querySelector('[data-summary-documents]')?.closest('article')?.addEventListener('click',()=>showTab('documents'));
+    document.querySelector('[data-summary-guests]')?.closest('article')?.addEventListener('click',()=>showTab('overview'));
     overviewForm?.addEventListener('submit',async(e)=>{e.preventDefault();saveMessage.textContent='Saving…';try{await saveSection('save-overview',{status:overviewForm.elements.status.value,finalGuestCount:Number(overviewForm.elements.finalGuestCount.value||0),venueArea:overviewForm.elements.venueArea.value,setupStart:overviewForm.elements.setupStart.value,guestArrival:overviewForm.elements.guestArrival.value,eventStart:overviewForm.elements.eventStart.value,eventEnd:overviewForm.elements.eventEnd.value,teardownEnd:overviewForm.elements.teardownEnd.value,notes:overviewForm.elements.notes.value});saveMessage.textContent='Saved.';renderVendorRequirements();renderVendorSuggestions();}catch(err){saveMessage.textContent=err.message||'Unable to save.';}});
     document.querySelector('[data-add-vendor]')?.addEventListener('click',()=>{if(vendorsEl.querySelector('p'))vendorsEl.innerHTML='';vendorsEl.appendChild(vendorRow());});
     document.querySelector('[data-save-vendors]')?.addEventListener('click',async()=>{await saveSection('save-vendors',{vendors:collectVendors()});renderVendors();renderVendorOperations();renderSummary();});

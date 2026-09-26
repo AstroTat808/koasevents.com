@@ -312,6 +312,12 @@ const seoSchema = {
     </script>
     {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
+    {isAdminPage && (
+      <button data-admin-back-to-top type="button" class="koa-admin-back-to-top" aria-label="Back to top">
+        <span aria-hidden="true">↑</span>
+        <span>Top</span>
+      </button>
+    )}
 
     <script is:inline>
       (() => {
@@ -372,6 +378,193 @@ const seoSchema = {
 
         applyLabels();
         new MutationObserver(scheduleLabels).observe(main, { childList: true, subtree: true });
+      })();
+    </script>
+
+    <script is:inline>
+      (() => {
+        if (!document.body.classList.contains('koa-admin-page')) return;
+
+        const normalizePath = (value) => {
+          const path = String(value || '/').split('?')[0].split('#')[0];
+          return path.endsWith('/') ? path : path + '/';
+        };
+
+        const path = normalizePath(window.location.pathname);
+        const mobileQuery = window.matchMedia('(max-width: 767px)');
+        const backToTop = document.querySelector('[data-admin-back-to-top]');
+
+        const updateBackToTop = () => {
+          if (!(backToTop instanceof HTMLElement)) return;
+          backToTop.classList.toggle('is-visible', mobileQuery.matches && window.scrollY > 560);
+        };
+
+        backToTop?.addEventListener('click', () => {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        window.addEventListener('scroll', updateBackToTop, { passive: true });
+        mobileQuery.addEventListener?.('change', updateBackToTop);
+        updateBackToTop();
+
+        const directChildren = (root) => root instanceof HTMLElement ? [...root.children].filter((node) => node instanceof HTMLElement) : [];
+        const textOf = (node) => String(node?.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+        const setPriority = (node, order) => {
+          if (!(node instanceof HTMLElement)) return;
+          node.classList.add('koa-mobile-priority-item');
+          node.style.setProperty('--koa-mobile-order', String(order));
+        };
+
+        const seedPriority = (root) => {
+          directChildren(root).forEach((node) => setPriority(node, 50));
+        };
+
+        const findDirectByText = (root, needle) => {
+          const normalized = String(needle || '').toLowerCase();
+          return directChildren(root).find((node) => textOf(node).includes(normalized)) || null;
+        };
+
+        const markSecondary = (section) => {
+          if (!(section instanceof HTMLElement) || section.dataset.mobileSecondaryReady === 'true') return;
+          if (section.children.length < 2) return;
+          const header = section.firstElementChild;
+          if (!(header instanceof HTMLElement)) return;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'koa-admin-mobile-section-toggle';
+          button.textContent = 'Show details';
+          button.setAttribute('aria-expanded', 'false');
+          [...section.children].slice(1).forEach((child) => {
+            if (child instanceof HTMLElement) child.classList.add('koa-admin-mobile-secondary-content');
+          });
+          header.appendChild(button);
+          section.dataset.mobileSecondaryReady = 'true';
+          section.dataset.mobileExpanded = 'false';
+          button.addEventListener('click', () => {
+            const expanded = section.dataset.mobileExpanded === 'true';
+            section.dataset.mobileExpanded = expanded ? 'false' : 'true';
+            button.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+            button.textContent = expanded ? 'Show details' : 'Hide details';
+          });
+        };
+
+        if (path === '/admin/crm/') {
+          const root = document.querySelector('[data-admin-ui]');
+          seedPriority(root);
+          const children = directChildren(root);
+          setPriority(children[0], 0);
+          setPriority(children[1], 1);
+          setPriority(children[2], 2);
+
+          const analytics = findDirectByText(root, 'cleanup analytics');
+          const audit = findDirectByText(root, 'cleanup audit log');
+          setPriority(analytics, 8);
+          setPriority(audit, 9);
+          markSecondary(analytics);
+          markSecondary(audit);
+
+          directChildren(root).forEach((node) => {
+            const copy = textOf(node);
+            if (copy.includes('reusable process templates') || copy.includes('automation library') || copy.includes('reusable client content') || copy.includes('messages + forms')) {
+              setPriority(node, 10);
+              markSecondary(node);
+            }
+          });
+        }
+
+        if (path === '/admin/quotes/') {
+          const root = document.querySelector('[data-app]');
+          seedPriority(root);
+          const children = directChildren(root);
+          setPriority(children[0], 0);
+          setPriority(document.querySelector('[data-accounting-alert]'), 1);
+          setPriority(findDirectByText(root, 'work the next action'), 2);
+          setPriority(findDirectByText(root, 'leads still waiting on us'), 3);
+          setPriority(findDirectByText(root, 'quickbooks receivables dashboard'), 4);
+          setPriority(findDirectByText(root, 'post-event review request dashboard'), 5);
+          setPriority(findDirectByText(root, 'inquiries → leads → proposals → booked'), 6);
+          setPriority(findDirectByText(root, 'contracts, payments + upcoming events'), 7);
+          setPriority(document.querySelector('[data-mobile-bar-section]'), 8);
+
+          const team = document.querySelector('[data-staff-performance-section]');
+          const funnel = findDirectByText(root, 'from interest to booked event');
+          const lost = findDirectByText(root, 'review, reopen, or clean up lost opportunities');
+          const snapshots = findDirectByText(root, 'quote builder snapshots');
+          const deleted = findDirectByText(root, 'deleted inquiries + leads');
+          [team, funnel, lost, snapshots, deleted].forEach((section, index) => {
+            setPriority(section, 9 + index);
+            markSecondary(section);
+          });
+        }
+
+        if (path === '/admin/quickbooks/') {
+          const root = document.querySelector('[data-app]');
+          seedPriority(root);
+          setPriority(findDirectByText(root, 'quickbooks integration health'), 0);
+          setPriority(document.querySelector('[data-accounting-audit]'), 1);
+          setPriority(directChildren(root)[0], 2);
+          setPriority(document.querySelector('[data-production-test]'), 3);
+
+          const secondaryTitles = [
+            'default koa’s service item',
+            'rentals, services, mileage + fees',
+            'general excise tax',
+            'deposits + payment schedules',
+            'switch koa’s real company safely',
+            'what the integration does',
+          ];
+          secondaryTitles.forEach((title, index) => {
+            const section = findDirectByText(root, title);
+            setPriority(section, 8 + index);
+            markSecondary(section);
+          });
+        }
+
+        if (path === '/admin/staff/') {
+          const root = document.querySelector('[data-app]');
+          seedPriority(root);
+          const children = directChildren(root);
+          setPriority(children[0], 0);
+          setPriority(findDirectByText(root, 'team access'), 1);
+          setPriority(findDirectByText(root, 'password + session security'), 2);
+          setPriority(findDirectByText(root, 'login history + active sessions'), 3);
+          setPriority(findDirectByText(root, 'create account'), 4);
+          setPriority(findDirectByText(root, 'build a role'), 8);
+          const roleLibrary = findDirectByText(root, 'role library');
+          const matrix = findDirectByText(root, 'page-by-page access matrix');
+          const activity = findDirectByText(root, 'user activity');
+          setPriority(roleLibrary, 9);
+          setPriority(matrix, 10);
+          setPriority(activity, 11);
+          markSecondary(roleLibrary);
+          markSecondary(matrix);
+          markSecondary(activity);
+        }
+
+        if (path === '/admin/events/') {
+          const root = document.querySelector('[data-app]');
+          seedPriority(root);
+          const children = directChildren(root);
+          setPriority(children[0], 0);
+          setPriority(children[2], 1);
+          setPriority(children[1], 1);
+
+          const order = {
+            checklist: 0,
+            tasks: 1,
+            'vendor-ops': 2,
+            questionnaire: 3,
+            timeline: 4,
+            vendors: 5,
+            documents: 6,
+            overview: 7,
+          };
+          document.querySelectorAll('[data-tab]').forEach((button) => {
+            if (!(button instanceof HTMLElement)) return;
+            button.classList.add('koa-mobile-priority-item');
+            button.style.setProperty('--koa-mobile-order', String(order[button.dataset.tab] ?? 20));
+          });
+        }
       })();
     </script>
     <script id="koa-media-placement-data" type="application/json" set:html={JSON.stringify(pagePlacementUsage)}></script>

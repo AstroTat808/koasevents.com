@@ -151,7 +151,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 16 18 16 18 9ZM9.5 20h5"/></svg>
           <span data-workspace-total-bottom class="workspace-bottom-badge hidden"></span>
         </span>
-        <span>Alerts</span>
+        <span data-workspace-bottom-alert-label>Alerts</span>
       </button>
       <button data-workspace-more-toggle type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-links" aria-label="More admin modules">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h.01M12 7h.01M19 7h.01M5 12h.01M12 12h.01M19 12h.01M5 17h.01M12 17h.01M19 17h.01"/></svg>
@@ -555,6 +555,18 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     place-items: center;
   }
 
+  .workspace-bottom-badge[data-severity="upcoming"] {
+    background: rgb(217 119 6);
+  }
+
+  .workspace-bottom-badge[data-severity="urgent"] {
+    background: rgb(185 28 28);
+  }
+
+  .workspace-bottom-badge[data-severity="info"] {
+    background: rgb(29 78 216);
+  }
+
   .workspace-bottom-badge {
     position: absolute;
     top: -.4rem;
@@ -852,6 +864,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   let alertPayload = null;
   let alertTab = 'active';
+  let bottomHealthWarningCount = 0;
   let deployWarningPoll = null;
 
   function updateDeployWarningPoll(payload) {
@@ -1135,7 +1148,13 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const total = Math.max(0, Number(payload?.total || 0));
     const mobileBadge = nav?.querySelector('[data-workspace-total]');
     const bottomBadge = nav?.querySelector('[data-workspace-total-bottom]');
+    const bottomAlertLabel = nav?.querySelector('[data-workspace-bottom-alert-label]');
     const desktopBadge = nav?.querySelector('[data-workspace-alert-toggle]');
+
+    const healthWarnings = payload?.items?.healthWarnings || {};
+    const healthWarningCount = Math.max(0, Number(healthWarnings?.count || 0));
+    const healthWarningSeverity = highestSeverity(healthWarnings?.alerts || []);
+    bottomHealthWarningCount = healthWarningCount;
 
     const mobileAlertButton = nav?.querySelector('[data-workspace-alert-toggle-mobile]');
     if (mobileBadge instanceof HTMLElement) {
@@ -1147,8 +1166,16 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       mobileAlertButton.classList.toggle('inline-flex', total > 0);
     }
     if (bottomBadge instanceof HTMLElement) {
-      bottomBadge.textContent = badgeText(total);
-      bottomBadge.classList.toggle('hidden', total <= 0);
+      const badgeCount = healthWarningCount > 0 ? healthWarningCount : total;
+      bottomBadge.textContent = badgeText(badgeCount);
+      bottomBadge.dataset.severity = healthWarningCount > 0 ? (healthWarningSeverity || 'upcoming') : highestSeverity(payload?.alerts);
+      bottomBadge.title = healthWarningCount > 0
+        ? healthWarningCount + ' System Health ' + (healthWarningCount === 1 ? 'warning' : 'warnings')
+        : (total > 0 ? total + ' workspace alerts' : '');
+      bottomBadge.classList.toggle('hidden', badgeCount <= 0);
+    }
+    if (bottomAlertLabel instanceof HTMLElement) {
+      bottomAlertLabel.textContent = healthWarningCount > 0 ? 'Health' : 'Alerts';
     }
     if (desktopBadge instanceof HTMLElement) {
       const newCount = Math.max(0, Number(payload?.newCount || 0));
@@ -1206,6 +1233,15 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
 
   nav?.querySelector('[data-workspace-alert-toggle-bottom]')?.addEventListener('click', () => {
+    if (bottomHealthWarningCount > 0) {
+      const target = '/admin/health/#health-priority';
+      if (normalizedPath(window.location.pathname) === '/admin/health/') {
+        window.location.hash = 'health-priority';
+      } else {
+        window.location.assign(target);
+      }
+      return;
+    }
     const center = nav?.querySelector('[data-workspace-alert-center]');
     if (!(center instanceof HTMLElement)) return;
     const opening = center.dataset.open !== 'true';

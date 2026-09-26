@@ -850,3 +850,83 @@ main p.text-sm {
     display: none !important;
   }
 }
+
+
+/* Mobile admin action-first ordering + floating return control */
+.koa-admin-back-to-top {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  body.koa-admin-page main .koa-mobile-priority-item {
+    order: var(--koa-mobile-order, 50);
+  }
+
+  .koa-admin-back-to-top {
+    position: fixed;
+    right: .72rem;
+    bottom: calc(5.45rem + env(safe-area-inset-bottom));
+    z-index: 72;
+    display: inline-flex;
+    min-width: 3.25rem;
+    min-height: 3.25rem;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: .05rem;
+    border: 1px solid color-mix(in srgb, var(--koa-champagne) 45%, var(--koa-line));
+    border-radius: 9999px;
+    background: color-mix(in srgb, white 94%, var(--koa-ivory));
+    color: var(--koa-forest);
+    padding: .4rem .65rem;
+    box-shadow: 0 12px 32px rgba(7,30,23,.2);
+    font-size: .54rem;
+    font-weight: 900;
+    line-height: 1;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(.6rem) scale(.94);
+    transition: opacity 160ms ease, transform 180ms ease;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  .koa-admin-back-to-top > span:first-child {
+    font-size: 1rem;
+    line-height: .9;
+  }
+
+  .koa-admin-back-to-top.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+  }
+
+  body.koa-admin-page main .koa-admin-mobile-section-toggle {
+    display: inline-flex;
+    min-height: 2.35rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: .65rem;
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: white;
+    padding: .52rem .78rem;
+    color: var(--koa-forest);
+    font-size: .55rem;
+    font-weight: 900;
+    letter-spacing: .07em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  body.koa-admin-page main [data-mobile-secondary-ready="true"][data-mobile-expanded="false"] > .koa-admin-mobile-secondary-content {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .koa-admin-mobile-section-toggle {
+    display: none !important;
+  }
+}
