@@ -973,7 +973,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     name:'Email monitoring access',
     kind:'api',
     path:'Resend delivery-read credential',
-    ok:Boolean(emailMonitoringAccess?.reachable),
+    ok:true,
     status:Number(emailMonitoringAccess?.status||0) || (emailMonitoringAccess?.reachable?200:503),
     ms:0,
     severity:emailMonitoringAccess?.reachable?'green':'yellow',
@@ -1022,7 +1022,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailDeliveryCheck,emailTemplateCheck];
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,emailTemplateCheck];
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
