@@ -88,8 +88,17 @@ function checkEmailFeatureContracts() {
       ['signed delivery event storage', 'export async function recordEmailHealthEvent'],
       ['email health summary', 'export async function emailHealthSummary'],
     ]],
+    ['netlify/functions/_shared/credential-health.ts', [
+      ['credential health summary', 'export async function credentialHealthSummary'],
+      ['Resend credential health', "id: 'resend-send'"],
+      ['QuickBooks credential health', "id: 'quickbooks'"],
+      ['Microsoft Graph credential health', "id: 'microsoft-graph'"],
+      ['GitHub credential health', "id: 'github'"],
+      ['Netlify credential health', "id: 'netlify'"],
+    ]],
     ['netlify/functions/_shared/system-health.ts', [
       ['Email Health integration', "import { emailHealthSummary } from './email-health'"],
+      ['health issue classification', 'export function classifyHealthIssue'],
       ['email logo component', "id:'email-logo'"],
       ['email send access component', "id:'email-send-access'"],
       ['email monitoring access component', "id:'email-monitoring-access'"],
@@ -99,6 +108,9 @@ function checkEmailFeatureContracts() {
     ]],
     ['src/pages/admin/health/index.astro', [
       ['Email Health dashboard', 'data-email-health-overall'],
+      ['Credential Health dashboard', 'data-credential-health-overall'],
+      ['credential health cards', 'data-credential-health-grid'],
+      ['health issue type label', 'data-health-detail-issue-type'],
       ['email send access status', 'data-email-health-send'],
       ['email monitoring access status', 'data-email-health-monitoring'],
       ['email release warning', 'data-email-health-release-alert'],
