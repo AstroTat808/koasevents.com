@@ -1067,8 +1067,6 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
   }
 
-  let deployWarningPoll = null;
-
   function updateDeployWarningPoll(payload) {
     const hasYellowDeployWarning = (payload?.alerts || []).some((alert) =>
       alert?.id === 'health:netlify-github-sync' && alert?.severity === 'upcoming'
@@ -1422,24 +1420,35 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   });
 
 
+
+  async function markNewCriticalHealthSeen(){
+    const freshCritical=(alertPayload?.items?.healthWarnings?.alerts||[])
+      .filter((alert)=>alert?.severity==='urgent'&&alert?.isNew)
+      .map((alert)=>alert.occurrenceId)
+      .filter(Boolean);
+    if(!freshCritical.length)return;
+    try{
+      await fetch('/api/admin/workspace-alerts',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'mark-seen',occurrenceIds:freshCritical}),
+      });
+      (alertPayload?.items?.healthWarnings?.alerts||[]).forEach((alert)=>{
+        if(freshCritical.includes(alert.occurrenceId))alert.isNew=false;
+      });
+      renderMobileSlotBadges(alertPayload);
+    }catch{}
+  }
+
   nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
     slot.addEventListener('click',async(event)=>{
       if(!(slot instanceof HTMLAnchorElement))return;
       const id=String(slot.dataset.mobileSlotId||'');
       if(id!=='health')return;
-      const freshCritical=(alertPayload?.items?.healthWarnings?.alerts||[])
-        .filter((alert)=>alert?.severity==='urgent'&&alert?.isNew)
-        .map((alert)=>alert.occurrenceId)
-        .filter(Boolean);
-      if(!freshCritical.length)return;
+      const freshCritical=(alertPayload?.items?.healthWarnings?.alerts||[]).some((alert)=>alert?.severity==='urgent'&&alert?.isNew);
+      if(!freshCritical)return;
       event.preventDefault();
-      try{
-        await fetch('/api/admin/workspace-alerts',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({action:'mark-seen',occurrenceIds:freshCritical}),
-        });
-      }catch{}
+      await markNewCriticalHealthSeen();
       slot.classList.remove('workspace-health-pulse');
       window.location.assign('/admin/health/#health-priority');
     });
@@ -1477,6 +1486,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   nav?.querySelectorAll('[data-workspace-link]').forEach((link) => {
     link.addEventListener('click', () => {
       if (window.innerWidth < 768) setMenu(false);
+      if(link instanceof HTMLAnchorElement&&normalizedPath(link.getAttribute('href'))==='/admin/health/'){
+        void markNewCriticalHealthSeen();
+      }
     });
   });
 
@@ -1553,7 +1565,10 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       if(!bottomMatch)moreButton.setAttribute('aria-current','page');
       else moreButton.removeAttribute('aria-current');
     }
-    loadAlerts();
+    await loadAlerts();
+    if(currentPath==='/admin/health/'){
+      await markNewCriticalHealthSeen();
+    }
   }
 
   showWorkspaceNav();
