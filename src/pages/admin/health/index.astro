@@ -39,6 +39,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p></article>
         </section>
 
+        <section data-root-cause-summary class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Root cause summary</p>
+              <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Click a category to show only checks with that classification.</p>
+            </div>
+            <button data-root-cause-clear type="button" class="hidden rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear filter</button>
+          </div>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <button data-root-cause-filter="Service Failure" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">Service Failure</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+            <button data-root-cause-filter="Authentication Expected" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">Authentication Expected</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+            <button data-root-cause-filter="Configuration Problem" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">Configuration Problem</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+            <button data-root-cause-filter="Permission Problem" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">Permission Problem</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+            <button data-root-cause-filter="Deployment Problem" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">Deployment Problem</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+            <button data-root-cause-filter="External Dependency Problem" type="button" class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)] disabled:cursor-default disabled:opacity-45">
+              <span class="block text-[.54rem] font-black uppercase tracking-[.08em]">External Dependency Problem</span>
+              <strong data-root-cause-count class="display mt-2 block text-3xl">0</strong>
+            </button>
+          </div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -767,6 +803,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const criticalCount=document.querySelector('[data-critical-count]');
     const warningCount=document.querySelector('[data-warning-count]');
     const infoCount=document.querySelector('[data-info-count]');
+    const rootCauseButtons=[...document.querySelectorAll('[data-root-cause-filter]')];
+    const rootCauseClear=document.querySelector('[data-root-cause-clear]');
+    let activeRootCause='';
     const healthDetailDialog=document.querySelector('[data-health-detail-dialog]');
     const healthDetailClose=document.querySelector('[data-health-detail-close]');
     const healthDetailSeverity=document.querySelector('[data-health-detail-severity]');
@@ -954,22 +993,78 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       card.append(top,detail,more);return card;
     }
 
+    function renderRootCauseSummary(rows){
+      const counts=(Array.isArray(rows)?rows:[]).reduce((acc,row)=>{
+        const type=String(row?.issueType||'');
+        if(type)acc[type]=(acc[type]||0)+1;
+        return acc;
+      },{});
+      rootCauseButtons.forEach((button)=>{
+        const type=String(button.dataset.rootCauseFilter||'');
+        const count=Number(counts[type]||0);
+        const countNode=button.querySelector('[data-root-cause-count]');
+        if(countNode)countNode.textContent=String(count);
+        const active=activeRootCause===type;
+        button.disabled=count===0;
+        button.setAttribute('aria-pressed',String(active));
+        button.className='rounded-xl border p-4 text-left transition disabled:cursor-default disabled:opacity-45 '+(
+          active
+            ? 'border-[var(--koa-forest)] bg-[var(--koa-forest)] text-white shadow-md'
+            : 'border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-forest)] hover:border-[var(--koa-clay)]'
+        );
+      });
+      rootCauseClear?.classList.toggle('hidden',!activeRootCause);
+    }
+
     function renderHealthChecks(){
       results.innerHTML='';
       const onlyFailures=Boolean(failuresOnly?.checked);
-      const rows=latestHealthChecks.filter(row=>!onlyFailures||normalizedSeverity(row)!=='healthy');
+      const rows=latestHealthChecks.filter((row)=>{
+        if(activeRootCause&&String(row?.issueType||'')!==activeRootCause)return false;
+        if(onlyFailures&&normalizedSeverity(row)==='healthy')return false;
+        return true;
+      });
       if(!rows.length){
-        results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No current issues in the health snapshot.</p>';
+        const message=activeRootCause
+          ? 'No health checks currently match '+activeRootCause+'.'
+          : onlyFailures
+            ? 'No failing or warning checks in the current snapshot.'
+            : 'No current health checks are available.';
+        const empty=document.createElement('p');
+        empty.className='text-sm text-[var(--koa-ink)]/50';
+        empty.textContent=message;
+        results.appendChild(empty);
         return;
       }
       rows.forEach(row=>results.appendChild(healthRow(row)));
     }
 
-    failuresOnly?.addEventListener('change',renderHealthChecks);
+    rootCauseButtons.forEach((button)=>button.addEventListener('click',()=>{
+      const type=String(button.dataset.rootCauseFilter||'');
+      activeRootCause=activeRootCause===type?'':type;
+      if(activeRootCause&&failuresOnly)failuresOnly.checked=false;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+      results.scrollIntoView({behavior:'smooth',block:'start'});
+    }));
+    rootCauseClear?.addEventListener('click',()=>{
+      activeRootCause='';
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+    });
+    failuresOnly?.addEventListener('change',()=>{
+      if(failuresOnly.checked)activeRootCause='';
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+    });
     healthDetailClose?.addEventListener('click',()=>healthDetailDialog.close());
     healthDetailDialog?.addEventListener('click',(event)=>{if(event.target===healthDetailDialog)healthDetailDialog.close();});
 
     function showFailedChecks(){
+      activeRootCause='';
+      if(failuresOnly)failuresOnly.checked=true;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
       const failedChecks=[...results.querySelectorAll('[data-health-ok="false"]')];
       if(!failedChecks.length)return;
       const firstFailure=failedChecks[0];
@@ -1429,6 +1524,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
         detail.textContent=(row.status?'HTTP '+row.status+' · ':'')+String(row.detail||'No verification detail recorded.');
         card.appendChild(detail);
+        const action=row.recommendedAction||null;
+        if(action&&action.href&&severity!=='green'){
+          const link=document.createElement('a');
+          link.href=String(action.href);
+          if(action.external){
+            link.target='_blank';
+            link.rel='noreferrer';
+          }
+          link.dataset.credentialHealthAction=String(row.id||'credential');
+          link.className='mt-4 inline-flex rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+          link.textContent=String(action.label||'Open recommended action');
+          card.appendChild(link);
+        }
         credentialHealthGrid.appendChild(card);
       });
       if(!rows.length)credentialHealthGrid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Credential checks are not available yet.</p>';
@@ -1499,6 +1607,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const severityRank={critical:0,warning:1,info:2,healthy:3};
         latestHealthChecks=[...(current.checks||[])];
         latestHealthChecks.sort((a,b)=>severityRank[normalizedSeverity(a)]-severityRank[normalizedSeverity(b)]);
+        renderRootCauseSummary(latestHealthChecks);
         renderHealthChecks();
       }else{
         overall.textContent='No data';
@@ -1508,6 +1617,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         failedHint.classList.add('hidden');
         severitySummary.classList.add('hidden');
         latestHealthChecks=[];
+        activeRootCause='';
+        renderRootCauseSummary([]);
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
 
