@@ -48,6 +48,7 @@ export type HealthCheck = {
 export type HealthSnapshot = {
   id: string;
   checkedAt: string;
+  durationMs?: number;
   overall: 'healthy' | 'unhealthy';
   passed: number;
   failed: number;
@@ -865,6 +866,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   };
 }
 export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
+  const healthRunStarted=Date.now();
   const origin=baseUrl().replace(/\/$/,'');
   const pageChecks=PAGE_CHECKS.map(async ([id,name,path,marker]):Promise<HealthCheck>=>{
     const result=await timedFetch(origin+path);
@@ -1078,6 +1080,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   return {
     id:'HLT-'+crypto.randomUUID().replaceAll('-','').slice(0,14).toUpperCase(),
     checkedAt:new Date().toISOString(),
+    durationMs:Math.max(0,Date.now()-healthRunStarted),
     overall:failedIds.length?'unhealthy':'healthy',
     passed:checks.length-failedIds.length,
     failed:failedIds.length,

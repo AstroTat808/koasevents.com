@@ -1274,6 +1274,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthExpandedSessionKey='koa-system-health-expanded-v1';
     let healthSectionStatusesReady=false;
     let latestHealthyCheckAt='';
+    let latestHealthSnapshot=null;
 
     function readExpandedHealthSections(){
       try{
@@ -1399,11 +1400,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!(app instanceof HTMLElement))return null;
       let banner=app.querySelector('[data-health-all-good]');
       if(banner instanceof HTMLElement)return banner;
-      banner=document.createElement('div');
+      banner=document.createElement('section');
       banner.dataset.healthAllGood='';
       banner.dataset.mobileOrder='1';
       banner.className='health-all-good-banner hidden';
-      banner.innerHTML='<span class="health-all-good-dot" aria-hidden="true"></span><strong data-health-all-good-copy>All systems good</strong>';
+      const toggle=document.createElement('button');
+      toggle.type='button';
+      toggle.dataset.healthAllGoodToggle='';
+      toggle.className='health-all-good-toggle';
+      toggle.setAttribute('aria-expanded','false');
+      toggle.innerHTML='<span class="health-all-good-dot" aria-hidden="true"></span><strong data-health-all-good-copy>All systems good</strong><span class="health-all-good-chevron" aria-hidden="true">⌄</span>';
+      const detail=document.createElement('div');
+      detail.dataset.healthAllGoodDetail='';
+      detail.className='health-all-good-detail hidden';
+      detail.innerHTML='<div><span>Passed</span><strong data-health-all-good-passed>—</strong></div><div><span>Duration</span><strong data-health-all-good-duration>—</strong></div><div><span>Verified</span><strong data-health-all-good-verified>—</strong></div>';
+      toggle.addEventListener('click',()=>{
+        const expanded=toggle.getAttribute('aria-expanded')==='true';
+        toggle.setAttribute('aria-expanded',expanded?'false':'true');
+        detail.classList.toggle('hidden',expanded);
+      });
+      banner.append(toggle,detail);
       const summarySection=document.querySelector('#health-summary');
       if(summarySection instanceof HTMLElement)summarySection.insertAdjacentElement('afterend',banner);
       else app.prepend(banner);
@@ -1418,12 +1434,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       tools.dataset.healthWarningTools='';
       tools.dataset.mobileOrder='2';
       tools.className='health-warning-tools hidden';
-      const button=document.createElement('button');
-      button.type='button';
-      button.dataset.expandHealthWarnings='';
-      button.className='health-expand-warnings-button';
-      button.textContent='Expand all warnings';
-      button.addEventListener('click',()=>{
+
+      const expand=document.createElement('button');
+      expand.type='button';
+      expand.dataset.expandHealthWarnings='';
+      expand.className='health-warning-tool-button health-expand-warnings-button';
+      expand.textContent='Expand all warnings';
+      expand.addEventListener('click',()=>{
         const sections=[...document.querySelectorAll('[data-mobile-collapsible]')]
           .filter((section)=>section instanceof HTMLElement);
         sections.forEach((section)=>{
@@ -1438,7 +1455,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         });
         refreshMobileHealthPresentation();
       });
-      tools.appendChild(button);
+
+      const collapseHealthy=document.createElement('button');
+      collapseHealthy.type='button';
+      collapseHealthy.dataset.collapseHealthy='';
+      collapseHealthy.className='health-warning-tool-button health-collapse-healthy-button';
+      collapseHealthy.textContent='Collapse healthy';
+      collapseHealthy.addEventListener('click',()=>{
+        const healthySections=[...document.querySelectorAll('[data-mobile-collapsible][data-health-section-status="green"]')]
+          .filter((section)=>section instanceof HTMLElement);
+        healthySections.forEach((section)=>setMobileCollapsed(section,true,true));
+        refreshMobileHealthPresentation();
+      });
+
+      tools.append(expand,collapseHealthy);
       const banner=ensureAllSystemsGoodBanner();
       if(banner instanceof HTMLElement)banner.insertAdjacentElement('afterend',tools);
       else{
@@ -1463,11 +1493,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return days+' day'+(days===1?'':'s')+' ago';
     }
 
+    function formatHealthDuration(value){
+      const ms=Number(value);
+      if(!Number.isFinite(ms)||ms<0)return 'Available after next check';
+      if(ms<1000)return Math.round(ms)+' ms';
+      if(ms<60000)return (Math.round(ms/100)/10)+' s';
+      const minutes=Math.floor(ms/60000);
+      const seconds=Math.round((ms%60000)/1000);
+      return minutes+'m '+seconds+'s';
+    }
+
     function updateAllSystemsGoodTime(){
       const copy=document.querySelector('[data-health-all-good-copy]');
-      if(!(copy instanceof HTMLElement))return;
-      const age=formatHealthCheckAge(latestHealthyCheckAt);
-      copy.textContent=age?'All systems good · checked '+age:'All systems good';
+      if(copy instanceof HTMLElement){
+        const age=formatHealthCheckAge(latestHealthyCheckAt);
+        copy.textContent=age?'All systems good · checked '+age:'All systems good';
+      }
+      const snapshot=latestHealthSnapshot||{};
+      const passed=document.querySelector('[data-health-all-good-passed]');
+      const duration=document.querySelector('[data-health-all-good-duration]');
+      const verified=document.querySelector('[data-health-all-good-verified]');
+      const total=Number(snapshot?.passed||0)+Number(snapshot?.failed||0);
+      if(passed instanceof HTMLElement){
+        passed.textContent=total?Number(snapshot?.passed||0)+' / '+total+' checks':'—';
+      }
+      if(duration instanceof HTMLElement){
+        duration.textContent=formatHealthDuration(snapshot?.durationMs);
+      }
+      if(verified instanceof HTMLElement){
+        const checkedMs=Date.parse(String(snapshot?.checkedAt||''));
+        verified.textContent=Number.isFinite(checkedMs)
+          ? new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date(checkedMs))
+          : '—';
+      }
     }
 
     function refreshMobileHealthPresentation(){
@@ -1499,13 +1557,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
 
       const problemSections=allSections.filter((section)=>['red','yellow'].includes(String(section.dataset.healthSectionStatus||'')));
+      const healthySections=allSections.filter((section)=>String(section.dataset.healthSectionStatus||'')==='green');
       const tools=ensureHealthWarningTools();
       if(tools instanceof HTMLElement){
-        const button=tools.querySelector('[data-expand-health-warnings]');
-        if(button instanceof HTMLButtonElement){
-          button.textContent='Expand all warnings'+(problemSections.length?' · '+problemSections.length:'');
+        const expand=tools.querySelector('[data-expand-health-warnings]');
+        if(expand instanceof HTMLButtonElement){
+          expand.textContent='Expand all warnings'+(problemSections.length?' · '+problemSections.length:'');
+          expand.disabled=problemSections.length===0;
         }
-        tools.classList.toggle('hidden',!mobileHealthQuery.matches||problemSections.length===0);
+        const collapseHealthy=tools.querySelector('[data-collapse-healthy]');
+        if(collapseHealthy instanceof HTMLButtonElement){
+          collapseHealthy.textContent='Collapse healthy'+(healthySections.length?' · '+healthySections.length:'');
+          collapseHealthy.disabled=healthySections.length===0;
+        }
+        tools.classList.toggle('hidden',!mobileHealthQuery.matches);
       }
     }
 
@@ -1621,6 +1686,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function refreshHealthSectionStatuses(data){
+      latestHealthSnapshot=data?.current||null;
       latestHealthyCheckAt=String(data?.current?.checkedAt||'');
       const currentChecks=Array.isArray(data?.current?.checks)?data.current.checks:[];
       const allStatus=healthStatusFromChecks(currentChecks);
