@@ -1094,3 +1094,48 @@ main p.text-sm {
     box-shadow: 0 0 0 .24rem rgba(5,150,105,.12);
   }
 }
+
+
+/* Mobile System Health warning controls */
+.health-warning-tools {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  body.koa-admin-page main .health-warning-tools {
+    order: 2;
+    display: flex;
+    justify-content: flex-start;
+  }
+
+  body.koa-admin-page main .health-warning-tools.hidden {
+    display: none !important;
+  }
+
+  body.koa-admin-page main .health-expand-warnings-button {
+    display: inline-flex;
+    min-height: 2.55rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgb(245 158 11 / .42);
+    border-radius: 9999px;
+    background: rgb(255 251 235);
+    padding: .62rem .85rem;
+    color: rgb(146 64 14);
+    font-size: .57rem;
+    font-weight: 900;
+    letter-spacing: .065em;
+    line-height: 1;
+    text-transform: uppercase;
+    touch-action: manipulation;
+  }
+
+  body.koa-admin-page main .health-expand-warnings-button:active {
+    transform: scale(.98);
+  }
+
+  body.koa-admin-page main .health-all-good-banner [data-health-all-good-copy] {
+    font-size: .75rem;
+    line-height: 1.35;
+  }
+}

@@ -1271,9 +1271,38 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     const mobileHealthQuery=window.matchMedia('(max-width: 767px)');
+    const healthExpandedSessionKey='koa-system-health-expanded-v1';
     let healthSectionStatusesReady=false;
+    let latestHealthyCheckAt='';
 
-    function setMobileCollapsed(section,collapsed){
+    function readExpandedHealthSections(){
+      try{
+        const stored=JSON.parse(sessionStorage.getItem(healthExpandedSessionKey)||'[]');
+        return new Set(Array.isArray(stored)?stored.map(String).filter(Boolean):[]);
+      }catch{return new Set();}
+    }
+
+    const expandedHealthSections=readExpandedHealthSections();
+
+    function healthSectionSessionId(section){
+      if(!(section instanceof HTMLElement))return '';
+      return String(section.id||section.dataset.mobileOrder||'').trim();
+    }
+
+    function rememberHealthSection(section,expanded){
+      const id=healthSectionSessionId(section);
+      if(!id)return;
+      if(expanded)expandedHealthSections.add(id);
+      else expandedHealthSections.delete(id);
+      try{sessionStorage.setItem(healthExpandedSessionKey,JSON.stringify([...expandedHealthSections]));}catch{}
+    }
+
+    function isHealthSectionRememberedOpen(section){
+      const id=healthSectionSessionId(section);
+      return Boolean(id&&expandedHealthSections.has(id));
+    }
+
+    function setMobileCollapsed(section,collapsed,persist=false){
       if(!(section instanceof HTMLElement))return;
       if(mobileHealthQuery.matches&&collapsed&&section.dataset.healthSectionStatus==='red')collapsed=false;
       const content=[...section.children].filter((child,index)=>index>0&&!(child instanceof HTMLButtonElement&&child.hasAttribute('data-mobile-collapse-toggle')));
@@ -1284,6 +1313,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         toggleButton.setAttribute('aria-expanded',collapsed?'false':'true');
         const label=toggleButton.querySelector('[data-health-toggle-label]');
         if(label)label.textContent=collapsed?'Expand':'Collapse';
+      }
+      if(persist&&section.dataset.healthSectionStatus!=='red'){
+        rememberHealthSection(section,!collapsed);
       }
     }
 
@@ -1312,6 +1344,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(mobileHealthQuery.matches&&section.dataset.mobileCollapsible==='true'){
         if(normalized==='red'){
           setMobileCollapsed(section,false);
+        }else if(isHealthSectionRememberedOpen(section)){
+          setMobileCollapsed(section,false);
         }else if(!previous||previous!==normalized){
           setMobileCollapsed(section,true);
         }
@@ -1336,7 +1370,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       button.innerHTML='<span data-health-toggle-label>Expand</span><span aria-hidden="true">⌄</span>';
       button.addEventListener('click',(event)=>{
         event.stopPropagation();
-        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
+        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true',true);
       });
       const summary=document.createElement('button');
       summary.type='button';
@@ -1344,7 +1378,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       summary.className='health-section-mobile-summary hidden';
       summary.addEventListener('click',(event)=>{
         event.stopPropagation();
-        if(section.dataset.mobileCollapsed==='true')setMobileCollapsed(section,false);
+        if(section.dataset.mobileCollapsed==='true')setMobileCollapsed(section,false,true);
       });
       controls.append(badge,button,summary);
       header.appendChild(controls);
@@ -1353,7 +1387,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!mobileHealthQuery.matches)return;
         const target=event.target;
         if(target instanceof Element&&target.closest('a,button,input,select,textarea,label'))return;
-        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
+        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true',true);
       });
       section.dataset.mobileCollapseReady='true';
       setHealthSectionStatus(section,'green',0);
@@ -1369,11 +1403,71 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       banner.dataset.healthAllGood='';
       banner.dataset.mobileOrder='1';
       banner.className='health-all-good-banner hidden';
-      banner.innerHTML='<span class="health-all-good-dot" aria-hidden="true"></span><div><strong>All systems good</strong><span> Every monitored System Health section is green.</span></div>';
+      banner.innerHTML='<span class="health-all-good-dot" aria-hidden="true"></span><strong data-health-all-good-copy>All systems good</strong>';
       const summarySection=document.querySelector('#health-summary');
       if(summarySection instanceof HTMLElement)summarySection.insertAdjacentElement('afterend',banner);
       else app.prepend(banner);
       return banner;
+    }
+
+    function ensureHealthWarningTools(){
+      if(!(app instanceof HTMLElement))return null;
+      let tools=app.querySelector('[data-health-warning-tools]');
+      if(tools instanceof HTMLElement)return tools;
+      tools=document.createElement('div');
+      tools.dataset.healthWarningTools='';
+      tools.dataset.mobileOrder='2';
+      tools.className='health-warning-tools hidden';
+      const button=document.createElement('button');
+      button.type='button';
+      button.dataset.expandHealthWarnings='';
+      button.className='health-expand-warnings-button';
+      button.textContent='Expand all warnings';
+      button.addEventListener('click',()=>{
+        const sections=[...document.querySelectorAll('[data-mobile-collapsible]')]
+          .filter((section)=>section instanceof HTMLElement);
+        sections.forEach((section)=>{
+          const severity=String(section.dataset.healthSectionStatus||'green');
+          if(severity==='red'){
+            setMobileCollapsed(section,false);
+          }else if(severity==='yellow'){
+            setMobileCollapsed(section,false,true);
+          }else{
+            setMobileCollapsed(section,true,true);
+          }
+        });
+        refreshMobileHealthPresentation();
+      });
+      tools.appendChild(button);
+      const banner=ensureAllSystemsGoodBanner();
+      if(banner instanceof HTMLElement)banner.insertAdjacentElement('afterend',tools);
+      else{
+        const summarySection=document.querySelector('#health-summary');
+        if(summarySection instanceof HTMLElement)summarySection.insertAdjacentElement('afterend',tools);
+        else app.prepend(tools);
+      }
+      return tools;
+    }
+
+    function formatHealthCheckAge(value){
+      const checkedMs=Date.parse(String(value||''));
+      if(!Number.isFinite(checkedMs))return '';
+      const diff=Math.max(0,Date.now()-checkedMs);
+      const seconds=Math.floor(diff/1000);
+      if(seconds<45)return 'just now';
+      const minutes=Math.floor(seconds/60);
+      if(minutes<60)return minutes+' minute'+(minutes===1?'':'s')+' ago';
+      const hours=Math.floor(minutes/60);
+      if(hours<24)return hours+' hour'+(hours===1?'':'s')+' ago';
+      const days=Math.floor(hours/24);
+      return days+' day'+(days===1?'':'s')+' ago';
+    }
+
+    function updateAllSystemsGoodTime(){
+      const copy=document.querySelector('[data-health-all-good-copy]');
+      if(!(copy instanceof HTMLElement))return;
+      const age=formatHealthCheckAge(latestHealthyCheckAt);
+      copy.textContent=age?'All systems good · checked '+age:'All systems good';
     }
 
     function refreshMobileHealthPresentation(){
@@ -1401,6 +1495,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const banner=ensureAllSystemsGoodBanner();
       if(banner instanceof HTMLElement){
         banner.classList.toggle('hidden',!mobileHealthQuery.matches||!allGreen);
+        if(allGreen)updateAllSystemsGoodTime();
+      }
+
+      const problemSections=allSections.filter((section)=>['red','yellow'].includes(String(section.dataset.healthSectionStatus||'')));
+      const tools=ensureHealthWarningTools();
+      if(tools instanceof HTMLElement){
+        const button=tools.querySelector('[data-expand-health-warnings]');
+        if(button instanceof HTMLButtonElement){
+          button.textContent='Expand all warnings'+(problemSections.length?' · '+problemSections.length:'');
+        }
+        tools.classList.toggle('hidden',!mobileHealthQuery.matches||problemSections.length===0);
       }
     }
 
@@ -1464,7 +1569,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       configureMobileHealthSection(findDirectHealthSection('Uptime by service'),'health-uptime',10,true);
       configureMobileHealthSection(findDirectHealthSection('Notifications + public status'),'health-notifications',11,true);
       configureMobileHealthSection(findDirectHealthSection('Recent health checks'),'health-history',12,true);
-      prepareMobileCollapsible(document.querySelector('[data-credit-panel]'));
+      const creditPanel=document.querySelector('[data-credit-panel]');
+      if(creditPanel instanceof HTMLElement&&!creditPanel.id)creditPanel.id='health-credit-usage';
+      prepareMobileCollapsible(creditPanel);
 
       makeHealthJumpCard(passedCard,showHealthyChecks,'Show healthy System Health checks');
       makeHealthJumpCard(checkedCard,()=>jumpToHealthSection('#health-history'),'Open recent System Health history');
@@ -1485,10 +1592,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     mobileHealthQuery.addEventListener?.('change',(event)=>{
       document.querySelectorAll('[data-mobile-collapsible]').forEach((section)=>{
-        if(section instanceof HTMLElement)setMobileCollapsed(section,event.matches);
+        if(!(section instanceof HTMLElement))return;
+        if(!event.matches){
+          setMobileCollapsed(section,false);
+        }else if(section.dataset.healthSectionStatus==='red'||isHealthSectionRememberedOpen(section)){
+          setMobileCollapsed(section,false);
+        }else{
+          setMobileCollapsed(section,true);
+        }
       });
       refreshMobileHealthPresentation();
     });
+
+    window.setInterval(()=>{
+      const banner=document.querySelector('[data-health-all-good]');
+      if(banner instanceof HTMLElement&&!banner.classList.contains('hidden'))updateAllSystemsGoodTime();
+    },30000);
 
     initializeMobileHealthExperience();
 
@@ -1502,6 +1621,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function refreshHealthSectionStatuses(data){
+      latestHealthyCheckAt=String(data?.current?.checkedAt||'');
       const currentChecks=Array.isArray(data?.current?.checks)?data.current.checks:[];
       const allStatus=healthStatusFromChecks(currentChecks);
       const problemChecks=currentChecks.filter((row)=>['critical','warning'].includes(normalizedSeverity(row)));
