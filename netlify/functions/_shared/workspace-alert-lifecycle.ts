@@ -50,9 +50,9 @@ export function credentialWorkspaceAlert(row: any): WorkspaceAlertDetail {
   };
 }
 
-export async function syncCredentialWorkspaceAlert(context: Context, row: any) {
-  const credentialId = clean(row?.id, 100);
-  if (!credentialId) return null;
+export async function syncCredentialWorkspaceAlerts(context: Context, rows: any[]) {
+  const input = Array.isArray(rows) ? rows.filter((row) => clean(row?.id, 100)) : [];
+  if (!input.length) return;
 
   const alerts = storeFor(context);
   const now = new Date().toISOString();
@@ -60,15 +60,20 @@ export async function syncCredentialWorkspaceAlert(context: Context, row: any) {
   const active: Record<string, LifecycleRecord> = state?.active && typeof state.active === 'object' ? state.active : {};
   const historyRaw: any = await alerts.get('lifecycle/history', { type: 'json' });
   const history: LifecycleRecord[] = Array.isArray(historyRaw) ? historyRaw : [];
-  const baseId = 'credential:' + credentialId;
-  const previous = active[baseId];
 
-  if (row?.ok) {
-    if (previous) {
-      history.unshift({ ...previous, lastSeenAt: now, resolvedAt: now });
-      delete active[baseId];
+  for (const row of input) {
+    const credentialId = clean(row?.id, 100);
+    const baseId = 'credential:' + credentialId;
+    const previous = active[baseId];
+
+    if (row?.ok) {
+      if (previous) {
+        history.unshift({ ...previous, lastSeenAt: now, resolvedAt: now });
+        delete active[baseId];
+      }
+      continue;
     }
-  } else {
+
     const alert = credentialWorkspaceAlert(row);
     if (!previous) {
       active[baseId] = {
@@ -78,30 +83,27 @@ export async function syncCredentialWorkspaceAlert(context: Context, row: any) {
         lastSeenAt: now,
         severityChanges: [],
       };
-    } else {
-      const severityChanges = [...(Array.isArray(previous.severityChanges) ? previous.severityChanges : [])];
-      if (previous.severity !== alert.severity) {
-        severityChanges.unshift({ at: now, from: previous.severity, to: alert.severity });
-      }
-      active[baseId] = {
-        ...previous,
-        ...alert,
-        lastSeenAt: now,
-        severityChanges: severityChanges.slice(0, 30),
-      };
+      continue;
     }
+
+    const severityChanges = [...(Array.isArray(previous.severityChanges) ? previous.severityChanges : [])];
+    if (previous.severity !== alert.severity) {
+      severityChanges.unshift({ at: now, from: previous.severity, to: alert.severity });
+    }
+    active[baseId] = {
+      ...previous,
+      ...alert,
+      lastSeenAt: now,
+      severityChanges: severityChanges.slice(0, 30),
+    };
   }
 
   await Promise.all([
     alerts.setJSON('lifecycle/state', { active, updatedAt: now }),
     alerts.setJSON('lifecycle/history', history.slice(0, 1000)),
   ]);
-
-  return active[baseId] || null;
 }
 
-export async function syncCredentialWorkspaceAlerts(context: Context, rows: any[]) {
-  for (const row of Array.isArray(rows) ? rows : []) {
-    await syncCredentialWorkspaceAlert(context, row);
-  }
+export async function syncCredentialWorkspaceAlert(context: Context, row: any) {
+  await syncCredentialWorkspaceAlerts(context, [row]);
 }
