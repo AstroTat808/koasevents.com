@@ -1280,8 +1280,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const toggleButton=section.querySelector('[data-mobile-collapse-toggle]');
       if(toggleButton instanceof HTMLButtonElement){
         toggleButton.setAttribute('aria-expanded',collapsed?'false':'true');
-        toggleButton.textContent=collapsed?'Show details':'Hide details';
+        const label=toggleButton.querySelector('[data-health-toggle-label]');
+        if(label)label.textContent=collapsed?'Expand':'Collapse';
       }
+    }
+
+    function setHealthSectionStatus(section,status,count=0){
+      if(!(section instanceof HTMLElement))return;
+      const normalized=['red','yellow','green'].includes(status)?status:'green';
+      section.dataset.healthSectionStatus=normalized;
+      const badge=section.querySelector('[data-health-section-status-badge]');
+      if(!(badge instanceof HTMLElement))return;
+      const map={
+        red:['Critical','bg-red-100 text-red-800 border-red-200'],
+        yellow:['Warning','bg-amber-100 text-amber-900 border-amber-200'],
+        green:['Good','bg-emerald-100 text-emerald-800 border-emerald-200'],
+      };
+      const selected=map[normalized]||map.green;
+      badge.className='inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[.56rem] font-black uppercase tracking-[.07em] '+selected[1];
+      badge.textContent=selected[0]+(count>0?' · '+count:'');
     }
 
     function prepareMobileCollapsible(section){
@@ -1290,17 +1307,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(section.dataset.mobileCollapseReady==='true')return;
       const header=section.firstElementChild;
       if(!(header instanceof HTMLElement))return;
+      const controls=document.createElement('div');
+      controls.className='health-section-mobile-controls';
+      const badge=document.createElement('span');
+      badge.dataset.healthSectionStatusBadge='';
       const button=document.createElement('button');
       button.type='button';
       button.dataset.mobileCollapseToggle='';
       button.className='health-mobile-detail-toggle';
       button.setAttribute('aria-expanded','false');
-      button.textContent='Show details';
-      button.addEventListener('click',()=>{
+      button.innerHTML='<span data-health-toggle-label>Expand</span><span aria-hidden="true">⌄</span>';
+      button.addEventListener('click',(event)=>{
+        event.stopPropagation();
         setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
       });
-      header.appendChild(button);
+      controls.append(badge,button);
+      header.appendChild(controls);
+      header.classList.add('health-section-mobile-header');
+      header.addEventListener('click',(event)=>{
+        if(!mobileHealthQuery.matches)return;
+        const target=event.target;
+        if(target instanceof Element&&target.closest('a,button,input,select,textarea,label'))return;
+        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
+      });
       section.dataset.mobileCollapseReady='true';
+      setHealthSectionStatus(section,'green',0);
       setMobileCollapsed(section,mobileHealthQuery.matches);
     }
 
@@ -1352,14 +1383,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!(app instanceof HTMLElement))return;
       const directSections=[...app.children].filter((node)=>node instanceof HTMLElement&&node.tagName==='SECTION');
       configureMobileHealthSection(directSections[0],'health-summary',0,false);
-      configureMobileHealthSection(document.querySelector('[data-needs-action]'),'health-needs-action',1,false);
-      configureMobileHealthSection(document.querySelector('[data-root-cause-summary]'),'health-root-causes',2,false);
-      configureMobileHealthSection(findDirectHealthSection('Pages + APIs'),'health-pages-apis',3,false);
-      configureMobileHealthSection(document.querySelector('#credential-health'),'credential-health',4,false);
-      configureMobileHealthSection(findDirectHealthSection('Email Health'),'health-email',5,false);
-      configureMobileHealthSection(findDirectHealthSection('Office 365 calendar sync'),'health-office365',6,false);
+      configureMobileHealthSection(document.querySelector('[data-needs-action]'),'health-needs-action',1,true);
+      configureMobileHealthSection(document.querySelector('[data-root-cause-summary]'),'health-root-causes',2,true);
+      configureMobileHealthSection(findDirectHealthSection('Pages + APIs'),'health-pages-apis',3,true);
+      configureMobileHealthSection(document.querySelector('#credential-health'),'credential-health',4,true);
+      configureMobileHealthSection(findDirectHealthSection('Email Health'),'health-email',5,true);
+      configureMobileHealthSection(findDirectHealthSection('Office 365 calendar sync'),'health-office365',6,true);
       configureMobileHealthSection(findDirectHealthSection('Deployment'),'health-deployment',7,true);
-      configureMobileHealthSection(document.querySelector('[data-weekly-executive-summary]'),'health-weekly',8,false);
+      configureMobileHealthSection(document.querySelector('[data-weekly-executive-summary]'),'health-weekly',8,true);
       configureMobileHealthSection(findDirectHealthSection('Observed outage duration'),'health-incidents',9,true);
       configureMobileHealthSection(findDirectHealthSection('Uptime by service'),'health-uptime',10,true);
       configureMobileHealthSection(findDirectHealthSection('Notifications + public status'),'health-notifications',11,true);
@@ -1391,6 +1422,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     initializeMobileHealthExperience();
 
+
+
+    function healthStatusFromChecks(rows){
+      const severities=(Array.isArray(rows)?rows:[]).map(normalizedSeverity);
+      const red=severities.filter((value)=>value==='critical').length;
+      const yellow=severities.filter((value)=>value==='warning').length;
+      return {status:red?'red':yellow?'yellow':'green',count:red||yellow};
+    }
+
+    function refreshHealthSectionStatuses(data){
+      const currentChecks=Array.isArray(data?.current?.checks)?data.current.checks:[];
+      const allStatus=healthStatusFromChecks(currentChecks);
+      const configChecks=currentChecks.filter((row)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||'')));
+      const configStatus=healthStatusFromChecks(configChecks);
+      const deploymentChecks=currentChecks.filter((row)=>/deploy|netlify|github|release/i.test(String(row?.id||'')+' '+String(row?.name||'')));
+      const deploymentStatus=healthStatusFromChecks(deploymentChecks);
+
+      setHealthSectionStatus(document.querySelector('#health-needs-action'),configStatus.status,configStatus.count);
+      setHealthSectionStatus(document.querySelector('#health-root-causes'),allStatus.status,allStatus.count);
+      setHealthSectionStatus(document.querySelector('#health-pages-apis'),allStatus.status,allStatus.count);
+
+      const credentialState=String(data?.credentialHealth?.overall||'green');
+      const credentialRows=Array.isArray(data?.credentialHealth?.rows)?data.credentialHealth.rows:[];
+      setHealthSectionStatus(document.querySelector('#credential-health'),credentialState==='red'?'red':credentialState==='yellow'?'yellow':'green',credentialRows.filter((row)=>!row?.ok).length);
+
+      const releaseCheck=currentChecks.find((row)=>row?.id==='email-release-sync');
+      let emailState=String(data?.emailHealth?.overall||'green');
+      if(String(releaseCheck?.severity||'')==='red')emailState='red';
+      else if(String(releaseCheck?.severity||'')==='yellow'&&emailState==='green')emailState='yellow';
+      setHealthSectionStatus(document.querySelector('#health-email'),emailState==='red'?'red':emailState==='yellow'?'yellow':'green',emailState==='green'?0:1);
+
+      const officeState=String(data?.office365?.severity||'green');
+      setHealthSectionStatus(document.querySelector('#health-office365'),officeState==='red'?'red':officeState==='yellow'?'yellow':'green',officeState==='green'?0:1);
+      setHealthSectionStatus(document.querySelector('#health-deployment'),deploymentStatus.status,deploymentStatus.count);
+      setHealthSectionStatus(document.querySelector('#health-weekly'),allStatus.status,allStatus.count);
+
+      const incidentRows=Array.isArray(data?.incidents?.rows)?data.incidents.rows:[];
+      const ongoing=incidentRows.filter((row)=>row?.currentIncident).length;
+      const recent=Array.isArray(data?.incidents?.recentIncidents)?data.incidents.recentIncidents:[];
+      setHealthSectionStatus(document.querySelector('#health-incidents'),ongoing?'red':recent.length?'yellow':'green',ongoing||recent.length);
+      setHealthSectionStatus(document.querySelector('#health-uptime'),allStatus.status,allStatus.count);
+      setHealthSectionStatus(document.querySelector('#health-notifications'),'green',0);
+      setHealthSectionStatus(document.querySelector('#health-history'),allStatus.status,allStatus.count);
+
+      const credit=String(data?.deployments?.creditUsage?.warningSeverity||data?.deployments?.creditUsage?.severity||'green');
+      setHealthSectionStatus(document.querySelector('[data-credit-panel]'),credit==='red'?'red':['orange','yellow'].includes(credit)?'yellow':'green',credit==='green'?0:1);
+    }
 
     function goToHighestPriorityProblem(){
       const actionItems=[...document.querySelectorAll('[data-needs-action-item]')];
@@ -3421,6 +3499,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         tr.append(service,timingTd,publicTd,labelTd);policyBody.appendChild(tr);
       });
+      refreshHealthSectionStatuses(data);
     }
 
     creditRecommendations?.addEventListener('click',async(event)=>{

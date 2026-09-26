@@ -930,3 +930,55 @@ main p.text-sm {
     display: none !important;
   }
 }
+
+
+/* System Health compact mobile status sections */
+@media (max-width: 767px) {
+  body.koa-admin-page main [data-mobile-collapsible] {
+    transition: border-color 160ms ease, box-shadow 160ms ease;
+  }
+
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="green"] {
+    box-shadow: inset 3px 0 0 rgb(5 150 105), var(--shadow-soft);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="yellow"] {
+    box-shadow: inset 3px 0 0 rgb(217 119 6), var(--shadow-soft);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="red"] {
+    box-shadow: inset 3px 0 0 rgb(185 28 28), var(--shadow-soft);
+  }
+
+  body.koa-admin-page main .health-section-mobile-header {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  body.koa-admin-page main .health-section-mobile-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .45rem;
+    margin-top: .7rem;
+  }
+
+  body.koa-admin-page main .health-mobile-detail-toggle {
+    margin-top: 0;
+    gap: .35rem;
+  }
+
+  body.koa-admin-page main [data-mobile-collapsed="true"] .health-mobile-detail-toggle [aria-hidden="true"] {
+    transform: rotate(0deg);
+  }
+
+  body.koa-admin-page main [data-mobile-collapsed="false"] .health-mobile-detail-toggle [aria-hidden="true"] {
+    transform: rotate(180deg);
+  }
+}
+
+@media (min-width: 768px) {
+  .health-section-mobile-controls {
+    display: none !important;
+  }
+}

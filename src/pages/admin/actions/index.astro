@@ -61,9 +61,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
-          <div class="flex items-end justify-between gap-3">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Team workload</p><h2 class="display mt-2 text-4xl">Action workload by staff</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/50">Active assignments, overdue deadlines, completed items from the last 7 days, and first-response SLAs approaching within one business hour.</p></div>
+            <span data-unassigned class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 unassigned</span>
+          </div>
+          <div data-team-dashboard class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Prioritized inbox</p><h2 class="display mt-2 text-4xl">What needs action now</h2></div>
             <span data-total class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 items</span>
+          </div>
+          <div data-bulk-bar class="mt-4 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <strong data-selected-count class="mr-auto text-sm text-[var(--koa-forest)]">0 selected</strong>
+              <button data-select-visible type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Select visible safe</button>
+              <button data-clear-selection type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Clear</button>
+              <button data-run-selected type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Run selected safe actions</button>
+            </div>
+            <p data-bulk-status class="mt-2 text-xs text-[var(--koa-ink)]/50"></p>
           </div>
           <div data-list class="mt-5 grid gap-3"></div>
         </section>
@@ -87,12 +104,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const refresh=document.querySelector('[data-refresh]');
     const sortSelect=document.querySelector('[data-sort]');
     const preferenceStatus=document.querySelector('[data-preference-status]');
+    const teamDashboard=document.querySelector('[data-team-dashboard]');
+    const unassigned=document.querySelector('[data-unassigned]');
+    const bulkBar=document.querySelector('[data-bulk-bar]');
+    const selectedCount=document.querySelector('[data-selected-count]');
+    const bulkStatus=document.querySelector('[data-bulk-status]');
+    const runSelected=document.querySelector('[data-run-selected]');
     let payload={alerts:[],severityCounts:{urgent:0,upcoming:0,info:0},total:0,mineCount:0};
     let filter='all';
     let sort='priority';
     let scope='everyone';
     let session=null;
     let capabilities=new Set();
+    const selectedAlerts=new Set();
 
     const categoryLabel={
       overdueTasks:'CRM task',
@@ -111,6 +135,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const ms=Date.parse(String(value||''));
       if(!Number.isFinite(ms))return '';
       return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(ms));
+    }
+
+    function durationLabel(ms){
+      const value=Math.max(0,Number(ms||0));
+      const minutes=Math.floor(value/60000);
+      const days=Math.floor(minutes/1440);
+      const hours=Math.floor((minutes%1440)/60);
+      const mins=minutes%60;
+      if(days)return days+'d '+hours+'h';
+      if(hours)return hours+'h '+mins+'m';
+      return Math.max(1,mins)+'m';
+    }
+
+    function deadlineCopy(alert){
+      const dueMs=Date.parse(String(alert?.dueAt||''));
+      const now=Date.now();
+      const ageMs=Math.max(0,now-(Date.parse(String(alert?.firstAppearedAt||''))||now));
+      const bits=['Open '+durationLabel(ageMs)];
+      if(Number.isFinite(dueMs)){
+        if(alert?.deadlineKind==='sla'){
+          bits.push(dueMs<=now?'SLA overdue '+durationLabel(now-dueMs):'SLA due in '+durationLabel(dueMs-now));
+        }else if(alert?.deadlineKind==='task'){
+          bits.push('Due '+timeLabel(alert.dueAt)+(dueMs<=now?' · overdue '+durationLabel(now-dueMs):''));
+        }else if(alert?.deadlineKind==='event'){
+          bits.push(dueMs<=now?'Event date reached':'Event in '+durationLabel(dueMs-now));
+        }
+      }
+      return bits;
     }
 
     function syncControls(){
@@ -198,6 +250,56 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    async function runSelectedActions(){
+      const alerts=(payload?.alerts||[]).filter((row)=>selectedAlerts.has(row.occurrenceId)&&canRunQuickAction(row));
+      if(!alerts.length)return;
+      runSelected.disabled=true;
+      if(bulkStatus)bulkStatus.textContent='Running '+alerts.length+' safe action'+(alerts.length===1?'':'s')+'…';
+      try{
+        const crmTaskIds=alerts.filter(row=>row.quickAction?.type==='complete_crm_task').map(row=>row.quickAction.resourceId).filter(Boolean);
+        if(crmTaskIds.length){
+          const response=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'complete-tasks',taskIds:crmTaskIds})});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||'Unable to complete selected CRM tasks.');
+        }
+
+        for(const alert of alerts.filter(row=>row.quickAction?.type==='mark_lead_responded')){
+          const response=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'log-activity',recordId:alert.quickAction.resourceId,type:'responded',detail:'Lead marked responded from Action Center bulk action.'})});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||'Unable to mark a selected lead responded.');
+        }
+
+        for(const alert of alerts.filter(row=>row.quickAction?.type==='recheck_quickbooks')){
+          const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sync-and-recheck',recordId:alert.quickAction.resourceId})});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||'Unable to recheck a selected QuickBooks item.');
+        }
+
+        if(alerts.some(row=>row.quickAction?.type==='rerun_health')){
+          const response=await fetch('/api/admin/health',{method:'POST'});
+          const data=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(data.error||'Unable to re-run System Health.');
+        }
+
+        selectedAlerts.clear();
+        if(bulkStatus)bulkStatus.textContent='Selected safe actions completed.';
+        await load();
+        window.dispatchEvent(new Event('koa:workspace-alerts-refresh'));
+      }catch(error){
+        if(bulkStatus)bulkStatus.textContent=error instanceof Error?error.message:'Bulk action failed.';
+      }finally{
+        runSelected.disabled=false;
+        updateBulkBar();
+      }
+    }
+
+    function updateBulkBar(){
+      const count=selectedAlerts.size;
+      if(selectedCount)selectedCount.textContent=count+' selected';
+      bulkBar?.classList.toggle('hidden',count===0);
+      if(runSelected)runSelected.disabled=count===0;
+    }
+
     function rowsForView(){
       const scoped=(payload?.alerts||[]).filter((row)=>scope==='everyone'||row.assignedToMe);
       const mineCount=(payload?.alerts||[]).filter((row)=>row.assignedToMe).length;
@@ -226,8 +328,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
+    function renderTeamDashboard(){
+      if(unassigned)unassigned.textContent=Number(payload?.unassignedCount||0)+' unassigned';
+      if(!teamDashboard)return;
+      teamDashboard.innerHTML='';
+      const rows=Array.isArray(payload?.teamDashboard)?payload.teamDashboard:[];
+      rows.forEach((row)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border '+(Number(row.overdue||0)>0?'border-red-200 bg-red-50':Number(row.approachingSla||0)>0?'border-amber-200 bg-amber-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]')+' p-4';
+        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Staff workload</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(row.name||row.email)+'</h3><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">'+escapeHtml(row.email||'')+'</p></div><span class="rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">'+Number(row.assigned||0)+' active</span></div><div class="mt-4 grid grid-cols-3 gap-2 text-center"><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-red-800">'+Number(row.overdue||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Overdue</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-emerald-800">'+Number(row.completedThisWeek||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">Done 7d</span></div><div class="rounded-lg bg-white/70 p-2"><strong class="block text-lg text-amber-800">'+Number(row.approachingSla||0)+'</strong><span class="text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-ink)]/45">SLA soon</span></div></div>';
+        teamDashboard.appendChild(card);
+      });
+      if(!rows.length)teamDashboard.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No assigned workload is available yet.</p>';
+    }
+
     function render(){
       syncControls();
+      renderTeamDashboard();
       const rows=rowsForView();
       total.textContent=rows.length+' item'+(rows.length===1?'':'s');
       list.innerHTML='';
@@ -239,9 +356,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const assignment=alert.assigneeEmail
           ? '<p class="mt-2 text-[.62rem] font-bold text-[var(--koa-clay)]">Assigned to '+escapeHtml(alert.assigneeName||alert.assigneeEmail)+(alert.assignedToMe?' · Mine':'')+'</p>'
           : '<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/38">Shared / unassigned item</p>';
-        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.54rem] font-black uppercase tracking-[.08em] '+(urgent?'text-red-700':upcoming?'text-amber-800':'text-sky-800')+'">'+escapeHtml(categoryLabel[alert.category]||alert.category)+(alert.isNew?' · New':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(alert.title||'Action item')+'</h3></div><span class="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(urgent?'Critical':upcoming?'Warning':'Info')+'</span></div><p class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/60">'+escapeHtml(alert.context||'')+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/58">'+escapeHtml(alert.detail||'')+'</p>'+assignment+'<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/40">First appeared '+escapeHtml(timeLabel(alert.firstAppearedAt))+'</p>';
+        const deadlineBits=deadlineCopy(alert);
+        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.54rem] font-black uppercase tracking-[.08em] '+(urgent?'text-red-700':upcoming?'text-amber-800':'text-sky-800')+'">'+escapeHtml(categoryLabel[alert.category]||alert.category)+(alert.isNew?' · New':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(alert.title||'Action item')+'</h3></div><span class="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(urgent?'Critical':upcoming?'Warning':'Info')+'</span></div><p class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/60">'+escapeHtml(alert.context||'')+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/58">'+escapeHtml(alert.detail||'')+'</p>'+assignment+'<div class="mt-3 flex flex-wrap gap-2">'+deadlineBits.map((bit,index)=>'<span class="rounded-full '+(alert.deadlineState==='overdue'&&index>0?'bg-red-100 text-red-800':alert.deadlineState==='approaching'&&index>0?'bg-amber-100 text-amber-900':'bg-white/80 text-[var(--koa-ink)]/55')+' px-2.5 py-1 text-[.58rem] font-bold">'+escapeHtml(bit)+'</span>').join('')+'</div>';
         const status=document.createElement('p');status.className='mt-3 text-xs font-semibold text-[var(--koa-ink)]/55';
         const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
+
+        if(canRunQuickAction(alert)){
+          const select=document.createElement('label');
+          select.className='inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';
+          const checkbox=document.createElement('input');
+          checkbox.type='checkbox';
+          checkbox.checked=selectedAlerts.has(alert.occurrenceId);
+          checkbox.addEventListener('change',()=>{
+            if(checkbox.checked)selectedAlerts.add(alert.occurrenceId);
+            else selectedAlerts.delete(alert.occurrenceId);
+            updateBulkBar();
+          });
+          const labelText=document.createElement('span');labelText.textContent='Select';
+          select.append(checkbox,labelText);
+          actions.appendChild(select);
+        }
 
         if(canRunQuickAction(alert)){
           const quick=document.createElement('button');
@@ -258,6 +392,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]';dismiss.textContent='Dismiss';dismiss.addEventListener('click',()=>void action('dismiss',{occurrenceId:alert.occurrenceId}));actions.appendChild(dismiss);
         card.append(status,actions);list.appendChild(card);
       }
+      updateBulkBar();
       if(!rows.length){
         const copy=scope==='mine'
           ? 'Nothing currently assigned specifically to you matches this view. Switch to Everyone to see shared and unassigned items.'
@@ -292,6 +427,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       render();
       void savePreferences();
     });
+    document.querySelector('[data-select-visible]')?.addEventListener('click',()=>{
+      rowsForView().filter(canRunQuickAction).forEach((row)=>selectedAlerts.add(row.occurrenceId));
+      render();
+    });
+    document.querySelector('[data-clear-selection]')?.addEventListener('click',()=>{selectedAlerts.clear();render();});
+    runSelected?.addEventListener('click',()=>void runSelectedActions());
     refresh?.addEventListener('click',()=>void load());
 
     session=await getAdminSession();

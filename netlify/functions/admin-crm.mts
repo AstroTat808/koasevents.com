@@ -663,6 +663,33 @@ export default async (req:Request, context:Context) => {
     return Response.json({ok:true,task:target});
   }
 
+  if (action === 'complete-tasks') {
+    const taskIds=[...new Set((Array.isArray(body.taskIds)?body.taskIds:[]).map((value:any)=>clean(value,100)).filter(Boolean))].slice(0,100);
+    if(!taskIds.length)return Response.json({error:'Select at least one task.'},{status:400});
+    const current=await readIndex<Task>(crm,'tasks/index');
+    const wanted=new Set(taskIds);
+    const completed:Task[]=[];
+    const alreadyDone:Task[]=[];
+    const now=new Date().toISOString();
+    for(const task of current){
+      if(!wanted.has(task.id))continue;
+      if(task.status==='done'){alreadyDone.push(task);continue;}
+      task.status='done';
+      task.completedAt=now;
+      completed.push(task);
+    }
+    if(completed.length)await crm.setJSON('tasks/index',current);
+    for(const task of completed)await appendActivity(crm,task.recordId,'task_done',task.title+' · completed through Action Center bulk action');
+    const found=new Set([...completed,...alreadyDone].map(task=>task.id));
+    return Response.json({
+      ok:true,
+      requested:taskIds.length,
+      completed:completed.map(task=>task.id),
+      alreadyDone:alreadyDone.map(task=>task.id),
+      missing:taskIds.filter(id=>!found.has(id)),
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
+
   if (action === 'schedule-appointment') {
     const recordId=clean(body.recordId,100), title=clean(body.title,300), startsAt=clean(body.startsAt,80);
     if (!title || !startsAt) return Response.json({error:'Title and start time required'},{status:400});

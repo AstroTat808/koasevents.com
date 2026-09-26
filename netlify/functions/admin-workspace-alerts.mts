@@ -16,6 +16,7 @@ type AlertQuickAction={
   capability:string;
   resourceId?:string;
 };
+type DeadlineState='overdue'|'due_today'|'approaching'|'scheduled'|'none';
 type AlertDetail={
   id:string;
   category:AlertCategory;
@@ -27,6 +28,10 @@ type AlertDetail={
   assigneeEmail?:string;
   assigneeName?:string;
   quickAction?:AlertQuickAction;
+  dueAt?:string;
+  deadlineLabel?:string;
+  deadlineKind?:'task'|'sla'|'event'|'none';
+  deadlineState?:DeadlineState;
 };
 type SeverityChange={at:string;from:Severity;to:Severity};
 type LifecycleRecord=AlertDetail&{
@@ -164,6 +169,34 @@ function hstBusinessHoursBetween(startMs:number,endMs=Date.now()){
   }
   return total/3600000;
 }
+function hstAddBusinessHours(startMs:number,hours:number){
+  const offset=-10*60*60*1000;
+  let local=startMs+offset;
+  let remaining=Math.max(0,hours)*3600000;
+  let guard=0;
+  while(remaining>0&&guard<20){
+    guard++;
+    const dayStart=Math.floor(local/86400000)*86400000;
+    const day=new Date(dayStart).getUTCDay();
+    const open=dayStart+9*3600000;
+    const close=dayStart+17*3600000;
+    if(day===0||day===6){
+      local=dayStart+86400000+9*3600000;
+      continue;
+    }
+    if(local<open)local=open;
+    if(local>=close){
+      local=dayStart+86400000+9*3600000;
+      continue;
+    }
+    const available=close-local;
+    const used=Math.min(available,remaining);
+    local+=used;
+    remaining-=used;
+    if(remaining>0)local=dayStart+86400000+9*3600000;
+  }
+  return new Date(local-offset).toISOString();
+}
 function userDisabled(user:any){
   const meta=user?.appMetadata||user?.app_metadata||{};
   const roles=[...(Array.isArray(user?.roles)?user.roles:[]),...(Array.isArray(meta?.roles)?meta.roles:[])].map((role:any)=>String(role||'').toLowerCase());
@@ -238,6 +271,10 @@ async function computeAlerts(context:Context,user:any){
           href:'/admin/crm/?q='+encodeURIComponent(String(task?.recordId||customer)),
           assigneeEmail:clip(task?.assignee,240).toLowerCase(),
           assigneeName:clip(task?.assignee,180),
+          dueAt:due+'T23:59:59-10:00',
+          deadlineLabel:'Task due date',
+          deadlineKind:'task',
+          deadlineState:'overdue',
           quickAction:{type:'complete_crm_task',label:'Complete task',capability:'crm.manage',resourceId:clip(task?.id,100)},
         } as AlertDetail;
       })
@@ -252,6 +289,8 @@ async function computeAlerts(context:Context,user:any){
           const businessHours=hstBusinessHoursBetween(startMs);
           const wallHours=Math.max(0,(Date.now()-startMs)/3600000);
           const overdue=businessHours>=4;
+          const approaching=businessHours>=3&&!overdue;
+          const slaDueAt=hstAddBusinessHours(startMs,4);
           const client=clip(record?.customer?.name||record?.customer?.email||record?.id||'Sales lead');
           return {
             id:'unanswered:'+clip(record?.id,100),
@@ -263,6 +302,10 @@ async function computeAlerts(context:Context,user:any){
             href:'/admin/quotes/?q='+encodeURIComponent(String(record?.id||client))+'#unanswered-leads',
             assigneeEmail:assigned.email,
             assigneeName:assigned.name,
+            dueAt:slaDueAt,
+            deadlineLabel:'4-business-hour first-response SLA',
+            deadlineKind:'sla',
+            deadlineState:overdue?'overdue':approaching?'approaching':'scheduled',
             quickAction:{type:'mark_lead_responded',label:'Mark responded',capability:'sales.manage',resourceId:clip(record?.id,100)},
           } as AlertDetail;
         })
@@ -301,6 +344,10 @@ async function computeAlerts(context:Context,user:any){
           href:'/admin/insurance/',
           assigneeEmail:assigned.email,
           assigneeName:assigned.name,
+          dueAt:eventDate+'T09:00:00-10:00',
+          deadlineLabel:'Event date',
+          deadlineKind:'event',
+          deadlineState:daysToEvent===0?'due_today':daysToEvent<=30?'approaching':'scheduled',
         });
       }
     }
@@ -485,6 +532,39 @@ async function reconcileLifecycle(context:Context,user:any,currentByCategory:Rec
   return {active,history:history.slice(0,1000)};
 }
 
+function teamDashboardRows(user:any,activeRows:any[],history:LifecycleRecord[],staffUsers:any[]){
+  const rows=new Map<string,{email:string;name:string;assigned:number;overdue:number;completedThisWeek:number;approachingSla:number}>();
+  const ensure=(emailRaw:any,nameRaw:any)=>{
+    const email=clip(emailRaw,240).toLowerCase();
+    if(!email)return null;
+    if(!rows.has(email))rows.set(email,{email,name:clip(nameRaw||email,180),assigned:0,overdue:0,completedThisWeek:0,approachingSla:0});
+    const row=rows.get(email)!;
+    if((!row.name||row.name===row.email)&&nameRaw)row.name=clip(nameRaw,180);
+    return row;
+  };
+  if(hasCapability(user,'users.manage')&&Array.isArray(staffUsers)){
+    for(const staff of staffUsers){
+      if(userDisabled(staff))continue;
+      const meta=staff?.userMetadata||staff?.user_metadata||{};
+      ensure(staff?.email,meta?.full_name||meta?.name||staff?.name||staff?.email);
+    }
+  }
+  for(const alert of activeRows){
+    const row=ensure(alert?.assigneeEmail,alert?.assigneeName);
+    if(!row)continue;
+    row.assigned++;
+    if(alert?.deadlineState==='overdue')row.overdue++;
+    if(alert?.deadlineKind==='sla'&&alert?.deadlineState==='approaching')row.approachingSla++;
+  }
+  const weekAgo=Date.now()-7*86400000;
+  for(const item of history){
+    if(!item?.resolvedAt||Date.parse(item.resolvedAt)<weekAgo||!canViewCategory(user,item.category))continue;
+    const row=ensure(item?.assigneeEmail,item?.assigneeName);
+    if(row)row.completedThisWeek++;
+  }
+  return [...rows.values()].sort((a,b)=>b.overdue-a.overdue||b.approachingSla-a.approachingSla||b.assigned-a.assigned||a.name.localeCompare(b.name));
+}
+
 function visibleHistory(user:any,active:Record<string,LifecycleRecord>,history:LifecycleRecord[]){
   const rows=[
     ...Object.values(active).map(record=>({...record,status:'active'})),
@@ -565,6 +645,9 @@ export default async(req:Request,context:Context)=>{
   const currentByCategory=await computeAlerts(context,user);
   const lifecycle=await reconcileLifecycle(context,user,currentByCategory);
   const state=await readUserState(context,user);
+  const dashboardStaff=hasCapability(user,'users.manage')
+    ? await admin.listUsers({page:1,perPage:200}).catch(()=>[])
+    : [];
   const now=Date.now();
 
   for(const [id,snooze] of Object.entries(state.snoozes)){
@@ -611,6 +694,9 @@ export default async(req:Request,context:Context)=>{
     info:visibleAlerts.filter((alert:any)=>alert.severity==='info').length,
   };
 
+  const teamDashboard=teamDashboardRows(user,visibleAlerts,lifecycle.history,Array.isArray(dashboardStaff)?dashboardStaff:[]);
+  const unassignedCount=visibleAlerts.filter((alert:any)=>!clip(alert?.assigneeEmail,240)).length;
+
   await saveUserState(context,user,state);
 
   return Response.json({
@@ -618,6 +704,8 @@ export default async(req:Request,context:Context)=>{
     total:visibleAlerts.length,
     newCount:visibleAlerts.filter((alert:any)=>alert.isNew).length,
     mineCount:visibleAlerts.filter((alert:any)=>alert.assignedToMe).length,
+    unassignedCount,
+    teamDashboard,
     snoozedCount:snoozedAlerts.length,
     dismissedCount:dismissedAlerts.length,
     severityCounts,
