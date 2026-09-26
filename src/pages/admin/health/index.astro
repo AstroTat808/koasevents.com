@@ -88,6 +88,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
           <p data-fix-all-safe-message class="mt-3 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/60"></p>
+          <div data-fix-all-safe-report class="mt-4 hidden rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"></div>
           <div data-needs-action-list class="mt-5 grid gap-3 lg:grid-cols-2"></div>
         </section>
 
@@ -232,11 +233,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
           <div data-credential-health-grid class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
           <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Credential reliability</p>
                 <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">7-day · 30-day · 90-day health</h3>
                 <p data-credential-reliability-note class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Hourly reliability history is building.</p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button data-save-credential-thresholds type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white">Save thresholds</button>
+                <span data-credential-threshold-message class="text-xs text-[var(--koa-ink)]/45"></span>
               </div>
             </div>
             <div data-credential-reliability-grid class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"></div>
@@ -248,6 +253,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Records when a credential problem starts, changes classification, recovers, and how long the problem lasted.</p>
             </div>
             <div data-credential-health-history class="mt-4 grid gap-2"></div>
+          </div>
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5">
+            <div>
+              <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Credential incident timeline</p>
+              <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Reliability + alerts + credential transitions</h3>
+              <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">One chronological view of reliability threshold changes, Workspace Alert incidents, credential failures, and recoveries.</p>
+            </div>
+            <div data-credential-incident-timeline class="mt-4 grid gap-2"></div>
           </div>
         </section>
 
@@ -753,13 +766,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
     const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
     const credentialHealthHistory=document.querySelector('[data-credential-health-history]');
+    const credentialIncidentTimeline=document.querySelector('[data-credential-incident-timeline]');
     const credentialReliabilityGrid=document.querySelector('[data-credential-reliability-grid]');
     const credentialReliabilityNote=document.querySelector('[data-credential-reliability-note]');
+    const saveCredentialThresholds=document.querySelector('[data-save-credential-thresholds]');
+    const credentialThresholdMessage=document.querySelector('[data-credential-threshold-message]');
     const needsActionCount=document.querySelector('[data-needs-action-count]');
     const needsActionList=document.querySelector('[data-needs-action-list]');
     const fixAllSafe=document.querySelector('[data-fix-all-safe]');
     const fixAllSafeMessage=document.querySelector('[data-fix-all-safe-message]');
-    let latestCredentialHealth={rows:[],history:[],reliability:{providers:[]}};
+    const fixAllSafeReport=document.querySelector('[data-fix-all-safe-report]');
+    let latestCredentialHealth={rows:[],history:[],incidentTimeline:[],reliability:{providers:[]}};
     let credentialRetestInFlight=false;
     const office365Operational=document.querySelector('[data-office365-operational]');
     const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
@@ -1591,8 +1608,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       credentialReliabilityGrid.innerHTML='';
       const periodKeys=['7d','30d','90d'];
       providers.forEach((provider)=>{
+        const severity=String(provider?.severity||'insufficient');
         const card=document.createElement('article');
-        card.className='rounded-xl border border-[var(--koa-line)] bg-white p-4';
+        card.className='rounded-xl border p-4 '+(
+          severity==='red'?'border-red-200 bg-red-50':
+          severity==='yellow'?'border-amber-200 bg-amber-50':
+          severity==='green'?'border-emerald-200 bg-emerald-50':
+          'border-[var(--koa-line)] bg-white'
+        );
+        const top=document.createElement('div');
+        top.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');
         const title=document.createElement('h4');
         title.className='text-sm font-semibold text-[var(--koa-forest)]';
         title.textContent=String(provider.label||provider.id||'Provider');
@@ -1600,12 +1626,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         meta.className='mt-1 text-[.62rem] text-[var(--koa-ink)]/45';
         const credentialCount=Number(provider.credentialCount||1);
         meta.textContent=credentialCount+' credential check'+(credentialCount===1?'':'s');
+        left.append(title,meta);
+        const badge=document.createElement('span');
+        badge.className='shrink-0 rounded-full px-2.5 py-1 text-[.5rem] font-black uppercase tracking-[.07em] '+(
+          severity==='red'?'bg-red-100 text-red-800':
+          severity==='yellow'?'bg-amber-100 text-amber-900':
+          severity==='green'?'bg-emerald-100 text-emerald-800':
+          'bg-slate-100 text-slate-700'
+        );
+        badge.textContent=severity==='red'?'Critical':severity==='yellow'?'Warning':severity==='green'?'Healthy':'Building';
+        top.append(left,badge);
+
         const grid=document.createElement('div');
         grid.className='mt-3 grid grid-cols-3 gap-2';
         periodKeys.forEach((key)=>{
           const period=provider?.periods?.[key]||{};
           const box=document.createElement('div');
-          box.className='rounded-lg bg-[var(--koa-sand)] p-2 text-center';
+          box.className='rounded-lg bg-white/80 p-2 text-center';
           const label=document.createElement('p');
           label.className='text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
           label.textContent=key;
@@ -1618,7 +1655,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           box.append(label,value,coverage);
           grid.appendChild(box);
         });
-        card.append(title,meta,grid);
+
+        const thresholds=provider?.thresholds||{yellowBelow:99,redBelow:95};
+        const controls=document.createElement('div');
+        controls.className='mt-3 grid grid-cols-2 gap-2';
+        const yellowLabel=document.createElement('label');
+        yellowLabel.className='text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
+        yellowLabel.textContent='Yellow below %';
+        const yellowInput=document.createElement('input');
+        yellowInput.type='number';
+        yellowInput.min='0';yellowInput.max='100';yellowInput.step='0.1';
+        yellowInput.value=String(Number(thresholds.yellowBelow??99));
+        yellowInput.dataset.credentialThresholdYellow=String(provider.id||'');
+        yellowInput.className='mt-1 w-full rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm font-semibold text-[var(--koa-forest)]';
+        yellowLabel.appendChild(yellowInput);
+        const redLabel=document.createElement('label');
+        redLabel.className='text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]';
+        redLabel.textContent='Red below %';
+        const redInput=document.createElement('input');
+        redInput.type='number';
+        redInput.min='0';redInput.max='100';redInput.step='0.1';
+        redInput.value=String(Number(thresholds.redBelow??95));
+        redInput.dataset.credentialThresholdRed=String(provider.id||'');
+        redInput.className='mt-1 w-full rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-sm font-semibold text-[var(--koa-forest)]';
+        redLabel.appendChild(redInput);
+        controls.append(yellowLabel,redLabel);
+
+        const thresholdMeta=document.createElement('p');
+        thresholdMeta.className='mt-2 text-[.58rem] leading-4 text-[var(--koa-ink)]/45';
+        thresholdMeta.textContent=provider.thresholdActive
+          ? '7-day threshold active · '+Number(provider?.periods?.['7d']?.samples||0)+' samples'
+          : 'Threshold starts after '+Number(provider.minimumSamples||24)+' hourly samples.';
+
+        card.append(top,grid,controls,thresholdMeta);
         credentialReliabilityGrid.appendChild(card);
       });
       if(!providers.length){
@@ -1665,6 +1734,154 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!history.length){
         credentialHealthHistory.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No credential-state changes have been recorded yet. History starts when this release performs its first credential check.</p>';
       }
+    }
+
+    function renderCredentialIncidentTimeline(rows){
+      if(!credentialIncidentTimeline)return;
+      const events=Array.isArray(rows)?rows:[];
+      credentialIncidentTimeline.innerHTML='';
+      events.slice(0,60).forEach((event)=>{
+        const source=String(event.source||'credential');
+        const severity=String(event.severity||'yellow');
+        const card=document.createElement('article');
+        card.className='rounded-xl border p-3 '+(
+          severity==='red'?'border-red-200 bg-red-50':
+          severity==='green'?'border-emerald-200 bg-emerald-50':
+          severity==='yellow'?'border-amber-200 bg-amber-50':
+          'border-[var(--koa-line)] bg-[var(--koa-ivory)]'
+        );
+        const top=document.createElement('div');
+        top.className='flex flex-wrap items-start justify-between gap-3';
+        const left=document.createElement('div');
+        const sourceLabel=document.createElement('p');
+        sourceLabel.className='text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        sourceLabel.textContent=source==='reliability'?'Reliability':source==='alert'?'Alert Center':'Credential';
+        const title=document.createElement('strong');
+        title.className='mt-1 block text-sm text-[var(--koa-forest)]';
+        title.textContent=String(event.title||event.provider||'Credential incident');
+        const detail=document.createElement('p');
+        detail.className='mt-1 text-xs leading-5 text-[var(--koa-ink)]/58';
+        const parts=[String(event.label||event.kind||'Event')];
+        if(event.percentage!=null)parts.push(Number(event.percentage).toFixed(1)+'%');
+        if(event.durationMinutes!=null)parts.push(formatDuration(Number(event.durationMinutes||0)));
+        detail.textContent=parts.join(' · ');
+        left.append(sourceLabel,title,detail);
+        const when=document.createElement('span');
+        when.className='text-xs text-[var(--koa-ink)]/45';
+        when.textContent=event.occurredAt?new Date(event.occurredAt).toLocaleString():'';
+        top.append(left,when);
+        card.appendChild(top);
+        if(event.detail){
+          const message=document.createElement('p');
+          message.className='mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50';
+          message.textContent=String(event.detail);
+          card.appendChild(message);
+        }
+        credentialIncidentTimeline.appendChild(card);
+      });
+      if(!events.length){
+        credentialIncidentTimeline.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No combined credential incidents have been recorded yet.</p>';
+      }
+    }
+
+    function renderSafeRepairReport(report){
+      if(!fixAllSafeReport)return;
+      if(!report){
+        fixAllSafeReport.classList.add('hidden');
+        fixAllSafeReport.innerHTML='';
+        return;
+      }
+      fixAllSafeReport.classList.remove('hidden');
+      fixAllSafeReport.innerHTML='';
+
+      const header=document.createElement('div');
+      header.className='flex flex-wrap items-start justify-between gap-3';
+      const titleWrap=document.createElement('div');
+      const eyebrow=document.createElement('p');
+      eyebrow.className='text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+      eyebrow.textContent='Before + after report';
+      const title=document.createElement('h3');
+      title.className='mt-1 text-base font-semibold text-[var(--koa-forest)]';
+      title.textContent=Number(report.fixed||0)+' fixed · '+Number(report.attempted||0)+' re-tested · '+Number(report.remaining||0)+' still needs you';
+      titleWrap.append(eyebrow,title);
+      const time=document.createElement('span');
+      time.className='text-xs text-[var(--koa-ink)]/45';
+      time.textContent=report.completedAt?new Date(report.completedAt).toLocaleString():'';
+      header.append(titleWrap,time);
+      fixAllSafeReport.appendChild(header);
+
+      const columns=document.createElement('div');
+      columns.className='mt-4 grid gap-3 lg:grid-cols-2 xl:grid-cols-4';
+      const sections=[
+        {
+          label:'Before',
+          rows:[...(report?.before?.failedCredentials||[]),...(report?.before?.systemIssues||[])],
+          empty:'No problems were present before the run.',
+        },
+        {
+          label:'Re-tested',
+          rows:report?.retested||[],
+          empty:'No failed credentials needed re-testing.',
+          retested:true,
+        },
+        {
+          label:'Fixed automatically',
+          rows:report?.fixedItems||[],
+          empty:'No problem cleared automatically on this run.',
+          fixed:true,
+        },
+        {
+          label:'Still requires me',
+          rows:report?.stillRequiresMe||[],
+          empty:'Nothing remains for manual action.',
+          remaining:true,
+        },
+      ];
+      sections.forEach((section)=>{
+        const panel=document.createElement('section');
+        panel.className='rounded-xl border border-[var(--koa-line)] bg-white p-3';
+        const heading=document.createElement('p');
+        heading.className='text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        heading.textContent=section.label+' · '+section.rows.length;
+        panel.appendChild(heading);
+        if(!section.rows.length){
+          const empty=document.createElement('p');
+          empty.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/48';
+          empty.textContent=section.empty;
+          panel.appendChild(empty);
+        }
+        section.rows.forEach((row)=>{
+          const item=document.createElement('div');
+          item.className='mt-2 rounded-lg bg-[var(--koa-sand)] p-2.5';
+          const name=document.createElement('strong');
+          name.className='block text-xs text-[var(--koa-forest)]';
+          name.textContent=String(row.provider||row.name||row.id||'Health item')+(row.credential?' · '+String(row.credential):'');
+          const detail=document.createElement('p');
+          detail.className='mt-1 text-[.65rem] leading-4 text-[var(--koa-ink)]/52';
+          if(section.retested){
+            detail.textContent=(row.fixed?'Fixed':'Still failing')+' · '+String(row?.before?.issueType||'')+' → '+String(row?.after?.issueType||'')+(row.changed?' · state changed':'');
+          }else if(section.fixed){
+            detail.textContent='Cleared after targeted re-test · '+String(row?.before?.issueType||'Credential problem')+' → healthy';
+          }else{
+            detail.textContent=String(row.issueType||row.detail||'');
+          }
+          item.append(name,detail);
+          if(section.remaining){
+            const action=row.recommendedAction||null;
+            if(action?.href){
+              const link=document.createElement('a');
+              link.href=String(action.href);
+              if(action.external){link.target='_blank';link.rel='noreferrer';}
+              link.className='mt-2 inline-flex text-[.6rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)] underline underline-offset-4';
+              link.textContent=String(action.label||'Open required action');
+              item.appendChild(link);
+            }
+          }
+          panel.appendChild(item);
+        });
+        columns.appendChild(panel);
+      });
+      fixAllSafeReport.appendChild(columns);
     }
 
     function needsActionPriority(item){
@@ -1858,6 +2075,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length)credentialHealthGrid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Credential checks are not available yet.</p>';
       renderCredentialReliability(health.reliability||{});
       renderCredentialHistory(health.history||[]);
+      renderCredentialIncidentTimeline(health.incidentTimeline||[]);
       renderNeedsMyAction();
     }
 
@@ -2861,10 +3079,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
 
+    saveCredentialThresholds?.addEventListener('click',async()=>{
+      saveCredentialThresholds.disabled=true;
+      if(credentialThresholdMessage)credentialThresholdMessage.textContent='Saving…';
+      try{
+        const providers={};
+        const yellowInputs=[...(credentialReliabilityGrid?.querySelectorAll('[data-credential-threshold-yellow]')||[])];
+        const redInputs=[...(credentialReliabilityGrid?.querySelectorAll('[data-credential-threshold-red]')||[])];
+        const redById=new Map(redInputs.map((input)=>[String(input.dataset.credentialThresholdRed||''),input]));
+        yellowInputs.forEach((input)=>{
+          const id=String(input.dataset.credentialThresholdYellow||'');
+          const redInput=redById.get(id);
+          const yellowBelow=Number(input.value);
+          const redBelow=Number(redInput?.value);
+          if(!id||!Number.isFinite(yellowBelow)||!Number.isFinite(redBelow)||yellowBelow<0||yellowBelow>100||redBelow<0||redBelow>100){
+            throw new Error('Every provider threshold must be between 0 and 100.');
+          }
+          if(redBelow>=yellowBelow)throw new Error('Red threshold must be lower than yellow for '+id+'.');
+          providers[id]={yellowBelow,redBelow};
+        });
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'save-credential-reliability-thresholds',providers}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to save Credential Health thresholds.');
+        renderCredentialHealth(data.credentialHealth||{});
+        if(credentialThresholdMessage)credentialThresholdMessage.textContent='Thresholds saved.';
+      }catch(error){
+        if(credentialThresholdMessage)credentialThresholdMessage.textContent=error instanceof Error?error.message:'Unable to save thresholds.';
+      }finally{
+        saveCredentialThresholds.disabled=false;
+      }
+    });
+
     fixAllSafe?.addEventListener('click',async()=>{
       fixAllSafe.disabled=true;
       const original=fixAllSafe.textContent;
       fixAllSafe.textContent='Fixing safe problems…';
+      renderSafeRepairReport(null);
       if(fixAllSafeMessage){
         fixAllSafeMessage.classList.remove('hidden');
         fixAllSafeMessage.className='mt-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/60';
@@ -2880,6 +3134,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!response.ok)throw new Error(data.error||'Unable to complete safe automatic repairs.');
         renderCredentialHealth(data.credentialHealth||{});
         const result=data.safeRepair||{};
+        renderSafeRepairReport(result);
         if(fixAllSafeMessage){
           const fixed=Number(result.fixed||0);
           const remaining=Number(result.remaining||0);

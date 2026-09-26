@@ -3,7 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './email-health';
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
-import { syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
+import { readCredentialWorkspaceAlertTimeline, syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
 
 export type CredentialIssueType =
   | 'Service Failure'
@@ -58,6 +58,34 @@ type CredentialHealthSample = {
   }>;
 };
 
+export type CredentialReliabilityThresholds = {
+  yellowBelow: number;
+  redBelow: number;
+};
+
+export type CredentialReliabilityPolicy = {
+  evaluationPeriod: '7d';
+  minimumSamples: number;
+  providers: Record<string, CredentialReliabilityThresholds>;
+  updatedAt: string;
+  updatedBy: string;
+};
+
+type CredentialReliabilityEvent = {
+  id: string;
+  providerId: string;
+  provider: string;
+  event: 'reliability_drop' | 'reliability_changed' | 'reliability_recovered';
+  occurredAt: string;
+  fromSeverity: 'green' | 'yellow' | 'red' | 'insufficient';
+  toSeverity: 'green' | 'yellow' | 'red' | 'insufficient';
+  percentage: number | null;
+  samples: number;
+  thresholdYellow: number;
+  thresholdRed: number;
+  detail: string;
+};
+
 type CredentialHealthOptions = {
   force?: boolean;
   emailHealth?: any;
@@ -82,6 +110,14 @@ const RELIABILITY_PROVIDERS = [
   { id: 'github', label: 'GitHub', credentialIds: ['github'] },
   { id: 'netlify', label: 'Netlify', credentialIds: ['netlify'] },
 ] as const;
+
+const DEFAULT_RELIABILITY_THRESHOLDS: CredentialReliabilityThresholds = {
+  yellowBelow: 99,
+  redBelow: 95,
+};
+
+const DEFAULT_RELIABILITY_MINIMUM_SAMPLES = 24;
+const RELIABILITY_EVENT_LIMIT = 500;
 
 function clean(value: unknown, max=800) {
   return String(value ?? '').trim().slice(0, max);
@@ -462,35 +498,82 @@ async function readSamples(context: Context, limit = 2300): Promise<CredentialHe
   return rows.slice(0, Math.max(1, Math.min(2300, limit)));
 }
 
+function defaultReliabilityPolicy(): CredentialReliabilityPolicy {
+  return {
+    evaluationPeriod: '7d',
+    minimumSamples: DEFAULT_RELIABILITY_MINIMUM_SAMPLES,
+    providers: Object.fromEntries(
+      RELIABILITY_PROVIDERS.map((provider) => [provider.id, { ...DEFAULT_RELIABILITY_THRESHOLDS }]),
+    ),
+    updatedAt: '',
+    updatedBy: '',
+  };
+}
+
+function normalizedThreshold(value: unknown, fallback: number) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(100, Math.round(number * 10) / 10)) : fallback;
+}
+
+export async function readCredentialReliabilityPolicy(context: Context): Promise<CredentialReliabilityPolicy> {
+  const stored: any = await storeFor(context).get('credential-health/reliability-policy', { type: 'json' });
+  const defaults = defaultReliabilityPolicy();
+  const providers = Object.fromEntries(RELIABILITY_PROVIDERS.map((provider) => {
+    const raw = stored?.providers?.[provider.id] || {};
+    const yellowBelow = normalizedThreshold(raw?.yellowBelow, defaults.providers[provider.id].yellowBelow);
+    const redBelow = normalizedThreshold(raw?.redBelow, defaults.providers[provider.id].redBelow);
+    return [provider.id, redBelow < yellowBelow
+      ? { yellowBelow, redBelow }
+      : { ...defaults.providers[provider.id] }];
+  }));
+  return {
+    evaluationPeriod: '7d',
+    minimumSamples: DEFAULT_RELIABILITY_MINIMUM_SAMPLES,
+    providers,
+    updatedAt: clean(stored?.updatedAt, 100),
+    updatedBy: clean(stored?.updatedBy, 180),
+  };
+}
+
+export async function saveCredentialReliabilityPolicy(
+  context: Context,
+  input: Record<string, any>,
+  actor: string,
+): Promise<CredentialReliabilityPolicy> {
+  const current = await readCredentialReliabilityPolicy(context);
+  const providers: Record<string, CredentialReliabilityThresholds> = {};
+  for (const provider of RELIABILITY_PROVIDERS) {
+    const raw = input?.[provider.id] || current.providers[provider.id] || DEFAULT_RELIABILITY_THRESHOLDS;
+    const yellowBelow = normalizedThreshold(raw?.yellowBelow, current.providers[provider.id].yellowBelow);
+    const redBelow = normalizedThreshold(raw?.redBelow, current.providers[provider.id].redBelow);
+    if (redBelow >= yellowBelow) {
+      throw new Error(provider.label + ': red threshold must be lower than yellow threshold.');
+    }
+    providers[provider.id] = { yellowBelow, redBelow };
+  }
+  const policy: CredentialReliabilityPolicy = {
+    evaluationPeriod: '7d',
+    minimumSamples: DEFAULT_RELIABILITY_MINIMUM_SAMPLES,
+    providers,
+    updatedAt: new Date().toISOString(),
+    updatedBy: clean(actor || 'admin', 180),
+  };
+  await storeFor(context).setJSON('credential-health/reliability-policy', policy);
+  const samples = await readSamples(context, 2300);
+  await persistReliabilityEvaluation(context, samples, policy, policy.updatedAt, 'policy-change');
+  return policy;
+}
+
+async function readReliabilityEvents(context: Context, limit = 300): Promise<CredentialReliabilityEvent[]> {
+  const rows = ((await storeFor(context).get('credential-health/reliability-events', { type: 'json' })) || []) as CredentialReliabilityEvent[];
+  return rows.slice(0, Math.max(1, Math.min(RELIABILITY_EVENT_LIMIT, limit)));
+}
+
 function sampleHour(value: string) {
   const at = new Date(value);
   if (Number.isNaN(at.getTime())) return '';
   at.setUTCMinutes(0, 0, 0);
   return at.toISOString();
-}
-
-async function persistReliabilitySample(context: Context, rows: CredentialHealthRow[], generatedAt: string) {
-  const store = storeFor(context);
-  const samples = await readSamples(context, 2300);
-  const hour = sampleHour(generatedAt);
-  if (!hour) return;
-  const snapshot: CredentialHealthSample = {
-    hour,
-    at: generatedAt,
-    rows: Object.fromEntries(rows.map((row) => [
-      row.id,
-      {
-        ok: Boolean(row.ok),
-        configured: Boolean(row.configured),
-        severity: row.severity,
-        issueType: row.issueType,
-      },
-    ])),
-  };
-  const next = [snapshot, ...samples.filter((sample) => sample.hour !== hour)]
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
-    .slice(0, 2300);
-  await store.setJSON('credential-health/samples', next);
 }
 
 function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: readonly string[], days: number) {
@@ -517,21 +600,152 @@ function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: rea
   };
 }
 
-function reliabilitySummary(samples: CredentialHealthSample[]) {
-  return {
-    generatedAt: new Date().toISOString(),
-    providers: RELIABILITY_PROVIDERS.map((provider) => ({
+function reliabilitySeverity(period: any, thresholds: CredentialReliabilityThresholds, minimumSamples: number) {
+  const percentage = period?.percentage == null ? null : Number(period.percentage);
+  const samples = Number(period?.samples || 0);
+  if (percentage == null || samples < minimumSamples) return 'insufficient' as const;
+  if (percentage < thresholds.redBelow) return 'red' as const;
+  if (percentage < thresholds.yellowBelow) return 'yellow' as const;
+  return 'green' as const;
+}
+
+function reliabilitySummary(samples: CredentialHealthSample[], policy: CredentialReliabilityPolicy) {
+  const providers = RELIABILITY_PROVIDERS.map((provider) => {
+    const periods = {
+      '7d': reliabilityPeriod(samples, provider.credentialIds, 7),
+      '30d': reliabilityPeriod(samples, provider.credentialIds, 30),
+      '90d': reliabilityPeriod(samples, provider.credentialIds, 90),
+    };
+    const thresholds = policy.providers[provider.id] || DEFAULT_RELIABILITY_THRESHOLDS;
+    const severity = reliabilitySeverity(periods['7d'], thresholds, policy.minimumSamples);
+    return {
       id: provider.id,
       label: provider.label,
       credentialCount: provider.credentialIds.length,
-      periods: {
-        '7d': reliabilityPeriod(samples, provider.credentialIds, 7),
-        '30d': reliabilityPeriod(samples, provider.credentialIds, 30),
-        '90d': reliabilityPeriod(samples, provider.credentialIds, 90),
-      },
-    })),
-    note: 'Reliability is the percentage of observed hourly Credential Health samples that were healthy. Coverage grows as hourly history accumulates.',
+      periods,
+      thresholds,
+      severity,
+      evaluatedPeriod: policy.evaluationPeriod,
+      minimumSamples: policy.minimumSamples,
+      thresholdActive: severity !== 'insufficient',
+    };
+  });
+  const activeSeverities = providers.map((provider) => provider.severity).filter((severity) => severity !== 'insufficient');
+  const overall = activeSeverities.includes('red')
+    ? 'red'
+    : activeSeverities.includes('yellow')
+      ? 'yellow'
+      : activeSeverities.length
+        ? 'green'
+        : 'insufficient';
+  return {
+    generatedAt: new Date().toISOString(),
+    evaluationPeriod: policy.evaluationPeriod,
+    minimumSamples: policy.minimumSamples,
+    overall,
+    providers,
+    policy,
+    note: 'Reliability thresholds evaluate the rolling 7-day percentage after at least ' + policy.minimumSamples + ' hourly samples. Default warning is below 99% and critical is below 95%; each provider can be configured independently.',
   };
+}
+
+async function persistReliabilityEvaluation(
+  context: Context,
+  samples: CredentialHealthSample[],
+  policy: CredentialReliabilityPolicy,
+  occurredAt: string,
+  source: 'sample' | 'policy-change',
+) {
+  const store = storeFor(context);
+  const summary = reliabilitySummary(samples, policy);
+  const stateRaw: any = (await store.get('credential-health/reliability-state', { type: 'json' })) || {};
+  const previousState = stateRaw?.providers && typeof stateRaw.providers === 'object' ? stateRaw.providers : {};
+  const previousEvents = await readReliabilityEvents(context, RELIABILITY_EVENT_LIMIT);
+  const events: CredentialReliabilityEvent[] = [];
+
+  for (const provider of summary.providers) {
+    const previous = previousState?.[provider.id] || null;
+    const currentSeverity = provider.severity as 'green' | 'yellow' | 'red' | 'insufficient';
+    const previousSeverity = (previous?.severity || 'insufficient') as 'green' | 'yellow' | 'red' | 'insufficient';
+    if (currentSeverity === previousSeverity) continue;
+
+    const period = provider.periods['7d'];
+    const thresholds = provider.thresholds;
+    const event = currentSeverity === 'green'
+      ? 'reliability_recovered'
+      : (previousSeverity === 'green' || previousSeverity === 'insufficient')
+        ? 'reliability_drop'
+        : 'reliability_changed';
+
+    if (currentSeverity === 'insufficient' && previousSeverity === 'green') continue;
+    if (currentSeverity === 'green' && previousSeverity === 'insufficient') continue;
+
+    events.push({
+      id: 'CRR-' + crypto.randomUUID().replaceAll('-', '').slice(0, 14).toUpperCase(),
+      providerId: provider.id,
+      provider: provider.label,
+      event,
+      occurredAt,
+      fromSeverity: previousSeverity,
+      toSeverity: currentSeverity,
+      percentage: period.percentage == null ? null : Number(period.percentage),
+      samples: Number(period.samples || 0),
+      thresholdYellow: Number(thresholds.yellowBelow),
+      thresholdRed: Number(thresholds.redBelow),
+      detail: source === 'policy-change'
+        ? 'Reliability state changed after provider thresholds were updated.'
+        : 'Rolling 7-day Credential Health reliability crossed a configured threshold.',
+    });
+  }
+
+  const state = {
+    updatedAt: occurredAt,
+    providers: Object.fromEntries(summary.providers.map((provider) => [
+      provider.id,
+      {
+        severity: provider.severity,
+        percentage: provider.periods['7d'].percentage,
+        samples: provider.periods['7d'].samples,
+        thresholds: provider.thresholds,
+      },
+    ])),
+  };
+
+  await Promise.all([
+    store.setJSON('credential-health/reliability-state', state),
+    ...(events.length
+      ? [store.setJSON('credential-health/reliability-events', [...events, ...previousEvents].slice(0, RELIABILITY_EVENT_LIMIT))]
+      : []),
+  ]);
+  return summary;
+}
+
+async function persistReliabilitySample(context: Context, rows: CredentialHealthRow[], generatedAt: string) {
+  const store = storeFor(context);
+  const [samples, policy] = await Promise.all([
+    readSamples(context, 2300),
+    readCredentialReliabilityPolicy(context),
+  ]);
+  const hour = sampleHour(generatedAt);
+  if (!hour) return reliabilitySummary(samples, policy);
+  const snapshot: CredentialHealthSample = {
+    hour,
+    at: generatedAt,
+    rows: Object.fromEntries(rows.map((row) => [
+      row.id,
+      {
+        ok: Boolean(row.ok),
+        configured: Boolean(row.configured),
+        severity: row.severity,
+        issueType: row.issueType,
+      },
+    ])),
+  };
+  const next = [snapshot, ...samples.filter((sample) => sample.hour !== hour)]
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, 2300);
+  await store.setJSON('credential-health/samples', next);
+  return persistReliabilityEvaluation(context, next, policy, generatedAt, 'sample');
 }
 
 async function persistRowsWithHistory(
@@ -643,15 +857,137 @@ async function persistRowsWithHistory(
   return rows;
 }
 
+function combinedCredentialOverall(currentOverall: unknown, reliabilityOverall: unknown) {
+  const current = String(currentOverall || 'green');
+  const reliability = String(reliabilityOverall || 'insufficient');
+  if (current === 'red' || reliability === 'red') return 'red';
+  if (current === 'yellow' || reliability === 'yellow') return 'yellow';
+  return 'green';
+}
+
+function buildCredentialIncidentTimeline(
+  history: CredentialHealthHistoryEvent[],
+  reliabilityEvents: CredentialReliabilityEvent[],
+  alertRows: any[],
+) {
+  const rows: any[] = [];
+
+  for (const event of history) {
+    const label = event.event === 'recovered'
+      ? 'Credential recovered'
+      : event.event === 'changed'
+        ? 'Credential problem changed'
+        : 'Credential became invalid';
+    rows.push({
+      id: 'credential:' + event.id,
+      source: 'credential',
+      kind: event.event,
+      occurredAt: event.occurredAt,
+      provider: event.provider,
+      title: event.provider + ' · ' + event.credential,
+      label,
+      severity: event.severity,
+      detail: event.detail,
+      durationMinutes: event.durationMinutes,
+    });
+  }
+
+  for (const event of reliabilityEvents) {
+    const label = event.event === 'reliability_recovered'
+      ? 'Reliability recovered'
+      : event.event === 'reliability_changed'
+        ? 'Reliability severity changed'
+        : 'Reliability dropped below threshold';
+    rows.push({
+      id: 'reliability:' + event.id,
+      source: 'reliability',
+      kind: event.event,
+      occurredAt: event.occurredAt,
+      provider: event.provider,
+      title: event.provider + ' reliability',
+      label,
+      severity: event.toSeverity,
+      detail: event.detail,
+      percentage: event.percentage,
+      samples: event.samples,
+      thresholdYellow: event.thresholdYellow,
+      thresholdRed: event.thresholdRed,
+    });
+  }
+
+  for (const alert of Array.isArray(alertRows) ? alertRows : []) {
+    const alertId = clean(alert?.occurrenceId || alert?.id, 120);
+    if (alert?.firstAppearedAt) {
+      rows.push({
+        id: 'alert-open:' + alertId,
+        source: 'alert',
+        kind: 'alert_opened',
+        occurredAt: String(alert.firstAppearedAt),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert opened',
+        severity: String(alert?.severity || 'upcoming') === 'urgent' ? 'red' : 'yellow',
+        detail: clean(alert?.detail || alert?.context || '', 500),
+      });
+    }
+    for (const change of Array.isArray(alert?.severityChanges) ? alert.severityChanges : []) {
+      rows.push({
+        id: 'alert-change:' + alertId + ':' + clean(change?.at, 80),
+        source: 'alert',
+        kind: 'alert_severity_changed',
+        occurredAt: String(change?.at || ''),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert severity changed',
+        severity: String(change?.to || '') === 'urgent' ? 'red' : 'yellow',
+        detail: 'Alert severity changed from ' + clean(change?.from, 40) + ' to ' + clean(change?.to, 40) + '.',
+      });
+    }
+    if (alert?.resolvedAt) {
+      rows.push({
+        id: 'alert-resolved:' + alertId,
+        source: 'alert',
+        kind: 'alert_resolved',
+        occurredAt: String(alert.resolvedAt),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert resolved',
+        severity: 'green',
+        detail: 'The credential alert automatically closed after the underlying problem cleared.',
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => row.occurredAt && Number.isFinite(Date.parse(row.occurredAt)))
+    .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))
+    .filter((row) => {
+      const key = [row.source, row.kind, row.occurredAt, row.title].join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 250);
+}
+
 async function withHistory(context: Context, summary: any) {
-  const [history, samples] = await Promise.all([
+  const [history, samples, policy, reliabilityEvents, alertRows] = await Promise.all([
     readHistory(context, 200),
     readSamples(context, 2300),
+    readCredentialReliabilityPolicy(context),
+    readReliabilityEvents(context, 300),
+    readCredentialWorkspaceAlertTimeline(context),
   ]);
+  const reliability = reliabilitySummary(samples, policy);
   return {
     ...summary,
+    operationalOverall: String(summary?.overall || 'green'),
+    overall: combinedCredentialOverall(summary?.overall, reliability.overall),
     history,
-    reliability: reliabilitySummary(samples),
+    reliability,
+    reliabilityPolicy: policy,
+    incidentTimeline: buildCredentialIncidentTimeline(history, reliabilityEvents, alertRows),
   };
 }
 

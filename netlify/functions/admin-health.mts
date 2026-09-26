@@ -23,7 +23,11 @@ import {
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
 import { emailHealthSummary } from './_shared/email-health';
-import { credentialHealthSummary, readCredentialHealthSummary } from './_shared/credential-health';
+import {
+  credentialHealthSummary,
+  readCredentialHealthSummary,
+  saveCredentialReliabilityPolicy,
+} from './_shared/credential-health';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
@@ -302,6 +306,18 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy,office365:await office365HealthSummary(context,deployments)},{headers:{'Cache-Control':'private, no-store'}});
     }
 
+    if(body?.action==='save-credential-reliability-thresholds'){
+      try{
+        const policy=await saveCredentialReliabilityPolicy(context,body?.providers||{},actor);
+        const credentialHealth=await readCredentialHealthSummary(context);
+        return Response.json({ok:true,policy,credentialHealth},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'Unable to save Credential Health reliability thresholds.',
+        },{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
     if(body?.action==='retest-credential'){
       try{
         const credentialId=String(body?.credentialId||'').trim();
@@ -321,29 +337,14 @@ export default async (req:Request,context:Context) => {
 
     if(body?.action==='fix-all-safe-problems'){
       try{
+        const startedAt=new Date().toISOString();
         let before=await readCredentialHealthSummary(context);
         if(!before)before=await credentialHealthSummary(context,{force:true});
         const beforeRows=Array.isArray(before?.rows)?before.rows:[];
+        const beforeById=new Map(beforeRows.map((row:any)=>[String(row?.id||''),row]));
         const attemptedIds=beforeRows.filter((row:any)=>!row?.ok).map((row:any)=>String(row?.id||'')).filter(Boolean);
-
-        let credentialHealth=before;
-        for(const credentialId of attemptedIds){
-          credentialHealth=await credentialHealthSummary(context,{force:true,credentialId});
-        }
-
-        const afterRows=Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[];
-        const afterById=new Map(afterRows.map((row:any)=>[String(row?.id||''),row]));
-        const fixed=attemptedIds.filter((id:string)=>Boolean(afterById.get(id)?.ok));
-        const remainingCredentials=afterRows.filter((row:any)=>!row?.ok).map((row:any)=>({
-          id:String(row?.id||''),
-          provider:String(row?.provider||'Credential'),
-          issueType:String(row?.issueType||'Credential problem'),
-          severity:String(row?.severity||'yellow'),
-          detail:String(row?.detail||''),
-          recommendedAction:row?.recommendedAction||null,
-        }));
-        const latest=await readLatestHealth(context);
-        const remainingSystemIssues=(Array.isArray(latest?.checks)?latest.checks:[])
+        const latestBefore=await readLatestHealth(context);
+        const beforeSystemIssues=(Array.isArray(latestBefore?.checks)?latestBefore.checks:[])
           .filter((row:any)=>!['email-send-access','email-monitoring-access'].includes(String(row?.id||'')))
           .filter((row:any)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&(!row?.ok||String(row?.severity||'')==='yellow'||String(row?.severity||'')==='red'))
           .map((row:any)=>({
@@ -354,18 +355,103 @@ export default async (req:Request,context:Context) => {
             detail:String(row?.detail||''),
           }));
 
+        let credentialHealth=before;
+        for(const credentialId of attemptedIds){
+          credentialHealth=await credentialHealthSummary(context,{force:true,credentialId});
+        }
+
+        const afterRows=Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[];
+        const afterById=new Map(afterRows.map((row:any)=>[String(row?.id||''),row]));
+        const retested=attemptedIds.map((id:string)=>{
+          const beforeRow:any=beforeById.get(id)||{};
+          const afterRow:any=afterById.get(id)||{};
+          return {
+            id,
+            provider:String(afterRow?.provider||beforeRow?.provider||'Credential'),
+            credential:String(afterRow?.credential||beforeRow?.credential||'Credential'),
+            before:{
+              ok:Boolean(beforeRow?.ok),
+              severity:String(beforeRow?.severity||'yellow'),
+              issueType:String(beforeRow?.issueType||'Credential problem'),
+              status:Number(beforeRow?.status||0),
+              detail:String(beforeRow?.detail||''),
+            },
+            after:{
+              ok:Boolean(afterRow?.ok),
+              severity:String(afterRow?.severity||'yellow'),
+              issueType:String(afterRow?.issueType||'Credential problem'),
+              status:Number(afterRow?.status||0),
+              detail:String(afterRow?.detail||''),
+            },
+            fixed:Boolean(afterRow?.ok),
+            changed:Boolean(beforeRow?.ok)!==Boolean(afterRow?.ok)
+              || String(beforeRow?.severity||'')!==String(afterRow?.severity||'')
+              || String(beforeRow?.issueType||'')!==String(afterRow?.issueType||'')
+              || Number(beforeRow?.status||0)!==Number(afterRow?.status||0),
+          };
+        });
+        const fixedItems=retested.filter((row:any)=>row.fixed);
+        const unchangedItems=retested.filter((row:any)=>!row.fixed);
+
+        const remainingCredentials=afterRows.filter((row:any)=>!row?.ok).map((row:any)=>({
+          id:String(row?.id||''),
+          provider:String(row?.provider||'Credential'),
+          credential:String(row?.credential||'Credential'),
+          issueType:String(row?.issueType||'Credential problem'),
+          severity:String(row?.severity||'yellow'),
+          detail:String(row?.detail||''),
+          recommendedAction:row?.recommendedAction||null,
+          requires:'Staff login, secret/configuration update, permission approval, or provider-side action.',
+        }));
+        const latestAfter=await readLatestHealth(context);
+        const remainingSystemIssues=(Array.isArray(latestAfter?.checks)?latestAfter.checks:[])
+          .filter((row:any)=>!['email-send-access','email-monitoring-access'].includes(String(row?.id||'')))
+          .filter((row:any)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&(!row?.ok||String(row?.severity||'')==='yellow'||String(row?.severity||'')==='red'))
+          .map((row:any)=>({
+            id:String(row?.id||''),
+            name:String(row?.name||row?.id||'System Health check'),
+            issueType:String(row?.issueType||''),
+            severity:String(row?.severity||'yellow'),
+            detail:String(row?.detail||''),
+            requires:'Manual configuration or permission decision.',
+          }));
+
+        const completedAt=new Date().toISOString();
         return Response.json({
           ok:true,
           credentialHealth,
           safeRepair:{
+            startedAt,
+            completedAt,
+            durationMs:Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)),
             attempted:attemptedIds.length,
-            fixed:fixed.length,
-            fixedIds:fixed,
+            fixed:fixedItems.length,
+            fixedIds:fixedItems.map((row:any)=>row.id),
             remaining:remainingCredentials.length+remainingSystemIssues.length,
-            remainingCredentials,
-            remainingSystemIssues,
+            before:{
+              failedCredentials:beforeRows.filter((row:any)=>!row?.ok).map((row:any)=>({
+                id:String(row?.id||''),
+                provider:String(row?.provider||'Credential'),
+                credential:String(row?.credential||'Credential'),
+                issueType:String(row?.issueType||'Credential problem'),
+                severity:String(row?.severity||'yellow'),
+                detail:String(row?.detail||''),
+              })),
+              systemIssues:beforeSystemIssues,
+            },
+            retested,
+            fixedItems,
+            unchangedItems,
+            after:{
+              failedCredentials:remainingCredentials,
+              systemIssues:remainingSystemIssues,
+            },
+            stillRequiresMe:[
+              ...remainingCredentials.map((row:any)=>({...row,source:'credential'})),
+              ...remainingSystemIssues.map((row:any)=>({...row,source:'system'})),
+            ],
             detail:attemptedIds.length
-              ? 'Safe automatic repair re-tested failed credentials, refreshed derived health state, and closed any resolved credential alerts without changing secrets or external account permissions.'
+              ? 'Safe automatic repair re-tested each failed credential independently, refreshed derived health state, and closed resolved credential alerts without changing secrets or external account permissions.'
               : 'No failed credentials needed a safe automatic re-test. Remaining configuration or permission items require staff action.',
           },
         },{headers:{'Cache-Control':'private, no-store'}});
