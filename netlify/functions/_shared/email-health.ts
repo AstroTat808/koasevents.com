@@ -124,9 +124,67 @@ async function checkLogo() {
   }
 }
 
-async function listResendEmails() {
+async function checkResendSendAccess() {
   const apiKey = clean(Netlify.env.get('RESEND_API_KEY'), 500);
-  if (!apiKey) return { ok: false, configured: false, status: 0, rows: [] as any[], detail: 'RESEND_API_KEY is not configured.' };
+  if (!apiKey) {
+    return {
+      ok: false,
+      configured: false,
+      status: 0,
+      verification: 'missing',
+      detail: 'RESEND_API_KEY is not configured, so outbound email cannot be sent.',
+    };
+  }
+  try {
+    // A send-only Resend key intentionally cannot list API keys. Resend's explicit
+    // send-only 401 therefore verifies that the credential is valid and restricted
+    // to sending without dispatching a test message.
+    const response = await fetch('https://api.resend.com/api-keys?limit=1', {
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+        'User-Agent': 'KoaEvents-EmailHealth/1.0',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const body: any = await response.json().catch(() => ({}));
+    const message = clean(body?.message || body?.error || '', 300);
+    const explicitlySendOnly = response.status === 401 && /restricted to only send emails|only send emails/i.test(message);
+    const ok = response.ok || explicitlySendOnly;
+    return {
+      ok,
+      configured: true,
+      status: response.status,
+      verification: explicitlySendOnly ? 'send-only-permission' : response.ok ? 'full-access-credential' : 'unverified',
+      detail: explicitlySendOnly
+        ? 'Resend confirmed the production credential is valid and restricted to sending email.'
+        : response.ok
+          ? 'Resend confirmed the production credential is valid; this key also has broader account access.'
+          : (message || 'Resend could not verify the sending credential.'),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      configured: true,
+      status: 0,
+      verification: 'unverified',
+      detail: error instanceof Error ? error.message : 'Resend sending credential verification failed.',
+    };
+  }
+}
+
+async function listResendEmails() {
+  const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
+  if (!apiKey) {
+    return {
+      ok: false,
+      configured: false,
+      permissionDenied: false,
+      status: 0,
+      rows: [] as any[],
+      detail: 'RESEND_MONITORING_API_KEY is not configured. Delivery history can still use signed webhook events when available.',
+    };
+  }
   try {
     const response = await fetch('https://api.resend.com/emails?limit=100', {
       headers: {
@@ -138,21 +196,26 @@ async function listResendEmails() {
     });
     const body: any = await response.json().catch(() => ({}));
     const rows = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+    const detail = response.ok
+      ? 'Resend delivery history is available through the dedicated monitoring credential.'
+      : clean(body?.message || 'Resend history request failed.', 300);
     return {
       ok: response.ok,
       configured: true,
+      permissionDenied: response.status === 401 || response.status === 403,
       status: response.status,
       rows: rows.map((row: any) => ({
         emailId: clean(row?.id, 180),
         status: canonicalStatus(row?.last_event || row?.status || row?.event),
         createdAt: clean(row?.created_at || row?.createdAt, 100),
       })),
-      detail: response.ok ? 'Resend delivery history is available.' : clean(body?.message || 'Resend history request failed.', 300),
+      detail,
     };
   } catch (error) {
     return {
       ok: false,
       configured: true,
+      permissionDenied: false,
       status: 0,
       rows: [] as any[],
       detail: error instanceof Error ? error.message : 'Resend history request failed.',
@@ -194,8 +257,9 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   const cachedAt = Date.parse(String(cached?.generatedAt || ''));
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
-  const [logo, resend, webhookEvents] = await Promise.all([
+  const [logo, sendAccess, resend, webhookEvents] = await Promise.all([
     checkLogo(),
+    checkResendSendAccess(),
     listResendEmails(),
     readEmailHealthEvents(context, 5000),
   ]);
@@ -216,6 +280,11 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     .sort((a: any, b: any) => Date.parse(b.createdAt || '') - Date.parse(a.createdAt || ''))
     .slice(0, 10);
 
+  const monitoringAccessSeverity = resend.ok
+    ? 'green'
+    : resend.permissionDenied || !resend.configured
+      ? 'yellow'
+      : 'yellow';
   const deliverySeverity = period24h.complained > 0 || period24h.failureRate >= 5
     ? 'red'
     : period24h.problemCount > 0 || period24h.delayed > 0 || (!resend.ok && !webhookEvents.length)
@@ -232,9 +301,9 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     detail: 'Production deploys are blocked when the automated email compatibility gate fails.',
   };
 
-  const overall = !logo.ok || !templateCompatibility.passed || deliverySeverity === 'red'
+  const overall = !logo.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
     ? 'red'
-    : deliverySeverity === 'yellow' || !resend.configured || !webhookConfigured
+    : deliverySeverity === 'yellow' || monitoringAccessSeverity === 'yellow' || !webhookConfigured
       ? 'yellow'
       : 'green';
 
@@ -242,6 +311,15 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     generatedAt: new Date().toISOString(),
     overall,
     logo,
+    sendAccess,
+    monitoringAccess: {
+      severity: monitoringAccessSeverity,
+      configured: resend.configured,
+      reachable: resend.ok,
+      permissionDenied: Boolean(resend.permissionDenied),
+      status: resend.status,
+      detail: resend.detail,
+    },
     delivery: {
       source,
       severity: deliverySeverity,
