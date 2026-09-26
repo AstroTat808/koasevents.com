@@ -561,6 +561,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: .38rem;
     text-decoration: none;
     transition:
       border-color 150ms ease,
@@ -573,6 +574,27 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     border-color: var(--koa-forest);
     background: var(--koa-forest);
     color: white;
+  }
+
+  .workspace-alert-action.is-critical-primary {
+    border-color: rgb(185 28 28);
+    background: rgb(185 28 28);
+    color: white;
+    box-shadow: 0 8px 22px rgba(185,28,28,.2);
+  }
+
+  .workspace-alert-action-icon {
+    display: inline-grid;
+    width: .92rem;
+    height: .92rem;
+    flex: 0 0 .92rem;
+    place-items: center;
+  }
+
+  .workspace-alert-action-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
   }
 
   .workspace-alert-action.is-snooze {
@@ -616,8 +638,21 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-alert-row[data-severity="urgent"] {
-    border-color: rgb(254 202 202);
-    background: rgb(254 242 242);
+    border: 2px solid rgb(239 68 68);
+    background:
+      linear-gradient(90deg, rgba(185,28,28,.08), transparent 22%),
+      rgb(254 242 242);
+    box-shadow:
+      inset 4px 0 0 rgb(185 28 28),
+      0 8px 24px rgba(185,28,28,.08);
+  }
+
+  .workspace-alert-row[data-severity="urgent"] .workspace-alert-action-label {
+    color: rgb(153 27 27);
+  }
+
+  .workspace-alert-row[data-severity="urgent"] .workspace-alert-actions {
+    border-top-color: rgb(254 202 202);
   }
 
   .workspace-alert-row[data-severity="upcoming"] {
@@ -640,7 +675,12 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     text-transform: uppercase;
   }
 
-  .workspace-alert-severity[data-severity="urgent"] { background: rgb(254 226 226); color: rgb(185 28 28); }
+  .workspace-alert-severity[data-severity="urgent"] {
+    border: 1px solid rgb(248 113 113);
+    background: rgb(185 28 28);
+    color: white;
+    box-shadow: 0 3px 10px rgba(185,28,28,.12);
+  }
   .workspace-alert-severity[data-severity="upcoming"] { background: rgb(254 243 199); color: rgb(180 83 9); }
   .workspace-alert-severity[data-severity="info"] { background: rgb(219 234 254); color: rgb(29 78 216); }
 
@@ -1296,11 +1336,34 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     } catch {}
   }
 
-  function actionButton(label, onClick, variant='') {
+  function alertActionIcon(name) {
+    const icon = document.createElement('span');
+    icon.className = 'workspace-alert-action-icon';
+    icon.setAttribute('aria-hidden','true');
+    const paths = {
+      clock:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>',
+      eye:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>',
+      dismiss:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7l10 10M17 7 7 17"></path></svg>',
+      arrow:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13"></path><path d="m14 8 4 4-4 4"></path></svg>',
+      restore:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7v5h5"></path><path d="M6.1 17A8 8 0 1 0 5 8"></path></svg>',
+    };
+    icon.innerHTML = paths[name] || paths.arrow;
+    return icon;
+  }
+
+  function setAlertActionContent(node,label,iconName='') {
+    node.textContent = '';
+    if(iconName)node.appendChild(alertActionIcon(iconName));
+    const text = document.createElement('span');
+    text.textContent = label;
+    node.appendChild(text);
+  }
+
+  function actionButton(label, onClick, variant='', iconName='') {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'workspace-alert-action'+(variant?' '+variant:'');
-    button.textContent = label;
+    setAlertActionContent(button,label,iconName);
     button.addEventListener('click',(event)=>{
       event.preventDefault();
       event.stopPropagation();
@@ -1335,7 +1398,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const sev = document.createElement('span');
     sev.className = 'workspace-alert-severity';
     sev.dataset.severity = alert.severity || 'info';
-    sev.textContent = alert.severity === 'urgent' ? 'Urgent' : alert.severity === 'upcoming' ? 'Upcoming' : 'Info';
+    sev.textContent = alert.severity === 'urgent' ? 'Critical' : alert.severity === 'upcoming' ? 'Upcoming' : 'Info';
 
     const context = document.createElement('p');
     context.className = 'mt-1 text-xs font-semibold text-[var(--koa-ink)]/65';
@@ -1362,48 +1425,57 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     snoozeButtons.appendChild(actionButton('Tomorrow', async(button)=>{
       button.disabled = true;
       await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'tomorrow'});
-    },'is-snooze'));
+    },'is-snooze','clock'));
     snoozeButtons.appendChild(actionButton('Next week', async(button)=>{
       button.disabled = true;
       await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'week'});
-    },'is-snooze'));
+    },'is-snooze','clock'));
     snoozeButtons.appendChild(actionButton('Custom date', async(button)=>{
       const raw = window.prompt('Snooze until what date? Use YYYY-MM-DD.');
       if (!raw) return;
       button.disabled = true;
       const ok = await alertAction('snooze',{occurrenceId:alert.occurrenceId,date:raw});
       if (!ok) button.disabled = false;
-    },'is-snooze'));
+    },'is-snooze','clock'));
     snoozeGroup.append(snoozeLabel,snoozeButtons);
 
     const responseGroup = document.createElement('div');
     responseGroup.className = 'workspace-alert-action-group';
     const responseLabel = document.createElement('span');
     responseLabel.className = 'workspace-alert-action-label';
-    responseLabel.textContent = 'Alert actions';
+    responseLabel.textContent = alert.severity === 'urgent' ? 'Critical action' : 'Alert actions';
     const responseButtons = document.createElement('div');
     responseButtons.className = 'workspace-alert-action-buttons';
+
+    const open = document.createElement('a');
+    open.href = alert.href || '#';
+    open.className = 'workspace-alert-action is-primary'+(alert.severity === 'urgent'?' is-critical-primary':'');
+    setAlertActionContent(open,alert.severity === 'urgent'?'Open critical issue':'Open item','arrow');
+
+    if (alert.severity === 'urgent') {
+      responseButtons.appendChild(open);
+    }
 
     if (alert.isNew) {
       responseButtons.appendChild(actionButton('Mark seen', async(button)=>{
         button.disabled = true;
         await alertAction('mark-seen',{occurrenceIds:[alert.occurrenceId]});
-      },'is-seen'));
+      },'is-seen','eye'));
     }
 
     responseButtons.appendChild(actionButton('Dismiss', async(button)=>{
       button.disabled = true;
       await alertAction('dismiss',{occurrenceId:alert.occurrenceId});
-    },'is-dismiss'));
+    },'is-dismiss','dismiss'));
 
-    const open = document.createElement('a');
-    open.href = alert.href || '#';
-    open.className = 'workspace-alert-action is-primary';
-    open.textContent = 'Open item';
-    responseButtons.appendChild(open);
+    if (alert.severity !== 'urgent') {
+      responseButtons.appendChild(open);
+    }
+
     responseGroup.append(responseLabel,responseButtons);
 
-    actions.append(snoozeGroup,responseGroup);
+    if (alert.severity === 'urgent') actions.append(responseGroup,snoozeGroup);
+    else actions.append(snoozeGroup,responseGroup);
 
     top.append(left,sev);
     row.append(top,context,detail,meta,actions);
@@ -1418,7 +1490,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       actions.appendChild(actionButton('Restore now', async(button)=>{
         button.disabled = true;
         await alertAction('unsnooze',{occurrenceId:alert.occurrenceId});
-      }));
+      },'','restore'));
       const until = document.createElement('span');
       until.className = 'self-center text-xs text-[var(--koa-ink)]/50';
       until.textContent = 'Snoozed until ' + formatAlertTime(alert.snoozedUntil);
