@@ -22,6 +22,11 @@ export type CredentialHealthRow = {
   severity: 'green' | 'yellow' | 'red';
   issueType: CredentialIssueType | null;
   detail: string;
+  recommendedAction?: {
+    label: string;
+    href: string;
+    external: boolean;
+  } | null;
 };
 
 type CredentialHealthOptions = {
@@ -54,6 +59,43 @@ function classifyCredentialFailure(input: { configured: boolean; status: number;
     || /timeout|timed out|network|fetch failed|temporarily unavailable|service unavailable|upstream/.test(detail)
   ) return 'External Dependency Problem';
   return 'Configuration Problem';
+}
+
+function recommendedAction(id: string, ok: boolean) {
+  if (ok) return null;
+  const actions: Record<string, { label: string; href: string; external: boolean }> = {
+    'resend-send': {
+      label: 'Open Resend API keys',
+      href: 'https://resend.com/api-keys',
+      external: true,
+    },
+    'resend-monitoring': {
+      label: 'Open Resend API keys',
+      href: 'https://resend.com/api-keys',
+      external: true,
+    },
+    quickbooks: {
+      label: 'Reconnect QuickBooks',
+      href: '/admin/quickbooks/',
+      external: false,
+    },
+    'microsoft-graph': {
+      label: 'Open Microsoft configuration',
+      href: 'https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade',
+      external: true,
+    },
+    github: {
+      label: 'Open GitHub repository settings',
+      href: 'https://github.com/AstroTat808/koasevents.com/settings',
+      external: true,
+    },
+    netlify: {
+      label: 'View Netlify credential problem',
+      href: 'https://app.netlify.com/projects/koasevents-website/configuration/env',
+      external: true,
+    },
+  };
+  return actions[id] || null;
 }
 
 async function verifyGithubCredential(): Promise<CredentialHealthRow> {
@@ -277,6 +319,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
       severity: sendAccess?.ok ? 'green' : resendSendIssue === 'External Dependency Problem' ? 'yellow' : 'red',
       issueType: resendSendIssue,
       detail: resendSendDetail,
+      recommendedAction: recommendedAction('resend-send', Boolean(sendAccess?.ok)),
     },
     {
       id: 'resend-monitoring',
@@ -288,6 +331,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
       severity: resendMonitoringOk ? 'green' : resendMonitoringIssue === 'External Dependency Problem' || !resendMonitoringConfigured ? 'yellow' : 'red',
       issueType: resendMonitoringIssue,
       detail: resendMonitoringDetail,
+      recommendedAction: recommendedAction('resend-monitoring', resendMonitoringOk),
     },
     {
       id: 'quickbooks',
@@ -299,6 +343,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
       severity: quickBooks?.ok ? 'green' : quickBooksIssue === 'External Dependency Problem' || !quickBooksConfigured || !quickBooks?.connected ? 'yellow' : 'red',
       issueType: quickBooksIssue,
       detail: quickBooksDetail,
+      recommendedAction: recommendedAction('quickbooks', Boolean(quickBooks?.ok)),
     },
     {
       id: 'microsoft-graph',
@@ -310,9 +355,16 @@ export async function credentialHealthSummary(context: Context, options: Credent
       severity: microsoftGraph?.ok ? 'green' : microsoftIssue === 'External Dependency Problem' || !microsoftConfigured ? 'yellow' : 'red',
       issueType: microsoftIssue,
       detail: microsoftDetail,
+      recommendedAction: recommendedAction('microsoft-graph', Boolean(microsoftGraph?.ok)),
     },
-    github,
-    netlify,
+    {
+      ...github,
+      recommendedAction: recommendedAction('github', github.ok),
+    },
+    {
+      ...netlify,
+      recommendedAction: recommendedAction('netlify', netlify.ok),
+    },
   ];
 
   const red = rows.filter((row) => row.severity === 'red').length;
