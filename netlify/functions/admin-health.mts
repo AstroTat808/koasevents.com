@@ -26,8 +26,10 @@ import { emailHealthSummary } from './_shared/email-health';
 import {
   credentialHealthSummary,
   readCredentialHealthSummary,
+  recordCredentialSafeRepairAudit,
   saveCredentialReliabilityPolicy,
 } from './_shared/credential-health';
+import { weeklySystemHealthExecutiveSummary } from './_shared/weekly-health-summary';
 import {
   office365CalendarConfig,
   readOffice365Conflicts,
