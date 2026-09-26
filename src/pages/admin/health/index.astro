@@ -59,11 +59,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div data-email-health-release-actions class="mt-4 flex flex-wrap gap-2"></div>
           </div>
 
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Logo availability</p>
               <p data-email-health-logo class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
               <p data-email-health-logo-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Can send email</p>
+              <p data-email-health-send class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-send-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Can read delivery health</p>
+              <p data-email-health-monitoring class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p>
+              <p data-email-health-monitoring-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/45"></p>
             </article>
             <article class="rounded-xl bg-[var(--koa-sand)] p-4">
               <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Delivery source</p>
@@ -620,6 +630,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealthOverall=document.querySelector('[data-email-health-overall]');
     const emailHealthLogo=document.querySelector('[data-email-health-logo]');
     const emailHealthLogoDetail=document.querySelector('[data-email-health-logo-detail]');
+    const emailHealthSend=document.querySelector('[data-email-health-send]');
+    const emailHealthSendDetail=document.querySelector('[data-email-health-send-detail]');
+    const emailHealthMonitoring=document.querySelector('[data-email-health-monitoring]');
+    const emailHealthMonitoringDetail=document.querySelector('[data-email-health-monitoring-detail]');
     const emailHealthSource=document.querySelector('[data-email-health-source]');
     const emailHealthSourceDetail=document.querySelector('[data-email-health-source-detail]');
     const emailHealthTemplates=document.querySelector('[data-email-health-templates]');
@@ -1131,6 +1145,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         emailHealthLogo.className='mt-2 text-sm font-semibold '+(logo.ok?'text-emerald-800':'text-red-800');
       }
       if(emailHealthLogoDetail)emailHealthLogoDetail.textContent=(logo.status?'HTTP '+logo.status+' · ':'')+(logo.contentType||'')+(logo.ms!=null?' · '+logo.ms+' ms':'');
+
+      const sendAccess=email.sendAccess||{};
+      if(emailHealthSend){
+        emailHealthSend.textContent=sendAccess.ok?'Available':'Unavailable';
+        emailHealthSend.className='mt-2 text-sm font-semibold '+(sendAccess.ok?'text-emerald-800':'text-red-800');
+      }
+      if(emailHealthSendDetail)emailHealthSendDetail.textContent=sendAccess.detail||'';
+
+      const monitoringAccess=email.monitoringAccess||{};
+      if(emailHealthMonitoring){
+        emailHealthMonitoring.textContent=monitoringAccess.reachable?'Available':monitoringAccess.configured?'Permission/configuration issue':'Not configured';
+        emailHealthMonitoring.className='mt-2 text-sm font-semibold '+(monitoringAccess.reachable?'text-emerald-800':'text-amber-800');
+      }
+      if(emailHealthMonitoringDetail)emailHealthMonitoringDetail.textContent=monitoringAccess.detail||'';
 
       const delivery=email.delivery||{};
       if(emailHealthSource)emailHealthSource.textContent=delivery.source==='resend-api'?'Resend API':delivery.source==='signed-webhook-history'?'Signed webhook history':'No delivery history';
@@ -1950,7 +1978,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(currentDeploy.behindMain===true){
         const behind=Number(currentDeploy.commitsBehind||0);
         const lag='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
-        if(deploymentState==='deploying'){
+        if(row?.id==='email-send-access'){
+        cause=status===0
+          ? 'The production Resend sending credential is missing or could not be verified.'
+          : 'The production Resend sending credential did not pass its non-destructive permission verification.';
+        fix='Verify RESEND_API_KEY is present in Netlify production and has Resend sending permission. Do not replace it with the broader monitoring credential.';
+      }else if(row?.id==='email-monitoring-access'){
+        cause=status===401||status===403
+          ? 'The dedicated Resend monitoring credential does not have permission to read delivery history.'
+          : status===0
+            ? 'The dedicated Resend monitoring credential is missing or the monitoring request could not reach Resend.'
+            : 'The dedicated Resend monitoring credential could not read delivery history.';
+        fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
+      }else if(deploymentState==='deploying'){
           syncEl.textContent=lag+' · build in progress';
         }else if(deploymentState==='waiting'){
           syncEl.textContent=lag+' · waiting for Git trigger';
