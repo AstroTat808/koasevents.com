@@ -124,7 +124,7 @@ async function checkLogo() {
   }
 }
 
-async function checkResendSendAccess() {
+export async function checkResendSendAccess() {
   const apiKey = clean(Netlify.env.get('RESEND_API_KEY'), 500);
   if (!apiKey) {
     return {
@@ -173,7 +173,7 @@ async function checkResendSendAccess() {
   }
 }
 
-async function listResendEmails() {
+export async function listResendEmails() {
   const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
   if (!apiKey) {
     return {
