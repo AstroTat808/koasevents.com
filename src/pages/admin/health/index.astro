@@ -1680,6 +1680,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderNeedsMyAction(){
       if(!needsActionList||!needsActionCount)return;
       const systemRows=(Array.isArray(latestHealthChecks)?latestHealthChecks:[])
+        .filter((row)=>!['email-send-access','email-monitoring-access'].includes(String(row?.id||'')))
         .filter((row)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&normalizedSeverity(row)!=='healthy')
         .map((row)=>({
           source:'system',
