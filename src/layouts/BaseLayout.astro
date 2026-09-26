@@ -46,6 +46,7 @@ const buildCommit = String(process.env.COMMIT_REF || '').trim();
 const deployId = String(process.env.DEPLOY_ID || '').trim();
 const buildTime = new Date().toISOString();
 const showWorkspaceNav = canonicalPath === '/staff/' || canonicalPath.startsWith('/admin/');
+const isAdminPage = canonicalPath.startsWith('/admin/');
 const pagePlacementUsage = Object.entries(mediaUsageBySrc).flatMap(([src, usages]) =>
   usages
     .filter((usage) => usage.href === canonicalPath && usage.placementId)
@@ -298,7 +299,7 @@ const seoSchema = {
     <meta name="theme-color" content="#173d30" />
     <script type="application/ld+json" set:html={JSON.stringify(seoSchema)} />
   </head>
-  <body>
+  <body class={isAdminPage ? 'koa-admin-page' : undefined}>
     <script is:inline>
       (() => {
         const hash = window.location.hash || '';
