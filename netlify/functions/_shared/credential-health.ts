@@ -857,15 +857,137 @@ async function persistRowsWithHistory(
   return rows;
 }
 
+function combinedCredentialOverall(currentOverall: unknown, reliabilityOverall: unknown) {
+  const current = String(currentOverall || 'green');
+  const reliability = String(reliabilityOverall || 'insufficient');
+  if (current === 'red' || reliability === 'red') return 'red';
+  if (current === 'yellow' || reliability === 'yellow') return 'yellow';
+  return 'green';
+}
+
+function buildCredentialIncidentTimeline(
+  history: CredentialHealthHistoryEvent[],
+  reliabilityEvents: CredentialReliabilityEvent[],
+  alertRows: any[],
+) {
+  const rows: any[] = [];
+
+  for (const event of history) {
+    const label = event.event === 'recovered'
+      ? 'Credential recovered'
+      : event.event === 'changed'
+        ? 'Credential problem changed'
+        : 'Credential became invalid';
+    rows.push({
+      id: 'credential:' + event.id,
+      source: 'credential',
+      kind: event.event,
+      occurredAt: event.occurredAt,
+      provider: event.provider,
+      title: event.provider + ' · ' + event.credential,
+      label,
+      severity: event.severity,
+      detail: event.detail,
+      durationMinutes: event.durationMinutes,
+    });
+  }
+
+  for (const event of reliabilityEvents) {
+    const label = event.event === 'reliability_recovered'
+      ? 'Reliability recovered'
+      : event.event === 'reliability_changed'
+        ? 'Reliability severity changed'
+        : 'Reliability dropped below threshold';
+    rows.push({
+      id: 'reliability:' + event.id,
+      source: 'reliability',
+      kind: event.event,
+      occurredAt: event.occurredAt,
+      provider: event.provider,
+      title: event.provider + ' reliability',
+      label,
+      severity: event.toSeverity,
+      detail: event.detail,
+      percentage: event.percentage,
+      samples: event.samples,
+      thresholdYellow: event.thresholdYellow,
+      thresholdRed: event.thresholdRed,
+    });
+  }
+
+  for (const alert of Array.isArray(alertRows) ? alertRows : []) {
+    const alertId = clean(alert?.occurrenceId || alert?.id, 120);
+    if (alert?.firstAppearedAt) {
+      rows.push({
+        id: 'alert-open:' + alertId,
+        source: 'alert',
+        kind: 'alert_opened',
+        occurredAt: String(alert.firstAppearedAt),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert opened',
+        severity: String(alert?.severity || 'upcoming') === 'urgent' ? 'red' : 'yellow',
+        detail: clean(alert?.detail || alert?.context || '', 500),
+      });
+    }
+    for (const change of Array.isArray(alert?.severityChanges) ? alert.severityChanges : []) {
+      rows.push({
+        id: 'alert-change:' + alertId + ':' + clean(change?.at, 80),
+        source: 'alert',
+        kind: 'alert_severity_changed',
+        occurredAt: String(change?.at || ''),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert severity changed',
+        severity: String(change?.to || '') === 'urgent' ? 'red' : 'yellow',
+        detail: 'Alert severity changed from ' + clean(change?.from, 40) + ' to ' + clean(change?.to, 40) + '.',
+      });
+    }
+    if (alert?.resolvedAt) {
+      rows.push({
+        id: 'alert-resolved:' + alertId,
+        source: 'alert',
+        kind: 'alert_resolved',
+        occurredAt: String(alert.resolvedAt),
+        provider: clean(alert?.title, 120).replace(/ credential problem$/i, ''),
+        title: clean(alert?.title || 'Credential alert', 180),
+        label: 'Workspace Alert resolved',
+        severity: 'green',
+        detail: 'The credential alert automatically closed after the underlying problem cleared.',
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  return rows
+    .filter((row) => row.occurredAt && Number.isFinite(Date.parse(row.occurredAt)))
+    .sort((a, b) => Date.parse(b.occurredAt) - Date.parse(a.occurredAt))
+    .filter((row) => {
+      const key = [row.source, row.kind, row.occurredAt, row.title].join('|');
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 250);
+}
+
 async function withHistory(context: Context, summary: any) {
-  const [history, samples] = await Promise.all([
+  const [history, samples, policy, reliabilityEvents, alertRows] = await Promise.all([
     readHistory(context, 200),
     readSamples(context, 2300),
+    readCredentialReliabilityPolicy(context),
+    readReliabilityEvents(context, 300),
+    readCredentialWorkspaceAlertTimeline(context),
   ]);
+  const reliability = reliabilitySummary(samples, policy);
   return {
     ...summary,
+    operationalOverall: String(summary?.overall || 'green'),
+    overall: combinedCredentialOverall(summary?.overall, reliability.overall),
     history,
-    reliability: reliabilitySummary(samples),
+    reliability,
+    reliabilityPolicy: policy,
+    incidentTimeline: buildCredentialIncidentTimeline(history, reliabilityEvents, alertRows),
   };
 }
 
