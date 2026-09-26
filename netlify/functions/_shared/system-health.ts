@@ -1086,18 +1086,31 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   };
 }
 
+function hydrateIssueTypes(snapshot:HealthSnapshot|null):HealthSnapshot|null {
+  if(!snapshot)return null;
+  return {
+    ...snapshot,
+    checks:(Array.isArray(snapshot.checks)?snapshot.checks:[]).map((row)=>({
+      ...row,
+      issueType:row.issueType??classifyHealthIssue(row),
+    })),
+  };
+}
+
 export async function readLatestHealth(context:Context):Promise<HealthSnapshot|null> {
-  return ((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
+  const snapshot=((await healthStore(context).get('latest',{type:'json'})) || null) as HealthSnapshot|null;
+  return hydrateIssueTypes(snapshot);
 }
 
 export async function readLatestHourlyHealth(context:Context):Promise<HealthSnapshot|null> {
   const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
-  return rows.find(row=>row?.source==='hourly') || null;
+  const snapshot=rows.find(row=>row?.source==='hourly') || null;
+  return hydrateIssueTypes(snapshot);
 }
 
 export async function readHealthHistory(context:Context,limit=100):Promise<HealthSnapshot[]> {
   const rows=((await healthStore(context).get('history',{type:'json'})) || []) as HealthSnapshot[];
-  return rows.slice(0,Math.max(1,Math.min(500,limit)));
+  return rows.slice(0,Math.max(1,Math.min(500,limit))).map((row)=>hydrateIssueTypes(row) as HealthSnapshot);
 }
 
 export async function applyHealthAlertPolicy(context:Context,current:HealthSnapshot,previousHourly:HealthSnapshot|null) {
