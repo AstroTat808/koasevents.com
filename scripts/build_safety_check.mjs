@@ -127,7 +127,7 @@ function checkEmailFeatureContracts() {
       ['needs my action queue', 'data-needs-action-list'],
       ['needs my action count', 'data-needs-action-count'],
       ['credential history view', 'data-credential-health-history'],
-      ['credential targeted retest', 'data.credentialRetest'],
+      ['credential targeted retest', 'dataset.credentialRetest'],
       ['credential retest return tracking', 'koaCredentialRetest'],
       ['health issue type label', 'data-health-detail-issue-type'],
       ['email send access status', 'data-email-health-send'],
