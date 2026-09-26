@@ -707,3 +707,146 @@ main p.text-sm {
     padding: .78rem !important;
   }
 }
+
+
+/* Native-style mobile admin navigation, table cards, and health drill-down behavior */
+@keyframes koaHealthJumpPulse {
+  0%, 100% { box-shadow: var(--shadow-soft); }
+  45% { box-shadow: 0 0 0 3px rgba(147,80,45,.28), var(--shadow-soft); }
+}
+
+@media (max-width: 767px) {
+  body.koa-admin-page {
+    padding-bottom: calc(5.35rem + env(safe-area-inset-bottom));
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table {
+    width: 100% !important;
+    min-width: 0 !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table thead {
+    display: none !important;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody {
+    display: grid;
+    gap: .7rem;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody tr {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--koa-line);
+    border-radius: .95rem;
+    background: white;
+    box-shadow: 0 8px 24px rgba(10,33,26,.055);
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody td,
+  body.koa-admin-page main .koa-mobile-card-table tbody th {
+    display: grid;
+    grid-template-columns: minmax(7.1rem, .82fr) minmax(0, 1.18fr);
+    gap: .7rem;
+    align-items: start;
+    width: 100% !important;
+    max-width: 100%;
+    padding: .7rem .78rem !important;
+    border: 0 !important;
+    border-bottom: 1px solid color-mix(in srgb, var(--koa-line) 72%, transparent) !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody td:last-child,
+  body.koa-admin-page main .koa-mobile-card-table tbody th:last-child {
+    border-bottom: 0 !important;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody td::before,
+  body.koa-admin-page main .koa-mobile-card-table tbody th::before {
+    content: attr(data-mobile-label);
+    min-width: 0;
+    color: var(--koa-clay);
+    font-size: .54rem;
+    font-weight: 900;
+    letter-spacing: .075em;
+    line-height: 1.35;
+    text-transform: uppercase;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody td[data-mobile-label=""],
+  body.koa-admin-page main .koa-mobile-card-table tbody th[data-mobile-label=""] {
+    grid-template-columns: minmax(0,1fr);
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table tbody td[data-mobile-label=""]::before,
+  body.koa-admin-page main .koa-mobile-card-table tbody th[data-mobile-label=""]::before {
+    display: none;
+  }
+
+  body.koa-admin-page main .koa-mobile-card-table input,
+  body.koa-admin-page main .koa-mobile-card-table select,
+  body.koa-admin-page main .koa-mobile-card-table textarea,
+  body.koa-admin-page main .koa-mobile-card-table button {
+    max-width: 100%;
+  }
+
+  body.koa-admin-page main [data-mobile-order="0"] { order: 0; }
+  body.koa-admin-page main [data-mobile-order="1"] { order: 1; }
+  body.koa-admin-page main [data-mobile-order="2"] { order: 2; }
+  body.koa-admin-page main [data-mobile-order="3"] { order: 3; }
+  body.koa-admin-page main [data-mobile-order="4"] { order: 4; }
+  body.koa-admin-page main [data-mobile-order="5"] { order: 5; }
+  body.koa-admin-page main [data-mobile-order="6"] { order: 6; }
+  body.koa-admin-page main [data-mobile-order="7"] { order: 7; }
+  body.koa-admin-page main [data-mobile-order="8"] { order: 8; }
+  body.koa-admin-page main [data-mobile-order="9"] { order: 9; }
+  body.koa-admin-page main [data-mobile-order="10"] { order: 10; }
+  body.koa-admin-page main [data-mobile-order="11"] { order: 11; }
+  body.koa-admin-page main [data-mobile-order="12"] { order: 12; }
+
+  body.koa-admin-page main .koa-mobile-collapsed-content {
+    display: none !important;
+  }
+
+  body.koa-admin-page main .health-mobile-detail-toggle {
+    display: inline-flex;
+    min-height: 2.4rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: .7rem;
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: white;
+    padding: .55rem .8rem;
+    color: var(--koa-forest);
+    font-size: .56rem;
+    font-weight: 900;
+    letter-spacing: .07em;
+    line-height: 1.1;
+    text-transform: uppercase;
+  }
+
+  body.koa-admin-page main .health-jump-card {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  body.koa-admin-page main .health-jump-card:active {
+    transform: scale(.985);
+  }
+
+  body.koa-admin-page main .health-jump-highlight {
+    animation: koaHealthJumpPulse 1.15s ease;
+  }
+}
+
+@media (min-width: 768px) {
+  .health-mobile-detail-toggle {
+    display: none !important;
+  }
+}

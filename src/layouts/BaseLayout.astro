@@ -312,6 +312,68 @@ const seoSchema = {
     </script>
     {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
+
+    <script is:inline>
+      (() => {
+        const normalizePath = (value) => {
+          const path = String(value || '/').split('?')[0].split('#')[0];
+          return path.endsWith('/') ? path : path + '/';
+        };
+        const cardTablePages = new Set([
+          '/admin/quickbooks/',
+          '/admin/quotes/',
+          '/admin/health/',
+          '/admin/staff/',
+          '/admin/profitability/',
+        ]);
+        if (!cardTablePages.has(normalizePath(window.location.pathname))) return;
+
+        const main = document.querySelector('main');
+        if (!(main instanceof HTMLElement)) return;
+
+        const labelTable = (table) => {
+          if (!(table instanceof HTMLTableElement)) return;
+          const headerRows = [...table.querySelectorAll('thead tr')];
+          const headerRow = headerRows[headerRows.length - 1];
+          if (!(headerRow instanceof HTMLTableRowElement)) return;
+
+          const headers = [];
+          [...headerRow.cells].forEach((cell) => {
+            const label = String(cell.textContent || '').replace(/\s+/g, ' ').trim();
+            const span = Math.max(1, Number(cell.colSpan || 1));
+            for (let index = 0; index < span; index += 1) headers.push(label);
+          });
+          if (!headers.some(Boolean)) return;
+
+          table.classList.add('koa-mobile-card-table');
+          [...table.tBodies].forEach((tbody) => {
+            [...tbody.rows].forEach((row) => {
+              let columnIndex = 0;
+              [...row.cells].forEach((cell) => {
+                const span = Math.max(1, Number(cell.colSpan || 1));
+                const labels = headers.slice(columnIndex, columnIndex + span).filter(Boolean);
+                cell.dataset.mobileLabel = span > 1 ? (labels[0] || '') : (headers[columnIndex] || '');
+                columnIndex += span;
+              });
+            });
+          });
+        };
+
+        let scheduled = false;
+        const applyLabels = () => {
+          scheduled = false;
+          main.querySelectorAll('table').forEach(labelTable);
+        };
+        const scheduleLabels = () => {
+          if (scheduled) return;
+          scheduled = true;
+          window.requestAnimationFrame(applyLabels);
+        };
+
+        applyLabels();
+        new MutationObserver(scheduleLabels).observe(main, { childList: true, subtree: true });
+      })();
+    </script>
     <script id="koa-media-placement-data" type="application/json" set:html={JSON.stringify(pagePlacementUsage)}></script>
     <script is:inline>
       (() => {

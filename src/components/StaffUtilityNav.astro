@@ -1,4 +1,5 @@
 ---
+const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 ---
 
 <nav
@@ -130,6 +131,34 @@
       </section>
     </div>
   </div>
+
+  {isAdminWorkspace && (
+    <div data-workspace-bottom-nav class="workspace-bottom-nav" aria-label="Mobile admin navigation">
+      <a data-mobile-nav-link="home" data-capability="admin.dashboard.view" href="/admin/" class="workspace-bottom-item" aria-label="Admin Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z"/></svg>
+        <span>Home</span>
+      </a>
+      <a data-mobile-nav-link="crm" data-capability="crm.view" href="/admin/crm/" class="workspace-bottom-item" aria-label="Business CRM">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.75A1.75 1.75 0 0 1 5.75 3h12.5A1.75 1.75 0 0 1 20 4.75v14.5A1.75 1.75 0 0 1 18.25 21H5.75A1.75 1.75 0 0 1 4 19.25zM7 8h10M7 12h10M7 16h6"/></svg>
+        <span>CRM</span>
+      </a>
+      <a data-mobile-nav-link="calendar" data-capability="calendar.view" href="/admin/calendar/" class="workspace-bottom-item" aria-label="Master Calendar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h14A2 2 0 0 1 21 6.5v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 9h18"/></svg>
+        <span>Calendar</span>
+      </a>
+      <button data-workspace-alert-toggle-bottom type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-alert-center" aria-label="Workspace alerts">
+        <span class="workspace-bottom-icon-wrap">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 16 18 16 18 9ZM9.5 20h5"/></svg>
+          <span data-workspace-total-bottom class="workspace-bottom-badge hidden"></span>
+        </span>
+        <span>Alerts</span>
+      </button>
+      <button data-workspace-more-toggle type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-links" aria-label="More admin modules">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h.01M12 7h.01M19 7h.01M5 12h.01M12 12h.01M19 12h.01M5 17h.01M12 17h.01M19 17h.01"/></svg>
+        <span>More</span>
+      </button>
+    </div>
+  )}
 </nav>
 
 <style>
@@ -495,7 +524,138 @@
   .workspace-alert-severity[data-severity="upcoming"] { background: rgb(254 243 199); color: rgb(180 83 9); }
   .workspace-alert-severity[data-severity="info"] { background: rgb(219 234 254); color: rgb(29 78 216); }
 
+
+  .workspace-bottom-nav {
+    display: none;
+  }
+
+  .workspace-bottom-item {
+    position: relative;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: color-mix(in srgb, var(--koa-forest) 72%, white);
+    font: inherit;
+    text-decoration: none;
+  }
+
+  .workspace-bottom-item svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .workspace-bottom-icon-wrap {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+  }
+
+  .workspace-bottom-badge {
+    position: absolute;
+    top: -.4rem;
+    right: -.65rem;
+    min-width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background: rgb(185 28 28);
+    color: white;
+    padding: 0 .25rem;
+    font-size: .5rem;
+    font-weight: 900;
+    line-height: 1rem;
+    text-align: center;
+  }
+
   @media (max-width: 767px) {
+
+    .workspace-bottom-nav {
+      position: fixed;
+      left: .5rem;
+      right: .5rem;
+      bottom: max(.5rem, env(safe-area-inset-bottom));
+      z-index: 80;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: .2rem;
+      min-height: 4.35rem;
+      padding: .38rem .35rem .42rem;
+      border: 1px solid color-mix(in srgb, var(--koa-champagne) 46%, var(--koa-line));
+      border-radius: 1.15rem;
+      background: color-mix(in srgb, white 94%, var(--koa-ivory));
+      box-shadow: 0 18px 50px rgba(7,30,23,.24);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+    }
+
+    .workspace-bottom-item {
+      display: flex;
+      min-height: 3.45rem;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: .24rem;
+      border-radius: .85rem;
+      padding: .35rem .12rem;
+      color: color-mix(in srgb, var(--koa-forest) 72%, #718078);
+      font-size: .56rem;
+      font-weight: 850;
+      letter-spacing: .025em;
+      line-height: 1;
+      text-transform: none;
+      touch-action: manipulation;
+    }
+
+    .workspace-bottom-item[aria-current="page"],
+    .workspace-bottom-item[aria-expanded="true"] {
+      background: color-mix(in srgb, var(--koa-forest) 10%, white);
+      color: var(--koa-forest);
+    }
+
+    .workspace-bottom-item[aria-current="page"]::before,
+    .workspace-bottom-item[aria-expanded="true"]::before {
+      content: "";
+      position: absolute;
+      top: .18rem;
+      width: 1.25rem;
+      height: 2px;
+      border-radius: 999px;
+      background: var(--koa-clay);
+    }
+
+    .workspace-bottom-item:active {
+      transform: scale(.97);
+    }
+
+    .workspace-links[data-open="true"],
+    .workspace-alert-center[data-open="true"] {
+      position: fixed;
+      left: .5rem;
+      right: .5rem;
+      bottom: calc(5.15rem + env(safe-area-inset-bottom));
+      z-index: 75;
+      max-height: min(72dvh, 42rem);
+      margin: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-width: 1px;
+      border-radius: 1.15rem;
+      background: white;
+      box-shadow: 0 20px 60px rgba(7,30,23,.28);
+    }
+
+    .workspace-links[data-open="true"] {
+      padding: .55rem;
+    }
+
+    .workspace-alert-center[data-open="true"] {
+      padding: .85rem;
+    }
+
     [data-workspace-nav] > .container-shell {
       width: calc(100% - .65rem);
       padding-top: .35rem;
@@ -658,6 +818,7 @@
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
     links.dataset.open = open ? 'true' : 'false';
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    nav?.querySelector('[data-workspace-more-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
     const chevron = toggle.querySelector('[data-workspace-chevron]');
     if (chevron) chevron.textContent = '⌄';
     if (persist) {
@@ -671,6 +832,7 @@
     center.dataset.open = open ? 'true' : 'false';
     nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
     nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    nav?.querySelector('[data-workspace-alert-toggle-bottom]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function initializeMenuState() {
@@ -972,6 +1134,7 @@
   function renderAlerts(payload) {
     const total = Math.max(0, Number(payload?.total || 0));
     const mobileBadge = nav?.querySelector('[data-workspace-total]');
+    const bottomBadge = nav?.querySelector('[data-workspace-total-bottom]');
     const desktopBadge = nav?.querySelector('[data-workspace-alert-toggle]');
 
     const mobileAlertButton = nav?.querySelector('[data-workspace-alert-toggle-mobile]');
@@ -982,6 +1145,10 @@
     if (mobileAlertButton instanceof HTMLElement) {
       mobileAlertButton.classList.toggle('hidden', total <= 0);
       mobileAlertButton.classList.toggle('inline-flex', total > 0);
+    }
+    if (bottomBadge instanceof HTMLElement) {
+      bottomBadge.textContent = badgeText(total);
+      bottomBadge.classList.toggle('hidden', total <= 0);
     }
     if (desktopBadge instanceof HTMLElement) {
       const newCount = Math.max(0, Number(payload?.newCount || 0));
@@ -1035,6 +1202,24 @@
       setMenu(false);
       markVisibleAlertsSeen();
     }
+  });
+
+
+  nav?.querySelector('[data-workspace-alert-toggle-bottom]')?.addEventListener('click', () => {
+    const center = nav?.querySelector('[data-workspace-alert-center]');
+    if (!(center instanceof HTMLElement)) return;
+    const opening = center.dataset.open !== 'true';
+    setAlertCenter(opening);
+    if (opening) {
+      setMenu(false);
+      markVisibleAlertsSeen();
+    }
+  });
+
+  nav?.querySelector('[data-workspace-more-toggle]')?.addEventListener('click', () => {
+    const opening = toggle?.getAttribute('aria-expanded') !== 'true';
+    setAlertCenter(false);
+    setMenu(opening);
   });
 
   nav?.querySelector('[data-workspace-alert-toggle]')?.addEventListener('click', () => {
@@ -1108,6 +1293,29 @@
     });
 
     updateGroupVisibility();
+
+
+    const mobileRoute = currentPath === '/admin/'
+      ? 'home'
+      : (currentPath.startsWith('/admin/crm/') || currentPath.startsWith('/admin/quotes/'))
+        ? 'crm'
+        : currentPath.startsWith('/admin/calendar/')
+          ? 'calendar'
+          : 'more';
+
+    nav.querySelectorAll('[data-mobile-nav-link]').forEach((node) => {
+      if (!(node instanceof HTMLAnchorElement)) return;
+      const required = node.dataset.capability;
+      const allowed = !required || capabilities.has(required);
+      node.classList.toggle('hidden', !allowed);
+      if (allowed && node.dataset.mobileNavLink === mobileRoute) node.setAttribute('aria-current', 'page');
+      else node.removeAttribute('aria-current');
+    });
+    const moreButton = nav.querySelector('[data-workspace-more-toggle]');
+    if (moreButton instanceof HTMLElement) {
+      if (mobileRoute === 'more') moreButton.setAttribute('aria-current', 'page');
+      else moreButton.removeAttribute('aria-current');
+    }
 
     const role = nav.querySelector('[data-workspace-role]');
     if (role) role.textContent = roleLabel(session.role);

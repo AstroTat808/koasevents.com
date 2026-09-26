@@ -963,6 +963,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const checked=document.querySelector('[data-checked]');
     const overallCard=document.querySelector('[data-overall-card]');
     const failedCard=document.querySelector('[data-failed-card]');
+    const passedCard=passed?.closest('article,button');
+    const checkedCard=checked?.closest('article,button');
     const overallHint=document.querySelector('[data-overall-hint]');
     const failedHint=document.querySelector('[data-failed-hint]');
     const failuresOnly=document.querySelector('[data-failures-only]');
@@ -1232,8 +1234,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(failuresOnly)failuresOnly.checked=true;
       renderRootCauseSummary(latestHealthChecks);
       renderHealthChecks();
-      const failedChecks=[...results.querySelectorAll('[data-health-ok="false"]')];
-      if(!failedChecks.length)return;
+      const failedChecks=[...results.querySelectorAll('[data-health-severity="critical"], [data-health-severity="warning"]')];
+      if(!failedChecks.length){
+        jumpToHealthSection('#health-pages-apis');
+        return;
+      }
       const firstFailure=failedChecks[0];
       firstFailure.scrollIntoView({behavior:'smooth',block:'center'});
       window.setTimeout(()=>{
@@ -1245,6 +1250,146 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     overallCard?.addEventListener('click',showFailedChecks);
     failedCard?.addEventListener('click',showFailedChecks);
+
+
+    function showHealthyChecks(){
+      activeRootCause='';
+      if(failuresOnly)failuresOnly.checked=false;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+      const firstHealthy=results.querySelector('[data-health-severity="healthy"]');
+      if(!(firstHealthy instanceof HTMLElement)){
+        jumpToHealthSection('#health-pages-apis');
+        return;
+      }
+      firstHealthy.scrollIntoView({behavior:'smooth',block:'center'});
+      window.setTimeout(()=>{
+        firstHealthy.focus({preventScroll:true});
+        firstHealthy.classList.add('ring-2','ring-emerald-700','ring-offset-2');
+        window.setTimeout(()=>firstHealthy.classList.remove('ring-2','ring-emerald-700','ring-offset-2'),1800);
+      },450);
+    }
+
+    const mobileHealthQuery=window.matchMedia('(max-width: 767px)');
+
+    function setMobileCollapsed(section,collapsed){
+      if(!(section instanceof HTMLElement))return;
+      const content=[...section.children].filter((child,index)=>index>0&&!(child instanceof HTMLButtonElement&&child.hasAttribute('data-mobile-collapse-toggle')));
+      content.forEach((child)=>child.classList.toggle('koa-mobile-collapsed-content',collapsed));
+      section.dataset.mobileCollapsed=collapsed?'true':'false';
+      const toggleButton=section.querySelector('[data-mobile-collapse-toggle]');
+      if(toggleButton instanceof HTMLButtonElement){
+        toggleButton.setAttribute('aria-expanded',collapsed?'false':'true');
+        toggleButton.textContent=collapsed?'Show details':'Hide details';
+      }
+    }
+
+    function prepareMobileCollapsible(section){
+      if(!(section instanceof HTMLElement))return;
+      section.dataset.mobileCollapsible='true';
+      if(section.dataset.mobileCollapseReady==='true')return;
+      const header=section.firstElementChild;
+      if(!(header instanceof HTMLElement))return;
+      const button=document.createElement('button');
+      button.type='button';
+      button.dataset.mobileCollapseToggle='';
+      button.className='health-mobile-detail-toggle';
+      button.setAttribute('aria-expanded','false');
+      button.textContent='Show details';
+      button.addEventListener('click',()=>{
+        setMobileCollapsed(section,section.dataset.mobileCollapsed!=='true');
+      });
+      header.appendChild(button);
+      section.dataset.mobileCollapseReady='true';
+      setMobileCollapsed(section,mobileHealthQuery.matches);
+    }
+
+    function jumpToHealthSection(selector){
+      const target=document.querySelector(selector);
+      if(!(target instanceof HTMLElement))return;
+      if(target.matches('[data-mobile-collapsible]'))setMobileCollapsed(target,false);
+      const collapsedParent=target.closest('[data-mobile-collapsible]');
+      if(collapsedParent instanceof HTMLElement)setMobileCollapsed(collapsedParent,false);
+      target.scrollIntoView({behavior:'smooth',block:'start'});
+      target.classList.add('health-jump-highlight');
+      window.setTimeout(()=>target.classList.remove('health-jump-highlight'),1300);
+    }
+
+    function makeHealthJumpCard(card,handler,label){
+      if(!(card instanceof HTMLElement)||card.dataset.healthJumpReady==='true')return;
+      card.dataset.healthJumpReady='true';
+      card.classList.add('health-jump-card');
+      if(!(card instanceof HTMLButtonElement)&&!(card instanceof HTMLAnchorElement)){
+        card.setAttribute('role','button');
+        card.tabIndex=0;
+        card.setAttribute('aria-label',label);
+        card.addEventListener('keydown',(event)=>{
+          if(event.key==='Enter'||event.key===' '){
+            event.preventDefault();
+            handler();
+          }
+        });
+      }
+      card.addEventListener('click',handler);
+    }
+
+    function findDirectHealthSection(title){
+      if(!(app instanceof HTMLElement))return null;
+      return [...app.children].find((node)=>{
+        if(!(node instanceof HTMLElement)||node.tagName!=='SECTION')return false;
+        return String(node.querySelector('h2')?.textContent||'').trim()===title;
+      })||null;
+    }
+
+    function configureMobileHealthSection(section,id,order,collapsible=false){
+      if(!(section instanceof HTMLElement))return;
+      if(id)section.id=id;
+      section.dataset.mobileOrder=String(order);
+      if(collapsible)prepareMobileCollapsible(section);
+    }
+
+    function initializeMobileHealthExperience(){
+      if(!(app instanceof HTMLElement))return;
+      const directSections=[...app.children].filter((node)=>node instanceof HTMLElement&&node.tagName==='SECTION');
+      configureMobileHealthSection(directSections[0],'health-summary',0,false);
+      configureMobileHealthSection(document.querySelector('[data-needs-action]'),'health-needs-action',1,false);
+      configureMobileHealthSection(document.querySelector('[data-root-cause-summary]'),'health-root-causes',2,false);
+      configureMobileHealthSection(findDirectHealthSection('Pages + APIs'),'health-pages-apis',3,false);
+      configureMobileHealthSection(document.querySelector('#credential-health'),'credential-health',4,false);
+      configureMobileHealthSection(findDirectHealthSection('Email Health'),'health-email',5,false);
+      configureMobileHealthSection(findDirectHealthSection('Office 365 calendar sync'),'health-office365',6,false);
+      configureMobileHealthSection(findDirectHealthSection('Deployment'),'health-deployment',7,true);
+      configureMobileHealthSection(document.querySelector('[data-weekly-executive-summary]'),'health-weekly',8,false);
+      configureMobileHealthSection(findDirectHealthSection('Observed outage duration'),'health-incidents',9,true);
+      configureMobileHealthSection(findDirectHealthSection('Uptime by service'),'health-uptime',10,true);
+      configureMobileHealthSection(findDirectHealthSection('Notifications + public status'),'health-notifications',11,true);
+      configureMobileHealthSection(findDirectHealthSection('Recent health checks'),'health-history',12,true);
+      prepareMobileCollapsible(document.querySelector('[data-credit-panel]'));
+
+      makeHealthJumpCard(passedCard,showHealthyChecks,'Show healthy System Health checks');
+      makeHealthJumpCard(checkedCard,()=>jumpToHealthSection('#health-history'),'Open recent System Health history');
+
+      const weeklyTargets=new Map([
+        ['Observed uptime','#health-uptime'],
+        ['Credential reliability','#credential-health'],
+        ['Incidents','#health-incidents'],
+        ['Automatic repairs','#health-history'],
+        ['Unresolved now','#health-needs-action'],
+      ]);
+      document.querySelector('[data-weekly-executive-summary]')?.querySelectorAll('article').forEach((card)=>{
+        const label=String(card.querySelector('p')?.textContent||'').trim();
+        const target=weeklyTargets.get(label);
+        if(target)makeHealthJumpCard(card,()=>jumpToHealthSection(target),'Open '+label+' details');
+      });
+    }
+
+    mobileHealthQuery.addEventListener?.('change',(event)=>{
+      document.querySelectorAll('[data-mobile-collapsible]').forEach((section)=>{
+        if(section instanceof HTMLElement)setMobileCollapsed(section,event.matches);
+      });
+    });
+
+    initializeMobileHealthExperience();
 
     function formatDuration(minutes){
       const value=Math.max(0,Number(minutes||0));
