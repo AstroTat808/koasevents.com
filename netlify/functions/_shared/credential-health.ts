@@ -26,6 +26,7 @@ export type CredentialHealthRow = {
 
 type CredentialHealthOptions = {
   force?: boolean;
+  emailHealth?: any;
 };
 
 function clean(value: unknown, max=800) {
@@ -226,7 +227,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
   const [emailHealth, quickBooks, microsoftGraph, github, netlify] = await Promise.all([
-    emailHealthSummary(context, { force: Boolean(options.force) }),
+    options.emailHealth || emailHealthSummary(context, { force: Boolean(options.force) }),
     verifyQuickBooksCredentials(context),
     verifyOffice365Credentials(),
     verifyGithubCredential(),
