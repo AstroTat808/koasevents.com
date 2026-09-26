@@ -791,8 +791,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const detail=String(row?.detail||'').trim();
       const status=Number(row?.status||0);
       const deploymentState=String(row?.deploymentState||'');
-      let cause='The monitor received an unexpected response from this service.';
-      let fix='Run the check again. If it still fails, inspect the affected service and its most recent deployment or configuration change.';
+      const issueType=String(row?.issueType||'');
+      const issueDefaults={
+        'Service Failure':[
+          'The monitored service or application path is not meeting its expected operational contract.',
+          'Inspect the affected service, runtime logs, and most recent code change, then rerun the check after the operational failure is corrected.',
+        ],
+        'Authentication Expected':[
+          'The protected endpoint returned an authentication response exactly as expected for an unauthenticated health probe.',
+          'No action is required. The authentication boundary is working as designed.',
+        ],
+        'Configuration Problem':[
+          'The service is reachable, but a required setting, environment value, route contract, or integration configuration is missing or inconsistent.',
+          'Correct the named configuration without treating the underlying provider as an outage, then rerun System Health.',
+        ],
+        'Permission Problem':[
+          'The credential or authenticated identity reached the service but does not currently have the access required for this check.',
+          'Correct the credential scope, role, consent, or permission. Keep unrelated service-health checks separate so a permission issue does not imply an outage.',
+        ],
+        'Deployment Problem':[
+          'The current production deployment state is preventing a clean verification of the expected release.',
+          'Resolve the identified deployment, release-policy, or Git-to-Netlify synchronization state, then rerun the check.',
+        ],
+        'External Dependency Problem':[
+          'An external provider or upstream API could not be verified independently of the Koa application itself.',
+          'Confirm the provider response and retry. Treat this separately from an internal application failure unless the provider problem is proven to be caused by Koa configuration.',
+        ],
+      };
+      const defaults=issueDefaults[issueType]||[
+        'The monitor received an unexpected response from this service.',
+        'Run the check again. If it still fails, inspect the affected service and its most recent deployment or configuration change.',
+      ];
+      let cause=defaults[0];
+      let fix=defaults[1];
 
       if(deploymentState==='synced'&&row?.deploymentDetails?.fallbackUsed){
         cause='Direct GitHub main metadata was not available to the production function, so the monitor verified the current release from Netlify commit_ref instead.';
