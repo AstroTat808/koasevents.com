@@ -1,0 +1,150 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout noindex title="Action Center | Koa’s Events" description="One mobile inbox for operational items that need attention across Koa’s admin." canonical="https://koasevents.com/admin/actions/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-5xl">
+      <header class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Mobile operations</p>
+            <h1 class="display mt-2 text-5xl">Action Center</h1>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-white/62">One prioritized inbox for overdue CRM work, unanswered sales leads, accounting mismatches, System Health, vendor insurance, and staff/security attention.</p>
+          </div>
+          <button data-refresh type="button" class="rounded-full border border-white/20 bg-white/[.06] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Refresh</button>
+        </div>
+      </header>
+
+      <section data-unauthorized class="mt-5 hidden rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+        <h2 class="display text-3xl text-[var(--koa-forest)]">Workspace access required</h2>
+      </section>
+
+      <div data-app class="mt-5 hidden grid gap-5">
+        <section class="grid grid-cols-3 gap-2">
+          <article class="rounded-xl border border-red-200 bg-red-50 p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-red-700">Critical</p><strong data-count-urgent class="display mt-2 block text-3xl text-red-900">0</strong></article>
+          <article class="rounded-xl border border-amber-200 bg-amber-50 p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-amber-800">Warning</p><strong data-count-upcoming class="display mt-2 block text-3xl text-amber-900">0</strong></article>
+          <article class="rounded-xl border border-sky-200 bg-sky-50 p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-sky-800">Info</p><strong data-count-info class="display mt-2 block text-3xl text-sky-900">0</strong></article>
+        </section>
+
+        <section class="rounded-[1.3rem] bg-white p-4 shadow-[var(--shadow-soft)]">
+          <div class="flex gap-2 overflow-x-auto pb-1" data-filters>
+            <button data-filter="all" class="action-filter is-active" type="button">All</button>
+            <button data-filter="urgent" class="action-filter" type="button">Critical</button>
+            <button data-filter="unansweredLeads" class="action-filter" type="button">Sales</button>
+            <button data-filter="overdueTasks" class="action-filter" type="button">CRM</button>
+            <button data-filter="accountingMismatches" class="action-filter" type="button">Accounting</button>
+            <button data-filter="healthWarnings" class="action-filter" type="button">Health</button>
+            <button data-filter="vendorInsurance" class="action-filter" type="button">Vendors</button>
+            <button data-filter="securityWarnings" class="action-filter" type="button">Staff / Security</button>
+          </div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex items-end justify-between gap-3">
+            <div><p class="eyebrow text-[var(--koa-clay)]">Prioritized inbox</p><h2 class="display mt-2 text-4xl">What needs action now</h2></div>
+            <span data-total class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-xs font-black text-[var(--koa-forest)]">0 items</span>
+          </div>
+          <div data-list class="mt-5 grid gap-3"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <style>
+    .action-filter{flex:0 0 auto;min-height:2.55rem;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.6rem .8rem;color:var(--koa-forest);font-size:.58rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+    .action-filter.is-active{border-color:var(--koa-forest);background:var(--koa-forest);color:white}
+  </style>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const app=document.querySelector('[data-app]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const list=document.querySelector('[data-list]');
+    const total=document.querySelector('[data-total]');
+    const refresh=document.querySelector('[data-refresh]');
+    let payload={alerts:[],severityCounts:{urgent:0,upcoming:0,info:0},total:0};
+    let filter='all';
+
+    const categoryLabel={
+      overdueTasks:'CRM task',
+      unansweredLeads:'Sales response',
+      accountingMismatches:'Accounting',
+      healthWarnings:'System Health',
+      vendorInsurance:'Vendor insurance',
+      securityWarnings:'Staff / Security',
+    };
+
+    function escapeHtml(value){
+      return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    }
+
+    function timeLabel(value){
+      const ms=Date.parse(String(value||''));
+      if(!Number.isFinite(ms))return '';
+      return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(ms));
+    }
+
+    async function action(actionName,extra={}){
+      const response=await fetch('/api/admin/workspace-alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:actionName,...extra})});
+      if(!response.ok)return false;
+      await load();
+      return true;
+    }
+
+    async function openAlert(alert){
+      if(alert?.isNew&&alert?.occurrenceId){
+        try{await fetch('/api/admin/workspace-alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'mark-seen',occurrenceIds:[alert.occurrenceId]})});}catch{}
+      }
+      window.location.assign(alert?.href||'/admin/');
+    }
+
+    function render(){
+      document.querySelector('[data-count-urgent]').textContent=String(payload?.severityCounts?.urgent||0);
+      document.querySelector('[data-count-upcoming]').textContent=String(payload?.severityCounts?.upcoming||0);
+      document.querySelector('[data-count-info]').textContent=String(payload?.severityCounts?.info||0);
+      const rows=(payload?.alerts||[]).filter((row)=>filter==='all'||(filter==='urgent'?row.severity==='urgent':row.category===filter));
+      total.textContent=rows.length+' item'+(rows.length===1?'':'s');
+      list.innerHTML='';
+      for(const alert of rows){
+        const card=document.createElement('article');
+        const urgent=alert.severity==='urgent';
+        const upcoming=alert.severity==='upcoming';
+        card.className='rounded-[1.1rem] border p-4 '+(urgent?'border-red-200 bg-red-50':upcoming?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50');
+        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.54rem] font-black uppercase tracking-[.08em] '+(urgent?'text-red-700':upcoming?'text-amber-800':'text-sky-800')+'">'+escapeHtml(categoryLabel[alert.category]||alert.category)+(alert.isNew?' · New':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(alert.title||'Action item')+'</h3></div><span class="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(urgent?'Critical':upcoming?'Warning':'Info')+'</span></div><p class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/60">'+escapeHtml(alert.context||'')+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/58">'+escapeHtml(alert.detail||'')+'</p><p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/40">First appeared '+escapeHtml(timeLabel(alert.firstAppearedAt))+'</p>';
+        const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
+        const open=document.createElement('button');open.type='button';open.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';open.textContent='Open';open.addEventListener('click',()=>void openAlert(alert));actions.appendChild(open);
+        if(alert.isNew){const seen=document.createElement('button');seen.type='button';seen.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';seen.textContent='Mark seen';seen.addEventListener('click',()=>void action('mark-seen',{occurrenceIds:[alert.occurrenceId]}));actions.appendChild(seen);}
+        const snooze=document.createElement('button');snooze.type='button';snooze.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';snooze.textContent='Tomorrow';snooze.addEventListener('click',()=>void action('snooze',{occurrenceId:alert.occurrenceId,preset:'tomorrow'}));actions.appendChild(snooze);
+        const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]';dismiss.textContent='Dismiss';dismiss.addEventListener('click',()=>void action('dismiss',{occurrenceId:alert.occurrenceId}));actions.appendChild(dismiss);
+        card.appendChild(actions);list.appendChild(card);
+      }
+      if(!rows.length)list.innerHTML='<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Nothing in this view currently needs attention.</div>';
+    }
+
+    async function load(){
+      refresh.disabled=true;
+      try{
+        const response=await fetch('/api/admin/workspace-alerts',{cache:'no-store'});
+        if(response.status===401||response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+        if(!response.ok)throw new Error('Unable to load Action Center.');
+        payload=await response.json();
+        render();
+      }finally{refresh.disabled=false;}
+    }
+
+    document.querySelectorAll('[data-filter]').forEach((button)=>button.addEventListener('click',()=>{
+      filter=button.dataset.filter||'all';
+      document.querySelectorAll('[data-filter]').forEach((node)=>node.classList.toggle('is-active',node===button));
+      render();
+    }));
+    refresh?.addEventListener('click',()=>void load());
+
+    const session=await getAdminSession();
+    const ok=Boolean(session&&!session.accessBlocked);
+    app?.classList.toggle('hidden',!ok);
+    unauthorized?.classList.toggle('hidden',ok);
+    if(ok)await load();
+  </script>
+</BaseLayout>

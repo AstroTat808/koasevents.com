@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { hasCapability, requireOperations } from './_shared/admin';
+import { admin } from '@netlify/identity';
+import { hasCapability, passwordSecurityFor, readAuthSecurityPolicy, requireOperations } from './_shared/admin';
 import { buildQuickBooksAccountingAudit } from './admin-quickbooks.mts';
 import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sync.ts';
 import { inspectDeploymentSync, readLatestHealth } from './_shared/system-health';
@@ -8,7 +9,7 @@ import { readCredentialHealthSummary } from './_shared/credential-health';
 import { credentialWorkspaceAlert } from './_shared/workspace-alert-lifecycle';
 
 type Severity='urgent'|'upcoming'|'info';
-type AlertCategory='overdueTasks'|'vendorInsurance'|'accountingMismatches'|'healthWarnings';
+type AlertCategory='overdueTasks'|'unansweredLeads'|'vendorInsurance'|'accountingMismatches'|'healthWarnings'|'securityWarnings';
 type AlertDetail={
   id:string;
   category:AlertCategory;
@@ -35,9 +36,11 @@ type UserAlertState={
 
 const CATEGORY_CAPABILITY:Record<AlertCategory,any>={
   overdueTasks:'crm.view',
+  unansweredLeads:'sales.view',
   vendorInsurance:'insurance.view',
   accountingMismatches:'quickbooks.view',
   healthWarnings:'health.view',
+  securityWarnings:'users.manage',
 };
 
 function store(context:Context,name:string){
@@ -77,6 +80,43 @@ function snoozeUntil(payload:any){
   const custom=dateKey(payload?.date);
   return custom?custom+'T08:00:00-10:00':'';
 }
+function hasResponseActivity(record:any){
+  const responseTypes=new Set(['email','call','meeting','responded','proposal_sent','quickbooks_estimate_sent']);
+  return (Array.isArray(record?.timeline)?record.timeline:[]).some((event:any)=>responseTypes.has(String(event?.type||'')));
+}
+function responseWaitSince(record:any){
+  const values=[record?.createdAt];
+  for(const event of Array.isArray(record?.timeline)?record.timeline:[]){
+    if(event?.createdAt&&['inquiry','lead'].includes(String(event?.type||'')))values.push(event.createdAt);
+  }
+  const times=values.map(value=>Date.parse(String(value||''))).filter(Number.isFinite);
+  return times.length?Math.min(...times):Date.now();
+}
+function hstBusinessHoursBetween(startMs:number,endMs=Date.now()){
+  if(!Number.isFinite(startMs)||endMs<=startMs)return 0;
+  const offset=-10*60*60*1000;
+  const localStart=startMs+offset;
+  const localEnd=endMs+offset;
+  const firstDay=Math.floor(localStart/86400000)*86400000;
+  const lastDay=Math.floor(localEnd/86400000)*86400000;
+  let total=0;
+  for(let dayMs=firstDay;dayMs<=lastDay;dayMs+=86400000){
+    const day=new Date(dayMs).getUTCDay();
+    if(day===0||day===6)continue;
+    const open=dayMs+9*3600000;
+    const close=dayMs+17*3600000;
+    const from=Math.max(localStart,open);
+    const to=Math.min(localEnd,close);
+    if(to>from)total+=to-from;
+  }
+  return total/3600000;
+}
+function userDisabled(user:any){
+  const meta=user?.appMetadata||user?.app_metadata||{};
+  const roles=[...(Array.isArray(user?.roles)?user.roles:[]),...(Array.isArray(meta?.roles)?meta.roles:[])].map((role:any)=>String(role||'').toLowerCase());
+  return meta?.active===false||roles.includes('deactivated');
+}
+
 function cleanUserState(value:any):UserAlertState{
   const seen=value?.seen&&typeof value.seen==='object'?value.seen:{};
   const snoozes=value?.snoozes&&typeof value.snoozes==='object'?value.snoozes:{};
@@ -95,9 +135,11 @@ async function saveUserState(context:Context,user:any,state:UserAlertState){
 
 async function computeAlerts(context:Context,user:any){
   const canCrm=hasCapability(user,'crm.view');
+  const canSales=hasCapability(user,'sales.view');
   const canInsurance=hasCapability(user,'insurance.view');
   const canQuickBooks=hasCapability(user,'quickbooks.view');
   const canHealth=hasCapability(user,'health.view');
+  const canStaffSecurity=hasCapability(user,'users.manage');
   const today=todayHst();
 
   const crm=store(context,'koa-crm');
@@ -105,13 +147,15 @@ async function computeAlerts(context:Context,user:any){
   const vendorsStore=store(context,'koa-vendors');
   const ops=store(context,'koa-event-ops');
 
-  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth]=await Promise.all([
+  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth,staffUsers,staffPolicy]=await Promise.all([
     canCrm?crm.get('tasks/index',{type:'json'}):Promise.resolve([]),
-    (canInsurance||canQuickBooks||canCrm)?sales.get('records/index',{type:'json'}):Promise.resolve([]),
+    (canInsurance||canQuickBooks||canCrm||canSales)?sales.get('records/index',{type:'json'}):Promise.resolve([]),
     canInsurance?vendorsStore.get('vendors/index',{type:'json'}):Promise.resolve([]),
     canHealth?readLatestHealth(context):Promise.resolve(null),
     canHealth?inspectDeploymentSync(context):Promise.resolve(null),
     canHealth?readCredentialHealthSummary(context):Promise.resolve(null),
+    canStaffSecurity?admin.listUsers({page:1,perPage:200}):Promise.resolve([]),
+    canStaffSecurity?readAuthSecurityPolicy():Promise.resolve(null),
   ]);
 
   const tasks:Array<any>=Array.isArray(tasksRaw)?tasksRaw:[];
@@ -139,6 +183,27 @@ async function computeAlerts(context:Context,user:any){
           href:'/admin/crm/?q='+encodeURIComponent(String(task?.recordId||customer)),
         } as AlertDetail;
       })
+    : [];
+
+  const unansweredLeadDetails:AlertDetail[]=canSales
+    ? records
+        .filter((record:any)=>['inquiry','lead'].includes(String(record?.kind||''))&&['inquiry','lead'].includes(String(record?.stage||''))&&!hasResponseActivity(record))
+        .map((record:any)=>{
+          const startMs=responseWaitSince(record);
+          const businessHours=hstBusinessHoursBetween(startMs);
+          const wallHours=Math.max(0,(Date.now()-startMs)/3600000);
+          const overdue=businessHours>=4;
+          const client=clip(record?.customer?.name||record?.customer?.email||record?.id||'Sales lead');
+          return {
+            id:'unanswered:'+clip(record?.id,100),
+            category:'unansweredLeads' as AlertCategory,
+            severity:overdue?'urgent':'upcoming',
+            title:client+' · waiting for first response',
+            context:dateKey(record?.customer?.eventDate)?'Event '+dateKey(record?.customer?.eventDate):'Sales CRM',
+            detail:(overdue?'Response SLA due · ':'Waiting · ')+(wallHours>=24?Math.floor(wallHours/24)+'d '+Math.floor(wallHours%24)+'h':Math.floor(wallHours)+'h')+' elapsed · '+businessHours.toFixed(businessHours<10?1:0)+' business hr',
+            href:'/admin/quotes/?q='+encodeURIComponent(String(record?.id||client))+'#unanswered-leads',
+          } as AlertDetail;
+        })
     : [];
 
   const insuranceDetails:AlertDetail[]=[];
@@ -233,11 +298,57 @@ async function computeAlerts(context:Context,user:any){
         .map((row:any)=>credentialWorkspaceAlert(row) as AlertDetail)
     : [];
 
+  const securityDetails:AlertDetail[]=[];
+  if(canStaffSecurity&&Array.isArray(staffUsers)&&staffPolicy){
+    for(const staff of staffUsers){
+      if(userDisabled(staff))continue;
+      const id=clip(staff?.id||staff?.email,100);
+      const email=clip(staff?.email,240).toLowerCase();
+      const confirmedAt=clip(staff?.confirmedAt||staff?.confirmed_at,80);
+      if(!confirmedAt){
+        securityDetails.push({
+          id:'security:pending:'+id,
+          category:'securityWarnings',
+          severity:'upcoming',
+          title:'Staff account setup pending',
+          context:email||'User Management',
+          detail:'This active staff account has not completed initial account confirmation/setup.',
+          href:'/admin/staff/',
+        });
+        continue;
+      }
+      const security=passwordSecurityFor(staff,staff,staffPolicy);
+      if(security.passwordExpired){
+        securityDetails.push({
+          id:'security:password-expired:'+id,
+          category:'securityWarnings',
+          severity:'urgent',
+          title:'Staff password expired',
+          context:email||'User Management',
+          detail:'This staff account requires a password change before normal access can continue.',
+          href:'/admin/staff/',
+        });
+      }else if(security.forcePasswordChange){
+        securityDetails.push({
+          id:'security:password-change:'+id,
+          category:'securityWarnings',
+          severity:'upcoming',
+          title:'Staff password change required',
+          context:email||'User Management',
+          detail:'A password change has been required for this staff account.',
+          href:'/admin/staff/',
+        });
+      }
+    }
+  }
+
   return {
     overdueTasks:overdueTaskDetails,
+    unansweredLeads:unansweredLeadDetails,
     vendorInsurance:insuranceDetails,
     accountingMismatches:accountingDetails,
     healthWarnings:[...credentialDetails,...healthDetails],
+    securityWarnings:securityDetails,
   } as Record<AlertCategory,AlertDetail[]>;
 }
 
@@ -399,10 +510,12 @@ export default async(req:Request,context:Context)=>{
   });
 
   const itemMeta:Record<AlertCategory,{label:string;href:string;capability:string}>={
-    overdueTasks:{label:'Overdue tasks',href:'/admin/crm/',capability:'crm.view'},
+    overdueTasks:{label:'Overdue CRM tasks',href:'/admin/crm/',capability:'crm.view'},
+    unansweredLeads:{label:'Unanswered sales leads',href:'/admin/quotes/#unanswered-leads',capability:'sales.view'},
     vendorInsurance:{label:'Vendor insurance problems',href:'/admin/insurance/',capability:'insurance.view'},
     accountingMismatches:{label:'Accounting mismatches',href:'/admin/quickbooks/#accounting-audit',capability:'quickbooks.view'},
-    healthWarnings:{label:'System health warnings',href:'/admin/health/',capability:'health.view'},
+    healthWarnings:{label:'System health warnings',href:'/admin/health/#health-priority',capability:'health.view'},
+    securityWarnings:{label:'Staff / security warnings',href:'/admin/staff/',capability:'users.manage'},
   };
   const items:any={};
   for(const category of Object.keys(itemMeta) as AlertCategory[]){

@@ -70,10 +70,30 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       data-open="false"
       class="workspace-links grid-cols-1 gap-3 rounded-[1rem] bg-white md:grid-cols-2 lg:grid-cols-6"
     >
+      <section data-mobile-nav-settings class="workspace-mobile-nav-settings">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="workspace-group-title">Mobile navigation</p>
+            <p class="px-1 text-xs leading-5 text-[var(--koa-ink)]/55">Choose the four modules shown next to More on this account.</p>
+          </div>
+          <button data-mobile-nav-edit type="button" class="workspace-alert-action">Customize</button>
+        </div>
+        <div data-mobile-nav-editor class="mt-3 hidden">
+          <div data-mobile-nav-selects class="grid gap-2"></div>
+          <div class="mt-3 flex items-center gap-2">
+            <button data-mobile-nav-save type="button" class="workspace-alert-action">Save</button>
+            <span data-mobile-nav-message class="text-xs text-[var(--koa-ink)]/50"></span>
+          </div>
+        </div>
+      </section>
+
       <section data-workspace-group class="workspace-group">
         <p class="workspace-group-title">Home</p>
         <div class="workspace-group-links">
           <a data-workspace-link data-capability="admin.dashboard.view" href="/admin/" class="workspace-nav-link">Admin Home</a>
+          <a data-workspace-link href="/admin/actions/" class="workspace-nav-link">
+            <span>Action Center</span><span data-link-alert="actionCenter" class="hidden workspace-link-badge"></span>
+          </a>
           <a data-workspace-link href="/staff/" class="workspace-nav-link workspace-nav-home">Staff Home</a>
         </div>
       </section>
@@ -134,25 +154,15 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   {isAdminWorkspace && (
     <div data-workspace-bottom-nav class="workspace-bottom-nav" aria-label="Mobile admin navigation">
-      <a data-mobile-nav-link="home" data-capability="admin.dashboard.view" href="/admin/" class="workspace-bottom-item" aria-label="Admin Home">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z"/></svg>
-        <span>Home</span>
-      </a>
-      <a data-mobile-nav-link="crm" data-capability="crm.view" href="/admin/crm/" class="workspace-bottom-item" aria-label="Business CRM">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4.75A1.75 1.75 0 0 1 5.75 3h12.5A1.75 1.75 0 0 1 20 4.75v14.5A1.75 1.75 0 0 1 18.25 21H5.75A1.75 1.75 0 0 1 4 19.25zM7 8h10M7 12h10M7 16h6"/></svg>
-        <span>CRM</span>
-      </a>
-      <a data-mobile-nav-link="calendar" data-capability="calendar.view" href="/admin/calendar/" class="workspace-bottom-item" aria-label="Master Calendar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h14A2 2 0 0 1 21 6.5v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 9h18"/></svg>
-        <span>Calendar</span>
-      </a>
-      <button data-workspace-alert-toggle-bottom type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-alert-center" aria-label="Workspace alerts">
-        <span class="workspace-bottom-icon-wrap">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 9a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18C21 16 18 16 18 9ZM9.5 20h5"/></svg>
-          <span data-workspace-total-bottom class="workspace-bottom-badge hidden"></span>
-        </span>
-        <span data-workspace-bottom-alert-label>Alerts</span>
-      </button>
+      {[0,1,2,3].map((slot)=>(
+        <a data-workspace-bottom-slot={slot} href="/admin/" class="workspace-bottom-item" aria-label="Admin module">
+          <span class="workspace-bottom-icon-wrap">
+            <svg data-mobile-slot-icon viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z"/></svg>
+            <span data-mobile-slot-badge class="workspace-bottom-badge hidden"></span>
+          </span>
+          <span data-mobile-slot-label>Home</span>
+        </a>
+      ))}
       <button data-workspace-more-toggle type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-links" aria-label="More admin modules">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h.01M12 7h.01M19 7h.01M5 12h.01M12 12h.01M19 12h.01M5 17h.01M12 17h.01M19 17h.01"/></svg>
         <span>More</span>
@@ -529,6 +539,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     display: none;
   }
 
+  .workspace-mobile-nav-settings {
+    display: none;
+  }
+
+  @keyframes koaHealthBadgePulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(185,28,28,0); }
+    45% { transform: scale(1.06); box-shadow: 0 0 0 .28rem rgba(185,28,28,.13); }
+  }
+
+  .workspace-bottom-item.workspace-health-pulse .workspace-bottom-badge {
+    animation: koaHealthBadgePulse 1.8s ease-in-out infinite;
+  }
+
   .workspace-bottom-item {
     position: relative;
     min-width: 0;
@@ -584,6 +607,26 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   @media (max-width: 767px) {
+
+    .workspace-mobile-nav-settings {
+      display: block;
+      border: 1px solid color-mix(in srgb, var(--koa-line) 72%, transparent);
+      border-radius: .8rem;
+      background: color-mix(in srgb, var(--koa-sand) 42%, white);
+      padding: .55rem;
+    }
+
+    .workspace-mobile-nav-settings select {
+      min-height: 2.65rem;
+      width: 100%;
+      border: 1px solid var(--koa-line);
+      border-radius: .72rem;
+      background: white;
+      padding: .6rem .7rem;
+      color: var(--koa-forest);
+      font-size: .78rem;
+      font-weight: 700;
+    }
 
     .workspace-bottom-nav {
       position: fixed;
@@ -864,7 +907,166 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   let alertPayload = null;
   let alertTab = 'active';
-  let bottomHealthWarningCount = 0;
+  let deployWarningPoll = null;
+  let currentMobileNav = ['home','crm','calendar','health'];
+  let currentCapabilities = new Set();
+
+  const mobileNavDefinitions = {
+    home:{label:'Home',href:'/admin/',capability:'admin.dashboard.view',icon:'M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z'},
+    actions:{label:'Actions',href:'/admin/actions/',capability:'',icon:'M5 4h14v16H5zM8 8h8M8 12h8M8 16h5'},
+    crm:{label:'CRM',href:'/admin/crm/',capability:'crm.view',icon:'M4 4.75A1.75 1.75 0 0 1 5.75 3h12.5A1.75 1.75 0 0 1 20 4.75v14.5A1.75 1.75 0 0 1 18.25 21H5.75A1.75 1.75 0 0 1 4 19.25zM7 8h10M7 12h10M7 16h6'},
+    sales:{label:'Sales',href:'/admin/quotes/',capability:'sales.view',icon:'M4 19V5M4 19h16M8 15l3-4 3 2 5-7'},
+    events:{label:'Events',href:'/admin/events/',capability:'events.view',icon:'M5 5h14v14H5zM8 3v4M16 3v4M5 9h14'},
+    calendar:{label:'Calendar',href:'/admin/calendar/',capability:'calendar.view',icon:'M5 4.5h14A2 2 0 0 1 21 6.5v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 9h18'},
+    quickbooks:{label:'Books',href:'/admin/quickbooks/',capability:'quickbooks.view',icon:'M4 5h16v14H4zM8 9h8M8 13h3M14 13h2M8 16h8'},
+    health:{label:'Health',href:'/admin/health/',capability:'health.view',icon:'M3 12h4l2-5 4 10 2-5h6'},
+    staff:{label:'Staff',href:'/admin/staff/',capability:'users.manage',icon:'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20v-2a5 5 0 0 1 10 0v2M17 10a2.5 2.5 0 1 0 0-5M15 20v-2a4 4 0 0 1 6 0v2'},
+    vendors:{label:'Vendors',href:'/admin/vendors/',capability:'vendors.view',icon:'M4 8h16v11H4zM7 8V5h10v3M8 12h8'},
+    insurance:{label:'Insurance',href:'/admin/insurance/',capability:'insurance.view',icon:'M12 3 20 6v6c0 5-3.4 8-8 9-4.6-1-8-4-8-9V6zM9 12l2 2 4-5'},
+    profitability:{label:'Profit',href:'/admin/profitability/',capability:'sales.profit_settings',icon:'M4 18 9 12l4 3 7-9M15 6h5v5'},
+    gallery:{label:'Gallery',href:'/admin/gallery/',capability:'gallery.view',icon:'M4 5h16v14H4zM7 15l3-3 3 2 3-4 3 5M9 9h.01'},
+  };
+
+  function allowedMobileNavDefinitions(){
+    return Object.entries(mobileNavDefinitions).filter(([,definition])=>!definition.capability||currentCapabilities.has(definition.capability));
+  }
+
+  function normalizeMobileNav(items){
+    const requested=Array.isArray(items)?items.map(String):[];
+    const allowedIds=new Set(allowedMobileNavDefinitions().map(([id])=>id));
+    const out=[];
+    for(const id of [...requested,'home','crm','calendar','health','actions','sales','events','quickbooks','staff','vendors','insurance','profitability','gallery']){
+      if(!allowedIds.has(id)||out.includes(id))continue;
+      out.push(id);
+      if(out.length===4)break;
+    }
+    return out;
+  }
+
+  function applyMobileNav(items){
+    currentMobileNav=normalizeMobileNav(items);
+    const currentPath=normalizedPath(window.location.pathname);
+    nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot,index)=>{
+      if(!(slot instanceof HTMLAnchorElement))return;
+      const id=currentMobileNav[index];
+      const definition=mobileNavDefinitions[id];
+      if(!definition){slot.classList.add('hidden');return;}
+      slot.classList.remove('hidden');
+      slot.dataset.mobileSlotId=id;
+      slot.href=definition.href;
+      slot.setAttribute('aria-label',definition.label);
+      const label=slot.querySelector('[data-mobile-slot-label]');
+      if(label)label.textContent=definition.label;
+      const path=slot.querySelector('[data-mobile-slot-icon] path');
+      if(path)path.setAttribute('d',definition.icon);
+      if(currentPath===normalizedPath(definition.href))slot.setAttribute('aria-current','page');
+      else slot.removeAttribute('aria-current');
+      slot.classList.remove('workspace-health-pulse');
+      const badge=slot.querySelector('[data-mobile-slot-badge]');
+      if(badge instanceof HTMLElement){badge.textContent='';badge.classList.add('hidden');badge.removeAttribute('data-severity');}
+    });
+    renderMobileNavEditor();
+    if(alertPayload)renderMobileSlotBadges(alertPayload);
+  }
+
+  function renderMobileNavEditor(){
+    const wrap=nav?.querySelector('[data-mobile-nav-selects]');
+    if(!(wrap instanceof HTMLElement))return;
+    wrap.innerHTML='';
+    const definitions=allowedMobileNavDefinitions();
+    for(let index=0;index<4;index+=1){
+      const label=document.createElement('label');
+      label.className='grid gap-1 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]';
+      label.textContent='Slot '+(index+1);
+      const select=document.createElement('select');
+      select.dataset.mobileNavSlotSelect=String(index);
+      for(const [id,definition] of definitions){
+        const option=document.createElement('option');
+        option.value=id;option.textContent=definition.label;select.appendChild(option);
+      }
+      select.value=currentMobileNav[index]||definitions[index]?.[0]||'';
+      label.appendChild(select);wrap.appendChild(label);
+    }
+  }
+
+  function categoryBadgeCount(payload,id){
+    const map={
+      actions:Number(payload?.total||0),
+      crm:Number(payload?.items?.overdueTasks?.count||0),
+      sales:Number(payload?.items?.unansweredLeads?.count||0),
+      quickbooks:Number(payload?.items?.accountingMismatches?.count||0),
+      health:Number(payload?.items?.healthWarnings?.count||0),
+      insurance:Number(payload?.items?.vendorInsurance?.count||0),
+      staff:Number(payload?.items?.securityWarnings?.count||0),
+    };
+    return Math.max(0,Number(map[id]||0));
+  }
+
+  function categorySeverity(payload,id){
+    const map={
+      actions:payload?.alerts||[],
+      crm:payload?.items?.overdueTasks?.alerts||[],
+      sales:payload?.items?.unansweredLeads?.alerts||[],
+      quickbooks:payload?.items?.accountingMismatches?.alerts||[],
+      health:payload?.items?.healthWarnings?.alerts||[],
+      insurance:payload?.items?.vendorInsurance?.alerts||[],
+      staff:payload?.items?.securityWarnings?.alerts||[],
+    };
+    return highestSeverity(map[id]||[]);
+  }
+
+  function renderMobileSlotBadges(payload){
+    nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
+      if(!(slot instanceof HTMLAnchorElement))return;
+      const id=String(slot.dataset.mobileSlotId||'');
+      const badge=slot.querySelector('[data-mobile-slot-badge]');
+      if(!(badge instanceof HTMLElement))return;
+      const count=categoryBadgeCount(payload,id);
+      const severity=categorySeverity(payload,id);
+      badge.textContent=badgeText(count);
+      if(severity)badge.dataset.severity=severity;
+      else badge.removeAttribute('data-severity');
+      badge.classList.toggle('hidden',count<=0);
+      const newCriticalHealth=id==='health'&&(payload?.items?.healthWarnings?.alerts||[]).some((alert)=>alert?.severity==='urgent'&&alert?.isNew);
+      slot.classList.toggle('workspace-health-pulse',Boolean(newCriticalHealth));
+      if(newCriticalHealth)slot.title='New critical System Health problem';
+    });
+  }
+
+  async function loadMobileNavPreferences(){
+    try{
+      const response=await fetch('/api/account/profile',{cache:'no-store'});
+      if(!response.ok){applyMobileNav(currentMobileNav);return;}
+      const profile=await response.json();
+      applyMobileNav(profile?.mobileNav);
+    }catch{applyMobileNav(currentMobileNav);}
+  }
+
+  async function saveMobileNavPreferences(){
+    const message=nav?.querySelector('[data-mobile-nav-message]');
+    const values=[...nav?.querySelectorAll('[data-mobile-nav-slot-select]')||[]]
+      .map((node)=>node instanceof HTMLSelectElement?node.value:'')
+      .filter(Boolean);
+    if(new Set(values).size!==4){
+      if(message)message.textContent='Choose four different modules.';
+      return;
+    }
+    if(message)message.textContent='Saving…';
+    try{
+      const response=await fetch('/api/account/profile',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({action:'save-mobile-nav',mobileNav:values}),
+      });
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Unable to save mobile navigation.');
+      applyMobileNav(data.mobileNav||values);
+      if(message)message.textContent='Saved for this account.';
+    }catch(error){
+      if(message)message.textContent=error instanceof Error?error.message:'Unable to save mobile navigation.';
+    }
+  }
+
   let deployWarningPoll = null;
 
   function updateDeployWarningPoll(payload) {
@@ -1147,15 +1349,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   function renderAlerts(payload) {
     const total = Math.max(0, Number(payload?.total || 0));
     const mobileBadge = nav?.querySelector('[data-workspace-total]');
-    const bottomBadge = nav?.querySelector('[data-workspace-total-bottom]');
-    const bottomAlertLabel = nav?.querySelector('[data-workspace-bottom-alert-label]');
     const desktopBadge = nav?.querySelector('[data-workspace-alert-toggle]');
-
-    const healthWarnings = payload?.items?.healthWarnings || {};
-    const healthWarningCount = Math.max(0, Number(healthWarnings?.count || 0));
-    const healthWarningSeverity = highestSeverity(healthWarnings?.alerts || []);
-    bottomHealthWarningCount = healthWarningCount;
-
     const mobileAlertButton = nav?.querySelector('[data-workspace-alert-toggle-mobile]');
     if (mobileBadge instanceof HTMLElement) {
       mobileBadge.textContent = badgeText(total);
@@ -1165,17 +1359,13 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       mobileAlertButton.classList.toggle('hidden', total <= 0);
       mobileAlertButton.classList.toggle('inline-flex', total > 0);
     }
-    if (bottomBadge instanceof HTMLElement) {
-      const badgeCount = healthWarningCount > 0 ? healthWarningCount : total;
-      bottomBadge.textContent = badgeText(badgeCount);
-      bottomBadge.dataset.severity = healthWarningCount > 0 ? (healthWarningSeverity || 'upcoming') : highestSeverity(payload?.alerts);
-      bottomBadge.title = healthWarningCount > 0
-        ? healthWarningCount + ' System Health ' + (healthWarningCount === 1 ? 'warning' : 'warnings')
-        : (total > 0 ? total + ' workspace alerts' : '');
-      bottomBadge.classList.toggle('hidden', badgeCount <= 0);
-    }
-    if (bottomAlertLabel instanceof HTMLElement) {
-      bottomAlertLabel.textContent = healthWarningCount > 0 ? 'Health' : 'Alerts';
+    renderMobileSlotBadges(payload);
+    const actionCenterBadge=nav?.querySelector('[data-link-alert="actionCenter"]');
+    if(actionCenterBadge instanceof HTMLElement){
+      actionCenterBadge.textContent=badgeText(total);
+      actionCenterBadge.dataset.severity=highestSeverity(payload?.alerts);
+      actionCenterBadge.classList.toggle('hidden',total<=0);
+      actionCenterBadge.classList.toggle('inline-flex',total>0);
     }
     if (desktopBadge instanceof HTMLElement) {
       const newCount = Math.max(0, Number(payload?.newCount || 0));
@@ -1232,25 +1422,37 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   });
 
 
-  nav?.querySelector('[data-workspace-alert-toggle-bottom]')?.addEventListener('click', () => {
-    if (bottomHealthWarningCount > 0) {
-      const target = '/admin/health/#health-priority';
-      if (normalizedPath(window.location.pathname) === '/admin/health/') {
-        window.location.hash = 'health-priority';
-      } else {
-        window.location.assign(target);
-      }
-      return;
-    }
-    const center = nav?.querySelector('[data-workspace-alert-center]');
-    if (!(center instanceof HTMLElement)) return;
-    const opening = center.dataset.open !== 'true';
-    setAlertCenter(opening);
-    if (opening) {
-      setMenu(false);
-      markVisibleAlertsSeen();
-    }
+  nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
+    slot.addEventListener('click',async(event)=>{
+      if(!(slot instanceof HTMLAnchorElement))return;
+      const id=String(slot.dataset.mobileSlotId||'');
+      if(id!=='health')return;
+      const freshCritical=(alertPayload?.items?.healthWarnings?.alerts||[])
+        .filter((alert)=>alert?.severity==='urgent'&&alert?.isNew)
+        .map((alert)=>alert.occurrenceId)
+        .filter(Boolean);
+      if(!freshCritical.length)return;
+      event.preventDefault();
+      try{
+        await fetch('/api/admin/workspace-alerts',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'mark-seen',occurrenceIds:freshCritical}),
+        });
+      }catch{}
+      slot.classList.remove('workspace-health-pulse');
+      window.location.assign('/admin/health/#health-priority');
+    });
   });
+
+  nav?.querySelector('[data-mobile-nav-edit]')?.addEventListener('click',()=>{
+    const editor=nav?.querySelector('[data-mobile-nav-editor]');
+    if(!(editor instanceof HTMLElement))return;
+    editor.classList.toggle('hidden');
+    if(!editor.classList.contains('hidden'))renderMobileNavEditor();
+  });
+
+  nav?.querySelector('[data-mobile-nav-save]')?.addEventListener('click',()=>{void saveMobileNavPreferences();});
 
   nav?.querySelector('[data-workspace-more-toggle]')?.addEventListener('click', () => {
     const opening = toggle?.getAttribute('aria-expanded') !== 'true';
@@ -1312,6 +1514,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     if (!session || session.accessBlocked) return;
 
     const capabilities = new Set(session.capabilities || session.permissions || []);
+    currentCapabilities=capabilities;
     const currentPath = normalizedPath(window.location.pathname);
 
     nav.querySelectorAll('[data-workspace-link]').forEach((node) => {
@@ -1331,26 +1534,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     updateGroupVisibility();
 
 
-    const mobileRoute = currentPath === '/admin/'
-      ? 'home'
-      : (currentPath.startsWith('/admin/crm/') || currentPath.startsWith('/admin/quotes/'))
-        ? 'crm'
-        : currentPath.startsWith('/admin/calendar/')
-          ? 'calendar'
-          : 'more';
-
-    nav.querySelectorAll('[data-mobile-nav-link]').forEach((node) => {
-      if (!(node instanceof HTMLAnchorElement)) return;
-      const required = node.dataset.capability;
-      const allowed = !required || capabilities.has(required);
-      node.classList.toggle('hidden', !allowed);
-      if (allowed && node.dataset.mobileNavLink === mobileRoute) node.setAttribute('aria-current', 'page');
-      else node.removeAttribute('aria-current');
-    });
     const moreButton = nav.querySelector('[data-workspace-more-toggle]');
     if (moreButton instanceof HTMLElement) {
-      if (mobileRoute === 'more') moreButton.setAttribute('aria-current', 'page');
-      else moreButton.removeAttribute('aria-current');
+      moreButton.removeAttribute('aria-current');
     }
 
     const role = nav.querySelector('[data-workspace-role]');
@@ -1361,6 +1547,12 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
     initializeMenuState();
     nav.classList.remove('hidden');
+    await loadMobileNavPreferences();
+    const bottomMatch=[...nav.querySelectorAll('[data-workspace-bottom-slot]')].some((slot)=>slot instanceof HTMLAnchorElement&&normalizedPath(slot.getAttribute('href'))===currentPath);
+    if(moreButton instanceof HTMLElement){
+      if(!bottomMatch)moreButton.setAttribute('aria-current','page');
+      else moreButton.removeAttribute('aria-current');
+    }
     loadAlerts();
   }
 

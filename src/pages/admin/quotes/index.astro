@@ -42,7 +42,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="mt-6 overflow-x-auto"><table class="w-full min-w-[900px] border-collapse text-sm"><thead><tr class="border-b border-[var(--koa-line)] text-left text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]"><th class="py-3 pr-4">Rep</th><th class="py-3 pr-4">Opportunities</th><th class="py-3 pr-4">Avg response</th><th class="py-3 pr-4">Proposals sent</th><th class="py-3 pr-4">Booked</th><th class="py-3 pr-4">Conversion</th><th class="py-3 pr-4">Booked revenue</th><th class="py-3">Follow-ups overdue</th></tr></thead><tbody data-performance-body></tbody></table></div>
         </section>
 
-        <section class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
+        <section id="sales-needs-attention" class="scroll-mt-24 rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-amber-light)]">Needs attention</p><h2 class="display mt-3 text-4xl">Work the next action, not the whole pipeline.</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-white/56">Accepted proposals, new inquiries, viewed proposals, qualified leads and draft proposals are surfaced here in action order.</p></div>
             <span data-work-count class="rounded-full border border-white/12 bg-white/[.06] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-white/70">0 items</span>
@@ -50,7 +50,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-work-queue class="mt-6 grid gap-3 lg:grid-cols-2 xl:grid-cols-3"></div>
         </section>
 
-        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+        <section id="unanswered-leads" class="scroll-mt-24 rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Awaiting response</p>

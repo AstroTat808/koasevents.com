@@ -11,6 +11,14 @@ function userMetadataFor(user:any){
   return user?.userMetadata||user?.user_metadata||{};
 }
 
+function cleanMobileNav(value:unknown){
+  const allowed=new Set([
+    'home','actions','crm','sales','events','calendar','quickbooks','health','staff','vendors','insurance','profitability','gallery',
+  ]);
+  const raw=Array.isArray(value)?value:[];
+  return [...new Set(raw.map(item=>clean(item,40)).filter(item=>allowed.has(item)))].slice(0,4);
+}
+
 export default async(req:Request,context:Context)=>{
   const auth=await requireOperations(req);
   if(auth.response)return auth.response;
@@ -31,12 +39,39 @@ export default async(req:Request,context:Context)=>{
       },
       photoUrl:meta?.has_profile_photo===true?('/api/staff/photo/'+encodeURIComponent(clean(user?.id,120))+(meta?.profile_photo_version?'?v='+encodeURIComponent(clean(meta.profile_photo_version,80)):'')):'',
       email:clean(user?.email,240).toLowerCase(),
+      mobileNav:cleanMobileNav(meta?.mobile_nav_items),
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);
   if(!body)return Response.json({error:'Invalid JSON.'},{status:400});
+
+  if(clean(body.action,60)==='save-mobile-nav'){
+    const mobileNav=cleanMobileNav(body.mobileNav);
+    if(mobileNav.length!==4)return Response.json({error:'Choose four different bottom-navigation modules.'},{status:400});
+    const currentMeta=userMetadataFor(user);
+    const updated:any=await admin.updateUser(user.id,{
+      user_metadata:{
+        ...currentMeta,
+        mobile_nav_items:mobileNav,
+      },
+    });
+    await appendStaffAudit(context,{
+      actor:clean(user?.email,240).toLowerCase(),
+      action:'self_mobile_nav_updated',
+      subjectId:clean(user?.id,120),
+      subjectEmail:clean(user?.email,240).toLowerCase(),
+      detail:'Updated personal mobile admin bottom navigation.',
+      metadata:{mobileNav},
+    });
+    const meta=userMetadataFor(updated);
+    return Response.json({
+      ok:true,
+      mobileNav:cleanMobileNav(meta?.mobile_nav_items),
+      message:'Mobile navigation saved.',
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
 
   const displayName=clean(body.displayName,180);
   const jobTitle=clean(body.jobTitle,120);
