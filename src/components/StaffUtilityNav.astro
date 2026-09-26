@@ -981,6 +981,10 @@
     if (document.visibilityState === 'visible' && deployWarningPoll) loadAlerts();
   });
 
+  window.addEventListener('koa:workspace-alerts-refresh', () => {
+    loadAlerts();
+  });
+
   nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
     await logout();
     window.location.assign('/staff/');
