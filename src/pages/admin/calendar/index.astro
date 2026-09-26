@@ -54,13 +54,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <button data-view="agenda" type="button" class="calendar-view-button">Agenda</button>
                 <button data-view="staff" type="button" class="calendar-view-button"><span class="calendar-view-label-desktop">Staff Schedule</span><span class="calendar-view-label-mobile">Staff</span></button>
               </div>
-              <div data-calendar-density-control class="calendar-density-control" role="group" aria-label="Mobile month calendar density">
-                <span class="calendar-density-label">Density</span>
-                <button data-calendar-density="compact" type="button" class="calendar-density-button is-active" aria-pressed="true">Compact</button>
-                <button data-calendar-density="comfortable" type="button" class="calendar-density-button" aria-pressed="false">Comfortable</button>
+              <div class="calendar-mobile-utilities">
+                <div data-calendar-density-control class="calendar-density-control" aria-label="Mobile month calendar density">
+                  <button data-calendar-density-toggle type="button" class="calendar-utility-button calendar-density-toggle" aria-expanded="false" aria-controls="calendar-density-options" title="Change calendar density">
+                    <span aria-hidden="true">▦</span>
+                    <span class="sr-only" data-calendar-density-current>Compact</span>
+                  </button>
+                  <div id="calendar-density-options" data-calendar-density-options class="calendar-density-options hidden" role="group" aria-label="Choose calendar density">
+                    <button data-calendar-density="compact" type="button" class="calendar-density-button is-active" aria-pressed="true">Compact</button>
+                    <button data-calendar-density="comfortable" type="button" class="calendar-density-button" aria-pressed="false">Comfortable</button>
+                  </div>
+                </div>
+                <button data-calendar-legend-toggle type="button" class="calendar-utility-button calendar-legend-toggle" aria-expanded="false" aria-controls="calendar-mobile-legend">Legend</button>
               </div>
             </div>
-            <div class="calendar-legends flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
+            <div id="calendar-mobile-legend" class="calendar-legends flex max-w-4xl flex-wrap gap-2 text-[.58rem] font-black uppercase tracking-[.08em]">
               <span class="legend legend-event"><span aria-hidden="true">💍</span> Wedding</span>
               <span class="legend legend-event"><span aria-hidden="true">◆</span> Event</span>
               <span class="legend legend-payment"><span aria-hidden="true">＄</span> Payment</span>
@@ -265,9 +273,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-view-button{border-radius:9999px;padding:.55rem .85rem;font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:color-mix(in srgb,var(--koa-ink) 55%,transparent)}
     .calendar-view-button.is-active{background:var(--koa-forest);color:white;box-shadow:0 4px 14px rgb(0 0 0/.08)}
     .calendar-view-label-mobile{display:none}
-    .calendar-density-control{display:none}
+    .calendar-mobile-utilities{display:none}
+    .calendar-density-control{position:relative}
+    .calendar-density-options{position:absolute;right:0;top:calc(100% + .35rem);z-index:30;display:flex;gap:.25rem;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.28rem;box-shadow:0 10px 28px rgba(7,30,23,.12)}
+    .calendar-density-options.hidden{display:none!important}
     .calendar-density-button{border-radius:9999px;padding:.42rem .62rem;font-size:.54rem;font-weight:900;text-transform:uppercase;letter-spacing:.055em;color:color-mix(in srgb,var(--koa-ink) 56%,transparent)}
     .calendar-density-button.is-active{background:var(--koa-forest);color:white}
+    .calendar-utility-button{display:inline-flex;min-height:2rem;align-items:center;justify-content:center;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.4rem .58rem;color:var(--koa-forest);font-size:.5rem;font-weight:900;letter-spacing:.055em;text-transform:uppercase}
+    .calendar-density-toggle{width:2rem;padding:.35rem;font-size:.82rem;line-height:1}
     .calendar-filter{border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.5rem .72rem;font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:color-mix(in srgb,var(--koa-ink) 58%,transparent)}
     .calendar-filter:hover{background:var(--koa-ivory)}
     .calendar-filter.is-active{background:var(--koa-forest);border-color:var(--koa-forest);color:white}
@@ -395,10 +408,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       .calendar-period-title [data-month-title]{
         margin-top:0;
-        overflow:hidden;
-        font-size:clamp(1.38rem,6.25vw,1.75rem)!important;
+        overflow:visible;
+        font-size:clamp(1.02rem,4.65vw,1.22rem)!important;
         line-height:1!important;
-        text-overflow:ellipsis;
+        letter-spacing:-.025em;
+        text-overflow:clip;
         white-space:nowrap;
       }
 
@@ -438,46 +452,58 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       .calendar-view-label-desktop{display:none}
       .calendar-view-label-mobile{display:inline}
 
-      .calendar-density-control{
+      .calendar-mobile-utilities{
         grid-column:1/-1;
         grid-row:3;
         display:flex;
+        min-height:2rem;
         align-items:center;
         justify-content:flex-end;
-        gap:.25rem;
-        min-width:0;
-        padding-top:.05rem;
+        gap:.3rem;
+        padding-top:.02rem;
       }
 
       .calendar-density-control.hidden{display:none!important}
 
-      .calendar-density-label{
-        margin-right:.1rem;
-        color:var(--koa-clay);
-        font-size:.48rem;
-        font-weight:900;
-        letter-spacing:.08em;
-        text-transform:uppercase;
+      .calendar-density-options{
+        top:calc(100% + .3rem);
       }
 
       .calendar-density-button{
-        min-height:1.95rem!important;
-        padding:.35rem .52rem;
-        font-size:.48rem;
+        min-height:1.85rem!important;
+        padding:.32rem .48rem;
+        font-size:.46rem;
+      }
+
+      .calendar-utility-button{
+        min-height:1.9rem;
+        padding:.32rem .5rem;
+        font-size:.47rem;
+      }
+
+      .calendar-density-toggle{
+        width:1.9rem;
+        padding:.3rem;
+        font-size:.78rem;
+      }
+
+      .calendar-legends{
+        display:none!important;
+        max-width:100%;
+        flex-wrap:nowrap!important;
+        overflow-x:auto;
+        padding-bottom:.2rem;
+        scrollbar-width:none;
+      }
+
+      .calendar-legends.is-mobile-open{
+        display:flex!important;
       }
 
       .calendar-nav{
         width:2.35rem;
         height:2.35rem;
         min-height:2.35rem;
-      }
-
-      .calendar-legends{
-        max-width:100%;
-        flex-wrap:nowrap!important;
-        overflow-x:auto;
-        padding-bottom:.2rem;
-        scrollbar-width:none;
       }
 
       .calendar-legends::-webkit-scrollbar{display:none}
@@ -1019,8 +1045,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const calendarToolbar=document.querySelector('.calendar-toolbar');
     const calendarPeriodControls=document.querySelector('.calendar-period-controls');
     const calendarPeriodTitle=document.querySelector('.calendar-period-title');
+    const calendarMobileUtilities=document.querySelector('.calendar-mobile-utilities');
     const calendarDensityControl=document.querySelector('[data-calendar-density-control]');
+    const calendarDensityToggle=document.querySelector('[data-calendar-density-toggle]');
+    const calendarDensityOptions=document.querySelector('[data-calendar-density-options]');
+    const calendarDensityCurrent=document.querySelector('[data-calendar-density-current]');
     const calendarDensityButtons=[...document.querySelectorAll('[data-calendar-density]')];
+    const calendarLegendToggle=document.querySelector('[data-calendar-legend-toggle]');
     const calendarLegends=document.querySelector('.calendar-legends');
     const calendarFilterBar=document.querySelector('.calendar-filter-bar');
     const calendarViewFrame=document.querySelector('.calendar-view-frame');
@@ -1073,7 +1104,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let activeView='month';
     let staffScale='week';
     const storedCalendarDensity=(()=>{try{return sessionStorage.getItem('koa-calendar-density')||'';}catch{return '';}})();
-    let calendarDensity=['compact','comfortable'].includes(storedCalendarDensity)?storedCalendarDensity:'compact';
+    let calendarDensityExplicit=['compact','comfortable'].includes(storedCalendarDensity);
+    let calendarDensity=calendarDensityExplicit
+      ? storedCalendarDensity
+      : (window.innerWidth<390?'compact':'comfortable');
+    let calendarDensityOptionsExpanded=false;
+    let calendarLegendExpanded=false;
     let staffDirectory=[];
     let availabilityRows=[];
     let currentSession=null;
@@ -1085,6 +1121,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let todayData={items:[],conflicts:[]};
 
     function applyCalendarDensity(){
+      const mobileMonth=calendarMobileQuery.matches&&activeView==='month';
       if(calendarShell instanceof HTMLElement){
         calendarShell.dataset.calendarDensity=calendarMobileQuery.matches?calendarDensity:'comfortable';
       }
@@ -1095,15 +1132,48 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         button.setAttribute('aria-pressed',active?'true':'false');
       });
       if(calendarDensityControl instanceof HTMLElement){
-        calendarDensityControl.classList.toggle('hidden',!calendarMobileQuery.matches||activeView!=='month');
+        calendarDensityControl.classList.toggle('hidden',!mobileMonth);
+      }
+      if(calendarDensityToggle instanceof HTMLButtonElement){
+        calendarDensityToggle.setAttribute('aria-expanded',calendarDensityOptionsExpanded?'true':'false');
+        calendarDensityToggle.setAttribute('aria-label','Calendar density: '+calendarDensity+'. Tap to change.');
+        calendarDensityToggle.title='Calendar density: '+calendarDensity;
+      }
+      if(calendarDensityCurrent instanceof HTMLElement)calendarDensityCurrent.textContent=calendarDensity;
+      if(calendarDensityOptions instanceof HTMLElement){
+        calendarDensityOptions.classList.toggle('hidden',!mobileMonth||!calendarDensityOptionsExpanded);
+      }
+    }
+
+    function applyMobileLegend(){
+      const mobile=calendarMobileQuery.matches;
+      if(calendarMobileUtilities instanceof HTMLElement)calendarMobileUtilities.classList.toggle('hidden',!mobile);
+      if(calendarLegendToggle instanceof HTMLButtonElement){
+        calendarLegendToggle.classList.toggle('hidden',!mobile);
+        calendarLegendToggle.setAttribute('aria-expanded',calendarLegendExpanded?'true':'false');
+        calendarLegendToggle.textContent=calendarLegendExpanded?'Hide legend':'Legend';
+      }
+      if(calendarLegends instanceof HTMLElement){
+        calendarLegends.classList.toggle('is-mobile-open',mobile&&calendarLegendExpanded);
       }
     }
 
     function setCalendarDensity(value){
       if(!['compact','comfortable'].includes(value))return;
       calendarDensity=value;
+      calendarDensityExplicit=true;
+      calendarDensityOptionsExpanded=false;
       try{sessionStorage.setItem('koa-calendar-density',calendarDensity);}catch{}
       applyCalendarDensity();
+    }
+
+    function applyResponsiveCalendarDensityDefault(){
+      if(calendarDensityExplicit)return;
+      const next=window.innerWidth<390?'compact':'comfortable';
+      if(next!==calendarDensity){
+        calendarDensity=next;
+        applyCalendarDensity();
+      }
     }
 
     function applyMobileCalendarSizing(){
@@ -1172,7 +1242,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           calendarPeriodControls.style.removeProperty('grid-template-columns');
         }
       }
+      applyResponsiveCalendarDensityDefault();
       applyCalendarDensity();
+      applyMobileLegend();
     }
 
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
@@ -1650,7 +1722,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderActiveView(){
+      if(activeView!=='month')calendarDensityOptionsExpanded=false;
       applyCalendarDensity();
+      applyMobileLegend();
       monthView.classList.toggle('hidden',activeView!=='month');
       weekView.classList.toggle('hidden',activeView!=='week');
       agendaView.classList.toggle('hidden',activeView!=='agenda');
@@ -2030,9 +2104,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-next]')?.addEventListener('click',()=>{closeMobileDayPreview();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
     document.querySelector('[data-today]')?.addEventListener('click',()=>{closeMobileDayPreview();const now=new Date();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
     document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{closeMobileDayPreview();activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
-    calendarDensityButtons.forEach((button)=>button.addEventListener('click',()=>{
+    calendarDensityToggle?.addEventListener('click',(event)=>{
+      event.stopPropagation();
+      calendarDensityOptionsExpanded=!calendarDensityOptionsExpanded;
+      applyCalendarDensity();
+    });
+    calendarDensityButtons.forEach((button)=>button.addEventListener('click',(event)=>{
+      event.stopPropagation();
       if(button instanceof HTMLButtonElement)setCalendarDensity(String(button.dataset.calendarDensity||'compact'));
     }));
+    calendarLegendToggle?.addEventListener('click',()=>{
+      calendarLegendExpanded=!calendarLegendExpanded;
+      applyMobileLegend();
+    });
+    document.addEventListener('click',(event)=>{
+      if(!calendarDensityOptionsExpanded)return;
+      const target=event.target;
+      if(target instanceof Node&&calendarDensityControl?.contains(target))return;
+      calendarDensityOptionsExpanded=false;
+      applyCalendarDensity();
+    });
     staffScaleButtons.forEach((button)=>button.addEventListener('click',()=>{staffScale=button.dataset.staffScale||'week';const nowDate=new Date(cursor);cursor=staffScale==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
     staffScheduleSearch?.addEventListener('input',renderStaffSchedule);
     todayScheduleOpen?.addEventListener('click',()=>void goToTodaySchedule());
@@ -2086,7 +2177,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
     window.addEventListener('orientationchange',()=>window.setTimeout(applyMobileCalendarSizing,80));
     window.addEventListener('resize',()=>{
+      applyResponsiveCalendarDensityDefault();
       if(calendarMobileQuery.matches)applyMobileCalendarSizing();
+      else{
+        applyCalendarDensity();
+        applyMobileLegend();
+      }
     },{passive:true});
     document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closePreview();closeDayPanel();closeMobileDayPreview();}});
     load();
