@@ -76,7 +76,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
               <div data-calendar class="calendar-grid grid grid-cols-7"></div>
             </div>
-            <div data-week-view class="hidden min-w-[70rem] bg-white"></div>
+            <div data-week-view class="week-view-panel hidden bg-white"></div>
             <div data-agenda-view class="hidden bg-white p-4 sm:p-6"></div>
             <div data-staff-view class="hidden bg-white">
               <div class="flex flex-col gap-3 border-b border-[var(--koa-line)] p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -93,10 +93,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <input data-staff-schedule-search type="search" placeholder="Search staff…" class="rounded-xl border border-[var(--koa-line)] px-3 py-2 text-sm" />
                 </div>
               </div>
-              <div data-staff-schedule class="overflow-x-auto"></div>
+              <div data-staff-schedule class="staff-schedule-wrap overflow-x-auto"></div>
               <p data-staff-schedule-note class="border-t border-[var(--koa-line)] px-4 py-3 text-xs text-[var(--koa-ink)]/45">Availability is internal. Click a staff/date cell to update availability; staff can edit themselves, while Event Ops managers can edit the team.</p>
             </div>
           </div>
+
+          <section data-mobile-day-preview class="mobile-day-preview hidden" aria-live="polite">
+            <div class="mobile-day-preview-head">
+              <div class="min-w-0">
+                <p class="eyebrow text-[var(--koa-clay)]">Day preview</p>
+                <h3 data-mobile-day-preview-title class="display mt-1 text-2xl text-[var(--koa-forest)]"></h3>
+                <p data-mobile-day-preview-summary class="mt-1 text-xs text-[var(--koa-ink)]/50"></p>
+              </div>
+              <button data-mobile-day-preview-close type="button" class="calendar-nav" aria-label="Close day preview">×</button>
+            </div>
+            <div data-mobile-day-preview-content class="mobile-day-preview-content"></div>
+            <div class="mobile-day-preview-actions">
+              <button data-mobile-day-preview-full type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">View full day</button>
+            </div>
+          </section>
 
           <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-[var(--koa-ink)]/45">
             <p>Click any day for a full day detail. Open an item to jump directly into that event record.</p>
@@ -247,6 +262,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-day.is-today{background:color-mix(in srgb,var(--koa-amber-light) 16%,white)}
     .calendar-day.is-today::after{content:"";position:absolute;inset:0;pointer-events:none;box-shadow:inset 0 0 0 2px var(--koa-forest)}
     .calendar-day.is-today .calendar-date-number{display:grid;height:1.8rem;min-width:1.8rem;place-items:center;border-radius:9999px;background:var(--koa-forest);padding:0 .35rem;color:white}
+    .calendar-day-count{display:none}
+    .mobile-day-preview{display:none}
     .calendar-item{display:flex;width:100%;align-items:center;gap:.35rem;overflow:hidden;border-radius:.55rem;padding:.42rem .5rem;text-align:left;font-size:.67rem;font-weight:700;line-height:1.3;transition:transform .12s ease,filter .12s ease}
     .calendar-item-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .calendar-icon{flex:0 0 auto;font-size:.72rem;line-height:1}
@@ -259,6 +276,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 20%,white);color:var(--koa-forest);border:1px dashed color-mix(in srgb,var(--koa-clay) 45%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 22%,white);color:var(--koa-ink);border:1px solid color-mix(in srgb,var(--koa-amber-light) 55%,var(--koa-line))}
+    .week-view-panel{min-width:70rem}
     .week-grid{display:grid;grid-template-columns:repeat(7,minmax(9.5rem,1fr));min-height:32rem}
     .week-day-column{border-right:1px solid var(--koa-line)}
     .week-day-column:last-child{border-right:0}
@@ -515,6 +533,200 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         font-size:.68rem;
       }
 
+      .calendar-day.is-selected{
+        background:color-mix(in srgb,var(--koa-forest) 9%,white)!important;
+        box-shadow:inset 0 0 0 2px var(--koa-forest);
+      }
+
+      .calendar-day-count{
+        display:inline-flex;
+        min-width:1.05rem;
+        height:1.05rem;
+        align-items:center;
+        justify-content:center;
+        border-radius:9999px;
+        background:color-mix(in srgb,var(--koa-forest) 11%,white);
+        padding:0 .28rem;
+        color:var(--koa-forest);
+        font-size:.5rem;
+        font-weight:900;
+        line-height:1;
+      }
+
+      .mobile-day-preview{
+        display:block;
+        margin-top:.75rem;
+        overflow:hidden;
+        border:1px solid var(--koa-line);
+        border-radius:1rem;
+        background:white;
+        box-shadow:0 12px 34px rgba(7,30,23,.08);
+      }
+
+      .mobile-day-preview.hidden{display:none!important}
+
+      .mobile-day-preview-head{
+        display:flex;
+        align-items:flex-start;
+        justify-content:space-between;
+        gap:.75rem;
+        border-bottom:1px solid var(--koa-line);
+        padding:.85rem;
+      }
+
+      .mobile-day-preview-head .calendar-nav{
+        width:2.35rem;
+        height:2.35rem;
+        min-height:2.35rem;
+        flex:0 0 auto;
+      }
+
+      .mobile-day-preview-content{
+        display:grid;
+        gap:.5rem;
+        padding:.75rem;
+      }
+
+      .mobile-day-preview-content .calendar-item{
+        min-height:2.75rem;
+        padding:.62rem .7rem;
+        font-size:.7rem;
+      }
+
+      .mobile-day-preview-conflict{
+        border:1px solid rgb(254 202 202);
+        border-radius:.75rem;
+        background:rgb(254 242 242);
+        padding:.65rem .7rem;
+        color:rgb(153 27 27);
+        font-size:.68rem;
+        font-weight:700;
+        line-height:1.35;
+      }
+
+      .mobile-day-preview-actions{
+        display:flex;
+        justify-content:flex-end;
+        border-top:1px solid var(--koa-line);
+        padding:.7rem .75rem;
+      }
+
+      .week-view-panel{
+        min-width:0!important;
+      }
+
+      .week-grid{
+        grid-template-columns:1fr;
+        min-height:0;
+        gap:.65rem;
+        padding:.65rem;
+        background:var(--koa-ivory);
+      }
+
+      .week-day-column{
+        overflow:hidden;
+        border:1px solid var(--koa-line)!important;
+        border-radius:.9rem;
+        background:white;
+      }
+
+      .week-day-head{
+        display:flex;
+        min-height:0;
+        align-items:center;
+        justify-content:space-between;
+        padding:.65rem .75rem;
+      }
+
+      .week-day-head p{
+        margin:0!important;
+      }
+
+      .week-day-head .display{
+        margin:0!important;
+        font-size:1.5rem!important;
+      }
+
+      .week-day-body{
+        padding:.65rem;
+      }
+
+      .week-day-body .calendar-item{
+        min-height:2.65rem;
+        padding:.58rem .65rem;
+        font-size:.68rem;
+      }
+
+      .staff-schedule-wrap{
+        overflow-x:hidden!important;
+      }
+
+      .staff-mobile-list{
+        display:grid;
+        gap:.75rem;
+        padding:.75rem;
+        background:var(--koa-ivory);
+      }
+
+      .staff-mobile-card{
+        overflow:hidden;
+        border:1px solid var(--koa-line);
+        border-radius:1rem;
+        background:white;
+      }
+
+      .staff-mobile-card-head{
+        display:flex;
+        align-items:flex-start;
+        gap:.7rem;
+        border-bottom:1px solid var(--koa-line);
+        padding:.8rem;
+      }
+
+      .staff-mobile-days{
+        display:grid;
+        gap:.45rem;
+        padding:.65rem;
+      }
+
+      .staff-mobile-day{
+        width:100%;
+        border:1px solid color-mix(in srgb,var(--koa-line) 82%,transparent);
+        border-radius:.8rem;
+        background:white;
+        padding:.65rem;
+        text-align:left;
+      }
+
+      .staff-mobile-day.is-today{
+        border-color:var(--koa-forest);
+        box-shadow:inset 0 0 0 1px var(--koa-forest);
+      }
+
+      .staff-mobile-day.has-overload{
+        border-color:rgb(245 158 11 / .55);
+        background:rgb(255 251 235);
+      }
+
+      .staff-mobile-card-actions{
+        display:flex;
+        justify-content:flex-end;
+        border-top:1px solid var(--koa-line);
+        padding:.6rem .7rem;
+      }
+
+      .staff-mobile-set-availability{
+        border:1px solid var(--koa-line);
+        border-radius:9999px;
+        background:white;
+        padding:.55rem .75rem;
+        color:var(--koa-forest);
+        font-size:.55rem;
+        font-weight:900;
+        letter-spacing:.06em;
+        text-transform:uppercase;
+      }
+
       .day-panel-card{
         top:auto;
         bottom:0;
@@ -540,6 +752,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const monthTitle=document.querySelector('[data-month-title]');
     const periodEyebrow=document.querySelector('[data-period-eyebrow]');
     const monthView=document.querySelector('[data-month-view]');
+    const mobileDayPreview=document.querySelector('[data-mobile-day-preview]');
+    const mobileDayPreviewTitle=document.querySelector('[data-mobile-day-preview-title]');
+    const mobileDayPreviewSummary=document.querySelector('[data-mobile-day-preview-summary]');
+    const mobileDayPreviewContent=document.querySelector('[data-mobile-day-preview-content]');
+    const mobileDayPreviewFull=document.querySelector('[data-mobile-day-preview-full]');
     const weekView=document.querySelector('[data-week-view]');
     const agendaView=document.querySelector('[data-agenda-view]');
     const staffView=document.querySelector('[data-staff-view]');
@@ -580,8 +797,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let staffDirectory=[];
     let availabilityRows=[];
     let currentSession=null;
+    const calendarMobileQuery=window.matchMedia('(max-width: 800px)');
     const activeFilters=new Set();
     let previewItem=null;
+    let mobileDayPreviewKey='';
     let data={items:[],conflicts:[],totals:{}};
 
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
@@ -648,6 +867,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       preview.classList.add('is-open');preview.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';
     }
     function closePreview(){preview.classList.remove('is-open');preview.setAttribute('aria-hidden','true');previewItem=null;document.body.style.overflow='';}
+
+    function closeMobileDayPreview(){
+      mobileDayPreviewKey='';
+      mobileDayPreview?.classList.add('hidden');
+      calendar?.querySelectorAll('.calendar-day.is-selected').forEach((node)=>node.classList.remove('is-selected'));
+    }
+
+    function renderMobileDayPreview(key,scroll=true){
+      if(!calendarMobileQuery.matches||activeView!=='month'||!key){
+        closeMobileDayPreview();
+        return;
+      }
+      mobileDayPreviewKey=key;
+      const rows=itemsForDate(key);
+      const conflicts=conflictsForDate(key);
+      const date=new Date(key+'T12:00:00');
+      if(mobileDayPreviewTitle)mobileDayPreviewTitle.textContent=new Intl.DateTimeFormat('en-US',{weekday:'long',month:'short',day:'numeric'}).format(date);
+      if(mobileDayPreviewSummary)mobileDayPreviewSummary.textContent=rows.length+' item'+(rows.length===1?'':'s')+(conflicts.length?' · '+conflicts.length+' conflict'+(conflicts.length===1?'':'s'):'');
+      if(mobileDayPreviewContent){
+        mobileDayPreviewContent.innerHTML='';
+        conflicts.slice(0,2).forEach((conflict)=>{
+          const warning=document.createElement('div');
+          warning.className='mobile-day-preview-conflict';
+          warning.textContent=(conflict.title||'Schedule conflict')+(conflict.detail?' · '+conflict.detail:'');
+          mobileDayPreviewContent.appendChild(warning);
+        });
+        rows.slice(0,4).forEach((item)=>mobileDayPreviewContent.appendChild(itemLink(item,true)));
+        if(rows.length>4)mobileDayPreviewContent.appendChild(text('p','px-1 text-xs font-semibold text-[var(--koa-ink)]/45','+'+(rows.length-4)+' more item'+(rows.length-4===1?'':'s')+' in full day view'));
+        if(!rows.length&&!conflicts.length)mobileDayPreviewContent.appendChild(text('p','rounded-lg bg-[var(--koa-ivory)] p-3 text-sm text-[var(--koa-ink)]/48','Nothing is scheduled for this day.'));
+      }
+      mobileDayPreview?.classList.remove('hidden');
+      calendar?.querySelectorAll('.calendar-day').forEach((node)=>node.classList.toggle('is-selected',node.dataset.dayKey===key));
+      if(scroll)window.setTimeout(()=>mobileDayPreview?.scrollIntoView({behavior:'smooth',block:'nearest'}),40);
+    }
+
     function itemLink(item,compact=false){
       const a=document.createElement('button');a.type='button';
       const visual=visualFor(item);a.className='calendar-item '+visual.className+(item.date<today() && !['paid','complete','not_applicable'].includes(item.status)?' is-overdue':'');
@@ -705,21 +959,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderCalendar(){
       calendar.innerHTML='';
-      const {gridStart}=rangeForMonth(cursor);
+      const {gridStart,start,end}=rangeForMonth(cursor);
       const itemsByDate=new Map();
       filteredItems().forEach((item)=>{const list=itemsByDate.get(item.date)||[];list.push(item);itemsByDate.set(item.date,list);});
       for(let i=0;i<42;i++){
         const date=addDays(gridStart,i);const key=ymd(date);const cell=document.createElement('div');
-        cell.className='calendar-day'+(date.getMonth()!==cursor.getMonth()?' is-other':'')+([0,6].includes(date.getDay())?' is-weekend':'')+(key===today()?' is-today':'');
+        cell.dataset.dayKey=key;
+        cell.className='calendar-day'+(date.getMonth()!==cursor.getMonth()?' is-other':'')+([0,6].includes(date.getDay())?' is-weekend':'')+(key===today()?' is-today':'')+(key===mobileDayPreviewKey?' is-selected':'');
+        const dayItems=itemsByDate.get(key)||[];
+        const dayConflicts=(data.conflicts||[]).filter((c)=>c.date===key);
         const head=document.createElement('div');head.className='mb-2 flex items-center justify-between gap-1';
         head.appendChild(text('span','calendar-date-number text-xs font-bold',String(date.getDate())));
-        const dayConflicts=(data.conflicts||[]).filter((c)=>c.date===key);
-        if(dayConflicts.length)head.appendChild(text('span','calendar-conflict-badge rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
+        const meta=document.createElement('div');meta.className='flex items-center gap-1';
+        if(dayItems.length){
+          const count=text('span','calendar-day-count',String(dayItems.length));
+          count.setAttribute('aria-label',dayItems.length+' calendar item'+(dayItems.length===1?'':'s'));
+          meta.appendChild(count);
+        }
+        if(dayConflicts.length)meta.appendChild(text('span','calendar-conflict-badge rounded-full bg-[var(--koa-clay)] px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em] text-white',String(dayConflicts.length)+' conflict'));
+        if(meta.childNodes.length)head.appendChild(meta);
         cell.appendChild(head);
         const list=document.createElement('div');list.className='calendar-day-items grid gap-1';
-        (itemsByDate.get(key)||[]).slice(0,5).forEach((item)=>{const a=itemLink(item);a.addEventListener('click',(event)=>event.stopPropagation());list.appendChild(a);});
-        const extra=(itemsByDate.get(key)||[]).length-5;if(extra>0){const more=text('button','calendar-more text-left text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more');more.type='button';more.addEventListener('click',(event)=>{event.stopPropagation();openDayPanel(key);});list.appendChild(more);}
-        cell.appendChild(list);cell.addEventListener('click',()=>openDayPanel(key));calendar.appendChild(cell);
+        dayItems.slice(0,5).forEach((item)=>{const a=itemLink(item);a.addEventListener('click',(event)=>event.stopPropagation());list.appendChild(a);});
+        const extra=dayItems.length-5;
+        if(extra>0){
+          const more=text('button','calendar-more text-left text-[.58rem] font-bold text-[var(--koa-ink)]/45','+'+extra+' more');
+          more.type='button';
+          more.addEventListener('click',(event)=>{event.stopPropagation();calendarMobileQuery.matches?renderMobileDayPreview(key):openDayPanel(key);});
+          list.appendChild(more);
+        }
+        cell.appendChild(list);
+        cell.addEventListener('click',()=>calendarMobileQuery.matches?renderMobileDayPreview(key):openDayPanel(key));
+        calendar.appendChild(cell);
+      }
+      if(calendarMobileQuery.matches&&mobileDayPreviewKey){
+        if(mobileDayPreviewKey>=start&&mobileDayPreviewKey<=end)renderMobileDayPreview(mobileDayPreviewKey,false);
+        else closeMobileDayPreview();
       }
     }
 
@@ -789,11 +1064,97 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(index>=0)availabilityRows[index]=result.availability;else availabilityRows.push(result.availability);
       renderStaffSchedule();
     }
+    async function editAvailabilityInRange(person,dates){
+      if(!dates.length)return;
+      const first=ymd(dates[0]),last=ymd(dates[dates.length-1]);
+      const defaultDate=today()>=first&&today()<=last?today():first;
+      const chosen=prompt('Set availability for '+person.name+'\n\nEnter a date from '+first+' through '+last+' (YYYY-MM-DD):',defaultDate);
+      if(chosen===null)return;
+      const normalized=String(chosen||'').trim();
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(normalized)||normalized<first||normalized>last){
+        alert('Choose a date between '+first+' and '+last+'.');
+        return;
+      }
+      await editAvailability(person,normalized);
+    }
+
+    function renderStaffScheduleMobile(staff,dates){
+      const wrap=document.createElement('div');
+      wrap.className='staff-mobile-list';
+      staff.forEach((person)=>{
+        const card=document.createElement('article');
+        card.className='staff-mobile-card';
+        const head=document.createElement('div');head.className='staff-mobile-card-head';
+        if(person.photoUrl){
+          const img=document.createElement('img');img.src=person.photoUrl;img.alt='';img.className='h-10 w-10 shrink-0 rounded-full object-cover';head.appendChild(img);
+        }else{
+          const avatar=text('span','flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--koa-forest)] text-xs font-black text-white',String(person.name||'K').charAt(0).toUpperCase());head.appendChild(avatar);
+        }
+        const copy=document.createElement('div');copy.className='min-w-0 flex-1';
+        copy.append(text('strong','block truncate text-sm text-[var(--koa-forest)]',person.name||person.email),text('span','block truncate text-xs text-[var(--koa-ink)]/45',person.jobTitle||person.roleLabel||'Staff'));
+        const workload=person.workload||{};
+        copy.appendChild(text('span','mt-1 block text-[.56rem] font-bold text-[var(--koa-ink)]/42',Number(workload.totalOpenAssignments||0)+' open · '+Number(workload.upcomingEvents||0)+' upcoming event'+(Number(workload.upcomingEvents||0)===1?'':'s')));
+        head.appendChild(copy);card.appendChild(head);
+
+        const dayWrap=document.createElement('div');dayWrap.className='staff-mobile-days';
+        const relevantDates=staffScale==='week'
+          ? dates
+          : dates.filter((date)=>{
+              const key=ymd(date);
+              const availability=availabilityFor(person.email,key);
+              const assignments=(person.assignments||[]).filter((row)=>assignmentDate(row)===key);
+              const load=(person.dateLoad||[]).find((row)=>row.date===key);
+              return Boolean(availability||assignments.length||load?.heavy);
+            });
+
+        relevantDates.forEach((date)=>{
+          const key=ymd(date);const availability=availabilityFor(person.email,key);
+          const assignments=(person.assignments||[]).filter((row)=>assignmentDate(row)===key);
+          const load=(person.dateLoad||[]).find((row)=>row.date===key);
+          const availabilityConflict=Boolean(assignments.length&&['unavailable','pto'].includes(String(availability?.status||'')));
+          const overload=Boolean(load?.heavy)||availabilityConflict;
+          const row=document.createElement('button');row.type='button';row.className='staff-mobile-day'+(key===today()?' is-today':'')+(overload?' has-overload':'');
+          const top=document.createElement('div');top.className='flex items-start justify-between gap-2';
+          const dateCopy=document.createElement('div');dateCopy.append(text('strong','block text-sm text-[var(--koa-forest)]',new Intl.DateTimeFormat('en-US',{weekday:'short',month:'short',day:'numeric'}).format(date)));
+          const availabilityBadge=document.createElement('span');availabilityBadge.className='staff-availability '+(availability?.status||'unset');availabilityBadge.textContent=availabilityLabel(availability?.status);
+          top.append(dateCopy,availabilityBadge);row.appendChild(top);
+          if(overload){
+            const warning=text('span','staff-overload-badge mt-2',availabilityConflict?'Availability conflict':(load?.responsibilityCount||0)+' load');
+            row.appendChild(warning);
+          }
+          if(availability?.note)row.appendChild(text('p','mt-2 text-xs font-semibold text-[var(--koa-ink)]/48',availability.note));
+          const list=document.createElement('div');list.className='mt-2 grid gap-1';
+          assignments.slice(0,3).forEach((assignment)=>{
+            const pill=document.createElement('span');pill.className='staff-schedule-pill '+(assignment.type==='task'?'task':assignment.type==='event'?'event':'project');
+            pill.textContent=(assignment.type==='event'?'◆ ':assignment.type==='task'?'☑ ':'• ')+(assignment.responsibilityLabel||assignment.label||assignment.detail||'Assignment');
+            list.appendChild(pill);
+          });
+          if(assignments.length>3)list.appendChild(text('span','text-[.55rem] font-bold text-[var(--koa-ink)]/40','+'+(assignments.length-3)+' more'));
+          if(!assignments.length&&!availability)list.appendChild(text('span','text-[.58rem] text-[var(--koa-ink)]/30','No assigned work'));
+          row.appendChild(list);
+          row.addEventListener('click',()=>editAvailability(person,key));
+          dayWrap.appendChild(row);
+        });
+
+        if(!relevantDates.length)dayWrap.appendChild(text('p','rounded-lg bg-[var(--koa-ivory)] p-3 text-xs text-[var(--koa-ink)]/45','No assigned work, availability changes, or overload warnings in this range.'));
+        card.appendChild(dayWrap);
+        const actions=document.createElement('div');actions.className='staff-mobile-card-actions';
+        const setAvailability=document.createElement('button');setAvailability.type='button';setAvailability.className='staff-mobile-set-availability';setAvailability.textContent='Set availability';setAvailability.addEventListener('click',()=>void editAvailabilityInRange(person,dates));
+        actions.appendChild(setAvailability);card.appendChild(actions);wrap.appendChild(card);
+      });
+      if(!staff.length)wrap.appendChild(text('p','rounded-lg bg-white p-4 text-sm text-[var(--koa-ink)]/50','No staff match this search.'));
+      staffSchedule.replaceChildren(wrap);
+    }
+
     function renderStaffSchedule(){
       if(!staffSchedule)return;
       const dates=datesForStaffView();
       const query=String(staffScheduleSearch?.value||'').trim().toLowerCase();
       const staff=staffDirectory.filter((person)=>!query||[person.name,person.email,person.jobTitle,person.roleLabel].some((v)=>String(v||'').toLowerCase().includes(query)));
+      if(calendarMobileQuery.matches){
+        renderStaffScheduleMobile(staff,dates);
+        return;
+      }
       const cols='15rem repeat('+dates.length+','+(staffScale==='week'?'11rem':'9rem')+')';
       const grid=document.createElement('div');grid.className='staff-schedule-grid';grid.style.gridTemplateColumns=cols;
       const corner=document.createElement('div');corner.className='staff-schedule-corner';corner.innerHTML='<p class="text-[.58rem] font-black uppercase tracking-[.09em] text-white/65">Employee</p><strong class="mt-1 block text-sm">Availability + assigned work</strong>';grid.appendChild(corner);
@@ -857,12 +1218,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const {gridStart,gridEnd}=rangeForWeek(cursor);
         periodEyebrow.textContent='Calendar week';
         monthTitle.textContent=new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric'}).format(gridStart)+' – '+new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(gridEnd);
-        viewDescription.textContent='Week view · operational schedule';
+        viewDescription.textContent=calendarMobileQuery.matches?'Week view · vertical day cards':'Week view · operational schedule';
         renderWeek();
       }else if(activeView==='agenda'){
         periodEyebrow.textContent='Calendar agenda';monthTitle.textContent=monthLabel(cursor);viewDescription.textContent='Agenda view · chronological month';renderAgendaView();
       }else{
-        periodEyebrow.textContent='Calendar month';monthTitle.textContent=monthLabel(cursor);viewDescription.textContent='Month view · 6-week grid';renderCalendar();
+        periodEyebrow.textContent='Calendar month';monthTitle.textContent=monthLabel(cursor);viewDescription.textContent=calendarMobileQuery.matches?'Month view · tap a day for preview':'Month view · 6-week grid';renderCalendar();
       }
     }
 
@@ -1196,14 +1557,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderTotals();renderActiveView();renderConflicts();renderAgenda();loadOffice365Status();
     }
 
-    document.querySelector('[data-prev]')?.addEventListener('click',()=>{cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
-    document.querySelector('[data-next]')?.addEventListener('click',()=>{cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
-    document.querySelector('[data-today]')?.addEventListener('click',()=>{const now=new Date();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
-    document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
+    document.querySelector('[data-prev]')?.addEventListener('click',()=>{closeMobileDayPreview();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,-7):new Date(cursor.getFullYear(),cursor.getMonth()-1,1);load();});
+    document.querySelector('[data-next]')?.addEventListener('click',()=>{closeMobileDayPreview();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?addDays(cursor,7):new Date(cursor.getFullYear(),cursor.getMonth()+1,1);load();});
+    document.querySelector('[data-today]')?.addEventListener('click',()=>{closeMobileDayPreview();const now=new Date();cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?now:new Date(now.getFullYear(),now.getMonth(),1);load();});
+    document.querySelectorAll('[data-view]').forEach((button)=>button.addEventListener('click',()=>{closeMobileDayPreview();activeView=button.dataset.view||'month';const nowDate=new Date(cursor);cursor=(activeView==='week'||(activeView==='staff'&&staffScale==='week'))?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
     staffScaleButtons.forEach((button)=>button.addEventListener('click',()=>{staffScale=button.dataset.staffScale||'week';const nowDate=new Date(cursor);cursor=staffScale==='week'?nowDate:new Date(nowDate.getFullYear(),nowDate.getMonth(),1);load();}));
     staffScheduleSearch?.addEventListener('input',renderStaffSchedule);
     document.querySelector('[data-day-close]')?.addEventListener('click',closeDayPanel);
     document.querySelector('[data-day-panel-backdrop]')?.addEventListener('click',closeDayPanel);
+    document.querySelector('[data-mobile-day-preview-close]')?.addEventListener('click',closeMobileDayPreview);
+    mobileDayPreviewFull?.addEventListener('click',()=>{if(mobileDayPreviewKey)openDayPanel(mobileDayPreviewKey);});
     document.querySelector('[data-preview-close]')?.addEventListener('click',closePreview);
     document.querySelector('[data-office365-sync]')?.addEventListener('click',syncOffice365Now);
     office365SyncVerifyButton?.addEventListener('click',syncOffice365NowAndVerify);
@@ -1238,7 +1601,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
       renderActiveView();renderAgenda();
     }));
-    document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closePreview();closeDayPanel();}});
+    calendarMobileQuery.addEventListener?.('change',()=>{
+      closeMobileDayPreview();
+      renderActiveView();
+    });
+    document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closePreview();closeDayPanel();closeMobileDayPreview();}});
     load();
   </script>
 </BaseLayout>
