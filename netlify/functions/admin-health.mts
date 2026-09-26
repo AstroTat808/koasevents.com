@@ -344,6 +344,7 @@ export default async (req:Request,context:Context) => {
         }));
         const latest=await readLatestHealth(context);
         const remainingSystemIssues=(Array.isArray(latest?.checks)?latest.checks:[])
+          .filter((row:any)=>!['email-send-access','email-monitoring-access'].includes(String(row?.id||'')))
           .filter((row:any)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&(!row?.ok||String(row?.severity||'')==='yellow'||String(row?.severity||'')==='red'))
           .map((row:any)=>({
             id:String(row?.id||''),
