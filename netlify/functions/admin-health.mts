@@ -419,43 +419,47 @@ export default async (req:Request,context:Context) => {
           }));
 
         const completedAt=new Date().toISOString();
+        const safeRepair={
+          startedAt,
+          completedAt,
+          durationMs:Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)),
+          attempted:attemptedIds.length,
+          fixed:fixedItems.length,
+          fixedIds:fixedItems.map((row:any)=>row.id),
+          remaining:remainingCredentials.length+remainingSystemIssues.length,
+          before:{
+            failedCredentials:beforeRows.filter((row:any)=>!row?.ok).map((row:any)=>({
+              id:String(row?.id||''),
+              provider:String(row?.provider||'Credential'),
+              credential:String(row?.credential||'Credential'),
+              issueType:String(row?.issueType||'Credential problem'),
+              severity:String(row?.severity||'yellow'),
+              detail:String(row?.detail||''),
+            })),
+            systemIssues:beforeSystemIssues,
+          },
+          retested,
+          fixedItems,
+          unchangedItems,
+          after:{
+            failedCredentials:remainingCredentials,
+            systemIssues:remainingSystemIssues,
+          },
+          stillRequiresMe:[
+            ...remainingCredentials.map((row:any)=>({...row,source:'credential'})),
+            ...remainingSystemIssues.map((row:any)=>({...row,source:'system'})),
+          ],
+          detail:attemptedIds.length
+            ? 'Safe automatic repair re-tested each failed credential independently, refreshed derived health state, and closed resolved credential alerts without changing secrets or external account permissions.'
+            : 'No failed credentials needed a safe automatic re-test. Remaining configuration or permission items require staff action.',
+        };
+        const audit=await recordCredentialSafeRepairAudit(context,safeRepair,actor);
+        const weeklyExecutiveSummary=await weeklySystemHealthExecutiveSummary(context);
         return Response.json({
           ok:true,
           credentialHealth,
-          safeRepair:{
-            startedAt,
-            completedAt,
-            durationMs:Math.max(0,Date.parse(completedAt)-Date.parse(startedAt)),
-            attempted:attemptedIds.length,
-            fixed:fixedItems.length,
-            fixedIds:fixedItems.map((row:any)=>row.id),
-            remaining:remainingCredentials.length+remainingSystemIssues.length,
-            before:{
-              failedCredentials:beforeRows.filter((row:any)=>!row?.ok).map((row:any)=>({
-                id:String(row?.id||''),
-                provider:String(row?.provider||'Credential'),
-                credential:String(row?.credential||'Credential'),
-                issueType:String(row?.issueType||'Credential problem'),
-                severity:String(row?.severity||'yellow'),
-                detail:String(row?.detail||''),
-              })),
-              systemIssues:beforeSystemIssues,
-            },
-            retested,
-            fixedItems,
-            unchangedItems,
-            after:{
-              failedCredentials:remainingCredentials,
-              systemIssues:remainingSystemIssues,
-            },
-            stillRequiresMe:[
-              ...remainingCredentials.map((row:any)=>({...row,source:'credential'})),
-              ...remainingSystemIssues.map((row:any)=>({...row,source:'system'})),
-            ],
-            detail:attemptedIds.length
-              ? 'Safe automatic repair re-tested each failed credential independently, refreshed derived health state, and closed resolved credential alerts without changing secrets or external account permissions.'
-              : 'No failed credentials needed a safe automatic re-test. Remaining configuration or permission items require staff action.',
-          },
+          safeRepair:{...safeRepair,auditId:audit.id},
+          weeklyExecutiveSummary,
         },{headers:{'Cache-Control':'private, no-store'}});
       }catch(error){
         return Response.json({
@@ -566,7 +570,8 @@ export default async (req:Request,context:Context) => {
     const incidents=calculateIncidents(uptimeHistory);
     const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
     deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth},{headers:{'Cache-Control':'private, no-store'}});
+    const weeklyExecutiveSummary=await weeklySystemHealthExecutiveSummary(context);
+    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -597,6 +602,7 @@ export default async (req:Request,context:Context) => {
     emailHealthSummary(context),
   ]);
   const credentialHealth=await credentialHealthSummary(context,{emailHealth});
+  const weeklyExecutiveSummary=await weeklySystemHealthExecutiveSummary(context);
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
   const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
@@ -612,6 +618,7 @@ export default async (req:Request,context:Context) => {
     office365,
     emailHealth,
     credentialHealth,
+    weeklyExecutiveSummary,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
