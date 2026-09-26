@@ -533,10 +533,73 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-alert-actions {
-    margin-top: .65rem;
+    margin-top: .7rem;
+    display: grid;
+    gap: .55rem;
+  }
+
+  .workspace-alert-action-group {
+    display: grid;
+    gap: .35rem;
+  }
+
+  .workspace-alert-action-label {
+    color: color-mix(in srgb, var(--koa-ink) 48%, transparent);
+    font-size: .5rem;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .workspace-alert-action-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: .4rem;
+  }
+
+  .workspace-alert-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    transition:
+      border-color 150ms ease,
+      background 150ms ease,
+      color 150ms ease,
+      transform 120ms ease;
+  }
+
+  .workspace-alert-action.is-primary {
+    border-color: var(--koa-forest);
+    background: var(--koa-forest);
+    color: white;
+  }
+
+  .workspace-alert-action.is-snooze {
+    border-color: color-mix(in srgb, var(--koa-champagne) 72%, var(--koa-line));
+    background: color-mix(in srgb, var(--koa-ivory) 72%, white);
+    color: var(--koa-forest);
+  }
+
+  .workspace-alert-action.is-dismiss {
+    border-color: rgb(254 202 202);
+    background: rgb(254 242 242);
+    color: rgb(185 28 28);
+  }
+
+  .workspace-alert-action.is-seen {
+    border-color: rgb(191 219 254);
+    background: rgb(239 246 255);
+    color: rgb(29 78 216);
+  }
+
+  .workspace-alert-action:not(:disabled):active {
+    transform: scale(.98);
+  }
+
+  .workspace-alert-action:disabled {
+    cursor: wait;
+    opacity: .55;
   }
 
   .workspace-alert-history {
@@ -851,13 +914,71 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
 
     .workspace-alert-close,
-    .workspace-alert-tab,
-    .workspace-alert-action {
+    .workspace-alert-tab {
       min-height: 2.5rem;
     }
 
     .workspace-alert-row {
-      padding: .75rem;
+      padding: .85rem;
+    }
+
+    .workspace-alert-actions {
+      margin-top: .8rem;
+      gap: .7rem;
+      border-top: 1px solid color-mix(in srgb, var(--koa-line) 82%, transparent);
+      padding-top: .72rem;
+    }
+
+    .workspace-alert-action-group {
+      gap: .42rem;
+    }
+
+    .workspace-alert-action-label {
+      font-size: .52rem;
+    }
+
+    .workspace-alert-action-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .48rem;
+    }
+
+    .workspace-alert-snooze-buttons {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .workspace-alert-action {
+      min-height: 2.8rem;
+      width: 100%;
+      border-radius: .72rem;
+      padding: .62rem .5rem;
+      font-size: .55rem;
+      letter-spacing: .055em;
+      line-height: 1.15;
+      white-space: normal;
+      text-align: center;
+    }
+
+    .workspace-alert-action.is-primary {
+      grid-column: 1 / -1;
+      min-height: 3rem;
+      font-size: .58rem;
+      box-shadow: 0 6px 16px rgba(7,30,23,.12);
+    }
+
+    .workspace-alert-action.is-dismiss {
+      font-size: .54rem;
+    }
+
+    .workspace-alert-actions > .workspace-alert-action {
+      width: auto;
+      min-width: 8rem;
+    }
+
+    .workspace-alert-actions > span {
+      align-self: center;
+      padding: .35rem .15rem;
+      line-height: 1.35;
     }
   }
 
@@ -1175,10 +1296,10 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     } catch {}
   }
 
-  function actionButton(label, onClick) {
+  function actionButton(label, onClick, variant='') {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'workspace-alert-action';
+    button.className = 'workspace-alert-action'+(variant?' '+variant:'');
     button.textContent = label;
     button.addEventListener('click',(event)=>{
       event.preventDefault();
@@ -1231,38 +1352,58 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const actions = document.createElement('div');
     actions.className = 'workspace-alert-actions';
 
-    const open = document.createElement('a');
-    open.href = alert.href || '#';
-    open.className = 'workspace-alert-action';
-    open.textContent = 'Open item';
-
-    if (alert.isNew) {
-      actions.appendChild(actionButton('Mark seen', async(button)=>{
-        button.disabled = true;
-        await alertAction('mark-seen',{occurrenceIds:[alert.occurrenceId]});
-      }));
-    }
-
-    actions.appendChild(actionButton('Tomorrow', async(button)=>{
+    const snoozeGroup = document.createElement('div');
+    snoozeGroup.className = 'workspace-alert-action-group';
+    const snoozeLabel = document.createElement('span');
+    snoozeLabel.className = 'workspace-alert-action-label';
+    snoozeLabel.textContent = 'Snooze';
+    const snoozeButtons = document.createElement('div');
+    snoozeButtons.className = 'workspace-alert-action-buttons workspace-alert-snooze-buttons';
+    snoozeButtons.appendChild(actionButton('Tomorrow', async(button)=>{
       button.disabled = true;
       await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'tomorrow'});
-    }));
-    actions.appendChild(actionButton('Next week', async(button)=>{
+    },'is-snooze'));
+    snoozeButtons.appendChild(actionButton('Next week', async(button)=>{
       button.disabled = true;
       await alertAction('snooze',{occurrenceId:alert.occurrenceId,preset:'week'});
-    }));
-    actions.appendChild(actionButton('Custom date', async(button)=>{
+    },'is-snooze'));
+    snoozeButtons.appendChild(actionButton('Custom date', async(button)=>{
       const raw = window.prompt('Snooze until what date? Use YYYY-MM-DD.');
       if (!raw) return;
       button.disabled = true;
       const ok = await alertAction('snooze',{occurrenceId:alert.occurrenceId,date:raw});
       if (!ok) button.disabled = false;
-    }));
-    actions.appendChild(actionButton('Dismiss', async(button)=>{
+    },'is-snooze'));
+    snoozeGroup.append(snoozeLabel,snoozeButtons);
+
+    const responseGroup = document.createElement('div');
+    responseGroup.className = 'workspace-alert-action-group';
+    const responseLabel = document.createElement('span');
+    responseLabel.className = 'workspace-alert-action-label';
+    responseLabel.textContent = 'Alert actions';
+    const responseButtons = document.createElement('div');
+    responseButtons.className = 'workspace-alert-action-buttons';
+
+    if (alert.isNew) {
+      responseButtons.appendChild(actionButton('Mark seen', async(button)=>{
+        button.disabled = true;
+        await alertAction('mark-seen',{occurrenceIds:[alert.occurrenceId]});
+      },'is-seen'));
+    }
+
+    responseButtons.appendChild(actionButton('Dismiss', async(button)=>{
       button.disabled = true;
       await alertAction('dismiss',{occurrenceId:alert.occurrenceId});
-    }));
-    actions.appendChild(open);
+    },'is-dismiss'));
+
+    const open = document.createElement('a');
+    open.href = alert.href || '#';
+    open.className = 'workspace-alert-action is-primary';
+    open.textContent = 'Open item';
+    responseButtons.appendChild(open);
+    responseGroup.append(responseLabel,responseButtons);
+
+    actions.append(snoozeGroup,responseGroup);
 
     top.append(left,sev);
     row.append(top,context,detail,meta,actions);
