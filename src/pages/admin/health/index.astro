@@ -75,6 +75,68 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section data-weekly-executive-summary class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Executive view</p>
+              <h2 class="display mt-2 text-4xl">Weekly System Health summary</h2>
+              <p data-weekly-summary-basis class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Rolling 7 days compared with the immediately preceding 7 days.</p>
+            </div>
+            <span data-weekly-summary-generated class="text-xs text-[var(--koa-ink)]/45">—</span>
+          </div>
+
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Observed uptime</p>
+              <p data-weekly-uptime class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p>
+              <p data-weekly-uptime-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Credential reliability</p>
+              <p data-weekly-credential-reliability class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p>
+              <p data-weekly-credential-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Incidents</p>
+              <p data-weekly-incidents class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-incidents-delta class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Automatic repairs</p>
+              <p data-weekly-repairs class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-repairs-detail class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-sand)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unresolved now</p>
+              <p data-weekly-unresolved class="display mt-2 text-3xl text-[var(--koa-forest)]">0</p>
+              <p data-weekly-unresolved-detail class="mt-1 text-[.66rem] text-[var(--koa-ink)]/48">—</p>
+            </article>
+          </div>
+
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.1rem] border border-emerald-200 bg-emerald-50 p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-emerald-800">Improved from prior week</p>
+              <div data-weekly-improved class="mt-3 grid gap-2"></div>
+            </article>
+            <article class="rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-amber-900">Worsened from prior week</p>
+              <div data-weekly-worsened class="mt-3 grid gap-2"></div>
+            </article>
+          </div>
+
+          <div class="mt-4 grid gap-4 lg:grid-cols-2">
+            <article class="rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current credential reliability by provider</p>
+              <div data-weekly-provider-reliability class="mt-3 grid gap-2"></div>
+            </article>
+            <article class="rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unresolved problems</p>
+              <div data-weekly-unresolved-list class="mt-3 grid gap-2"></div>
+            </article>
+          </div>
+          <p data-weekly-summary-coverage class="mt-4 text-[.66rem] leading-5 text-[var(--koa-ink)]/45"></p>
+        </section>
+
         <section data-needs-action class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -260,6 +322,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Reliability + alerts + credential transitions</h3>
               <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">One chronological view of reliability threshold changes, Workspace Alert incidents, credential failures, and recoveries.</p>
             </div>
+            <div class="mt-4 grid gap-3">
+              <div>
+                <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Provider</p>
+                <div data-credential-timeline-provider-filters class="mt-2 flex flex-wrap gap-2">
+                  <button data-credential-timeline-provider="all" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">All providers</button>
+                  <button data-credential-timeline-provider="resend" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Resend</button>
+                  <button data-credential-timeline-provider="quickbooks" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">QuickBooks</button>
+                  <button data-credential-timeline-provider="microsoft-graph" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Microsoft Graph</button>
+                  <button data-credential-timeline-provider="github" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">GitHub</button>
+                  <button data-credential-timeline-provider="netlify" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Netlify</button>
+                </div>
+              </div>
+              <div>
+                <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Event type</p>
+                <div data-credential-timeline-source-filters class="mt-2 flex flex-wrap gap-2">
+                  <button data-credential-timeline-source="all" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">All events</button>
+                  <button data-credential-timeline-source="reliability" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Reliability</button>
+                  <button data-credential-timeline-source="credential" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Credential Changes</button>
+                  <button data-credential-timeline-source="alert" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Alert Center</button>
+                </div>
+              </div>
+            </div>
+            <p data-credential-timeline-count class="mt-3 text-xs text-[var(--koa-ink)]/45"></p>
             <div data-credential-incident-timeline class="mt-4 grid gap-2"></div>
           </div>
         </section>
