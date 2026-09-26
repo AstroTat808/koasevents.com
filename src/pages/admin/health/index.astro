@@ -3071,10 +3071,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
 
+    saveCredentialThresholds?.addEventListener('click',async()=>{
+      saveCredentialThresholds.disabled=true;
+      if(credentialThresholdMessage)credentialThresholdMessage.textContent='Saving…';
+      try{
+        const providers={};
+        const yellowInputs=[...(credentialReliabilityGrid?.querySelectorAll('[data-credential-threshold-yellow]')||[])];
+        const redInputs=[...(credentialReliabilityGrid?.querySelectorAll('[data-credential-threshold-red]')||[])];
+        const redById=new Map(redInputs.map((input)=>[String(input.dataset.credentialThresholdRed||''),input]));
+        yellowInputs.forEach((input)=>{
+          const id=String(input.dataset.credentialThresholdYellow||'');
+          const redInput=redById.get(id);
+          const yellowBelow=Number(input.value);
+          const redBelow=Number(redInput?.value);
+          if(!id||!Number.isFinite(yellowBelow)||!Number.isFinite(redBelow)||yellowBelow<0||yellowBelow>100||redBelow<0||redBelow>100){
+            throw new Error('Every provider threshold must be between 0 and 100.');
+          }
+          if(redBelow>=yellowBelow)throw new Error('Red threshold must be lower than yellow for '+id+'.');
+          providers[id]={yellowBelow,redBelow};
+        });
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'save-credential-reliability-thresholds',providers}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to save Credential Health thresholds.');
+        renderCredentialHealth(data.credentialHealth||{});
+        if(credentialThresholdMessage)credentialThresholdMessage.textContent='Thresholds saved.';
+      }catch(error){
+        if(credentialThresholdMessage)credentialThresholdMessage.textContent=error instanceof Error?error.message:'Unable to save thresholds.';
+      }finally{
+        saveCredentialThresholds.disabled=false;
+      }
+    });
+
     fixAllSafe?.addEventListener('click',async()=>{
       fixAllSafe.disabled=true;
       const original=fixAllSafe.textContent;
       fixAllSafe.textContent='Fixing safe problems…';
+      renderSafeRepairReport(null);
       if(fixAllSafeMessage){
         fixAllSafeMessage.classList.remove('hidden');
         fixAllSafeMessage.className='mt-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/60';
@@ -3090,6 +3126,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(!response.ok)throw new Error(data.error||'Unable to complete safe automatic repairs.');
         renderCredentialHealth(data.credentialHealth||{});
         const result=data.safeRepair||{};
+        renderSafeRepairReport(result);
         if(fixAllSafeMessage){
           const fixed=Number(result.fixed||0);
           const remaining=Number(result.remaining||0);
