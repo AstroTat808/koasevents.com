@@ -113,7 +113,7 @@ function checkEmailFeatureContracts() {
       ['Email Health dashboard', 'data-email-health-overall'],
       ['Credential Health dashboard', 'data-credential-health-overall'],
       ['credential health cards', 'data-credential-health-grid'],
-      ['credential health recommended actions', 'data.credentialHealthAction'],
+      ['credential health recommended actions', 'dataset.credentialHealthAction'],
       ['root cause summary', 'data-root-cause-summary'],
       ['root cause filters', 'data-root-cause-filter'],
       ['root cause clear action', 'data-root-cause-clear'],
