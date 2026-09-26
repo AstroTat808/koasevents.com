@@ -169,6 +169,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Authentication + permissions</p>
+              <h2 class="display mt-2 text-4xl">Credential Health</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Validates credentials and access scopes independently from service uptime. A credential warning does not automatically mean the underlying service is down.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span data-credential-health-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking</span>
+              <span data-credential-health-checked class="text-xs text-[var(--koa-ink)]/45">—</span>
+            </div>
+          </div>
+          <div data-credential-health-grid class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
               <p class="eyebrow text-[var(--koa-clay)]">Microsoft 365 integration</p>
               <h2 class="display mt-2 text-4xl">Office 365 calendar sync</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Production synchronization health for the shared Koa’s Events calendar.</p>
@@ -495,6 +510,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <p data-health-detail-severity class="eyebrow text-[var(--koa-clay)]">Health check</p>
                 <h2 data-health-detail-title class="display mt-2 text-3xl">Issue details</h2>
                 <p data-health-detail-meta class="mt-2 text-xs text-[var(--koa-ink)]/48"></p>
+                <span data-health-detail-issue-type class="mt-3 hidden w-fit rounded-full bg-[var(--koa-sand)] px-3 py-1.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]"></span>
               </div>
               <button data-health-detail-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close">×</button>
             </div>
@@ -663,6 +679,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealth7Complained=document.querySelector('[data-email-health-7-complained]');
     const emailHealth7Suppressed=document.querySelector('[data-email-health-7-suppressed]');
     const emailHealthIssues=document.querySelector('[data-email-health-issues]');
+    const credentialHealthOverall=document.querySelector('[data-credential-health-overall]');
+    const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
+    const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
     const office365Operational=document.querySelector('[data-office365-operational]');
     const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
     const office365OperationalDetail=document.querySelector('[data-office365-operational-detail]');
@@ -753,6 +772,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthDetailSeverity=document.querySelector('[data-health-detail-severity]');
     const healthDetailTitle=document.querySelector('[data-health-detail-title]');
     const healthDetailMeta=document.querySelector('[data-health-detail-meta]');
+    const healthDetailIssueType=document.querySelector('[data-health-detail-issue-type]');
     const healthDetailError=document.querySelector('[data-health-detail-error]');
     const healthDetailVerificationWrap=document.querySelector('[data-health-detail-verification-wrap]');
     const healthDetailVerification=document.querySelector('[data-health-detail-verification]');
@@ -842,6 +862,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         String(row.kind||'check')+' · '+String(row.path||'')+' · HTTP '+String(row.status||'—')+' · '+String(row.ms||0)+' ms',
         deploymentMeta,
       ].filter(Boolean).join(' · ');
+      if(healthDetailIssueType){
+        const issueType=String(row.issueType||'');
+        healthDetailIssueType.textContent=issueType;
+        healthDetailIssueType.classList.toggle('hidden',!issueType);
+      }
       healthDetailError.textContent=String(row.detail||'No additional detail was recorded.');
       if(deploymentDetails){
         const verificationLabel=String(deploymentDetails.verificationSourceLabel||deploymentDetails.verificationSource||'Unverified');
@@ -885,6 +910,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const title=document.createElement('h3');title.className='font-semibold text-[var(--koa-forest)]';title.textContent=row.name;
       const meta=document.createElement('p');meta.className='mt-1 break-all text-xs text-[var(--koa-ink)]/48';meta.textContent=row.kind+' · '+row.path;
       left.append(title,meta);
+      if(row.issueType){
+        const type=document.createElement('span');
+        type.className='mt-2 inline-flex rounded-full bg-white/75 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';
+        type.textContent=String(row.issueType);
+        left.appendChild(type);
+      }
       const badge=document.createElement('span');badge.className='shrink-0 rounded-full px-3 py-1 text-[.58rem] font-black uppercase tracking-[.08em] '+badgePalette;badge.textContent=badgeText;
       top.append(left,badge);
       const detail=document.createElement('p');detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='HTTP '+(row.status||'—')+' · '+row.ms+' ms · '+(row.detail||'');
@@ -895,9 +926,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderHealthChecks(){
       results.innerHTML='';
       const onlyFailures=Boolean(failuresOnly?.checked);
-      const rows=latestHealthChecks.filter(row=>!onlyFailures||!row.ok);
+      const rows=latestHealthChecks.filter(row=>!onlyFailures||normalizedSeverity(row)!=='healthy');
       if(!rows.length){
-        results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No failing checks in the current snapshot.</p>';
+        results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No current issues in the health snapshot.</p>';
         return;
       }
       rows.forEach(row=>results.appendChild(healthRow(row)));
@@ -1315,6 +1346,63 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderCredentialHealth(summary){
+      const health=summary||{};
+      const state=String(health.overall||'yellow');
+      const overallMap={
+        green:['Credentials healthy','bg-emerald-100 text-emerald-800'],
+        yellow:['Credential attention','bg-amber-100 text-amber-900'],
+        red:['Credential problem','bg-red-100 text-red-800'],
+      };
+      const selected=overallMap[state]||overallMap.yellow;
+      if(credentialHealthOverall){
+        credentialHealthOverall.textContent=selected[0];
+        credentialHealthOverall.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+selected[1];
+      }
+      if(credentialHealthChecked)credentialHealthChecked.textContent=health.generatedAt?'Checked '+new Date(health.generatedAt).toLocaleString():'—';
+      if(!credentialHealthGrid)return;
+      credentialHealthGrid.innerHTML='';
+      const rows=Array.isArray(health.rows)?health.rows:[];
+      rows.forEach((row)=>{
+        const severity=String(row.severity||'yellow');
+        const card=document.createElement('article');
+        card.className='rounded-[1.1rem] border p-4 '+(
+          severity==='green'?'border-emerald-200 bg-emerald-50':
+          severity==='red'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50'
+        );
+        const top=document.createElement('div');
+        top.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');
+        const provider=document.createElement('p');
+        provider.className='text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';
+        provider.textContent=String(row.provider||row.id||'Credential');
+        const credential=document.createElement('h3');
+        credential.className='mt-1 text-sm font-semibold text-[var(--koa-forest)]';
+        credential.textContent=String(row.credential||'Credential');
+        left.append(provider,credential);
+        const badge=document.createElement('span');
+        badge.className='shrink-0 rounded-full px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.07em] '+(
+          severity==='green'?'bg-emerald-800 text-white':
+          severity==='red'?'bg-red-800 text-white':'bg-amber-700 text-white'
+        );
+        badge.textContent=severity==='green'?'Valid':severity==='red'?'Problem':'Attention';
+        top.append(left,badge);
+        card.appendChild(top);
+        if(row.issueType){
+          const issue=document.createElement('span');
+          issue.className='mt-3 inline-flex rounded-full bg-white/75 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';
+          issue.textContent=String(row.issueType);
+          card.appendChild(issue);
+        }
+        const detail=document.createElement('p');
+        detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
+        detail.textContent=(row.status?'HTTP '+row.status+' · ':'')+String(row.detail||'No verification detail recorded.');
+        card.appendChild(detail);
+        credentialHealthGrid.appendChild(card);
+      });
+      if(!rows.length)credentialHealthGrid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Credential checks are not available yet.</p>';
+    }
+
     function renderOffice365Trend(rows){
       if(!office365Trend)return;
       const data=Array.isArray(rows)?rows:[];
@@ -1401,6 +1489,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
 
       renderEmailHealth(data.emailHealth||{},data.current||null);
+      renderCredentialHealth(data.credentialHealth||{});
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
