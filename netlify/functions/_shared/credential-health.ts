@@ -3,6 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './email-health';
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
+import { syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
 
 export type CredentialIssueType =
   | 'Service Failure'
@@ -46,6 +47,17 @@ export type CredentialHealthHistoryEvent = {
   detail: string;
 };
 
+type CredentialHealthSample = {
+  hour: string;
+  at: string;
+  rows: Record<string, {
+    ok: boolean;
+    configured: boolean;
+    severity: 'green' | 'yellow' | 'red';
+    issueType: CredentialIssueType | null;
+  }>;
+};
+
 type CredentialHealthOptions = {
   force?: boolean;
   emailHealth?: any;
@@ -62,6 +74,14 @@ const CREDENTIAL_IDS = [
 ] as const;
 
 type CredentialId = (typeof CREDENTIAL_IDS)[number];
+
+const RELIABILITY_PROVIDERS = [
+  { id: 'resend', label: 'Resend', credentialIds: ['resend-send', 'resend-monitoring'] },
+  { id: 'quickbooks', label: 'QuickBooks', credentialIds: ['quickbooks'] },
+  { id: 'microsoft-graph', label: 'Microsoft Graph', credentialIds: ['microsoft-graph'] },
+  { id: 'github', label: 'GitHub', credentialIds: ['github'] },
+  { id: 'netlify', label: 'Netlify', credentialIds: ['netlify'] },
+] as const;
 
 function clean(value: unknown, max=800) {
   return String(value ?? '').trim().slice(0, max);
@@ -437,6 +457,83 @@ async function readHistory(context: Context, limit = 200): Promise<CredentialHea
   return rows.slice(0, Math.max(1, Math.min(500, limit)));
 }
 
+async function readSamples(context: Context, limit = 2300): Promise<CredentialHealthSample[]> {
+  const rows = ((await storeFor(context).get('credential-health/samples', { type: 'json' })) || []) as CredentialHealthSample[];
+  return rows.slice(0, Math.max(1, Math.min(2300, limit)));
+}
+
+function sampleHour(value: string) {
+  const at = new Date(value);
+  if (Number.isNaN(at.getTime())) return '';
+  at.setUTCMinutes(0, 0, 0);
+  return at.toISOString();
+}
+
+async function persistReliabilitySample(context: Context, rows: CredentialHealthRow[], generatedAt: string) {
+  const store = storeFor(context);
+  const samples = await readSamples(context, 2300);
+  const hour = sampleHour(generatedAt);
+  if (!hour) return;
+  const snapshot: CredentialHealthSample = {
+    hour,
+    at: generatedAt,
+    rows: Object.fromEntries(rows.map((row) => [
+      row.id,
+      {
+        ok: Boolean(row.ok),
+        configured: Boolean(row.configured),
+        severity: row.severity,
+        issueType: row.issueType,
+      },
+    ])),
+  };
+  const next = [snapshot, ...samples.filter((sample) => sample.hour !== hour)]
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at))
+    .slice(0, 2300);
+  await store.setJSON('credential-health/samples', next);
+}
+
+function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: readonly string[], days: number) {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const observed = samples.filter((sample) => {
+    const at = Date.parse(String(sample?.at || sample?.hour || ''));
+    return Number.isFinite(at)
+      && at >= cutoff
+      && credentialIds.every((id) => Boolean(sample?.rows?.[id]));
+  });
+  const healthy = observed.filter((sample) =>
+    credentialIds.every((id) => Boolean(sample.rows[id]?.ok))
+  ).length;
+  const sampleCount = observed.length;
+  const expectedSamples = days * 24;
+  return {
+    days,
+    percentage: sampleCount ? Math.round((healthy / sampleCount) * 1000) / 10 : null,
+    healthySamples: healthy,
+    failedSamples: Math.max(0, sampleCount - healthy),
+    samples: sampleCount,
+    expectedSamples,
+    coveragePercent: expectedSamples ? Math.round((sampleCount / expectedSamples) * 1000) / 10 : 0,
+  };
+}
+
+function reliabilitySummary(samples: CredentialHealthSample[]) {
+  return {
+    generatedAt: new Date().toISOString(),
+    providers: RELIABILITY_PROVIDERS.map((provider) => ({
+      id: provider.id,
+      label: provider.label,
+      credentialCount: provider.credentialIds.length,
+      periods: {
+        '7d': reliabilityPeriod(samples, provider.credentialIds, 7),
+        '30d': reliabilityPeriod(samples, provider.credentialIds, 30),
+        '90d': reliabilityPeriod(samples, provider.credentialIds, 90),
+      },
+    })),
+    note: 'Reliability is the percentage of observed hourly Credential Health samples that were healthy. Coverage grows as hourly history accumulates.',
+  };
+}
+
 async function persistRowsWithHistory(
   context: Context,
   previousRows: CredentialHealthRow[],
@@ -547,10 +644,20 @@ async function persistRowsWithHistory(
 }
 
 async function withHistory(context: Context, summary: any) {
+  const [history, samples] = await Promise.all([
+    readHistory(context, 200),
+    readSamples(context, 2300),
+  ]);
   return {
     ...summary,
-    history: await readHistory(context, 200),
+    history,
+    reliability: reliabilitySummary(samples),
   };
+}
+
+export async function readCredentialHealthSummary(context: Context) {
+  const cached: any = await storeFor(context).get('credential-health/summary', { type: 'json' });
+  return cached ? withHistory(context, cached) : null;
 }
 
 export async function credentialHealthSummary(context: Context, options: CredentialHealthOptions = {}) {
@@ -575,7 +682,11 @@ export async function credentialHealthSummary(context: Context, options: Credent
     const incoming = previousRows.map((row) => row.id === requestedId ? checked : row);
     const rows = await persistRowsWithHistory(context, previousRows, incoming, new Set([requestedId]), generatedAt);
     const summary = healthSummaryFromRows(rows, generatedAt);
-    await store.setJSON('credential-health/summary', summary);
+    await Promise.all([
+      store.setJSON('credential-health/summary', summary),
+      persistReliabilitySample(context, rows, generatedAt),
+      syncCredentialWorkspaceAlerts(context, [rows.find((row) => row.id === requestedId)].filter(Boolean)),
+    ]);
     return withHistory(context, summary);
   }
 
@@ -604,6 +715,10 @@ export async function credentialHealthSummary(context: Context, options: Credent
     generatedAt,
   );
   const summary = healthSummaryFromRows(rows, generatedAt);
-  await store.setJSON('credential-health/summary', summary);
+  await Promise.all([
+    store.setJSON('credential-health/summary', summary),
+    persistReliabilitySample(context, rows, generatedAt),
+    syncCredentialWorkspaceAlerts(context, rows),
+  ]);
   return withHistory(context, summary);
 }

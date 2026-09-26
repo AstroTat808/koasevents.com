@@ -101,10 +101,25 @@ function checkEmailFeatureContracts() {
       ['targeted credential probe', 'async function verifyCredentialById'],
       ['credential history storage', "'credential-health/history'"],
       ['credential recovery event', "event: 'recovered'"],
+      ['credential reliability storage', "'credential-health/samples'"],
+      ['credential reliability summary', 'function reliabilitySummary'],
+      ['cached credential health reader', 'export async function readCredentialHealthSummary'],
+      ['Workspace Alert sync', 'syncCredentialWorkspaceAlerts'],
+    ]],
+    ['netlify/functions/_shared/workspace-alert-lifecycle.ts', [
+      ['credential Workspace Alert projection', 'export function credentialWorkspaceAlert'],
+      ['credential Workspace Alert reconciliation', 'export async function syncCredentialWorkspaceAlerts'],
+      ['resolved credential alert history', 'resolvedAt: now'],
     ]],
     ['netlify/functions/admin-health.mts', [
       ['targeted credential retest action', "body?.action==='retest-credential'"],
       ['targeted credential retest response', 'retestedCredentialId:credentialId'],
+      ['safe batch repair action', "body?.action==='fix-all-safe-problems'"],
+      ['safe batch repair result', 'safeRepair:{'],
+    ]],
+    ['netlify/functions/admin-workspace-alerts.mts', [
+      ['Credential Health alert source', 'readCredentialHealthSummary'],
+      ['credential Workspace Alert projection', 'credentialWorkspaceAlert'],
     ]],
     ['netlify/functions/_shared/system-health.ts', [
       ['Email Health integration', "import { emailHealthSummary } from './email-health'"],
@@ -127,6 +142,10 @@ function checkEmailFeatureContracts() {
       ['root cause clear action', 'data-root-cause-clear'],
       ['needs my action queue', 'data-needs-action-list'],
       ['needs my action count', 'data-needs-action-count'],
+      ['safe repair button', 'data-fix-all-safe'],
+      ['safe repair result message', 'data-fix-all-safe-message'],
+      ['credential reliability view', 'data-credential-reliability-grid'],
+      ['credential reliability periods', "const periodKeys=['7d','30d','90d']"],
       ['credential history view', 'data-credential-health-history'],
       ['credential targeted retest', 'dataset.credentialRetest'],
       ['credential retest return tracking', 'koaCredentialRetest'],
@@ -142,6 +161,9 @@ function checkEmailFeatureContracts() {
       ['renderer deploy link', 'data-email-renderer-deploy'],
       ['email issue list', 'data-email-health-issues'],
       ['email 24-hour delivery stats', 'data-email-health-24-delivered'],
+    ]],
+    ['src/components/StaffUtilityNav.astro', [
+      ['Credential Alert Center live refresh', "koa:workspace-alerts-refresh"],
     ]],
     ['netlify/functions/resend-webhook.mts', [
       ['Email Health webhook recording', 'recordEmailHealthEvent'],

@@ -4,6 +4,8 @@ import { hasCapability, requireOperations } from './_shared/admin';
 import { buildQuickBooksAccountingAudit } from './admin-quickbooks.mts';
 import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sync.ts';
 import { inspectDeploymentSync, readLatestHealth } from './_shared/system-health';
+import { readCredentialHealthSummary } from './_shared/credential-health';
+import { credentialWorkspaceAlert } from './_shared/workspace-alert-lifecycle';
 
 type Severity='urgent'|'upcoming'|'info';
 type AlertCategory='overdueTasks'|'vendorInsurance'|'accountingMismatches'|'healthWarnings';
@@ -103,12 +105,13 @@ async function computeAlerts(context:Context,user:any){
   const vendorsStore=store(context,'koa-vendors');
   const ops=store(context,'koa-event-ops');
 
-  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync]=await Promise.all([
+  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth]=await Promise.all([
     canCrm?crm.get('tasks/index',{type:'json'}):Promise.resolve([]),
     (canInsurance||canQuickBooks||canCrm)?sales.get('records/index',{type:'json'}):Promise.resolve([]),
     canInsurance?vendorsStore.get('vendors/index',{type:'json'}):Promise.resolve([]),
     canHealth?readLatestHealth(context):Promise.resolve(null),
     canHealth?inspectDeploymentSync(context):Promise.resolve(null),
+    canHealth?readCredentialHealthSummary(context):Promise.resolve(null),
   ]);
 
   const tasks:Array<any>=Array.isArray(tasksRaw)?tasksRaw:[];
@@ -195,7 +198,9 @@ async function computeAlerts(context:Context,user:any){
   const healthDetails:AlertDetail[]=canHealth&&latestHealth
     ? (Array.isArray(latestHealth?.checks)?latestHealth.checks:[])
         .filter((check:any)=>{
-          if(String(check?.id||'')==='netlify-github-sync'){
+          const checkId=String(check?.id||'');
+          if(credentialHealth&&['email-send-access','email-monitoring-access'].includes(checkId))return false;
+          if(checkId==='netlify-github-sync'){
             return Boolean(deploymentSync && (deploymentSync.severity==='yellow' || deploymentSync.severity==='red'));
           }
           return !check?.ok || String(check?.severity||'')==='yellow';
@@ -222,11 +227,17 @@ async function computeAlerts(context:Context,user:any){
         })
     : [];
 
+  const credentialDetails:AlertDetail[]=canHealth&&credentialHealth
+    ? (Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
+        .filter((row:any)=>!row?.ok)
+        .map((row:any)=>credentialWorkspaceAlert(row) as AlertDetail)
+    : [];
+
   return {
     overdueTasks:overdueTaskDetails,
     vendorInsurance:insuranceDetails,
     accountingMismatches:accountingDetails,
-    healthWarnings:healthDetails,
+    healthWarnings:[...credentialDetails,...healthDetails],
   } as Record<AlertCategory,AlertDetail[]>;
 }
 
