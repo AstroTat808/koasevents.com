@@ -265,7 +265,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-nav{display:grid;height:3rem;width:3rem;place-items:center;border-radius:9999px;border:1px solid var(--koa-line);background:white;font-size:1.2rem;color:var(--koa-forest);transition:transform .16s ease,background .16s ease}
     .calendar-nav:hover{background:var(--koa-ivory);transform:translateY(-1px)}
     .calendar-today{border-radius:9999px;background:var(--koa-sand);padding:.72rem 1rem;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--koa-forest)}
-    .calendar-grid-wrap{min-width:68rem}
+    .calendar-grid-wrap{width:100%;min-width:0;max-width:100%}
     .calendar-weekdays{background:color-mix(in srgb,var(--koa-sand) 54%,white)}
     .calendar-weekdays>div{border-right:1px solid var(--koa-line);padding:.8rem .5rem}
     .calendar-weekdays>div:last-child{border-right:0}
@@ -293,7 +293,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 20%,white);color:var(--koa-forest);border:1px dashed color-mix(in srgb,var(--koa-clay) 45%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 22%,white);color:var(--koa-ink);border:1px solid color-mix(in srgb,var(--koa-amber-light) 55%,var(--koa-line))}
-    .week-view-panel{min-width:70rem}
+    .week-view-panel{width:100%;min-width:0;max-width:100%}
     .week-grid{display:grid;grid-template-columns:repeat(7,minmax(9.5rem,1fr));min-height:32rem}
     .week-day-column{border-right:1px solid var(--koa-line)}
     .week-day-column:last-child{border-right:0}
@@ -332,16 +332,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-day{cursor:pointer}
     .calendar-day:hover{background:color-mix(in srgb,var(--koa-amber-light) 9%,white)}
     .calendar-item.is-overdue{outline:2px solid var(--koa-clay);outline-offset:1px}
+    @media(min-width:801px){
+      .calendar-grid-wrap{min-width:68rem;max-width:none}
+      .week-view-panel{min-width:70rem;max-width:none}
+    }
+
     @media(min-width:1536px){.calendar-day{min-height:14rem}.calendar-grid-wrap{min-width:76rem}.calendar-item{font-size:.7rem}}
 
     @media(max-width:800px){
       .calendar-shell{
-        margin-inline:0;
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        margin-inline:0!important;
+        overflow:hidden;
         border-radius:1.1rem!important;
         padding:.8rem!important;
       }
 
-      .calendar-toolbar{gap:.8rem}
+      [data-app],
+      .calendar-toolbar,
+      .calendar-period-controls,
+      .calendar-period-title,
+      .calendar-legends,
+      .calendar-filter-bar,
+      .calendar-view-frame,
+      .calendar-grid-wrap,
+      .calendar-weekdays,
+      .calendar-grid{
+        min-width:0!important;
+        max-width:100%!important;
+        box-sizing:border-box;
+      }
+
+      .calendar-toolbar{width:100%;gap:.8rem}
 
       .calendar-period-controls{
         display:grid!important;
@@ -435,18 +459,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
 
       .calendar-view-frame{
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
         margin-top:1rem!important;
+        margin-right:0!important;
+        margin-left:0!important;
         overflow-x:hidden!important;
+        padding-right:0!important;
+        padding-left:0!important;
         border-radius:.9rem!important;
       }
 
       .calendar-grid-wrap{
-        width:100%;
-        min-width:0;
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
       }
 
       .calendar-weekdays{
-        width:100%;
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        grid-template-columns:repeat(7,minmax(0,1fr))!important;
         font-size:.48rem!important;
         letter-spacing:.035em!important;
       }
@@ -457,8 +492,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
 
       .calendar-grid{
-        width:100%;
-        min-width:0;
+        width:100%!important;
+        min-width:0!important;
+        max-width:100%!important;
+        grid-template-columns:repeat(7,minmax(0,1fr))!important;
       }
 
       .calendar-day{
@@ -902,6 +939,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const todayScheduleItems=document.querySelector('[data-today-schedule-items]');
     const todayScheduleOpen=document.querySelector('[data-today-schedule-open]');
     const calendar=document.querySelector('[data-calendar]');
+    const calendarShell=document.querySelector('.calendar-shell');
+    const calendarToolbar=document.querySelector('.calendar-toolbar');
+    const calendarPeriodControls=document.querySelector('.calendar-period-controls');
+    const calendarPeriodTitle=document.querySelector('.calendar-period-title');
+    const calendarLegends=document.querySelector('.calendar-legends');
+    const calendarFilterBar=document.querySelector('.calendar-filter-bar');
+    const calendarViewFrame=document.querySelector('.calendar-view-frame');
+    const calendarWeekdays=document.querySelector('.calendar-weekdays');
     const agenda=document.querySelector('[data-agenda]');
     const conflictsEl=document.querySelector('[data-conflicts]');
     const monthTitle=document.querySelector('[data-month-title]');
@@ -958,6 +1003,74 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let mobileDayPreviewKey='';
     let data={items:[],conflicts:[],totals:{}};
     let todayData={items:[],conflicts:[]};
+
+    function applyMobileCalendarSizing(){
+      const mobile=calendarMobileQuery.matches;
+      const constrained=[calendarShell,calendarToolbar,calendarPeriodControls,calendarPeriodTitle,calendarLegends,calendarFilterBar,calendarViewFrame,monthView,calendarWeekdays,calendar];
+      constrained.forEach((node)=>{
+        if(!(node instanceof HTMLElement))return;
+        if(mobile){
+          node.style.setProperty('min-width','0','important');
+          node.style.setProperty('max-width','100%','important');
+          node.style.setProperty('box-sizing','border-box','important');
+        }else{
+          node.style.removeProperty('min-width');
+          node.style.removeProperty('max-width');
+          node.style.removeProperty('box-sizing');
+        }
+      });
+
+      if(calendarShell instanceof HTMLElement){
+        if(mobile){
+          calendarShell.style.setProperty('width','100%','important');
+          calendarShell.style.setProperty('overflow','hidden','important');
+        }else{
+          calendarShell.style.removeProperty('width');
+          calendarShell.style.removeProperty('overflow');
+        }
+      }
+
+      if(calendarViewFrame instanceof HTMLElement){
+        if(mobile){
+          calendarViewFrame.style.setProperty('width','100%','important');
+          calendarViewFrame.style.setProperty('overflow-x','hidden','important');
+          calendarViewFrame.style.setProperty('margin-left','0','important');
+          calendarViewFrame.style.setProperty('margin-right','0','important');
+          calendarViewFrame.style.setProperty('padding-left','0','important');
+          calendarViewFrame.style.setProperty('padding-right','0','important');
+        }else{
+          ['width','overflow-x','margin-left','margin-right','padding-left','padding-right'].forEach((prop)=>calendarViewFrame.style.removeProperty(prop));
+        }
+      }
+
+      if(monthView instanceof HTMLElement){
+        if(mobile)monthView.style.setProperty('width','100%','important');
+        else monthView.style.removeProperty('width');
+      }
+
+      [calendarWeekdays,calendar].forEach((node)=>{
+        if(!(node instanceof HTMLElement))return;
+        if(mobile){
+          node.style.setProperty('width','100%','important');
+          node.style.setProperty('grid-template-columns','repeat(7,minmax(0,1fr))','important');
+        }else{
+          node.style.removeProperty('width');
+          node.style.removeProperty('grid-template-columns');
+        }
+      });
+
+      if(calendarPeriodControls instanceof HTMLElement){
+        if(mobile){
+          calendarPeriodControls.style.setProperty('display','grid','important');
+          calendarPeriodControls.style.setProperty('width','100%','important');
+          calendarPeriodControls.style.setProperty('grid-template-columns','2.65rem minmax(0,1fr) 2.65rem','important');
+        }else{
+          calendarPeriodControls.style.removeProperty('display');
+          calendarPeriodControls.style.removeProperty('width');
+          calendarPeriodControls.style.removeProperty('grid-template-columns');
+        }
+      }
+    }
 
     function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=user?.app_metadata?.roles||[];return approvedAdminEmails.has(email)||(Array.isArray(roles)&&roles.some((role)=>['admin','staff','sales','manager'].includes(String(role||'').toLowerCase())));}
     function pad(n){return String(n).padStart(2,'0');}
@@ -1777,7 +1890,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(){
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
-      currentSession=user;app.classList.remove('hidden');
+      currentSession=user;
+      applyMobileCalendarSizing();
+      app.classList.remove('hidden');
       const range=rangeForView();
       const todayKey=today();
       const rangeIncludesToday=todayKey>=range.start&&todayKey<=range.end;
@@ -1858,9 +1973,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }));
     calendarMobileQuery.addEventListener?.('change',()=>{
       closeMobileDayPreview();
+      applyMobileCalendarSizing();
       renderTodaySchedule();
       renderActiveView();
     });
+    window.addEventListener('orientationchange',()=>window.setTimeout(applyMobileCalendarSizing,80));
+    window.addEventListener('resize',()=>{
+      if(calendarMobileQuery.matches)applyMobileCalendarSizing();
+    },{passive:true});
     document.addEventListener('keydown',(event)=>{if(event.key==='Escape'){closePreview();closeDayPanel();closeMobileDayPreview();}});
     load();
   </script>
