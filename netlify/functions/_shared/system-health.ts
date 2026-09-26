@@ -134,6 +134,8 @@ export function healthComponents() {
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
+    {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
+    {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
     {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
     {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
     {id:'email-release-sync',name:'Email rendering release sync',path:'email rendering main → production',kind:'api' as const},
@@ -145,7 +147,7 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
     'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
-    'email-logo','email-delivery','email-template-compatibility','email-release-sync',
+    'email-logo','email-send-access','email-delivery','email-template-compatibility','email-release-sync',
   ]);
   return immediate.has(id)?1:2;
 }
@@ -952,6 +954,36 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     ms:Number(emailHealth?.logo?.ms||0),
     severity:emailHealth?.logo?.ok?'green':'red',
     detail:clean(emailHealth?.logo?.detail||'Email logo health unavailable.',1200),
+  };
+  const emailSendAccess=emailHealth?.sendAccess||{};
+  const emailSendAccessCheck:HealthCheck={
+    id:'email-send-access',
+    name:'Email sending access',
+    kind:'api',
+    path:'Resend send credential',
+    ok:Boolean(emailSendAccess?.ok),
+    status:Number(emailSendAccess?.status||0) || (emailSendAccess?.ok?200:503),
+    ms:0,
+    severity:emailSendAccess?.ok?'green':'red',
+    detail:clean(emailSendAccess?.detail||'Email sending credential verification is unavailable.',1200),
+  };
+  const emailMonitoringAccess=emailHealth?.monitoringAccess||{};
+  const emailMonitoringAccessCheck:HealthCheck={
+    id:'email-monitoring-access',
+    name:'Email monitoring access',
+    kind:'api',
+    path:'Resend delivery-read credential',
+    ok:Boolean(emailMonitoringAccess?.reachable),
+    status:Number(emailMonitoringAccess?.status||0) || (emailMonitoringAccess?.reachable?200:503),
+    ms:0,
+    severity:emailMonitoringAccess?.reachable?'green':'yellow',
+    detail:clean(
+      emailMonitoringAccess?.detail
+      || (emailMonitoringAccess?.configured
+        ? 'The dedicated Resend monitoring credential is configured but delivery history could not be read.'
+        : 'RESEND_MONITORING_API_KEY is not configured. Sending is evaluated separately and signed webhook history remains available when configured.'),
+      1200,
+    ),
   };
   const emailDelivery= emailHealth?.delivery || {};
   const delivery24h=emailDelivery?.period24h||{};
