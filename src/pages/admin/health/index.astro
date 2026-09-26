@@ -75,6 +75,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section data-needs-action class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Action queue</p>
+              <h2 class="display mt-2 text-4xl">Needs my action</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Combines configuration problems, permission problems, and failed credential checks into one prioritized troubleshooting queue.</p>
+            </div>
+            <span data-needs-action-count class="w-fit rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">0 items</span>
+          </div>
+          <div data-needs-action-list class="mt-5 grid gap-3 lg:grid-cols-2"></div>
+        </section>
+
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -215,6 +227,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
           <div data-credential-health-grid class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+          <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+            <div>
+              <p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Credential change history</p>
+              <h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Invalid, changed, and recovered credentials</h3>
+              <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Records when a credential problem starts, changes classification, recovers, and how long the problem lasted.</p>
+            </div>
+            <div data-credential-health-history class="mt-4 grid gap-2"></div>
+          </div>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
@@ -718,6 +738,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const credentialHealthOverall=document.querySelector('[data-credential-health-overall]');
     const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
     const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
+    const credentialHealthHistory=document.querySelector('[data-credential-health-history]');
+    const needsActionCount=document.querySelector('[data-needs-action-count]');
+    const needsActionList=document.querySelector('[data-needs-action-list]');
+    let latestCredentialHealth={rows:[],history:[]};
+    let credentialRetestInFlight=false;
     const office365Operational=document.querySelector('[data-office365-operational]');
     const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
     const office365OperationalDetail=document.querySelector('[data-office365-operational-detail]');
@@ -1472,8 +1497,215 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function rememberCredentialRetest(credentialId){
+      const id=String(credentialId||'').trim();
+      if(!id)return;
+      try{
+        sessionStorage.setItem('koaCredentialRetest',JSON.stringify({credentialId:id,openedAt:Date.now()}));
+      }catch{}
+    }
+
+    function pendingCredentialRetest(){
+      try{
+        const raw=sessionStorage.getItem('koaCredentialRetest');
+        if(!raw)return null;
+        const parsed=JSON.parse(raw);
+        const credentialId=String(parsed?.credentialId||'').trim();
+        const openedAt=Number(parsed?.openedAt||0);
+        return credentialId?{credentialId,openedAt}:null;
+      }catch{
+        return null;
+      }
+    }
+
+    function clearPendingCredentialRetest(){
+      try{sessionStorage.removeItem('koaCredentialRetest');}catch{}
+    }
+
+    async function retestCredential(credentialId,button=null){
+      const id=String(credentialId||'').trim();
+      if(!id||credentialRetestInFlight)return false;
+      credentialRetestInFlight=true;
+      const original=button?.textContent||'';
+      if(button){
+        button.disabled=true;
+        button.textContent='Re-testing…';
+      }
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'retest-credential',credentialId:id}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to re-test credential.');
+        renderCredentialHealth(data.credentialHealth||{});
+        clearPendingCredentialRetest();
+        return true;
+      }catch(error){
+        if(button)button.textContent=error instanceof Error?error.message:'Re-test failed';
+        return false;
+      }finally{
+        credentialRetestInFlight=false;
+        if(button){
+          window.setTimeout(()=>{
+            button.disabled=false;
+            if(button.isConnected)button.textContent=original||'Re-test only';
+          },800);
+        }
+      }
+    }
+
+    async function maybeRetestPendingCredential(){
+      const pending=pendingCredentialRetest();
+      if(!pending||credentialRetestInFlight)return;
+      if(Date.now()-Number(pending.openedAt||0)<1200)return;
+      await retestCredential(pending.credentialId);
+    }
+
+    function renderCredentialHistory(rows){
+      if(!credentialHealthHistory)return;
+      const history=Array.isArray(rows)?rows:[];
+      credentialHealthHistory.innerHTML='';
+      history.slice(0,30).forEach((event)=>{
+        const kind=String(event.event||'changed');
+        const card=document.createElement('article');
+        card.className='rounded-xl border p-3 '+(
+          kind==='recovered'?'border-emerald-200 bg-emerald-50':
+          kind==='became_invalid'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50'
+        );
+        const top=document.createElement('div');
+        top.className='flex flex-wrap items-start justify-between gap-3';
+        const left=document.createElement('div');
+        const title=document.createElement('strong');
+        title.className='block text-sm text-[var(--koa-forest)]';
+        const label=kind==='recovered'?'Recovered':kind==='became_invalid'?'Became invalid':'Problem changed';
+        title.textContent=String(event.provider||'Credential')+' · '+String(event.credential||event.credentialId||'Credential');
+        const detail=document.createElement('p');
+        detail.className='mt-1 text-xs leading-5 text-[var(--koa-ink)]/58';
+        const duration=event.durationMinutes==null?'':(' · '+formatDuration(Number(event.durationMinutes||0)));
+        detail.textContent=label+(event.issueType?' · '+String(event.issueType):'')+duration;
+        left.append(title,detail);
+        const when=document.createElement('span');
+        when.className='text-xs text-[var(--koa-ink)]/45';
+        when.textContent=event.occurredAt?new Date(event.occurredAt).toLocaleString():'';
+        top.append(left,when);
+        card.appendChild(top);
+        if(event.detail){
+          const message=document.createElement('p');
+          message.className='mt-2 text-[.68rem] leading-5 text-[var(--koa-ink)]/50';
+          message.textContent=String(event.detail);
+          card.appendChild(message);
+        }
+        credentialHealthHistory.appendChild(card);
+      });
+      if(!history.length){
+        credentialHealthHistory.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No credential-state changes have been recorded yet. History starts when this release performs its first credential check.</p>';
+      }
+    }
+
+    function needsActionPriority(item){
+      let score=item.source==='credential'?0:20;
+      if(item.issueType==='Permission Problem')score-=8;
+      else if(item.issueType==='Configuration Problem')score-=5;
+      else score+=8;
+      if(item.severity==='red')score-=4;
+      else if(item.severity==='yellow')score+=2;
+      return score;
+    }
+
+    function renderNeedsMyAction(){
+      if(!needsActionList||!needsActionCount)return;
+      const systemRows=(Array.isArray(latestHealthChecks)?latestHealthChecks:[])
+        .filter((row)=>['Configuration Problem','Permission Problem'].includes(String(row?.issueType||''))&&normalizedSeverity(row)!=='healthy')
+        .map((row)=>({
+          source:'system',
+          key:'system:'+String(row.id||row.name||'check'),
+          title:String(row.name||'System Health check'),
+          subtitle:'System Health',
+          issueType:String(row.issueType||''),
+          severity:row.severity==='red'?'red':'yellow',
+          detail:String(row.detail||''),
+          row,
+        }));
+      const credentialRows=(Array.isArray(latestCredentialHealth?.rows)?latestCredentialHealth.rows:[])
+        .filter((row)=>!row?.ok)
+        .map((row)=>({
+          source:'credential',
+          key:'credential:'+String(row.id||row.provider||'credential'),
+          title:String(row.provider||'Credential')+' · '+String(row.credential||'Credential'),
+          subtitle:'Credential Health',
+          issueType:String(row.issueType||'Credential problem'),
+          severity:String(row.severity||'yellow'),
+          detail:String(row.detail||''),
+          row,
+        }));
+      const items=[...credentialRows,...systemRows].sort((a,b)=>needsActionPriority(a)-needsActionPriority(b));
+      needsActionCount.textContent=items.length+' item'+(items.length===1?'':'s');
+      needsActionCount.className='w-fit rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+(
+        items.some((item)=>item.severity==='red')?'bg-red-100 text-red-800':
+        items.length?'bg-amber-100 text-amber-900':'bg-emerald-100 text-emerald-800'
+      );
+      needsActionList.innerHTML='';
+      items.forEach((item,index)=>{
+        const card=document.createElement('article');
+        card.className='rounded-[1.1rem] border p-4 '+(item.severity==='red'?'border-red-200 bg-red-50':'border-amber-200 bg-amber-50');
+        const top=document.createElement('div');
+        top.className='flex items-start justify-between gap-3';
+        const left=document.createElement('div');
+        const rank=document.createElement('p');
+        rank.className='text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        rank.textContent='Priority '+(index+1)+' · '+item.subtitle;
+        const title=document.createElement('h3');
+        title.className='mt-1 text-sm font-semibold text-[var(--koa-forest)]';
+        title.textContent=item.title;
+        left.append(rank,title);
+        const badge=document.createElement('span');
+        badge.className='shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';
+        badge.textContent=item.issueType;
+        top.append(left,badge);
+        const detail=document.createElement('p');
+        detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
+        detail.textContent=item.detail||'No additional detail recorded.';
+        card.append(top,detail);
+        const actions=document.createElement('div');
+        actions.className='mt-4 flex flex-wrap gap-2';
+        if(item.source==='credential'){
+          const action=item.row?.recommendedAction||null;
+          if(action?.href){
+            const link=document.createElement('a');
+            link.href=String(action.href);
+            if(action.external){link.target='_blank';link.rel='noreferrer';}
+            link.dataset.credentialHealthAction=String(item.row.id||'');
+            link.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+            link.textContent=String(action.label||'Open recommended action');
+            actions.appendChild(link);
+          }
+          const retest=document.createElement('button');
+          retest.type='button';
+          retest.dataset.credentialRetest=String(item.row.id||'');
+          retest.className='rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+          retest.textContent='Re-test only';
+          actions.appendChild(retest);
+        }else{
+          const open=document.createElement('button');
+          open.type='button';
+          open.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+          open.textContent='Open explanation';
+          open.addEventListener('click',()=>openHealthDetail(item.row));
+          actions.appendChild(open);
+        }
+        card.appendChild(actions);
+        needsActionList.appendChild(card);
+      });
+      if(!items.length){
+        needsActionList.innerHTML='<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Nothing currently needs manual configuration, permission, or credential action.</div>';
+      }
+    }
+
     function renderCredentialHealth(summary){
       const health=summary||{};
+      latestCredentialHealth=health;
       const state=String(health.overall||'yellow');
       const overallMap={
         green:['Credentials healthy','bg-emerald-100 text-emerald-800'],
@@ -1524,22 +1756,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
         detail.textContent=(row.status?'HTTP '+row.status+' · ':'')+String(row.detail||'No verification detail recorded.');
         card.appendChild(detail);
-        const action=row.recommendedAction||null;
-        if(action&&action.href&&severity!=='green'){
-          const link=document.createElement('a');
-          link.href=String(action.href);
-          if(action.external){
-            link.target='_blank';
-            link.rel='noreferrer';
+        if(!row.ok&&row.problemSince){
+          const since=document.createElement('p');
+          const started=Date.parse(String(row.problemSince||''));
+          const minutes=Number.isFinite(started)?Math.max(0,Math.round((Date.now()-started)/60000)):0;
+          since.className='mt-2 text-[.66rem] font-semibold text-[var(--koa-clay)]';
+          since.textContent='Needs attention since '+new Date(row.problemSince).toLocaleString()+' · '+formatDuration(minutes);
+          card.appendChild(since);
+        }
+        if(severity!=='green'){
+          const actions=document.createElement('div');
+          actions.className='mt-4 flex flex-wrap gap-2';
+          const action=row.recommendedAction||null;
+          if(action&&action.href){
+            const link=document.createElement('a');
+            link.href=String(action.href);
+            if(action.external){
+              link.target='_blank';
+              link.rel='noreferrer';
+            }
+            link.dataset.credentialHealthAction=String(row.id||'credential');
+            link.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+            link.textContent=String(action.label||'Open recommended action');
+            actions.appendChild(link);
           }
-          link.dataset.credentialHealthAction=String(row.id||'credential');
-          link.className='mt-4 inline-flex rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
-          link.textContent=String(action.label||'Open recommended action');
-          card.appendChild(link);
+          const retest=document.createElement('button');
+          retest.type='button';
+          retest.dataset.credentialRetest=String(row.id||'credential');
+          retest.className='rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+          retest.textContent='Re-test only';
+          actions.appendChild(retest);
+          card.appendChild(actions);
         }
         credentialHealthGrid.appendChild(card);
       });
       if(!rows.length)credentialHealthGrid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Credential checks are not available yet.</p>';
+      renderCredentialHistory(health.history||[]);
+      renderNeedsMyAction();
     }
 
     function renderOffice365Trend(rows){
@@ -2542,6 +2795,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
 
+    document.addEventListener('click',(event)=>{
+      const action=event.target?.closest?.('[data-credential-health-action]');
+      if(action)rememberCredentialRetest(String(action.dataset.credentialHealthAction||''));
+    });
+
+    const handleCredentialRetestClick=async(event)=>{
+      const button=event.target?.closest?.('[data-credential-retest]');
+      if(!button)return;
+      await retestCredential(String(button.dataset.credentialRetest||''),button);
+    };
+    credentialHealthGrid?.addEventListener('click',handleCredentialRetestClick);
+    needsActionList?.addEventListener('click',handleCredentialRetestClick);
+
+    window.addEventListener('focus',()=>{void maybeRetestPendingCredential();});
+    document.addEventListener('visibilitychange',()=>{
+      if(document.visibilityState==='visible')void maybeRetestPendingCredential();
+    });
+
     async function load(){
       const response=await fetch('/api/admin/health',{cache:'no-store'});
       if(response.status===401||response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
@@ -2637,6 +2908,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const ok=Boolean(session?.isAdmin);
     app?.classList.toggle('hidden',!ok);
     unauthorized?.classList.toggle('hidden',ok);
-    if(ok) await load();
+    if(ok){
+      await load();
+      await maybeRetestPendingCredential();
+    }
   </script>
 </BaseLayout>
