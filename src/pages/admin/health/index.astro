@@ -2067,6 +2067,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!rows.length)credentialHealthGrid.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Credential checks are not available yet.</p>';
       renderCredentialReliability(health.reliability||{});
       renderCredentialHistory(health.history||[]);
+      renderCredentialIncidentTimeline(health.incidentTimeline||[]);
       renderNeedsMyAction();
     }
 
