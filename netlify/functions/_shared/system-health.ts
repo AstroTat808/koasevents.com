@@ -3,6 +3,7 @@ import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
+import { credentialHealthSummary } from './credential-health';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -886,11 +887,16 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       severity:ok?'green':(defaultAlertAfter(id)===1?'red':'yellow'),
     };
   });
+  const emailHealthPromise=emailHealthSummary(context,{force:source==='manual'});
+  const credentialHealthPromise=emailHealthPromise.then((emailHealth)=>
+    credentialHealthSummary(context,{force:source==='manual',emailHealth})
+  );
   const [baseChecks,startupSignal,deploymentSync,emailHealth]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
-    emailHealthSummary(context,{force:source==='manual'}),
+    emailHealthPromise,
+    credentialHealthPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
