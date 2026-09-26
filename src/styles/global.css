@@ -1107,21 +1107,36 @@ main p.text-sm {
     top: 4.15rem;
     z-index: 38;
     order: 2;
-    display: flex;
-    gap: .45rem;
-    overflow-x: auto;
+    display: grid;
+    gap: .38rem;
     margin-inline: -.15rem;
     border: 1px solid color-mix(in srgb, var(--koa-line) 72%, transparent);
     border-radius: .9rem;
     background: color-mix(in srgb, white 92%, var(--koa-ivory));
     padding: .42rem;
     box-shadow: 0 10px 28px rgba(7,30,23,.10);
-    scrollbar-width: none;
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
   }
 
-  body.koa-admin-page main .health-warning-tools::-webkit-scrollbar {
+  body.koa-admin-page main .health-toolbar-counts {
+    padding: .12rem .38rem 0;
+    color: var(--koa-forest);
+    font-size: .62rem;
+    font-weight: 900;
+    letter-spacing: .015em;
+    line-height: 1.25;
+  }
+
+  body.koa-admin-page main .health-warning-tool-buttons {
+    display: flex;
+    gap: .45rem;
+    overflow-x: auto;
+    padding-bottom: .02rem;
+    scrollbar-width: none;
+  }
+
+  body.koa-admin-page main .health-warning-tool-buttons::-webkit-scrollbar {
     display: none;
   }
 
@@ -1155,6 +1170,12 @@ main p.text-sm {
     border: 1px solid rgb(16 185 129 / .34);
     background: rgb(236 253 245);
     color: rgb(6 95 70);
+  }
+
+  body.koa-admin-page main .health-collapse-all-button {
+    border: 1px solid color-mix(in srgb, var(--koa-line) 82%, var(--koa-forest));
+    background: white;
+    color: var(--koa-forest);
   }
 
   body.koa-admin-page main .health-warning-tool-button:disabled {
@@ -1203,7 +1224,7 @@ main p.text-sm {
 
   body.koa-admin-page main .health-all-good-detail {
     display: grid;
-    grid-template-columns: repeat(3,minmax(0,1fr));
+    grid-template-columns: repeat(2,minmax(0,1fr));
     gap: .35rem;
     border-top: 1px solid rgb(167 243 208 / .78);
     padding: .65rem .7rem .75rem;

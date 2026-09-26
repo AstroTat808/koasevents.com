@@ -1413,7 +1413,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const detail=document.createElement('div');
       detail.dataset.healthAllGoodDetail='';
       detail.className='health-all-good-detail hidden';
-      detail.innerHTML='<div><span>Passed</span><strong data-health-all-good-passed>—</strong></div><div><span>Duration</span><strong data-health-all-good-duration>—</strong></div><div><span>Verified</span><strong data-health-all-good-verified>—</strong></div>';
+      detail.innerHTML='<div><span>Passed</span><strong data-health-all-good-passed>—</strong></div><div><span>Duration</span><strong data-health-all-good-duration>—</strong></div><div><span>Verified</span><strong data-health-all-good-verified>—</strong></div><div><span>Verification source</span><strong data-health-all-good-source>—</strong></div>';
       toggle.addEventListener('click',()=>{
         const expanded=toggle.getAttribute('aria-expanded')==='true';
         toggle.setAttribute('aria-expanded',expanded?'false':'true');
@@ -1434,6 +1434,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       tools.dataset.healthWarningTools='';
       tools.dataset.mobileOrder='2';
       tools.className='health-warning-tools hidden';
+
+      const counts=document.createElement('div');
+      counts.dataset.healthToolbarCounts='';
+      counts.className='health-toolbar-counts';
+      counts.textContent='0 critical · 0 warnings · 0 healthy';
+
+      const buttonRow=document.createElement('div');
+      buttonRow.className='health-warning-tool-buttons';
 
       const expand=document.createElement('button');
       expand.type='button';
@@ -1468,7 +1476,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         refreshMobileHealthPresentation();
       });
 
-      tools.append(expand,collapseHealthy);
+      const collapseAll=document.createElement('button');
+      collapseAll.type='button';
+      collapseAll.dataset.collapseAllHealth='';
+      collapseAll.className='health-warning-tool-button health-collapse-all-button';
+      collapseAll.textContent='Collapse all';
+      collapseAll.addEventListener('click',()=>{
+        const sections=[...document.querySelectorAll('[data-mobile-collapsible]')]
+          .filter((section)=>section instanceof HTMLElement);
+        sections.forEach((section)=>{
+          const severity=String(section.dataset.healthSectionStatus||'green');
+          if(severity==='red')setMobileCollapsed(section,false);
+          else setMobileCollapsed(section,true,true);
+        });
+        refreshMobileHealthPresentation();
+      });
+
+      buttonRow.append(expand,collapseHealthy,collapseAll);
+      tools.append(counts,buttonRow);
       const banner=ensureAllSystemsGoodBanner();
       if(banner instanceof HTMLElement)banner.insertAdjacentElement('afterend',tools);
       else{
@@ -1503,6 +1528,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return minutes+'m '+seconds+'s';
     }
 
+    function healthVerificationSource(snapshot){
+      const checks=Array.isArray(snapshot?.checks)?snapshot.checks:[];
+      const deploymentCheck=checks.find((row)=>String(row?.id||'')==='netlify-github-sync');
+      const details=deploymentCheck?.deploymentDetails||{};
+      const key=String(details?.verificationSourceKey||'');
+      const label=String(details?.verificationSourceLabel||details?.verificationSource||'').trim();
+      if(label)return label;
+      if(key==='github-netlify')return 'GitHub + Netlify';
+      if(key==='netlify-fallback')return 'Netlify fallback';
+      if(key==='netlify-runtime')return 'Netlify runtime';
+      return 'Direct service verification';
+    }
+
     function updateAllSystemsGoodTime(){
       const copy=document.querySelector('[data-health-all-good-copy]');
       if(copy instanceof HTMLElement){
@@ -1513,6 +1551,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const passed=document.querySelector('[data-health-all-good-passed]');
       const duration=document.querySelector('[data-health-all-good-duration]');
       const verified=document.querySelector('[data-health-all-good-verified]');
+      const source=document.querySelector('[data-health-all-good-source]');
       const total=Number(snapshot?.passed||0)+Number(snapshot?.failed||0);
       if(passed instanceof HTMLElement){
         passed.textContent=total?Number(snapshot?.passed||0)+' / '+total+' checks':'—';
@@ -1525,6 +1564,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         verified.textContent=Number.isFinite(checkedMs)
           ? new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',second:'2-digit'}).format(new Date(checkedMs))
           : '—';
+      }
+      if(source instanceof HTMLElement){
+        source.textContent=healthVerificationSource(snapshot);
       }
     }
 
@@ -1556,10 +1598,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(allGreen)updateAllSystemsGoodTime();
       }
 
-      const problemSections=allSections.filter((section)=>['red','yellow'].includes(String(section.dataset.healthSectionStatus||'')));
+      const criticalSections=allSections.filter((section)=>String(section.dataset.healthSectionStatus||'')==='red');
+      const warningSections=allSections.filter((section)=>String(section.dataset.healthSectionStatus||'')==='yellow');
+      const problemSections=[...criticalSections,...warningSections];
       const healthySections=allSections.filter((section)=>String(section.dataset.healthSectionStatus||'')==='green');
       const tools=ensureHealthWarningTools();
       if(tools instanceof HTMLElement){
+        const counts=tools.querySelector('[data-health-toolbar-counts]');
+        if(counts instanceof HTMLElement){
+          counts.textContent=criticalSections.length+' critical · '+warningSections.length+' warning'+(warningSections.length===1?'':'s')+' · '+healthySections.length+' healthy';
+        }
         const expand=tools.querySelector('[data-expand-health-warnings]');
         if(expand instanceof HTMLButtonElement){
           expand.textContent='Expand all warnings'+(problemSections.length?' · '+problemSections.length:'');
