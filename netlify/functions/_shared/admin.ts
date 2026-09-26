@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
+import { defaultTenantConfig } from './tenant-config';
 
 const ADMIN_EMAILS = new Set([
   'chris@sibel.org',
@@ -161,7 +162,7 @@ export const DEFAULT_AUTH_SECURITY_POLICY: AuthSecurityPolicy = {
 };
 
 function securityStore() {
-  return getStore({ name:'koa-auth-security', consistency:'strong' });
+  return getStore({ name:defaultTenantConfig().legacyStores.authSecurity, consistency:'strong' });
 }
 
 function clean(value: unknown, max = 300) {

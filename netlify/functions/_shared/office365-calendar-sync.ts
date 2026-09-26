@@ -1,17 +1,20 @@
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { defaultTenantConfig } from './tenant-config';
 
-const HAWAII_TZ = 'Hawaiian Standard Time';
-const MARKER_PREFIX = 'KOA_RECORD_ID:';
+const TENANT = defaultTenantConfig();
+const HAWAII_TZ = TENANT.timezone.microsoft;
+const UTC_OFFSET = TENANT.timezone.utcOffset;
+const MARKER_PREFIX = TENANT.integrations.microsoft365.recordMarkerPrefix;
 
 function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}
 function isoDate(value:unknown){const raw=clean(value,40);return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';}
 function timeValue(value:unknown){const raw=clean(value,10);return /^\d{2}:\d{2}$/.test(raw)?raw:'';}
 function addDays(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 function storeFor(context:Context,name:string){return context.deploy.context==='production'?getStore({name,consistency:'strong'}):getDeployStore({name});}
-function salesStore(context:Context){return storeFor(context,'koa-sales');}
-function opsStore(context:Context){return storeFor(context,'koa-event-ops');}
-function syncStore(context:Context){return storeFor(context,'koa-calendar-sync');}
+function salesStore(context:Context){return storeFor(context,TENANT.legacyStores.sales);}
+function opsStore(context:Context){return storeFor(context,TENANT.legacyStores.eventOps);}
+function syncStore(context:Context){return storeFor(context,TENANT.legacyStores.calendarSync);}
 
 type GraphEvent={
   id:string;
@@ -83,9 +86,9 @@ function env(){
     tenantId:clean(Netlify.env.get('MICROSOFT_GRAPH_TENANT_ID'),200),
     clientId:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_ID'),200),
     clientSecret:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_SECRET'),500),
-    calendarOwner:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_OWNER')||'chris@koas.us',240),
+    calendarOwner:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_OWNER')||TENANT.integrations.microsoft365.defaultCalendarOwner,240),
     calendarId:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_ID'),500),
-    calendarName:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_NAME')||"Koa's Events",180),
+    calendarName:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_NAME')||TENANT.integrations.microsoft365.defaultCalendarName,180),
   };
 }
 export function office365CalendarConfig(){
@@ -176,7 +179,7 @@ export async function verifyOffice365Credentials(){
   }
 }
 async function listEvents(accessToken:string,start:string,end:string){
-  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
+  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00'+UTC_OFFSET)+'&endDateTime='+encodeURIComponent(end+'T23:59:59'+UTC_OFFSET)+'&$top=999';
   const rows:GraphEvent[]=[];
   while(next){
     const payload:any=await graph(next,accessToken);
@@ -189,7 +192,10 @@ async function listEvents(accessToken:string,start:string,end:string){
 function marker(recordId:string){return MARKER_PREFIX+recordId;}
 function recordIdFromEvent(event:GraphEvent){
   const haystack=clean(event.body?.content||event.bodyPreview,10000);
-  const match=haystack.match(/KOA_RECORD_ID:([A-Za-z0-9._:-]+)/);
+  const index=haystack.indexOf(MARKER_PREFIX);
+  if(index<0)return '';
+  const tail=haystack.slice(index+MARKER_PREFIX.length);
+  const match=tail.match(/^([A-Za-z0-9._:-]+)/);
   return clean(match?.[1],200);
 }
 function eventHasRecordMarker(event:GraphEvent,recordId:string){
@@ -202,7 +208,7 @@ function eventBodyWithMarker(event:GraphEvent,recordId:string){
   if(String(event.body?.contentType||'').toLowerCase()==='text'){
     return {contentType:'Text',content:[existing,markerText].filter(Boolean).join('\n')};
   }
-  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with Koa’s Master Calendar.</p>')+'<p>'+markerText+'</p>'};
+  return {contentType:'HTML',content:existing+(existing?'':'<p>'+TENANT.integrations.microsoft365.syncBodyLabel+'</p>')+'<p>'+markerText+'</p>'};
 }
 function localParts(event:GraphEvent){
   const start=clean(event.start?.dateTime,40);
@@ -223,7 +229,7 @@ function crmShape(record:any,ops:any){
     date:eventDate,
     startTime:start,
     endTime:end,
-    venue:clean(ops?.venueArea,180)||'Koa’s Events',
+    venue:clean(ops?.venueArea,180)||TENANT.displayName,
     recordUpdatedAt:clean(record?.updatedAt,80),
     opsUpdatedAt:clean(ops?.updatedAt,80),
   };
@@ -246,7 +252,7 @@ function conflictSides(shape:any,event:GraphEvent){
   return {koa,office365,differingFields};
 }
 function eventBody(shape:any){
-  return '<p>Synced with Koa’s Master Calendar.</p><p>'+marker(shape.recordId)+'</p>';
+  return '<p>'+TENANT.integrations.microsoft365.syncBodyLabel+'</p><p>'+marker(shape.recordId)+'</p>';
 }
 function graphPayload(shape:any){
   const allDay=!shape.startTime;
@@ -361,7 +367,8 @@ function safeAdoptionCandidate(shape:any,event:GraphEvent){
   const endMatch=!shape?.endTime||p.endTime===shape.endTime;
   const shapeLocation=normalizedLocation(shape?.venue);
   const eventLocation=normalizedLocation(event?.location?.displayName);
-  const locationMatch=!shapeLocation||shapeLocation==="koa s events"||shapeLocation===eventLocation;
+  const tenantLocation=normalizedLocation(TENANT.displayName);
+  const locationMatch=!shapeLocation||shapeLocation===tenantLocation||shapeLocation===eventLocation;
   return Boolean(titleMatch&&p.date===shape?.date&&startMatch&&endMatch&&locationMatch);
 }
 function exactDuplicate(shape:any,linked:GraphEvent,candidate:GraphEvent){
@@ -638,7 +645,7 @@ export async function syncOffice365Calendar(context:Context,trigger='manual',tri
       if(pendingConflict){
         conflictMap.set(shape.recordId,buildConflict(pendingConflict,shape.recordId,event,shape));
         conflicts++;
-        addAudit('conflicted',shape,event,'A previously detected Koa’s / Office 365 conflict is still awaiting staff resolution.');
+        addAudit('conflicted',shape,event,'A previously detected venue / Office 365 conflict is still awaiting staff resolution.');
         continue;
       }
 
@@ -664,11 +671,11 @@ export async function syncOffice365Calendar(context:Context,trigger='manual',tri
         // surface a conflict so staff can explicitly choose which side wins.
         conflictMap.set(shape.recordId,buildConflict(undefined,shape.recordId,event,shape));
         conflicts++;
-        addAudit('conflicted',shape,event,'Both Koa’s and Office 365 changed since the previous sync; neither side was overwritten.');
+        addAudit('conflicted',shape,event,'Both the venue record and Office 365 changed since the previous sync; neither side was overwritten.');
         continue;
       }else if(crmChanged||!link.lastCrmHash){
         event=await updateOutlookEvent(accessToken,event.id,shape);pushed++;
-        addAudit('pushed',shape,event,'Pushed Koa’s date, time, or location changes to the linked Office 365 event.');
+        addAudit('pushed',shape,event,'Pushed venue date, time, or location changes to the linked Office 365 event.');
       }else{
         addAudit('skipped',shape,event,'No synchronized date, time, or location fields changed.');
       }
