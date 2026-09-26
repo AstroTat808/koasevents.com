@@ -10,6 +10,12 @@ import { credentialWorkspaceAlert } from './_shared/workspace-alert-lifecycle';
 
 type Severity='urgent'|'upcoming'|'info';
 type AlertCategory='overdueTasks'|'unansweredLeads'|'vendorInsurance'|'accountingMismatches'|'healthWarnings'|'securityWarnings';
+type AlertQuickAction={
+  type:'complete_crm_task'|'mark_lead_responded'|'recheck_quickbooks'|'rerun_health';
+  label:string;
+  capability:string;
+  resourceId?:string;
+};
 type AlertDetail={
   id:string;
   category:AlertCategory;
@@ -18,6 +24,9 @@ type AlertDetail={
   context:string;
   detail:string;
   href:string;
+  assigneeEmail?:string;
+  assigneeName?:string;
+  quickAction?:AlertQuickAction;
 };
 type SeverityChange={at:string;from:Severity;to:Severity};
 type LifecycleRecord=AlertDetail&{
@@ -80,17 +89,61 @@ function snoozeUntil(payload:any){
   const custom=dateKey(payload?.date);
   return custom?custom+'T08:00:00-10:00':'';
 }
-function hasResponseActivity(record:any){
-  const responseTypes=new Set(['email','call','meeting','responded','proposal_sent','quickbooks_estimate_sent']);
-  return (Array.isArray(record?.timeline)?record.timeline:[]).some((event:any)=>responseTypes.has(String(event?.type||'')));
+function relatedRecordIds(record:any,records:any[]){
+  const ids=new Set<string>([String(record?.id||'')].filter(Boolean));
+  if(record?.quoteId){
+    records.filter((entry:any)=>String(entry?.quoteId||'')===String(record.quoteId)).forEach((entry:any)=>ids.add(String(entry?.id||'')));
+  }
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(const entry of records){
+      const entryId=String(entry?.id||'');
+      const source=String(entry?.source||'');
+      const recordSource=String(record?.source||'');
+      if((source&&ids.has(source))||(recordSource&&entryId===recordSource)){
+        if(entryId&&!ids.has(entryId)){ids.add(entryId);changed=true;}
+        if(source&&!ids.has(source)){ids.add(source);changed=true;}
+      }
+    }
+  }
+  return ids;
 }
-function responseWaitSince(record:any){
+function timelineForRecord(record:any,records:any[],events:any[]){
+  const ids=relatedRecordIds(record,records);
+  const quoteIds=new Set(
+    records.filter((entry:any)=>ids.has(String(entry?.id||''))).map((entry:any)=>String(entry?.quoteId||'')).filter(Boolean)
+  );
+  return events.filter((event:any)=>
+    ids.has(String(event?.recordId||''))||
+    ids.has(String(event?.sourceRecordId||''))||
+    quoteIds.has(String(event?.quoteId||''))
+  );
+}
+function hasResponseActivity(record:any,records:any[],events:any[]){
+  const responseTypes=new Set(['email','call','meeting','responded','proposal_sent','quickbooks_estimate_sent']);
+  return timelineForRecord(record,records,events).some((event:any)=>responseTypes.has(String(event?.type||'')));
+}
+function responseWaitSince(record:any,records:any[],events:any[]){
   const values=[record?.createdAt];
-  for(const event of Array.isArray(record?.timeline)?record.timeline:[]){
+  for(const event of timelineForRecord(record,records,events)){
     if(event?.createdAt&&['inquiry','lead'].includes(String(event?.type||'')))values.push(event.createdAt);
   }
   const times=values.map(value=>Date.parse(String(value||''))).filter(Number.isFinite);
   return times.length?Math.min(...times):Date.now();
+}
+function assignmentForRecord(record:any,records:any[]){
+  if(!record)return {email:'',name:''};
+  const ids=relatedRecordIds(record,records);
+  const candidates=[
+    record,
+    ...records.filter((entry:any)=>ids.has(String(entry?.id||''))),
+  ];
+  const assigned=candidates.find((entry:any)=>clip(entry?.assignment?.email,240));
+  return {
+    email:clip(assigned?.assignment?.email,240).toLowerCase(),
+    name:clip(assigned?.assignment?.name||assigned?.assignment?.email,180),
+  };
 }
 function hstBusinessHoursBetween(startMs:number,endMs=Date.now()){
   if(!Number.isFinite(startMs)||endMs<=startMs)return 0;
@@ -147,9 +200,10 @@ async function computeAlerts(context:Context,user:any){
   const vendorsStore=store(context,'koa-vendors');
   const ops=store(context,'koa-event-ops');
 
-  const [tasksRaw,recordsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth,staffUsers,staffPolicy]=await Promise.all([
+  const [tasksRaw,recordsRaw,salesEventsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth,staffUsers,staffPolicy]=await Promise.all([
     canCrm?crm.get('tasks/index',{type:'json'}):Promise.resolve([]),
     (canInsurance||canQuickBooks||canCrm||canSales)?sales.get('records/index',{type:'json'}):Promise.resolve([]),
+    canSales?sales.get('analytics/events/index',{type:'json'}):Promise.resolve([]),
     canInsurance?vendorsStore.get('vendors/index',{type:'json'}):Promise.resolve([]),
     canHealth?readLatestHealth(context):Promise.resolve(null),
     canHealth?inspectDeploymentSync(context):Promise.resolve(null),
@@ -160,6 +214,7 @@ async function computeAlerts(context:Context,user:any){
 
   const tasks:Array<any>=Array.isArray(tasksRaw)?tasksRaw:[];
   const records:Array<any>=Array.isArray(recordsRaw)?recordsRaw:[];
+  const salesEvents:Array<any>=Array.isArray(salesEventsRaw)?salesEventsRaw:[];
   const vendors:Array<any>=Array.isArray(vendorsRaw)?vendorsRaw:[];
   const recordById=new Map(records.map((record:any)=>[String(record?.id||''),record]));
 
@@ -181,15 +236,19 @@ async function computeAlerts(context:Context,user:any){
           context:customer,
           detail:overdueDays+' day'+(overdueDays===1?'':'s')+' overdue · due '+due,
           href:'/admin/crm/?q='+encodeURIComponent(String(task?.recordId||customer)),
+          assigneeEmail:clip(task?.assignee,240).toLowerCase(),
+          assigneeName:clip(task?.assignee,180),
+          quickAction:{type:'complete_crm_task',label:'Complete task',capability:'crm.manage',resourceId:clip(task?.id,100)},
         } as AlertDetail;
       })
     : [];
 
   const unansweredLeadDetails:AlertDetail[]=canSales
     ? records
-        .filter((record:any)=>['inquiry','lead'].includes(String(record?.kind||''))&&['inquiry','lead'].includes(String(record?.stage||''))&&!hasResponseActivity(record))
+        .filter((record:any)=>['inquiry','lead'].includes(String(record?.kind||''))&&['inquiry','lead'].includes(String(record?.stage||''))&&!hasResponseActivity(record,records,salesEvents))
         .map((record:any)=>{
-          const startMs=responseWaitSince(record);
+          const startMs=responseWaitSince(record,records,salesEvents);
+          const assigned=assignmentForRecord(record,records);
           const businessHours=hstBusinessHoursBetween(startMs);
           const wallHours=Math.max(0,(Date.now()-startMs)/3600000);
           const overdue=businessHours>=4;
@@ -202,6 +261,9 @@ async function computeAlerts(context:Context,user:any){
             context:dateKey(record?.customer?.eventDate)?'Event '+dateKey(record?.customer?.eventDate):'Sales CRM',
             detail:(overdue?'Response SLA due · ':'Waiting · ')+(wallHours>=24?Math.floor(wallHours/24)+'d '+Math.floor(wallHours%24)+'h':Math.floor(wallHours)+'h')+' elapsed · '+businessHours.toFixed(businessHours<10?1:0)+' business hr',
             href:'/admin/quotes/?q='+encodeURIComponent(String(record?.id||client))+'#unanswered-leads',
+            assigneeEmail:assigned.email,
+            assigneeName:assigned.name,
+            quickAction:{type:'mark_lead_responded',label:'Mark responded',capability:'sales.manage',resourceId:clip(record?.id,100)},
           } as AlertDetail;
         })
     : [];
@@ -228,6 +290,7 @@ async function computeAlerts(context:Context,user:any){
         if(result.covered)continue;
         const immediateIssue=['rejected','expired','expires_before_event','missing_certificate','missing_expiration'].includes(String(result.issue||''));
         const severity:Severity=immediateIssue&&daysToEvent<=30?'urgent':'upcoming';
+        const assigned=assignmentForRecord(record,records);
         insuranceDetails.push({
           id:'insurance:'+vendorId+':'+String(record.id),
           category:'vendorInsurance',
@@ -236,6 +299,8 @@ async function computeAlerts(context:Context,user:any){
           context:clip(record?.customer?.name||record?.id||'Upcoming event'),
           detail:'Event '+eventDate+(daysToEvent===0?' · today':' · '+daysToEvent+' days away'),
           href:'/admin/insurance/',
+          assigneeEmail:assigned.email,
+          assigneeName:assigned.name,
         });
       }
     }
@@ -248,6 +313,8 @@ async function computeAlerts(context:Context,user:any){
         .map((row:any)=>{
           const issues=Array.isArray(row?.issues)?row.issues:[];
           const urgent=issues.some((issue:any)=>['estimate_missing','stored_balance','allocation_total'].includes(String(issue?.code||'')));
+          const record=recordById.get(String(row?.recordId||'')) as any;
+          const assigned=assignmentForRecord(record,records);
           return {
             id:'accounting:'+clip(row?.recordId,100),
             category:'accountingMismatches',
@@ -256,6 +323,9 @@ async function computeAlerts(context:Context,user:any){
             context:dateKey(row?.eventDate)?'Event '+dateKey(row?.eventDate):'QuickBooks reconciliation',
             detail:issues.slice(0,2).map((issue:any)=>clip(issue?.label,100)).join(' · ')+(issues.length>2?' · +'+(issues.length-2)+' more':''),
             href:'/admin/quickbooks/#accounting-audit',
+            assigneeEmail:assigned.email,
+            assigneeName:assigned.name,
+            quickAction:{type:'recheck_quickbooks',label:'Sync & Recheck',capability:'quickbooks.manage',resourceId:clip(row?.recordId,100)},
           } as AlertDetail;
         })
     : [];
@@ -287,7 +357,8 @@ async function computeAlerts(context:Context,user:any){
             title:clip(check?.name||check?.id||'System health failure'),
             context:releaseMeta||clip(check?.kind||'Protected service').replaceAll('_',' '),
             detail:clip(baseDetail+(releaseMeta?' · '+releaseMeta:''),220),
-            href:'/admin/health/',
+            href:'/admin/health/#health-priority',
+            quickAction:{type:'rerun_health',label:'Re-run health checks',capability:'health.manage'},
           } as AlertDetail;
         })
     : [];
@@ -295,7 +366,11 @@ async function computeAlerts(context:Context,user:any){
   const credentialDetails:AlertDetail[]=canHealth&&credentialHealth
     ? (Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
         .filter((row:any)=>!row?.ok)
-        .map((row:any)=>credentialWorkspaceAlert(row) as AlertDetail)
+        .map((row:any)=>({
+          ...(credentialWorkspaceAlert(row) as AlertDetail),
+          href:'/admin/health/#health-priority',
+          quickAction:{type:'rerun_health',label:'Re-run health checks',capability:'health.manage'},
+        }))
     : [];
 
   const securityDetails:AlertDetail[]=[];
@@ -314,6 +389,8 @@ async function computeAlerts(context:Context,user:any){
           context:email||'User Management',
           detail:'This active staff account has not completed initial account confirmation/setup.',
           href:'/admin/staff/',
+          assigneeEmail:email,
+          assigneeName:clip(staff?.userMetadata?.full_name||staff?.user_metadata?.full_name||email,180),
         });
         continue;
       }
@@ -327,6 +404,8 @@ async function computeAlerts(context:Context,user:any){
           context:email||'User Management',
           detail:'This staff account requires a password change before normal access can continue.',
           href:'/admin/staff/',
+          assigneeEmail:email,
+          assigneeName:clip(staff?.userMetadata?.full_name||staff?.user_metadata?.full_name||email,180),
         });
       }else if(security.forcePasswordChange){
         securityDetails.push({
@@ -337,6 +416,8 @@ async function computeAlerts(context:Context,user:any){
           context:email||'User Management',
           detail:'A password change has been required for this staff account.',
           href:'/admin/staff/',
+          assigneeEmail:email,
+          assigneeName:clip(staff?.userMetadata?.full_name||staff?.user_metadata?.full_name||email,180),
         });
       }
     }
@@ -490,6 +571,7 @@ export default async(req:Request,context:Context)=>{
     const until=Date.parse(String(snooze?.until||''));
     if(!Number.isFinite(until)||until<=now)delete state.snoozes[id];
   }
+  const userEmail=clip(user?.email,240).toLowerCase();
   const activeVisible=Object.values(lifecycle.active)
     .filter((record:any)=>canViewCategory(user,record.category))
     .map((record:any)=>({
@@ -498,6 +580,7 @@ export default async(req:Request,context:Context)=>{
       seenAt:state.seen[record.occurrenceId]||'',
       snoozedUntil:state.snoozes[record.occurrenceId]?.until||'',
       dismissedAt:state.dismissed[record.occurrenceId]?.dismissedAt||'',
+      assignedToMe:Boolean(clip(record?.assigneeEmail,240)&&clip(record?.assigneeEmail,240).toLowerCase()===userEmail),
     }));
 
   const visibleAlerts=activeVisible.filter((record:any)=>!record.snoozedUntil&&!record.dismissedAt);
@@ -534,6 +617,7 @@ export default async(req:Request,context:Context)=>{
     generatedAt:new Date().toISOString(),
     total:visibleAlerts.length,
     newCount:visibleAlerts.filter((alert:any)=>alert.isNew).length,
+    mineCount:visibleAlerts.filter((alert:any)=>alert.assignedToMe).length,
     snoozedCount:snoozedAlerts.length,
     dismissedCount:dismissedAlerts.length,
     severityCounts,

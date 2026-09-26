@@ -2,15 +2,15 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
 
-<BaseLayout noindex title="Action Center | Koa’s Events" description="One mobile inbox for operational items that need attention across Koa’s admin." canonical="https://koasevents.com/admin/actions/">
+<BaseLayout noindex title="Action Center | Koa’s Events" description="One prioritized inbox for operational items that need attention across Koa’s admin." canonical="https://koasevents.com/admin/actions/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-8">
     <div class="container-shell max-w-5xl">
       <header class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p class="eyebrow text-[var(--koa-amber-light)]">Mobile operations</p>
+            <p class="eyebrow text-[var(--koa-amber-light)]">Operations inbox</p>
             <h1 class="display mt-2 text-5xl">Action Center</h1>
-            <p class="mt-2 max-w-3xl text-sm leading-6 text-white/62">One prioritized inbox for overdue CRM work, unanswered sales leads, accounting mismatches, System Health, vendor insurance, and staff/security attention.</p>
+            <p class="mt-2 max-w-3xl text-sm leading-6 text-white/62">Prioritized work across CRM, Sales, QuickBooks, System Health, vendor insurance, and staff security—with safe one-tap actions for routine fixes.</p>
           </div>
           <button data-refresh type="button" class="rounded-full border border-white/20 bg-white/[.06] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Refresh</button>
         </div>
@@ -28,16 +28,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-[1.3rem] bg-white p-4 shadow-[var(--shadow-soft)]">
-          <div class="flex gap-2 overflow-x-auto pb-1" data-filters>
-            <button data-filter="all" class="action-filter is-active" type="button">All</button>
-            <button data-filter="urgent" class="action-filter" type="button">Critical</button>
-            <button data-filter="unansweredLeads" class="action-filter" type="button">Sales</button>
-            <button data-filter="overdueTasks" class="action-filter" type="button">CRM</button>
-            <button data-filter="accountingMismatches" class="action-filter" type="button">Accounting</button>
-            <button data-filter="healthWarnings" class="action-filter" type="button">Health</button>
-            <button data-filter="vendorInsurance" class="action-filter" type="button">Vendors</button>
-            <button data-filter="securityWarnings" class="action-filter" type="button">Staff / Security</button>
+          <div class="grid gap-4 lg:grid-cols-[auto_1fr_auto] lg:items-end">
+            <div>
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Assignment</p>
+              <div class="mt-2 inline-flex rounded-full bg-[var(--koa-sand)] p-1">
+                <button data-scope="mine" type="button" class="action-scope">Mine <span data-mine-count></span></button>
+                <button data-scope="everyone" type="button" class="action-scope is-active">Everyone</button>
+              </div>
+            </div>
+            <div>
+              <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Filter</p>
+              <div class="mt-2 flex gap-2 overflow-x-auto pb-1" data-filters>
+                <button data-filter="all" class="action-filter is-active" type="button">All</button>
+                <button data-filter="urgent" class="action-filter" type="button">Critical</button>
+                <button data-filter="unansweredLeads" class="action-filter" type="button">Sales</button>
+                <button data-filter="overdueTasks" class="action-filter" type="button">CRM</button>
+                <button data-filter="accountingMismatches" class="action-filter" type="button">Accounting</button>
+                <button data-filter="healthWarnings" class="action-filter" type="button">Health</button>
+                <button data-filter="vendorInsurance" class="action-filter" type="button">Vendors</button>
+                <button data-filter="securityWarnings" class="action-filter" type="button">Staff / Security</button>
+              </div>
+            </div>
+            <label class="grid gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Sort
+              <select data-sort class="min-h-11 rounded-xl border border-[var(--koa-line)] bg-white px-3 text-sm font-semibold normal-case tracking-normal text-[var(--koa-forest)]">
+                <option value="priority">Priority first</option>
+                <option value="oldest">Oldest first</option>
+                <option value="newest">Newest first</option>
+              </select>
+            </label>
           </div>
+          <p data-preference-status class="mt-3 text-xs text-[var(--koa-ink)]/42"></p>
         </section>
 
         <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -52,8 +72,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </main>
 
   <style>
-    .action-filter{flex:0 0 auto;min-height:2.55rem;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.6rem .8rem;color:var(--koa-forest);font-size:.58rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
-    .action-filter.is-active{border-color:var(--koa-forest);background:var(--koa-forest);color:white}
+    .action-filter,.action-scope{flex:0 0 auto;min-height:2.55rem;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.6rem .8rem;color:var(--koa-forest);font-size:.58rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+    .action-filter.is-active,.action-scope.is-active{border-color:var(--koa-forest);background:var(--koa-forest);color:white}
+    .action-scope{border-color:transparent;background:transparent}
   </style>
 
   <script>
@@ -64,8 +85,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const list=document.querySelector('[data-list]');
     const total=document.querySelector('[data-total]');
     const refresh=document.querySelector('[data-refresh]');
-    let payload={alerts:[],severityCounts:{urgent:0,upcoming:0,info:0},total:0};
+    const sortSelect=document.querySelector('[data-sort]');
+    const preferenceStatus=document.querySelector('[data-preference-status]');
+    let payload={alerts:[],severityCounts:{urgent:0,upcoming:0,info:0},total:0,mineCount:0};
     let filter='all';
+    let sort='priority';
+    let scope='everyone';
+    let session=null;
+    let capabilities=new Set();
 
     const categoryLabel={
       overdueTasks:'CRM task',
@@ -86,10 +113,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(ms));
     }
 
+    function syncControls(){
+      document.querySelectorAll('[data-filter]').forEach((node)=>node.classList.toggle('is-active',node.dataset.filter===filter));
+      document.querySelectorAll('[data-scope]').forEach((node)=>node.classList.toggle('is-active',node.dataset.scope===scope));
+      if(sortSelect instanceof HTMLSelectElement)sortSelect.value=sort;
+    }
+
+    async function savePreferences(){
+      if(preferenceStatus)preferenceStatus.textContent='Saving view…';
+      try{
+        const response=await fetch('/api/account/profile',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'save-action-center-preferences',preferences:{filter,sort,scope}}),
+        });
+        if(!response.ok)throw new Error('Unable to save Action Center preferences.');
+        if(preferenceStatus)preferenceStatus.textContent='View saved for this account.';
+      }catch(error){
+        if(preferenceStatus)preferenceStatus.textContent=error instanceof Error?error.message:'Unable to save view.';
+      }
+    }
+
+    async function loadPreferences(){
+      try{
+        const response=await fetch('/api/account/profile',{cache:'no-store'});
+        if(!response.ok)return;
+        const profile=await response.json();
+        const prefs=profile?.actionCenterPreferences||{};
+        filter=String(prefs.filter||'all');
+        sort=String(prefs.sort||'priority');
+        scope=String(prefs.scope||'everyone');
+      }catch{}
+      syncControls();
+    }
+
     async function action(actionName,extra={}){
       const response=await fetch('/api/admin/workspace-alerts',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:actionName,...extra})});
       if(!response.ok)return false;
       await load();
+      window.dispatchEvent(new Event('koa:workspace-alerts-refresh'));
       return true;
     }
 
@@ -100,11 +162,73 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       window.location.assign(alert?.href||'/admin/');
     }
 
+    function canRunQuickAction(alert){
+      const required=String(alert?.quickAction?.capability||'');
+      return Boolean(alert?.quickAction?.type)&&(!required||capabilities.has(required));
+    }
+
+    async function runQuickAction(alert,button,status){
+      const quick=alert?.quickAction||{};
+      let url='',body={};
+      if(quick.type==='complete_crm_task'){
+        url='/api/admin/crm';body={action:'toggle-task',taskId:quick.resourceId};
+      }else if(quick.type==='mark_lead_responded'){
+        url='/api/admin/quotes';body={action:'log-activity',recordId:quick.resourceId,type:'responded',detail:'Lead marked responded from Action Center.'};
+      }else if(quick.type==='recheck_quickbooks'){
+        url='/api/admin/quickbooks';body={action:'sync-and-recheck',recordId:quick.resourceId};
+      }else if(quick.type==='rerun_health'){
+        url='/api/admin/health';body={};
+      }else return;
+
+      const previous=button.textContent;
+      button.disabled=true;
+      button.textContent='Working…';
+      if(status)status.textContent='';
+      try{
+        const response=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Action failed.');
+        if(status)status.textContent=quick.type==='rerun_health'?'Health checks completed.':'Action completed.';
+        await load();
+        window.dispatchEvent(new Event('koa:workspace-alerts-refresh'));
+      }catch(error){
+        if(status)status.textContent=error instanceof Error?error.message:'Action failed.';
+        button.disabled=false;
+        button.textContent=previous;
+      }
+    }
+
+    function rowsForView(){
+      const scoped=(payload?.alerts||[]).filter((row)=>scope==='everyone'||row.assignedToMe);
+      const mineCount=(payload?.alerts||[]).filter((row)=>row.assignedToMe).length;
+      const mineNode=document.querySelector('[data-mine-count]');
+      if(mineNode)mineNode.textContent='('+mineCount+')';
+
+      const counts={
+        urgent:scoped.filter((row)=>row.severity==='urgent').length,
+        upcoming:scoped.filter((row)=>row.severity==='upcoming').length,
+        info:scoped.filter((row)=>row.severity==='info').length,
+      };
+      document.querySelector('[data-count-urgent]').textContent=String(counts.urgent);
+      document.querySelector('[data-count-upcoming]').textContent=String(counts.upcoming);
+      document.querySelector('[data-count-info]').textContent=String(counts.info);
+
+      const filtered=scoped.filter((row)=>filter==='all'||(filter==='urgent'?row.severity==='urgent':row.category===filter));
+      const severityRank={urgent:0,upcoming:1,info:2};
+      return [...filtered].sort((a,b)=>{
+        const atA=Date.parse(a.firstAppearedAt||a.lastSeenAt||'')||0;
+        const atB=Date.parse(b.firstAppearedAt||b.lastSeenAt||'')||0;
+        if(sort==='oldest')return atA-atB;
+        if(sort==='newest')return atB-atA;
+        return (severityRank[a.severity]??9)-(severityRank[b.severity]??9)
+          ||Number(Boolean(b.isNew))-Number(Boolean(a.isNew))
+          ||atA-atB;
+      });
+    }
+
     function render(){
-      document.querySelector('[data-count-urgent]').textContent=String(payload?.severityCounts?.urgent||0);
-      document.querySelector('[data-count-upcoming]').textContent=String(payload?.severityCounts?.upcoming||0);
-      document.querySelector('[data-count-info]').textContent=String(payload?.severityCounts?.info||0);
-      const rows=(payload?.alerts||[]).filter((row)=>filter==='all'||(filter==='urgent'?row.severity==='urgent':row.category===filter));
+      syncControls();
+      const rows=rowsForView();
       total.textContent=rows.length+' item'+(rows.length===1?'':'s');
       list.innerHTML='';
       for(const alert of rows){
@@ -112,15 +236,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const urgent=alert.severity==='urgent';
         const upcoming=alert.severity==='upcoming';
         card.className='rounded-[1.1rem] border p-4 '+(urgent?'border-red-200 bg-red-50':upcoming?'border-amber-200 bg-amber-50':'border-sky-200 bg-sky-50');
-        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.54rem] font-black uppercase tracking-[.08em] '+(urgent?'text-red-700':upcoming?'text-amber-800':'text-sky-800')+'">'+escapeHtml(categoryLabel[alert.category]||alert.category)+(alert.isNew?' · New':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(alert.title||'Action item')+'</h3></div><span class="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(urgent?'Critical':upcoming?'Warning':'Info')+'</span></div><p class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/60">'+escapeHtml(alert.context||'')+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/58">'+escapeHtml(alert.detail||'')+'</p><p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/40">First appeared '+escapeHtml(timeLabel(alert.firstAppearedAt))+'</p>';
+        const assignment=alert.assigneeEmail
+          ? '<p class="mt-2 text-[.62rem] font-bold text-[var(--koa-clay)]">Assigned to '+escapeHtml(alert.assigneeName||alert.assigneeEmail)+(alert.assignedToMe?' · Mine':'')+'</p>'
+          : '<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/38">Shared / unassigned item</p>';
+        card.innerHTML='<div class="flex items-start justify-between gap-3"><div><p class="text-[.54rem] font-black uppercase tracking-[.08em] '+(urgent?'text-red-700':upcoming?'text-amber-800':'text-sky-800')+'">'+escapeHtml(categoryLabel[alert.category]||alert.category)+(alert.isNew?' · New':'')+'</p><h3 class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+escapeHtml(alert.title||'Action item')+'</h3></div><span class="shrink-0 rounded-full bg-white/80 px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(urgent?'Critical':upcoming?'Warning':'Info')+'</span></div><p class="mt-2 text-xs font-semibold text-[var(--koa-ink)]/60">'+escapeHtml(alert.context||'')+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/58">'+escapeHtml(alert.detail||'')+'</p>'+assignment+'<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/40">First appeared '+escapeHtml(timeLabel(alert.firstAppearedAt))+'</p>';
+        const status=document.createElement('p');status.className='mt-3 text-xs font-semibold text-[var(--koa-ink)]/55';
         const actions=document.createElement('div');actions.className='mt-4 flex flex-wrap gap-2';
-        const open=document.createElement('button');open.type='button';open.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';open.textContent='Open';open.addEventListener('click',()=>void openAlert(alert));actions.appendChild(open);
+
+        if(canRunQuickAction(alert)){
+          const quick=document.createElement('button');
+          quick.type='button';
+          quick.className='rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white';
+          quick.textContent=alert.quickAction.label||'Run action';
+          quick.addEventListener('click',()=>void runQuickAction(alert,quick,status));
+          actions.appendChild(quick);
+        }
+
+        const open=document.createElement('button');open.type='button';open.className='rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';open.textContent='Open';open.addEventListener('click',()=>void openAlert(alert));actions.appendChild(open);
         if(alert.isNew){const seen=document.createElement('button');seen.type='button';seen.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';seen.textContent='Mark seen';seen.addEventListener('click',()=>void action('mark-seen',{occurrenceIds:[alert.occurrenceId]}));actions.appendChild(seen);}
         const snooze=document.createElement('button');snooze.type='button';snooze.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]';snooze.textContent='Tomorrow';snooze.addEventListener('click',()=>void action('snooze',{occurrenceId:alert.occurrenceId,preset:'tomorrow'}));actions.appendChild(snooze);
         const dismiss=document.createElement('button');dismiss.type='button';dismiss.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]';dismiss.textContent='Dismiss';dismiss.addEventListener('click',()=>void action('dismiss',{occurrenceId:alert.occurrenceId}));actions.appendChild(dismiss);
-        card.appendChild(actions);list.appendChild(card);
+        card.append(status,actions);list.appendChild(card);
       }
-      if(!rows.length)list.innerHTML='<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">Nothing in this view currently needs attention.</div>';
+      if(!rows.length){
+        const copy=scope==='mine'
+          ? 'Nothing currently assigned specifically to you matches this view. Switch to Everyone to see shared and unassigned items.'
+          : 'Nothing in this view currently needs attention.';
+        list.innerHTML='<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">'+escapeHtml(copy)+'</div>';
+      }
     }
 
     async function load(){
@@ -136,15 +279,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     document.querySelectorAll('[data-filter]').forEach((button)=>button.addEventListener('click',()=>{
       filter=button.dataset.filter||'all';
-      document.querySelectorAll('[data-filter]').forEach((node)=>node.classList.toggle('is-active',node===button));
       render();
+      void savePreferences();
     }));
+    document.querySelectorAll('[data-scope]').forEach((button)=>button.addEventListener('click',()=>{
+      scope=button.dataset.scope||'everyone';
+      render();
+      void savePreferences();
+    }));
+    sortSelect?.addEventListener('change',()=>{
+      sort=sortSelect.value||'priority';
+      render();
+      void savePreferences();
+    });
     refresh?.addEventListener('click',()=>void load());
 
-    const session=await getAdminSession();
+    session=await getAdminSession();
     const ok=Boolean(session&&!session.accessBlocked);
+    capabilities=new Set(session?.capabilities||session?.permissions||[]);
     app?.classList.toggle('hidden',!ok);
     unauthorized?.classList.toggle('hidden',ok);
-    if(ok)await load();
+    if(ok){
+      await loadPreferences();
+      await load();
+    }
   </script>
 </BaseLayout>

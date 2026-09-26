@@ -19,6 +19,20 @@ function cleanMobileNav(value:unknown){
   return [...new Set(raw.map(item=>clean(item,40)).filter(item=>allowed.has(item)))].slice(0,4);
 }
 
+function cleanActionCenterPreferences(value:any){
+  const allowedFilters=new Set(['all','urgent','overdueTasks','unansweredLeads','accountingMismatches','healthWarnings','vendorInsurance','securityWarnings']);
+  const allowedSorts=new Set(['priority','oldest','newest']);
+  const allowedScopes=new Set(['everyone','mine']);
+  const filter=clean(value?.filter,60);
+  const sort=clean(value?.sort,40);
+  const scope=clean(value?.scope,40);
+  return {
+    filter:allowedFilters.has(filter)?filter:'all',
+    sort:allowedSorts.has(sort)?sort:'priority',
+    scope:allowedScopes.has(scope)?scope:'everyone',
+  };
+}
+
 export default async(req:Request,context:Context)=>{
   const auth=await requireOperations(req);
   if(auth.response)return auth.response;
@@ -40,12 +54,29 @@ export default async(req:Request,context:Context)=>{
       photoUrl:meta?.has_profile_photo===true?('/api/staff/photo/'+encodeURIComponent(clean(user?.id,120))+(meta?.profile_photo_version?'?v='+encodeURIComponent(clean(meta.profile_photo_version,80)):'')):'',
       email:clean(user?.email,240).toLowerCase(),
       mobileNav:cleanMobileNav(meta?.mobile_nav_items),
+      actionCenterPreferences:cleanActionCenterPreferences(meta?.action_center_preferences),
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);
   if(!body)return Response.json({error:'Invalid JSON.'},{status:400});
+
+  if(clean(body.action,60)==='save-action-center-preferences'){
+    const preferences=cleanActionCenterPreferences(body.preferences||{});
+    const currentMeta=userMetadataFor(user);
+    await admin.updateUser(user.id,{
+      user_metadata:{
+        ...currentMeta,
+        action_center_preferences:preferences,
+      },
+    });
+    return Response.json({
+      ok:true,
+      preferences,
+      message:'Action Center preferences saved.',
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
 
   if(clean(body.action,60)==='save-mobile-nav'){
     const mobileNav=cleanMobileNav(body.mobileNav);
