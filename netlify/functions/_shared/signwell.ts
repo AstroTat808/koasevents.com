@@ -101,10 +101,11 @@ export function verifySignWellWebhookEvent(payload:any,toleranceSeconds=WEBHOOK_
   if(!webhookId)return {ok:false,error:'SIGNWELL_WEBHOOK_ID is not configured.',eventType:'',eventTime:0,eventHash:'',replayKey:''};
 
   const event=payload?.event;
-  const eventType=clean(event?.type,160).toLowerCase();
+  const eventTypeRaw=clean(event?.type,160);
+  const eventType=eventTypeRaw.toLowerCase();
   const eventTime=Number(event?.time||0);
   const eventHash=clean(event?.hash,200).toLowerCase();
-  if(!eventType||!Number.isFinite(eventTime)||eventTime<=0||!/^[0-9a-f]{64}$/i.test(eventHash)){
+  if(!eventTypeRaw||!Number.isFinite(eventTime)||eventTime<=0||!/^[0-9a-f]{64}$/i.test(eventHash)){
     return {ok:false,error:'SignWell event metadata is incomplete or malformed.',eventType,eventTime,eventHash,replayKey:''};
   }
 
@@ -113,7 +114,7 @@ export function verifySignWellWebhookEvent(payload:any,toleranceSeconds=WEBHOOK_
     return {ok:false,error:'SignWell event timestamp is outside the allowed verification window.',eventType,eventTime,eventHash,replayKey:''};
   }
 
-  const expected=createHmac('sha256',webhookId).update(eventType+'@'+String(eventTime),'utf8').digest('hex');
+  const expected=createHmac('sha256',webhookId).update(eventTypeRaw+'@'+String(eventTime),'utf8').digest('hex');
   const expectedBytes=Buffer.from(expected,'hex');
   const receivedBytes=Buffer.from(eventHash,'hex');
   const valid=expectedBytes.length===receivedBytes.length&&timingSafeEqual(expectedBytes,receivedBytes);
