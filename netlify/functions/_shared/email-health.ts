@@ -198,14 +198,17 @@ export async function checkResendSendAccess() {
   }
 }
 
+const RESEND_WEBHOOK_ENDPOINT = 'https://koasevents.com/api/webhooks/resend';
+
 async function checkResendWebhookConfig() {
   const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
   const signingSecretConfigured = clean(Netlify.env.get('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
-  const endpoint = 'https://koasevents.com/api/webhooks/resend';
+  const endpoint = RESEND_WEBHOOK_ENDPOINT;
 
   if (!apiKey) {
     return {
       endpoint,
+      webhookId: '',
       existsInResend: null,
       enabled: null,
       signingSecretConfigured,
@@ -246,6 +249,7 @@ async function checkResendWebhookConfig() {
 
     return {
       endpoint,
+      webhookId: webhook ? clean(webhook?.id, 180) : '',
       existsInResend: response.ok ? existsInResend : null,
       enabled: response.ok ? enabled : null,
       signingSecretConfigured,
@@ -255,6 +259,7 @@ async function checkResendWebhookConfig() {
   } catch (error) {
     return {
       endpoint,
+      webhookId: '',
       existsInResend: null,
       enabled: null,
       signingSecretConfigured,
@@ -262,6 +267,196 @@ async function checkResendWebhookConfig() {
       detail: error instanceof Error ? error.message : 'Resend webhook lookup failed.',
     };
   }
+}
+
+function resendHeaders(apiKey:string) {
+  return {
+    Authorization: 'Bearer ' + apiKey,
+    'Content-Type': 'application/json',
+    'User-Agent': 'KoaEvents-EmailHealth/1.0',
+  };
+}
+
+function webhookEventRows(body:any){
+  return Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+}
+
+async function listResendWebhookEvents(webhookId:string, limit=10) {
+  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  if(!apiKey||!webhookId)return {ok:false,status:0,rows:[] as any[],detail:'Resend monitoring credential or webhook id is unavailable.'};
+  try{
+    const response=await fetch(
+      'https://api.resend.com/webhooks/'+encodeURIComponent(webhookId)+'/events?limit='+Math.max(1,Math.min(100,limit)),
+      {headers:resendHeaders(apiKey),signal:AbortSignal.timeout(10000)}
+    );
+    const body:any=await response.json().catch(()=>({}));
+    return {
+      ok:response.ok,
+      status:response.status,
+      rows:webhookEventRows(body),
+      detail:response.ok?'Webhook delivery history is available.':clean(body?.message||body?.error||'Webhook event lookup failed.',500),
+    };
+  }catch(error){
+    return {ok:false,status:0,rows:[] as any[],detail:error instanceof Error?error.message:'Webhook event lookup failed.'};
+  }
+}
+
+async function listResendWebhookAttempts(webhookId:string,eventId:string,limit=10) {
+  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  if(!apiKey||!webhookId||!eventId)return {ok:false,status:0,rows:[] as any[],detail:'Resend monitoring credential, webhook id, or event id is unavailable.'};
+  try{
+    const response=await fetch(
+      'https://api.resend.com/webhooks/'+encodeURIComponent(webhookId)+'/events/'+encodeURIComponent(eventId)+'/attempts?limit='+Math.max(1,Math.min(100,limit)),
+      {headers:resendHeaders(apiKey),signal:AbortSignal.timeout(10000)}
+    );
+    const body:any=await response.json().catch(()=>({}));
+    return {
+      ok:response.ok,
+      status:response.status,
+      rows:webhookEventRows(body),
+      detail:response.ok?'Webhook delivery attempts are available.':clean(body?.message||body?.error||'Webhook attempt lookup failed.',500),
+    };
+  }catch(error){
+    return {ok:false,status:0,rows:[] as any[],detail:error instanceof Error?error.message:'Webhook attempt lookup failed.'};
+  }
+}
+
+export async function resendWebhookDeliveryStatus() {
+  const webhook=await checkResendWebhookConfig();
+  if(!webhook.webhookId){
+    return {
+      available:false,
+      webhookId:'',
+      endpoint:webhook.endpoint,
+      status:'unknown',
+      eventId:'',
+      eventType:'',
+      createdAt:'',
+      attempt:null as any,
+      detail:webhook.detail,
+    };
+  }
+
+  const events=await listResendWebhookEvents(webhook.webhookId,10);
+  if(!events.ok){
+    return {
+      available:false,
+      webhookId:webhook.webhookId,
+      endpoint:webhook.endpoint,
+      status:'unknown',
+      eventId:'',
+      eventType:'',
+      createdAt:'',
+      attempt:null as any,
+      detail:events.detail,
+    };
+  }
+
+  const event=events.rows.find((row:any)=>['success','failed','pending','attempting'].includes(clean(row?.status,40).toLowerCase()))||events.rows[0]||null;
+  if(!event){
+    return {
+      available:true,
+      webhookId:webhook.webhookId,
+      endpoint:webhook.endpoint,
+      status:'none',
+      eventId:'',
+      eventType:'',
+      createdAt:'',
+      attempt:null as any,
+      detail:'The Resend webhook is configured, but no delivery events are available yet.',
+    };
+  }
+
+  const eventId=clean(event?.id,180);
+  const attempts=eventId?await listResendWebhookAttempts(webhook.webhookId,eventId,5):null;
+  const attempt=attempts?.rows?.[0]||null;
+  const status=clean(event?.status,40).toLowerCase()||'unknown';
+  const httpStatus=Number(attempt?.http_status_code||0);
+
+  return {
+    available:true,
+    webhookId:webhook.webhookId,
+    endpoint:webhook.endpoint,
+    status,
+    eventId,
+    eventType:clean(event?.type,120),
+    createdAt:clean(event?.created_at,100),
+    attempt:attempt?{
+      id:clean(attempt?.id,180),
+      httpStatus,
+      sentAt:clean(attempt?.sent_at,100),
+      response:clean(attempt?.response,500),
+    }:null,
+    detail:status==='success'
+      ? 'Latest Resend webhook delivery succeeded'+(httpStatus?' with HTTP '+httpStatus:'')+'.'
+      : status==='failed'
+        ? 'Latest Resend webhook delivery failed'+(httpStatus?' with HTTP '+httpStatus:'')+'.'
+        : 'Latest Resend webhook delivery is '+status+'.',
+  };
+}
+
+function wait(ms:number){
+  return new Promise((resolve)=>setTimeout(resolve,ms));
+}
+
+export async function testResendWebhookDelivery() {
+  const webhook=await checkResendWebhookConfig();
+  if(!webhook.webhookId)throw new Error(webhook.detail||'Resend webhook is not available.');
+  if(webhook.enabled===false)throw new Error('The Resend webhook exists but is disabled.');
+
+  const events=await listResendWebhookEvents(webhook.webhookId,20);
+  if(!events.ok)throw new Error(events.detail||'Unable to list Resend webhook events.');
+  const event=events.rows.find((row:any)=>['success','failed'].includes(clean(row?.status,40).toLowerCase()));
+  if(!event?.id)throw new Error('No completed Resend webhook event is available to replay safely.');
+
+  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  const eventId=clean(event.id,180);
+  const startedAt=Date.now();
+  const replay=await fetch(
+    'https://api.resend.com/webhooks/'+encodeURIComponent(webhook.webhookId)+'/events/'+encodeURIComponent(eventId)+'/replay',
+    {method:'POST',headers:resendHeaders(apiKey),signal:AbortSignal.timeout(10000)}
+  );
+  const replayBody:any=await replay.json().catch(()=>({}));
+  if(!replay.ok)throw new Error(clean(replayBody?.message||replayBody?.error||'Resend webhook replay failed.',500));
+
+  let latestAttempt:any=null;
+  for(let index=0;index<8;index+=1){
+    await wait(index===0?350:650);
+    const attempts=await listResendWebhookAttempts(webhook.webhookId,eventId,10);
+    latestAttempt=(attempts.rows||[]).find((row:any)=>{
+      const sentAt=Date.parse(String(row?.sent_at||''));
+      return Number.isFinite(sentAt)&&sentAt>=startedAt-1000;
+    })||null;
+    if(latestAttempt)break;
+  }
+
+  if(!latestAttempt){
+    return {
+      ok:true,
+      queued:true,
+      completed:false,
+      eventId,
+      eventType:clean(event?.type,120),
+      message:'Webhook replay was queued. Resend has not reported the new delivery attempt yet.',
+    };
+  }
+
+  const httpStatus=Number(latestAttempt?.http_status_code||0);
+  const success=httpStatus>=200&&httpStatus<300;
+  return {
+    ok:success,
+    queued:true,
+    completed:true,
+    eventId,
+    eventType:clean(event?.type,120),
+    attemptId:clean(latestAttempt?.id,180),
+    httpStatus,
+    sentAt:clean(latestAttempt?.sent_at,100),
+    response:clean(latestAttempt?.response,500),
+    message:success
+      ? 'Resend replay reached /api/webhooks/resend successfully with HTTP '+httpStatus+'.'
+      : 'Resend replay reached /api/webhooks/resend but returned HTTP '+httpStatus+'.',
+  };
 }
 
 export async function listResendEmails() {
@@ -390,12 +585,13 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   const cachedAt = Date.parse(String(cached?.generatedAt || ''));
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
-  const [logo, sendAccess, resend, webhookEvents, webhook] = await Promise.all([
+  const [logo, sendAccess, resend, webhookEvents, webhook, webhookDelivery] = await Promise.all([
     checkLogo(),
     checkResendSendAccess(),
     listResendEmails(),
     readEmailHealthEvents(context, 5000),
     checkResendWebhookConfig(),
+    resendWebhookDeliveryStatus(),
   ]);
 
   const webhookConfigured = Boolean(webhook.signingSecretConfigured);
@@ -465,12 +661,14 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
       webhookConfigured,
       webhook: {
         endpoint: webhook.endpoint,
+        webhookId: webhook.webhookId,
         existsInResend: webhook.existsInResend,
         enabled: webhook.enabled,
         signingSecretConfigured: webhook.signingSecretConfigured,
         lookupStatus: webhook.status,
         detail: webhook.detail,
       },
+      webhookDelivery,
       period24h,
       period7d,
       recentIssues,
