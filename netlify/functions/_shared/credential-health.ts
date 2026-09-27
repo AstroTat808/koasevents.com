@@ -816,6 +816,15 @@ function reliabilitySummary(samples: CredentialHealthSample[], policy: Credentia
         samplesUntilThresholdActive,
         healthySamplesToExitCritical,
         healthySamplesToHealthy,
+        estimatedThresholdActiveAt: samplesUntilThresholdActive
+          ? new Date(Date.now() + samplesUntilThresholdActive * 60 * 60 * 1000).toISOString()
+          : '',
+        estimatedExitCriticalAt: healthySamplesToExitCritical
+          ? new Date(Date.now() + healthySamplesToExitCritical * 60 * 60 * 1000).toISOString()
+          : '',
+        estimatedHealthyAt: healthySamplesToHealthy
+          ? new Date(Date.now() + healthySamplesToHealthy * 60 * 60 * 1000).toISOString()
+          : '',
       },
     };
   });
@@ -1090,6 +1099,7 @@ function buildCredentialIncidentTimeline(
   history: CredentialHealthHistoryEvent[],
   reliabilityEvents: CredentialReliabilityEvent[],
   alertRows: any[],
+  reliabilityProviders: any[] = [],
 ) {
   const rows: any[] = [];
 
@@ -1184,6 +1194,23 @@ function buildCredentialIncidentTimeline(
     }
   }
 
+  for (const provider of Array.isArray(reliabilityProviders) ? reliabilityProviders : []) {
+    const occurredAt = clean(provider?.firstVerifiedAt, 100);
+    if (!occurredAt) continue;
+    rows.push({
+      id: 'baseline:' + clean(provider?.id, 80) + ':' + occurredAt,
+      source: 'reliability',
+      kind: 'baseline_reset',
+      occurredAt,
+      providerId: clean(provider?.id, 80),
+      provider: clean(provider?.label || provider?.id, 120),
+      title: clean(provider?.label || provider?.id, 120) + ' reliability baseline',
+      label: 'Credential baseline reset here',
+      severity: 'green',
+      detail: 'First successful verification. Reliability calculations start here; earlier failures are excluded.',
+    });
+  }
+
   const seen = new Set<string>();
   return rows
     .filter((row) => row.occurredAt && Number.isFinite(Date.parse(row.occurredAt)))
@@ -1258,7 +1285,7 @@ async function withHistory(context: Context, summary: any) {
     history,
     reliability,
     reliabilityPolicy: policy,
-    incidentTimeline: buildCredentialIncidentTimeline(history, reliabilityEvents, alertRows),
+    incidentTimeline: buildCredentialIncidentTimeline(history, reliabilityEvents, alertRows, reliability.providers),
   };
 }
 
