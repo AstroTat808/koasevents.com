@@ -8,6 +8,7 @@ import {
   disconnectQuickBooks,
   getQuickBooksCatalog,
   getQuickBooksConnection,
+  getQuickBooksDamageDepositSettings,
   getQuickBooksDepositSettings,
   getQuickBooksGetSettings,
   getQuickBooksSettings,
@@ -19,6 +20,7 @@ import {
   qboOperation,
   quickBooksConfiguration,
   saveQuickBooksCatalog,
+  saveQuickBooksDamageDepositSettings,
   saveQuickBooksDepositSettings,
   saveQuickBooksGetSettings,
   saveQuickBooksSettings,
@@ -99,6 +101,68 @@ function quickBooksState(record: any) {
   };
   record.accounting.quickbooks.invoices ||= [];
   return record.accounting.quickbooks;
+}
+
+function offsetDate(date: unknown, days: number) {
+  const raw = isoDate(date);
+  if (!raw) return '';
+  const parsed = new Date(raw + 'T12:00:00Z');
+  parsed.setUTCDate(parsed.getUTCDate() + days);
+  return parsed.toISOString().slice(0, 10);
+}
+
+function inferredDamageDepositRentalType(record: any) {
+  const saved = clean(record?.accounting?.damageDeposit?.rentalType, 20);
+  if (saved === 'weekend' || saved === 'one-day') return saved;
+  const packageId = clean(record?.packageId || record?.quote?.state?.startingPoint || record?.inquiry?.venuePackage, 80).toLowerCase();
+  return ['hibiscus','signature-wedding','plumeria'].includes(packageId) ? 'weekend' : 'one-day';
+}
+
+function ensureDamageDepositState(record: any, settings: any) {
+  record.accounting ||= {};
+  const rentalType = inferredDamageDepositRentalType(record);
+  const current = record.accounting.damageDeposit || {};
+  const amount = Math.max(0, Math.round(Number(
+    current.amount ?? (rentalType === 'weekend' ? settings.weekendAmount : settings.oneDayAmount)
+  ) * 100) / 100);
+  const dueDate = clean(current.dueDate, 40) || offsetDate(record?.customer?.eventDate, -Math.max(0, Number(settings.dueDaysBefore || 30)));
+  const deductionAmount = Math.min(amount, Math.max(0, Math.round(Number(current.deductionAmount || 0) * 100) / 100));
+  const state = record.accounting.damageDeposit = {
+    rentalType,
+    amount,
+    dueDate,
+    status: clean(current.status || 'not_invoiced', 40),
+    invoiceId: clean(current.invoiceId, 100),
+    invoiceDocNumber: clean(current.invoiceDocNumber, 100),
+    invoiceBalance: current.invoiceBalance == null ? amount : Math.max(0, Number(current.invoiceBalance || 0)),
+    paidAt: clean(current.paidAt, 80),
+    deductionAmount,
+    deductionReason: clean(current.deductionReason, 1000),
+    deductionJournalEntryId: clean(current.deductionJournalEntryId, 100),
+    refundAmount: Math.max(0, Math.round(Number(current.refundAmount ?? (amount - deductionAmount)) * 100) / 100),
+    refundTransactionId: clean(current.refundTransactionId, 100),
+    refundedAt: clean(current.refundedAt, 80),
+    lastSyncedAt: clean(current.lastSyncedAt, 80),
+  };
+  return state;
+}
+
+async function syncDamageDepositInvoice(context: Context, record: any, settings: any) {
+  const state = ensureDamageDepositState(record, settings);
+  if (!state.invoiceId) return state;
+  const data: any = await qboGet(context, 'invoice', state.invoiceId);
+  const invoice = data?.Invoice;
+  if (invoice) {
+    state.invoiceDocNumber = String(invoice.DocNumber || state.invoiceDocNumber || '');
+    state.invoiceBalance = Math.max(0, Number(invoice.Balance ?? state.invoiceBalance ?? state.amount));
+    state.lastSyncedAt = new Date().toISOString();
+    if (state.refundTransactionId) state.status = 'refunded';
+    else if (state.invoiceBalance <= 0) {
+      state.status = state.deductionAmount > 0 ? 'paid_with_pending_resolution' : 'paid';
+      state.paidAt ||= new Date().toISOString();
+    } else state.status = 'invoiced';
+  }
+  return state;
 }
 
 function proposalLines(record: any, itemId: string) {
@@ -709,12 +773,13 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
+    const [connection, settings, catalog, getSettings, depositSettings, damageDepositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
       getQuickBooksGetSettings(context),
       getQuickBooksDepositSettings(context),
+      getQuickBooksDamageDepositSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-last-processed', { type: 'json' }),
@@ -757,6 +822,7 @@ export default async (req: Request, context: Context) => {
       catalog,
       getSettings,
       depositSettings,
+      damageDepositSettings,
       webhookReceipt: webhookReceipt || null,
       webhookProcessed: webhookProcessed || null,
       smokeTest: smokeTest || null,
@@ -804,6 +870,59 @@ export default async (req: Request, context: Context) => {
       autoRules: payload?.autoRules,
     });
     return Response.json({ ok: true, depositSettings }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
+  if (action === 'list-damage-deposit-accounts') {
+    const data: any = await qboQuery(context, 'select * from Account where Active = true maxresults 1000');
+    const rows = Array.isArray(data?.QueryResponse?.Account) ? data.QueryResponse.Account : [];
+    const map = (types: string[]) => rows.filter((account: any) => types.includes(String(account.AccountType || '')))
+      .map((account: any) => ({ id:String(account.Id), name:String(account.Name || ''), type:String(account.AccountType || ''), subType:String(account.AccountSubType || '') }))
+      .sort((a: any,b: any)=>a.name.localeCompare(b.name));
+    return Response.json({
+      liabilityAccounts: map(['Other Current Liability','Long Term Liability']),
+      bankAccounts: map(['Bank']),
+      incomeAccounts: map(['Income','Other Income']),
+    }, { headers: { 'Cache-Control':'private, no-store' } });
+  }
+
+  if (action === 'save-damage-deposit-settings') {
+    let damageDepositSettings = await saveQuickBooksDamageDepositSettings(context, {
+      enabled: payload?.enabled !== false,
+      oneDayAmount: payload?.oneDayAmount,
+      weekendAmount: payload?.weekendAmount,
+      dueDaysBefore: payload?.dueDaysBefore,
+      refundWithinDays: payload?.refundWithinDays,
+      liabilityAccountId: clean(payload?.liabilityAccountId,80),
+      liabilityAccountName: clean(payload?.liabilityAccountName,160),
+      itemId: clean(payload?.itemId,80),
+      itemName: clean(payload?.itemName || 'Refundable Damage Deposit',160),
+      refundBankAccountId: clean(payload?.refundBankAccountId,80),
+      refundBankAccountName: clean(payload?.refundBankAccountName,160),
+      deductionIncomeAccountId: clean(payload?.deductionIncomeAccountId,80),
+      deductionIncomeAccountName: clean(payload?.deductionIncomeAccountName,160),
+    });
+    if (!damageDepositSettings.itemId && damageDepositSettings.liabilityAccountId) {
+      const created: any = await qboCreate(context, 'item', {
+        Name: damageDepositSettings.itemName || 'Refundable Damage Deposit',
+        Description: 'Refundable security / damage deposit held as a customer liability.',
+        Active: true,
+        Type: 'Service',
+        UnitPrice: damageDepositSettings.oneDayAmount,
+        IncomeAccountRef: {
+          value: damageDepositSettings.liabilityAccountId,
+          name: damageDepositSettings.liabilityAccountName || undefined,
+        },
+      });
+      const item = created?.Item;
+      if (item?.Id) {
+        damageDepositSettings = await saveQuickBooksDamageDepositSettings(context, {
+          ...damageDepositSettings,
+          itemId: String(item.Id),
+          itemName: String(item.Name || damageDepositSettings.itemName),
+        });
+      }
+    }
+    return Response.json({ ok:true, damageDepositSettings }, { headers:{'Cache-Control':'private, no-store'} });
   }
 
   if (action === 'connect') {
@@ -1498,6 +1617,121 @@ export default async (req: Request, context: Context) => {
   const itemId = clean(settings?.serviceItemId, 80);
   if (!itemId && ['sync-estimate','create-invoice'].includes(action)) {
     return Response.json({ error: 'Choose the QuickBooks service item in QuickBooks Setup before syncing financial records.' }, { status: 409 });
+  }
+
+  if (action === 'update-damage-deposit') {
+    const damageSettings = await getQuickBooksDamageDepositSettings(context);
+    const state = ensureDamageDepositState(record, damageSettings);
+    const requestedType = clean(payload?.rentalType,20);
+    if (requestedType === 'one-day' || requestedType === 'weekend') {
+      state.rentalType = requestedType;
+      state.amount = requestedType === 'weekend' ? damageSettings.weekendAmount : damageSettings.oneDayAmount;
+    }
+    if (!state.invoiceId) state.dueDate = offsetDate(record?.customer?.eventDate, -Math.max(0, Number(damageSettings.dueDaysBefore || 30)));
+    state.deductionAmount = Math.min(state.amount, Math.max(0, Math.round(Number(payload?.deductionAmount ?? state.deductionAmount || 0) * 100) / 100));
+    state.deductionReason = clean(payload?.deductionReason ?? state.deductionReason,1000);
+    state.refundAmount = Math.max(0, Math.round((state.amount - state.deductionAmount) * 100) / 100);
+    records = await saveQuickBooksSalesRecord(context, record, records);
+    return Response.json({ ok:true, record, damageDeposit:state }, { headers:{'Cache-Control':'private, no-store'} });
+  }
+
+  if (action === 'create-damage-deposit-invoice') {
+    const damageSettings = await getQuickBooksDamageDepositSettings(context);
+    if (!damageSettings.enabled) return Response.json({ error:'Refundable damage deposits are disabled.' },{status:409});
+    if (!damageSettings.itemId || !damageSettings.liabilityAccountId) {
+      return Response.json({ error:'Configure the refundable damage-deposit liability account and QuickBooks item first.' },{status:409});
+    }
+    const state = ensureDamageDepositState(record, damageSettings);
+    if (state.invoiceId) {
+      await syncDamageDepositInvoice(context, record, damageSettings);
+      records = await saveQuickBooksSalesRecord(context, record, records);
+      return Response.json({ ok:true, record, damageDeposit:state, reused:true });
+    }
+    const customer = await ensureCustomer(context, record);
+    const created: any = await qboCreate(context, 'invoice', {
+      CustomerRef:{ value:String(customer.Id) },
+      TxnDate:today(),
+      DueDate:state.dueDate || undefined,
+      BillEmail:record.customer?.email ? { Address:clean(record.customer.email,240) } : undefined,
+      CustomerMemo:{ value:'Refundable security / damage deposit · Koa’s Events '+record.id },
+      PrivateNote:'Koa CRM '+record.id+' · refundable damage deposit · held as liability',
+      Line:[{
+        Amount:state.amount,
+        DetailType:'SalesItemLineDetail',
+        Description:'Refundable security / damage deposit. This amount is separate from event revenue and is refundable after the event less documented deductions.',
+        SalesItemLineDetail:{ ItemRef:{value:damageSettings.itemId}, Qty:1, UnitPrice:state.amount },
+      }],
+    });
+    const invoice=created?.Invoice;
+    if(!invoice?.Id) throw new Error('QuickBooks damage-deposit invoice could not be created.');
+    state.invoiceId=String(invoice.Id);
+    state.invoiceDocNumber=String(invoice.DocNumber||'');
+    state.invoiceBalance=Math.max(0,Number(invoice.Balance ?? invoice.TotalAmt ?? state.amount));
+    state.status=state.invoiceBalance<=0?'paid':'invoiced';
+    state.lastSyncedAt=new Date().toISOString();
+    records=await saveQuickBooksSalesRecord(context,record,records);
+    await appendEvent(context,{type:'damage_deposit_invoice_created',recordId:record.id,quoteId:record.quoteId||'',amount:state.amount,detail:'QuickBooks refundable damage-deposit invoice '+(state.invoiceDocNumber||state.invoiceId)+' created.'});
+    return Response.json({ok:true,record,damageDeposit:state});
+  }
+
+  if (action === 'sync-damage-deposit') {
+    const damageSettings = await getQuickBooksDamageDepositSettings(context);
+    const state = await syncDamageDepositInvoice(context, record, damageSettings);
+    records = await saveQuickBooksSalesRecord(context, record, records);
+    return Response.json({ok:true,record,damageDeposit:state},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if (action === 'refund-damage-deposit') {
+    const damageSettings = await getQuickBooksDamageDepositSettings(context);
+    const state = await syncDamageDepositInvoice(context, record, damageSettings);
+    if (!state.invoiceId || state.invoiceBalance > 0) return Response.json({error:'The refundable damage deposit must be paid in QuickBooks before it can be refunded.'},{status:409});
+    if (state.refundTransactionId) return Response.json({ok:true,record,damageDeposit:state,reused:true});
+    if (!damageSettings.liabilityAccountId || !damageSettings.refundBankAccountId) {
+      return Response.json({error:'Configure the damage-deposit liability account and refund bank account first.'},{status:409});
+    }
+    state.deductionAmount=Math.min(state.amount,Math.max(0,Math.round(Number(payload?.deductionAmount ?? state.deductionAmount || 0)*100)/100));
+    state.deductionReason=clean(payload?.deductionReason ?? state.deductionReason,1000);
+    state.refundAmount=Math.max(0,Math.round((state.amount-state.deductionAmount)*100)/100);
+
+    if (state.deductionAmount > 0 && !state.deductionJournalEntryId) {
+      if (!damageSettings.deductionIncomeAccountId) return Response.json({error:'Choose a QuickBooks income account for retained damage-deposit deductions.'},{status:409});
+      const journalCreated:any=await qboCreate(context,'journalentry',{
+        TxnDate:today(),
+        PrivateNote:'Koa CRM '+record.id+' · damage-deposit deduction · '+state.deductionReason,
+        Line:[
+          { Amount:state.deductionAmount, DetailType:'JournalEntryLineDetail', Description:'Release refundable deposit liability for documented deduction', JournalEntryLineDetail:{PostingType:'Debit',AccountRef:{value:damageSettings.liabilityAccountId}} },
+          { Amount:state.deductionAmount, DetailType:'JournalEntryLineDetail', Description:state.deductionReason||'Damage deposit deduction', JournalEntryLineDetail:{PostingType:'Credit',AccountRef:{value:damageSettings.deductionIncomeAccountId}} },
+        ],
+      });
+      state.deductionJournalEntryId=String(journalCreated?.JournalEntry?.Id||'');
+    }
+
+    if (state.refundAmount > 0) {
+      const customer=await ensureCustomer(context,record);
+      const purchaseCreated:any=await qboCreate(context,'purchase',{
+        PaymentType:'Check',
+        AccountRef:{value:damageSettings.refundBankAccountId},
+        TxnDate:today(),
+        EntityRef:{type:'Customer',value:String(customer.Id)},
+        PrivateNote:'Koa CRM '+record.id+' · refundable damage-deposit return',
+        Line:[{
+          Amount:state.refundAmount,
+          DetailType:'AccountBasedExpenseLineDetail',
+          Description:'Refundable security / damage deposit returned to client'+(state.deductionAmount>0?' after documented deductions':''),
+          AccountBasedExpenseLineDetail:{AccountRef:{value:damageSettings.liabilityAccountId},CustomerRef:{value:String(customer.Id)},BillableStatus:'NotBillable'},
+        }],
+      });
+      state.refundTransactionId=String(purchaseCreated?.Purchase?.Id||'');
+      if(!state.refundTransactionId) throw new Error('QuickBooks refund transaction could not be created.');
+    } else {
+      state.refundTransactionId='DEDUCTION-FULL';
+    }
+    state.refundedAt=new Date().toISOString();
+    state.status=state.deductionAmount>0?'refunded_with_deduction':'refunded';
+    state.lastSyncedAt=state.refundedAt;
+    records=await saveQuickBooksSalesRecord(context,record,records);
+    await appendEvent(context,{type:'damage_deposit_refunded',recordId:record.id,quoteId:record.quoteId||'',amount:state.refundAmount,detail:'Refunded '+state.refundAmount.toFixed(2)+' from the refundable damage deposit'+(state.deductionAmount>0?' with '+state.deductionAmount.toFixed(2)+' retained for documented deductions.':'.')});
+    return Response.json({ok:true,record,damageDeposit:state},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (action === 'sync-estimate') {
