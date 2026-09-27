@@ -1288,7 +1288,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       let cause=defaults[0];
       let fix=defaults[1];
 
-      if(deploymentState==='synced'&&row?.deploymentDetails?.fallbackUsed){
+      if(row?.id==='email-send-access'){
+        cause=status===0
+          ? 'The production Resend sending credential is missing or could not be verified.'
+          : 'The production Resend sending credential did not pass its non-destructive permission verification.';
+        fix='Verify RESEND_API_KEY is present in Netlify production and has Resend sending permission. Do not replace it with the broader monitoring credential.';
+      }else if(row?.id==='email-monitoring-access'){
+        cause=status===401||status===403
+          ? 'The dedicated Resend monitoring credential does not have permission to read delivery history.'
+          : status===0
+            ? 'The dedicated Resend monitoring credential is missing or the monitoring request could not reach Resend.'
+            : 'The dedicated Resend monitoring credential could not read delivery history.';
+        fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
+      }else if(deploymentState==='synced'&&row?.deploymentDetails?.fallbackUsed){
         cause='Direct GitHub main metadata was not available to the production function, so the monitor verified the current release from Netlify commit_ref instead.';
         fix='No manual action is required. System Health automatically retries direct GitHub metadata on later checks and returns to full green as soon as GitHub + Netlify verification succeeds.';
       }else if(deploymentState==='deploying'){
@@ -4123,19 +4135,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }else if(currentDeploy.behindMain===true){
         const behind=Number(currentDeploy.commitsBehind||0);
         const lag='Behind main'+(behind?' by '+behind+' commit'+(behind===1?'':'s'):'');
-        if(row?.id==='email-send-access'){
-        cause=status===0
-          ? 'The production Resend sending credential is missing or could not be verified.'
-          : 'The production Resend sending credential did not pass its non-destructive permission verification.';
-        fix='Verify RESEND_API_KEY is present in Netlify production and has Resend sending permission. Do not replace it with the broader monitoring credential.';
-      }else if(row?.id==='email-monitoring-access'){
-        cause=status===401||status===403
-          ? 'The dedicated Resend monitoring credential does not have permission to read delivery history.'
-          : status===0
-            ? 'The dedicated Resend monitoring credential is missing or the monitoring request could not reach Resend.'
-            : 'The dedicated Resend monitoring credential could not read delivery history.';
-        fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
-      }else if(deploymentState==='deploying'){
+        if(deploymentState==='deploying'){
           syncEl.textContent=lag+' · build in progress';
         }else if(deploymentState==='waiting'){
           syncEl.textContent=lag+' · waiting for Git trigger';
