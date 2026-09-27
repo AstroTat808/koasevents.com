@@ -5,8 +5,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   <main class="min-h-screen bg-[var(--koa-sand)] py-16">
     <div class="container-shell max-w-5xl">
       <div class="rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
-        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
-        <h1 class="display mt-4 text-5xl">Content Admin</h1>
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+            <h1 class="display mt-4 text-5xl">Content Admin</h1>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span data-admin-role-badge class="hidden rounded-full border border-[var(--koa-line)] bg-[var(--koa-sand)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></span>
+            <button data-admin-layout-edit type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Customize layout</button>
+          </div>
+        </div>
         <div data-auth-panel class="mt-8">
           <div data-session-expired-message class="mb-5 hidden rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
             <p class="text-xs font-black uppercase tracking-[.1em] text-amber-800">Session expired</p>
@@ -76,65 +84,82 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Open System Health for details.</span>
             </a>
 
-            <section data-admin-section class="grid gap-3">
+            <section data-admin-layout-editor class="hidden rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
+              <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Personal layout</p>
+                  <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Customize Admin Home</h2>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/55">Move sections and modules into the order that works best for you. This preference follows your account and does not change anyone else’s dashboard.</p>
+                </div>
+                <span data-admin-layout-message class="text-xs font-semibold text-[var(--koa-ink)]/50"></span>
+              </div>
+              <div data-admin-layout-editor-sections class="mt-5 grid gap-4"></div>
+              <div class="mt-5 flex flex-wrap gap-2">
+                <button data-admin-layout-save type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Save layout</button>
+                <button data-admin-layout-reset type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Reset to default</button>
+                <button data-admin-layout-cancel type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Cancel</button>
+              </div>
+            </section>
+
+            <section data-admin-section data-section-id="sales" class="grid gap-3">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Sales</p>
                 <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Client relationships, inquiries, proposals, email, and pricing.</p>
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <a data-admin-module data-capability="crm.view" href="/admin/crm/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/70">Unified client workspace for contacts, projects, tasks, appointments, workflows, templates, client links, payments and activity history.</span></a>
-                <a data-admin-module data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/70">Manage inquiries, proposals, QuickBooks estimates and invoices, contracts, bookings and conversion analytics.</span></a>
-                <a data-admin-module data-capability="email.view" href="/admin/email/" class="rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-forest)]"><span class="display text-3xl">Email</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Control email recipients and routing, reusable recipient groups, sender identities, test routes, and review delivery activity.</span></a>
-                <a data-admin-module data-capability="sales.profit_settings" href="/admin/profitability/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Wedding Profitability</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Enter package and add-on costs, target margins, recommended sell prices, and actual event economics in one management dashboard.</span></a>
-                <a data-admin-module data-capability="sales.view" href="/admin/quotes/#mobile-bar" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/65">Open the dedicated Mobile Bar pipeline, calculator details, follow-ups, filters and package reporting.</span></a>
+              <div data-admin-module-grid class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-module-id="business-crm" data-capability="crm.view" href="/admin/crm/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/70">Unified client workspace for contacts, projects, tasks, appointments, workflows, templates, client links, payments and activity history.</span></a>
+                <a data-admin-module data-module-id="sales-crm" data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/70">Manage inquiries, proposals, QuickBooks estimates and invoices, contracts, bookings and conversion analytics.</span></a>
+                <a data-admin-module data-module-id="email" data-capability="email.view" href="/admin/email/" class="rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-forest)]"><span class="display text-3xl">Email</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Control email recipients and routing, reusable recipient groups, sender identities, test routes, and review delivery activity.</span></a>
+                <a data-admin-module data-module-id="wedding-profitability" data-capability="sales.profit_settings" href="/admin/profitability/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Wedding Profitability</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Enter package and add-on costs, target margins, recommended sell prices, and actual event economics in one management dashboard.</span></a>
+                <a data-admin-module data-module-id="mobile-bar-crm" data-capability="sales.view" href="/admin/quotes/#mobile-bar" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/65">Open the dedicated Mobile Bar pipeline, calculator details, follow-ups, filters and package reporting.</span></a>
               </div>
             </section>
 
-            <section data-admin-section class="grid gap-3">
+            <section data-admin-section data-section-id="operations" class="grid gap-3">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Operations</p>
                 <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Events, schedules, vendors, and compliance.</p>
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <a data-admin-module data-capability="events.view" href="/admin/events/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/65">Run booked events: vendors, insurance, floor plans, questionnaires, timelines, checklists and event-day tasks.</span></a>
-                <a data-admin-module data-capability="calendar.view" href="/admin/calendar/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/70">See every event, deadline, vendor arrival, staffing assignment and scheduling conflict across all bookings.</span></a>
-                <a data-admin-module data-capability="vendors.view" href="/admin/vendors/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Vendor CRM</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Manage marketplace profiles, Preferred Partners, insurance, verified reviews, internal performance and gallery attribution.</span></a>
-                <a data-admin-module data-capability="insurance.view" href="/admin/insurance/" class="rounded-[1.3rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">See missing, pending, rejected, expiring and expired vendor certificates and every upcoming event affected.</span></a>
+              <div data-admin-module-grid class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-module-id="event-ops" data-capability="events.view" href="/admin/events/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/65">Run booked events: vendors, insurance, floor plans, questionnaires, timelines, checklists and event-day tasks.</span></a>
+                <a data-admin-module data-module-id="calendar" data-capability="calendar.view" href="/admin/calendar/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/70">See every event, deadline, vendor arrival, staffing assignment and scheduling conflict across all bookings.</span></a>
+                <a data-admin-module data-module-id="vendor-crm" data-capability="vendors.view" href="/admin/vendors/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Vendor CRM</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Manage marketplace profiles, Preferred Partners, insurance, verified reviews, internal performance and gallery attribution.</span></a>
+                <a data-admin-module data-module-id="insurance" data-capability="insurance.view" href="/admin/insurance/" class="rounded-[1.3rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">See missing, pending, rejected, expiring and expired vendor certificates and every upcoming event affected.</span></a>
               </div>
             </section>
 
-            <section data-admin-section class="grid gap-3">
+            <section data-admin-section data-section-id="accounting" class="grid gap-3">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Accounting</p>
                 <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Accounting connections and financial workflows.</p>
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <a data-admin-module data-capability="quickbooks.view" href="/admin/quickbooks/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">QuickBooks</span><span class="mt-2 block text-sm text-white/65">Connect QuickBooks Online and map the accounting item used for Koa’s estimates and invoices.</span></a>
+              <div data-admin-module-grid class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-module-id="quickbooks" data-capability="quickbooks.view" href="/admin/quickbooks/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">QuickBooks</span><span class="mt-2 block text-sm text-white/65">Connect QuickBooks Online and map the accounting item used for Koa’s estimates and invoices.</span></a>
               </div>
             </section>
 
-            <section data-admin-section class="grid gap-3">
+            <section data-admin-section data-section-id="content" class="grid gap-3">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Content</p>
                 <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Website content, search visibility, galleries, and email presentation.</p>
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <a data-admin-module data-capability="email.view" href="/admin/email-preview/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Email Preview</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Preview automated and staff-sent emails in desktop/mobile layouts and switch between Koa’s Events and Koa’s Mobile Bar branding.</span></a>
-                <a data-admin-module data-capability="seo.view" href="/admin/seo/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Local SEO</span><span class="mt-2 block text-sm text-white/65">Track Google Business Profile performance, Search Console rankings, citations and GBP publishing history.</span></a>
-                <a data-admin-module data-capability="blog.view" href="/admin/blog/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and delete journal entries.</span></a>
-                <a data-admin-module data-capability="gallery.view" href="/admin/gallery/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Upload, remove and hide gallery photography.</span></a>
+              <div data-admin-module-grid class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-module-id="email-preview" data-capability="email.view" href="/admin/email-preview/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Email Preview</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Preview automated and staff-sent emails in desktop/mobile layouts and switch between Koa’s Events and Koa’s Mobile Bar branding.</span></a>
+                <a data-admin-module data-module-id="seo" data-capability="seo.view" href="/admin/seo/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Local SEO</span><span class="mt-2 block text-sm text-white/65">Track Google Business Profile performance, Search Console rankings, citations and GBP publishing history.</span></a>
+                <a data-admin-module data-module-id="blog" data-capability="blog.view" href="/admin/blog/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and delete journal entries.</span></a>
+                <a data-admin-module data-module-id="gallery" data-capability="gallery.view" href="/admin/gallery/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Upload, remove and hide gallery photography.</span></a>
               </div>
             </section>
 
-            <section data-admin-section class="grid gap-3">
+            <section data-admin-section data-section-id="administration" class="grid gap-3">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Administration</p>
                 <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Users, reliability, and workspace security.</p>
               </div>
-              <div class="grid gap-4 sm:grid-cols-2">
-                <a data-admin-module data-capability="users.manage" href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Create users, assign roles and permissions, deactivate or remove accounts, reset or set passwords, and review security activity.</span></a>
-                <a data-admin-module data-capability="health.view" href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)]"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
-                <a data-admin-module data-capability="security.view" href="/admin/security/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/65">Review blocked attempts, suspicious inquiry flags, rate limits, and legitimate inquiry volume.</span></a>
+              <div data-admin-module-grid class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-module-id="user-management" data-capability="users.manage" href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Create users, assign roles and permissions, deactivate or remove accounts, reset or set passwords, and review security activity.</span></a>
+                <a data-admin-module data-module-id="system-health" data-capability="health.view" href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)]"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
+                <a data-admin-module data-module-id="security" data-capability="security.view" href="/admin/security/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/65">Review blocked attempts, suspicious inquiry flags, rate limits, and legitimate inquiry volume.</span></a>
               </div>
             </section>
 
@@ -172,6 +197,49 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const requestedReturnTo = safeAdminReturnTo(loginQuery.get('returnTo'));
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
+    const roleBadge=document.querySelector('[data-admin-role-badge]');
+    const layoutEditButton=document.querySelector('[data-admin-layout-edit]');
+    const layoutEditor=document.querySelector('[data-admin-layout-editor]');
+    const layoutEditorSections=document.querySelector('[data-admin-layout-editor-sections]');
+    const layoutMessage=document.querySelector('[data-admin-layout-message]');
+
+    const ADMIN_HOME_DEFAULT_LAYOUT={
+      sectionOrder:['sales','operations','accounting','content','administration'],
+      moduleOrder:{
+        sales:['business-crm','sales-crm','email','wedding-profitability','mobile-bar-crm'],
+        operations:['event-ops','calendar','vendor-crm','insurance'],
+        accounting:['quickbooks'],
+        content:['email-preview','seo','blog','gallery'],
+        administration:['user-management','system-health','security'],
+      },
+    };
+    const ADMIN_HOME_SECTION_LABELS={
+      sales:'Sales',
+      operations:'Operations',
+      accounting:'Accounting',
+      content:'Content',
+      administration:'Administration',
+    };
+    const ADMIN_HOME_MODULE_LABELS={
+      'business-crm':'Business CRM',
+      'sales-crm':'Sales CRM',
+      email:'Email',
+      'wedding-profitability':'Wedding Profitability',
+      'mobile-bar-crm':'Mobile Bar CRM',
+      'event-ops':'Event Ops',
+      calendar:'Master Calendar',
+      'vendor-crm':'Vendor CRM',
+      insurance:'Insurance Compliance',
+      quickbooks:'QuickBooks',
+      'email-preview':'Email Preview',
+      seo:'Local SEO',
+      blog:'Blog',
+      gallery:'Gallery',
+      'user-management':'User Management',
+      'system-health':'System Health',
+      security:'Security + Spam',
+    };
+    let savedAdminHomeLayout=structuredClone(ADMIN_HOME_DEFAULT_LAYOUT);
 
     function safeAdminReturnTo(value) {
       const raw = String(value || '').trim();
@@ -244,6 +312,198 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return approvedAdminEmails.has(email) || roles.map((role) => String(role || '').toLowerCase()).includes('admin');
     }
 
+    function roleLabel(role) {
+      const labels={
+        admin:'Administrator',
+        manager:'Manager',
+        sales:'Sales Rep',
+        event_coordinator:'Event Coordinator',
+        vendor_manager:'Vendor Manager',
+        content_editor:'Content Editor',
+        accounting:'Accounting',
+        read_only:'Read Only',
+        custom:'Custom Role',
+      };
+      return labels[role]||String(role||'Staff').replaceAll('_',' ');
+    }
+
+    function normalizeOrder(value,allowed) {
+      const allowedSet=new Set(allowed);
+      const requested=Array.isArray(value)?value.map(String).filter((item)=>allowedSet.has(item)):[];
+      return [...new Set([...requested,...allowed])];
+    }
+
+    function normalizeAdminHomeLayout(value) {
+      const sectionOrder=normalizeOrder(value?.sectionOrder,ADMIN_HOME_DEFAULT_LAYOUT.sectionOrder);
+      const moduleOrder={};
+      for(const sectionId of ADMIN_HOME_DEFAULT_LAYOUT.sectionOrder){
+        moduleOrder[sectionId]=normalizeOrder(
+          value?.moduleOrder?.[sectionId],
+          ADMIN_HOME_DEFAULT_LAYOUT.moduleOrder[sectionId],
+        );
+      }
+      return {sectionOrder,moduleOrder};
+    }
+
+    function applyAdminHomeLayout(value) {
+      if(!(links instanceof HTMLElement))return;
+      const layout=normalizeAdminHomeLayout(value);
+      const signOut=links.querySelector('[data-logout]');
+      for(const sectionId of layout.sectionOrder){
+        const section=links.querySelector('[data-admin-section][data-section-id="'+sectionId+'"]');
+        if(!(section instanceof HTMLElement))continue;
+        if(signOut)links.insertBefore(section,signOut);
+        else links.appendChild(section);
+        const grid=section.querySelector('[data-admin-module-grid]');
+        if(!(grid instanceof HTMLElement))continue;
+        for(const moduleId of layout.moduleOrder[sectionId]||[]){
+          const module=grid.querySelector('[data-admin-module][data-module-id="'+moduleId+'"]');
+          if(module)grid.appendChild(module);
+        }
+      }
+    }
+
+    function readAdminHomeLayout() {
+      const sectionOrder=[];
+      const moduleOrder={};
+      links?.querySelectorAll('[data-admin-section]').forEach((section)=>{
+        if(!(section instanceof HTMLElement))return;
+        const sectionId=String(section.dataset.sectionId||'');
+        if(!sectionId)return;
+        sectionOrder.push(sectionId);
+        moduleOrder[sectionId]=[...section.querySelectorAll('[data-admin-module]')]
+          .map((node)=>node instanceof HTMLElement?String(node.dataset.moduleId||''):'')
+          .filter(Boolean);
+      });
+      return normalizeAdminHomeLayout({sectionOrder,moduleOrder});
+    }
+
+    function visibleSections() {
+      return [...(links?.querySelectorAll('[data-admin-section]')||[])]
+        .filter((node)=>node instanceof HTMLElement&&!node.classList.contains('hidden'));
+    }
+
+    function visibleModules(section) {
+      return [...section.querySelectorAll('[data-admin-module]')]
+        .filter((node)=>node instanceof HTMLElement&&!node.classList.contains('hidden'));
+    }
+
+    function moveNodeAmongVisible(nodes,node,direction) {
+      const index=nodes.indexOf(node);
+      const target=nodes[index+direction];
+      if(index<0||!target)return false;
+      if(direction<0)target.before(node);
+      else target.after(node);
+      return true;
+    }
+
+    function smallMoveButton(label,disabled,onClick) {
+      const button=document.createElement('button');
+      button.type='button';
+      button.textContent=label;
+      button.disabled=disabled;
+      button.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)] disabled:cursor-not-allowed disabled:opacity-35';
+      button.addEventListener('click',onClick);
+      return button;
+    }
+
+    function renderLayoutEditor() {
+      if(!(layoutEditorSections instanceof HTMLElement))return;
+      layoutEditorSections.innerHTML='';
+      const sections=visibleSections();
+      sections.forEach((section,sectionIndex)=>{
+        const sectionId=String(section.dataset.sectionId||'');
+        const card=document.createElement('div');
+        card.className='rounded-xl border border-[var(--koa-line)] bg-white p-4';
+
+        const head=document.createElement('div');
+        head.className='flex flex-wrap items-center justify-between gap-3';
+        const title=document.createElement('strong');
+        title.className='text-sm font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        title.textContent=ADMIN_HOME_SECTION_LABELS[sectionId]||sectionId;
+        const sectionControls=document.createElement('div');
+        sectionControls.className='flex gap-2';
+        sectionControls.append(
+          smallMoveButton('↑ Up',sectionIndex===0,()=>{
+            if(moveNodeAmongVisible(visibleSections(),section,-1))renderLayoutEditor();
+          }),
+          smallMoveButton('↓ Down',sectionIndex===sections.length-1,()=>{
+            if(moveNodeAmongVisible(visibleSections(),section,1))renderLayoutEditor();
+          }),
+        );
+        head.append(title,sectionControls);
+        card.appendChild(head);
+
+        const list=document.createElement('div');
+        list.className='mt-3 grid gap-2';
+        const modules=visibleModules(section);
+        modules.forEach((module,moduleIndex)=>{
+          const moduleId=String(module.dataset.moduleId||'');
+          const row=document.createElement('div');
+          row.className='flex items-center justify-between gap-3 rounded-lg bg-[var(--koa-ivory)] px-3 py-2';
+          const label=document.createElement('span');
+          label.className='text-sm font-semibold text-[var(--koa-forest)]';
+          label.textContent=ADMIN_HOME_MODULE_LABELS[moduleId]||moduleId;
+          const controls=document.createElement('div');
+          controls.className='flex shrink-0 gap-1.5';
+          controls.append(
+            smallMoveButton('↑',moduleIndex===0,()=>{
+              if(moveNodeAmongVisible(visibleModules(section),module,-1))renderLayoutEditor();
+            }),
+            smallMoveButton('↓',moduleIndex===modules.length-1,()=>{
+              if(moveNodeAmongVisible(visibleModules(section),module,1))renderLayoutEditor();
+            }),
+          );
+          row.append(label,controls);
+          list.appendChild(row);
+        });
+        card.appendChild(list);
+        layoutEditorSections.appendChild(card);
+      });
+    }
+
+    async function loadAdminHomePreferences() {
+      try{
+        const response=await fetch('/api/account/profile',{cache:'no-store'});
+        if(!response.ok)throw new Error('Unable to load Admin Home preferences.');
+        const profile=await response.json();
+        savedAdminHomeLayout=normalizeAdminHomeLayout(profile?.adminHomeLayout);
+      }catch{
+        savedAdminHomeLayout=normalizeAdminHomeLayout(ADMIN_HOME_DEFAULT_LAYOUT);
+      }
+      applyAdminHomeLayout(savedAdminHomeLayout);
+    }
+
+    async function saveAdminHomeLayout() {
+      const layout=readAdminHomeLayout();
+      if(layoutMessage)layoutMessage.textContent='Saving…';
+      try{
+        const response=await fetch('/api/account/profile',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'save-admin-home-layout',layout}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to save Admin Home layout.');
+        savedAdminHomeLayout=normalizeAdminHomeLayout(data.adminHomeLayout||layout);
+        applyAdminHomeLayout(savedAdminHomeLayout);
+        if(layoutMessage)layoutMessage.textContent='Saved for this account.';
+        layoutEditor?.classList.add('hidden');
+        layoutEditButton?.setAttribute('aria-expanded','false');
+      }catch(error){
+        if(layoutMessage)layoutMessage.textContent=error instanceof Error?error.message:'Unable to save Admin Home layout.';
+      }
+    }
+
+    function updateAdminIdentity(session,user) {
+      if(!(roleBadge instanceof HTMLElement))return;
+      const rawName=String(session?.displayName||session?.email||user?.email||'Staff').trim();
+      const shortName=(rawName.includes('@')?rawName.split('@')[0]:rawName.split(/\s+/)[0])||'Staff';
+      const role=roleLabel(session?.role||(hasAdminAccess(user)?'admin':'staff'));
+      roleBadge.textContent=shortName+' · '+role;
+      roleBadge.classList.remove('hidden');
+    }
+
     async function updateHealthWarning(canViewHealth) {
       const warning=document.querySelector('[data-health-warning]');
       if(!warning||!canViewHealth){warning?.classList.add('hidden');return;}
@@ -287,11 +547,18 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       if(canViewDashboard){
         filterAdminModules(capabilities,!session&&fallbackAdmin);
+        await loadAdminHomePreferences();
+        updateAdminIdentity(session,user);
+        layoutEditButton?.classList.remove('hidden');
+        layoutEditButton?.setAttribute('aria-expanded','false');
         links?.classList.remove('hidden');
         roleWarning?.classList.add('hidden');
       }else{
         links?.classList.add('hidden');
         roleWarning?.classList.toggle('hidden',!user);
+        roleBadge?.classList.add('hidden');
+        layoutEditButton?.classList.add('hidden');
+        layoutEditor?.classList.add('hidden');
       }
 
       const canViewHealth=canViewDashboard&&((!session&&fallbackAdmin)||capabilities.has('health.view'));
@@ -309,6 +576,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 
       links?.classList.add('hidden');
       roleWarning?.classList.add('hidden');
+      roleBadge?.classList.add('hidden');
+      layoutEditButton?.classList.add('hidden');
+      layoutEditor?.classList.add('hidden');
 
       if(!user){
         updateHealthWarning(false);
@@ -429,6 +699,30 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           submitButton.textContent = 'Create account';
         }
       }
+    });
+
+    layoutEditButton?.addEventListener('click',()=>{
+      if(!(layoutEditor instanceof HTMLElement))return;
+      const opening=layoutEditor.classList.contains('hidden');
+      if(opening){
+        renderLayoutEditor();
+        if(layoutMessage)layoutMessage.textContent='';
+      }
+      layoutEditor.classList.toggle('hidden',!opening);
+      layoutEditButton.setAttribute('aria-expanded',opening?'true':'false');
+    });
+
+    document.querySelector('[data-admin-layout-save]')?.addEventListener('click',()=>{void saveAdminHomeLayout();});
+    document.querySelector('[data-admin-layout-reset]')?.addEventListener('click',()=>{
+      applyAdminHomeLayout(ADMIN_HOME_DEFAULT_LAYOUT);
+      renderLayoutEditor();
+      if(layoutMessage)layoutMessage.textContent='Default order loaded. Press Save layout to keep it.';
+    });
+    document.querySelector('[data-admin-layout-cancel]')?.addEventListener('click',()=>{
+      applyAdminHomeLayout(savedAdminHomeLayout);
+      layoutEditor?.classList.add('hidden');
+      layoutEditButton?.setAttribute('aria-expanded','false');
+      if(layoutMessage)layoutMessage.textContent='';
     });
 
     document.querySelector('[data-toggle-login-password]')?.addEventListener('click',()=>{
