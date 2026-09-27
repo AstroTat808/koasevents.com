@@ -159,7 +159,7 @@ const API_CHECKS = [
 const SYNTHETIC_INTEGRATION_COMPONENTS = [
   {id:'synthetic-event-documents',name:'Event Documents synthetic probe',path:'/api/admin/events/documents/__health__',kind:'api' as const},
   {id:'synthetic-vendor-insurance-document',name:'Vendor Insurance document synthetic probe',path:'/api/admin/vendors/insurance/__health__',kind:'api' as const},
-  {id:'synthetic-quickbooks-webhook',name:'QuickBooks webhook synthetic probe',path:'/api/webhooks/quickbooks',kind:'api' as const},
+  {id:'synthetic-quickbooks-webhook',name:'QuickBooks webhook synthetic probe',path:'/.netlify/functions/quickbooks-webhook',kind:'api' as const},
   {id:'synthetic-signwell-webhook',name:'SignWell webhook synthetic probe',path:'/api/webhooks/signwell',kind:'api' as const},
 ] as const;
 
@@ -440,7 +440,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
   const quickBooksToken=clean(quickBooksWebhookVerifierToken(),1000);
   const quickBooksBody=JSON.stringify({koaHealthCheck:true,eventNotifications:[]});
   const quickBooksPromise=quickBooksToken
-    ? timedFetch(origin+'/api/webhooks/quickbooks',{
+    ? timedFetch(origin+'/.netlify/functions/quickbooks-webhook',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
@@ -471,7 +471,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
   return [
     syntheticResult('synthetic-event-documents','Event Documents synthetic probe','/api/admin/events/documents/:recordId',eventDocuments,'event-documents'),
     syntheticResult('synthetic-vendor-insurance-document','Vendor Insurance document synthetic probe','/api/admin/vendors/insurance/:vendorId',vendorInsurance,'vendor-insurance-document'),
-    syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/api/webhooks/quickbooks',quickBooks,'quickbooks-webhook'),
+    syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/.netlify/functions/quickbooks-webhook',quickBooks,'quickbooks-webhook'),
     syntheticResult('synthetic-signwell-webhook','SignWell webhook synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook'),
   ];
 }
