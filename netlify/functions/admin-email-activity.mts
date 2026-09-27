@@ -1,0 +1,139 @@
+import type { Config, Context } from '@netlify/functions';
+import { requireCapability } from './_shared/admin';
+import { readEmailHealthEvents } from './_shared/email-health';
+
+function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
+function normalizeStatus(value:unknown){return clean(value,80).toLowerCase().replace(/^email\./,'').replace(/-/g,'_');}
+function addresses(value:unknown){
+  if(Array.isArray(value))return value.map((row)=>clean(row,240)).filter(Boolean).slice(0,50);
+  return String(value??'').split(/[\n,;]+/).map((row)=>clean(row,240)).filter(Boolean).slice(0,50);
+}
+function classify(subject:unknown){
+  const value=clean(subject,500).toLowerCase();
+  if(/security alert/.test(value))return 'Security alert';
+  if(/follow-up due/.test(value))return 'Lead response reminder';
+  if(/received your .*inquiry|received your koa/.test(value))return 'Client inquiry confirmation';
+  if(/quick follow-up/.test(value))return 'Client follow-up';
+  if(/would you share your experience|google review/.test(value))return 'Review request';
+  if(/vendor.*brief|vendor event brief/.test(value))return 'Vendor event brief';
+  if(/insurance|compliance/.test(value))return 'Vendor insurance reminder';
+  if(/new .*inquiry|new discovery call request|new private event inquiry|new mobile bar inquiry/.test(value))return 'New lead notification';
+  if(/test/.test(value))return 'Admin test';
+  return 'Other';
+}
+function routeFor(type:string){
+  if(type==='New lead notification')return 'lead-notification';
+  if(type==='Lead response reminder')return 'lead-response-reminder';
+  if(type==='Client inquiry confirmation')return 'client-confirmation';
+  if(type==='Client follow-up')return 'client-follow-up';
+  if(type==='Review request')return 'review-request';
+  if(type==='Vendor event brief')return 'vendor-event-brief';
+  if(type==='Vendor insurance reminder')return 'vendor-insurance-reminder';
+  if(type==='Admin test')return 'email-preview';
+  if(type==='Security alert')return 'security-alert';
+  return 'other';
+}
+function problem(status:string){return ['failed','bounced','complained','suppressed'].includes(status);}
+function recommendation(status:string,bounceType:string,bounceSubType:string,message:string){
+  const hay=(bounceType+' '+bounceSubType+' '+message).toLowerCase();
+  if(status==='complained')return 'Do not resend automatically. Confirm the recipient expected this message and review consent or list source before contacting them again.';
+  if(status==='suppressed'||/suppression/.test(hay))return 'The address is suppressed. Verify the address and the reason for suppression before attempting another send.';
+  if(status==='bounced'&&(/permanent|hard/.test(hay)))return 'Treat this as a hard bounce. Verify or replace the recipient address before resending.';
+  if(status==='bounced'&&(/transient|soft|mailbox full|temporary/.test(hay)))return 'This appears temporary. Verify the address, then retry later if the mailbox or receiving server recovers.';
+  if(status==='failed')return 'Review the failure reason and sender/recipient configuration. Correct the underlying issue before retrying.';
+  return 'Review the delivery details and recipient address before taking action.';
+}
+async function resend(path:string){
+  const key=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  if(!key)return {ok:false,status:0,body:{message:'RESEND_MONITORING_API_KEY is not configured.'}};
+  try{
+    const response=await fetch('https://api.resend.com'+path,{
+      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','User-Agent':'KoaEvents-EmailActivity/1.0'},
+      signal:AbortSignal.timeout(10000),
+    });
+    const body:any=await response.json().catch(()=>({}));
+    return {ok:response.ok,status:response.status,body};
+  }catch(error){
+    return {ok:false,status:0,body:{message:error instanceof Error?error.message:'Resend request failed.'}};
+  }
+}
+
+export default async (req:Request,context:Context)=>{
+  const auth=await requireCapability('email.view',req);
+  if(auth.response)return auth.response;
+  const url=new URL(req.url);
+  const detailId=clean(url.searchParams.get('id'),180);
+  if(detailId){
+    const [emailResult,events]=await Promise.all([
+      resend('/emails/'+encodeURIComponent(detailId)),
+      readEmailHealthEvents(context,5000),
+    ]);
+    if(!emailResult.ok)return Response.json({error:clean(emailResult.body?.message||'Unable to load email detail.',500)},{status:emailResult.status||400});
+    const email:any=emailResult.body||{};
+    const related=(Array.isArray(events)?events:[]).filter((row:any)=>String(row?.emailId||'')===detailId);
+    const diagnostic=related.find((row:any)=>row?.bounceMessage||row?.failureReason||row?.bounceType)||related[0]||{};
+    const status=normalizeStatus(email?.last_event||email?.status||diagnostic?.status);
+    const emailType=classify(email?.subject||diagnostic?.subject);
+    const bounceType=clean(diagnostic?.bounceType,120);
+    const bounceSubType=clean(diagnostic?.bounceSubType,160);
+    const reason=clean(diagnostic?.bounceMessage||diagnostic?.failureReason,1000);
+    return Response.json({
+      ok:true,
+      email:{
+        id:detailId,
+        resendMessageId:clean(email?.message_id,300)||clean(diagnostic?.messageId,300)||detailId,
+        recipient:addresses(email?.to?.length?email.to:diagnostic?.to).join(', '),
+        recipients:addresses(email?.to?.length?email.to:diagnostic?.to),
+        from:clean(email?.from||diagnostic?.from,300),
+        subject:clean(email?.subject||diagnostic?.subject,500),
+        createdAt:clean(email?.created_at||diagnostic?.createdAt,100),
+        status,
+        emailType,
+        route:routeFor(emailType),
+        bounceType,
+        bounceSubType,
+        reason,
+        recommendation:recommendation(status,bounceType,bounceSubType,reason),
+        archivedEvents:related.map((row:any)=>({type:row.type,status:row.status,createdAt:row.createdAt,recordedAt:row.recordedAt})).slice(0,20),
+      },
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  const limit=Math.max(1,Math.min(100,Number(url.searchParams.get('limit')||100)||100));
+  const after=clean(url.searchParams.get('after'),180);
+  const before=clean(url.searchParams.get('before'),180);
+  const params=new URLSearchParams({limit:String(limit)});
+  if(after)params.set('after',after);
+  else if(before)params.set('before',before);
+  const result=await resend('/emails?'+params.toString());
+  if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to load email history.',500)},{status:result.status||400});
+  const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
+  const rows=raw.map((row:any)=>{
+    const status=normalizeStatus(row?.last_event||row?.status||row?.event)||'unknown';
+    const emailType=classify(row?.subject);
+    return {
+      emailId:clean(row?.id,180),
+      resendMessageId:clean(row?.message_id,300)||clean(row?.id,180),
+      recipient:addresses(row?.to).join(', '),
+      recipients:addresses(row?.to),
+      subject:clean(row?.subject,500)||'(subject unavailable)',
+      emailType,
+      route:routeFor(emailType),
+      status,
+      sent:!problem(status),
+      createdAt:clean(row?.created_at,100),
+      from:clean(row?.from,300),
+      problem:problem(status),
+    };
+  });
+  return Response.json({
+    ok:true,
+    rows,
+    hasMore:Boolean(result.body?.has_more),
+    nextAfter:rows.length?rows[rows.length-1].emailId:'',
+    previousBefore:rows.length?rows[0].emailId:'',
+    retentionNote:'History is limited to email records retained by the connected Resend account. Koa’s signed webhook archive preserves lifecycle diagnostics going forward.',
+  },{headers:{'Cache-Control':'private, no-store'}});
+};
+
+export const config:Config={path:'/api/admin/email-activity'};
