@@ -6,6 +6,8 @@ import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
 import { recordCrmStartupSignal } from './_shared/system-health';
+import { ensureBooking } from './_shared/booking';
+import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -135,7 +137,26 @@ export default async (req:Request, context:Context) => {
   const sales = salesStoreFor(context);
 
   if (req.method === 'GET') {
+    const requestUrl=new URL(req.url);
+    const signWellPdfRecordId=clean(requestUrl.searchParams.get('signwellPdf'),100);
     const salesRecords = await readIndex<any>(sales,'records/index');
+
+    if(signWellPdfRecordId){
+      const record=salesRecords.find((entry:any)=>entry?.id===signWellPdfRecordId);
+      if(!record)return Response.json({error:'CRM record not found.'},{status:404});
+      const key=clean(record?.booking?.contract?.signwell?.signedPdfKey,500);
+      if(!key)return Response.json({error:'A stored signed SignWell PDF is not available for this project yet.'},{status:404});
+      const pdf=await eventStoreFor(context).get(key,{type:'arrayBuffer'});
+      if(!pdf)return Response.json({error:'The signed SignWell PDF reference exists, but the stored file could not be found.'},{status:404});
+      const safeName=('Koa-Signed-Agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
+      return new Response(pdf,{
+        headers:{
+          'Content-Type':'application/pdf',
+          'Content-Disposition':'inline; filename="'+safeName+'"',
+          'Cache-Control':'private, no-store',
+        },
+      });
+    }
     const [tasks, appointments, notes, workflows, enrollments, templates, metas, activity, messages, trash, cleanupAudit] = await Promise.all([
       readIndex<Task>(crm,'tasks/index'),
       readIndex<Appointment>(crm,'appointments/index'),
@@ -428,6 +449,19 @@ export default async (req:Request, context:Context) => {
         mode: normalizeCleanupMode(cleanupSettings.mode),
         updatedAt: cleanupSettings.updatedAt || '',
         updatedBy: cleanupSettings.updatedBy || '',
+      },
+      integrations:{
+        signwell:(()=>{
+          const cfg=signWellConfiguration();
+          return {
+            configured:signWellConfigured(),
+            apiKeyConfigured:cfg.apiKeyConfigured,
+            webhookConfigured:cfg.webhookIdConfigured,
+            testMode:cfg.testMode,
+            signerEmail:cfg.koaSignerEmail,
+            signerName:cfg.koaSignerName,
+          };
+        })(),
       }
     },{
       headers:{'Cache-Control':'private, no-store'}
@@ -448,6 +482,8 @@ export default async (req:Request, context:Context) => {
     'permanent-delete-client-chain':'crm.destructive',
     'save-workflow':'crm.workflows',
     'save-template':'crm.templates',
+    'create-signwell-agreement':'crm.manage',
+    'retrieve-signwell-pdf':'crm.manage',
     'report-startup-health':'crm.view',
   };
   const requiredCapability=capabilityByAction[action] || 'crm.manage';
@@ -464,6 +500,100 @@ export default async (req:Request, context:Context) => {
       commit:clean(body.commit,120),
     });
     return Response.json({ok:true,signal},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='create-signwell-agreement'){
+    const recordId=clean(body.recordId,100);
+    if(!recordId)return Response.json({error:'recordId required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((entry:any)=>entry?.id===recordId);
+    if(!record)return Response.json({error:'CRM record not found.'},{status:404});
+    if(record?.kind!=='proposal'||!['accepted','booked'].includes(String(record?.proposal?.status||''))){
+      return Response.json({error:'The proposal must be accepted before a SignWell agreement can be created.'},{status:409});
+    }
+    if(!clean(record?.customer?.email,240)){
+      return Response.json({error:'The client email address is required before creating the SignWell agreement.'},{status:409});
+    }
+    if(!signWellConfigured()){
+      return Response.json({error:'SignWell is not fully configured. Verify SIGNWELL_API_KEY and SIGNWELL_WEBHOOK_ID in production.'},{status:503});
+    }
+
+    const booking=ensureBooking(record);
+    if(!booking)return Response.json({error:'Unable to create the booking agreement for this proposal.'},{status:409});
+    booking.contract.signwell ||= {status:'not_sent',documentId:'',clientSigningUrl:'',sentAt:'',completedAt:'',signedPdfStored:false};
+
+    if(booking.contract.status==='signed'){
+      return Response.json({ok:true,alreadySigned:true,signwell:booking.contract.signwell,booking},{headers:{'Cache-Control':'private, no-store'}});
+    }
+    if(booking.contract.signwell.documentId){
+      return Response.json({ok:true,alreadyExists:true,signwell:booking.contract.signwell,booking},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
+    try{
+      const created:any=await createSignWellContract(record,new URL(req.url).origin);
+      if(!created?.documentId)throw new Error('SignWell did not return a document ID.');
+      booking.contract.signwell={
+        status:created.status||'sent',
+        documentId:clean(created.documentId,180),
+        clientSigningUrl:clean(created.embeddedSigningUrl,1200),
+        sentAt:new Date().toISOString(),
+        completedAt:'',
+        signedPdfStored:false,
+        signedPdfKey:'',
+        lastWebhookEvent:'',
+        lastWebhookAt:'',
+        lastError:'',
+      };
+      booking.updatedAt=new Date().toISOString();
+      record.updatedAt=booking.updatedAt;
+      await sales.setJSON('records/'+record.id,record);
+      await sales.setJSON('records/index',records.map((entry:any)=>entry.id===record.id?record:entry).slice(0,1500));
+      await appendActivity(crm,record.id,'signwell_contract_sent','SignWell agreement created from the Business CRM by '+actor+'.');
+      return Response.json({ok:true,signwell:booking.contract.signwell,booking},{headers:{'Cache-Control':'private, no-store'}});
+    }catch(error){
+      booking.contract.signwell.status='send_failed';
+      booking.contract.signwell.lastError=error instanceof Error?clean(error.message,800):'SignWell request failed.';
+      booking.updatedAt=new Date().toISOString();
+      record.updatedAt=booking.updatedAt;
+      await sales.setJSON('records/'+record.id,record);
+      await sales.setJSON('records/index',records.map((entry:any)=>entry.id===record.id?record:entry).slice(0,1500));
+      await appendActivity(crm,record.id,'signwell_contract_failed','SignWell agreement creation failed: '+booking.contract.signwell.lastError);
+      return Response.json({error:booking.contract.signwell.lastError,signwell:booking.contract.signwell},{status:502,headers:{'Cache-Control':'private, no-store'}});
+    }
+  }
+
+  if(action==='retrieve-signwell-pdf'){
+    const recordId=clean(body.recordId,100);
+    if(!recordId)return Response.json({error:'recordId required'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    const record=records.find((entry:any)=>entry?.id===recordId);
+    if(!record)return Response.json({error:'CRM record not found.'},{status:404});
+    const sw=record?.booking?.contract?.signwell||{};
+    const documentId=clean(sw?.documentId,180);
+    if(!documentId)return Response.json({error:'No SignWell document is linked to this project.'},{status:409});
+    if(!signWellConfigured())return Response.json({error:'SignWell is not fully configured.'},{status:503});
+
+    try{
+      const pdf=await getCompletedPdf(documentId);
+      const key='signed-contracts/'+record.id+'/agreement.pdf';
+      await eventStoreFor(context).set(key,pdf);
+      sw.signedPdfStored=true;
+      sw.signedPdfKey=key;
+      sw.signedPdfStoredAt=new Date().toISOString();
+      sw.pdfError='';
+      record.updatedAt=new Date().toISOString();
+      await sales.setJSON('records/'+record.id,record);
+      await sales.setJSON('records/index',records.map((entry:any)=>entry.id===record.id?record:entry).slice(0,1500));
+      await appendActivity(crm,record.id,'signwell_pdf_stored','Completed SignWell PDF retrieved and stored in the CRM by '+actor+'.');
+      return Response.json({ok:true,signedPdfStored:true,signedPdfKey:key},{headers:{'Cache-Control':'private, no-store'}});
+    }catch(error){
+      sw.signedPdfStored=false;
+      sw.pdfError=error instanceof Error?clean(error.message,800):'Unable to retrieve the completed SignWell PDF.';
+      record.updatedAt=new Date().toISOString();
+      await sales.setJSON('records/'+record.id,record);
+      await sales.setJSON('records/index',records.map((entry:any)=>entry.id===record.id?record:entry).slice(0,1500));
+      return Response.json({error:sw.pdfError},{status:502,headers:{'Cache-Control':'private, no-store'}});
+    }
   }
 
   if (action === 'bulk-approve-cleanup-review') {
