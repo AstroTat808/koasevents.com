@@ -127,6 +127,14 @@ export default async (req: Request, context: Context) => {
     emailId,
     type: payload?.type,
     createdAt: payload?.created_at || payload?.createdAt,
+    from: payload?.data?.from,
+    to: Array.isArray(payload?.data?.to) ? payload.data.to : [],
+    subject: payload?.data?.subject,
+    messageId: payload?.data?.message_id,
+    bounceType: payload?.data?.bounce?.type,
+    bounceSubType: payload?.data?.bounce?.subType || payload?.data?.bounce?.sub_type,
+    bounceMessage: payload?.data?.bounce?.message,
+    failureReason: payload?.data?.failed?.message || payload?.data?.failure?.message || payload?.data?.reason || payload?.data?.message,
   }).catch(() => null);
 
   // The payload is authoritative only after Svix signature verification above.

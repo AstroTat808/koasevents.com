@@ -8,6 +8,14 @@ export type EmailHealthEvent = {
   status: string;
   createdAt: string;
   recordedAt: string;
+  from?: string;
+  to?: string[];
+  subject?: string;
+  messageId?: string;
+  bounceType?: string;
+  bounceSubType?: string;
+  bounceMessage?: string;
+  failureReason?: string;
 };
 
 type EmailHealthSummaryOptions = {
@@ -270,6 +278,14 @@ export async function recordEmailHealthEvent(context: Context, input: {
   emailId?: string;
   type?: string;
   createdAt?: string;
+  from?: string;
+  to?: string[];
+  subject?: string;
+  messageId?: string;
+  bounceType?: string;
+  bounceSubType?: string;
+  bounceMessage?: string;
+  failureReason?: string;
 }) {
   const emailId = clean(input?.emailId, 180);
   const type = canonicalStatus(input?.type);
@@ -281,6 +297,14 @@ export async function recordEmailHealthEvent(context: Context, input: {
     status: type,
     createdAt: clean(input?.createdAt, 100) || new Date().toISOString(),
     recordedAt: new Date().toISOString(),
+    from: clean(input?.from, 300),
+    to: Array.isArray(input?.to) ? input.to.map((value)=>clean(value,240)).filter(Boolean).slice(0,50) : [],
+    subject: clean(input?.subject, 500),
+    messageId: clean(input?.messageId, 300),
+    bounceType: clean(input?.bounceType, 120),
+    bounceSubType: clean(input?.bounceSubType, 160),
+    bounceMessage: clean(input?.bounceMessage, 1000),
+    failureReason: clean(input?.failureReason, 1000),
   };
   const store = storeFor(context);
   const rows = ((await store.get('email/events', { type: 'json' })) || []) as EmailHealthEvent[];

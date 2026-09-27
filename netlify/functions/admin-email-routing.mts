@@ -1,7 +1,6 @@
 import type { Config } from '@netlify/functions';
 import { requireCapability } from './_shared/admin';
 import { emailRoutingSummary, saveEmailRouting } from './_shared/email-routing';
-import { emailActivityLog } from './_shared/email-health';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function esc(value:unknown){
@@ -88,20 +87,14 @@ export default async (req:Request) => {
   if (req.method === 'GET') {
     const auth=await requireCapability('email.view',req);
     if(auth.response)return auth.response;
-    const [routing,activity]=await Promise.all([
-      emailRoutingSummary(),
-      emailActivityLog(100),
-    ]);
-    return Response.json({...routing,activity},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json(await emailRoutingSummary(),{headers:{'Cache-Control':'private, no-store'}});
   }
   if (req.method === 'PUT') {
     const auth=await requireCapability('email.manage',req);
     if(auth.response)return auth.response;
     try{
       const body=await req.json().catch(()=>({}));
-      const routing=await saveEmailRouting(body,auth.user?.email||'staff');
-      const activity=await emailActivityLog(100);
-      return Response.json({...routing,activity},{headers:{'Cache-Control':'private, no-store'}});
+      return Response.json(await saveEmailRouting(body,auth.user?.email||'staff'),{headers:{'Cache-Control':'private, no-store'}});
     }catch(error){
       return Response.json({error:error instanceof Error?error.message:'Unable to save email routing.'},{status:400});
     }
