@@ -939,14 +939,16 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   (state.selected || []).forEach((item) => {
     const id = cleanText(item.id, 80);
     const quantity = Math.max(1, Math.round(finite(item.quantity, 1, 500)));
-    const approvedPrice = finite(publishedPrices.get(id));
+    const catalogPrice = finite(catalogPrices.get(id));
+    const legacyPublishedPrice = finite(publishedPrices.get(id));
+    const currentPrice = catalogPrice > 0 ? catalogPrice : legacyPublishedPrice;
     const savedAmount = finite(item.estimatedLineTotal);
-    const amount = approvedPrice > 0 ? roundMoney(approvedPrice * quantity) : savedAmount;
+    const amount = currentPrice > 0 ? roundMoney(currentPrice * quantity) : savedAmount;
     lines.push({
       id,
       description: cleanText(item.name, 180),
       quantity,
-      unitPrice: approvedPrice > 0 ? approvedPrice : amount > 0 ? amount / quantity : 0,
+      unitPrice: currentPrice > 0 ? currentPrice : amount > 0 ? amount / quantity : 0,
       amount,
       custom: amount <= 0,
       catalogItemId: id || undefined,
@@ -958,9 +960,11 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     inquiryLines.slice(0, 50).forEach((item: any, index: number) => {
       const quantity = Math.max(1, Math.round(finite(item?.quantity, 1, 2000)));
       const sourceId = cleanText(item?.catalogItemId || item?.id, 80);
-      const approvedPrice = finite(publishedPrices.get(sourceId));
-      const unitPrice = approvedPrice > 0 ? approvedPrice : finite(item?.unitPrice);
-      const amount = approvedPrice > 0 ? roundMoney(quantity * approvedPrice) : finite(item?.amount || quantity * unitPrice);
+      const catalogPrice = finite(catalogPrices.get(sourceId));
+      const legacyPublishedPrice = finite(publishedPrices.get(sourceId));
+      const currentPrice = catalogPrice > 0 ? catalogPrice : legacyPublishedPrice;
+      const unitPrice = currentPrice > 0 ? currentPrice : finite(item?.unitPrice);
+      const amount = currentPrice > 0 ? roundMoney(quantity * currentPrice) : finite(item?.amount || quantity * unitPrice);
       const description = cleanText(item?.description, 240);
       if (!description) return;
       lines.push({
