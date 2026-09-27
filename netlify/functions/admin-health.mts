@@ -22,7 +22,7 @@ import {
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
 import { clearCreditSaverPolicy, creditSaverPreset, readCreditSaverPolicy, setCreditSaverAction, setCreditSaverMode, setCreditSaverModes } from './_shared/credit-saver';
-import { emailHealthSummary } from './_shared/email-health';
+import { emailHealthSummary, testResendWebhookDelivery } from './_shared/email-health';
 import {
   credentialHealthSummary,
   readCredentialHealthSummary,
@@ -308,6 +308,25 @@ export default async (req:Request,context:Context) => {
     if(body?.action==='save-policy'){
       const policy=await saveHealthAlertPolicy(context,body.policy||{},actor);
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
+    if(body?.action==='test-resend-webhook'){
+      try{
+        const webhookTest=await testResendWebhookDelivery();
+        const emailHealth=await emailHealthSummary(context,{force:true});
+        return Response.json({
+          ok:Boolean(webhookTest?.ok),
+          webhookTest,
+          emailHealth,
+        },{
+          status:webhookTest?.completed&&webhookTest?.ok===false?502:200,
+          headers:{'Cache-Control':'private, no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'Unable to test Resend webhook delivery.',
+        },{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
     }
 
     if(body?.action==='save-office365-thresholds'){
