@@ -3589,6 +3589,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         historyEl.appendChild(card);
       });
 
+      markDashboardRenderPanel('Email Health');
       renderEmailHealth(data.emailHealth||{},data.current||null);
       markDashboardRenderPanel('Credential Health');
       renderCredentialHealth(data.credentialHealth||{});
@@ -3993,8 +3994,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         },0);
         const parts=[];
         if(pausedCount)parts.push(pausedCount+' job'+(pausedCount===1?'':'s')+' paused');
-        if(saverCount)parts.push(saverCount+' in Saver');
-        if(normalCount)parts.push(normalCount+' Normal');
+        if(saverCount)parts.push(saverCount+' job'+(saverCount===1?'':'s')+' in Saver');
+        if(normalCount)parts.push(normalCount+' job'+(normalCount===1?'':'s')+' Normal');
         const rounded=Math.round(estimatedSavedPerDay*100)/100;
         parts.push('estimated '+rounded.toLocaleString(undefined,{maximumFractionDigits:2})+' credits/day saved');
         if(activeProfile.expiresAt&&!activeProfile.expired){
