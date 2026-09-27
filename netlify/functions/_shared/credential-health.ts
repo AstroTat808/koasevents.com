@@ -727,12 +727,28 @@ function sampleHour(value: string) {
   return at.toISOString();
 }
 
-function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: readonly string[], days: number) {
+function firstSuccessfulVerificationAt(samples: CredentialHealthSample[], credentialIds: readonly string[]) {
+  const successfulTimes = samples
+    .filter((sample) => credentialIds.every((id) => Boolean(sample?.rows?.[id]?.configured && sample?.rows?.[id]?.ok)))
+    .map((sample) => Date.parse(String(sample?.at || sample?.hour || '')))
+    .filter((at) => Number.isFinite(at));
+  if (!successfulTimes.length) return '';
+  return new Date(Math.min(...successfulTimes)).toISOString();
+}
+
+function reliabilityPeriod(
+  samples: CredentialHealthSample[],
+  credentialIds: readonly string[],
+  days: number,
+  firstVerifiedAt = '',
+) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const firstVerifiedMs = Date.parse(firstVerifiedAt);
+  const effectiveCutoff = Number.isFinite(firstVerifiedMs) ? Math.max(cutoff, firstVerifiedMs) : cutoff;
   const observed = samples.filter((sample) => {
     const at = Date.parse(String(sample?.at || sample?.hour || ''));
     return Number.isFinite(at)
-      && at >= cutoff
+      && at >= effectiveCutoff
       && credentialIds.every((id) => Boolean(sample?.rows?.[id]));
   });
   const healthy = observed.filter((sample) =>
@@ -742,6 +758,7 @@ function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: rea
   const expectedSamples = days * 24;
   return {
     days,
+    firstVerifiedAt: Number.isFinite(firstVerifiedMs) ? firstVerifiedAt : '',
     percentage: sampleCount ? Math.round((healthy / sampleCount) * 1000) / 10 : null,
     healthySamples: healthy,
     failedSamples: Math.max(0, sampleCount - healthy),
@@ -749,6 +766,16 @@ function reliabilityPeriod(samples: CredentialHealthSample[], credentialIds: rea
     expectedSamples,
     coveragePercent: expectedSamples ? Math.round((sampleCount / expectedSamples) * 1000) / 10 : 0,
   };
+}
+
+function healthySamplesNeeded(period: any, targetPercent: number, minimumSamples: number) {
+  const samples = Math.max(0, Number(period?.samples || 0));
+  const healthy = Math.max(0, Math.min(samples, Number(period?.healthySamples || 0)));
+  const target = Math.max(0, Math.min(99.999, Number(targetPercent || 0))) / 100;
+  const minimumRemaining = Math.max(0, Number(minimumSamples || 0) - samples);
+  if (target <= 0) return minimumRemaining;
+  const targetRemaining = Math.max(0, Math.ceil(((target * samples) - healthy) / (1 - target)));
+  return Math.max(minimumRemaining, targetRemaining);
 }
 
 function reliabilitySeverity(period: any, thresholds: CredentialReliabilityThresholds, minimumSamples: number) {
@@ -762,23 +789,34 @@ function reliabilitySeverity(period: any, thresholds: CredentialReliabilityThres
 
 function reliabilitySummary(samples: CredentialHealthSample[], policy: CredentialReliabilityPolicy) {
   const providers = RELIABILITY_PROVIDERS.map((provider) => {
+    const firstVerifiedAt = firstSuccessfulVerificationAt(samples, provider.credentialIds);
     const periods = {
-      '7d': reliabilityPeriod(samples, provider.credentialIds, 7),
-      '30d': reliabilityPeriod(samples, provider.credentialIds, 30),
-      '90d': reliabilityPeriod(samples, provider.credentialIds, 90),
+      '7d': reliabilityPeriod(samples, provider.credentialIds, 7, firstVerifiedAt),
+      '30d': reliabilityPeriod(samples, provider.credentialIds, 30, firstVerifiedAt),
+      '90d': reliabilityPeriod(samples, provider.credentialIds, 90, firstVerifiedAt),
     };
     const thresholds = policy.providers[provider.id] || DEFAULT_RELIABILITY_THRESHOLDS;
     const severity = reliabilitySeverity(periods['7d'], thresholds, policy.minimumSamples);
+    const period7 = periods['7d'];
+    const samplesUntilThresholdActive = Math.max(0, policy.minimumSamples - Number(period7.samples || 0));
+    const healthySamplesToExitCritical = healthySamplesNeeded(period7, thresholds.redBelow, policy.minimumSamples);
+    const healthySamplesToHealthy = healthySamplesNeeded(period7, thresholds.yellowBelow, policy.minimumSamples);
     return {
       id: provider.id,
       label: provider.label,
       credentialCount: provider.credentialIds.length,
+      firstVerifiedAt,
       periods,
       thresholds,
       severity,
       evaluatedPeriod: policy.evaluationPeriod,
       minimumSamples: policy.minimumSamples,
       thresholdActive: severity !== 'insufficient',
+      recovery: {
+        samplesUntilThresholdActive,
+        healthySamplesToExitCritical,
+        healthySamplesToHealthy,
+      },
     };
   });
   const activeSeverities = providers.map((provider) => provider.severity).filter((severity) => severity !== 'insufficient');
@@ -796,7 +834,7 @@ function reliabilitySummary(samples: CredentialHealthSample[], policy: Credentia
     overall,
     providers,
     policy,
-    note: 'Reliability thresholds evaluate the rolling 7-day percentage after at least ' + policy.minimumSamples + ' hourly samples. Default warning is below 99% and critical is below 95%; each provider can be configured independently.',
+    note: 'Reliability starts at each provider’s first successful verification, so failures recorded before the credential first worked are excluded. Thresholds evaluate the rolling 7-day percentage after at least ' + policy.minimumSamples + ' hourly samples. Default warning is below 99% and critical is below 95%; each provider can be configured independently.',
   };
 }
 
