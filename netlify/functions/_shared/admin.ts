@@ -247,7 +247,16 @@ export function capabilitiesFor(user: any) {
   if (role === 'none' || role === 'deactivated') return [];
   const defaults = role === 'custom' ? [] : (ROLE_CAPABILITIES[role as StaffRole] || []);
   const explicit = normalizedPermissions(user);
-  return [...new Set([...defaults, ...explicit])];
+  const capabilities = [...new Set([...defaults, ...explicit])];
+
+  // Any active staff member with at least one workspace capability should be able
+  // to reach Admin Home. The dashboard itself filters every module card against
+  // the user's effective capabilities, so this grants navigation—not module access.
+  if (capabilities.length && !capabilities.includes('admin.dashboard.view')) {
+    capabilities.unshift('admin.dashboard.view');
+  }
+
+  return capabilities;
 }
 
 export function hasCapability(user: any, capability: StaffCapability) {
