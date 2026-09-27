@@ -432,10 +432,10 @@ export default async (req:Request, context:Context)=>{
     const id=importId();
     const store=storeFor(context);
     await store.setJSON('catalog/imports/snapshots/'+id,{catalog,createdAt:new Date().toISOString(),filename});
-    const byId=new Map(catalog.map((item)=>[item.id,item]));
+    const byId=new Map(catalog.map((item)=>[item.id.toLowerCase(),item]));
     const byName=new Map(catalog.map((item)=>[item.name.toLowerCase(),item]));
     for(const row of usable){
-      const existing=byId.get(row.item.id)||byName.get(row.item.name.toLowerCase());
+      const existing=byId.get(row.item.id.toLowerCase())||byName.get(row.item.name.toLowerCase());
       const targetId=existing?.id||row.item.id;
       const nextItem:QuickBooksCatalogItem={
         ...(existing||row.item),
@@ -450,7 +450,7 @@ export default async (req:Request, context:Context)=>{
         sourceRef:id,
         updatedAt:new Date().toISOString(),
       };
-      byId.set(targetId,nextItem);
+      byId.set(targetId.toLowerCase(),nextItem);
       byName.set(nextItem.name.toLowerCase(),nextItem);
     }
     const next=await saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
