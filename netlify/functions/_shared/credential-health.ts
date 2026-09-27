@@ -4,6 +4,7 @@ import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './e
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
 import { verifySignWellCredentials } from './signwell';
+import { getTurnstileStatus } from './security';
 import { readCredentialWorkspaceAlertTimeline, syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
 
 export type CredentialIssueType =
@@ -132,6 +133,7 @@ const CREDENTIAL_IDS = [
   'github',
   'netlify',
   'signwell',
+  'turnstile',
 ] as const;
 
 type CredentialId = (typeof CREDENTIAL_IDS)[number];
@@ -143,6 +145,7 @@ const RELIABILITY_PROVIDERS = [
   { id: 'github', label: 'GitHub', credentialIds: ['github'] },
   { id: 'netlify', label: 'Netlify', credentialIds: ['netlify'] },
   { id: 'signwell', label: 'SignWell', credentialIds: ['signwell'] },
+  { id: 'turnstile', label: 'Cloudflare Turnstile', credentialIds: ['turnstile'] },
 ] as const;
 
 const DEFAULT_RELIABILITY_THRESHOLDS: CredentialReliabilityThresholds = {
@@ -216,6 +219,11 @@ function recommendedAction(id: string, ok: boolean) {
     signwell: {
       label: 'Open SignWell',
       href: 'https://www.signwell.com/app/',
+      external: true,
+    },
+    turnstile: {
+      label: 'Open Turnstile',
+      href: 'https://dash.cloudflare.com/?to=/:account/turnstile',
       external: true,
     },
   };
@@ -334,6 +342,76 @@ function signWellRow(signWell:any): CredentialHealthRow {
     diagnostics:signWell,
   };
   return {...row,recommendedAction:recommendedAction(row.id,row.ok)};
+}
+
+function turnstileRow(turnstile: any): CredentialHealthRow {
+  const siteKeyConfigured = Boolean(turnstile?.siteKeyConfigured);
+  const secretConfigured = Boolean(turnstile?.secretConfigured);
+  const widget = turnstile?.widgetRendering || {};
+  const siteverify = turnstile?.siteverify || {};
+  const mismatches = turnstile?.mismatches || {};
+  const validations = turnstile?.totals || {};
+  const configured = siteKeyConfigured && secretConfigured;
+  const widgetOk = Boolean(widget?.ok);
+  const siteverifyOk = Boolean(siteverify?.ok);
+  const mismatchCount = Number(mismatches?.total || 0);
+  const ok = Boolean(configured && widgetOk && siteverifyOk && mismatchCount === 0);
+  const status = Number(siteverify?.status || 0);
+  const issueType = ok ? null : classifyCredentialFailure({
+    configured,
+    status,
+    detail: !siteKeyConfigured
+      ? 'Turnstile public site key is not configured.'
+      : !secretConfigured
+        ? 'Turnstile server-side secret is not configured.'
+        : !widgetOk
+          ? 'One or more protected forms are not rendering the configured Turnstile widget correctly.'
+          : !siteverifyOk
+            ? clean(siteverify?.detail || 'Cloudflare Siteverify verification failed.', 800)
+            : 'Turnstile hostname or action mismatch detected.',
+  });
+  const severity: CredentialHealthRow['severity'] = ok
+    ? 'green'
+    : (!configured || siteverify?.reachable === false || Number(siteverify?.status || 0) >= 500 || Number(siteverify?.status || 0) === 429)
+      ? 'yellow'
+      : 'red';
+  const lastSuccess = turnstile?.lastSuccess || null;
+  const lastFailure = turnstile?.lastFailure || null;
+  const detail = [
+    siteKeyConfigured ? 'Site key configured' : 'Site key missing',
+    secretConfigured ? 'Secret configured' : 'Secret missing',
+    String(Number(widget?.healthy || 0)) + '/' + String(Number(widget?.total || 0)) + ' protected forms rendering correctly',
+    siteverifyOk ? 'Siteverify reachable + secret accepted' : clean(siteverify?.detail || 'Siteverify not healthy', 260),
+    String(Number(validations?.successful || 0)) + ' successful validations / ' + String(Number(validations?.failed || 0)) + ' failures in ' + String(Number(turnstile?.windowDays || 30)) + 'd',
+    mismatchCount ? String(mismatchCount) + ' hostname/action mismatches' : 'No hostname/action mismatches',
+    lastSuccess?.createdAt ? 'Last success ' + lastSuccess.createdAt : 'No successful validation recorded yet',
+    lastFailure?.createdAt ? 'Last failure ' + lastFailure.createdAt : 'No failed validation recorded',
+  ].join(' · ');
+  const verifiedPermissions: string[] = [];
+  if (siteKeyConfigured) verifiedPermissions.push('Public site key configured');
+  if (secretConfigured) verifiedPermissions.push('Server-side secret configured');
+  if (widgetOk) verifiedPermissions.push('All protected widgets rendering');
+  if (siteverifyOk) verifiedPermissions.push('Cloudflare Siteverify reachable');
+  if (mismatchCount === 0) verifiedPermissions.push('Hostname + action match');
+
+  const row: CredentialHealthRow = {
+    id: 'turnstile',
+    provider: 'Cloudflare Turnstile',
+    credential: 'Site key + server-side secret + widget/Siteverify validation',
+    ok,
+    configured,
+    status,
+    severity,
+    issueType,
+    detail: clean(detail, 1200),
+    verificationHttp: [
+      siteverify?.status ? 'Siteverify HTTP ' + siteverify.status : '',
+      widget?.total ? 'Widgets ' + Number(widget.healthy || 0) + '/' + Number(widget.total || 0) : '',
+    ].filter(Boolean).join(' · '),
+    verifiedPermissions,
+    diagnostics: turnstile,
+  };
+  return { ...row, recommendedAction: recommendedAction(row.id, row.ok) };
 }
 
 function microsoftGraphRow(microsoftGraph: any): CredentialHealthRow {
@@ -571,7 +649,8 @@ async function verifyCredentialById(context: Context, id: CredentialId): Promise
   if (id === 'microsoft-graph') return microsoftGraphRow(await verifyOffice365Credentials());
   if (id === 'github') return verifyGithubCredential();
   if (id === 'netlify') return verifyNetlifyCredential();
-  return signWellRow(await verifySignWellCredentials(context));
+  if (id === 'signwell') return signWellRow(await verifySignWellCredentials(context));
+  return turnstileRow(await getTurnstileStatus(context, 30));
 }
 
 function healthSummaryFromRows(rows: CredentialHealthRow[], generatedAt: string) {
@@ -1133,6 +1212,7 @@ function runtimeCredentialConfigured(credentialId: unknown, fallback: boolean) {
   if (id === 'github') return env('KOA_GITHUB_READ_TOKEN');
   if (id === 'netlify') return env('NETLIFY_AUTH_TOKEN');
   if (id === 'signwell') return env('SIGNWELL_API_KEY') && env('SIGNWELL_WEBHOOK_ID');
+  if (id === 'turnstile') return (env('PUBLIC_TURNSTILE_SITE_KEY') || env('TURNSTILE_SITEKEY') || env('TURNSTILE_SITE_KEY')) && (env('TURNSTILE_SECRET_KEY') || env('TURNSTILE_SECRET'));
   if (id === 'microsoft-graph') {
     return env('MICROSOFT_GRAPH_CLIENT_ID') && env('MICROSOFT_GRAPH_CLIENT_SECRET') && env('MICROSOFT_GRAPH_TENANT_ID');
   }
@@ -1147,6 +1227,7 @@ function providerIdForCredential(credentialId: unknown) {
   if (id === 'github') return 'github';
   if (id === 'netlify') return 'netlify';
   if (id === 'signwell') return 'signwell';
+  if (id === 'turnstile') return 'turnstile';
   return '';
 }
 
@@ -1379,13 +1460,14 @@ export async function credentialHealthSummary(context: Context, options: Credent
     return withHistory(context, summary);
   }
 
-  const [emailHealth, quickBooks, microsoftGraph, github, netlify, signWell] = await Promise.all([
+  const [emailHealth, quickBooks, microsoftGraph, github, netlify, signWell, turnstile] = await Promise.all([
     options.emailHealth || emailHealthSummary(context, { force: Boolean(options.force) }),
     verifyQuickBooksCredentials(context),
     verifyOffice365Credentials(),
     verifyGithubCredential(),
     verifyNetlifyCredential(),
     verifySignWellCredentials(context),
+    getTurnstileStatus(context, 30),
   ]);
 
   const incomingRows: CredentialHealthRow[] = [
@@ -1396,6 +1478,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
     github,
     netlify,
     signWellRow(signWell),
+    turnstileRow(turnstile),
   ];
 
   const rows = await persistRowsWithHistory(
