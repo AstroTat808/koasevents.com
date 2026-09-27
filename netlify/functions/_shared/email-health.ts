@@ -54,6 +54,23 @@ function canonicalStatus(value: unknown) {
   return clean(value, 80).toLowerCase().replace(/^email\./, '').replace(/-/g, '_');
 }
 
+function normalizeAddressList(value: unknown) {
+  return String(value ?? '').split(/[\n,;]+/).map((row)=>clean(row,240)).filter(Boolean).slice(0,50);
+}
+
+function classifyEmailType(subject: unknown) {
+  const value=clean(subject,500).toLowerCase();
+  if(/follow-up due/.test(value)) return 'Lead response reminder';
+  if(/received your .*inquiry|received your koa/.test(value)) return 'Client inquiry confirmation';
+  if(/quick follow-up/.test(value)) return 'Client follow-up';
+  if(/would you share your experience|google review/.test(value)) return 'Review request';
+  if(/vendor.*brief|vendor event brief/.test(value)) return 'Vendor event brief';
+  if(/insurance|compliance/.test(value)) return 'Vendor insurance reminder';
+  if(/new .*inquiry|new discovery call request|new private event inquiry|new mobile bar inquiry/.test(value)) return 'New lead notification';
+  if(/test/.test(value)) return 'Admin test';
+  return 'Other';
+}
+
 function statusCounts(rows: any[], cutoffMs: number) {
   const filtered = rows.filter((row) => {
     const at = Date.parse(String(row?.createdAt || row?.created_at || row?.recordedAt || ''));
@@ -208,6 +225,9 @@ export async function listResendEmails() {
         emailId: clean(row?.id, 180),
         status: canonicalStatus(row?.last_event || row?.status || row?.event),
         createdAt: clean(row?.created_at || row?.createdAt, 100),
+        from: clean(row?.from, 300),
+        to: Array.isArray(row?.to) ? row.to.map((value:any)=>clean(value,240)).filter(Boolean) : normalizeAddressList(row?.to),
+        subject: clean(row?.subject, 500),
       })),
       detail,
     };
@@ -221,6 +241,29 @@ export async function listResendEmails() {
       detail: error instanceof Error ? error.message : 'Resend history request failed.',
     };
   }
+}
+
+export async function emailActivityLog(limit=100) {
+  const resend=await listResendEmails();
+  if(!resend.ok) return {ok:false,configured:resend.configured,status:resend.status,detail:resend.detail,rows:[] as any[]};
+  return {
+    ok:true,
+    configured:true,
+    status:resend.status,
+    detail:resend.detail,
+    rows:resend.rows.slice(0,Math.max(1,Math.min(100,limit))).map((row:any)=>({
+      emailId:clean(row?.emailId,180),
+      resendMessageId:clean(row?.emailId,180),
+      recipient:Array.isArray(row?.to)?row.to.join(', '):clean(row?.to,500),
+      recipients:Array.isArray(row?.to)?row.to:normalizeAddressList(row?.to),
+      subject:clean(row?.subject,500)||'(subject unavailable)',
+      emailType:classifyEmailType(row?.subject),
+      status:canonicalStatus(row?.status)||'unknown',
+      sent:!['failed','bounced','complained','suppressed'].includes(canonicalStatus(row?.status)),
+      createdAt:clean(row?.createdAt,100),
+      from:clean(row?.from,300),
+    })),
+  };
 }
 
 export async function recordEmailHealthEvent(context: Context, input: {
