@@ -297,6 +297,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </form>
         </section>
 
+        <section data-damage-deposit-settings-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Refundable liabilities</p>
+          <h2 class="display mt-3 text-4xl">Security / damage deposit accounting</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Keep refundable client deposits outside event revenue. One-day rentals default to $500, weekend rentals to $1,000, due 30 days before the event, with refunds due within 14 days after the event less documented deductions.</p>
+          <form data-damage-deposit-settings-form class="mt-6 grid gap-4">
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label class="grid gap-2 text-sm font-semibold">One-day amount<input name="oneDayAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Weekend amount<input name="weekendAmount" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Due days before event<input name="dueDaysBefore" type="number" min="0" max="365" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Refund within days<input name="refundWithinDays" type="number" min="0" max="365" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            </div>
+            <div class="grid gap-4 lg:grid-cols-3">
+              <label class="grid gap-2 text-sm font-semibold">Liability account<select name="liabilityAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose Other Current Liability…</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Refund bank account<select name="refundBankAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose bank account…</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Deduction income account<select name="deductionIncomeAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose income account…</option></select></label>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save refundable-deposit accounting</button>
+              <button data-refresh-damage-accounts type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Reload QBO accounts</button>
+              <p data-damage-deposit-settings-message class="text-sm text-[var(--koa-ink)]/52"></p>
+            </div>
+            <p data-damage-deposit-item class="text-xs leading-5 text-[var(--koa-ink)]/48"></p>
+          </form>
+        </section>
+
         <dialog data-catalog-dialog class="w-[min(94vw,760px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
           <form data-catalog-form class="p-7 sm:p-8">
             <input type="hidden" name="id" />
@@ -401,6 +426,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const depositSection=document.querySelector('[data-deposit-section]');
     const depositForm=document.querySelector('[data-deposit-form]');
     const depositMessage=document.querySelector('[data-deposit-message]');
+    const damageDepositSettingsSection=document.querySelector('[data-damage-deposit-settings-section]');
+    const damageDepositSettingsForm=document.querySelector('[data-damage-deposit-settings-form]');
+    const damageDepositSettingsMessage=document.querySelector('[data-damage-deposit-settings-message]');
+    const damageDepositItem=document.querySelector('[data-damage-deposit-item]');
+    const refreshDamageAccounts=document.querySelector('[data-refresh-damage-accounts]');
     const testAccountingAlert=document.querySelector('[data-test-accounting-alert]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
@@ -466,6 +496,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(catalogTitle)catalogTitle.textContent=item?'Edit '+item.name:'Add catalog item';
       if(catalogFormMessage)catalogFormMessage.textContent=item?.quickBooksItemId?'QuickBooks item '+item.quickBooksItemId+' is linked.':'A matching QuickBooks item will be created when saved.';
       catalogDialog.showModal();
+    }
+
+    async function loadDamageDepositAccounts(){
+      if(!damageDepositSettingsForm||!state?.connection?.connected)return;
+      if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='Loading QuickBooks accounts…';
+      try{
+        const data=await api({action:'list-damage-deposit-accounts'});
+        const settings=state?.damageDepositSettings||{};
+        const fill=(name,rows,currentId)=>{
+          const select=damageDepositSettingsForm.elements[name];if(!select)return;
+          const first=select.options[0]?.textContent||'Choose…';
+          select.innerHTML='<option value="">'+first+'</option>';
+          (rows||[]).forEach((row)=>{const option=document.createElement('option');option.value=row.id;option.textContent=row.name+' · '+row.type;select.appendChild(option);});
+          if(currentId)select.value=currentId;
+        };
+        fill('liabilityAccountId',data.liabilityAccounts,settings.liabilityAccountId);
+        fill('refundBankAccountId',data.bankAccounts,settings.refundBankAccountId);
+        fill('deductionIncomeAccountId',data.incomeAccounts,settings.deductionIncomeAccountId);
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='';
+      }catch(err){if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent=err.message||'Unable to load QuickBooks accounts.';}
+    }
+
+    function renderDamageDepositSettings(){
+      if(!damageDepositSettingsForm)return;
+      const settings=state?.damageDepositSettings||{};
+      damageDepositSettingsForm.elements.oneDayAmount.value=String(settings.oneDayAmount??500);
+      damageDepositSettingsForm.elements.weekendAmount.value=String(settings.weekendAmount??1000);
+      damageDepositSettingsForm.elements.dueDaysBefore.value=String(settings.dueDaysBefore??30);
+      damageDepositSettingsForm.elements.refundWithinDays.value=String(settings.refundWithinDays??14);
+      if(damageDepositItem)damageDepositItem.textContent=settings.itemId
+        ? 'QuickBooks liability item: '+(settings.itemName||'Refundable Damage Deposit')+' #'+settings.itemId
+        : 'No QuickBooks liability item yet. Saving a liability account will create the dedicated “Refundable Damage Deposit” item.';
+      loadDamageDepositAccounts();
     }
 
     function renderCatalog(){
@@ -1303,6 +1366,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(ruleSimEvent()&&!ruleSimEvent().value){const d=new Date();d.setFullYear(d.getFullYear()+1);ruleSimEvent().value=d.toISOString().slice(0,10);}
       }
       renderCatalog();
+      damageDepositSettingsSection?.classList.toggle('hidden',!connected);
+      if(connected)renderDamageDepositSettings();
       renderDiagnostics();
       renderAccountingAudit();
       if(connected)loadItems();
@@ -1392,6 +1457,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(getMessage)getMessage.textContent='Saved. New CRM proposals can use '+Number(result.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'% '+String(result.getSettings.label||'Hawaiʻi GET')+'.';
       }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
     });
+    refreshDamageAccounts?.addEventListener('click',loadDamageDepositAccounts);
+    damageDepositSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(damageDepositSettingsForm);
+      const optionText=(name)=>damageDepositSettingsForm.elements[name]?.selectedOptions?.[0]?.textContent?.split(' · ')[0]||'';
+      if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='Saving refundable-deposit accounting…';
+      try{
+        const result=await api({
+          action:'save-damage-deposit-settings',
+          enabled:true,
+          oneDayAmount:Number(data.get('oneDayAmount')||500),
+          weekendAmount:Number(data.get('weekendAmount')||1000),
+          dueDaysBefore:Number(data.get('dueDaysBefore')||30),
+          refundWithinDays:Number(data.get('refundWithinDays')||14),
+          liabilityAccountId:data.get('liabilityAccountId'),
+          liabilityAccountName:optionText('liabilityAccountId'),
+          refundBankAccountId:data.get('refundBankAccountId'),
+          refundBankAccountName:optionText('refundBankAccountId'),
+          deductionIncomeAccountId:data.get('deductionIncomeAccountId'),
+          deductionIncomeAccountName:optionText('deductionIncomeAccountId'),
+          itemId:state?.damageDepositSettings?.itemId||'',
+          itemName:state?.damageDepositSettings?.itemName||'Refundable Damage Deposit',
+        });
+        state.damageDepositSettings=result.damageDepositSettings;
+        renderDamageDepositSettings();
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='Saved. Refundable deposits will post to the selected liability account and remain separate from event revenue.';
+      }catch(err){if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent=err.message||'Unable to save refundable-deposit accounting.';}
+    });
+
     depositForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
       const validation=renderTemplateValidation();
