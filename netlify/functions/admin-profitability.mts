@@ -195,7 +195,7 @@ async function upsertCatalogEconomics(context:Context, patches:CatalogEconomicsP
     const targetPercent=Math.round(margin(patch.targetMargin,0.6)*10000)/100;
     const item:QuickBooksCatalogItem = {
       id,
-      name:clean(patch.name || previous?.name || id,100),
+      name:clean(previous?.name || patch.name || id,100),
       description:clean(previous?.description || patch.description || '',1000),
       category:patch.category,
       group:patch.group,
@@ -205,7 +205,7 @@ async function upsertCatalogEconomics(context:Context, patches:CatalogEconomicsP
         : money(patch.unitPrice),
       internalCost:money(patch.internalCost),
       targetMargin:targetPercent,
-      active:patch.active==null ? previous?.active!==false : patch.active,
+      active:patch.active==null ? (previous ? previous.active!==false : patch.group==='packages') : patch.active,
       getExempt:previous?.getExempt===true,
       source:'catalog-manager',
       sourceRef:'wedding-profitability',
@@ -631,7 +631,7 @@ async function responseState(context:Context,state:ProfitabilityState) {
       catalogPrice:Number(item?.unitPrice||0),
       catalogInternalCost:Number(item?.internalCost||0),
       catalogTargetMargin:Number(item?.targetMargin||0)/100,
-      catalogActive:item?.active!==false,
+      catalogActive:Boolean(item && item.active!==false),
     };
   });
   const addOns=state.addOns.map(row=>{
