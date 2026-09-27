@@ -85,18 +85,24 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             </a>
 
             <section data-admin-layout-editor class="hidden rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
-              <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p class="eyebrow text-[var(--koa-clay)]">Personal layout</p>
+                  <p class="eyebrow text-[var(--koa-clay)]">Admin Home layout</p>
                   <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Customize Admin Home</h2>
-                  <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/55">Move sections and modules into the order that works best for you. This preference follows your account and does not change anyone else’s dashboard.</p>
+                  <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/55">Drag sections and modules into place, or use the Up/Down buttons. Drag handles use pointer controls so they work with a mouse, touch, Apple Pencil, and iPad.</p>
                 </div>
                 <span data-admin-layout-message class="text-xs font-semibold text-[var(--koa-ink)]/50"></span>
               </div>
+              <div class="mt-4 flex flex-wrap items-center gap-2">
+                <span class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Save as</span>
+                <button data-admin-layout-scope="personal" type="button" class="rounded-full border border-[var(--koa-forest)] bg-[var(--koa-forest)] px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white">My Layout</button>
+                <button data-admin-layout-scope="company" type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Company Default</button>
+                <span data-admin-layout-scope-help class="text-xs leading-5 text-[var(--koa-ink)]/50">Only your account will use this order.</span>
+              </div>
               <div data-admin-layout-editor-sections class="mt-5 grid gap-4"></div>
               <div class="mt-5 flex flex-wrap gap-2">
-                <button data-admin-layout-save type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Save layout</button>
-                <button data-admin-layout-reset type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Reset to default</button>
+                <button data-admin-layout-save type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Save My Layout</button>
+                <button data-admin-layout-reset type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Reset order</button>
                 <button data-admin-layout-cancel type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Cancel</button>
               </div>
             </section>
