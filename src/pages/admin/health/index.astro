@@ -2460,9 +2460,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(emailHealthSource)emailHealthSource.textContent=delivery.source==='resend-api'?'Resend API':delivery.source==='signed-webhook-history'?'Signed webhook history':'No delivery history';
       if(emailHealthSourceDetail){
         const parts=[];
+        const webhook=delivery.webhook||{};
         parts.push(delivery.apiConfigured?'API key configured':'API key missing');
-        parts.push(delivery.webhookConfigured?'webhook configured':'webhook missing');
-        if(delivery.apiDetail)parts.push(delivery.apiDetail);
+        if(webhook.existsInResend===true){
+          parts.push(webhook.enabled===false?'Resend webhook exists but is disabled':'Resend webhook exists and is enabled');
+        }else if(webhook.existsInResend===false){
+          parts.push('Resend webhook not found');
+        }else{
+          parts.push('Resend webhook existence not verified');
+        }
+        parts.push(webhook.signingSecretConfigured||delivery.webhookConfigured
+          ? 'Netlify signing secret configured'
+          : 'Netlify signing secret missing');
+        if(webhook.detail)parts.push(webhook.detail);
+        else if(delivery.apiDetail)parts.push(delivery.apiDetail);
         emailHealthSourceDetail.textContent=parts.join(' · ');
       }
 
