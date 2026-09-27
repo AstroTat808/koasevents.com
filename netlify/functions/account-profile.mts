@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
+import { getStore } from '@netlify/blobs';
 import { admin } from '@netlify/identity';
-import { requireOperations } from './_shared/admin';
+import { hasCapability, requireOperations } from './_shared/admin';
 import { appendStaffAudit } from './_shared/staff-audit';
 
 function clean(value:unknown,max=300){
@@ -43,6 +44,34 @@ function cleanAdminHomeLayout(value:any){
   return {sectionOrder,moduleOrder};
 }
 
+function adminHomeStore(){
+  return getStore({name:'koa-admin-home-layout',consistency:'strong'});
+}
+
+async function readCompanyAdminHomeLayout(){
+  try{
+    const saved:any=await adminHomeStore().get('company-default',{type:'json'});
+    if(!saved?.layout)return null;
+    return {
+      layout:cleanAdminHomeLayout(saved.layout),
+      updatedAt:clean(saved.updatedAt,80),
+      updatedBy:clean(saved.updatedBy,240).toLowerCase(),
+    };
+  }catch{
+    return null;
+  }
+}
+
+async function saveCompanyAdminHomeLayout(layout:any,actor:string){
+  const record={
+    layout:cleanAdminHomeLayout(layout),
+    updatedAt:new Date().toISOString(),
+    updatedBy:clean(actor,240).toLowerCase(),
+  };
+  await adminHomeStore().setJSON('company-default',record);
+  return record;
+}
+
 function cleanActionCenterPreferences(value:any){
   const allowedFilters=new Set(['all','urgent','overdueTasks','unansweredLeads','accountingMismatches','healthWarnings','vendorInsurance','securityWarnings']);
   const allowedSorts=new Set(['priority','oldest','newest']);
@@ -64,6 +93,11 @@ export default async(req:Request,context:Context)=>{
 
   if(req.method==='GET'){
     const meta=userMetadataFor(user);
+    const personalAdminHomeLayout=meta?.admin_home_layout?cleanAdminHomeLayout(meta.admin_home_layout):null;
+    const companyDefault=await readCompanyAdminHomeLayout();
+    const companyAdminHomeLayout=companyDefault?.layout||cleanAdminHomeLayout({});
+    const adminHomeLayout=personalAdminHomeLayout||companyAdminHomeLayout;
+    const adminHomeLayoutSource=personalAdminHomeLayout?'personal':companyDefault?'company':'built-in';
     return Response.json({
       displayName:clean(meta?.full_name||meta?.name||user?.name,180),
       jobTitle:clean(meta?.job_title||meta?.jobTitle,120),
@@ -79,7 +113,12 @@ export default async(req:Request,context:Context)=>{
       email:clean(user?.email,240).toLowerCase(),
       mobileNav:cleanMobileNav(meta?.mobile_nav_items),
       actionCenterPreferences:cleanActionCenterPreferences(meta?.action_center_preferences),
-      adminHomeLayout:cleanAdminHomeLayout(meta?.admin_home_layout),
+      adminHomeLayout,
+      adminHomeLayoutSource,
+      personalAdminHomeLayout,
+      companyAdminHomeLayout,
+      companyAdminHomeLayoutMeta:companyDefault?{updatedAt:companyDefault.updatedAt,updatedBy:companyDefault.updatedBy}:null,
+      canManageCompanyAdminHomeLayout:hasCapability(user,'users.manage'),
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -89,6 +128,32 @@ export default async(req:Request,context:Context)=>{
 
   if(clean(body.action,60)==='save-admin-home-layout'){
     const adminHomeLayout=cleanAdminHomeLayout(body.layout||{});
+    const scope=clean(body.scope,30)==='company'?'company':'personal';
+    const actor=clean(user?.email,240).toLowerCase();
+
+    if(scope==='company'){
+      if(!hasCapability(user,'users.manage')){
+        return Response.json({error:'User Management permission is required to change the company Admin Home default.'},{status:403});
+      }
+      const companyDefault=await saveCompanyAdminHomeLayout(adminHomeLayout,actor);
+      await appendStaffAudit(context,{
+        actor,
+        action:'company_admin_home_layout_updated',
+        subjectId:'company-admin-home',
+        subjectEmail:'',
+        detail:'Updated the company Admin Home default for staff without a personal layout.',
+        metadata:{adminHomeLayout,updatedAt:companyDefault.updatedAt},
+      });
+      return Response.json({
+        ok:true,
+        scope:'company',
+        adminHomeLayout,
+        companyAdminHomeLayout:adminHomeLayout,
+        companyAdminHomeLayoutMeta:{updatedAt:companyDefault.updatedAt,updatedBy:companyDefault.updatedBy},
+        message:'Company Admin Home default saved for new staff and anyone using the company layout.',
+      },{headers:{'Cache-Control':'private, no-store'}});
+    }
+
     const currentMeta=userMetadataFor(user);
     await admin.updateUser(user.id,{
       user_metadata:{
@@ -97,17 +162,19 @@ export default async(req:Request,context:Context)=>{
       },
     });
     await appendStaffAudit(context,{
-      actor:clean(user?.email,240).toLowerCase(),
+      actor,
       action:'self_admin_home_layout_updated',
       subjectId:clean(user?.id,120),
-      subjectEmail:clean(user?.email,240).toLowerCase(),
+      subjectEmail:actor,
       detail:'Updated personal Admin Home section and module order.',
       metadata:{adminHomeLayout},
     });
     return Response.json({
       ok:true,
+      scope:'personal',
       adminHomeLayout,
-      message:'Admin Home layout saved for this account.',
+      personalAdminHomeLayout:adminHomeLayout,
+      message:'My Layout saved for this account.',
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
