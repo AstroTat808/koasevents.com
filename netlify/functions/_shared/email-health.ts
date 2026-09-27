@@ -198,6 +198,72 @@ export async function checkResendSendAccess() {
   }
 }
 
+async function checkResendWebhookConfig() {
+  const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
+  const signingSecretConfigured = clean(Netlify.env.get('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
+  const endpoint = 'https://koasevents.com/api/webhooks/resend';
+
+  if (!apiKey) {
+    return {
+      endpoint,
+      existsInResend: null,
+      enabled: null,
+      signingSecretConfigured,
+      status: 0,
+      detail: signingSecretConfigured
+        ? 'Webhook signing secret is configured in Netlify, but Resend webhook existence could not be verified because the monitoring credential is unavailable.'
+        : 'Webhook signing secret is missing in Netlify, and Resend webhook existence could not be verified because the monitoring credential is unavailable.',
+    };
+  }
+
+  try {
+    const response = await fetch('https://api.resend.com/webhooks', {
+      headers: {
+        Authorization: 'Bearer ' + apiKey,
+        'Content-Type': 'application/json',
+        'User-Agent': 'KoaEvents-EmailHealth/1.0',
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    const body:any = await response.json().catch(() => ({}));
+    const rows = Array.isArray(body?.data) ? body.data : Array.isArray(body) ? body : [];
+    const webhook = rows.find((row:any)=>clean(row?.endpoint || row?.url, 500)===endpoint) || null;
+    const existsInResend = Boolean(webhook);
+    const enabled = webhook ? String(webhook?.status || 'enabled').toLowerCase() !== 'disabled' : false;
+
+    let detail = '';
+    if (!response.ok) {
+      detail = clean(body?.message || body?.error || 'Resend webhook lookup failed.', 500);
+    } else if (!existsInResend) {
+      detail = signingSecretConfigured
+        ? 'Signing secret is configured in Netlify, but no matching Resend webhook exists for '+endpoint+'.'
+        : 'No matching Resend webhook exists, and the signing secret is also missing in Netlify.';
+    } else if (!signingSecretConfigured) {
+      detail = 'Resend webhook exists'+(enabled?' and is enabled':' but is disabled')+', but RESEND_WEBHOOK_SECRET is missing in Netlify.';
+    } else {
+      detail = 'Resend webhook exists'+(enabled?' and is enabled':' but is disabled')+', and the Netlify signing secret is configured.';
+    }
+
+    return {
+      endpoint,
+      existsInResend: response.ok ? existsInResend : null,
+      enabled: response.ok ? enabled : null,
+      signingSecretConfigured,
+      status: response.status,
+      detail,
+    };
+  } catch (error) {
+    return {
+      endpoint,
+      existsInResend: null,
+      enabled: null,
+      signingSecretConfigured,
+      status: 0,
+      detail: error instanceof Error ? error.message : 'Resend webhook lookup failed.',
+    };
+  }
+}
+
 export async function listResendEmails() {
   const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
   if (!apiKey) {
@@ -324,14 +390,15 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   const cachedAt = Date.parse(String(cached?.generatedAt || ''));
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
-  const [logo, sendAccess, resend, webhookEvents] = await Promise.all([
+  const [logo, sendAccess, resend, webhookEvents, webhook] = await Promise.all([
     checkLogo(),
     checkResendSendAccess(),
     listResendEmails(),
     readEmailHealthEvents(context, 5000),
+    checkResendWebhookConfig(),
   ]);
 
-  const webhookConfigured = clean(Netlify.env.get('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
+  const webhookConfigured = Boolean(webhook.signingSecretConfigured);
   const rows = resend.ok && resend.rows.length ? resend.rows : webhookEvents;
   const source = resend.ok && resend.rows.length ? 'resend-api' : webhookEvents.length ? 'signed-webhook-history' : 'none';
   const now = Date.now();
@@ -368,9 +435,10 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     detail: 'Production deploys are blocked when the automated email compatibility gate fails.',
   };
 
+  const webhookAttention = webhook.existsInResend === false || webhook.enabled === false || !webhookConfigured;
   const overall = !logo.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
     ? 'red'
-    : deliverySeverity === 'yellow' || monitoringAccessSeverity === 'yellow' || !webhookConfigured
+    : deliverySeverity === 'yellow' || monitoringAccessSeverity === 'yellow' || webhookAttention
       ? 'yellow'
       : 'green';
 
@@ -395,6 +463,14 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
       apiStatus: resend.status,
       apiDetail: resend.detail,
       webhookConfigured,
+      webhook: {
+        endpoint: webhook.endpoint,
+        existsInResend: webhook.existsInResend,
+        enabled: webhook.enabled,
+        signingSecretConfigured: webhook.signingSecretConfigured,
+        lookupStatus: webhook.status,
+        detail: webhook.detail,
+      },
       period24h,
       period7d,
       recentIssues,
