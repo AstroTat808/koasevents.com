@@ -173,6 +173,10 @@ export function healthComponents() {
     {id:'credential-microsoft-graph',name:'Microsoft Graph credential',path:'Credential Health · Microsoft Graph',kind:'api' as const},
     {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
     {id:'credential-netlify',name:'Netlify credential',path:'Credential Health · Netlify',kind:'api' as const},
+    {id:'credential-signwell',name:'SignWell API access',path:'Credential Health · SignWell',kind:'api' as const},
+    {id:'signwell-webhook-registration',name:'SignWell webhook registration',path:'SignWell GET /hooks',kind:'api' as const},
+    {id:'signwell-webhook-delivery',name:'SignWell webhook delivery',path:'/api/webhooks/signwell',kind:'api' as const},
+    {id:'signwell-signed-pdf',name:'SignWell signed PDF retrieval',path:'SignWell completed PDF',kind:'api' as const},
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
     {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
     {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
@@ -210,7 +214,8 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
-    'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify',
+    'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell',
+    'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
     'synthetic-event-documents','synthetic-vendor-insurance-document','synthetic-quickbooks-webhook','synthetic-signwell-webhook',
   ]);
@@ -459,15 +464,23 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
       })
     : Promise.resolve({response:null,ms:0,error:'QuickBooks webhook verifier token is not configured.'});
 
-  const signWellToken=clean(Netlify.env.get('SIGNWELL_WEBHOOK_TOKEN'),1000);
-  const signWellBody=JSON.stringify({koaHealthCheck:true,event:'koa_health_check'});
-  const signWellPromise=signWellToken
-    ? timedFetch(origin+'/api/webhooks/signwell?token='+encodeURIComponent(signWellToken),{
+  const signWellWebhookId=clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'),1000);
+  const signWellEventType='koa_health_check';
+  const signWellEventTime=Math.floor(Date.now()/1000);
+  const signWellHash=signWellWebhookId
+    ? createHmac('sha256',signWellWebhookId).update(signWellEventType+'@'+String(signWellEventTime),'utf8').digest('hex')
+    : '';
+  const signWellBody=JSON.stringify({
+    koaHealthCheck:true,
+    event:{type:signWellEventType,time:signWellEventTime,hash:signWellHash},
+  });
+  const signWellPromise=signWellWebhookId
+    ? timedFetch(origin+'/api/webhooks/signwell',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:signWellBody,
       })
-    : Promise.resolve({response:null,ms:0,error:'SIGNWELL_WEBHOOK_TOKEN is not configured.'});
+    : Promise.resolve({response:null,ms:0,error:'SIGNWELL_WEBHOOK_ID is not configured.'});
 
   const [eventDocuments,vendorInsurance,quickBooks,signWell]=await Promise.all([
     eventDocumentsPromise,
@@ -476,18 +489,18 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     signWellPromise,
   ]);
 
-  const signWellCheck=signWellToken
-    ? syntheticResult('synthetic-signwell-webhook','SignWell webhook synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook')
+  const signWellCheck=signWellWebhookId
+    ? syntheticResult('synthetic-signwell-webhook','SignWell webhook HMAC synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook')
     : {
         id:'synthetic-signwell-webhook',
-        name:'SignWell webhook synthetic probe',
+        name:'SignWell webhook HMAC synthetic probe',
         kind:'api' as const,
         path:'/api/webhooks/signwell',
         ok:true,
         status:0,
         ms:0,
         severity:'yellow' as const,
-        detail:'SignWell webhook token is not configured, so the zero-write webhook probe is skipped. This is attention-only until SignWell is enabled.',
+        detail:'SIGNWELL_WEBHOOK_ID is not configured, so the zero-write HMAC webhook probe is skipped. This is attention-only until SignWell is enabled.',
       };
 
   return [
@@ -1251,6 +1264,73 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       };
     })
     .filter((row:any)=>row.id!=='credential-');
+  const signWellCredential=(Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
+    .find((row:any)=>String(row?.id||'')==='signwell')||{};
+  const signWellDiag=signWellCredential?.diagnostics||{};
+  const signWellApi=signWellDiag?.api||{};
+  const signWellHook=signWellDiag?.webhook||{};
+  const signWellDelivery=signWellDiag?.delivery||{};
+  const signWellPdf=signWellDiag?.signedPdf||{};
+  const signWellConfig=signWellDiag?.configuration||{};
+  const signWellApiConfigured=Boolean(signWellConfig?.apiKeyConfigured);
+  const signWellIdConfigured=Boolean(signWellHook?.idConfigured||signWellConfig?.webhookIdConfigured);
+
+  const signWellRegistrationCheck:HealthCheck={
+    id:'signwell-webhook-registration',
+    name:'SignWell webhook registration',
+    kind:'api',
+    path:'SignWell GET /hooks',
+    ok:!signWellApiConfigured||!signWellIdConfigured||Boolean(signWellHook?.registered&&signWellHook?.endpointMatch),
+    status:Number(signWellHook?.status||0),
+    ms:0,
+    severity:!signWellApiConfigured||!signWellIdConfigured
+      ? 'yellow'
+      : signWellHook?.registered&&signWellHook?.endpointMatch
+        ? 'green'
+        : Number(signWellHook?.status||0)>=500||Number(signWellHook?.status||0)===429
+          ? 'yellow'
+          : 'red',
+    detail:clean(signWellHook?.detail||(
+      !signWellApiConfigured
+        ? 'SIGNWELL_API_KEY is not configured.'
+        : !signWellIdConfigured
+          ? 'SIGNWELL_WEBHOOK_ID is not configured.'
+          : 'SignWell webhook registration verification is unavailable.'
+    ),1200),
+  };
+
+  const signWellDeliveryCheck:HealthCheck={
+    id:'signwell-webhook-delivery',
+    name:'SignWell webhook delivery',
+    kind:'api',
+    path:'/api/webhooks/signwell',
+    ok:true,
+    status:signWellDelivery?.verified?200:0,
+    ms:0,
+    severity:signWellDelivery?.verified?'green':'yellow',
+    detail:clean(signWellDelivery?.verified
+      ? 'Most recent verified SignWell webhook: '+String(signWellDelivery?.eventType||'event')+' · '+String(signWellDelivery?.lastWebhookAt||'')
+      : (signWellDelivery?.detail||'No verified production SignWell webhook delivery has been recorded yet.'),1200),
+  };
+
+  const signWellPdfCheck:HealthCheck={
+    id:'signwell-signed-pdf',
+    name:'SignWell signed PDF retrieval',
+    kind:'api',
+    path:'SignWell completed PDF',
+    ok:!signWellPdf?.available||Boolean(signWellPdf?.ok),
+    status:Number(signWellPdf?.status||0),
+    ms:0,
+    severity:!signWellApiConfigured||!signWellPdf?.available
+      ? 'yellow'
+      : signWellPdf?.ok
+        ? 'green'
+        : Number(signWellPdf?.status||0)>=500||Number(signWellPdf?.status||0)===429
+          ? 'yellow'
+          : 'red',
+    detail:clean(signWellPdf?.detail||'Completed SignWell PDF retrieval has not been verified yet.',1200),
+  };
+
   const webhook=emailDelivery?.webhook||{};
   const webhookDelivery=emailDelivery?.webhookDelivery||{};
   const webhookExists=webhook?.existsInResend;
@@ -1309,7 +1389,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
