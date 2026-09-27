@@ -336,13 +336,13 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
         const rec=recommended(a.directCost,a.targetMargin,a.priceIncrement),actualMargin=gm(a.sellPrice,a.directCost);
         const tr=document.createElement('tr');
         tr.dataset.addonId=a.id; tr.className='bg-[var(--koa-ivory)]';
-        const published=a.approved&&Number(a.sellPrice)>0;
+        const published=a.approved&&Number(a.sellPrice)>0&&a.catalogActive!==false;
         tr.innerHTML=
           '<td class="rounded-l-xl px-3 py-3"><strong class="text-[var(--koa-forest)]">'+esc(a.name)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/45">'+esc(a.category)+' · '+esc(a.catalogItemId||'')+'</p></td>'+
           '<td class="px-3 py-3"><input data-addon-cost type="number" min="0" step=".01" value="'+Number(a.directCost||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
           '<td class="px-3 py-3"><input data-addon-target type="number" min="5" max="90" step=".5" value="'+(Number(a.targetMargin||0)*100)+'" class="w-24 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
           '<td class="px-3 py-3"><strong data-addon-recommended class="text-[var(--koa-forest)]">'+(Number(a.directCost||0)>0?money(rec):'Enter cost')+'</strong><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">Round '+money(a.priceIncrement||1)+'</p></td>'+
-          '<td class="px-3 py-3"><input data-addon-price type="number" min="0" step=".01" value="'+Number(a.sellPrice||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /></td>'+
+          '<td class="px-3 py-3"><input data-addon-price type="number" min="0" step=".01" value="'+Number(a.sellPrice||0)+'" class="w-28 rounded-lg border border-[var(--koa-line)] px-3 py-2" /><p class="mt-1 text-[.6rem] text-[var(--koa-ink)]/42">Catalog '+(Number(a.catalogPrice||0)>0?money(a.catalogPrice):'not priced')+(a.catalogActive===false?' · disabled':'')+'</p></td>'+
           '<td class="px-3 py-3"><strong data-addon-margin class="'+(Number(a.directCost||0)>0&&actualMargin>=a.targetMargin?'text-emerald-700':'text-red-700')+'">'+(Number(a.directCost||0)>0?pct(actualMargin):'Cost needed')+'</strong></td>'+
           '<td class="px-3 py-3">'+(published?'<span class="rounded-full bg-emerald-50 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-emerald-800">Published '+money(a.sellPrice)+'</span><p class="mt-1 text-[.6rem] text-[var(--koa-ink)]/40">'+esc(a.approvedAt?dt(a.approvedAt):'')+'</p>':'<span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/55">Working only</span>')+'</td>'+
           '<td class="px-3 py-3"><button data-approve-addon="'+esc(a.id)+'" type="button" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-white">'+(published?'Republish recommended':'Approve recommended')+'</button>'+(published?'<button data-unpublish-addon="'+esc(a.id)+'" type="button" class="mt-2 block text-[.55rem] font-black uppercase tracking-[.08em] text-red-700">Unpublish</button>':'')+'</td>'+
