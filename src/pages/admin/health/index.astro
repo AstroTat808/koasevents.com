@@ -605,7 +605,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Each preset shows the exact six-job mode changes before you apply it.</p>
                 </div>
               </div>
-              <div data-credit-automation class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">Automatic protection is evaluating the current forecast.</div>
+              <div data-credit-active-profile class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p class="text-[.54rem] font-black uppercase tracking-[.09em] text-emerald-800">Current operating profile</p>
+                    <div class="mt-1 flex flex-wrap items-center gap-2">
+                      <strong data-credit-active-profile-name class="text-lg text-[var(--koa-forest)]">Loading…</strong>
+                      <span data-credit-active-profile-badge class="rounded-full bg-emerald-700 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-white">In effect</span>
+                    </div>
+                    <p data-credit-active-profile-detail class="mt-1 text-xs leading-5 text-emerald-950/65">Checking the six scheduled-job modes.</p>
+                  </div>
+                  <p data-credit-active-profile-meta class="text-xs leading-5 text-emerald-950/55 sm:max-w-xs sm:text-right"></p>
+                </div>
+              </div>
+              <div data-credit-automation class="mt-3 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">Automatic protection is evaluating the current forecast.</div>
               <div data-credit-presets class="mt-4 grid gap-3 lg:grid-cols-3"></div>
             </div>
 
@@ -1022,8 +1035,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditRecommendations=document.querySelector('[data-credit-recommendations]');
     const creditSaverStatus=document.querySelector('[data-credit-saver-status]');
     const creditSaverClear=document.querySelector('[data-credit-saver-clear]');
+    const creditActiveProfile=document.querySelector('[data-credit-active-profile]');
+    const creditActiveProfileName=document.querySelector('[data-credit-active-profile-name]');
+    const creditActiveProfileBadge=document.querySelector('[data-credit-active-profile-badge]');
+    const creditActiveProfileDetail=document.querySelector('[data-credit-active-profile-detail]');
+    const creditActiveProfileMeta=document.querySelector('[data-credit-active-profile-meta]');
     const creditAutomation=document.querySelector('[data-credit-automation]');
-        const creditPresets=document.querySelector('[data-credit-presets]');
+    const creditPresets=document.querySelector('[data-credit-presets]');
     const creditLearningAttribution=document.querySelector('[data-credit-learning-attribution]');
     const creditLearningFactor=document.querySelector('[data-credit-learning-factor]');
     const creditLearningCount=document.querySelector('[data-credit-learning-count]');
@@ -3893,25 +3911,90 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           creditRecommendations.innerHTML='<p class="text-xs leading-5 text-[var(--koa-ink)]/50">No credit-saving intervention is currently recommended. The weighted projection is within the configured allowance.</p>';
         }
       }
+      const presetRows=Array.isArray(creditUsage.presets)?creditUsage.presets:[];
+      const derivedActivePreset=presetRows.find((preset)=>
+        Array.isArray(preset?.changes)&&preset.changes.length>0&&preset.changes.every((change)=>!change.changed)
+      )||null;
+      const activeProfile=creditUsage.activeProfile||{
+        id:derivedActivePreset?.id||'custom',
+        name:derivedActivePreset?.name||'Custom Mix',
+        isPreset:Boolean(derivedActivePreset),
+        modeCounts:(Array.isArray(creditUsage.jobControls)?creditUsage.jobControls:[]).reduce((acc,item)=>{
+          const mode=String(item?.currentMode||'normal');
+          if(mode==='paused')acc.paused+=1;
+          else if(mode==='saver')acc.saver+=1;
+          else acc.normal+=1;
+          return acc;
+        },{normal:0,saver:0,paused:0}),
+        updatedAt:String(creditUsage.saverPolicy?.updatedAt||''),
+        updatedBy:String(creditUsage.saverPolicy?.updatedBy||''),
+        expiresAt:String(creditUsage.saverPolicy?.expiresAt||''),
+      };
+      const activeProfileId=String(activeProfile.id||'custom');
+      const activeProfileName=String(activeProfile.name||'Custom Mix');
+      const activeProfileIsPreset=Boolean(activeProfile.isPreset&&activeProfileId!=='custom');
+      const activeModeCounts=activeProfile.modeCounts||{};
+      if(creditActiveProfile){
+        creditActiveProfile.className='mt-4 rounded-xl border p-4 '+(
+          activeProfileIsPreset
+            ? 'border-emerald-200 bg-emerald-50'
+            : 'border-amber-200 bg-amber-50'
+        );
+      }
+      if(creditActiveProfileName)creditActiveProfileName.textContent=activeProfileName;
+      if(creditActiveProfileBadge){
+        creditActiveProfileBadge.textContent=activeProfileIsPreset?'In effect':'Custom configuration';
+        creditActiveProfileBadge.className='rounded-full px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-white '+(
+          activeProfileIsPreset?'bg-emerald-700':'bg-amber-700'
+        );
+      }
+      if(creditActiveProfileDetail){
+        if(activeProfileIsPreset){
+          const preset=derivedActivePreset||presetRows.find((row)=>String(row?.id||'')===activeProfileId);
+          creditActiveProfileDetail.textContent=String(preset?.description||'All six scheduled jobs currently match this preset.');
+        }else{
+          const normal=Number(activeModeCounts.normal||0);
+          const saver=Number(activeModeCounts.saver||0);
+          const paused=Number(activeModeCounts.paused||0);
+          creditActiveProfileDetail.textContent='Manual mix currently in effect · '+normal+' Normal · '+saver+' Saver · '+paused+' Paused.';
+        }
+        creditActiveProfileDetail.className='mt-1 text-xs leading-5 '+(activeProfileIsPreset?'text-emerald-950/65':'text-amber-950/70');
+      }
+      if(creditActiveProfileMeta){
+        const meta=[];
+        if(activeProfile.updatedAt)meta.push('Applied '+new Date(activeProfile.updatedAt).toLocaleString());
+        if(activeProfile.updatedBy)meta.push('by '+String(activeProfile.updatedBy));
+        if(activeProfile.expiresAt&&!activeProfile.expired)meta.push('Resets '+new Date(activeProfile.expiresAt).toLocaleString());
+        creditActiveProfileMeta.textContent=meta.join(' · ');
+        creditActiveProfileMeta.className='text-xs leading-5 '+(activeProfileIsPreset?'text-emerald-950/55':'text-amber-950/60')+' sm:max-w-xs sm:text-right';
+      }
+
       const creditAutomationState=creditUsage.creditAutomation||{};
       if(creditAutomation){
         const autoApplied=Boolean(creditAutomationState.autoAppliedBalanced);
         const maxSuggested=Boolean(creditAutomationState.maximumSavingsSuggested);
         creditAutomation.className='mt-4 rounded-xl border p-3 text-xs leading-5 '+(autoApplied?'border-amber-200 bg-amber-50 text-amber-900':maxSuggested?'border-red-200 bg-red-50 text-red-900':'border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-ink)]/58');
-        creditAutomation.textContent=autoApplied
-          ? 'Automatic Protection switched all six safe jobs to Balanced Savings when the projected cycle usage crossed 80%'+(creditAutomationState.autoAppliedAt?' at '+new Date(creditAutomationState.autoAppliedAt).toLocaleString():'')+'. Maximum Savings remains manual.'
-          : maxSuggested
-            ? 'Maximum Savings is recommended because the adjusted projection is still '+String(creditAutomationState.adjustedProjectedPercent??'—')+'% of the monthly allowance. It will not be enabled automatically.'
-            : 'Automatic Protection will switch Normal Operations to Balanced Savings only when projected cycle usage crosses 80%. Maximum Savings is suggestion-only and never automatic.';
+        creditAutomation.textContent=activeProfileId==='maximum-savings'
+          ? 'Maximum Savings is currently in effect. All six optional scheduled jobs are paused; protected core workflows remain active.'
+          : autoApplied
+            ? 'Automatic Protection switched all six safe jobs to Balanced Savings when the projected cycle usage crossed 80%'+(creditAutomationState.autoAppliedAt?' at '+new Date(creditAutomationState.autoAppliedAt).toLocaleString():'')+'. Maximum Savings remains manual.'
+            : maxSuggested
+              ? 'Maximum Savings is recommended because the adjusted projection is still '+String(creditAutomationState.adjustedProjectedPercent??'—')+'% of the monthly allowance. It will not be enabled automatically.'
+              : 'Automatic Protection will switch Normal Operations to Balanced Savings only when projected cycle usage crosses 80%. Maximum Savings is suggestion-only and never automatic.';
         if(creditAutomationState.skippedReason)creditAutomation.textContent+=' '+String(creditAutomationState.skippedReason);
       }
 
       if(creditPresets){
         creditPresets.innerHTML='';
-        const presets=Array.isArray(creditUsage.presets)?creditUsage.presets:[];
+        const presets=presetRows;
         presets.forEach((preset)=>{
+          const isCurrent=String(preset.id||'')===activeProfileId&&activeProfileIsPreset;
           const card=document.createElement('article');
-          card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+          card.className='rounded-xl border p-4 '+(
+            isCurrent
+              ? 'border-2 border-emerald-500 bg-emerald-50 shadow-sm'
+              : 'border-[var(--koa-line)] bg-[var(--koa-ivory)]'
+          );
           const title=document.createElement('strong');
           title.className='block text-sm text-[var(--koa-forest)]';
           title.textContent=String(preset.name||'Preset');
@@ -3938,16 +4021,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const button=document.createElement('button');
           button.type='button';
           button.dataset.creditPreset=String(preset.id||'');
-          button.className='mt-3 rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.07em] text-white';
           const isMaximum=String(preset.id||'')==='maximum-savings';
-          const suggested=isMaximum&&Boolean(creditAutomationState.maximumSavingsSuggested);
-          if(suggested){
+          const suggested=!isCurrent&&isMaximum&&Boolean(creditAutomationState.maximumSavingsSuggested);
+          if(isCurrent){
+            const badge=document.createElement('span');
+            badge.className='mt-3 inline-flex rounded-full bg-emerald-700 px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-white';
+            badge.textContent='Current profile · in effect';
+            card.appendChild(badge);
+          }else if(suggested){
             const badge=document.createElement('span');
             badge.className='mt-3 inline-flex rounded-full bg-red-100 px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-red-800';
             badge.textContent='Suggested now · manual approval required';
             card.appendChild(badge);
           }
-          button.textContent=(suggested?'Review & apply ':'Apply ')+String(preset.name||'preset');
+          button.disabled=isCurrent;
+          button.className='mt-3 rounded-full px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.07em] '+(
+            isCurrent
+              ? 'cursor-default border border-emerald-300 bg-white text-emerald-800'
+              : 'bg-[var(--koa-forest)] text-white'
+          );
+          button.textContent=isCurrent?'Currently active':(suggested?'Review & apply ':'Apply ')+String(preset.name||'preset');
           card.append(title,description,list,caution,button);
           creditPresets.appendChild(card);
         });
