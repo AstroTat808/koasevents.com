@@ -18,6 +18,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       <section data-unauthorized class="mt-5 hidden rounded-[1.3rem] bg-white p-6 shadow-[var(--shadow-soft)]">
         <h2 class="display text-3xl text-[var(--koa-forest)]">Workspace access required</h2>
+        <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">You are signed in, but this account does not currently have active staff workspace access.</p>
       </section>
 
       <div data-app class="mt-5 hidden grid gap-5">
@@ -466,7 +467,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       refresh.disabled=true;
       try{
         const response=await fetch('/api/admin/workspace-alerts',{cache:'no-store'});
-        if(response.status===401||response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+        if(response.status===401)return;
+        if(response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
         if(!response.ok)throw new Error('Unable to load Action Center.');
         payload=await response.json();
         render();
