@@ -9,7 +9,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <h1 class="display mt-3 text-5xl">Loading workforce…</h1>
       </section>
       <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-        <h1 class="display text-4xl text-[var(--koa-forest)]">Staff access required</h1>
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Workspace access required</h1>
+        <p class="mt-2 text-sm text-[var(--koa-ink)]/58">You are signed in, but this account does not currently have active staff workspace access.</p>
       </section>
       <div data-app class="hidden grid gap-6">
         <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
@@ -143,7 +144,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
     (async()=>{
       const session=await getAdminSession();loading.classList.add('hidden');
-      if(!session){unauthorized.classList.remove('hidden');return;}
+      if(!session||session.accessBlocked){unauthorized.classList.remove('hidden');return;}
       app.classList.remove('hidden');
       try{await load();}catch(err){rosterMessage.textContent=err.message||'Unable to load workforce.';}
     })();
