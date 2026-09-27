@@ -43,6 +43,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p></article>
         </section>
 
+        <div data-health-run-warning aria-live="polite" class="hidden rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <strong data-health-run-warning-title class="block">Core checks completed.</strong>
+          <span data-health-run-warning-detail class="mt-1 block text-xs leading-5 text-amber-900/70"></span>
+        </div>
+
         <section data-root-cause-summary class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div>
