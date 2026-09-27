@@ -420,6 +420,108 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return button;
     }
 
+    function mergedVisibleOrder(allIds,visibleIds) {
+      const visibleSet=new Set(visibleIds);
+      const queue=[...visibleIds];
+      return allIds.map((id)=>visibleSet.has(id)?queue.shift():id);
+    }
+
+    function commitSectionEditorOrder(sectionIds) {
+      const layout=readAdminHomeLayout();
+      layout.sectionOrder=mergedVisibleOrder(layout.sectionOrder,sectionIds);
+      applyAdminHomeLayout(layout);
+    }
+
+    function commitModuleEditorOrder(sectionId,moduleIds) {
+      const layout=readAdminHomeLayout();
+      layout.moduleOrder[sectionId]=mergedVisibleOrder(layout.moduleOrder[sectionId]||[],moduleIds);
+      applyAdminHomeLayout(layout);
+    }
+
+    function dragHandle(label='Drag') {
+      const button=document.createElement('button');
+      button.type='button';
+      button.textContent='↕ '+label;
+      button.className='touch-none cursor-grab select-none rounded-full border border-[var(--koa-line)] bg-[var(--koa-sand)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)] active:cursor-grabbing';
+      button.setAttribute('aria-label','Drag to reorder');
+      return button;
+    }
+
+    function enablePointerSort(handle,item,container,selector,onCommit) {
+      if(!(handle instanceof HTMLElement)||!(item instanceof HTMLElement)||!(container instanceof HTMLElement))return;
+      handle.addEventListener('pointerdown',(event)=>{
+        if(event.pointerType==='mouse'&&event.button!==0)return;
+        event.preventDefault();
+        handle.setPointerCapture?.(event.pointerId);
+        item.classList.add('opacity-60','shadow-lg');
+        document.body.style.userSelect='none';
+        let moved=false;
+
+        const onMove=(moveEvent)=>{
+          moveEvent.preventDefault();
+          const candidates=document.elementsFromPoint(moveEvent.clientX,moveEvent.clientY)
+            .map((element)=>element instanceof Element?element.closest(selector):null)
+            .filter((element)=>element instanceof HTMLElement&&element!==item&&element.parentElement===container);
+          const target=candidates[0];
+          if(!(target instanceof HTMLElement))return;
+          const rect=target.getBoundingClientRect();
+          const before=moveEvent.clientY<rect.top+(rect.height/2);
+          if(before)container.insertBefore(item,target);
+          else container.insertBefore(item,target.nextSibling);
+          moved=true;
+        };
+
+        const finish=()=>{
+          handle.removeEventListener('pointermove',onMove);
+          handle.removeEventListener('pointerup',finish);
+          handle.removeEventListener('pointercancel',finish);
+          item.classList.remove('opacity-60','shadow-lg');
+          document.body.style.userSelect='';
+          if(moved)onCommit();
+          renderLayoutEditor();
+        };
+
+        handle.addEventListener('pointermove',onMove);
+        handle.addEventListener('pointerup',finish);
+        handle.addEventListener('pointercancel',finish);
+      });
+    }
+
+    function updateLayoutScopeUi() {
+      layoutScopeButtons.forEach((node)=>{
+        if(!(node instanceof HTMLButtonElement))return;
+        const active=node.dataset.adminLayoutScope===currentAdminHomeLayoutScope;
+        node.classList.toggle('bg-[var(--koa-forest)]',active);
+        node.classList.toggle('text-white',active);
+        node.classList.toggle('border-[var(--koa-forest)]',active);
+        node.classList.toggle('bg-white',!active);
+        node.classList.toggle('text-[var(--koa-forest)]',!active);
+        node.classList.toggle('border-[var(--koa-line)]',!active);
+      });
+      if(layoutScopeHelp){
+        layoutScopeHelp.textContent=currentAdminHomeLayoutScope==='company'
+          ? 'This becomes the starting layout for new employees and staff without a personal layout.'
+          : 'Only your account will use this order.';
+      }
+      if(layoutSaveButton){
+        layoutSaveButton.textContent=currentAdminHomeLayoutScope==='company'?'Save Company Default':'Save My Layout';
+      }
+    }
+
+    function setAdminHomeLayoutScope(scope,apply=true) {
+      if(scope==='company'&&!canManageCompanyAdminHomeLayout)return;
+      currentAdminHomeLayoutScope=scope==='company'?'company':'personal';
+      updateLayoutScopeUi();
+      if(apply){
+        const layout=currentAdminHomeLayoutScope==='company'
+          ? companyAdminHomeLayout
+          : (personalAdminHomeLayout||savedAdminHomeLayout);
+        applyAdminHomeLayout(layout);
+        renderLayoutEditor();
+      }
+      if(layoutMessage)layoutMessage.textContent='';
+    }
+
     function renderLayoutEditor() {
       if(!(layoutEditorSections instanceof HTMLElement))return;
       layoutEditorSections.innerHTML='';
@@ -427,13 +529,19 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       sections.forEach((section,sectionIndex)=>{
         const sectionId=String(section.dataset.sectionId||'');
         const card=document.createElement('div');
+        card.dataset.layoutSectionCard=sectionId;
         card.className='rounded-xl border border-[var(--koa-line)] bg-white p-4';
 
         const head=document.createElement('div');
         head.className='flex flex-wrap items-center justify-between gap-3';
+        const titleWrap=document.createElement('div');
+        titleWrap.className='flex items-center gap-2';
+        const sectionDrag=dragHandle('Section');
         const title=document.createElement('strong');
         title.className='text-sm font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
         title.textContent=ADMIN_HOME_SECTION_LABELS[sectionId]||sectionId;
+        titleWrap.append(sectionDrag,title);
+
         const sectionControls=document.createElement('div');
         sectionControls.className='flex gap-2';
         sectionControls.append(
@@ -444,19 +552,27 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
             if(moveNodeAmongVisible(visibleSections(),section,1))renderLayoutEditor();
           }),
         );
-        head.append(title,sectionControls);
+        head.append(titleWrap,sectionControls);
         card.appendChild(head);
 
         const list=document.createElement('div');
+        list.dataset.layoutModuleList=sectionId;
         list.className='mt-3 grid gap-2';
         const modules=visibleModules(section);
         modules.forEach((module,moduleIndex)=>{
           const moduleId=String(module.dataset.moduleId||'');
           const row=document.createElement('div');
+          row.dataset.layoutModuleRow=moduleId;
           row.className='flex items-center justify-between gap-3 rounded-lg bg-[var(--koa-ivory)] px-3 py-2';
+
+          const labelWrap=document.createElement('div');
+          labelWrap.className='flex min-w-0 items-center gap-2';
+          const moduleDrag=dragHandle('Drag');
           const label=document.createElement('span');
-          label.className='text-sm font-semibold text-[var(--koa-forest)]';
+          label.className='truncate text-sm font-semibold text-[var(--koa-forest)]';
           label.textContent=ADMIN_HOME_MODULE_LABELS[moduleId]||moduleId;
+          labelWrap.append(moduleDrag,label);
+
           const controls=document.createElement('div');
           controls.className='flex shrink-0 gap-1.5';
           controls.append(
@@ -467,11 +583,37 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
               if(moveNodeAmongVisible(visibleModules(section),module,1))renderLayoutEditor();
             }),
           );
-          row.append(label,controls);
+          row.append(labelWrap,controls);
           list.appendChild(row);
+
+          enablePointerSort(
+            moduleDrag,
+            row,
+            list,
+            '[data-layout-module-row]',
+            ()=>{
+              const ids=[...list.querySelectorAll('[data-layout-module-row]')]
+                .map((node)=>node instanceof HTMLElement?String(node.dataset.layoutModuleRow||''):'')
+                .filter(Boolean);
+              commitModuleEditorOrder(sectionId,ids);
+            },
+          );
         });
         card.appendChild(list);
         layoutEditorSections.appendChild(card);
+
+        enablePointerSort(
+          sectionDrag,
+          card,
+          layoutEditorSections,
+          '[data-layout-section-card]',
+          ()=>{
+            const ids=[...layoutEditorSections.querySelectorAll('[data-layout-section-card]')]
+              .map((node)=>node instanceof HTMLElement?String(node.dataset.layoutSectionCard||''):'')
+              .filter(Boolean);
+            commitSectionEditorOrder(ids);
+          },
+        );
       });
     }
 
@@ -480,31 +622,55 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         const response=await fetch('/api/account/profile',{cache:'no-store'});
         if(!response.ok)throw new Error('Unable to load Admin Home preferences.');
         const profile=await response.json();
-        savedAdminHomeLayout=normalizeAdminHomeLayout(profile?.adminHomeLayout);
+        personalAdminHomeLayout=profile?.personalAdminHomeLayout
+          ? normalizeAdminHomeLayout(profile.personalAdminHomeLayout)
+          : null;
+        companyAdminHomeLayout=normalizeAdminHomeLayout(profile?.companyAdminHomeLayout||ADMIN_HOME_DEFAULT_LAYOUT);
+        savedAdminHomeLayout=normalizeAdminHomeLayout(profile?.adminHomeLayout||companyAdminHomeLayout);
+        canManageCompanyAdminHomeLayout=Boolean(profile?.canManageCompanyAdminHomeLayout);
+        document.querySelector('[data-admin-layout-scope="company"]')?.classList.toggle('hidden',!canManageCompanyAdminHomeLayout);
       }catch{
+        personalAdminHomeLayout=null;
+        companyAdminHomeLayout=normalizeAdminHomeLayout(ADMIN_HOME_DEFAULT_LAYOUT);
         savedAdminHomeLayout=normalizeAdminHomeLayout(ADMIN_HOME_DEFAULT_LAYOUT);
+        canManageCompanyAdminHomeLayout=false;
+        document.querySelector('[data-admin-layout-scope="company"]')?.classList.add('hidden');
       }
+      currentAdminHomeLayoutScope='personal';
+      updateLayoutScopeUi();
       applyAdminHomeLayout(savedAdminHomeLayout);
     }
 
     async function saveAdminHomeLayout() {
       const layout=readAdminHomeLayout();
-      if(layoutMessage)layoutMessage.textContent='Saving…';
+      const scope=currentAdminHomeLayoutScope;
+      if(layoutMessage)layoutMessage.textContent=scope==='company'?'Saving company default…':'Saving My Layout…';
+      if(layoutSaveButton instanceof HTMLButtonElement)layoutSaveButton.disabled=true;
       try{
         const response=await fetch('/api/account/profile',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({action:'save-admin-home-layout',layout}),
+          body:JSON.stringify({action:'save-admin-home-layout',scope,layout}),
         });
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to save Admin Home layout.');
-        savedAdminHomeLayout=normalizeAdminHomeLayout(data.adminHomeLayout||layout);
+
+        if(scope==='company'){
+          companyAdminHomeLayout=normalizeAdminHomeLayout(data.companyAdminHomeLayout||layout);
+          if(!personalAdminHomeLayout)savedAdminHomeLayout=companyAdminHomeLayout;
+        }else{
+          personalAdminHomeLayout=normalizeAdminHomeLayout(data.personalAdminHomeLayout||data.adminHomeLayout||layout);
+          savedAdminHomeLayout=personalAdminHomeLayout;
+        }
+
         applyAdminHomeLayout(savedAdminHomeLayout);
-        if(layoutMessage)layoutMessage.textContent='Saved for this account.';
+        if(layoutMessage)layoutMessage.textContent=data.message||'Layout saved.';
         layoutEditor?.classList.add('hidden');
         layoutEditButton?.setAttribute('aria-expanded','false');
       }catch(error){
         if(layoutMessage)layoutMessage.textContent=error instanceof Error?error.message:'Unable to save Admin Home layout.';
+      }finally{
+        if(layoutSaveButton instanceof HTMLButtonElement)layoutSaveButton.disabled=false;
       }
     }
 
