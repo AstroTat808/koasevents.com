@@ -183,7 +183,7 @@ function headerKey(value: unknown) {
   return clean(value,120).toLowerCase().replace(/[^a-z0-9]+/g,'');
 }
 
-function suggestMapping(headers: string[]): ImportMapping {
+export function suggestMapping(headers: string[]): ImportMapping {
   const aliases: Record<keyof ImportMapping,string[]> = {
     id:['id','sku','itemid','code'],
     name:['name','item','itemname','product','service','descriptionname'],
@@ -206,7 +206,7 @@ function suggestMapping(headers: string[]): ImportMapping {
   return mapping;
 }
 
-function parseCsv(text: string): string[][] {
+export function parseCsv(text: string): string[][] {
   const rows:string[][]=[]; let row:string[]=[]; let cell=''; let quoted=false;
   for(let i=0;i<text.length;i++){
     const ch=text[i];
@@ -223,7 +223,7 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-async function rowsFromFile(filename: string, base64: string) {
+export async function rowsFromFile(filename: string, base64: string) {
   if(!base64)throw new Error('Choose a CSV or Excel file.');
   const buffer=Buffer.from(base64,'base64');
   if(buffer.byteLength>IMPORT_LIMIT_BYTES)throw new Error('Catalog imports are limited to 2 MB.');
@@ -271,7 +271,7 @@ function importedItem(raw:Record<string,string>, mapping:ImportMapping, defaultG
   };
 }
 
-function buildImportRows(rawRows:Record<string,string>[], mapping:ImportMapping, defaultGroup:QuickBooksCatalogItem['group'], catalog:QuickBooksCatalogItem[]):ImportRow[] {
+export function buildImportRows(rawRows:Record<string,string>[], mapping:ImportMapping, defaultGroup:QuickBooksCatalogItem['group'], catalog:QuickBooksCatalogItem[]):ImportRow[] {
   const byId=new Map(catalog.map((item)=>[item.id.toLowerCase(),item]));
   const byName=new Map(catalog.map((item)=>[item.name.trim().toLowerCase(),item]));
   const seenIds=new Set<string>();
@@ -314,7 +314,7 @@ function importId(){
   return 'CAT-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
 }
 
-async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
+export async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
   const stable=(Array.isArray(catalog)?catalog:[])
     .map(item=>({
       id:item.id,name:item.name,description:item.description,category:item.category,group:item.group,
