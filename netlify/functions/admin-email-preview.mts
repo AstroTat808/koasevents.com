@@ -80,7 +80,7 @@ function renderTemplate(template:PreviewTemplate,brand:EmailBrandKey,person:Retu
 }
 
 export default async(req:Request)=>{
-  const auth=await requireCapability('crm.view',req);
+  const auth=await requireCapability('email.view',req);
   if(auth.response)return auth.response;
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);
