@@ -507,9 +507,10 @@ function normalizeLegacyProposalAccounting(record: any) {
   );
   const hasPaidBookingPayment = (Array.isArray(record?.booking?.payments) ? record.booking.payments : [])
     .some((entry: any) => String(entry?.status || '').toLowerCase() === 'paid' || Number(entry?.paidAmount || 0) > 0);
+  const depositAlreadyPaid = Boolean(qbo?.depositPaid);
   const contractCommitted = record?.booking?.contract?.status === 'signed' || Boolean(record?.booking?.contract?.koaSignature);
 
-  if (activeInvoices.length || hasPaidBookingPayment || contractCommitted) {
+  if (activeInvoices.length || hasPaidBookingPayment || depositAlreadyPaid || contractCommitted) {
     return {
       changed:false,
       reason:'financially-committed',
