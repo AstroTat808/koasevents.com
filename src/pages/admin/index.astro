@@ -884,21 +884,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       if(!(layoutEditor instanceof HTMLElement))return;
       const opening=layoutEditor.classList.contains('hidden');
       if(opening){
-        renderLayoutEditor();
+        setAdminHomeLayoutScope('personal',true);
         if(layoutMessage)layoutMessage.textContent='';
+      }else{
+        applyAdminHomeLayout(savedAdminHomeLayout);
       }
       layoutEditor.classList.toggle('hidden',!opening);
       layoutEditButton.setAttribute('aria-expanded',opening?'true':'false');
     });
 
+    layoutScopeButtons.forEach((node)=>{
+      node.addEventListener('click',()=>{
+        if(!(node instanceof HTMLButtonElement))return;
+        setAdminHomeLayoutScope(String(node.dataset.adminLayoutScope||'personal'),true);
+      });
+    });
+
     document.querySelector('[data-admin-layout-save]')?.addEventListener('click',()=>{void saveAdminHomeLayout();});
     document.querySelector('[data-admin-layout-reset]')?.addEventListener('click',()=>{
-      applyAdminHomeLayout(ADMIN_HOME_DEFAULT_LAYOUT);
+      const resetLayout=currentAdminHomeLayoutScope==='company'
+        ? ADMIN_HOME_DEFAULT_LAYOUT
+        : companyAdminHomeLayout;
+      applyAdminHomeLayout(resetLayout);
       renderLayoutEditor();
-      if(layoutMessage)layoutMessage.textContent='Default order loaded. Press Save layout to keep it.';
+      if(layoutMessage){
+        layoutMessage.textContent=currentAdminHomeLayoutScope==='company'
+          ? 'Built-in default loaded. Save Company Default to publish it.'
+          : 'Company default loaded. Save My Layout to keep it as your personal order.';
+      }
     });
     document.querySelector('[data-admin-layout-cancel]')?.addEventListener('click',()=>{
       applyAdminHomeLayout(savedAdminHomeLayout);
+      currentAdminHomeLayoutScope='personal';
+      updateLayoutScopeUi();
       layoutEditor?.classList.add('hidden');
       layoutEditButton?.setAttribute('aria-expanded','false');
       if(layoutMessage)layoutMessage.textContent='';
