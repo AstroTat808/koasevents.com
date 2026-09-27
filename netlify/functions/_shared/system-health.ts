@@ -6,6 +6,7 @@ import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCredit
 import { emailHealthSummary } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { quickBooksWebhookVerifierToken } from './quickbooks';
+import { syntheticHealthToken } from './synthetic-health';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -434,8 +435,14 @@ function syntheticResult(
 }
 
 async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCheck[]> {
-  const eventDocumentsPromise=timedFetch(origin+'/api/admin/events/documents/__health__',{method:'HEAD'});
-  const vendorInsurancePromise=timedFetch(origin+'/api/admin/vendors/insurance/__health__',{method:'HEAD'});
+  const internalSyntheticToken=syntheticHealthToken();
+  const internalHeaders=internalSyntheticToken?{'X-Koa-Synthetic-Token':internalSyntheticToken}:{};
+  const eventDocumentsPromise=internalSyntheticToken
+    ? timedFetch(origin+'/api/admin/events/documents/__health__',{method:'HEAD',headers:internalHeaders})
+    : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
+  const vendorInsurancePromise=internalSyntheticToken
+    ? timedFetch(origin+'/api/admin/vendors/insurance/__health__',{method:'HEAD',headers:internalHeaders})
+    : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
 
   const quickBooksToken=clean(quickBooksWebhookVerifierToken(),1000);
   const quickBooksBody=JSON.stringify({koaHealthCheck:true,eventNotifications:[]});
@@ -468,11 +475,25 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     signWellPromise,
   ]);
 
+  const signWellCheck=signWellToken
+    ? syntheticResult('synthetic-signwell-webhook','SignWell webhook synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook')
+    : {
+        id:'synthetic-signwell-webhook',
+        name:'SignWell webhook synthetic probe',
+        kind:'api' as const,
+        path:'/api/webhooks/signwell',
+        ok:true,
+        status:0,
+        ms:0,
+        severity:'yellow' as const,
+        detail:'SignWell webhook token is not configured, so the zero-write webhook probe is skipped. This is attention-only until SignWell is enabled.',
+      };
+
   return [
     syntheticResult('synthetic-event-documents','Event Documents synthetic probe','/api/admin/events/documents/:recordId',eventDocuments,'event-documents'),
     syntheticResult('synthetic-vendor-insurance-document','Vendor Insurance document synthetic probe','/api/admin/vendors/insurance/:vendorId',vendorInsurance,'vendor-insurance-document'),
     syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/.netlify/functions/quickbooks-webhook',quickBooks,'quickbooks-webhook'),
-    syntheticResult('synthetic-signwell-webhook','SignWell webhook synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook'),
+    signWellCheck,
   ];
 }
 
