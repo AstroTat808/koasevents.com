@@ -3246,8 +3246,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           return acc;
         },{critical:0,warning:0,info:0});
         const hasIssues=severityCounts.critical+severityCounts.warning+severityCounts.info>0;
+        const allHealthy=!hasIssues&&Number(current.failed||0)===0;
         overall.textContent=severityCounts.critical?'Critical':severityCounts.warning?'Warning':severityCounts.info?'Info':'Healthy';
-        overall.className='display mt-3 text-4xl '+(severityCounts.critical?'text-red-800':severityCounts.warning?'text-amber-800':severityCounts.info?'text-sky-800':'text-[var(--koa-forest)]');
+        overall.className='display mt-3 text-4xl '+(severityCounts.critical?'text-red-800':severityCounts.warning?'text-amber-800':severityCounts.info?'text-sky-800':'text-emerald-800');
+        overallCard.classList.toggle('bg-emerald-50',allHealthy);
+        overallCard.classList.toggle('border',allHealthy);
+        overallCard.classList.toggle('border-emerald-200',allHealthy);
+        overallCard.classList.toggle('bg-white',!allHealthy);
         criticalCount.textContent=severityCounts.critical+' critical';
         warningCount.textContent=severityCounts.warning+' warning';
         infoCount.textContent=severityCounts.info+' info';
@@ -4328,7 +4333,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const latest=await fetch('/api/admin/health',{cache:'no-store'});
         render(await latest.json());
       }catch(error){
-        overall.textContent='Check failed';overall.className='display mt-3 text-4xl text-red-800';
+        // The core health run may already have completed and persisted successfully even if
+        // a secondary enrichment step fails. Re-read the persisted snapshot before showing
+        // a dashboard-level failure so "0 failed" can never be paired with "Check failed".
+        try{
+          const latest=await fetch('/api/admin/health',{cache:'no-store'});
+          if(latest.ok){
+            render(await latest.json());
+          }else{
+            overall.textContent='Check failed';
+            overall.className='display mt-3 text-4xl text-red-800';
+          }
+        }catch{
+          overall.textContent='Check failed';
+          overall.className='display mt-3 text-4xl text-red-800';
+        }
       }finally{
         refresh.disabled=false;refresh.textContent='Run checks now';
       }
