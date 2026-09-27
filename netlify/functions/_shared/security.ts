@@ -240,10 +240,131 @@ export async function recordTurnstileValidation(
   return row;
 }
 
+const TURNSTILE_WIDGET_EXPECTATIONS = [
+  { path: '/inquire/', action: 'event_inquiry' },
+  { path: '/wedding-inquiry/', action: 'wedding_inquiry' },
+  { path: '/wedding-inquiry-thank-you/', action: 'discovery_call' },
+  { path: '/stay/', action: 'stay_inquiry' },
+] as const;
+
+async function inspectTurnstileWidgets(context: Context, siteKey: string) {
+  const origin = String(context.site?.url || 'https://koasevents.com').replace(/\/$/, '');
+  return Promise.all(TURNSTILE_WIDGET_EXPECTATIONS.map(async (expectation) => {
+    const started = Date.now();
+    try {
+      const response = await fetch(origin + expectation.path, {
+        headers: { Accept: 'text/html', 'User-Agent': 'KoaEvents-Turnstile-Health/1.0' },
+        signal: AbortSignal.timeout(8000),
+      });
+      const html = response.ok ? await response.text() : '';
+      const widgetTags = [...html.matchAll(/<div\b[^>]*\bcf-turnstile\b[^>]*>/gi)].map((match) => match[0]);
+      const widgetPresent = widgetTags.length > 0;
+      const scriptPresent = html.includes('https://challenges.cloudflare.com/turnstile/v0/api.js');
+      const actionPresent = widgetTags.some((tag) =>
+        tag.includes('data-action="' + expectation.action + '"') ||
+        tag.includes("data-action='" + expectation.action + "'")
+      );
+      const siteKeyPresent = Boolean(siteKey) && widgetTags.some((tag) =>
+        tag.includes('data-sitekey="' + siteKey + '"') ||
+        tag.includes("data-sitekey='" + siteKey + "'")
+      );
+      const ok = Boolean(response.ok && widgetPresent && scriptPresent && actionPresent && siteKeyPresent);
+      return {
+        path: expectation.path,
+        action: expectation.action,
+        ok,
+        status: response.status,
+        ms: Date.now() - started,
+        widgetPresent,
+        scriptPresent,
+        actionPresent,
+        siteKeyPresent,
+        detail: ok
+          ? 'Widget, script, site key, and action are rendered.'
+          : [
+              response.ok ? '' : 'Page request failed',
+              widgetPresent ? '' : 'widget missing',
+              scriptPresent ? '' : 'Turnstile script missing',
+              siteKeyPresent ? '' : 'configured site key not rendered',
+              actionPresent ? '' : 'expected action missing',
+            ].filter(Boolean).join(' · ') || 'Widget verification failed.',
+      };
+    } catch (error) {
+      return {
+        path: expectation.path,
+        action: expectation.action,
+        ok: false,
+        status: 0,
+        ms: Date.now() - started,
+        widgetPresent: false,
+        scriptPresent: false,
+        actionPresent: false,
+        siteKeyPresent: false,
+        detail: error instanceof Error ? clean(error.message, 300) : 'Widget verification failed.',
+      };
+    }
+  }));
+}
+
+async function probeTurnstileSiteverify(secret: string) {
+  if (!secret) {
+    return {
+      ok: false,
+      reachable: false,
+      secretAccepted: false,
+      status: 0,
+      codes: ['missing-secret'],
+      detail: 'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET is not configured.',
+    };
+  }
+
+  try {
+    const body = new URLSearchParams({
+      secret,
+      response: 'koa-health-probe-intentionally-invalid-token',
+    });
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+      signal: AbortSignal.timeout(10000),
+    });
+    const data: any = await response.json().catch(() => null);
+    const codes = Array.isArray(data?.['error-codes'])
+      ? data['error-codes'].map((value: unknown) => clean(value, 120)).filter(Boolean)
+      : [];
+    const secretRejected = codes.includes('invalid-input-secret') || codes.includes('missing-input-secret');
+    const reachable = Boolean(response.status);
+    const secretAccepted = Boolean(response.ok && !secretRejected);
+    return {
+      ok: Boolean(reachable && secretAccepted),
+      reachable,
+      secretAccepted,
+      status: response.status,
+      codes,
+      detail: secretAccepted
+        ? 'Cloudflare Siteverify is reachable and accepted the configured secret; the health-probe token was intentionally invalid.'
+        : secretRejected
+          ? 'Cloudflare Siteverify rejected the configured Turnstile secret.'
+          : 'Cloudflare Siteverify could not complete the health probe.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reachable: false,
+      secretAccepted: false,
+      status: 0,
+      codes: ['siteverify-unavailable'],
+      detail: error instanceof Error ? clean(error.message, 300) : 'Cloudflare Siteverify health probe failed.',
+    };
+  }
+}
+
 export async function getTurnstileStatus(context: Context, days = 30) {
   const store = storeFor(context);
   const rows = ((await store.get('turnstile/validations', { type: 'json', consistency: 'strong' })) || []) as TurnstileValidation[];
-  const cutoff = Date.now() - Math.max(1, Math.min(90, Math.round(Number(days || 30)))) * 24 * 60 * 60 * 1000;
+  const windowDays = Math.max(1, Math.min(90, Math.round(Number(days || 30))));
+  const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
   const inRange = rows.filter((row) => Date.parse(row.createdAt) >= cutoff);
   const failures = inRange.filter((row) => !row.ok);
   const successes = inRange.filter((row) => row.ok);
@@ -259,35 +380,58 @@ export async function getTurnstileStatus(context: Context, days = 30) {
     }
   }
 
-  let siteKeyConfigured = Boolean(
-    String(
-      Netlify.env.get('PUBLIC_TURNSTILE_SITE_KEY') ||
-      Netlify.env.get('TURNSTILE_SITEKEY') ||
-      Netlify.env.get('TURNSTILE_SITE_KEY') ||
-      '',
-    ).trim(),
+  const siteKey = String(
+    Netlify.env.get('PUBLIC_TURNSTILE_SITE_KEY') ||
+    Netlify.env.get('TURNSTILE_SITEKEY') ||
+    Netlify.env.get('TURNSTILE_SITE_KEY') ||
+    '',
+  ).trim();
+  const secret = securitySecret();
+
+  const [widgets, siteverify] = await Promise.all([
+    inspectTurnstileWidgets(context, siteKey),
+    probeTurnstileSiteverify(secret),
+  ]);
+
+  const mismatchRows = inRange.filter((row) =>
+    row.codes.includes('hostname-mismatch') ||
+    row.codes.includes('action-mismatch') ||
+    Boolean(row.hostname && row.requestHostname && row.hostname !== row.requestHostname) ||
+    Boolean(row.action && row.expectedAction && row.action !== row.expectedAction)
   );
-  let siteKeySource = siteKeyConfigured ? 'environment' : '';
-  if (!siteKeyConfigured) {
-    try {
-      const origin = String(context.site?.url || 'https://koasevents.com').replace(/\/$/, '');
-      const response = await fetch(origin + '/inquire/', { signal: AbortSignal.timeout(8000) });
-      const html = response.ok ? await response.text() : '';
-      siteKeyConfigured = /class=["'][^"']*cf-turnstile[^"']*["'][^>]*data-sitekey=["'][^"']+["']/i.test(html)
-        || /data-sitekey=["'][^"']+["'][^>]*class=["'][^"']*cf-turnstile/i.test(html);
-      if (siteKeyConfigured) siteKeySource = 'deployed-widget';
-    } catch {}
-  }
+  const hostnameMismatchRows = mismatchRows.filter((row) =>
+    row.codes.includes('hostname-mismatch') ||
+    Boolean(row.hostname && row.requestHostname && row.hostname !== row.requestHostname)
+  );
+  const actionMismatchRows = mismatchRows.filter((row) =>
+    row.codes.includes('action-mismatch') ||
+    Boolean(row.action && row.expectedAction && row.action !== row.expectedAction)
+  );
+  const lastMismatch = mismatchRows[0] || null;
+  const healthyWidgets = widgets.filter((row) => row.ok).length;
 
   return {
-    siteKeyConfigured,
-    siteKeySource,
-    secretConfigured: Boolean(securitySecret()),
-    windowDays: Math.max(1, Math.min(90, Math.round(Number(days || 30)))),
+    siteKeyConfigured: Boolean(siteKey),
+    siteKeySource: siteKey ? 'environment' : '',
+    secretConfigured: Boolean(secret),
+    widgetRendering: {
+      ok: healthyWidgets === widgets.length && widgets.length === TURNSTILE_WIDGET_EXPECTATIONS.length,
+      healthy: healthyWidgets,
+      total: widgets.length,
+      widgets,
+    },
+    siteverify,
+    windowDays,
     totals: {
       validations: inRange.length,
       successful: successes.length,
       failed: failures.length,
+    },
+    mismatches: {
+      hostname: hostnameMismatchRows.length,
+      action: actionMismatchRows.length,
+      total: mismatchRows.length,
+      lastSeenAt: lastMismatch?.createdAt || '',
     },
     lastSuccess: rows.find((row) => row.ok) || null,
     lastFailure: rows.find((row) => !row.ok) || null,
