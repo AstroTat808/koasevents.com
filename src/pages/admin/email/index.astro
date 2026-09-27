@@ -10,7 +10,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div>
             <p class="eyebrow text-[var(--koa-clay)]">Administration · Communications</p>
             <h1 class="display mt-2 text-5xl text-[var(--koa-forest)] sm:text-6xl">Email</h1>
-            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">See exactly where Koa’s automated emails go. Internal notification routes can be assigned to one or more To, CC, and BCC recipients. Client and vendor messages remain tied to the actual client/vendor record so they cannot be accidentally redirected.</p>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Control internal destinations, reusable recipient groups, sender identities, route tests, and recent delivery activity. Client and vendor primary recipients remain tied to the actual CRM/vendor record so they cannot be accidentally redirected.</p>
           </div>
           <div class="flex flex-wrap gap-2">
             <a href="/admin/email-preview/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Email Preview</a>
@@ -31,6 +31,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div data-sender-grid class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
         </section>
 
+        <section class="mt-6 rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Reusable destinations</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Recipient groups</h2>
+              <p class="mt-2 max-w-3xl text-sm text-[var(--koa-ink)]/55">Create groups such as Sales Team, Management, Event Ops, and Accounting once, then assign those groups to any configurable route.</p>
+            </div>
+            <button data-add-group type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add group</button>
+          </div>
+          <div data-group-grid class="mt-4 grid gap-3 lg:grid-cols-2"></div>
+        </section>
+
         <section class="mt-6">
           <div class="flex items-end justify-between gap-4">
             <div>
@@ -39,6 +51,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
           </div>
           <div data-route-grid class="mt-4 grid gap-4 lg:grid-cols-2"></div>
+        </section>
+
+        <section class="mt-6 rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Delivery audit</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Email activity · last 100</h2>
+              <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Resend message ID, recipient, subject, email type, and latest delivery state.</p>
+            </div>
+            <span data-activity-state class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
+          </div>
+          <div class="mt-4 overflow-x-auto">
+            <table class="w-full min-w-[900px] border-collapse text-left text-xs">
+              <thead><tr class="border-b border-[var(--koa-line)] text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-2 py-3">When</th><th class="px-2 py-3">Recipient</th><th class="px-2 py-3">Subject</th><th class="px-2 py-3">Type</th><th class="px-2 py-3">Status</th><th class="px-2 py-3">Resend ID</th></tr></thead>
+              <tbody data-activity-body></tbody>
+            </table>
+          </div>
         </section>
       </section>
 
@@ -57,13 +86,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const denied=document.querySelector('[data-email-routing-denied]');
     const routeGrid=document.querySelector('[data-route-grid]');
     const senderGrid=document.querySelector('[data-sender-grid]');
+    const groupGrid=document.querySelector('[data-group-grid]');
+    const activityBody=document.querySelector('[data-activity-body]');
+    const activityState=document.querySelector('[data-activity-state]');
+    const addGroupButton=document.querySelector('[data-add-group]');
     const saveButton=document.querySelector('[data-save-routes]');
     const statusNode=document.querySelector('[data-email-routing-status]');
     const updatedNode=document.querySelector('[data-routing-updated]');
-    let latest:any={routes:[],senders:{}};
+    let latest:any={routes:[],senders:{},groups:[],activity:{rows:[]}};
     let canManage=false;
 
-    function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));}
+    function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[char]||char));}
+    function parseEmails(value){return String(value||'').split(/[\n,;]+/).map((x)=>x.trim().toLowerCase()).filter(Boolean);}
+    function makeId(value){return String(value||'group').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||('group-'+Date.now());}
     function showStatus(message,tone='ok'){
       if(!(statusNode instanceof HTMLElement))return;
       statusNode.textContent=message;
@@ -88,52 +123,133 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       ];
       senderGrid.innerHTML=rows.map(([label,value])=>'<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><p class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">'+esc(value)+'</p></article>').join('');
     }
+    function renderGroups(){
+      if(!groupGrid)return;
+      groupGrid.innerHTML='';
+      const groups=Array.isArray(latest.groups)?latest.groups:[];
+      if(!groups.length){
+        groupGrid.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/50">No named recipient groups yet. Add Sales Team, Management, Event Ops, Accounting, or any group you use repeatedly.</div>';
+        return;
+      }
+      for(const group of groups){
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        card.innerHTML='<div class="flex gap-2"><input data-group-name data-group-id="'+esc(group.id)+'" value="'+esc(group.name)+'" '+(!canManage?'disabled':'')+' class="min-w-0 flex-1 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-sm font-semibold text-[var(--koa-forest)]"><button data-delete-group="'+esc(group.id)+'" type="button" '+(!canManage?'disabled':'')+' class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.52rem] font-black uppercase tracking-[.06em]">Remove</button></div><label class="mt-3 grid gap-1.5 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Members<textarea data-group-emails data-group-id="'+esc(group.id)+'" rows="2" '+(!canManage?'disabled':'')+' class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[var(--koa-forest)]">'+esc((group.emails||[]).join(', '))+'</textarea></label>';
+        groupGrid.appendChild(card);
+      }
+      groupGrid.querySelectorAll('[data-delete-group]').forEach((node)=>{
+        node.addEventListener('click',()=>{
+          const id=String((node as HTMLElement).dataset.deleteGroup||'');
+          latest.groups=(latest.groups||[]).filter((g)=>g.id!==id);
+          for(const route of latest.routes||[]){
+            for(const field of ['toGroups','ccGroups','bccGroups'])route[field]=(route[field]||[]).filter((gid)=>gid!==id);
+          }
+          renderGroups();renderRoutes();
+        });
+      });
+    }
+    function groupSelector(route,kind){
+      const wrap=document.createElement('div');
+      wrap.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+      const field=kind+'Groups';
+      const selected=new Set(route[field]||[]);
+      const title=document.createElement('p');
+      title.className='text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+      title.textContent=kind.toUpperCase()+' groups';
+      wrap.appendChild(title);
+      const groups=Array.isArray(latest.groups)?latest.groups:[];
+      if(!groups.length){
+        const empty=document.createElement('p');empty.className='mt-2 text-xs text-[var(--koa-ink)]/45';empty.textContent='No recipient groups created yet.';wrap.appendChild(empty);return wrap;
+      }
+      const list=document.createElement('div');list.className='mt-2 flex flex-wrap gap-2';
+      for(const group of groups){
+        const label=document.createElement('label');label.className='flex items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]';
+        const checkbox=document.createElement('input');checkbox.type='checkbox';checkbox.checked=selected.has(group.id);checkbox.disabled=!canManage;checkbox.dataset.routeId=route.id;checkbox.dataset.routeGroupField=field;checkbox.value=group.id;
+        label.append(checkbox,document.createTextNode(group.name));list.appendChild(label);
+      }
+      wrap.appendChild(list);return wrap;
+    }
+    function testButton(route){
+      const button=document.createElement('button');
+      button.type='button';
+      button.disabled=!canManage;
+      button.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)] disabled:opacity-40';
+      button.textContent='Send test';
+      button.addEventListener('click',async()=>{
+        if(!canManage)return;
+        button.disabled=true;button.textContent='Sending…';
+        try{
+          const response=await fetch('/api/admin/email-routing',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'send-test',routeId:route.id})});
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(result.error||'Unable to send test.');
+          showStatus('Test sent for '+route.label+'. Resend ID: '+(result.resendMessageId||'unknown'));
+          window.setTimeout(load,1200);
+        }catch(error){showStatus(error instanceof Error?error.message:'Unable to send test.','error');}
+        finally{button.disabled=!canManage;button.textContent='Send test';}
+      });
+      return button;
+    }
     function renderRoutes(){
       if(!routeGrid)return;
       routeGrid.innerHTML='';
       for(const route of latest.routes||[]){
         const card=document.createElement('article');
         card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5 shadow-[0_8px_24px_rgba(7,30,23,.05)]';
-        const top=document.createElement('div');
-        top.className='flex items-start justify-between gap-3';
+        const top=document.createElement('div');top.className='flex items-start justify-between gap-3';
         const copy=document.createElement('div');
         copy.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(route.category)+'</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">'+esc(route.label)+'</h3><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(route.description)+'</p>';
-        const badge=document.createElement('span');
-        badge.className='shrink-0 rounded-full px-2.5 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+(route.mode==='configurable'?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700');
-        badge.textContent=route.mode==='configurable'?'Configurable':'Dynamic';
-        top.append(copy,badge);card.appendChild(top);
+        const controls=document.createElement('div');controls.className='flex shrink-0 flex-col items-end gap-2';
+        const badge=document.createElement('span');badge.className='rounded-full px-2.5 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+(route.mode==='configurable'?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700');badge.textContent=route.mode==='configurable'?'Configurable':'Dynamic';
+        controls.append(badge,testButton(route));top.append(copy,controls);card.appendChild(top);
+
+        const sender=document.createElement('div');sender.className='mt-4 grid gap-2 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs sm:grid-cols-2';
+        sender.innerHTML='<p><span class="font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">From</span><br><span class="font-semibold text-[var(--koa-forest)]">'+esc(route.from||'—')+'</span></p><p><span class="font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Reply-To</span><br><span class="font-semibold text-[var(--koa-forest)]">'+esc(route.replyTo||'—')+'</span></p>';
+        card.appendChild(sender);
 
         if(route.mode==='dynamic'){
           const dynamic=document.createElement('div');
-          dynamic.className='mt-4 rounded-xl bg-[var(--koa-ivory)] p-4';
-          dynamic.innerHTML='<p class="text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recipient source</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+esc(recipientText(route))+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/45">Protected dynamic route: the recipient follows the actual record instead of a fixed inbox.</p>';
+          dynamic.className='mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4';
+          dynamic.innerHTML='<p class="text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recipient source</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+esc(recipientText(route))+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/45">Protected dynamic route. Send test delivers only to the signed-in staff member, never to a live client/vendor.</p>';
           card.appendChild(dynamic);
         }else{
-          const fields=document.createElement('div');
-          fields.className='mt-4 grid gap-3';
+          const fields=document.createElement('div');fields.className='mt-4 grid gap-3';
           for(const kind of ['to','cc','bcc']){
-            const label=document.createElement('label');
-            label.className='grid gap-1.5 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
-            label.textContent=kind.toUpperCase();
-            const textarea=document.createElement('textarea');
-            textarea.rows=kind==='to'?2:1;
-            textarea.dataset.routeId=route.id;
-            textarea.dataset.routeField=kind;
-            textarea.disabled=!canManage;
-            textarea.value=(route[kind]||[]).join(', ');
-            textarea.placeholder=kind==='to'?'name@example.com':'Optional';
-            textarea.className='min-h-[2.9rem] rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[var(--koa-forest)] disabled:bg-slate-50 disabled:text-slate-400';
-            label.appendChild(textarea);fields.appendChild(label);
+            const label=document.createElement('label');label.className='grid gap-1.5 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';label.textContent=kind.toUpperCase()+' individual addresses';
+            const textarea=document.createElement('textarea');textarea.rows=kind==='to'?2:1;textarea.dataset.routeId=route.id;textarea.dataset.routeField=kind;textarea.disabled=!canManage;textarea.value=(route['direct'+kind.charAt(0).toUpperCase()+kind.slice(1)]||[]).join(', ');textarea.placeholder=kind==='to'?'name@example.com':'Optional';textarea.className='min-h-[2.9rem] rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[var(--koa-forest)] disabled:bg-slate-50 disabled:text-slate-400';label.appendChild(textarea);fields.append(label,groupSelector(route,kind));
           }
-          const fallback=document.createElement('p');
-          fallback.className='text-[.58rem] leading-4 text-[var(--koa-ink)]/42';
-          fallback.textContent='Default/fallback: '+((route.defaultTo||[]).join(', ')||'none');
-          fields.appendChild(fallback);card.appendChild(fields);
+          const effective=document.createElement('p');effective.className='text-[.62rem] leading-5 text-[var(--koa-ink)]/48';effective.textContent='Effective To now: '+((route.to||[]).join(', ')||'none')+' · Default/fallback: '+((route.defaultTo||[]).join(', ')||'none');fields.appendChild(effective);card.appendChild(fields);
         }
         routeGrid.appendChild(card);
       }
     }
-    function parseEmails(value){return String(value||'').split(/[\n,;]+/).map((x)=>x.trim().toLowerCase()).filter(Boolean);}
+    function renderActivity(){
+      if(!activityBody)return;
+      const activity=latest.activity||{};
+      const rows=Array.isArray(activity.rows)?activity.rows:[];
+      if(activityState)activityState.textContent=activity.ok?rows.length+' messages loaded':(activity.detail||'Activity unavailable');
+      activityBody.innerHTML='';
+      if(!rows.length){
+        activityBody.innerHTML='<tr><td colspan="6" class="px-2 py-6 text-center text-sm text-[var(--koa-ink)]/45">No Resend activity is currently available.</td></tr>';return;
+      }
+      for(const row of rows){
+        const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)]/70 align-top';
+        const status=String(row.status||'unknown');
+        const tone=['failed','bounced','complained','suppressed'].includes(status)?'text-red-700':status==='delivered'?'text-emerald-700':'text-[var(--koa-forest)]';
+        tr.innerHTML='<td class="px-2 py-3 whitespace-nowrap">'+esc(row.createdAt?new Date(row.createdAt).toLocaleString():'—')+'</td><td class="px-2 py-3 max-w-[220px] break-all">'+esc(row.recipient||'—')+'</td><td class="px-2 py-3 max-w-[260px]">'+esc(row.subject||'—')+'</td><td class="px-2 py-3">'+esc(row.emailType||'Other')+'</td><td class="px-2 py-3 font-black '+tone+'">'+esc(status)+'</td><td class="px-2 py-3 max-w-[210px] break-all font-mono text-[.68rem]">'+esc(row.resendMessageId||'—')+'</td>';
+        activityBody.appendChild(tr);
+      }
+    }
+    function collectGroups(){
+      const groups=[];
+      document.querySelectorAll('[data-group-name]').forEach((node)=>{
+        if(!(node instanceof HTMLInputElement))return;
+        const id=String(node.dataset.groupId||makeId(node.value));
+        const emailNode=document.querySelector('[data-group-emails][data-group-id="'+CSS.escape(id)+'"]');
+        const emails=emailNode instanceof HTMLTextAreaElement?parseEmails(emailNode.value):[];
+        if(node.value.trim()&&emails.length)groups.push({id,name:node.value.trim(),emails});
+      });
+      return groups;
+    }
     async function load(){
       const session=await getAdminSession();
       const caps=new Set(session?.capabilities||session?.permissions||[]);
@@ -141,34 +257,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       canManage=Boolean(session.isAdmin||caps.has('email.manage'));
       app?.classList.remove('hidden');
       if(saveButton instanceof HTMLButtonElement)saveButton.classList.toggle('hidden',!canManage);
+      if(addGroupButton instanceof HTMLButtonElement)addGroupButton.classList.toggle('hidden',!canManage);
       const response=await fetch('/api/admin/email-routing',{cache:'no-store'});
       if(response.status===401)return;
       if(response.status===403){app?.classList.add('hidden');denied?.classList.remove('hidden');return;}
       if(!response.ok){showStatus('Unable to load email routing.','error');return;}
       latest=await response.json();
       if(updatedNode)updatedNode.textContent=latest.updatedAt?'Last changed '+new Date(latest.updatedAt).toLocaleString()+(latest.updatedBy?' by '+latest.updatedBy:''):'Using default routing';
-      renderSenders();renderRoutes();
+      renderSenders();renderGroups();renderRoutes();renderActivity();
     }
+    addGroupButton?.addEventListener('click',()=>{
+      if(!canManage)return;
+      const name='New group';
+      const base=makeId(name);
+      let id=base,i=2;
+      while((latest.groups||[]).some((g)=>g.id===id)){id=base+'-'+i;i+=1;}
+      latest.groups=[...(latest.groups||[]),{id,name,emails:[]}];
+      renderGroups();renderRoutes();
+    });
     saveButton?.addEventListener('click',async()=>{
       if(!canManage)return;
-      const routes:Record<string,{to:string[];cc:string[];bcc:string[]}>={};
+      const groups=collectGroups();
+      const routes={};
       for(const route of latest.routes||[]){
         if(route.mode!=='configurable')continue;
-        routes[route.id]={to:[],cc:[],bcc:[]};
+        routes[route.id]={to:[],cc:[],bcc:[],toGroups:[],ccGroups:[],bccGroups:[]};
         document.querySelectorAll('[data-route-id="'+CSS.escape(route.id)+'"]').forEach((node)=>{
-          if(!(node instanceof HTMLTextAreaElement))return;
-          const field=String(node.dataset.routeField||'to') as 'to'|'cc'|'bcc';
-          routes[route.id][field]=parseEmails(node.value);
+          if(node instanceof HTMLTextAreaElement){
+            const field=String(node.dataset.routeField||'to');routes[route.id][field]=parseEmails(node.value);
+          }else if(node instanceof HTMLInputElement&&node.type==='checkbox'&&node.checked){
+            const field=String(node.dataset.routeGroupField||'toGroups');routes[route.id][field].push(node.value);
+          }
         });
       }
       if(saveButton instanceof HTMLButtonElement){saveButton.disabled=true;saveButton.textContent='Saving…';}
       try{
-        const response=await fetch('/api/admin/email-routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({routes})});
+        const response=await fetch('/api/admin/email-routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({groups,routes})});
         const result=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(result.error||'Unable to save email routing.');
-        latest=result;renderSenders();renderRoutes();
+        latest=result;renderSenders();renderGroups();renderRoutes();renderActivity();
         if(updatedNode)updatedNode.textContent='Last changed '+new Date(latest.updatedAt).toLocaleString()+(latest.updatedBy?' by '+latest.updatedBy:'');
-        showStatus('Email routing saved. New internal emails will use these recipients.');
+        showStatus('Email routing and recipient groups saved.');
       }catch(error){showStatus(error instanceof Error?error.message:'Unable to save email routing.','error');}
       finally{if(saveButton instanceof HTMLButtonElement){saveButton.disabled=false;saveButton.textContent='Save routing';}}
     });
