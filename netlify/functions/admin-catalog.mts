@@ -282,8 +282,14 @@ export function buildImportRows(rawRows:Record<string,string>[], mapping:ImportM
     if(!item.name)errors.push('Name is required.');
     const idKey=item.id.toLowerCase();
     const nameKey=item.name.trim().toLowerCase();
-    const existing=byId.get(idKey)||byName.get(nameKey);
+    const idMatch=byId.get(idKey);
+    const nameMatch=byName.get(nameKey);
+    const existing=idMatch||nameMatch;
     let status:ImportRow['status']=existing?'update':'new';
+    if(idMatch&&nameMatch&&idMatch.id!==nameMatch.id){
+      status='invalid';
+      errors.push('ID and name match different existing catalog items.');
+    }
     if((idKey&&seenIds.has(idKey))||(nameKey&&seenNames.has(nameKey))){
       status='duplicate';
       errors.push('Duplicate ID or name inside this import file.');
