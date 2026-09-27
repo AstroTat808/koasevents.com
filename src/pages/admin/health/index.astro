@@ -16,7 +16,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </div>
       </div>
 
-      <div data-unauthorized class="mt-8 hidden rounded-[1.4rem] bg-white p-7 shadow-[var(--shadow-soft)]">This health dashboard requires an administrator account.</div>
+      <div data-unauthorized class="mt-8 hidden rounded-[1.4rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Permission required</p>
+        <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">System Health access is not enabled for this account.</h2>
+        <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">You are signed in, but your role does not include the System Health permission.</p>
+      </div>
 
       <div data-app class="mt-8 hidden grid gap-6">
         <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4115,7 +4119,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function load(){
       const response=await fetch('/api/admin/health',{cache:'no-store'});
-      if(response.status===401||response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+      if(response.status===401)return;
+      if(response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok) throw new Error('Unable to load System Health.');
       render(await response.json());
     }
@@ -4205,7 +4210,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
 
     const session=await getAdminSession();
-    const ok=Boolean(session?.isAdmin);
+    const sessionCapabilities=new Set(session?.capabilities||session?.permissions||[]);
+    const ok=Boolean(session&&!session.accessBlocked&&(session.isAdmin||sessionCapabilities.has('health.view')));
     app?.classList.toggle('hidden',!ok);
     unauthorized?.classList.toggle('hidden',ok);
     if(ok){
