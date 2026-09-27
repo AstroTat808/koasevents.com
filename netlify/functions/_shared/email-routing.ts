@@ -150,8 +150,9 @@ export async function emailRoutingSummary() {
   const routes: EmailRoute[] = CATALOG.map((route)=>{
     const defaultTo = defaultsFor(route.id);
     const saved:any = stored.routes?.[route.id] || {};
+    const hasSavedTo=Object.prototype.hasOwnProperty.call(saved,'to');
     const directTo=route.mode==='configurable'
-      ? (normalizeEmails(saved.to).length?normalizeEmails(saved.to):defaultTo)
+      ? (hasSavedTo?normalizeEmails(saved.to):defaultTo)
       : [];
     const directCc=normalizeEmails(saved.cc);
     const directBcc=normalizeEmails(saved.bcc);
