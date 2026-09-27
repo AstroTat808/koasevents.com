@@ -361,7 +361,10 @@ export async function getAccessContext(req?:Request) {
 
 function blockedResponse(ctx: Awaited<ReturnType<typeof getAccessContext>>) {
   if (!ctx.sessionUser || !ctx.user) {
-    return new Response('Unauthorized', { status:401 });
+    return Response.json(
+      { error:'Authentication required.', code:'unauthenticated' },
+      { status:401, headers:{'Cache-Control':'private, no-store'} },
+    );
   }
   if (ctx.role === 'deactivated' || ctx.role === 'none') {
     return Response.json({ error:'Account access is disabled.', code:'account_disabled' }, { status:403 });
@@ -384,7 +387,13 @@ export async function requireAdmin(req?:Request) {
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role !== 'admin') {
-    return { user:null, response:new Response('Unauthorized', { status:401 }) };
+    return {
+      user:null,
+      response:Response.json(
+        { error:'Administrator permission required.', code:'forbidden' },
+        { status:403, headers:{'Cache-Control':'private, no-store'} },
+      ),
+    };
   }
   return { user:ctx.user, response:null };
 }
@@ -394,7 +403,13 @@ export async function requireManager(req?:Request) {
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!['admin','manager'].includes(ctx.role)) {
-    return { user:null, response:new Response('Forbidden', { status:403 }) };
+    return {
+      user:null,
+      response:Response.json(
+        { error:'Manager permission required.', code:'forbidden' },
+        { status:403, headers:{'Cache-Control':'private, no-store'} },
+      ),
+    };
   }
   return { user:ctx.user, response:null };
 }
@@ -404,7 +419,13 @@ export async function requireCapability(capability: StaffCapability, req?:Reques
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!ctx.capabilities.includes(capability)) {
-    return { user:null, response:new Response('Forbidden', { status:403 }) };
+    return {
+      user:null,
+      response:Response.json(
+        { error:'This account does not have permission for this action.', code:'forbidden', capability },
+        { status:403, headers:{'Cache-Control':'private, no-store'} },
+      ),
+    };
   }
   return { user:ctx.user, response:null };
 }
@@ -414,7 +435,13 @@ export async function requireOperations(req?:Request) {
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role === 'none' || ctx.role === 'deactivated') {
-    return { user:null, response:new Response('Unauthorized', { status:401 }) };
+    return {
+      user:null,
+      response:Response.json(
+        { error:'Workspace access is disabled for this account.', code:'account_disabled' },
+        { status:403, headers:{'Cache-Control':'private, no-store'} },
+      ),
+    };
   }
   return { user:ctx.user, response:null };
 }
