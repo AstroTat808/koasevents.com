@@ -102,11 +102,14 @@ export type GithubMainSignal = {
 
 const PAGE_CHECKS = [
   ['admin-home','Content Admin','/admin/','data-auth-panel'],
+  ['action-center','Action Center','/admin/actions/','data-app'],
   ['business-crm','Business CRM','/admin/crm/','data-crm-watchdog'],
   ['sales-crm','Sales CRM','/admin/quotes/','data-admin-ui'],
   ['wedding-profitability','Wedding Profitability','/admin/profitability/','data-app'],
   ['event-ops','Event Ops','/admin/events/','data-app'],
   ['master-calendar','Master Calendar','/admin/calendar/','data-app'],
+  ['email-admin','Email Admin','/admin/email/','data-email-routing-app'],
+  ['email-preview','Email Preview','/admin/email-preview/','data-email-preview-app'],
   ['blog-admin','Blog Admin','/admin/blog/','data-admin-ui'],
   ['staff-management','Staff Management','/admin/staff/','data-app'],
   ['quickbooks','QuickBooks','/admin/quickbooks/','data-app'],
@@ -116,16 +119,26 @@ const PAGE_CHECKS = [
   ['system-health','System Health','/admin/health/','data-app'],
   ['vendor-crm','Vendor CRM','/admin/vendors/','data-app'],
   ['insurance','Vendor Insurance','/admin/insurance/','data-app'],
+  ['mobile-bar-workforce','Mobile Bar Workforce','/admin/mobile-bar-workforce/','data-app'],
+  ['payroll','Payroll','/admin/payroll/','data-app'],
   ['staff-home','Staff Home','/staff/','data-staff-ui'],
 ] as const;
 
 const API_CHECKS = [
   ['admin-session','Admin session API','/api/admin/session'],
+  ['account-profile-api','Account Profile API','/api/account/profile'],
+  ['workspace-alerts-api','Action Center API','/api/admin/workspace-alerts'],
   ['business-crm-api','Business CRM API','/api/admin/crm'],
   ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
   ['wedding-profitability-api','Wedding Profitability API','/api/admin/profitability'],
   ['event-ops-api','Event Ops API','/api/admin/events'],
   ['calendar-api','Master Calendar API','/api/admin/calendar'],
+  ['calendar-office365-api','Office 365 Calendar API','/api/admin/calendar-office365'],
+  ['staff-availability-api','Staff Availability API','/api/admin/staff-availability'],
+  ['staff-directory-api','Staff Directory API','/api/staff/directory'],
+  ['email-routing-api','Email Routing API','/api/admin/email-routing'],
+  ['email-activity-api','Email Activity API','/api/admin/email-activity'],
+  ['email-preview-api','Email Preview API','/api/admin/email-preview'],
   ['blog-api','Blog API','/api/blog?admin=1'],
   ['staff-api','Staff Management API','/api/admin/staff'],
   ['custom-roles-api','Custom Roles API','/api/admin/custom-roles'],
@@ -136,6 +149,8 @@ const API_CHECKS = [
   ['seo-api','Local SEO API','/api/admin/local-seo'],
   ['vendor-crm-api','Vendor CRM API','/api/admin/vendors'],
   ['vendor-insurance-api','Vendor Insurance API','/api/admin/vendor-insurance-compliance'],
+  ['mobile-bar-workforce-api','Mobile Bar Workforce API','/api/admin/mobile-bar-workforce'],
+  ['payroll-api','Payroll API','/api/admin/payroll'],
   ['system-health-api','System Health API','/api/admin/health'],
 ] as const;
 
@@ -148,6 +163,7 @@ export function healthComponents() {
     {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
     {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
     {id:'email-delivery',name:'Email delivery health',path:'Resend delivery lifecycle',kind:'api' as const},
+    {id:'resend-webhook',name:'Resend webhook delivery',path:'/api/webhooks/resend',kind:'api' as const},
     {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
     {id:'email-release-sync',name:'Email rendering release sync',path:'email rendering main → production',kind:'api' as const},
     ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
@@ -156,9 +172,9 @@ export function healthComponents() {
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','staff-home',
-    'admin-session','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api',
-    'email-logo','email-send-access','email-delivery','email-template-compatibility','email-release-sync',
+    'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
+    'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
+    'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
   ]);
   return immediate.has(id)?1:2;
 }
@@ -1058,6 +1074,48 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
+  const webhook=emailDelivery?.webhook||{};
+  const webhookDelivery=emailDelivery?.webhookDelivery||{};
+  const webhookExists=webhook?.existsInResend;
+  const webhookEnabled=webhook?.enabled;
+  const webhookSecretConfigured=Boolean(webhook?.signingSecretConfigured||emailDelivery?.webhookConfigured);
+  const webhookDeliveryStatus=String(webhookDelivery?.status||'unknown').toLowerCase();
+  const webhookHttpStatus=Number(webhookDelivery?.attempt?.httpStatus||0);
+  const webhookConfigurationFailed=webhookExists===false||webhookEnabled===false||!webhookSecretConfigured;
+  const webhookDeliveryFailed=webhookDeliveryStatus==='failed';
+  const webhookVerificationIncomplete=webhookExists==null||!webhookDelivery?.available||['unknown','none','pending','attempting'].includes(webhookDeliveryStatus);
+  const resendWebhookSeverity:HealthCheck['severity']=webhookConfigurationFailed||webhookDeliveryFailed
+    ? 'red'
+    : webhookVerificationIncomplete
+      ? 'yellow'
+      : 'green';
+  const resendWebhookCheck:HealthCheck={
+    id:'resend-webhook',
+    name:'Resend webhook delivery',
+    kind:'api',
+    path:'/api/webhooks/resend',
+    ok:!webhookConfigurationFailed&&!webhookDeliveryFailed,
+    status:webhookHttpStatus || (webhookConfigurationFailed?503:200),
+    ms:0,
+    severity:resendWebhookSeverity,
+    detail:clean(
+      (webhookExists===true?'Resend webhook exists':webhookExists===false?'Resend webhook not found':'Resend webhook existence not verified')
+      +' · '+(webhookEnabled===true?'enabled':webhookEnabled===false?'disabled':'enablement not verified')
+      +' · '+(webhookSecretConfigured?'Netlify signing secret configured':'Netlify signing secret missing')
+      +' · '+(
+        webhookDeliveryStatus==='success'
+          ? 'latest delivery succeeded'+(webhookHttpStatus?' with HTTP '+webhookHttpStatus:'')
+          : webhookDeliveryStatus==='failed'
+            ? 'latest delivery failed'+(webhookHttpStatus?' with HTTP '+webhookHttpStatus:'')
+            : webhookDeliveryStatus==='none'
+              ? 'no webhook delivery events recorded yet'
+              : 'latest delivery status '+webhookDeliveryStatus
+      )
+      +(webhookDelivery?.eventType?' · '+String(webhookDelivery.eventType):'')
+      +(webhookDelivery?.detail?' · '+String(webhookDelivery.detail):''),
+      1200,
+    ),
+  };
   const templateCompatibility=emailHealth?.templateCompatibility||{};
   const emailTemplateCheck:HealthCheck={
     id:'email-template-compatibility',
@@ -1074,7 +1132,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,emailTemplateCheck]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
