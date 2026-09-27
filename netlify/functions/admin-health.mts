@@ -8,6 +8,7 @@ import {
   calculateIncidents,
   calculateUptime,
   healthComponents,
+  healthCoverageSummary,
   hydrateProductionReleaseMetadata,
   persistHealth,
   readHealthAlertPolicy,
@@ -632,7 +633,7 @@ export default async (req:Request,context:Context) => {
     );
     return Response.json({
       ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -694,6 +695,7 @@ export default async (req:Request,context:Context) => {
     incidents,
     policy,
     components:healthComponents(),
+    coverage:healthCoverageSummary(latest),
     deployments,
     office365,
     emailHealth,
