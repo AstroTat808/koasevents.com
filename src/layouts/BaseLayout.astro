@@ -310,6 +310,62 @@ const seoSchema = {
         }
       })();
     </script>
+    <script is:inline>
+      (() => {
+        const currentPath = String(window.location.pathname || '/');
+        const isProtectedAdminPage = currentPath.startsWith('/admin/') && currentPath !== '/admin/';
+        if (!isProtectedAdminPage || window.__koaAdminAuthGuardInstalled) return;
+        window.__koaAdminAuthGuardInstalled = true;
+
+        const returnTo = window.location.pathname + window.location.search + window.location.hash;
+        const loginUrl = new URL('/admin/', window.location.origin);
+        loginUrl.searchParams.set('reason', 'session_expired');
+        loginUrl.searchParams.set('returnTo', returnTo);
+
+        const redirectToLogin = () => {
+          if (window.__koaAdminSessionRedirecting) return;
+          window.__koaAdminSessionRedirecting = true;
+          window.location.replace(loginUrl.pathname + loginUrl.search);
+        };
+
+        const sameOriginApiUrl = (input) => {
+          try {
+            const raw = typeof input === 'string'
+              ? input
+              : input instanceof Request
+                ? input.url
+                : String(input?.url || '');
+            const parsed = new URL(raw, window.location.origin);
+            if (parsed.origin !== window.location.origin || !parsed.pathname.startsWith('/api/')) return null;
+            return parsed;
+          } catch {
+            return null;
+          }
+        };
+
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = async (...args) => {
+          const response = await originalFetch(...args);
+          const requestUrl = sameOriginApiUrl(args[0]);
+
+          if (requestUrl && response.status === 401) {
+            redirectToLogin();
+            return response;
+          }
+
+          if (requestUrl?.pathname === '/api/admin/session' && response.ok) {
+            try {
+              const session = await response.clone().json();
+              if (session?.accessBlocked && session?.blockReason === 'session_revoked') {
+                redirectToLogin();
+              }
+            } catch {}
+          }
+
+          return response;
+        };
+      })();
+    </script>
     {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
     {isAdminPage && (
