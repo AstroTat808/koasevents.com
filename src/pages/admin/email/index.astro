@@ -57,12 +57,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Delivery audit</p>
-              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Email activity · last 100</h2>
-              <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Resend message ID, recipient, subject, email type, and latest delivery state.</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Email activity</h2>
+              <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Browse Resend history 100 messages at a time, search all retained history, and open failed deliveries for diagnostics.</p>
             </div>
             <span data-activity-state class="text-xs font-semibold text-[var(--koa-ink)]/45">—</span>
           </div>
-          <div class="mt-5 rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button data-activity-preset="failures" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Failures</button>
+            <button data-activity-preset="client" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Client Emails</button>
+            <button data-activity-preset="internal" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Internal Alerts</button>
+            <button data-activity-preset="vendor" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Vendor Emails</button>
+            <button data-activity-preset="7d" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Last 7 Days</button>
+          </div>
+          <div class="mt-4 rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
             <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
               <label class="grid gap-1.5 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">
                 Recipient
@@ -100,12 +107,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-clear-activity-filters type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear filters</button>
             </div>
           </div>
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex flex-wrap gap-2">
+              <button data-activity-newer type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] disabled:opacity-40">← Newer</button>
+              <button data-activity-older type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] disabled:opacity-40">Older →</button>
+            </div>
+            <button data-load-full-activity type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-white">Search all retained history</button>
+          </div>
+          <p data-activity-retention-note class="mt-2 text-[.66rem] leading-5 text-[var(--koa-ink)]/45"></p>
           <div class="mt-4 overflow-x-auto">
-            <table class="w-full min-w-[900px] border-collapse text-left text-xs">
+            <table class="w-full min-w-[980px] border-collapse text-left text-xs">
               <thead><tr class="border-b border-[var(--koa-line)] text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-2 py-3">When</th><th class="px-2 py-3">Recipient</th><th class="px-2 py-3">Subject</th><th class="px-2 py-3">Type</th><th class="px-2 py-3">Status</th><th class="px-2 py-3">Resend ID</th></tr></thead>
               <tbody data-activity-body></tbody>
             </table>
           </div>
+          <article data-activity-detail class="mt-4 hidden rounded-[1.1rem] border border-red-200 bg-red-50 p-5">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-red-700">Delivery diagnostic</p>
+                <h3 data-activity-detail-title class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Email failure</h3>
+              </div>
+              <button data-close-activity-detail type="button" class="rounded-full border border-red-200 bg-white px-3 py-2 text-[.52rem] font-black uppercase tracking-[.07em] text-red-800">Close</button>
+            </div>
+            <div data-activity-detail-body class="mt-4 grid gap-3 sm:grid-cols-2"></div>
+          </article>
         </section>
       </section>
 
@@ -135,11 +160,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const activityIdFilter=document.querySelector('[data-activity-id-filter]');
     const activityFilterSummary=document.querySelector('[data-activity-filter-summary]');
     const clearActivityFilters=document.querySelector('[data-clear-activity-filters]');
+    const activityNewer=document.querySelector('[data-activity-newer]');
+    const activityOlder=document.querySelector('[data-activity-older]');
+    const loadFullActivity=document.querySelector('[data-load-full-activity]');
+    const activityRetentionNote=document.querySelector('[data-activity-retention-note]');
+    const activityDetail=document.querySelector('[data-activity-detail]');
+    const activityDetailTitle=document.querySelector('[data-activity-detail-title]');
+    const activityDetailBody=document.querySelector('[data-activity-detail-body]');
+    const closeActivityDetail=document.querySelector('[data-close-activity-detail]');
     const addGroupButton=document.querySelector('[data-add-group]');
     const saveButton=document.querySelector('[data-save-routes]');
     const statusNode=document.querySelector('[data-email-routing-status]');
     const updatedNode=document.querySelector('[data-routing-updated]');
     let latest:any={routes:[],senders:{},groups:[],activity:{rows:[]}};
+    let activityRows:any[]=[];
+    let activityHasMore=false;
+    let activityNextAfter='';
+    let activityCursorStack:string[]=[];
+    let activityCurrentAfter='';
+    let activityPreset='';
+    let activityAllLoaded=false;
     let canManage=false;
 
     function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));}
@@ -294,7 +334,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(emailType&&String(row?.emailType||'Other')!==emailType)return false;
         if(statusFilter==='sent'&&!Boolean(row?.sent))return false;
         if(statusFilter==='failed'&&Boolean(row?.sent))return false;
-        if(messageId&&!String(row?.resendMessageId||'').toLowerCase().includes(messageId))return false;
+        if(messageId&&!String(row?.resendMessageId||row?.emailId||'').toLowerCase().includes(messageId))return false;
+        if(activityPreset==='client'&&!['client-confirmation','client-follow-up','review-request'].includes(String(row?.route||'')))return false;
+        if(activityPreset==='vendor'&&!['vendor-event-brief','vendor-insurance-reminder'].includes(String(row?.route||'')))return false;
+        if(activityPreset==='internal'&&!['lead-notification','lead-response-reminder','security-alert','email-preview'].includes(String(row?.route||'')))return false;
         const createdAt=Date.parse(String(row?.createdAt||''));
         if(start!=null&&(!Number.isFinite(createdAt)||createdAt<start))return false;
         if(end!=null&&(!Number.isFinite(createdAt)||createdAt>end))return false;
@@ -303,12 +346,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
     function renderActivity(){
       if(!activityBody)return;
-      const activity=latest.activity||{};
-      const rows=Array.isArray(activity.rows)?activity.rows:[];
+      const rows=activityRows;
       syncActivityTypeOptions(rows);
       const filtered=filteredActivityRows(rows);
-      if(activityState)activityState.textContent=activity.ok?rows.length+' messages loaded':(activity.detail||'Activity unavailable');
-      if(activityFilterSummary)activityFilterSummary.textContent=rows.length?'Showing '+filtered.length+' of '+rows.length+' loaded messages':'No messages loaded';
+      if(activityState)activityState.textContent=activityAllLoaded
+        ? rows.length+' retained messages loaded'
+        : rows.length+' messages on this page';
+      if(activityFilterSummary)activityFilterSummary.textContent=rows.length?'Showing '+filtered.length+' of '+rows.length+(activityAllLoaded?' retained messages':' messages on this page'):'No messages loaded';
+      if(activityNewer instanceof HTMLButtonElement)activityNewer.disabled=activityAllLoaded||activityCursorStack.length===0;
+      if(activityOlder instanceof HTMLButtonElement)activityOlder.disabled=activityAllLoaded||!activityHasMore;
       activityBody.innerHTML='';
       if(!rows.length){
         activityBody.innerHTML='<tr><td colspan="6" class="px-2 py-6 text-center text-sm text-[var(--koa-ink)]/45">No Resend activity is currently available.</td></tr>';return;
@@ -317,12 +363,109 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         activityBody.innerHTML='<tr><td colspan="6" class="px-2 py-6 text-center text-sm text-[var(--koa-ink)]/45">No messages match the current filters.</td></tr>';return;
       }
       for(const row of filtered){
-        const tr=document.createElement('tr');tr.className='border-b border-[var(--koa-line)]/70 align-top';
+        const tr=document.createElement('tr');
         const status=String(row.status||'unknown');
-        const tone=['failed','bounced','complained','suppressed'].includes(status)?'text-red-700':status==='delivered'?'text-emerald-700':'text-[var(--koa-forest)]';
-        tr.innerHTML='<td class="px-2 py-3 whitespace-nowrap">'+esc(row.createdAt?new Date(row.createdAt).toLocaleString():'—')+'</td><td class="px-2 py-3 max-w-[220px] break-all">'+esc(row.recipient||'—')+'</td><td class="px-2 py-3 max-w-[260px]">'+esc(row.subject||'—')+'</td><td class="px-2 py-3">'+esc(row.emailType||'Other')+'</td><td class="px-2 py-3 font-black '+tone+'">'+esc(status)+'</td><td class="px-2 py-3 max-w-[210px] break-all font-mono text-[.68rem]">'+esc(row.resendMessageId||'—')+'</td>';
+        const isProblem=Boolean(row.problem)||['failed','bounced','complained','suppressed'].includes(status);
+        tr.className='border-b border-[var(--koa-line)]/70 align-top '+(isProblem?'cursor-pointer bg-red-50/40 hover:bg-red-50':'');
+        tr.innerHTML='<td class="px-2 py-3 whitespace-nowrap">'+esc(row.createdAt?new Date(row.createdAt).toLocaleString():'—')+'</td><td class="px-2 py-3 max-w-[220px] break-all">'+esc(row.recipient||'—')+'</td><td class="px-2 py-3 max-w-[260px]">'+esc(row.subject||'—')+'</td><td class="px-2 py-3">'+esc(row.emailType||'Other')+'</td><td class="px-2 py-3 font-black '+(isProblem?'text-red-700':status==='delivered'?'text-emerald-700':'text-[var(--koa-forest)]')+'">'+esc(status)+(isProblem?' · details':'')+'</td><td class="px-2 py-3 max-w-[210px] break-all font-mono text-[.68rem]">'+esc(row.resendMessageId||row.emailId||'—')+'</td>';
+        if(isProblem)tr.addEventListener('click',()=>loadActivityDetail(String(row.emailId||'')));
         activityBody.appendChild(tr);
       }
+    }
+    async function loadActivityPage(after='',pushHistory=false){
+      if(activityState)activityState.textContent='Loading email history…';
+      const url='/api/admin/email-activity?limit=100'+(after?'&after='+encodeURIComponent(after):'');
+      const response=await fetch(url,{cache:'no-store'});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){showStatus(result.error||'Unable to load email history.','error');return;}
+      if(pushHistory)activityCursorStack.push(activityCurrentAfter);
+      activityCurrentAfter=after;
+      activityRows=Array.isArray(result.rows)?result.rows:[];
+      activityHasMore=Boolean(result.hasMore);
+      activityNextAfter=String(result.nextAfter||'');
+      activityAllLoaded=false;
+      if(activityRetentionNote)activityRetentionNote.textContent=String(result.retentionNote||'');
+      renderActivity();
+    }
+    async function loadAllActivity(){
+      if(!(loadFullActivity instanceof HTMLButtonElement))return;
+      loadFullActivity.disabled=true;loadFullActivity.textContent='Loading retained history…';
+      try{
+        const all:any[]=[];
+        const seen=new Set<string>();
+        let after='';
+        let pages=0;
+        let hasMore=true;
+        while(hasMore&&pages<100){
+          const response=await fetch('/api/admin/email-activity?limit=100'+(after?'&after='+encodeURIComponent(after):''),{cache:'no-store'});
+          const result=await response.json().catch(()=>({}));
+          if(!response.ok)throw new Error(result.error||'Unable to load retained history.');
+          const rows=Array.isArray(result.rows)?result.rows:[];
+          for(const row of rows){
+            const id=String(row?.emailId||'');
+            if(id&&!seen.has(id)){seen.add(id);all.push(row);}
+          }
+          hasMore=Boolean(result.hasMore);
+          after=String(result.nextAfter||'');
+          pages+=1;
+          if(activityState)activityState.textContent='Loading retained history · '+all.length+' messages';
+          if(!rows.length||!after)break;
+        }
+        activityRows=all;
+        activityHasMore=false;
+        activityNextAfter='';
+        activityCursorStack=[];
+        activityCurrentAfter='';
+        activityAllLoaded=!hasMore;
+        if(activityRetentionNote)activityRetentionNote.textContent=activityAllLoaded
+          ? 'All email records currently retained by Resend are loaded. Koa’s signed webhook archive preserves lifecycle diagnostics going forward.'
+          : 'Loaded 10,000 retained messages. Additional older records may exist; use page browsing to continue.';
+        renderActivity();
+      }catch(error){showStatus(error instanceof Error?error.message:'Unable to load retained history.','error');}
+      finally{loadFullActivity.disabled=false;loadFullActivity.textContent='Search all retained history';}
+    }
+    async function loadActivityDetail(id){
+      if(!id)return;
+      if(activityDetail)activityDetail.classList.remove('hidden');
+      if(activityDetailTitle)activityDetailTitle.textContent='Loading delivery diagnostic…';
+      if(activityDetailBody)activityDetailBody.innerHTML='';
+      const response=await fetch('/api/admin/email-activity?id='+encodeURIComponent(id),{cache:'no-store'});
+      const result=await response.json().catch(()=>({}));
+      if(!response.ok){
+        if(activityDetailTitle)activityDetailTitle.textContent='Unable to load delivery diagnostic';
+        if(activityDetailBody)activityDetailBody.innerHTML='<p class="text-sm text-red-800">'+esc(result.error||'Unknown error')+'</p>';
+        return;
+      }
+      const row=result.email||{};
+      if(activityDetailTitle)activityDetailTitle.textContent=(row.subject||'Email')+' · '+String(row.status||'unknown');
+      if(activityDetailBody)activityDetailBody.innerHTML=[
+        ['Recipient',row.recipient||'—'],
+        ['Route',row.route||'—'],
+        ['Resend / Message ID',row.resendMessageId||row.id||'—'],
+        ['Bounce type',[row.bounceType,row.bounceSubType].filter(Boolean).join(' · ')||'—'],
+        ['Reason',row.reason||'No detailed bounce/failure payload is archived for this message.'],
+        ['Recommended fix',row.recommendation||'Review the delivery details before retrying.'],
+      ].map(([label,value])=>'<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-red-700">'+esc(label)+'</p><p class="mt-1 break-words text-sm font-semibold text-[var(--koa-forest)]">'+esc(value)+'</p></div>').join('');
+    }
+    function applyActivityPreset(preset){
+      activityPreset=preset;
+      document.querySelectorAll('[data-activity-preset]').forEach((node)=>{
+        const active=String((node as HTMLElement).dataset.activityPreset||'')===preset;
+        node.classList.toggle('bg-[var(--koa-forest)]',active);
+        node.classList.toggle('text-white',active);
+      });
+      if(activityStatusFilter instanceof HTMLSelectElement)activityStatusFilter.value=preset==='failures'?'failed':'';
+      if(activityTypeFilter instanceof HTMLSelectElement)activityTypeFilter.value='';
+      if(activityRecipientFilter instanceof HTMLInputElement)activityRecipientFilter.value='';
+      if(activityIdFilter instanceof HTMLInputElement)activityIdFilter.value='';
+      if(activityStartFilter instanceof HTMLInputElement){
+        if(preset==='7d'){
+          const d=new Date();d.setDate(d.getDate()-6);
+          activityStartFilter.value=d.toISOString().slice(0,10);
+        }else activityStartFilter.value='';
+      }
+      if(activityEndFilter instanceof HTMLInputElement)activityEndFilter.value='';
+      renderActivity();
     }
     function collectGroups(){
       const groups=[];
@@ -349,10 +492,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!response.ok){showStatus('Unable to load email routing.','error');return;}
       latest=await response.json();
       if(updatedNode)updatedNode.textContent=latest.updatedAt?'Last changed '+new Date(latest.updatedAt).toLocaleString()+(latest.updatedBy?' by '+latest.updatedBy:''):'Using default routing';
-      renderSenders();renderGroups();renderRoutes();renderActivity();
+      renderSenders();renderGroups();renderRoutes();
+      await loadActivityPage();
     }
+    document.querySelectorAll('[data-activity-preset]').forEach((node)=>{
+      node.addEventListener('click',()=>applyActivityPreset(String((node as HTMLElement).dataset.activityPreset||'')));
+    });
     for(const node of [activityRecipientFilter,activityIdFilter]){
-      if(node instanceof HTMLInputElement)node.addEventListener('input',renderActivity);
+      if(node instanceof HTMLInputElement)node.addEventListener('input',()=>{activityPreset='';renderActivity();});
     }
     for(const node of [activityTypeFilter,activityStatusFilter,activityStartFilter,activityEndFilter]){
       if(node instanceof HTMLSelectElement||node instanceof HTMLInputElement)node.addEventListener('change',renderActivity);
@@ -364,8 +511,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(activityStartFilter instanceof HTMLInputElement)activityStartFilter.value='';
       if(activityEndFilter instanceof HTMLInputElement)activityEndFilter.value='';
       if(activityIdFilter instanceof HTMLInputElement)activityIdFilter.value='';
+      activityPreset='';
       renderActivity();
     });
+    activityOlder?.addEventListener('click',()=>{if(activityHasMore&&activityNextAfter)loadActivityPage(activityNextAfter,true);});
+    activityNewer?.addEventListener('click',()=>{
+      if(!activityCursorStack.length)return;
+      const previous=activityCursorStack.pop()||'';
+      loadActivityPage(previous,false);
+    });
+    loadFullActivity?.addEventListener('click',loadAllActivity);
+    closeActivityDetail?.addEventListener('click',()=>activityDetail?.classList.add('hidden'));
     addGroupButton?.addEventListener('click',()=>{
       if(!canManage)return;
       const name='New group';
