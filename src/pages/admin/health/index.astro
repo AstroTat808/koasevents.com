@@ -10,9 +10,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <h1 class="display mt-3 text-5xl">System health</h1>
           <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Hourly monitoring, transition-only alerts, protected page/API status, and deployment QA history in one place.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-col items-start gap-2 lg:items-end">
           <button data-refresh type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run checks now</button>
-          
+          <div class="flex flex-wrap gap-2 text-[.54rem] font-black uppercase tracking-[.08em]">
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[var(--koa-ink)]/55">
+              <span>Core check</span>
+              <strong data-core-check-status class="text-slate-600">Loading</strong>
+            </span>
+            <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[var(--koa-ink)]/55">
+              <span>Dashboard refresh</span>
+              <strong data-dashboard-refresh-status class="text-slate-600">Loading</strong>
+            </span>
+          </div>
         </div>
       </div>
 
@@ -43,10 +52,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p></article>
         </section>
 
-        <div data-health-run-warning aria-live="polite" class="hidden rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <strong data-health-run-warning-title class="block">Core checks completed.</strong>
-          <span data-health-run-warning-detail class="mt-1 block text-xs leading-5 text-amber-900/70"></span>
-        </div>
+        <button data-health-run-warning type="button" aria-live="polite" aria-haspopup="dialog" class="hidden w-full rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-950 transition hover:border-amber-300 hover:bg-amber-100/70 focus:outline-none focus:ring-2 focus:ring-amber-500">
+          <span class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              <strong data-health-run-warning-title class="block">Core checks completed.</strong>
+              <span data-health-run-warning-detail class="mt-1 block text-xs leading-5 text-amber-900/70"></span>
+            </span>
+            <span class="shrink-0 text-[.56rem] font-black uppercase tracking-[.08em] text-amber-800">View exact errors →</span>
+          </span>
+        </button>
+
+        <dialog data-health-run-warning-dialog class="w-[min(94vw,780px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+          <div class="p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Supporting data</p>
+                <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Dashboard refresh details</h2>
+                <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">These errors are separate from the core health-check result. Open a subsystem to inspect the affected panel.</p>
+              </div>
+              <button data-health-run-warning-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close supporting-data details">×</button>
+            </div>
+            <div data-health-run-warning-list class="mt-5 grid gap-3"></div>
+          </div>
+        </dialog>
 
         <section data-root-cause-summary class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -800,9 +828,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
     const refresh=document.querySelector('[data-refresh]');
+    const coreCheckStatus=document.querySelector('[data-core-check-status]');
+    const dashboardRefreshStatus=document.querySelector('[data-dashboard-refresh-status]');
     const healthRunWarning=document.querySelector('[data-health-run-warning]');
     const healthRunWarningTitle=document.querySelector('[data-health-run-warning-title]');
     const healthRunWarningDetail=document.querySelector('[data-health-run-warning-detail]');
+    const healthRunWarningDialog=document.querySelector('[data-health-run-warning-dialog]');
+    const healthRunWarningList=document.querySelector('[data-health-run-warning-list]');
     const results=document.querySelector('[data-results]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
@@ -1035,42 +1067,177 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthDetailFix=document.querySelector('[data-health-detail-fix]');
     let latestHealthChecks=[];
 
+    let latestHealthRunWarnings=[];
+
+    function setCompactStatus(node,state,label){
+      if(!(node instanceof HTMLElement))return;
+      const states={
+        healthy:'text-emerald-700',
+        current:'text-emerald-700',
+        running:'text-sky-700',
+        partial:'text-amber-700',
+        failed:'text-red-700',
+        idle:'text-slate-600',
+      };
+      node.className=states[state]||states.idle;
+      node.textContent=label;
+    }
+
+    function updateCoreCheckStatus(current,state='complete'){
+      if(state==='running'){
+        setCompactStatus(coreCheckStatus,'running','Checking…');
+        return;
+      }
+      if(state==='failed'){
+        setCompactStatus(coreCheckStatus,'failed','Run failed');
+        return;
+      }
+      if(!current){
+        setCompactStatus(coreCheckStatus,'idle','No data');
+        return;
+      }
+      const failedCount=Number(current.failed||0);
+      if(failedCount>0||String(current.overall||'')==='unhealthy'){
+        setCompactStatus(coreCheckStatus,'failed',failedCount?failedCount+' failed':'Attention');
+      }else{
+        setCompactStatus(coreCheckStatus,'healthy','Healthy');
+      }
+    }
+
+    function updateDashboardRefreshStatus(state,count=0){
+      if(state==='running')setCompactStatus(dashboardRefreshStatus,'running','Refreshing…');
+      else if(state==='partial')setCompactStatus(dashboardRefreshStatus,'partial',count?('Partial · '+count):'Partial');
+      else if(state==='failed')setCompactStatus(dashboardRefreshStatus,'failed','Failed');
+      else if(state==='current')setCompactStatus(dashboardRefreshStatus,'current','Current');
+      else setCompactStatus(dashboardRefreshStatus,'idle','No data');
+    }
+
+    function normalizeHealthRunWarnings(warnings){
+      return (Array.isArray(warnings)?warnings:[])
+        .map((warning)=>({
+          section:String(warning?.section||'Supporting data').trim()||'Supporting data',
+          error:String(warning?.error||'Refresh failed.').trim()||'Refresh failed.',
+        }))
+        .filter((warning)=>warning.section||warning.error);
+    }
+
+    function warningTarget(section){
+      const normalized=String(section||'').toLowerCase();
+      const mappings=[
+        [/office 365|microsoft/, '[data-office365-operational]'],
+        [/credential/, '#credential-health'],
+        [/email health|email/, '[data-email-health-overall]'],
+        [/weekly|executive summary/, '[data-weekly-executive-summary]'],
+        [/release metadata|production release|deployment/, '[data-deploy-history]'],
+        [/uptime|incident/, '[data-uptime-body]'],
+        [/policy|transition alert/, '[data-policy-body]'],
+        [/snapshot|history|previous health/, '[data-health-history]'],
+      ];
+      const match=mappings.find(([pattern])=>pattern.test(normalized));
+      if(!match)return null;
+      const found=document.querySelector(match[1]);
+      if(!(found instanceof HTMLElement))return null;
+      return found.closest('section')||found;
+    }
+
+    function openWarningSubsystem(section){
+      const target=warningTarget(section);
+      if(!(target instanceof HTMLElement))return false;
+      healthRunWarningDialog?.close();
+      target.scrollIntoView({behavior:'smooth',block:'start'});
+      target.classList.add('ring-2','ring-amber-400','ring-offset-2');
+      window.setTimeout(()=>target.classList.remove('ring-2','ring-amber-400','ring-offset-2'),2600);
+      return true;
+    }
+
+    function renderHealthRunWarningDialog(){
+      if(!healthRunWarningList)return;
+      healthRunWarningList.innerHTML='';
+      latestHealthRunWarnings.forEach((warning,index)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-amber-200 bg-amber-50 p-4';
+        const top=document.createElement('div');
+        top.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
+        const text=document.createElement('div');
+        const label=document.createElement('p');
+        label.className='text-[.54rem] font-black uppercase tracking-[.08em] text-amber-800';
+        label.textContent='Subsystem '+(index+1);
+        const title=document.createElement('h3');
+        title.className='mt-1 text-sm font-semibold text-[var(--koa-forest)]';
+        title.textContent=warning.section;
+        const detail=document.createElement('p');
+        detail.className='mt-2 break-words text-xs leading-5 text-amber-950/75';
+        detail.textContent=warning.error;
+        text.append(label,title,detail);
+        top.appendChild(text);
+
+        if(warningTarget(warning.section)){
+          const open=document.createElement('button');
+          open.type='button';
+          open.className='shrink-0 rounded-full bg-[var(--koa-forest)] px-4 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white';
+          open.textContent='Open subsystem';
+          open.addEventListener('click',()=>openWarningSubsystem(warning.section));
+          top.appendChild(open);
+        }
+        card.appendChild(top);
+        healthRunWarningList.appendChild(card);
+      });
+      if(!latestHealthRunWarnings.length){
+        healthRunWarningList.innerHTML='<p class="text-sm text-[var(--koa-ink)]/55">No supporting-data error details were recorded.</p>';
+      }
+    }
+
     function clearHealthRunWarning(){
+      latestHealthRunWarnings=[];
       healthRunWarning?.classList.add('hidden');
       if(healthRunWarningDetail)healthRunWarningDetail.textContent='';
     }
 
-    function showHealthRunWarning(title,detail=''){
+    function showHealthRunWarning(title,detail='',warnings=[]){
       if(!healthRunWarning)return;
+      latestHealthRunWarnings=normalizeHealthRunWarnings(
+        warnings.length?warnings:(detail?[{section:'Dashboard refresh',error:detail}]:[])
+      );
       healthRunWarning.classList.remove('hidden');
       if(healthRunWarningTitle)healthRunWarningTitle.textContent=title;
-      if(healthRunWarningDetail)healthRunWarningDetail.textContent=detail;
+      if(healthRunWarningDetail){
+        healthRunWarningDetail.textContent=latestHealthRunWarnings.length
+          ? latestHealthRunWarnings.length+' supporting-data issue'+(latestHealthRunWarnings.length===1?'':'s')+' · click for exact subsystem and error'
+          : detail;
+      }
+      renderHealthRunWarningDialog();
     }
 
     function renderHealthPayload(payload,source='System Health'){
       clearHealthRunWarning();
+      updateCoreCheckStatus(payload?.current);
+      const warnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
+      updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
       try{
         render(payload||{});
       }catch(error){
         console.error('[system-health] '+source+' detail rendering failed:',error);
         if(payload?.current){
-          // render() paints the authoritative top summary first. If a later,
-          // non-core panel throws, preserve that healthy/failed result instead
-          // of overwriting it with a false dashboard-level failure.
+          const renderWarnings=[...warnings,{
+            section:'Dashboard rendering',
+            error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
+          }];
+          updateDashboardRefreshStatus('partial',renderWarnings.length);
           showHealthRunWarning(
             'Core checks completed; a detail panel could not refresh.',
-            error instanceof Error?error.message:'A secondary System Health panel failed to render.'
+            '',
+            renderWarnings
           );
           return false;
         }
         throw error;
       }
 
-      const warnings=Array.isArray(payload?.enrichmentWarnings)?payload.enrichmentWarnings:[];
       if(warnings.length){
         showHealthRunWarning(
           'Core checks completed; supporting data needs attention.',
-          warnings.map((warning)=>String(warning?.section||'Supporting data')+': '+String(warning?.error||'refresh failed')).slice(0,4).join(' · ')
+          '',
+          warnings
         );
       }
       return true;
@@ -4397,56 +4564,69 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
 
     async function load(){
+      updateDashboardRefreshStatus('running');
       const response=await fetch('/api/admin/health',{cache:'no-store'});
       if(response.status===401)return;
       if(response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
-      if(!response.ok) throw new Error('Unable to load System Health.');
+      if(!response.ok){
+        updateDashboardRefreshStatus('failed');
+        throw new Error('Unable to load System Health.');
+      }
       renderHealthPayload(await response.json(),'Initial load');
     }
 
     refresh?.addEventListener('click',async()=>{
       refresh.disabled=true;refresh.textContent='Checking…';
       clearHealthRunWarning();
+      updateCoreCheckStatus(null,'running');
+      updateDashboardRefreshStatus('running');
       let postPayload=null;
       try{
         const response=await fetch('/api/admin/health',{method:'POST'});
         postPayload=await response.json().catch(()=>null);
         if(!response.ok)throw new Error(postPayload?.error||'Health check request failed.');
 
-        // Render the result returned by the actual manual run immediately. A
-        // follow-up GET is only for history/enrichment, not to decide whether
-        // the check itself succeeded.
+        // Render the authoritative core result immediately, then mark the
+        // dashboard refresh separately while the history/enrichment GET runs.
         renderHealthPayload(postPayload||{},'Manual check');
+        updateCoreCheckStatus(postPayload?.current);
+        updateDashboardRefreshStatus('running');
 
         try{
           const latest=await fetch('/api/admin/health',{cache:'no-store'});
           if(latest.ok){
             renderHealthPayload(await latest.json(),'Post-check refresh');
           }else{
+            updateDashboardRefreshStatus('failed');
             showHealthRunWarning(
               'Core checks completed; dashboard history did not refresh.',
-              'The manual check result is valid, but the follow-up System Health refresh returned HTTP '+latest.status+'.'
+              '',
+              [{section:'Dashboard refresh',error:'The follow-up System Health refresh returned HTTP '+latest.status+'.'}]
             );
           }
         }catch(refreshError){
+          updateDashboardRefreshStatus('failed');
           showHealthRunWarning(
             'Core checks completed; dashboard history did not refresh.',
-            refreshError instanceof Error?refreshError.message:'The follow-up dashboard refresh failed.'
+            '',
+            [{section:'Dashboard refresh',error:refreshError instanceof Error?refreshError.message:'The follow-up dashboard refresh failed.'}]
           );
         }
       }catch(error){
-        // A request can fail after the core snapshot was already saved. Recover
-        // the authoritative snapshot, and only show "Check failed" if there is
-        // genuinely no completed health result to display.
+        // Recover the persisted snapshot if the request failed after the core
+        // checks finished. The two compact statuses show which layer failed.
         try{
           const latest=await fetch('/api/admin/health',{cache:'no-store'});
           if(latest.ok){
             const latestPayload=await latest.json();
             if(latestPayload?.current){
               renderHealthPayload(latestPayload,'Recovered health snapshot');
+              updateCoreCheckStatus(latestPayload.current);
+              updateDashboardRefreshStatus('partial',1);
               showHealthRunWarning(
                 'Core health result recovered after a request error.',
-                error instanceof Error?error.message:'A non-core part of the manual check request failed.'
+                '',
+                [{section:'Manual check request',error:error instanceof Error?error.message:'A non-core part of the manual check request failed.'}]
               );
               return;
             }
@@ -4455,15 +4635,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           console.error('[system-health] recovery refresh failed:',recoveryError);
         }
 
+        updateCoreCheckStatus(null,'failed');
+        updateDashboardRefreshStatus('failed');
         overall.textContent='Check failed';
         overall.className='display mt-3 text-4xl text-red-800';
         showHealthRunWarning(
           'The manual health check did not complete.',
-          error instanceof Error?error.message:'No completed health snapshot was available.'
+          '',
+          [{section:'Core health check',error:error instanceof Error?error.message:'No completed health snapshot was available.'}]
         );
       }finally{
         refresh.disabled=false;refresh.textContent='Run checks now';
       }
+    });
+
+    healthRunWarning?.addEventListener('click',()=>{
+      renderHealthRunWarningDialog();
+      healthRunWarningDialog?.showModal();
+    });
+    document.querySelector('[data-health-run-warning-close]')?.addEventListener('click',()=>healthRunWarningDialog?.close());
+    healthRunWarningDialog?.addEventListener('click',(event)=>{
+      if(event.target===healthRunWarningDialog)healthRunWarningDialog.close();
     });
 
     document.querySelector('[data-close-release]')?.addEventListener('click',()=>releaseDialog.close());
