@@ -39,6 +39,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
             </div>
             <div class="flex flex-wrap gap-3">
               <a href="/admin/quotes/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Sales CRM</a>
+              <a href="/admin/catalog/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Catalog Manager</a>
               <a href="/catalog/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Public catalog</a>
               <button data-reset type="button" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Reset planning assumptions</button>
             </div>
@@ -75,7 +76,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Package economics</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Plan margin before you sell it.</h2>
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Replace the starting assumptions with actual Koa’s direct costs. Use loaded labor cost rather than wage-only cost. Gross margin = (price − direct cost) ÷ price.</p>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Replace the starting assumptions with actual Koa’s direct costs. Use loaded labor cost rather than wage-only cost. Gross margin = (price − direct cost) ÷ price. Working assumptions sync cost and target margin to Catalog Manager; publishing a recommended package price updates the central sell price and matching draft proposals.</p>
             </div>
             <button data-save-packages type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save package costs</button>
           </div>
@@ -88,7 +89,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Profitable add-ons</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Approve once. Publish pricing everywhere.</h2>
-              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Enter direct cost and target margin, then approve the recommended price. Approval publishes that price to the public catalog/quote builder and reprices matching draft proposals. Sent, viewed, accepted and booked proposals are never silently repriced.</p>
+              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Enter direct cost and target margin, then approve the recommended price. Approval writes the sell price, cost and target margin into the central Catalog Manager and reprices matching draft proposals. Sent, viewed, accepted and booked proposals are never silently repriced.</p>
             </div>
             <button data-save-addons type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save working assumptions</button>
           </div>
@@ -193,7 +194,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     const eventCount=document.querySelector('[data-event-count]');
     const eventCancel=document.querySelector('[data-event-cancel]');
     const crmEventNote=document.querySelector('[data-crm-event-note]');
-    let state={packages:[],addOns:[],events:[],performance:[],leaders:{},crmSync:{},updatedAt:'',updatedBy:''};
+    let state={packages:[],addOns:[],events:[],performance:[],leaders:{},crmSync:{},catalogSync:{},updatedAt:'',updatedBy:''};
 
     const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(Number(value||0));
     const pct=(value)=>value==null?'—':new Intl.NumberFormat('en-US',{style:'percent',maximumFractionDigits:1}).format(Number(value||0));
@@ -203,6 +204,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     const gp=(price,cost)=>clampNum(price)-clampNum(cost);
     const gm=(price,cost)=>clampNum(price)>0?gp(price,cost)/clampNum(price):0;
     const recommended=(cost,target,increment)=>{const c=clampNum(cost),m=Math.min(.9,Math.max(.05,Number(target)||0)),step=Math.max(1,Number(increment)||1);return c>0?Math.ceil((c/(1-m))/step)*step:0;};
+    const recommendedPackage=(cost,target)=>recommended(cost,target,500);
     const date=(value)=>value?new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',year:'numeric'}).format(new Date(value+'T12:00:00')):'Date not set';
     const dt=(value)=>value?new Intl.DateTimeFormat('en-US',{dateStyle:'medium',timeStyle:'short'}).format(new Date(value)):'';
     const addOnSummary=(rows)=>Array.isArray(rows)&&rows.length?rows.map(r=>(Number(r.quantity||1)>1?Number(r.quantity)+'× ':'')+String(r.description||'Add-on')).join(' · '):'None recorded';
@@ -275,7 +277,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     function renderPackages(){
       packageEl.innerHTML='';
       state.packages.forEach(p=>{
-        const cost=sumCosts(p.costs),m=gm(p.price,cost),gap=m-Number(p.targetMargin||0);
+        const cost=sumCosts(p.costs),m=gm(p.price,cost),gap=m-Number(p.targetMargin||0),recommendedPrice=recommendedPackage(cost,p.targetMargin);
         const article=document.createElement('article');
         article.dataset.packageId=p.id;
         article.className='rounded-[1.35rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5';
@@ -291,15 +293,18 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
           '</div>'+
           '<div class="mt-5 grid gap-4 xl:grid-cols-[220px_1fr]">'+
             '<div class="grid content-start gap-3">'+
-              '<label class="grid gap-1 text-sm font-semibold">Package price<input data-package-price type="number" min="0" step="1" value="'+Number(p.price||0)+'" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>'+
+              '<label class="grid gap-1 text-sm font-semibold">Working package price<input data-package-price type="number" min="0" step="1" value="'+Number(p.price||0)+'" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>'+
               '<label class="grid gap-1 text-sm font-semibold">Target margin<input data-package-target type="number" min="5" max="90" step=".5" value="'+(Number(p.targetMargin||0)*100)+'" class="rounded-xl border border-[var(--koa-line)] px-3 py-2.5" /></label>'+
               '<p data-package-status class="rounded-xl '+(gap>=0?'bg-emerald-50 text-emerald-800':'bg-red-50 text-red-800')+' p-3 text-xs font-semibold">'+(gap>=0?'On target · '+pct(gap)+' above target':'Below target · '+pct(Math.abs(gap))+' gap')+'</p>'+
+              '<div class="rounded-xl border border-[var(--koa-line)] bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recommended @ target</p><strong data-package-recommended class="mt-1 block text-lg text-[var(--koa-forest)]">'+(recommendedPrice>0?money(recommendedPrice):'Enter costs')+'</strong><p data-package-catalog class="mt-1 text-[.62rem] text-[var(--koa-ink)]/48">Catalog Manager: '+(Number(p.catalogPrice||0)>0?money(p.catalogPrice):'not priced')+'</p></div>'+
+              '<button data-approve-package="'+esc(p.id)+'" type="button" class="rounded-full bg-[var(--koa-clay)] px-4 py-2.5 text-[.56rem] font-black uppercase tracking-[.08em] text-white">Publish recommended</button>'+
             '</div>'+
             '<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">'+costInputs(p.costs,p.id)+'</div>'+
           '</div>';
         packageEl.appendChild(article);
       });
       packageEl.querySelectorAll('input').forEach(input=>input.addEventListener('input',updatePackagePreview));
+      packageEl.querySelectorAll('[data-approve-package]').forEach(button=>button.addEventListener('click',()=>approvePackage(button.dataset.approvePackage)));
     }
 
     function collectPackages(){
@@ -316,9 +321,10 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
       renderSummary();
       state.packages.forEach(p=>{
         const root=packageEl.querySelector('[data-package-id="'+p.id+'"]'); if(!root)return;
-        const cost=sumCosts(p.costs),m=gm(p.price,cost),gap=m-p.targetMargin;
+        const cost=sumCosts(p.costs),m=gm(p.price,cost),gap=m-p.targetMargin,rec=recommendedPackage(cost,p.targetMargin);
         root.querySelector('[data-package-cost]').textContent=money(cost);
         root.querySelector('[data-package-profit]').textContent=money(gp(p.price,cost));
+        root.querySelector('[data-package-recommended]').textContent=rec>0?money(rec):'Enter costs';
         const marginEl=root.querySelector('[data-package-margin]'); marginEl.textContent=pct(m); marginEl.className='text-lg '+(gap>=0?'text-emerald-700':'text-red-700');
         const status=root.querySelector('[data-package-status]'); status.textContent=gap>=0?'On target · '+pct(gap)+' above target':'Below target · '+pct(Math.abs(gap))+' gap'; status.className='rounded-xl '+(gap>=0?'bg-emerald-50 text-emerald-800':'bg-red-50 text-red-800')+' p-3 text-xs font-semibold';
       });
@@ -364,6 +370,25 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
       });
     }
 
+    async function approvePackage(id){
+      try{
+        state.packages=collectPackages();
+        const row=state.packages.find(p=>p.id===id);
+        if(!row)return;
+        const rec=recommendedPackage(sumCosts(row.costs),row.targetMargin);
+        if(rec<=0){packageMessage.textContent='Enter direct costs before publishing a recommended package price.';return;}
+        if(rec<Number(row.catalogPrice||row.price||0)&&!confirm('The recommended price '+money(rec)+' is lower than the current catalog/working price. Publish the lower price?'))return;
+        packageMessage.textContent='Saving package economics before approval…';
+        state=await api({action:'save-packages',packages:state.packages});
+        packageMessage.textContent='Publishing '+money(rec)+' to Catalog Manager…';
+        const data=await api({action:'approve-package-price',id});
+        state=data;
+        const changed=Number(data.approvedPackage?.updatedDraftProposals||0);
+        packageMessage.textContent='Published '+money(data.approvedPackage?.price||0)+' to Catalog Manager'+(changed?' · '+changed+' matching draft proposal'+(changed===1?'':'s')+' repriced.':'.');
+        renderAll();
+      }catch(err){packageMessage.textContent=err.message||'Package approval failed.';}
+    }
+
     async function approveAddOn(id){
       try{
         state.addOns=collectAddOns();
@@ -373,14 +398,14 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
         const data=await api({action:'approve-addon-price',id});
         state=data;
         const changed=data.approved?.updatedDraftProposals||0;
-        addonMessage.textContent='Published '+money(data.approved?.price||0)+' to the catalog and quote builder'+(changed?' · '+changed+' draft proposal'+(changed===1?'':'s')+' repriced.':'.');
+        addonMessage.textContent='Published '+money(data.approved?.price||0)+' to Catalog Manager'+(changed?' · '+changed+' draft proposal'+(changed===1?'':'s')+' repriced.':'.');
         renderAll();
       }catch(err){addonMessage.textContent=err.message||'Approval failed.';}
     }
 
     async function unpublishAddOn(id){
       if(!confirm('Unpublish this approved add-on price? Existing proposals will not be changed.'))return;
-      try{state=await api({action:'unpublish-addon-price',id});addonMessage.textContent='Price unpublished from the catalog/quote builder.';renderAll();}catch(err){addonMessage.textContent=err.message||'Unpublish failed.';}
+      try{state=await api({action:'unpublish-addon-price',id});addonMessage.textContent='Catalog item disabled for new proposal selection. Existing proposals were not changed.';renderAll();}catch(err){addonMessage.textContent=err.message||'Unpublish failed.';}
     }
 
     function eventCostsFromForm(){const costs={};costFields.forEach(([key])=>costs[key]=clampNum(eventForm.elements[key].value));return costs;}
@@ -434,10 +459,10 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
 
     function renderAll(){
       renderSummary();renderPerformance();renderPackages();renderAddOns();renderEvents();
-      updatedEl.textContent=state.updatedAt?'Planning/pricing settings last saved '+dt(state.updatedAt)+(state.updatedBy?' by '+state.updatedBy:''):'Using starting planning assumptions; save changes to persist them.';
+      updatedEl.textContent=state.updatedAt?'Planning/pricing settings last saved '+dt(state.updatedAt)+(state.updatedBy?' by '+state.updatedBy:'')+' · Catalog Manager '+Number(state.catalogSync?.packageCount||0)+' packages / '+Number(state.catalogSync?.addOnCount||0)+' add-ons priced.':'Using starting planning assumptions; save changes to persist them.';
     }
 
-    document.querySelector('[data-save-packages]')?.addEventListener('click',async()=>{try{packageMessage.textContent='Saving…';state.packages=collectPackages();state=await api({action:'save-packages',packages:state.packages});packageMessage.textContent='Package economics saved.';renderAll();}catch(err){packageMessage.textContent=err.message||'Save failed.';}});
+    document.querySelector('[data-save-packages]')?.addEventListener('click',async()=>{try{packageMessage.textContent='Saving…';state.packages=collectPackages();state=await api({action:'save-packages',packages:state.packages});packageMessage.textContent='Package economics saved. Direct cost and target margin are synchronized to Catalog Manager; sell price changes only when you publish a recommended price.';renderAll();}catch(err){packageMessage.textContent=err.message||'Save failed.';}});
     document.querySelector('[data-save-addons]')?.addEventListener('click',async()=>{try{addonMessage.textContent='Saving…';state.addOns=collectAddOns();state=await api({action:'save-addons',addOns:state.addOns});addonMessage.textContent='Working assumptions saved. Edited published rows are automatically unpublished until re-approved.';renderAll();}catch(err){addonMessage.textContent=err.message||'Save failed.';}});
     document.querySelector('[data-reset]')?.addEventListener('click',async()=>{if(!confirm('Reset package and add-on planning assumptions to defaults? Actual-event cost history will be kept.'))return;try{state=await api({action:'reset-planning-assumptions'});renderAll();}catch(err){packageMessage.textContent=err.message||'Reset failed.';}});
 
