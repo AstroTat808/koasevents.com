@@ -3068,6 +3068,27 @@ export async function cachedDeploymentHistory(context:Context) {
       };
     }),
   }));
+
+  const activePreset=creditUsage.presets.find((preset:any)=>
+    Array.isArray(preset?.changes)&&preset.changes.length>0&&preset.changes.every((change:any)=>!change.changed)
+  )||null;
+  const modeCounts=(creditUsage.jobControls||[]).reduce((acc:any,item:any)=>{
+    const mode=String(item?.currentMode||'normal');
+    if(mode==='paused')acc.paused+=1;
+    else if(mode==='saver')acc.saver+=1;
+    else acc.normal+=1;
+    return acc;
+  },{normal:0,saver:0,paused:0});
+  creditUsage.activeProfile={
+    id:activePreset?.id||'custom',
+    name:activePreset?.name||'Custom Mix',
+    isPreset:Boolean(activePreset),
+    modeCounts,
+    updatedAt:String(creditSaverPolicy?.updatedAt||''),
+    updatedBy:String(creditSaverPolicy?.updatedBy||''),
+    expiresAt:String(creditSaverPolicy?.expiresAt||''),
+    expired:Boolean(creditSaverPolicy?.expired),
+  };
   creditUsage.autoSaverPlan=optimizeCreditSaverPlan(creditUsage,creditSaverPolicy);
   creditUsage.recommendations=(creditUsage.recommendations||[]).map((item:any)=>({
     ...item,
