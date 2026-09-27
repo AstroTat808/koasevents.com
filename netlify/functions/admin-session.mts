@@ -7,7 +7,12 @@ function clean(value: unknown, max = 240) {
 
 export default async (req:Request) => {
   const ctx = await getAccessContext(req);
-  if (!ctx.sessionUser || !ctx.user) return new Response('Unauthorized', { status:401 });
+  if (!ctx.sessionUser || !ctx.user) {
+    return Response.json(
+      { error:'Authentication required.', code:'unauthenticated' },
+      { status:401, headers:{'Cache-Control':'private, no-store'} },
+    );
+  }
 
   const email = clean(ctx.user?.email,240).toLowerCase();
   const metadata = ctx.user?.user_metadata || ctx.user?.userMetadata || {};
@@ -28,6 +33,13 @@ export default async (req:Request) => {
     tokenSessionVersion:0,
     sessionRevoked:false,
   };
+
+  if (security.sessionRevoked) {
+    return Response.json(
+      { error:'This session has ended. Sign in again.', code:'session_revoked' },
+      { status:401, headers:{'Cache-Control':'private, no-store'} },
+    );
+  }
 
   return Response.json({
     email,
