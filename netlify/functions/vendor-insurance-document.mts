@@ -30,6 +30,19 @@ export default async (req: Request, context: Context) => {
   const isAdmin = pathname.startsWith('/api/admin/vendors/insurance/');
   const store = vendorStoreFor(context);
   const files = filesStoreFor(context);
+
+  if (req.method === 'HEAD' && isAdmin && clean(context.params.vendorId, 100) === '__health__') {
+    try {
+      await Promise.all([
+        store.get('vendors/index', { type: 'json' }),
+        files.get('insurance/__health__/__health__', { type: 'arrayBuffer' }),
+      ]);
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'vendor-insurance-document' } });
+    } catch {
+      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'vendor-insurance-document' } });
+    }
+  }
+
   const rows = await vendors(context);
   let vendor: any = null;
 
