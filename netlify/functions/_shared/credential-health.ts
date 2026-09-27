@@ -29,13 +29,17 @@ export type CredentialHealthRow = {
   reliability7d?: {
     percentage: number | null;
     samples: number;
+    expectedSamples: number;
     coveragePercent: number;
   };
   reliability30d?: {
     percentage: number | null;
     samples: number;
+    expectedSamples: number;
     coveragePercent: number;
   };
+  verificationHttp?: string;
+  verifiedPermissions?: string[];
   problemSince?: string;
   recommendedAction?: {
     label: string;
@@ -230,6 +234,10 @@ function resendSendRow(sendAccess: any): CredentialHealthRow {
     severity: ok ? 'green' : issueType === 'External Dependency Problem' ? 'yellow' : 'red',
     issueType,
     detail,
+    verificationHttp: status ? ('HTTP '+status) : '',
+    verifiedPermissions: ok
+      ? [String(sendAccess?.verification||'').includes('send-only') ? 'Email sending · send-only credential confirmed' : 'Email sending · credential accepted']
+      : [],
     recommendedAction: recommendedAction('resend-send', ok),
   };
 }
@@ -250,6 +258,8 @@ function resendMonitoringRow(monitoringAccess: any): CredentialHealthRow {
     severity: ok ? 'green' : issueType === 'External Dependency Problem' || !configured ? 'yellow' : 'red',
     issueType,
     detail,
+    verificationHttp: status ? ('HTTP '+status) : '',
+    verifiedPermissions: ok ? ['Delivery history read · GET /emails'] : [],
     recommendedAction: recommendedAction('resend-monitoring', ok),
   };
 }
@@ -307,59 +317,88 @@ async function verifyGithubCredential(): Promise<CredentialHealthRow> {
       severity: 'yellow',
       issueType: 'Configuration Problem',
       detail: 'KOA_GITHUB_READ_TOKEN is not configured. Public-repository and GitHub Actions OIDC verification may still keep deployment health operational.',
+      verificationHttp: '',
+      verifiedPermissions: [],
     };
     return { ...row, recommendedAction: recommendedAction(row.id, row.ok) };
   }
 
+  const headers = {
+    Accept: 'application/vnd.github+json',
+    Authorization: 'Bearer ' + token,
+    'User-Agent': 'KoaEvents-CredentialHealth/1.0',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+  const base = 'https://api.github.com/repos/AstroTat808/koasevents.com';
+  const checks = [
+    { label:'Token identity', url:'https://api.github.com/user', permission:'Authenticated token identity' },
+    { label:'Repository metadata', url:base, permission:'Repository metadata read' },
+    { label:'Commit history', url:base+'/commits?per_page=1', permission:'Repository contents / commits read' },
+    { label:'Actions', url:base+'/actions/runs?per_page=1', permission:'GitHub Actions read' },
+    { label:'Pull requests', url:base+'/pulls?state=all&per_page=1', permission:'Pull requests read' },
+  ];
+
   try {
-    const response = await fetch('https://api.github.com/repos/AstroTat808/koasevents.com', {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: 'Bearer ' + token,
-        'User-Agent': 'KoaEvents-CredentialHealth/1.0',
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-    const body: any = await response.json().catch(() => ({}));
-    if (response.ok) {
+    const results = await Promise.all(checks.map(async(check) => {
+      const response = await fetch(check.url, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      const body: any = await response.json().catch(() => ({}));
       return {
-        id: 'github',
-        provider: 'GitHub',
-        credential: 'Repository read token',
-        ok: true,
-        configured: true,
+        ...check,
+        ok: response.ok,
         status: response.status,
-        severity: 'green',
-        issueType: null,
-        detail: 'GitHub repository read credential is valid and can access the production repository.',
-        recommendedAction: null,
+        statusText: clean(response.statusText, 80),
+        message: clean(body?.message || '', 240),
+        oauthScopes: clean(response.headers.get('x-oauth-scopes'), 500),
+        tokenExpiration: clean(response.headers.get('github-authentication-token-expiration'), 120),
       };
-    }
-    const detail = clean(body?.message || 'GitHub credential verification failed.', 800);
-    const issueType = classifyCredentialFailure({ configured: true, status: response.status, detail });
+    }));
+
+    const identity = results[0];
+    const repository = results[1];
+    const required = results.slice(1);
+    const ok = Boolean(identity?.ok && repository?.ok && required.every((item) => item.ok));
+    const failed = results.find((item) => !item.ok);
+    const status = Number(failed?.status || repository?.status || identity?.status || 0);
+    const httpSummary = results.map((item) => item.label+' HTTP '+item.status).join(' · ');
+    const verifiedPermissions = results.filter((item) => item.ok).map((item) => item.permission);
+    const scopeHeader = results.map((item) => item.oauthScopes).find(Boolean) || '';
+    const expiration = results.map((item) => item.tokenExpiration).find(Boolean) || '';
+    const detail = ok
+      ? 'GitHub token authenticated successfully. '+httpSummary
+        +(scopeHeader?' · Reported OAuth scopes: '+scopeHeader:'')
+        +(expiration?' · Token expiration: '+expiration:'')
+      : (failed?.message || (failed?.label || 'GitHub')+' verification failed')+' · '+httpSummary;
+    const issueType = ok ? null : classifyCredentialFailure({ configured:true, status, detail });
     const row: CredentialHealthRow = {
-      id: 'github',
-      provider: 'GitHub',
-      credential: 'Repository read token',
-      ok: false,
-      configured: true,
-      status: response.status,
-      severity: issueType === 'External Dependency Problem' ? 'yellow' : 'red',
+      id:'github',
+      provider:'GitHub',
+      credential:'Repository read token',
+      ok,
+      configured:true,
+      status,
+      severity: ok ? 'green' : issueType === 'External Dependency Problem' ? 'yellow' : 'red',
       issueType,
-      detail,
+      detail: clean(detail, 800),
+      verificationHttp: httpSummary,
+      verifiedPermissions,
     };
     return { ...row, recommendedAction: recommendedAction(row.id, row.ok) };
   } catch (error) {
     const row: CredentialHealthRow = {
-      id: 'github',
-      provider: 'GitHub',
-      credential: 'Repository read token',
-      ok: false,
-      configured: true,
-      status: 0,
-      severity: 'yellow',
-      issueType: 'External Dependency Problem',
-      detail: error instanceof Error ? clean(error.message, 800) : 'GitHub credential verification failed.',
+      id:'github',
+      provider:'GitHub',
+      credential:'Repository read token',
+      ok:false,
+      configured:true,
+      status:0,
+      severity:'yellow',
+      issueType:'External Dependency Problem',
+      detail:error instanceof Error ? clean(error.message,800) : 'GitHub credential verification failed.',
+      verificationHttp:'',
+      verifiedPermissions:[],
     };
     return { ...row, recommendedAction: recommendedAction(row.id, row.ok) };
   }
@@ -988,7 +1027,7 @@ function combinedCredentialOverall(currentOverall: unknown, reliabilityOverall: 
 
 function runtimeCredentialConfigured(credentialId: unknown, fallback: boolean) {
   const id = clean(credentialId, 120);
-  const env = (name:string) => Boolean(String(Deno.env.get(name) || '').trim());
+  const env = (name:string) => Boolean(String(Netlify.env.get(name) || '').trim());
   if (id === 'resend-send') return env('RESEND_API_KEY');
   if (id === 'resend-monitoring') return env('RESEND_MONITORING_API_KEY');
   if (id === 'github') return env('KOA_GITHUB_READ_TOKEN');
@@ -1162,11 +1201,13 @@ async function withHistory(context: Context, summary: any) {
       reliability7d: {
         percentage: typeof period7?.percentage === 'number' ? period7.percentage : null,
         samples: Number(period7?.samples || 0),
+        expectedSamples: Number(period7?.expectedSamples || 168),
         coveragePercent: Number(period7?.coveragePercent || 0),
       },
       reliability30d: {
         percentage: typeof period30?.percentage === 'number' ? period30.percentage : null,
         samples: Number(period30?.samples || 0),
+        expectedSamples: Number(period30?.expectedSamples || 720),
         coveragePercent: Number(period30?.coveragePercent || 0),
       },
     };
