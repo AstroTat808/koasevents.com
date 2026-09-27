@@ -232,7 +232,7 @@ function packageCatalogPatch(row:PackageModel, publishPrice = false):CatalogEcon
     fallbackUnitPrice:row.price,
     internalCost:sumCosts(row.costs),
     targetMargin:row.targetMargin,
-    active:true,
+    active:publishPrice ? true : undefined,
   };
 }
 
