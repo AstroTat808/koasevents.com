@@ -24,6 +24,18 @@ export type CredentialHealthRow = {
   issueType: CredentialIssueType | null;
   detail: string;
   lastCheckedAt?: string;
+  lastVerifiedAt?: string;
+  verificationState?: 'missing' | 'configured_unverified' | 'verified' | 'verification_failed';
+  reliability7d?: {
+    percentage: number | null;
+    samples: number;
+    coveragePercent: number;
+  };
+  reliability30d?: {
+    percentage: number | null;
+    samples: number;
+    coveragePercent: number;
+  };
   problemSince?: string;
   recommendedAction?: {
     label: string;
@@ -865,9 +877,18 @@ async function persistRowsWithHistory(
     if (!checkedIds.has(row.id)) return row;
 
     const previousProblemSince = clean(previous?.problemSince, 100);
+    const previousLastVerifiedAt = clean(previous?.lastVerifiedAt, 100);
     const next: CredentialHealthRow = {
       ...row,
       lastCheckedAt: generatedAt,
+      lastVerifiedAt: row.ok ? generatedAt : previousLastVerifiedAt,
+      verificationState: !row.configured
+        ? 'missing'
+        : row.ok
+          ? 'verified'
+          : previousLastVerifiedAt
+            ? 'verification_failed'
+            : 'configured_unverified',
       problemSince: row.ok ? '' : previous && !previous.ok ? (previousProblemSince || generatedAt) : generatedAt,
     };
 
@@ -1095,8 +1116,40 @@ async function withHistory(context: Context, summary: any) {
     readCredentialWorkspaceAlertTimeline(context),
   ]);
   const reliability = reliabilitySummary(samples, policy);
+  const reliabilityByProvider = new Map(
+    (Array.isArray(reliability?.providers) ? reliability.providers : []).map((provider:any) => [String(provider?.id || ''), provider]),
+  );
+  const rows = (Array.isArray(summary?.rows) ? summary.rows : []).map((row:any) => {
+    const provider = reliabilityByProvider.get(providerIdForCredential(row?.id));
+    const period7 = provider?.periods?.['7d'] || {};
+    const period30 = provider?.periods?.['30d'] || {};
+    const lastVerifiedAt = clean(row?.lastVerifiedAt, 100) || (row?.ok ? clean(row?.lastCheckedAt, 100) : '');
+    const verificationState = !row?.configured
+      ? 'missing'
+      : row?.ok
+        ? 'verified'
+        : lastVerifiedAt
+          ? 'verification_failed'
+          : 'configured_unverified';
+    return {
+      ...row,
+      lastVerifiedAt,
+      verificationState,
+      reliability7d: {
+        percentage: typeof period7?.percentage === 'number' ? period7.percentage : null,
+        samples: Number(period7?.samples || 0),
+        coveragePercent: Number(period7?.coveragePercent || 0),
+      },
+      reliability30d: {
+        percentage: typeof period30?.percentage === 'number' ? period30.percentage : null,
+        samples: Number(period30?.samples || 0),
+        coveragePercent: Number(period30?.coveragePercent || 0),
+      },
+    };
+  });
   return {
     ...summary,
+    rows,
     operationalOverall: String(summary?.overall || 'green'),
     overall: combinedCredentialOverall(summary?.overall, reliability.overall),
     history,
