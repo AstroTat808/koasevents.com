@@ -7,7 +7,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin · Reliability</p>
-          <h1 class="display mt-3 text-5xl">System health</h1>
+          <h1 class="display mt-3 text-5xl">System Health</h1>
           <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Hourly monitoring, transition-only alerts, protected page/API status, and deployment QA history in one place.</p>
         </div>
         <div class="flex flex-col items-start gap-2 lg:items-end">
@@ -550,6 +550,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </div>
 
+            <div data-credit-active-profile class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p class="text-[.54rem] font-black uppercase tracking-[.09em] text-emerald-800">Current operating profile</p>
+                  <div class="mt-1 flex flex-wrap items-center gap-2">
+                    <strong data-credit-active-profile-name class="text-xl text-[var(--koa-forest)]">Loading…</strong>
+                    <span data-credit-active-profile-badge class="rounded-full bg-emerald-700 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-white">In effect</span>
+                  </div>
+                  <p data-credit-active-profile-detail class="mt-1 text-xs leading-5 text-emerald-950/65">Checking the six scheduled-job modes.</p>
+                </div>
+                <div class="rounded-xl bg-white/75 px-4 py-3 lg:max-w-md lg:text-right">
+                  <p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current impact</p>
+                  <p data-credit-active-profile-impact class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">Calculating…</p>
+                  <p data-credit-active-profile-meta class="mt-1 text-[.66rem] leading-5 text-emerald-950/55"></p>
+                </div>
+              </div>
+            </div>
+
             <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimated total credits</p><p data-credit-total class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
               <article class="rounded-xl bg-white p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Allowance used</p><p data-credit-percent class="display mt-2 text-3xl text-[var(--koa-forest)]">—</p></article>
@@ -603,19 +621,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">One-click presets</p>
                   <h4 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">Choose an operating profile</h4>
                   <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Each preset shows the exact six-job mode changes before you apply it.</p>
-                </div>
-              </div>
-              <div data-credit-active-profile class="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p class="text-[.54rem] font-black uppercase tracking-[.09em] text-emerald-800">Current operating profile</p>
-                    <div class="mt-1 flex flex-wrap items-center gap-2">
-                      <strong data-credit-active-profile-name class="text-lg text-[var(--koa-forest)]">Loading…</strong>
-                      <span data-credit-active-profile-badge class="rounded-full bg-emerald-700 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-white">In effect</span>
-                    </div>
-                    <p data-credit-active-profile-detail class="mt-1 text-xs leading-5 text-emerald-950/65">Checking the six scheduled-job modes.</p>
-                  </div>
-                  <p data-credit-active-profile-meta class="text-xs leading-5 text-emerald-950/55 sm:max-w-xs sm:text-right"></p>
                 </div>
               </div>
               <div data-credit-automation class="mt-3 rounded-xl bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/58">Automatic protection is evaluating the current forecast.</div>
@@ -1039,6 +1044,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const creditActiveProfileName=document.querySelector('[data-credit-active-profile-name]');
     const creditActiveProfileBadge=document.querySelector('[data-credit-active-profile-badge]');
     const creditActiveProfileDetail=document.querySelector('[data-credit-active-profile-detail]');
+    const creditActiveProfileImpact=document.querySelector('[data-credit-active-profile-impact]');
     const creditActiveProfileMeta=document.querySelector('[data-credit-active-profile-meta]');
     const creditAutomation=document.querySelector('[data-credit-automation]');
     const creditPresets=document.querySelector('[data-credit-presets]');
@@ -1086,6 +1092,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let latestHealthChecks=[];
 
     let latestHealthRunWarnings=[];
+    let currentDashboardRenderPanel='Starting';
+
+    function markDashboardRenderPanel(label){
+      currentDashboardRenderPanel=String(label||'Dashboard');
+      setCompactStatus(dashboardRefreshStatus,'running','Rendering · '+currentDashboardRenderPanel);
+    }
 
     function setCompactStatus(node,state,label){
       if(!(node instanceof HTMLElement))return;
@@ -1230,14 +1242,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       clearHealthRunWarning();
       updateCoreCheckStatus(payload?.current);
       const warnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
-      updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
+      updateDashboardRefreshStatus('running');
+      currentDashboardRenderPanel='Starting';
       try{
         render(payload||{});
       }catch(error){
-        console.error('[system-health] '+source+' detail rendering failed:',error);
+        console.error('[system-health] '+source+' detail rendering failed in '+currentDashboardRenderPanel+':',error);
         if(payload?.current){
           const renderWarnings=[...warnings,{
-            section:'Dashboard rendering',
+            section:'Dashboard rendering · '+currentDashboardRenderPanel,
             error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
           }];
           updateDashboardRefreshStatus('partial',renderWarnings.length);
@@ -1251,6 +1264,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         throw error;
       }
 
+      updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
       if(warnings.length){
         showHealthRunWarning(
           'Core checks completed; supporting data needs attention.',
@@ -3481,6 +3495,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function render(data){
+      markDashboardRenderPanel('Core summary');
       const current=data.current;
       if(current){
         const bad=current.overall==='unhealthy';
@@ -3565,6 +3580,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
 
+      markDashboardRenderPanel('Health history');
       historyEl.innerHTML='';
       (data.history||[]).slice(0,20).forEach(row=>{
         const card=document.createElement('article');
@@ -3574,8 +3590,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
 
       renderEmailHealth(data.emailHealth||{},data.current||null);
+      markDashboardRenderPanel('Credential Health');
       renderCredentialHealth(data.credentialHealth||{});
+      markDashboardRenderPanel('Weekly executive summary');
       renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
+      markDashboardRenderPanel('Office 365');
       const office365=data.office365||{};
       if(office365Operational){
         const signals=office365.signals||{};
@@ -3698,6 +3717,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         renderOffice365Trend(office365.reliabilityTrend||[]);
       }
 
+      markDashboardRenderPanel('Credit Usage');
       const deployments=data.deployments||{};
       const creditUsage=deployments.creditUsage||{};
       if(creditCycle){
@@ -3959,6 +3979,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           creditActiveProfileDetail.textContent='Manual mix currently in effect · '+normal+' Normal · '+saver+' Saver · '+paused+' Paused.';
         }
         creditActiveProfileDetail.className='mt-1 text-xs leading-5 '+(activeProfileIsPreset?'text-emerald-950/65':'text-amber-950/70');
+      }
+      if(creditActiveProfileImpact){
+        const controls=Array.isArray(creditUsage.jobControls)?creditUsage.jobControls:[];
+        const pausedCount=controls.filter((item)=>String(item?.currentMode||'normal')==='paused').length;
+        const saverCount=controls.filter((item)=>String(item?.currentMode||'normal')==='saver').length;
+        const normalCount=controls.filter((item)=>String(item?.currentMode||'normal')==='normal').length;
+        const estimatedSavedPerDay=controls.reduce((sum,item)=>{
+          const mode=String(item?.currentMode||'normal');
+          if(mode==='paused')return sum+Number(item?.pausedSavingsPerDay||0);
+          if(mode==='saver')return sum+Number(item?.saverSavingsPerDay||0);
+          return sum;
+        },0);
+        const parts=[];
+        if(pausedCount)parts.push(pausedCount+' job'+(pausedCount===1?'':'s')+' paused');
+        if(saverCount)parts.push(saverCount+' in Saver');
+        if(normalCount)parts.push(normalCount+' Normal');
+        const rounded=Math.round(estimatedSavedPerDay*100)/100;
+        parts.push('estimated '+rounded.toLocaleString(undefined,{maximumFractionDigits:2})+' credits/day saved');
+        if(activeProfile.expiresAt&&!activeProfile.expired){
+          parts.push('resets '+new Date(activeProfile.expiresAt).toLocaleDateString(undefined,{month:'short',day:'numeric'}));
+        }
+        creditActiveProfileImpact.textContent=parts.join(' · ');
       }
       if(creditActiveProfileMeta){
         const meta=[];
@@ -4321,10 +4363,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         postDeployEl.className='mt-2 text-sm font-semibold text-amber-800';
       }
 
+      markDashboardRenderPanel('Release timeline');
       latestReleases=deployments.releaseTimeline||[];
       renderReleaseTimeline();
       populateCompareSelectors();
 
+      markDashboardRenderPanel('Failed deployment groups');
       failedDeployGroups.innerHTML='';
       const deployGroups=deployments.failedDeployGroups||[];
       deployGroups.forEach((group)=>{
@@ -4346,6 +4390,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
       if(!deployGroups.length)failedDeployGroups.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No grouped production deploy failures are available.</p>';
 
+      markDashboardRenderPanel('Deployment QA history');
       deployHistory.innerHTML='';
       const rows=deployments.history||[];
       rows.slice(0,12).forEach(row=>{
@@ -4358,6 +4403,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
       if(!rows.length) deployHistory.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">Deployment QA history is not available yet.</p>';
 
+      markDashboardRenderPanel('Uptime and incidents');
       const uptime=data.uptime||{};
       uptimeBody.innerHTML='';
       const pct=(period)=>{
@@ -4423,6 +4469,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       latestComponents=data.components||[];
       publicStatusEnabled.checked=Boolean(latestPolicy?.publicStatusEnabled);
       const componentById=new Map(latestComponents.map((component)=>[component.id,component]));
+      markDashboardRenderPanel('Alert policy');
       policyBody.innerHTML='';
       (latestPolicy?.rules||[]).forEach((rule)=>{
         const component=componentById.get(rule.id)||{name:rule.id,kind:''};
@@ -4440,6 +4487,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         tr.append(service,timingTd,publicTd,labelTd);policyBody.appendChild(tr);
       });
+      markDashboardRenderPanel('Section status rollup');
       refreshHealthSectionStatuses(data);
     }
 
