@@ -309,8 +309,7 @@ const seoSchema = {
           window.location.replace('/admin/' + hash);
         }
       })();
-    </script>
-    <script is:inline>
+
       (() => {
         const currentPath = String(window.location.pathname || '/');
         const isProtectedAdminPage = currentPath.startsWith('/admin/') && currentPath !== '/admin/';
