@@ -493,7 +493,7 @@ function contractSections(record: SalesRecord) {
   }
 
   return [
-    { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3330 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (record.customer?.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
+    { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3334 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (record.customer?.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
     { heading: '2. Premises Use & Access', body: 'Lessee is granted exclusive access to the property for the scheduled event. Koa’s Events reserves the right to define accessible areas if only a portion of the venue is being rented. Unauthorized access to non-designated areas is prohibited.' },
     { heading: '3. Payment Terms', body: 'The finalized proposal total is $' + Number(proposal?.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized proposal scope. A 10% non-refundable deposit is required to reserve the event date. The first payment is due within 14 days of signing, the second payment is due 90 days before the event, and the final payment is due 60 days before the event. A $150 late fee applies per occurrence; two missed payments may result in event cancellation with no refund.' },
     { heading: '4. Security / Damage Deposit', body: 'The separate security or damage deposit required for the event is due 30 days before the event. Failure to pay authorizes cancellation by Koa’s. The deposit will be refunded within 14 days after the event, less deductions for damage, excessive cleanup, or breach.' },
@@ -662,6 +662,15 @@ function remindersForRecord(record: SalesRecord) {
   return reminders.sort((a,b) => a.priority-b.priority);
 }
 
+function proposalGrandTotal(proposal: any) {
+  const stored = roundMoney(finite(proposal?.total));
+  const subtotal = roundMoney(finite(proposal?.subtotal));
+  const discount = roundMoney(finite(proposal?.discountAmount));
+  const taxAmount = roundMoney(finite(proposal?.taxAmount));
+  const derived = roundMoney(Math.max(0, subtotal - discount + taxAmount));
+  return derived > 0 ? derived : stored;
+}
+
 function bookingSummary(record: SalesRecord) {
   if (!record.proposal || !['accepted','booked'].includes(record.proposal.status)) return null;
   const booking = record.booking;
@@ -694,7 +703,8 @@ function bookingSummary(record: SalesRecord) {
     if (!item.invoiceId) return sum;
     return sum + Math.max(0, Number(item.amount || 0) - Number(item.balance || 0));
   }, 0);
-  const outstanding = Math.max(0, Number(record.proposal.total || 0)-paid);
+  const proposalTotal = proposalGrandTotal(record.proposal);
+  const outstanding = Math.max(0, proposalTotal-paid);
   const qboBalanceDue = quickbooks?.balanceDue != null
     ? Math.max(0, Number(quickbooks.balanceDue || 0))
     : payments.filter((item:any)=>item.invoiceId).reduce((sum:number,item:any)=>sum+Math.max(0,Number(item.balance||0)),0);
@@ -702,7 +712,7 @@ function bookingSummary(record: SalesRecord) {
   const depositPaid = Boolean(quickbooks?.depositPaid || payments[0]?.status === 'paid');
 
   let paymentStatus = 'Balance Due';
-  if (outstanding <= 0 && Number(record.proposal.total || 0) > 0) paymentStatus = 'Paid in Full';
+  if (outstanding <= 0 && proposalTotal > 0) paymentStatus = 'Paid in Full';
   else if (paid > 0 && qboBalanceDue > 0) paymentStatus = 'Partially Paid';
   else if (paid > 0 && qboBalanceDue <= 0) paymentStatus = 'Paid';
   else if (!hasInvoices && outstanding > 0) paymentStatus = 'Balance Due';
@@ -717,7 +727,7 @@ function bookingSummary(record: SalesRecord) {
     discountAmount: Number(record.proposal.discountAmount || 0),
     taxRate: 4.712,
     taxAmount: Number(record.proposal.taxAmount || 0),
-    total: Number(record.proposal.total || 0),
+    total: proposalTotal,
     depositAmount: Number(record.proposal.depositAmount || 0),
     payments,
     paid,
