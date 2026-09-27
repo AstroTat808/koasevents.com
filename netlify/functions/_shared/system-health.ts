@@ -159,6 +159,10 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'credential-quickbooks',name:'QuickBooks credential',path:'Credential Health · QuickBooks',kind:'api' as const},
+    {id:'credential-microsoft-graph',name:'Microsoft Graph credential',path:'Credential Health · Microsoft Graph',kind:'api' as const},
+    {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
+    {id:'credential-netlify',name:'Netlify credential',path:'Credential Health · Netlify',kind:'api' as const},
     {id:'email-logo',name:'Email logo availability',path:'/brand/koa-mark.png',kind:'api' as const},
     {id:'email-send-access',name:'Email sending access',path:'Resend send credential',kind:'api' as const},
     {id:'email-monitoring-access',name:'Email monitoring access',path:'Resend delivery-read credential',kind:'api' as const},
@@ -174,6 +178,7 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
+    'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
   ]);
   return immediate.has(id)?1:2;
@@ -909,7 +914,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const credentialHealthPromise=emailHealthPromise.then((emailHealth)=>
     credentialHealthSummary(context,{force:source==='manual',emailHealth})
   );
-  const [baseChecks,startupSignal,deploymentSync,emailHealth]=await Promise.all([
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
@@ -1074,6 +1079,31 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
+  const credentialChecks:HealthCheck[]=(Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
+    .filter((row:any)=>!['resend-send','resend-monitoring'].includes(String(row?.id||'')))
+    .map((row:any)=>{
+      const rowSeverity:HealthCheck['severity']=String(row?.severity||'yellow')==='red'
+        ? 'red'
+        : String(row?.severity||'yellow')==='green'
+          ? 'green'
+          : 'yellow';
+      return {
+        id:'credential-'+clean(row?.id,100),
+        name:clean(row?.provider,120)+' credential',
+        kind:'api' as const,
+        path:'Credential Health · '+clean(row?.provider,120),
+        ok:rowSeverity!=='red',
+        status:Number(row?.status||0),
+        ms:0,
+        severity:rowSeverity,
+        detail:clean(
+          clean(row?.credential,180)
+          +' · '+clean(row?.detail||'Credential verification result unavailable.',900),
+          1200,
+        ),
+      };
+    })
+    .filter((row:any)=>row.id!=='credential-');
   const webhook=emailDelivery?.webhook||{};
   const webhookDelivery=emailDelivery?.webhookDelivery||{};
   const webhookExists=webhook?.existsInResend;
@@ -1132,7 +1162,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
