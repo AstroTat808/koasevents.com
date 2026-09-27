@@ -476,6 +476,14 @@ def admin_mode(browser_name):
  with sync_playwright() as p:
   browser=getattr(p,browser_name).launch()
   ctx=browser.new_context(viewport={"width":1440,"height":1000},reduced_motion="reduce",color_scheme="light")
+
+  # Authorized browser regressions load the production admin shell, whose global
+  # auth guard redirects on any same-origin API 401. Register a generic 200 JSON
+  # fallback first; page-specific mocks are registered afterward and therefore
+  # take precedence. This keeps background nav/profile/alert fetches from turning
+  # an otherwise-authorized QA page into a false session-expired redirect.
+  def mock_authorized_shell(page):
+   page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
   for name,path in ADMIN_ROUTES:
    page=ctx.new_page()
    page_errors=[];console_errors=[];request_failed=[]
@@ -543,6 +551,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
   crm_session_fixture={
    "email":"qa-manager@koasevents.test","role":"manager","roles":["manager"],"isAdmin":False,
    "permissions":["crm.view","crm.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"],
@@ -610,6 +619,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
   page.route("**/api/admin/quickbooks",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(qbo_fixture)))
   detail=""
@@ -663,6 +673,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
   page.route("**/api/admin/quotes**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(sales_fixture)))
   page.route("**/api/admin/quickbooks**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"configuration":{"configured":False},"connection":{"connected":False},"catalog":[]})))
@@ -701,9 +712,14 @@ def admin_mode(browser_name):
     else:
      picker.select_option("qa-rental")
      page.wait_for_function("() => document.body.innerText.includes('QA catalog regression item')",timeout=5000)
-     editor_text=page.locator("[data-proposal-dialog]").inner_text()
-     if "QA catalog regression item" not in editor_text or "$125" not in editor_text:
-      detail="Sales CRM Add from catalog did not add the central catalog item at its current price."
+     added=page.locator('[data-line-items] [data-catalog-item-id="qa-rental"]')
+     if added.count()!=1:
+      detail="Sales CRM Add from catalog did not create exactly one catalog-backed proposal line."
+     else:
+      description=added.locator("[data-line-description]").input_value()
+      price=added.locator("[data-line-price]").input_value()
+      if description!="QA catalog regression item" or abs(float(price)-125)>0.001:
+       detail="Sales CRM Add from catalog did not add the central catalog item at its current $125 price."
    if not detail and page_errors:
     detail="Sales CRM proposal explanation/catalog picker JavaScript errors: "+" | ".join(page_errors[:5])
   except Exception as exc:
@@ -775,6 +791,7 @@ def admin_mode(browser_name):
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
   page.on("dialog",lambda dialog:dialog.accept())
+  mock_authorized_shell(page)
   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(catalog_session_fixture)))
   page.route("**/api/admin/catalog**",catalog_api_mock)
   detail=""
@@ -882,6 +899,7 @@ def admin_mode(browser_name):
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
   page.on("dialog",lambda dialog:dialog.accept())
+  mock_authorized_shell(page)
   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(profit_session_fixture)))
   page.route("**/api/admin/profitability**",profitability_api_mock)
   detail=""
@@ -934,6 +952,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_session_fixture)))
   page.route("**/api/gallery",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_fixture)) if route.request.method=="GET" else route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True})))
   page.route("**/api/admin/vendors",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"vendors":[]})))
