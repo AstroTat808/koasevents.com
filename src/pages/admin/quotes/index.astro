@@ -13,7 +13,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         
       </div>
 
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an authorized staff account at <a class="underline" href="/staff/">Koa’s Staff Workspace</a>.</div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8"><strong class="text-[var(--koa-forest)]">Sales CRM access required.</strong><p class="mt-2 text-sm text-[var(--koa-ink)]/58">You are signed in, but your role does not include Sales CRM access.</p></div>
 
       <div data-admin-ui class="hidden grid gap-8">
         <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
@@ -808,9 +808,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());
     }
     function hasAdminAccess(user) {
-      const email = String(user?.email || '').trim().toLowerCase();
-      const roles = userRoles(user);
-      return approvedAdminEmails.has(email) || roles.some((role) => ['admin','staff','sales','manager'].includes(role));
+      return Boolean(!user?.accessBlocked&&(user?.isAdmin||user?.capabilities?.includes('sales.view')||user?.permissions?.includes('sales.view')));
     }
     function userPermissions(user){const meta=user?.appMetadata||user?.app_metadata||{};return (Array.isArray(meta.permissions)?meta.permissions:[]).map((p)=>String(p||'').toLowerCase());}
     function hasManagerAccess(user) {
@@ -2981,7 +2979,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'}),
         fetch('/api/admin/quickbooks',{cache:'no-store'})
       ]);
-      if(response.status===401){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+      if(response.status===401)return;
+      if(response.status===403){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
       payload=await response.json();
       qboState=qboResponse.ok?await qboResponse.json():null;
