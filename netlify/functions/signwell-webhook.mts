@@ -18,6 +18,12 @@ export default async(req:Request,context:Context)=>{
   if(!expected||url.searchParams.get('token')!==expected)return new Response('Unauthorized',{status:401});
   const payload:any=await req.json().catch(()=>null);
   if(!payload)return new Response('Invalid JSON',{status:400});
+  if(payload?.koaHealthCheck===true&&eventName(payload)==='koa_health_check'){
+    return new Response(null,{
+      status:204,
+      headers:{'Cache-Control':'no-store','X-Koa-Synthetic-Check':'signwell-webhook'},
+    });
+  }
   const documentId=docId(payload); if(!documentId)return new Response(null,{status:200});
   const store=sales(context); const records:any[]=(await store.get('records/index',{type:'json'}))||[];
   const record=records.find(r=>String(r?.booking?.contract?.signwell?.documentId||'')===documentId);
