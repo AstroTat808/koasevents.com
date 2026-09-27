@@ -111,6 +111,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
             <span>Business CRM</span><span data-link-alert="overdueTasks" class="hidden workspace-link-badge"></span>
           </a>
           <a data-workspace-link data-capability="sales.view" href="/admin/quotes/" class="workspace-nav-link">Sales CRM</a>
+          <a data-workspace-link data-capability="email.view" href="/admin/email/" class="workspace-nav-link">Email</a>
           <a data-workspace-link data-capability="sales.profit_settings" href="/admin/profitability/" class="workspace-nav-link">Wedding Profitability</a>
         </div>
       </section>
@@ -1179,6 +1180,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     events:{label:'Events',href:'/admin/events/',capability:'events.view',icon:'M5 5h14v14H5zM8 3v4M16 3v4M5 9h14'},
     calendar:{label:'Calendar',href:'/admin/calendar/',capability:'calendar.view',icon:'M5 4.5h14A2 2 0 0 1 21 6.5v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-12a2 2 0 0 1 2-2ZM7 2v5M17 2v5M3 9h18'},
     quickbooks:{label:'Books',href:'/admin/quickbooks/',capability:'quickbooks.view',icon:'M4 5h16v14H4zM8 9h8M8 13h3M14 13h2M8 16h8'},
+    email:{label:'Email',href:'/admin/email/',capability:'email.view',icon:'M4 6h16v12H4zM5 7l7 5 7-5'},
     health:{label:'Health',href:'/admin/health/',capability:'health.view',icon:'M3 12h4l2-5 4 10 2-5h6'},
     staff:{label:'Staff',href:'/admin/staff/',capability:'users.manage',icon:'M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3 20v-2a5 5 0 0 1 10 0v2M17 10a2.5 2.5 0 1 0 0-5M15 20v-2a4 4 0 0 1 6 0v2'},
     vendors:{label:'Vendors',href:'/admin/vendors/',capability:'vendors.view',icon:'M4 8h16v11H4zM7 8V5h10v3M8 12h8'},
