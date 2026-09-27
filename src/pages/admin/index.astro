@@ -208,6 +208,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
     const layoutEditor=document.querySelector('[data-admin-layout-editor]');
     const layoutEditorSections=document.querySelector('[data-admin-layout-editor-sections]');
     const layoutMessage=document.querySelector('[data-admin-layout-message]');
+    const layoutScopeHelp=document.querySelector('[data-admin-layout-scope-help]');
+    const layoutSaveButton=document.querySelector('[data-admin-layout-save]');
+    const layoutScopeButtons=[...(document.querySelectorAll('[data-admin-layout-scope]')||[])];
 
     const ADMIN_HOME_DEFAULT_LAYOUT={
       sectionOrder:['sales','operations','accounting','content','administration'],
@@ -246,6 +249,10 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       security:'Security + Spam',
     };
     let savedAdminHomeLayout=structuredClone(ADMIN_HOME_DEFAULT_LAYOUT);
+    let personalAdminHomeLayout=null;
+    let companyAdminHomeLayout=structuredClone(ADMIN_HOME_DEFAULT_LAYOUT);
+    let currentAdminHomeLayoutScope='personal';
+    let canManageCompanyAdminHomeLayout=false;
 
     function safeAdminReturnTo(value) {
       const raw = String(value || '').trim();
