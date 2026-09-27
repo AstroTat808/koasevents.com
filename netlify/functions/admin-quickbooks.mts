@@ -263,7 +263,7 @@ async function createMilestoneInvoice(context: Context, record: any, itemId: str
     const balance = Number(entry.balance ?? total);
     return sum + Math.max(0, total - balance);
   }, 0);
-  const proposalTotal = Number(proposal.total || 0);
+  const proposalTotal = proposalAccountingTotal(proposal).grandTotal;
   const remainingBalance = Math.max(0, Math.round((proposalTotal - paymentsReceived) * 100) / 100);
   const remainingAfterMilestone = Math.max(0, Math.round((remainingBalance - amount) * 100) / 100);
   const depositPercent = Number.isFinite(Number(proposal.depositPercent))
@@ -489,6 +489,88 @@ function proposalAccountingTotal(proposal: any) {
     discount,
     taxAmount,
     grandTotal: derived > 0 ? derived : stored,
+  };
+}
+
+function normalizeLegacyProposalAccounting(record: any) {
+  const proposal = record?.proposal;
+  if (!proposal) return { changed:false, reason:'no-proposal' };
+
+  const financials = proposalAccountingTotal(proposal);
+  if (Math.abs(moneyDelta(financials.grandTotal, financials.stored)) < 0.01) {
+    return { changed:false, reason:'already-current', grandTotal:financials.grandTotal };
+  }
+
+  const qbo = record?.accounting?.quickbooks || {};
+  const activeInvoices = (Array.isArray(qbo.invoices) ? qbo.invoices : []).filter((entry: any) =>
+    entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
+  );
+  const hasPaidBookingPayment = (Array.isArray(record?.booking?.payments) ? record.booking.payments : [])
+    .some((entry: any) => String(entry?.status || '').toLowerCase() === 'paid' || Number(entry?.paidAmount || 0) > 0);
+  const contractCommitted = record?.booking?.contract?.status === 'signed' || Boolean(record?.booking?.contract?.koaSignature);
+
+  if (activeInvoices.length || hasPaidBookingPayment || contractCommitted) {
+    return {
+      changed:false,
+      reason:'financially-committed',
+      grandTotal:financials.grandTotal,
+      storedTotal:financials.stored,
+    };
+  }
+
+  const currentSchedule = Array.isArray(proposal.paymentSchedule) ? proposal.paymentSchedule : [];
+  const depositPercent = Number.isFinite(Number(proposal.depositPercent))
+    ? Math.min(100, Math.max(0, Number(proposal.depositPercent)))
+    : financials.stored > 0
+      ? Math.min(100, Math.max(0, (Number(proposal.depositAmount || 0) / financials.stored) * 100))
+      : 10;
+  const depositAmount = Math.round(financials.grandTotal * depositPercent) / 100;
+  const remaining = Math.max(0, Math.round((financials.grandTotal - depositAmount) * 100) / 100);
+  const rest = currentSchedule.slice(1);
+  const oldRestTotal = rest.reduce((sum: number, item: any) => sum + Math.max(0, Number(item?.amount || 0)), 0);
+  let allocated = 0;
+  const normalizedRest = rest.map((item: any, index: number) => {
+    const amount = index === rest.length - 1
+      ? Math.max(0, Math.round((remaining - allocated) * 100) / 100)
+      : Math.max(0, Math.round((
+          oldRestTotal > 0
+            ? remaining * (Math.max(0, Number(item?.amount || 0)) / oldRestTotal)
+            : remaining / Math.max(1, rest.length)
+        ) * 100) / 100);
+    allocated = Math.round((allocated + amount) * 100) / 100;
+    return { ...item, amount };
+  });
+  const first = currentSchedule[0] || { label:'Reservation deposit', dueDate:'' };
+  const paymentSchedule = [{ ...first, amount:depositAmount }, ...normalizedRest];
+  if (!rest.length && remaining > 0) {
+    paymentSchedule.push({ label:'Final payment', dueDate:'', amount:remaining });
+  }
+
+  proposal.total = financials.grandTotal;
+  proposal.depositPercent = depositPercent;
+  proposal.depositAmount = depositAmount;
+  proposal.paymentSchedule = paymentSchedule;
+
+  if (Array.isArray(record?.booking?.payments) && record.booking.payments.length) {
+    record.booking.payments = paymentSchedule.map((item: any, index: number) => ({
+      ...(record.booking.payments[index] || {}),
+      id: record.booking.payments[index]?.id || 'pay-' + (index + 1),
+      label: item.label,
+      dueDate: item.dueDate,
+      amount: item.amount,
+      status: record.booking.payments[index]?.status || 'pending',
+    }));
+    record.booking.updatedAt = new Date().toISOString();
+  }
+  record.updatedAt = new Date().toISOString();
+
+  return {
+    changed:true,
+    reason:'legacy-subtotal-total',
+    storedTotal:financials.stored,
+    grandTotal:financials.grandTotal,
+    taxAmount:financials.taxAmount,
+    depositAmount,
   };
 }
 
@@ -1486,6 +1568,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'sync-and-recheck') {
+    const repair = normalizeLegacyProposalAccounting(record);
     const state = await syncQuickBooksAccountingStatus(context, record);
     await refreshQuickBooksPaymentSnapshot(context, record);
     records = await saveQuickBooksSalesRecord(context, record, records);
@@ -1498,9 +1581,9 @@ export default async (req: Request, context: Context) => {
       type: 'quickbooks_accounting_recheck',
       recordId: record.id,
       quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
+      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.' + (repair.changed ? ' Legacy CRM subtotal-only total and uncommitted payment schedule were normalized to the tax-inclusive grand total.' : ''),
     });
-    return Response.json({ ok: true, record, quickbooks: state, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ ok: true, record, quickbooks: state, repair, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (action === 'sync-status') {
