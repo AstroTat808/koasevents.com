@@ -986,6 +986,19 @@ function combinedCredentialOverall(currentOverall: unknown, reliabilityOverall: 
   return 'green';
 }
 
+function runtimeCredentialConfigured(credentialId: unknown, fallback: boolean) {
+  const id = clean(credentialId, 120);
+  const env = (name:string) => Boolean(String(Deno.env.get(name) || '').trim());
+  if (id === 'resend-send') return env('RESEND_API_KEY');
+  if (id === 'resend-monitoring') return env('RESEND_MONITORING_API_KEY');
+  if (id === 'github') return env('KOA_GITHUB_READ_TOKEN');
+  if (id === 'netlify') return env('NETLIFY_AUTH_TOKEN');
+  if (id === 'microsoft-graph') {
+    return env('MICROSOFT_GRAPH_CLIENT_ID') && env('MICROSOFT_GRAPH_CLIENT_SECRET') && env('MICROSOFT_GRAPH_TENANT_ID');
+  }
+  return fallback;
+}
+
 function providerIdForCredential(credentialId: unknown) {
   const id = clean(credentialId, 120);
   if (id.startsWith('resend-')) return 'resend';
@@ -1124,15 +1137,26 @@ async function withHistory(context: Context, summary: any) {
     const period7 = provider?.periods?.['7d'] || {};
     const period30 = provider?.periods?.['30d'] || {};
     const lastVerifiedAt = clean(row?.lastVerifiedAt, 100) || (row?.ok ? clean(row?.lastCheckedAt, 100) : '');
-    const verificationState = !row?.configured
+    const runtimeConfigured = runtimeCredentialConfigured(row?.id, Boolean(row?.configured));
+    const staleMissingSnapshot = runtimeConfigured && !row?.configured && !lastVerifiedAt;
+    const verificationState = !runtimeConfigured
       ? 'missing'
       : row?.ok
         ? 'verified'
-        : lastVerifiedAt
-          ? 'verification_failed'
-          : 'configured_unverified';
+        : staleMissingSnapshot || !clean(row?.lastCheckedAt, 100)
+          ? 'configured_unverified'
+          : lastVerifiedAt
+            ? 'verification_failed'
+            : 'configured_unverified';
     return {
       ...row,
+      configured: runtimeConfigured,
+      ok: staleMissingSnapshot ? false : row?.ok,
+      severity: staleMissingSnapshot ? 'yellow' : row?.severity,
+      issueType: staleMissingSnapshot ? null : row?.issueType,
+      detail: staleMissingSnapshot
+        ? 'Credential is configured in the current production runtime and is waiting for its first live verification.'
+        : row?.detail,
       lastVerifiedAt,
       verificationState,
       reliability7d: {
