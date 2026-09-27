@@ -712,6 +712,203 @@ def admin_mode(browser_name):
   if detail:failures.append({"route":"/admin/quotes/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
+  # Catalog Manager import/rollback regression test. The page uses the exact
+  # production JavaScript while protected API writes are mocked in-browser.
+  catalog_session_fixture={
+   **session_fixture,
+   "permissions":["sales.view","sales.profit_settings"],"capabilities":["sales.view","sales.profit_settings"],
+   "app_metadata":{"roles":["admin"],"permissions":["sales.view","sales.profit_settings"]},
+   "appMetadata":{"roles":["admin"],"permissions":["sales.view","sales.profit_settings"]}
+  }
+  catalog_base_item={
+   "id":"gardenia","name":"Gardenia Wedding Collection","description":"QA seeded package","group":"packages","category":"service",
+   "unitLabel":"package","unitPrice":5000,"internalCost":1800,"targetMargin":60,"active":True,"getExempt":False,
+   "source":"website","sourceRef":"gardenia","quickBooksItemId":"","quickBooksItemName":"","quickBooksType":"Service",
+   "incomeAccountId":"","incomeAccountName":"","updatedAt":"2026-09-27T00:00:00Z"
+  }
+  catalog_runtime={"catalog":[catalog_base_item.copy()],"imports":[],"actions":[]}
+  def catalog_api_mock(route):
+   req=route.request
+   if req.method=="GET":
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"]}))
+    return
+   try: payload=json.loads(req.post_data or "{}")
+   except Exception: payload={}
+   action=str(payload.get("action") or "")
+   catalog_runtime["actions"].append(action)
+   if action=="preview-import":
+    body={
+     "ok":True,
+     "headers":["Name","Group","Price","Cost","Target Margin","GET Status"],
+     "mapping":{"name":"Name","group":"Group","unitPrice":"Price","internalCost":"Cost","targetMargin":"Target Margin","getExempt":"GET Status"},
+     "suggestedMapping":{"name":"Name","group":"Group","unitPrice":"Price","internalCost":"Cost","targetMargin":"Target Margin","getExempt":"GET Status"},
+     "summary":{"rows":1,"valid":1,"new":1,"updates":0,"duplicates":0,"invalid":0},
+     "rows":[{
+      "rowNumber":2,"status":"new","duplicateId":"","errors":[],
+      "item":{"id":"qa-imported-add-on","name":"QA Imported Add-on","description":"","group":"add-ons","category":"service",
+       "unitLabel":"each","unitPrice":275,"internalCost":100,"targetMargin":60,"active":True,"getExempt":False}
+     }]
+    }
+   elif action=="commit-import":
+    imported={
+     "id":"qa-imported-add-on","name":"QA Imported Add-on","description":"","group":"add-ons","category":"service",
+     "unitLabel":"each","unitPrice":275,"internalCost":100,"targetMargin":60,"active":True,"getExempt":False,
+     "source":"import","sourceRef":"CAT-QA","quickBooksItemId":"","quickBooksItemName":"","quickBooksType":"Service",
+     "incomeAccountId":"","incomeAccountName":"","updatedAt":"2026-09-27T00:00:00Z"
+    }
+    catalog_runtime["catalog"]=[catalog_base_item.copy(),imported]
+    entry={"id":"CAT-QA","filename":"qa-catalog-import.csv","createdAt":"2026-09-27T00:00:00Z","createdBy":"qa-admin@koasevents.test","imported":1,"newCount":1,"updatedCount":0,"duplicateMode":"update","rolledBackAt":""}
+    catalog_runtime["imports"]=[entry]
+    body={"ok":True,"catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"],"import":entry,
+          "summary":{"rows":1,"valid":1,"new":1,"updates":0,"duplicates":0,"invalid":0}}
+   elif action=="rollback-import":
+    catalog_runtime["catalog"]=[catalog_base_item.copy()]
+    entry={**catalog_runtime["imports"][0],"rolledBackAt":"2026-09-27T00:05:00Z","rolledBackBy":"qa-admin@koasevents.test"}
+    catalog_runtime["imports"]=[entry]
+    body={"ok":True,"catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"],"rollback":entry}
+   else:
+    body={"ok":True,"catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"]}
+   route.fulfill(status=200,content_type="application/json",body=json.dumps(body))
+
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.on("dialog",lambda dialog:dialog.accept())
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(catalog_session_fixture)))
+  page.route("**/api/admin/catalog**",catalog_api_mock)
+  detail=""
+  shot=root/"admin-catalog-import-rollback.png"
+  qa_csv=root/"qa-catalog-import.csv"
+  qa_csv.write_text("Name,Group,Price,Cost,Target Margin,GET Status\nQA Imported Add-on,add-ons,275,100,60,taxable\n",encoding="utf-8")
+  try:
+   response=page.goto(BASE+"/admin/catalog/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-catalog-list]",state="visible",timeout=8000)
+   if "Gardenia Wedding Collection" not in page.locator("[data-catalog-list]").inner_text():
+    raise RuntimeError("Catalog Manager did not render its seeded catalog item.")
+   page.locator("[data-open-import]").click()
+   page.locator("[data-import-file]").set_input_files(str(qa_csv))
+   page.locator("[data-preview-import]").click()
+   page.wait_for_selector("[data-preview-section]:not(.hidden)",state="visible",timeout=5000)
+   preview_text=page.locator("[data-preview-section]").inner_text()
+   if "QA Imported Add-on" not in preview_text or "1 rows" not in preview_text:
+    raise RuntimeError("Catalog import preview did not render the mapped CSV row.")
+   page.locator("[data-commit-import]").click()
+   page.wait_for_function("() => document.body.innerText.includes('QA Imported Add-on')",timeout=5000)
+   page.wait_for_timeout(1100)
+   rollback_button=page.get_by_role("button",name="Rollback this import",exact=True)
+   if rollback_button.count()!=1:
+    raise RuntimeError("Committed import did not expose exactly one newest-first rollback action.")
+   rollback_button.click()
+   page.wait_for_function("() => document.body.innerText.includes('Rolled back')",timeout=5000)
+   if "QA Imported Add-on" in page.locator("[data-catalog-list]").inner_text():
+    detail="Catalog rollback did not restore the pre-import catalog state."
+   elif catalog_runtime["actions"][:3]!=["preview-import","commit-import","rollback-import"]:
+    detail="Catalog Manager import action sequence was incorrect: "+repr(catalog_runtime["actions"])
+   elif page_errors:
+    detail="Catalog Manager import/rollback JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Catalog Manager import/rollback regression: "+str(exc)
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"catalog-manager-import-rollback","path":"/admin/catalog/","status":response.status if 'response' in locals() and response else 0,
+                  "state":{"visible":not bool(detail),"actions":catalog_runtime["actions"]},"pageErrors":page_errors,
+                  "consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/catalog/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
+  # Wedding Profitability -> Catalog Manager publishing regression. This confirms
+  # the deployed client invokes package and add-on approval actions in the intended
+  # sequence without changing production financial records.
+  profit_session_fixture={
+   **session_fixture,
+   "permissions":["sales.profit_settings","sales.view"],"capabilities":["sales.profit_settings","sales.view"],
+   "app_metadata":{"roles":["admin"],"permissions":["sales.profit_settings","sales.view"]},
+   "appMetadata":{"roles":["admin"],"permissions":["sales.profit_settings","sales.view"]}
+  }
+  zero_costs={"laborSetup":0,"flowers":0,"cake":0,"mobileBar":0,"cleaning":0,"cottage":0,"rentalsInventory":0,
+              "coordination":0,"photoBooth":0,"lightingAv":0,"parkingStaffing":0,"otherDirect":0}
+  package_costs={**zero_costs,"laborSetup":2400}
+  profit_runtime={
+   "actions":[],
+   "state":{
+    "packages":[{"id":"gardenia","name":"Gardenia Wedding Collection","price":5000,"includedGuests":30,"targetMargin":0.60,
+                 "costs":package_costs,"catalogPrice":5000,"catalogInternalCost":2400,"catalogTargetMargin":0.60,"catalogActive":True}],
+    "addOns":[{"id":"qa-addon","name":"QA Add-on","category":"Rentals","unit":"each","catalogItemId":"qa-addon",
+               "directCost":100,"targetMargin":0.50,"sellPrice":150,"priceIncrement":25,"approved":False,"approvedAt":"","approvedBy":"",
+               "catalogPrice":150,"catalogInternalCost":100,"catalogTargetMargin":0.50,"catalogActive":True}],
+    "events":[],"performance":[],"leaders":{"mostPopular":None,"mostProfitable":None,"totalBookings":0,"bookingThreshold":5,"totalActualCostEvents":0,"actualCostThreshold":5},
+    "crmSync":{"bookedWeddingCount":0,"syncedAt":"2026-09-27T00:00:00Z"},
+    "catalogSync":{"packageCount":1,"addOnCount":1,"syncedAt":"2026-09-27T00:00:00Z"},
+    "updatedAt":"2026-09-27T00:00:00Z","updatedBy":"qa-admin@koasevents.test"
+   }
+  }
+  def profitability_api_mock(route):
+   req=route.request
+   if req.method=="GET":
+    route.fulfill(status=200,content_type="application/json",body=json.dumps(profit_runtime["state"]))
+    return
+   try: payload=json.loads(req.post_data or "{}")
+   except Exception: payload={}
+   action=str(payload.get("action") or "")
+   profit_runtime["actions"].append(action)
+   state=profit_runtime["state"]
+   if action=="save-packages":
+    incoming=payload.get("packages") or []
+    if incoming: state["packages"]=incoming
+    state["packages"][0].update({"catalogPrice":5000,"catalogInternalCost":2400,"catalogTargetMargin":0.60,"catalogActive":True})
+   elif action=="approve-package-price":
+    state["packages"][0]["price"]=6000
+    state["packages"][0]["catalogPrice"]=6000
+   elif action=="save-addons":
+    incoming=payload.get("addOns") or []
+    if incoming: state["addOns"]=incoming
+    state["addOns"][0].update({"catalogPrice":150,"catalogInternalCost":100,"catalogTargetMargin":0.50,"catalogActive":True})
+   elif action=="approve-addon-price":
+    state["addOns"][0]["sellPrice"]=200
+    state["addOns"][0]["catalogPrice"]=200
+    state["addOns"][0]["approved"]=True
+    state["addOns"][0]["approvedAt"]="2026-09-27T00:10:00Z"
+    state["addOns"][0]["approvedBy"]="qa-admin@koasevents.test"
+   body={**state}
+   if action=="approve-package-price":
+    body["approvedPackage"]={"id":"gardenia","price":6000,"updatedDraftProposals":1}
+   if action=="approve-addon-price":
+    body["approved"]={"id":"qa-addon","catalogItemId":"qa-addon","price":200,"updatedDraftProposals":1}
+   route.fulfill(status=200,content_type="application/json",body=json.dumps(body))
+
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  page.on("dialog",lambda dialog:dialog.accept())
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(profit_session_fixture)))
+  page.route("**/api/admin/profitability**",profitability_api_mock)
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/profitability/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-packages] [data-package-id=\"gardenia\"]",state="visible",timeout=8000)
+   gardenia=page.locator('[data-package-id="gardenia"]')
+   if "$6,000" not in gardenia.locator("[data-package-recommended]").inner_text():
+    raise RuntimeError("Wedding Profitability package recommendation did not calculate the expected target-margin price.")
+   gardenia.locator('[data-approve-package="gardenia"]').click()
+   page.wait_for_function("() => document.body.innerText.includes('Catalog Manager: $6,000')",timeout=5000)
+   addon=page.locator('[data-addon-id="qa-addon"]')
+   addon.locator('[data-approve-addon="qa-addon"]').click()
+   page.wait_for_function("() => document.body.innerText.includes('Catalog $200')",timeout=5000)
+   expected=["save-packages","approve-package-price","save-addons","approve-addon-price"]
+   if profit_runtime["actions"][:4]!=expected:
+    detail="Wedding Profitability catalog publish sequence was incorrect: "+repr(profit_runtime["actions"])
+   elif page_errors:
+    detail="Wedding Profitability catalog publishing JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Wedding Profitability catalog publishing regression: "+str(exc)
+  results.append({"name":"profitability-catalog-publishing","path":"/admin/profitability/","status":response.status if 'response' in locals() and response else 0,
+                  "state":{"visible":not bool(detail),"actions":profit_runtime["actions"]},"pageErrors":page_errors,
+                  "consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":""})
+  if detail:failures.append({"route":"/admin/profitability/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
   # Live Gallery crop-impact regression test. The protected session and data APIs
   # are mocked in-browser so this exercises the exact production JavaScript without
   # reading or changing real gallery records.
