@@ -13,10 +13,34 @@ function userMetadataFor(user:any){
 
 function cleanMobileNav(value:unknown){
   const allowed=new Set([
-    'home','actions','crm','sales','events','calendar','quickbooks','health','staff','vendors','insurance','profitability','gallery',
+    'home','actions','crm','sales','email','events','calendar','quickbooks','health','staff','vendors','insurance','profitability','gallery',
   ]);
   const raw=Array.isArray(value)?value:[];
   return [...new Set(raw.map(item=>clean(item,40)).filter(item=>allowed.has(item)))].slice(0,4);
+}
+
+const ADMIN_HOME_SECTIONS=['sales','operations','accounting','content','administration'] as const;
+const ADMIN_HOME_MODULES={
+  sales:['business-crm','sales-crm','email','wedding-profitability','mobile-bar-crm'],
+  operations:['event-ops','calendar','vendor-crm','insurance'],
+  accounting:['quickbooks'],
+  content:['email-preview','seo','blog','gallery'],
+  administration:['user-management','system-health','security'],
+} as const;
+
+function normalizedOrder(value:unknown,allowed:readonly string[]){
+  const allowedSet=new Set(allowed);
+  const requested=Array.isArray(value)?value.map(item=>clean(item,80)).filter(item=>allowedSet.has(item)):[];
+  return [...new Set([...requested,...allowed])];
+}
+
+function cleanAdminHomeLayout(value:any){
+  const sectionOrder=normalizedOrder(value?.sectionOrder,ADMIN_HOME_SECTIONS);
+  const moduleOrder:Record<string,string[]>={};
+  for(const section of ADMIN_HOME_SECTIONS){
+    moduleOrder[section]=normalizedOrder(value?.moduleOrder?.[section],ADMIN_HOME_MODULES[section]);
+  }
+  return {sectionOrder,moduleOrder};
 }
 
 function cleanActionCenterPreferences(value:any){
@@ -55,12 +79,37 @@ export default async(req:Request,context:Context)=>{
       email:clean(user?.email,240).toLowerCase(),
       mobileNav:cleanMobileNav(meta?.mobile_nav_items),
       actionCenterPreferences:cleanActionCenterPreferences(meta?.action_center_preferences),
+      adminHomeLayout:cleanAdminHomeLayout(meta?.admin_home_layout),
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);
   if(!body)return Response.json({error:'Invalid JSON.'},{status:400});
+
+  if(clean(body.action,60)==='save-admin-home-layout'){
+    const adminHomeLayout=cleanAdminHomeLayout(body.layout||{});
+    const currentMeta=userMetadataFor(user);
+    await admin.updateUser(user.id,{
+      user_metadata:{
+        ...currentMeta,
+        admin_home_layout:adminHomeLayout,
+      },
+    });
+    await appendStaffAudit(context,{
+      actor:clean(user?.email,240).toLowerCase(),
+      action:'self_admin_home_layout_updated',
+      subjectId:clean(user?.id,120),
+      subjectEmail:clean(user?.email,240).toLowerCase(),
+      detail:'Updated personal Admin Home section and module order.',
+      metadata:{adminHomeLayout},
+    });
+    return Response.json({
+      ok:true,
+      adminHomeLayout,
+      message:'Admin Home layout saved for this account.',
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
 
   if(clean(body.action,60)==='save-action-center-preferences'){
     const preferences=cleanActionCenterPreferences(body.preferences||{});
