@@ -381,7 +381,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <span data-credential-threshold-message class="text-xs text-[var(--koa-ink)]/45"></span>
               </div>
             </div>
-            <div data-credential-reliability-grid class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-6"></div>
+            <div data-credential-reliability-grid class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-7"></div>
           </div>
           <div class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
             <div>
@@ -408,6 +408,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                   <button data-credential-timeline-provider="github" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">GitHub</button>
                   <button data-credential-timeline-provider="netlify" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Netlify</button>
                   <button data-credential-timeline-provider="signwell" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">SignWell</button>
+                  <button data-credential-timeline-provider="turnstile" type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.54rem] font-black uppercase tracking-[.07em]">Turnstile</button>
                 </div>
               </div>
               <div>
@@ -1378,6 +1379,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             ? 'The dedicated Resend monitoring credential is missing or the monitoring request could not reach Resend.'
             : 'The dedicated Resend monitoring credential could not read delivery history.';
         fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
+      }else if(row?.id==='credential-turnstile'){
+        cause='The Turnstile site key, server secret, widget rendering, Siteverify probe, or recent hostname/action validation is not healthy.';
+        fix='Open the Turnstile credential card below to see the failing layer. Verify the Netlify site/secret variables and Cloudflare widget hostname configuration, then re-test Turnstile only.';
+      }else if(row?.id==='turnstile-site-key'){
+        cause='The production runtime cannot see the configured public Turnstile site key.';
+        fix='Verify PUBLIC_TURNSTILE_SITE_KEY in Netlify production matches the Cloudflare widget site key, then redeploy.';
+      }else if(row?.id==='turnstile-secret'){
+        cause='The server-side Turnstile secret is missing from the production runtime.';
+        fix='Configure TURNSTILE_SECRET_KEY (or TURNSTILE_SECRET) as a secret Netlify runtime variable. Never place this secret in browser code.';
+      }else if(row?.id==='turnstile-widgets'){
+        cause='One or more protected public forms is not rendering the configured Turnstile site key, script, or expected action.';
+        fix='Open the affected form named in the check detail and restore its cf-turnstile widget, Cloudflare script, and expected data-action.';
+      }else if(row?.id==='turnstile-siteverify'){
+        cause=status===401||status===403
+          ? 'Cloudflare Siteverify rejected the configured Turnstile secret.'
+          : 'Cloudflare Siteverify could not be reached or did not accept the health probe.';
+        fix='Verify the production secret against the existing Cloudflare widget and rerun System Health. If Cloudflare is temporarily unavailable, the check will recover automatically.';
+      }else if(row?.id==='turnstile-validation-history'){
+        cause='No successful production Turnstile validation has been recorded yet in the current security history.';
+        fix='Submit one protected production form normally, then rerun System Health to establish a verified validation record.';
+      }else if(row?.id==='turnstile-hostname-action'){
+        cause='Cloudflare accepted one or more tokens whose returned hostname or action did not match the Koa’s Events request.';
+        fix='Check the latest mismatch detail in Security + Spam, confirm the widget hostname is koasevents.com and each form uses its expected data-action, then retest.';
       }else if(row?.id==='credential-signwell'){
         cause=status===401||status===403
           ? 'The SignWell API key was rejected by SignWell.'
