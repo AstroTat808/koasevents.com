@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import readXlsxFile from 'read-excel-file/node';
+import { Buffer } from 'node:buffer';
 import { hasCapability, requireCapability } from './_shared/admin';
 import {
   getQuickBooksCatalog,
@@ -273,17 +274,23 @@ function importedItem(raw:Record<string,string>, mapping:ImportMapping, defaultG
 function buildImportRows(rawRows:Record<string,string>[], mapping:ImportMapping, defaultGroup:QuickBooksCatalogItem['group'], catalog:QuickBooksCatalogItem[]):ImportRow[] {
   const byId=new Map(catalog.map((item)=>[item.id.toLowerCase(),item]));
   const byName=new Map(catalog.map((item)=>[item.name.trim().toLowerCase(),item]));
-  const seen=new Set<string>();
+  const seenIds=new Set<string>();
+  const seenNames=new Set<string>();
   return rawRows.map((raw,index)=>{
     const item=importedItem(raw,mapping,defaultGroup,index+2);
     const errors:string[]=[];
     if(!item.name)errors.push('Name is required.');
-    const key=(item.id||item.name).toLowerCase();
-    const existing=byId.get(item.id.toLowerCase())||byName.get(item.name.toLowerCase());
+    const idKey=item.id.toLowerCase();
+    const nameKey=item.name.trim().toLowerCase();
+    const existing=byId.get(idKey)||byName.get(nameKey);
     let status:ImportRow['status']=existing?'update':'new';
-    if(seen.has(key)){status='duplicate';errors.push('Duplicate row inside this import file.');}
+    if((idKey&&seenIds.has(idKey))||(nameKey&&seenNames.has(nameKey))){
+      status='duplicate';
+      errors.push('Duplicate ID or name inside this import file.');
+    }
     if(errors.length&&status!=='duplicate')status='invalid';
-    seen.add(key);
+    if(idKey)seenIds.add(idKey);
+    if(nameKey)seenNames.add(nameKey);
     return {rowNumber:index+2,raw,item,status,duplicateId:existing?.id||'',errors};
   });
 }
@@ -437,10 +444,14 @@ export default async (req:Request, context:Context)=>{
   if(action==='rollback-import'){
     const id=clean(payload?.id,100);
     const store=storeFor(context);
+    const history=await readImportHistory(context);
+    const latestActive=history.find((row:any)=>!row?.rolledBackAt);
+    if(!latestActive||latestActive.id!==id){
+      return Response.json({error:'Only the most recent active import can be rolled back. Roll back newer imports first so catalog history stays consistent.'},{status:409});
+    }
     const snapshot=await store.get('catalog/imports/snapshots/'+id,{type:'json'}) as any;
     if(!snapshot||!Array.isArray(snapshot.catalog))return Response.json({error:'Import rollback snapshot was not found.'},{status:404});
     const catalog=await saveQuickBooksCatalog(context,snapshot.catalog);
-    const history=await readImportHistory(context);
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
     const imports=await writeImportHistory(context,entry);
