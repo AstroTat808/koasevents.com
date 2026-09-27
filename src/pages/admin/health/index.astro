@@ -755,7 +755,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         <section class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div><p class="eyebrow text-[var(--koa-clay)]">Protected interfaces</p><h2 class="display mt-2 text-4xl">Pages + APIs</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly checks use non-destructive page-shell probes and protected endpoint reachability checks. Manual checks use the same monitor and immediately persist the result.</p></div>
+            <div><p class="eyebrow text-[var(--koa-clay)]">Protected interfaces</p><h2 class="display mt-2 text-4xl">Pages + APIs</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Hourly checks use non-destructive page-shell probes and protected endpoint reachability checks. Record-specific integrations use zero-write synthetic probes; manual and post-deploy runs test them live, while hourly runs reuse a live result for up to six hours to limit Netlify credit usage.</p></div>
             <label class="flex w-fit cursor-pointer items-center gap-3 rounded-full border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">
               <input data-failures-only type="checkbox" class="h-4 w-4" />
               Show failures only
