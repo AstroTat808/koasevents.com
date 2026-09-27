@@ -800,6 +800,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
     const refresh=document.querySelector('[data-refresh]');
+    const healthRunWarning=document.querySelector('[data-health-run-warning]');
+    const healthRunWarningTitle=document.querySelector('[data-health-run-warning-title]');
+    const healthRunWarningDetail=document.querySelector('[data-health-run-warning-detail]');
     const results=document.querySelector('[data-results]');
     const historyEl=document.querySelector('[data-health-history]');
     const deployHistory=document.querySelector('[data-deploy-history]');
@@ -1031,6 +1034,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const healthDetailCause=document.querySelector('[data-health-detail-cause]');
     const healthDetailFix=document.querySelector('[data-health-detail-fix]');
     let latestHealthChecks=[];
+
+    function clearHealthRunWarning(){
+      healthRunWarning?.classList.add('hidden');
+      if(healthRunWarningDetail)healthRunWarningDetail.textContent='';
+    }
+
+    function showHealthRunWarning(title,detail=''){
+      if(!healthRunWarning)return;
+      healthRunWarning.classList.remove('hidden');
+      if(healthRunWarningTitle)healthRunWarningTitle.textContent=title;
+      if(healthRunWarningDetail)healthRunWarningDetail.textContent=detail;
+    }
+
+    function renderHealthPayload(payload,source='System Health'){
+      clearHealthRunWarning();
+      try{
+        render(payload||{});
+      }catch(error){
+        console.error('[system-health] '+source+' detail rendering failed:',error);
+        if(payload?.current){
+          // render() paints the authoritative top summary first. If a later,
+          // non-core panel throws, preserve that healthy/failed result instead
+          // of overwriting it with a false dashboard-level failure.
+          showHealthRunWarning(
+            'Core checks completed; a detail panel could not refresh.',
+            error instanceof Error?error.message:'A secondary System Health panel failed to render.'
+          );
+          return false;
+        }
+        throw error;
+      }
+
+      const warnings=Array.isArray(payload?.enrichmentWarnings)?payload.enrichmentWarnings:[];
+      if(warnings.length){
+        showHealthRunWarning(
+          'Core checks completed; supporting data needs attention.',
+          warnings.map((warning)=>String(warning?.section||'Supporting data')+': '+String(warning?.error||'refresh failed')).slice(0,4).join(' · ')
+        );
+      }
+      return true;
+    }
 
     function normalizedSeverity(row){
       if(row?.severity==='red')return 'critical';
@@ -4357,33 +4401,66 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(response.status===401)return;
       if(response.status===403){app?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok) throw new Error('Unable to load System Health.');
-      render(await response.json());
+      renderHealthPayload(await response.json(),'Initial load');
     }
 
     refresh?.addEventListener('click',async()=>{
       refresh.disabled=true;refresh.textContent='Checking…';
+      clearHealthRunWarning();
+      let postPayload=null;
       try{
         const response=await fetch('/api/admin/health',{method:'POST'});
-        if(!response.ok) throw new Error('Health check failed.');
-        const data=await response.json();
-        const latest=await fetch('/api/admin/health',{cache:'no-store'});
-        render(await latest.json());
-      }catch(error){
-        // The core health run may already have completed and persisted successfully even if
-        // a secondary enrichment step fails. Re-read the persisted snapshot before showing
-        // a dashboard-level failure so "0 failed" can never be paired with "Check failed".
+        postPayload=await response.json().catch(()=>null);
+        if(!response.ok)throw new Error(postPayload?.error||'Health check request failed.');
+
+        // Render the result returned by the actual manual run immediately. A
+        // follow-up GET is only for history/enrichment, not to decide whether
+        // the check itself succeeded.
+        renderHealthPayload(postPayload||{},'Manual check');
+
         try{
           const latest=await fetch('/api/admin/health',{cache:'no-store'});
           if(latest.ok){
-            render(await latest.json());
+            renderHealthPayload(await latest.json(),'Post-check refresh');
           }else{
-            overall.textContent='Check failed';
-            overall.className='display mt-3 text-4xl text-red-800';
+            showHealthRunWarning(
+              'Core checks completed; dashboard history did not refresh.',
+              'The manual check result is valid, but the follow-up System Health refresh returned HTTP '+latest.status+'.'
+            );
           }
-        }catch{
-          overall.textContent='Check failed';
-          overall.className='display mt-3 text-4xl text-red-800';
+        }catch(refreshError){
+          showHealthRunWarning(
+            'Core checks completed; dashboard history did not refresh.',
+            refreshError instanceof Error?refreshError.message:'The follow-up dashboard refresh failed.'
+          );
         }
+      }catch(error){
+        // A request can fail after the core snapshot was already saved. Recover
+        // the authoritative snapshot, and only show "Check failed" if there is
+        // genuinely no completed health result to display.
+        try{
+          const latest=await fetch('/api/admin/health',{cache:'no-store'});
+          if(latest.ok){
+            const latestPayload=await latest.json();
+            if(latestPayload?.current){
+              renderHealthPayload(latestPayload,'Recovered health snapshot');
+              showHealthRunWarning(
+                'Core health result recovered after a request error.',
+                error instanceof Error?error.message:'A non-core part of the manual check request failed.'
+              );
+              return;
+            }
+          }
+        }catch(recoveryError){
+          console.error('[system-health] recovery refresh failed:',recoveryError);
+        }
+
+        overall.textContent='Check failed';
+        overall.className='display mt-3 text-4xl text-red-800';
+        showHealthRunWarning(
+          'The manual health check did not complete.',
+          error instanceof Error?error.message:'No completed health snapshot was available.'
+        );
       }finally{
         refresh.disabled=false;refresh.textContent='Run checks now';
       }
