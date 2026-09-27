@@ -285,10 +285,15 @@ export type QuickBooksCatalogItem = {
   name: string;
   description: string;
   category: 'service' | 'rental' | 'mileage' | 'fee';
+  group: 'packages' | 'rentals' | 'mobile-bar' | 'add-ons' | 'fees' | 'other';
   unitLabel: string;
   unitPrice: number;
+  internalCost: number;
+  targetMargin: number;
   active: boolean;
   getExempt: boolean;
+  source: 'catalog-manager' | 'website' | 'quickbooks' | 'import';
+  sourceRef: string;
   quickBooksItemId: string;
   quickBooksItemName: string;
   quickBooksType: 'Service' | 'NonInventory';
@@ -516,10 +521,17 @@ export async function getQuickBooksCatalog(context: Context): Promise<QuickBooks
     category: ['rental','mileage','fee'].includes(String(item?.category || ''))
       ? String(item.category) as QuickBooksCatalogItem['category']
       : 'service',
+    group: ['packages','rentals','mobile-bar','add-ons','fees','other'].includes(String(item?.group || ''))
+      ? String(item.group) as QuickBooksCatalogItem['group']
+      : (String(item?.category || '') === 'rental' ? 'rentals' : String(item?.category || '') === 'fee' ? 'fees' : 'add-ons'),
     unitLabel: String(item?.unitLabel || 'each').trim().slice(0, 40),
     unitPrice: Math.max(0, Number(item?.unitPrice || 0)),
+    internalCost: Math.max(0, Number(item?.internalCost || 0)),
+    targetMargin: Math.min(100, Math.max(0, Number(item?.targetMargin || 0))),
     active: item?.active !== false,
     getExempt: item?.getExempt === true,
+    source: ['website','quickbooks','import'].includes(String(item?.source || '')) ? item.source : 'catalog-manager',
+    sourceRef: String(item?.sourceRef || '').trim().slice(0, 160),
     quickBooksItemId: String(item?.quickBooksItemId || '').trim().slice(0, 80),
     quickBooksItemName: String(item?.quickBooksItemName || item?.name || '').trim().slice(0, 100),
     quickBooksType: String(item?.quickBooksType || '') === 'NonInventory' ? 'NonInventory' : 'Service',
@@ -535,10 +547,15 @@ export async function saveQuickBooksCatalog(context: Context, catalog: QuickBook
     name: String(item.name || '').trim().slice(0, 100),
     description: String(item.description || '').trim().slice(0, 1000),
     category: ['service','rental','mileage','fee'].includes(String(item.category || '')) ? item.category : 'service',
+    group: ['packages','rentals','mobile-bar','add-ons','fees','other'].includes(String(item.group || '')) ? item.group : 'other',
     unitLabel: String(item.unitLabel || 'each').trim().slice(0, 40),
     unitPrice: Math.max(0, Math.round(Number(item.unitPrice || 0) * 100) / 100),
+    internalCost: Math.max(0, Math.round(Number(item.internalCost || 0) * 100) / 100),
+    targetMargin: Math.min(100, Math.max(0, Math.round(Number(item.targetMargin || 0) * 100) / 100)),
     active: item.active !== false,
     getExempt: item.getExempt === true,
+    source: ['website','quickbooks','import'].includes(String(item.source || '')) ? item.source : 'catalog-manager',
+    sourceRef: String(item.sourceRef || '').trim().slice(0, 160),
     quickBooksItemId: String(item.quickBooksItemId || '').trim().slice(0, 80),
     quickBooksItemName: String(item.quickBooksItemName || item.name || '').trim().slice(0, 100),
     quickBooksType: item.quickBooksType === 'NonInventory' ? 'NonInventory' : 'Service',

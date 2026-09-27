@@ -18,7 +18,8 @@
     "@netlify/blobs": "latest",
     "@netlify/functions": "latest",
     "@netlify/identity": "latest",
-    "@netlify/edge-functions": "latest"
+    "@netlify/edge-functions": "latest",
+    "read-excel-file": "latest"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",

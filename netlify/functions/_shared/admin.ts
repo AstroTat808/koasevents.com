@@ -140,6 +140,7 @@ export const PAGE_CAPABILITIES = {
   '/admin/email-preview/': 'email.view',
   '/admin/quotes/': 'sales.view',
   '/admin/profitability/': 'sales.profit_settings',
+  '/admin/catalog/': 'sales.view',
   '/admin/events/': 'events.view',
   '/admin/calendar/': 'calendar.view',
   '/admin/quickbooks/': 'quickbooks.view',

@@ -4,7 +4,7 @@ import { hasCapability, isApprovedManager, requireCapability } from './_shared/a
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
 import { appendStaffAudit } from './_shared/staff-audit';
-import { getQuickBooksDepositSettings, type QuickBooksDepositSettings } from './_shared/quickbooks';
+import { getQuickBooksCatalog, getQuickBooksDepositSettings, type QuickBooksDepositSettings } from './_shared/quickbooks';
 import { readPublishedAddOnPricing } from './_shared/wedding-pricing';
 
 type QuoteItem = {
@@ -248,6 +248,23 @@ const PACKAGE_NAMES: Record<string, string> = {
   'mobile-big-island': 'Koa’s Mobile Bar — Big Island Package',
   'mobile-custom': 'Koa’s Mobile Bar — Custom Service',
 };
+
+
+const PACKAGE_CATALOG_IDS: Record<string,string> = {
+  gardenia: 'gardenia',
+  orchid: 'orchid',
+  hibiscus: 'hibiscus',
+  'signature-wedding': 'signature-wedding',
+  'mobile-oahu': 'oahu-bar',
+  'mobile-maui': 'maui-bar',
+  'mobile-big-island': 'big-island-bar',
+};
+
+function catalogPackagePrice(prices: Map<string,number>, packageId: string) {
+  const catalogId = PACKAGE_CATALOG_IDS[normalizePackage(packageId)] || normalizePackage(packageId);
+  return { catalogId, price: finite(prices.get(catalogId)) };
+}
+
 
 async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
   const store = salesStoreFor(context);
@@ -899,13 +916,14 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
   return [{ label:'Reservation deposit', dueDate:'', amount:depositAmount }, ...milestones];
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>()) {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>(), catalogPrices = new Map<string, number>()) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
   const inquiryLines = Array.isArray((inquiry as any)?.estimateLineItems) ? (inquiry as any).estimateLineItems : [];
   const mobileEstimate = finite((inquiry as any)?.estimatedTotal || 0);
-  const base = finite(state.basePackagePrice || PACKAGE_PRICES[normalizedPackage] || 0);
+  const packageCatalog = catalogPackagePrice(catalogPrices, normalizedPackage);
+  const base = finite(packageCatalog.price || state.basePackagePrice || PACKAGE_PRICES[normalizedPackage] || 0);
   if (base > 0) {
     lines.push({
       id: 'collection',
@@ -914,20 +932,23 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
       unitPrice: base,
       amount: base,
       custom: false,
+      catalogItemId: packageCatalog.catalogId || undefined,
     });
   }
 
   (state.selected || []).forEach((item) => {
     const id = cleanText(item.id, 80);
     const quantity = Math.max(1, Math.round(finite(item.quantity, 1, 500)));
-    const approvedPrice = finite(publishedPrices.get(id));
+    const catalogPrice = finite(catalogPrices.get(id));
+    const legacyPublishedPrice = finite(publishedPrices.get(id));
+    const currentPrice = catalogPrice > 0 ? catalogPrice : legacyPublishedPrice;
     const savedAmount = finite(item.estimatedLineTotal);
-    const amount = approvedPrice > 0 ? roundMoney(approvedPrice * quantity) : savedAmount;
+    const amount = currentPrice > 0 ? roundMoney(currentPrice * quantity) : savedAmount;
     lines.push({
       id,
       description: cleanText(item.name, 180),
       quantity,
-      unitPrice: approvedPrice > 0 ? approvedPrice : amount > 0 ? amount / quantity : 0,
+      unitPrice: currentPrice > 0 ? currentPrice : amount > 0 ? amount / quantity : 0,
       amount,
       custom: amount <= 0,
       catalogItemId: id || undefined,
@@ -939,9 +960,11 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
     inquiryLines.slice(0, 50).forEach((item: any, index: number) => {
       const quantity = Math.max(1, Math.round(finite(item?.quantity, 1, 2000)));
       const sourceId = cleanText(item?.catalogItemId || item?.id, 80);
-      const approvedPrice = finite(publishedPrices.get(sourceId));
-      const unitPrice = approvedPrice > 0 ? approvedPrice : finite(item?.unitPrice);
-      const amount = approvedPrice > 0 ? roundMoney(quantity * approvedPrice) : finite(item?.amount || quantity * unitPrice);
+      const catalogPrice = finite(catalogPrices.get(sourceId));
+      const legacyPublishedPrice = finite(publishedPrices.get(sourceId));
+      const currentPrice = catalogPrice > 0 ? catalogPrice : legacyPublishedPrice;
+      const unitPrice = currentPrice > 0 ? currentPrice : finite(item?.unitPrice);
+      const amount = currentPrice > 0 ? roundMoney(quantity * currentPrice) : finite(item?.amount || quantity * unitPrice);
       const description = cleanText(item?.description, 240);
       if (!description) return;
       lines.push({
@@ -1948,8 +1971,14 @@ export default async (req: Request, context: Context) => {
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
     const eventDate = cleanText(payload.customer?.eventDate, 40);
     const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, undefined, eventDate, now.slice(0,10)) : 10;
+    const [publishedPricingRows, centralCatalog] = kind === 'proposal'
+      ? await Promise.all([readPublishedAddOnPricing(context), getQuickBooksCatalog(context)])
+      : [[], []] as any;
     const publishedPricing = kind === 'proposal'
-      ? new Map((await readPublishedAddOnPricing(context)).map((row) => [row.catalogItemId, row.price]))
+      ? new Map(publishedPricingRows.map((row:any) => [row.catalogItemId, row.price]))
+      : new Map<string, number>();
+    const catalogPricing = kind === 'proposal'
+      ? new Map(centralCatalog.filter((row:any)=>row.active!==false).map((row:any)=>[row.id, Number(row.unitPrice||0)]))
       : new Map<string, number>();
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
@@ -1968,7 +1997,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing, catalogPricing) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -2006,8 +2035,14 @@ export default async (req: Request, context: Context) => {
     const packageId = normalizePackage(source.packageId || quote?.state?.startingPoint || source.inquiry?.venuePackage || source.inquiry?.mobileBarPackage);
     const depositSettings = kind === 'proposal' ? await getQuickBooksDepositSettings(context) : null;
     const depositPercent = depositSettings ? configuredDepositPercent(depositSettings, packageId, source.inquiry, source.customer?.eventDate || '', now.slice(0,10)) : 10;
+    const [publishedPricingRows, centralCatalog] = kind === 'proposal'
+      ? await Promise.all([readPublishedAddOnPricing(context), getQuickBooksCatalog(context)])
+      : [[], []] as any;
     const publishedPricing = kind === 'proposal'
-      ? new Map((await readPublishedAddOnPricing(context)).map((row) => [row.catalogItemId, row.price]))
+      ? new Map(publishedPricingRows.map((row:any) => [row.catalogItemId, row.price]))
+      : new Map<string, number>();
+    const catalogPricing = kind === 'proposal'
+      ? new Map(centralCatalog.filter((row:any)=>row.active!==false).map((row:any)=>[row.id, Number(row.unitPrice||0)]))
       : new Map<string, number>();
     const record: SalesRecord = {
       id: (kind === 'proposal' ? 'KEP-' : 'KEL-') + new Date().getUTCFullYear() + '-' + idSuffix(),
@@ -2033,7 +2068,7 @@ export default async (req: Request, context: Context) => {
       quote: quote || undefined,
       profitModel: source.profitModel ? { ...source.profitModel } : undefined,
       assignment: source.assignment ? { ...source.assignment } : undefined,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, source.customer?.eventDate || '', packageId, source.inquiry, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing, catalogPricing) : undefined,
     };
     source.stage = 'converted';
     source.status = 'converted';

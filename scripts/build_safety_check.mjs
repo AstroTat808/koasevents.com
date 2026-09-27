@@ -219,6 +219,75 @@ function checkEmailFeatureContracts() {
   }
 }
 
+function checkCatalogFeatureContracts() {
+  const contracts = [
+    ['netlify/functions/admin-catalog.mts', [
+      ['XLSX parser', "readXlsxFile from 'read-excel-file/node'"],
+      ['CSV/XLSX preview action', "action==='preview-import'"],
+      ['CSV/XLSX commit action', "action==='commit-import'"],
+      ['duplicate ID/name detection', 'Duplicate ID or name inside this import file.'],
+      ['pre-import snapshot', "'catalog/imports/snapshots/'+id"],
+      ['post-import fingerprint', 'afterFingerprint:await catalogFingerprint(next)'],
+      ['sequential rollback guard', 'Only the most recent active import can be rolled back'],
+      ['post-import edit rollback guard', 'The catalog changed after this import.'],
+      ['central catalog GET route', "path:'/api/admin/catalog'"],
+    ]],
+    ['src/pages/admin/catalog/index.astro', [
+      ['catalog item editor', 'data-item-dialog'],
+      ['CSV/XLSX import control', 'data-open-import'],
+      ['import column mapping', 'data-mapping-grid'],
+      ['duplicate strategy control', 'data-duplicate-mode'],
+      ['import preview rows', 'data-preview-rows'],
+      ['rollback history', 'Rollback this import'],
+    ]],
+    ['src/pages/admin/quotes/index.astro', [
+      ['central catalog fetch', "fetch('/api/admin/catalog'"],
+      ['catalog proposal picker', 'data-catalog-picker'],
+      ['Catalog Manager shortcut', 'Manage catalog'],
+      ['central catalog client state', 'catalogState'],
+    ]],
+    ['netlify/functions/admin-quotes.mts', [
+      ['central catalog pricing reader', 'getQuickBooksCatalog'],
+      ['package catalog IDs', 'PACKAGE_CATALOG_IDS'],
+      ['package catalog pricing map', 'catalogPricing'],
+      ['catalog package line snapshot', 'catalogItemId: packageCatalog.catalogId'],
+    ]],
+    ['netlify/functions/admin-profitability.mts', [
+      ['profitability central catalog writer', 'upsertCatalogEconomics'],
+      ['package price approval action', "action==='approve-package-price'"],
+      ['package draft proposal repricing', 'updateDraftPackagePricing'],
+      ['add-on central catalog approval', 'addOnCatalogPatch(addon,true,true)'],
+      ['catalog sync response', 'catalogSync:{'],
+    ]],
+    ['src/pages/admin/profitability/index.astro', [
+      ['Catalog Manager navigation', 'href="/admin/catalog/"'],
+      ['package publish control', 'data-approve-package'],
+      ['package approval client workflow', 'async function approvePackage'],
+      ['catalog package price status', 'data-package-catalog'],
+    ]],
+    ['netlify/functions/_shared/quickbooks.ts', [
+      ['catalog business group', "group: 'packages' | 'rentals' | 'mobile-bar' | 'add-ons' | 'fees' | 'other'"],
+      ['catalog internal cost', 'internalCost: number'],
+      ['catalog target margin', 'targetMargin: number'],
+      ['catalog source provenance', "source: 'catalog-manager' | 'website' | 'quickbooks' | 'import'"],
+    ]],
+    ['netlify/functions/_shared/admin.ts', [
+      ['Catalog Manager page permission', "'/admin/catalog/': 'sales.view'"],
+    ]],
+  ];
+
+  for (const [file, requirements] of contracts) {
+    if (!fs.existsSync(file)) {
+      failures.push(file + ': required Catalog Manager source is missing');
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    for (const [label, needle] of requirements) {
+      if (!text.includes(needle)) failures.push(file + ': missing ' + label + ' contract: ' + needle);
+    }
+  }
+}
+
 function checkScript(file) {
   const text = fs.readFileSync(file, 'utf8');
   const kind = file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -288,6 +357,7 @@ for (const file of roots.flatMap(walk)) {
 
 checkEmailCompatibility();
 checkEmailFeatureContracts();
+checkCatalogFeatureContracts();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
