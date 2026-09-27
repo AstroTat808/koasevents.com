@@ -127,20 +127,23 @@ export function verifySignWellWebhookEvent(payload:any,toleranceSeconds=WEBHOOK_
   };
 }
 
-export async function claimSignWellWebhookEvent(context:Context,verification:any){
+export async function signWellWebhookReplaySeen(context:Context,verification:any){
   const key=clean(verification?.replayKey,300);
-  if(!key)return {accepted:false,duplicate:false};
-  const store=healthStoreFor(context);
-  const existing:any=await store.get(key,{type:'json'});
-  if(existing)return {accepted:false,duplicate:true,existing};
+  if(!key)return false;
+  return Boolean(await healthStoreFor(context).get(key,{type:'json'}));
+}
+
+export async function recordSignWellWebhookReplay(context:Context,verification:any){
+  const key=clean(verification?.replayKey,300);
+  if(!key)return null;
   const row={
     receivedAt:new Date().toISOString(),
     eventType:clean(verification?.eventType,160),
     eventTime:Number(verification?.eventTime||0),
     eventHash:clean(verification?.eventHash,200),
   };
-  await store.setJSON(key,row);
-  return {accepted:true,duplicate:false,row};
+  await healthStoreFor(context).setJSON(key,row);
+  return row;
 }
 
 export async function recordSignWellWebhookReceipt(context:Context,input:any){
