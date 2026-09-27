@@ -529,6 +529,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Remaining Balance</p><p data-booking-remaining class="mt-1 font-bold text-[var(--koa-forest)]"></p></div>
         </div>
       </section>
+      <section data-damage-deposit-section class="mt-6 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Refundable liability</p>
+            <h3 class="display mt-2 text-3xl">Security / damage deposit</h3>
+            <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Tracked separately from event revenue. Due 30 days before the event and refundable after the event less documented deductions.</p>
+          </div>
+          <span data-damage-deposit-status class="w-fit rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Not invoiced</span>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label class="grid gap-2 text-xs font-semibold">Rental type
+            <select data-damage-deposit-rental-type class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5">
+              <option value="one-day">One-day · $500</option>
+              <option value="weekend">Weekend · $1,000</option>
+            </select>
+          </label>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Deposit amount</p><p data-damage-deposit-amount class="mt-1 font-bold text-[var(--koa-forest)]">$0</p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Due date</p><p data-damage-deposit-due class="mt-1 font-bold text-[var(--koa-forest)]">—</p></div>
+          <div class="rounded-xl bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">QBO document</p><p data-damage-deposit-qbo class="mt-1 font-bold text-[var(--koa-forest)]">Not created</p></div>
+        </div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-[160px_1fr]">
+          <label class="grid gap-2 text-xs font-semibold">Deduction amount
+            <input data-damage-deposit-deduction type="number" min="0" step="0.01" value="0" class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5" />
+          </label>
+          <label class="grid gap-2 text-xs font-semibold">Deduction reason
+            <input data-damage-deposit-reason class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5" placeholder="Damage, excess cleanup, breach, etc." />
+          </label>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-2">
+          <button type="button" data-damage-deposit-save class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Save deposit details</button>
+          <button type="button" data-damage-deposit-invoice class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Create QBO deposit invoice</button>
+          <button type="button" data-damage-deposit-sync class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Sync deposit</button>
+          <button type="button" data-damage-deposit-refund class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Issue refund</button>
+        </div>
+        <p data-damage-deposit-message class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/55"></p>
+      </section>
+
       <section data-reconciliation-history-block="booking" class="mt-6 rounded-xl border border-[var(--koa-line)] bg-white p-5">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div><p class="eyebrow text-[var(--koa-clay)]">Accounting</p><h3 class="display mt-2 text-3xl">Reconciliation History</h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45">State changes from automatic hourly reconciliation and manual rechecks.</p></div>
@@ -756,6 +793,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const countersignButton = document.querySelector('[data-countersign]');
     const qboSyncStatusButton = document.querySelector('[data-qbo-sync-status]');
     const eventOpsLink = document.querySelector('[data-event-ops-link]');
+    const damageDepositSection = document.querySelector('[data-damage-deposit-section]');
+    const damageDepositStatus = document.querySelector('[data-damage-deposit-status]');
+    const damageDepositRentalType = document.querySelector('[data-damage-deposit-rental-type]');
+    const damageDepositAmount = document.querySelector('[data-damage-deposit-amount]');
+    const damageDepositDue = document.querySelector('[data-damage-deposit-due]');
+    const damageDepositQbo = document.querySelector('[data-damage-deposit-qbo]');
+    const damageDepositDeduction = document.querySelector('[data-damage-deposit-deduction]');
+    const damageDepositReason = document.querySelector('[data-damage-deposit-reason]');
+    const damageDepositSave = document.querySelector('[data-damage-deposit-save]');
+    const damageDepositInvoice = document.querySelector('[data-damage-deposit-invoice]');
+    const damageDepositSync = document.querySelector('[data-damage-deposit-sync]');
+    const damageDepositRefund = document.querySelector('[data-damage-deposit-refund]');
+    const damageDepositMessage = document.querySelector('[data-damage-deposit-message]');
 
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
     let payload = { quotes: [], analytics: {}, funnel: [], mobileBarAnalytics: {}, mobileBarProfitSettings: {}, conversions: {}, records: [], trash: [] };
@@ -1797,6 +1847,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ? 'QuickBooks is not connected. Use QBO Setup before issuing invoices.'
         : 'Invoice balances shown here come from the last QuickBooks synchronization.';
       renderReconciliationHistory(document.querySelector('[data-booking-reconciliation-history]'),record);
+
+      const damage=record?.accounting?.damageDeposit||{};
+      const isVenue=!String(recordPackage(record)||'').startsWith('mobile-');
+      damageDepositSection?.classList.toggle('hidden',!isVenue);
+      if(isVenue){
+        const type=damage.rentalType||(['hibiscus','signature-wedding'].includes(recordPackage(record))?'weekend':'one-day');
+        if(damageDepositRentalType) damageDepositRentalType.value=type;
+        const configuredAmount=type==='weekend'?Number(qboState?.damageDepositSettings?.weekendAmount||1000):Number(qboState?.damageDepositSettings?.oneDayAmount||500);
+        if(damageDepositAmount) damageDepositAmount.textContent=money(damage.amount ?? configuredAmount);
+        if(damageDepositDue) damageDepositDue.textContent=damage.dueDate||'30 days before event';
+        if(damageDepositQbo) damageDepositQbo.textContent=damage.invoiceId?('Invoice '+(damage.invoiceDocNumber?'#'+damage.invoiceDocNumber:damage.invoiceId)+(damage.invoiceBalance!=null?' · '+money(damage.invoiceBalance)+' balance':'')):'Not created';
+        if(damageDepositStatus) damageDepositStatus.textContent=String(damage.status||'not_invoiced').replaceAll('_',' ');
+        if(damageDepositDeduction) damageDepositDeduction.value=String(Number(damage.deductionAmount||0));
+        if(damageDepositReason) damageDepositReason.value=damage.deductionReason||'';
+        if(damageDepositRefund) damageDepositRefund.disabled=!damage.invoiceId||Number(damage.invoiceBalance??damage.amount??configuredAmount)>0||Boolean(damage.refundTransactionId);
+        if(damageDepositSync) damageDepositSync.disabled=!damage.invoiceId;
+        if(damageDepositInvoice) damageDepositInvoice.disabled=!qboState?.connection?.connected||Boolean(damage.invoiceId);
+        if(damageDepositMessage) damageDepositMessage.textContent=damage.refundedAt
+          ? 'Refund completed '+dateTime(damage.refundedAt)+' · returned '+money(damage.refundAmount||0)+(Number(damage.deductionAmount||0)>0?' · deductions '+money(damage.deductionAmount):'')
+          : 'This deposit is excluded from proposal revenue and tracked as a refundable QuickBooks liability.';
+      }
 
       const clientSigned = summary.contractStatus === 'signed';
       const koaSigned = Boolean(summary.koaSignedAt);
@@ -3098,6 +3169,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!editingRecord||!quickBooksReady())return;
       if(proposalMessage)proposalMessage.textContent='Emailing estimate from QuickBooks…';
       try{const refreshed=await runQuickBooks('send-estimate',editingRecord);editingRecord=refreshed;openProposal(refreshed);}catch(error){if(proposalMessage)proposalMessage.textContent=error.message||'Unable to email QuickBooks estimate.';}
+    });
+
+    damageDepositSave?.addEventListener('click',async()=>{
+      if(!bookingRecord)return;
+      if(damageDepositMessage)damageDepositMessage.textContent='Saving damage-deposit details…';
+      try{
+        const refreshed=await runQuickBooks('update-damage-deposit',bookingRecord,{
+          rentalType:damageDepositRentalType?.value||'one-day',
+          deductionAmount:Number(damageDepositDeduction?.value||0),
+          deductionReason:damageDepositReason?.value||''
+        });
+        bookingRecord=refreshed;openBooking(refreshed);
+      }catch(error){if(damageDepositMessage)damageDepositMessage.textContent=error.message||'Unable to save damage-deposit details.';}
+    });
+    damageDepositInvoice?.addEventListener('click',async()=>{
+      if(!bookingRecord)return;
+      if(damageDepositMessage)damageDepositMessage.textContent='Creating refundable-deposit invoice in QuickBooks…';
+      try{
+        await qboApi({action:'update-damage-deposit',recordId:bookingRecord.id,rentalType:damageDepositRentalType?.value||'one-day',deductionAmount:Number(damageDepositDeduction?.value||0),deductionReason:damageDepositReason?.value||''});
+        const refreshed=await runQuickBooks('create-damage-deposit-invoice',bookingRecord);
+        bookingRecord=refreshed;openBooking(refreshed);
+      }catch(error){if(damageDepositMessage)damageDepositMessage.textContent=error.message||'Unable to create damage-deposit invoice.';}
+    });
+    damageDepositSync?.addEventListener('click',async()=>{
+      if(!bookingRecord)return;
+      if(damageDepositMessage)damageDepositMessage.textContent='Synchronizing refundable deposit…';
+      try{const refreshed=await runQuickBooks('sync-damage-deposit',bookingRecord);bookingRecord=refreshed;openBooking(refreshed);}
+      catch(error){if(damageDepositMessage)damageDepositMessage.textContent=error.message||'Unable to sync refundable deposit.';}
+    });
+    damageDepositRefund?.addEventListener('click',async()=>{
+      if(!bookingRecord)return;
+      const deduction=Number(damageDepositDeduction?.value||0);
+      const reason=String(damageDepositReason?.value||'').trim();
+      if(deduction>0&&!reason){if(damageDepositMessage)damageDepositMessage.textContent='Enter a deduction reason before issuing the refund.';return;}
+      if(!confirm('Issue the refundable damage-deposit return in QuickBooks? This creates accounting transactions.'))return;
+      if(damageDepositMessage)damageDepositMessage.textContent='Issuing refund in QuickBooks…';
+      try{
+        const refreshed=await runQuickBooks('refund-damage-deposit',bookingRecord,{deductionAmount:deduction,deductionReason:reason});
+        bookingRecord=refreshed;openBooking(refreshed);
+      }catch(error){if(damageDepositMessage)damageDepositMessage.textContent=error.message||'Unable to issue damage-deposit refund.';}
     });
 
     qboSyncStatusButton?.addEventListener('click',async()=>{
