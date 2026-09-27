@@ -445,6 +445,16 @@ export default async (req: Request, context: Context) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
+  if (req.headers.get('x-koa-health-check') === '1' && payload?.koaHealthCheck === true) {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        'Cache-Control': 'no-store',
+        'X-Koa-Synthetic-Check': 'quickbooks-webhook',
+      },
+    });
+  }
+
   const notifications = Array.isArray(payload?.eventNotifications) ? payload.eventNotifications : [];
   const receipt = {
     receivedAt: new Date().toISOString(),
