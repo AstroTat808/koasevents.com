@@ -112,7 +112,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       <section class="mt-6 rounded-xl bg-[var(--koa-sand)]/55 p-5">
         <div class="grid gap-4 lg:grid-cols-[1fr_220px]">
-          <label class="grid gap-2 text-sm font-semibold">Catalog file<input data-import-file type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+          <label class="grid gap-2 text-sm font-semibold">Catalog file<input data-import-file type="file" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
           <label class="grid gap-2 text-sm font-semibold">Default group<select data-default-group class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="other">Other / use mapped group</option><option value="packages">Wedding packages</option><option value="rentals">Rentals</option><option value="mobile-bar">Mobile Bar</option><option value="add-ons">Add-ons</option><option value="fees">Fees</option></select></label>
         </div>
         <div class="mt-4 flex flex-wrap gap-3"><button data-preview-import type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Preview import</button><span data-import-message class="self-center text-sm text-[var(--koa-ink)]/55"></span></div>
