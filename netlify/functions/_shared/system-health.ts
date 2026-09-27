@@ -174,6 +174,13 @@ export function healthComponents() {
     {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
     {id:'credential-netlify',name:'Netlify credential',path:'Credential Health · Netlify',kind:'api' as const},
     {id:'credential-signwell',name:'SignWell API access',path:'Credential Health · SignWell',kind:'api' as const},
+    {id:'credential-turnstile',name:'Cloudflare Turnstile credential',path:'Credential Health · Cloudflare Turnstile',kind:'api' as const},
+    {id:'turnstile-site-key',name:'Turnstile site key',path:'PUBLIC_TURNSTILE_SITE_KEY',kind:'api' as const},
+    {id:'turnstile-secret',name:'Turnstile server secret',path:'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET',kind:'api' as const},
+    {id:'turnstile-widgets',name:'Turnstile widget rendering',path:'4 protected public forms',kind:'api' as const},
+    {id:'turnstile-siteverify',name:'Turnstile Siteverify',path:'Cloudflare /siteverify',kind:'api' as const},
+    {id:'turnstile-validation-history',name:'Turnstile validation history',path:'Recent successful + failed validations',kind:'api' as const},
+    {id:'turnstile-hostname-action',name:'Turnstile hostname + action matching',path:'Recent validation mismatches',kind:'api' as const},
     {id:'signwell-webhook-registration',name:'SignWell webhook registration',path:'SignWell GET /hooks',kind:'api' as const},
     {id:'signwell-webhook-delivery',name:'SignWell webhook delivery',path:'/api/webhooks/signwell',kind:'api' as const},
     {id:'signwell-signed-pdf',name:'SignWell signed PDF retrieval',path:'SignWell completed PDF',kind:'api' as const},
@@ -214,7 +221,8 @@ function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
-    'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell',
+    'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
+    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
     'synthetic-event-documents','synthetic-vendor-insurance-document','synthetic-quickbooks-webhook','synthetic-signwell-webhook',
@@ -1264,6 +1272,119 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       };
     })
     .filter((row:any)=>row.id!=='credential-');
+  const turnstileCredential=(Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
+    .find((row:any)=>String(row?.id||'')==='turnstile')||{};
+  const turnstileDiag=turnstileCredential?.diagnostics||{};
+  const turnstileWidgets=turnstileDiag?.widgetRendering||{};
+  const turnstileSiteverify=turnstileDiag?.siteverify||{};
+  const turnstileTotals=turnstileDiag?.totals||{};
+  const turnstileMismatches=turnstileDiag?.mismatches||{};
+  const turnstileLastSuccess=turnstileDiag?.lastSuccess||null;
+  const turnstileLastFailure=turnstileDiag?.lastFailure||null;
+
+  const turnstileSiteKeyCheck:HealthCheck={
+    id:'turnstile-site-key',
+    name:'Turnstile site key',
+    kind:'api',
+    path:'PUBLIC_TURNSTILE_SITE_KEY',
+    ok:Boolean(turnstileDiag?.siteKeyConfigured),
+    status:turnstileDiag?.siteKeyConfigured?200:0,
+    ms:0,
+    severity:turnstileDiag?.siteKeyConfigured?'green':'yellow',
+    detail:turnstileDiag?.siteKeyConfigured
+      ? 'Public Turnstile site key is configured in the production runtime.'
+      : 'PUBLIC_TURNSTILE_SITE_KEY / TURNSTILE_SITEKEY / TURNSTILE_SITE_KEY is missing.',
+  };
+
+  const turnstileSecretCheck:HealthCheck={
+    id:'turnstile-secret',
+    name:'Turnstile server secret',
+    kind:'api',
+    path:'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET',
+    ok:Boolean(turnstileDiag?.secretConfigured),
+    status:turnstileDiag?.secretConfigured?200:0,
+    ms:0,
+    severity:turnstileDiag?.secretConfigured?'green':'red',
+    detail:turnstileDiag?.secretConfigured
+      ? 'Server-side Turnstile secret is configured. Secret value is never exposed by System Health.'
+      : 'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET is missing from the production runtime.',
+  };
+
+  const turnstileWidgetCheck:HealthCheck={
+    id:'turnstile-widgets',
+    name:'Turnstile widget rendering',
+    kind:'api',
+    path:'4 protected public forms',
+    ok:Boolean(turnstileWidgets?.ok),
+    status:turnstileWidgets?.ok?200:503,
+    ms:0,
+    severity:turnstileWidgets?.ok?'green':'red',
+    detail:clean(
+      String(Number(turnstileWidgets?.healthy||0))+'/'+String(Number(turnstileWidgets?.total||0))
+      +' protected forms render the configured site key, Turnstile script, and expected action'
+      +(Array.isArray(turnstileWidgets?.widgets)
+        ? ' · '+turnstileWidgets.widgets.map((row:any)=>String(row?.path||'')+': '+(row?.ok?'OK':String(row?.detail||'failed'))).join(' · ')
+        : ''),
+      1200,
+    ),
+  };
+
+  const turnstileSiteverifyCheck:HealthCheck={
+    id:'turnstile-siteverify',
+    name:'Turnstile Siteverify',
+    kind:'api',
+    path:'Cloudflare /siteverify',
+    ok:Boolean(turnstileSiteverify?.ok),
+    status:Number(turnstileSiteverify?.status||0),
+    ms:0,
+    severity:turnstileSiteverify?.ok
+      ? 'green'
+      : turnstileSiteverify?.reachable===false||Number(turnstileSiteverify?.status||0)>=500||Number(turnstileSiteverify?.status||0)===429
+        ? 'yellow'
+        : 'red',
+    detail:clean(turnstileSiteverify?.detail||'Cloudflare Siteverify status is unavailable.',1200),
+  };
+
+  const turnstileValidationHistoryCheck:HealthCheck={
+    id:'turnstile-validation-history',
+    name:'Turnstile validation history',
+    kind:'api',
+    path:'Recent successful + failed validations',
+    ok:true,
+    status:turnstileLastSuccess?200:0,
+    ms:0,
+    severity:turnstileLastSuccess?'green':'yellow',
+    detail:clean(
+      String(Number(turnstileTotals?.successful||0))+' successful · '
+      +String(Number(turnstileTotals?.failed||0))+' failed · '
+      +String(Number(turnstileTotals?.validations||0))+' total in '
+      +String(Number(turnstileDiag?.windowDays||30))+'d'
+      +(turnstileLastSuccess?.createdAt?' · Last success '+String(turnstileLastSuccess.createdAt):' · No successful validation recorded yet')
+      +(turnstileLastFailure?.createdAt?' · Last failure '+String(turnstileLastFailure.createdAt):' · No failed validation recorded'),
+      1200,
+    ),
+  };
+
+  const turnstileMismatchCount=Number(turnstileMismatches?.total||0);
+  const turnstileMismatchCheck:HealthCheck={
+    id:'turnstile-hostname-action',
+    name:'Turnstile hostname + action matching',
+    kind:'api',
+    path:'Recent validation mismatches',
+    ok:turnstileMismatchCount===0,
+    status:turnstileMismatchCount===0?200:409,
+    ms:0,
+    severity:turnstileMismatchCount===0?'green':'red',
+    detail:clean(
+      turnstileMismatchCount===0
+        ? 'No hostname or action mismatches recorded in the current validation window.'
+        : String(turnstileMismatchCount)+' mismatches · hostname '+String(Number(turnstileMismatches?.hostname||0))
+          +' · action '+String(Number(turnstileMismatches?.action||0))
+          +(turnstileMismatches?.lastSeenAt?' · last seen '+String(turnstileMismatches.lastSeenAt):''),
+      1200,
+    ),
+  };
+
   const signWellCredential=(Array.isArray(credentialHealth?.rows)?credentialHealth.rows:[])
     .find((row:any)=>String(row?.id||'')==='signwell')||{};
   const signWellDiag=signWellCredential?.diagnostics||{};
@@ -1389,7 +1510,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
