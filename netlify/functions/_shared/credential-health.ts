@@ -3,6 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './email-health';
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
+import { verifySignWellCredentials } from './signwell';
 import { readCredentialWorkspaceAlertTimeline, syncCredentialWorkspaceAlerts } from './workspace-alert-lifecycle';
 
 export type CredentialIssueType =
@@ -46,6 +47,7 @@ export type CredentialHealthRow = {
     href: string;
     external: boolean;
   } | null;
+  diagnostics?: any;
 };
 
 export type CredentialHealthHistoryEvent = {
@@ -129,6 +131,7 @@ const CREDENTIAL_IDS = [
   'microsoft-graph',
   'github',
   'netlify',
+  'signwell',
 ] as const;
 
 type CredentialId = (typeof CREDENTIAL_IDS)[number];
@@ -139,6 +142,7 @@ const RELIABILITY_PROVIDERS = [
   { id: 'microsoft-graph', label: 'Microsoft Graph', credentialIds: ['microsoft-graph'] },
   { id: 'github', label: 'GitHub', credentialIds: ['github'] },
   { id: 'netlify', label: 'Netlify', credentialIds: ['netlify'] },
+  { id: 'signwell', label: 'SignWell', credentialIds: ['signwell'] },
 ] as const;
 
 const DEFAULT_RELIABILITY_THRESHOLDS: CredentialReliabilityThresholds = {
@@ -207,6 +211,11 @@ function recommendedAction(id: string, ok: boolean) {
     netlify: {
       label: 'View Netlify credential problem',
       href: 'https://app.netlify.com/projects/koasevents-website/configuration/env',
+      external: true,
+    },
+    signwell: {
+      label: 'Open SignWell',
+      href: 'https://www.signwell.com/app/',
       external: true,
     },
   };
@@ -282,6 +291,49 @@ function quickBooksRow(quickBooks: any): CredentialHealthRow {
     detail,
     recommendedAction: recommendedAction('quickbooks', ok),
   };
+}
+
+function signWellRow(signWell:any): CredentialHealthRow {
+  const api=signWell?.api||{};
+  const webhook=signWell?.webhook||{};
+  const delivery=signWell?.delivery||{};
+  const signedPdf=signWell?.signedPdf||{};
+  const configured=Boolean(signWell?.configured);
+  const apiOk=Boolean(api?.ok);
+  const registrationOk=Boolean(webhook?.registered&&webhook?.endpointMatch&&webhook?.idConfigured);
+  const pdfFailed=Boolean(signedPdf?.available&&!signedPdf?.ok);
+  const ok=Boolean(signWell?.ok);
+  const status=Number(signWell?.status||api?.status||webhook?.status||signedPdf?.status||0);
+  const detail=clean(signWell?.detail||'SignWell credential verification unavailable.',800);
+  const issueType=ok?null:classifyCredentialFailure({configured,status,detail});
+  const incompleteVerification=ok&&(!delivery?.verified||!signedPdf?.available);
+  const severity:CredentialHealthRow['severity']=ok
+    ? (incompleteVerification?'yellow':'green')
+    : (!configured||issueType==='External Dependency Problem'?'yellow':'red');
+  const permissions:string[]=[];
+  if(apiOk)permissions.push('API authentication · GET /me');
+  if(registrationOk)permissions.push('Webhook registration · GET /hooks');
+  if(delivery?.verified)permissions.push('Webhook HMAC delivery verified');
+  if(signedPdf?.available&&signedPdf?.ok)permissions.push('Completed PDF retrieval');
+  const row:CredentialHealthRow={
+    id:'signwell',
+    provider:'SignWell',
+    credential:'API key + webhook HMAC',
+    ok,
+    configured,
+    status,
+    severity,
+    issueType,
+    detail,
+    verificationHttp:[
+      api?.status?'API HTTP '+api.status:'',
+      webhook?.status?'Hooks HTTP '+webhook.status:'',
+      signedPdf?.available&&signedPdf?.status?'PDF HTTP '+signedPdf.status:'',
+    ].filter(Boolean).join(' · '),
+    verifiedPermissions:permissions,
+    diagnostics:signWell,
+  };
+  return {...row,recommendedAction:recommendedAction(row.id,row.ok)};
 }
 
 function microsoftGraphRow(microsoftGraph: any): CredentialHealthRow {
@@ -518,7 +570,8 @@ async function verifyCredentialById(context: Context, id: CredentialId): Promise
   if (id === 'quickbooks') return quickBooksRow(await verifyQuickBooksCredentials(context));
   if (id === 'microsoft-graph') return microsoftGraphRow(await verifyOffice365Credentials());
   if (id === 'github') return verifyGithubCredential();
-  return verifyNetlifyCredential();
+  if (id === 'netlify') return verifyNetlifyCredential();
+  return signWellRow(await verifySignWellCredentials(context));
 }
 
 function healthSummaryFromRows(rows: CredentialHealthRow[], generatedAt: string) {
@@ -1079,6 +1132,7 @@ function runtimeCredentialConfigured(credentialId: unknown, fallback: boolean) {
   if (id === 'resend-monitoring') return env('RESEND_MONITORING_API_KEY');
   if (id === 'github') return env('KOA_GITHUB_READ_TOKEN');
   if (id === 'netlify') return env('NETLIFY_AUTH_TOKEN');
+  if (id === 'signwell') return env('SIGNWELL_API_KEY') && env('SIGNWELL_WEBHOOK_ID');
   if (id === 'microsoft-graph') {
     return env('MICROSOFT_GRAPH_CLIENT_ID') && env('MICROSOFT_GRAPH_CLIENT_SECRET') && env('MICROSOFT_GRAPH_TENANT_ID');
   }
@@ -1092,6 +1146,7 @@ function providerIdForCredential(credentialId: unknown) {
   if (id === 'quickbooks') return 'quickbooks';
   if (id === 'github') return 'github';
   if (id === 'netlify') return 'netlify';
+  if (id === 'signwell') return 'signwell';
   return '';
 }
 
@@ -1324,12 +1379,13 @@ export async function credentialHealthSummary(context: Context, options: Credent
     return withHistory(context, summary);
   }
 
-  const [emailHealth, quickBooks, microsoftGraph, github, netlify] = await Promise.all([
+  const [emailHealth, quickBooks, microsoftGraph, github, netlify, signWell] = await Promise.all([
     options.emailHealth || emailHealthSummary(context, { force: Boolean(options.force) }),
     verifyQuickBooksCredentials(context),
     verifyOffice365Credentials(),
     verifyGithubCredential(),
     verifyNetlifyCredential(),
+    verifySignWellCredentials(context),
   ]);
 
   const incomingRows: CredentialHealthRow[] = [
@@ -1339,6 +1395,7 @@ export async function credentialHealthSummary(context: Context, options: Credent
     microsoftGraphRow(microsoftGraph),
     github,
     netlify,
+    signWellRow(signWell),
   ];
 
   const rows = await persistRowsWithHistory(
