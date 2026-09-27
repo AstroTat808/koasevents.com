@@ -364,6 +364,39 @@ const seoSchema = {
           return response;
         };
       })();
+
+      (() => {
+        if (window.__koaClickFeedbackInstalled) return;
+        window.__koaClickFeedbackInstalled = true;
+        const selector = [
+          'button',
+          'input[type="button"]',
+          'input[type="submit"]',
+          'input[type="reset"]',
+          '[role="button"]',
+          'a.koa-button',
+          'a[class*="rounded-full"]',
+          'a[class*="rounded-xl"]',
+          'a[class*="rounded-lg"]',
+        ].join(',');
+
+        document.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const control = target.closest(selector);
+          if (!(control instanceof HTMLElement)) return;
+          if (
+            control.matches(':disabled')
+            || control.getAttribute('aria-disabled') === 'true'
+            || control.dataset.noClickFeedback === 'true'
+          ) return;
+
+          control.classList.remove('koa-click-feedback');
+          void control.offsetWidth;
+          control.classList.add('koa-click-feedback');
+          window.setTimeout(() => control.classList.remove('koa-click-feedback'), 520);
+        }, true);
+      })();
     </script>
     {showWorkspaceNav && <StaffUtilityNav />}
     <slot />
