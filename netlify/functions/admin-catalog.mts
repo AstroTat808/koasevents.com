@@ -230,10 +230,10 @@ async function rowsFromFile(filename: string, base64: string) {
   let rows:any[][];
   if(lower.endsWith('.csv')){
     rows=parseCsv(buffer.toString('utf8'));
-  }else if(lower.endsWith('.xlsx') || lower.endsWith('.xls')){
+  }else if(lower.endsWith('.xlsx')){
     rows=await readXlsxFile(buffer);
   }else{
-    throw new Error('Use a .csv, .xlsx, or .xls catalog file.');
+    throw new Error('Use a .csv or .xlsx catalog file.');
   }
   rows=rows.filter((row)=>Array.isArray(row)&&row.some((cell)=>clean(cell,10)));
   if(rows.length<2)throw new Error('The import file needs a header row and at least one data row.');
