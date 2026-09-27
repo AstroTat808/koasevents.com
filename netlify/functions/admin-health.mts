@@ -74,6 +74,22 @@ function saverMeasurementInput(baseline:any,targetModes:any,source:string,label:
   };
 }
 
+async function safeHealthSection<T>(
+  warnings:Array<{section:string;error:string}>,
+  section:string,
+  task:()=>Promise<T>,
+  fallback:T,
+):Promise<T>{
+  try{
+    return await task();
+  }catch(error){
+    const message=error instanceof Error?error.message:String(error||'Unknown error');
+    warnings.push({section,error:message});
+    console.error('[admin-health] '+section+' enrichment failed:',error);
+    return fallback;
+  }
+}
+
 function nextOfficeSyncIso(mode:string,now=new Date()){
   const next=new Date(now);
   next.setUTCMinutes(0,0,0);
@@ -561,17 +577,37 @@ export default async (req:Request,context:Context) => {
       cachedDeploymentHistory(context),
       readProductionReleases(context,50),
     ]);
+    const enrichmentWarnings:Array<{section:string;error:string}>=[];
     const [office365,emailHealth]=await Promise.all([
-      office365HealthSummary(context,deployments),
-      emailHealthSummary(context),
+      safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
+      safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
     ]);
-    const credentialHealth=await credentialHealthSummary(context,{emailHealth});
+    const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
+    const credentialHealth=await safeHealthSection(
+      enrichmentWarnings,
+      'Credential Health',
+      ()=>credentialHealthSummary(context,{emailHealth}),
+      cachedCredentialHealth||{},
+    );
     const uptime=calculateUptime(uptimeHistory);
     const incidents=calculateIncidents(uptimeHistory);
-    const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
+    const hydratedReleases=await safeHealthSection(
+      enrichmentWarnings,
+      'Release metadata',
+      ()=>hydrateProductionReleaseMetadata(context,releases,12),
+      releases,
+    );
     deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    const weeklyExecutiveSummary=await weeklySystemHealthExecutiveSummary(context);
-    return Response.json({current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary},{headers:{'Cache-Control':'private, no-store'}});
+    const weeklyExecutiveSummary=await safeHealthSection(
+      enrichmentWarnings,
+      'Weekly executive summary',
+      ()=>weeklySystemHealthExecutiveSummary(context),
+      {} as any,
+    );
+    return Response.json({
+      current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      enrichmentWarnings,
+    },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -597,15 +633,32 @@ export default async (req:Request,context:Context) => {
     readHealthAlertPolicy(context),
     readProductionReleases(context,50),
   ]);
+  const enrichmentWarnings:Array<{section:string;error:string}>=[];
   const [office365,emailHealth]=await Promise.all([
-    office365HealthSummary(context,deployments),
-    emailHealthSummary(context),
+    safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
+    safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
   ]);
-  const credentialHealth=await credentialHealthSummary(context,{emailHealth});
-  const weeklyExecutiveSummary=await weeklySystemHealthExecutiveSummary(context);
+  const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
+  const credentialHealth=await safeHealthSection(
+    enrichmentWarnings,
+    'Credential Health',
+    ()=>credentialHealthSummary(context,{emailHealth}),
+    cachedCredentialHealth||{},
+  );
+  const weeklyExecutiveSummary=await safeHealthSection(
+    enrichmentWarnings,
+    'Weekly executive summary',
+    ()=>weeklySystemHealthExecutiveSummary(context),
+    {} as any,
+  );
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
-  const hydratedReleases=await hydrateProductionReleaseMetadata(context,releases,12);
+  const hydratedReleases=await safeHealthSection(
+    enrichmentWarnings,
+    'Release metadata',
+    ()=>hydrateProductionReleaseMetadata(context,releases,12),
+    releases,
+  );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
   return Response.json({
     current:latest,
@@ -619,6 +672,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
+    enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
