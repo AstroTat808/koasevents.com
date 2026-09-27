@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
-import { createSignWellContract, signWellConfigured } from './_shared/signwell';
+import { createSignWellContract, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
 function salesStoreFor(context: Context) {
@@ -162,6 +162,7 @@ function publicBooking(record: any) {
     },
     payments,
     accountingProvider: 'QuickBooks Online',
+    signwellTestMode: signWellConfiguration().testMode,
   };
 }
 
