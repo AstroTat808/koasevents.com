@@ -71,7 +71,7 @@ function contractSections(record: any) {
   }
 
   return [
-    { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3330 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (customer.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (customer.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
+    { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3334 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (customer.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (customer.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
     { heading: '2. Premises Use & Access', body: 'Lessee is granted exclusive access to the property for the scheduled event. Koa’s Events reserves the right to define accessible areas if only a portion of the venue is being rented. Unauthorized access to non-designated areas is prohibited.' },
     { heading: '3. Payment Terms', body: 'The finalized proposal total is $' + Number(proposal.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized proposal scope. A 10% non-refundable deposit is required to reserve the event date. The first payment is due within 14 days of signing, the second payment is due 90 days before the event, and the final payment is due 60 days before the event. A $150 late fee applies per occurrence; two missed payments may result in event cancellation with no refund.' },
     { heading: '4. Security / Damage Deposit', body: 'The separate security or damage deposit required for the event is due 30 days before the event. Failure to pay authorizes cancellation by Koa’s. The deposit will be refunded within 14 days after the event, less deductions for damage, excessive cleanup, or breach.' },
@@ -116,6 +116,15 @@ function ensureBooking(record: any) {
   return record.booking;
 }
 
+function proposalGrandTotal(proposal: any) {
+  const stored = Math.round(Number(proposal?.total || 0) * 100) / 100;
+  const subtotal = Math.round(Number(proposal?.subtotal || 0) * 100) / 100;
+  const discount = Math.round(Number(proposal?.discountAmount || 0) * 100) / 100;
+  const taxAmount = Math.round(Number(proposal?.taxAmount || 0) * 100) / 100;
+  const derived = Math.round(Math.max(0, subtotal - discount + taxAmount) * 100) / 100;
+  return derived > 0 ? derived : stored;
+}
+
 function publicBooking(record: any) {
   const booking = ensureBooking(record);
   const proposal = record.proposal || {};
@@ -148,7 +157,7 @@ function publicBooking(record: any) {
     customerName: record.customer?.name || '',
     eventDate: record.customer?.eventDate || '',
     packageId: record.packageId || '',
-    proposalTotal: Number(proposal.total || 0),
+    proposalTotal: proposalGrandTotal(proposal),
     proposalId: record.id,
     contract: {
       title: booking.contract?.title || (String(record?.packageId || '').startsWith('mobile-') ? 'Koa’s Mobile Bar Services Agreement' : 'Koa’s Events Venue & Services Agreement'),
