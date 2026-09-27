@@ -1,4 +1,5 @@
 import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
+import { resolveEmailRoute } from './email-routing.ts';
 
 type LeadRecord = {
   id: string;
@@ -372,12 +373,14 @@ export async function sendLeadNotification(record: LeadRecord) {
   const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
   if (!apiKey) return { sent: false, configured: false, id: '' };
 
-  const to = String(Netlify.env.get('KOA_LEAD_EMAIL_TO') || 'aloha@koasevents.com').trim();
+  const route = await resolveEmailRoute('lead-notification');
   const from = String(Netlify.env.get('KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
   const subject = heading(record) + ' — ' + (record.customer?.name || record.id);
   const requestBody = JSON.stringify({
     from,
-    to: [to],
+    to: route.to,
+    cc: route.cc.length ? route.cc : undefined,
+    bcc: route.bcc.length ? route.bcc : undefined,
     subject,
     html: buildHtml(record),
     text: buildText(record),
@@ -541,6 +544,8 @@ async function sendWithResend(args: {
   html: string;
   text: string;
   replyTo?: string;
+  cc?: string[];
+  bcc?: string[];
   idempotencyKey: string;
 }) {
   const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
@@ -557,6 +562,8 @@ async function sendWithResend(args: {
       body: JSON.stringify({
         from: args.from,
         to: args.to,
+        cc: args.cc?.length ? args.cc : undefined,
+        bcc: args.bcc?.length ? args.bcc : undefined,
         subject: args.subject,
         html: args.html,
         text: args.text,
@@ -597,7 +604,7 @@ export async function sendClientConfirmation(record: LeadRecord) {
 }
 
 export async function sendResponseReminder(record: LeadRecord, hoursOpen: number) {
-  const to = String(Netlify.env.get('KOA_LEAD_EMAIL_TO') || 'aloha@koasevents.com').trim();
+  const route = await resolveEmailRoute('lead-response-reminder');
   const from = String(Netlify.env.get('KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
   const crmUrl = 'https://koasevents.com/admin/quotes/?q=' + encodeURIComponent(record.id);
   const title = heading(record);
@@ -635,7 +642,9 @@ export async function sendResponseReminder(record: LeadRecord, hoursOpen: number
   ].join('\n');
 
   return sendWithResend({
-    to: [to],
+    to: route.to,
+    cc: route.cc,
+    bcc: route.bcc,
     from,
     subject,
     html,
