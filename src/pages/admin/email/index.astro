@@ -66,7 +66,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-email-health-note class="mt-3 text-[.66rem] leading-5 text-[var(--koa-ink)]/45"></p>
         </section>
 
-        <section class="mt-6 rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+        <section data-email-activity-section class="mt-6 rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Delivery audit</p>
@@ -173,6 +173,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealthGrid=document.querySelector('[data-email-health-grid]');
     const emailHealthState=document.querySelector('[data-email-health-state]');
     const emailHealthNote=document.querySelector('[data-email-health-note]');
+    const activitySection=document.querySelector('[data-email-activity-section]');
     const activityBody=document.querySelector('[data-activity-body]');
     const activityState=document.querySelector('[data-activity-state]');
     const activityRecipientFilter=document.querySelector('[data-activity-recipient-filter]');
@@ -205,6 +206,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let activityCurrentAfter='';
     let activityPreset='';
     let activityAllLoaded=false;
+    let activityScopeLabel='';
     let canManage=false;
 
     function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));}
@@ -333,6 +335,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         routeGrid.appendChild(card);
       }
     }
+    function comparisonHtml(metric,unit=''){
+      const state=String(metric?.state||'no_prior_data');
+      if(state==='no_prior_data')return '<p class="mt-1 text-[.6rem] font-semibold text-[var(--koa-ink)]/40">No prior-period data</p>';
+      const delta=Number(metric?.delta||0);
+      const previous=Number(metric?.previous||0);
+      const arrow=delta>0?'↑':delta<0?'↓':'→';
+      const tone=state==='improved'?'text-emerald-700':state==='worsened'?'text-red-700':'text-[var(--koa-ink)]/45';
+      const label=state==='improved'?'improved':state==='worsened'?'worsened':'unchanged';
+      const magnitude=Math.abs(delta);
+      const deltaText=unit==='pts'?magnitude.toFixed(1)+' pts':String(Number.isInteger(magnitude)?magnitude:magnitude.toFixed(1));
+      const previousText=unit==='pts'?previous.toFixed(1)+'%':String(previous);
+      return '<p class="mt-1 text-[.6rem] font-black '+tone+'">'+arrow+' '+deltaText+' · '+label+'</p><p class="text-[.56rem] text-[var(--koa-ink)]/38">Previous: '+esc(previousText)+'</p>';
+    }
+    async function drillIntoDomainFailures(domain,days){
+      const cleanDomain=String(domain||'').trim().toLowerCase();
+      const span=Math.max(1,Number(days||30)||30);
+      if(!cleanDomain)return;
+      clearActivityPresetVisual();
+      if(activityRecipientFilter instanceof HTMLInputElement)activityRecipientFilter.value='@'+cleanDomain;
+      if(activityTypeFilter instanceof HTMLSelectElement)activityTypeFilter.value='';
+      if(activityStatusFilter instanceof HTMLSelectElement)activityStatusFilter.value='failed';
+      if(activityIdFilter instanceof HTMLInputElement)activityIdFilter.value='';
+      if(activityStartFilter instanceof HTMLInputElement){
+        const start=new Date();start.setDate(start.getDate()-span);
+        activityStartFilter.value=localDateInputValue(start);
+      }
+      if(activityEndFilter instanceof HTMLInputElement)activityEndFilter.value=localDateInputValue(new Date());
+      if(activityState)activityState.textContent='Loading '+cleanDomain+' failures…';
+      if(activityRetentionNote)activityRetentionNote.textContent='Scanning retained history for '+cleanDomain+' problem emails in the last '+span+' days…';
+      try{
+        const response=await fetch('/api/admin/email-activity?scan=domain-failures&domain='+encodeURIComponent(cleanDomain)+'&days='+encodeURIComponent(String(span)),{cache:'no-store'});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to load domain failures.');
+        activityRows=Array.isArray(result.rows)?result.rows:[];
+        activityHasMore=false;
+        activityNextAfter='';
+        activityCursorStack=[];
+        activityCurrentAfter='';
+        activityAllLoaded=true;
+        activityScopeLabel=cleanDomain+' failures · last '+span+' days';
+        if(activityRetentionNote)activityRetentionNote.textContent=String(result.retentionNote||'');
+        renderActivity();
+        activitySection?.scrollIntoView({behavior:'smooth',block:'start'});
+      }catch(error){
+        showStatus(error instanceof Error?error.message:'Unable to load domain failures.','error');
+      }
+    }
     function renderEmailHealth(summary){
       if(!emailHealthGrid)return;
       const periods=Array.isArray(summary?.periods)?summary.periods:[];
@@ -348,19 +397,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         card.className='rounded-[1.1rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         const domains=Array.isArray(period.topFailingDomains)?period.topFailingDomains:[];
         const domainHtml=domains.length
-          ? domains.map((row)=>'<span class="rounded-full bg-white px-2.5 py-1 text-[.62rem] font-semibold text-[var(--koa-forest)]">'+esc(row.domain)+' · '+esc(row.count)+'</span>').join('')
+          ? domains.map((row)=>'<button type="button" data-failing-domain="'+esc(row.domain)+'" data-failing-days="'+esc(period.days)+'" class="rounded-full border border-[var(--koa-line)] bg-white px-2.5 py-1 text-[.62rem] font-semibold text-[var(--koa-forest)] hover:border-red-200 hover:bg-red-50 hover:text-red-800">'+esc(row.domain)+' · '+esc(row.count)+'</button>').join('')
           : '<span class="text-xs text-emerald-700">No failing recipient domains in this period.</span>';
         card.innerHTML=
           '<div class="flex items-start justify-between gap-3"><div><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last '+esc(period.days)+' days</p><h3 class="mt-1 text-xl font-semibold text-[var(--koa-forest)]">'+esc(period.totalSent)+' emails sent</h3></div></div>'+
           '<div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5 xl:grid-cols-2">'+
             '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Total sent</p><p class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">'+esc(period.totalSent)+'</p></div>'+
-            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Delivered</p><p class="mt-1 text-lg font-semibold text-emerald-700">'+esc(period.deliveryRate)+'%</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.delivered)+' delivered</p></div>'+
-            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Bounce rate</p><p class="mt-1 text-lg font-semibold '+(Number(period.bounced||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.bounceRate)+'%</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.bounced)+' bounced</p></div>'+
-            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Failures</p><p class="mt-1 text-lg font-semibold '+(Number(period.failures||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.failures)+'</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.failed)+' failed · '+esc(period.suppressed)+' suppressed</p></div>'+
-            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Complaints</p><p class="mt-1 text-lg font-semibold '+(Number(period.complaints||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.complaints)+'</p></div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Delivered</p><p class="mt-1 text-lg font-semibold text-emerald-700">'+esc(period.deliveryRate)+'%</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.delivered)+' delivered</p>'+comparisonHtml(period.comparison?.deliveryRate,'pts')+'</div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Bounce rate</p><p class="mt-1 text-lg font-semibold '+(Number(period.bounced||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.bounceRate)+'%</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.bounced)+' bounced</p>'+comparisonHtml(period.comparison?.bounceRate,'pts')+'</div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Failures</p><p class="mt-1 text-lg font-semibold '+(Number(period.failures||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.failures)+'</p><p class="text-[.62rem] text-[var(--koa-ink)]/45">'+esc(period.failed)+' failed · '+esc(period.suppressed)+' suppressed</p>'+comparisonHtml(period.comparison?.failures)+'</div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Complaints</p><p class="mt-1 text-lg font-semibold '+(Number(period.complaints||0)>0?'text-red-700':'text-[var(--koa-forest)]')+'">'+esc(period.complaints)+'</p>'+comparisonHtml(period.comparison?.complaints)+'</div>'+
           '</div>'+
           '<div class="mt-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Top failing recipient domains</p><div class="mt-2 flex flex-wrap gap-2">'+domainHtml+'</div></div>';
         emailHealthGrid.appendChild(card);
+        card.querySelectorAll('[data-failing-domain]').forEach((node)=>{
+          node.addEventListener('click',()=>{
+            const domain=String((node as HTMLElement).dataset.failingDomain||'');
+            const days=Number((node as HTMLElement).dataset.failingDays||period.days||30);
+            drillIntoDomainFailures(domain,days);
+          });
+        });
       }
     }
     async function loadEmailHealth(){
@@ -415,10 +471,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const rows=activityRows;
       syncActivityTypeOptions(rows);
       const filtered=filteredActivityRows(rows);
-      if(activityState)activityState.textContent=activityAllLoaded
-        ? rows.length+' retained messages loaded'
-        : rows.length+' messages on this page';
-      if(activityFilterSummary)activityFilterSummary.textContent=rows.length?'Showing '+filtered.length+' of '+rows.length+(activityAllLoaded?' retained messages':' messages on this page'):'No messages loaded';
+      if(activityState)activityState.textContent=activityScopeLabel
+        ? rows.length+' '+activityScopeLabel
+        : activityAllLoaded
+          ? rows.length+' retained messages loaded'
+          : rows.length+' messages on this page';
+      if(activityFilterSummary)activityFilterSummary.textContent=rows.length
+        ? 'Showing '+filtered.length+' of '+rows.length+(activityScopeLabel?' '+activityScopeLabel:activityAllLoaded?' retained messages':' messages on this page')
+        : 'No messages loaded';
       if(activityNewer instanceof HTMLButtonElement)activityNewer.disabled=activityAllLoaded||activityCursorStack.length===0;
       if(activityOlder instanceof HTMLButtonElement)activityOlder.disabled=activityAllLoaded||!activityHasMore;
       activityBody.innerHTML='';
@@ -450,6 +510,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       activityHasMore=Boolean(result.hasMore);
       activityNextAfter=String(result.nextAfter||'');
       activityAllLoaded=false;
+      activityScopeLabel='';
       if(activityRetentionNote)activityRetentionNote.textContent=String(result.retentionNote||'');
       renderActivity();
     }
@@ -491,6 +552,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         activityCursorStack=[];
         activityCurrentAfter='';
         activityAllLoaded=result.complete;
+        activityScopeLabel='';
         if(activityRetentionNote)activityRetentionNote.textContent='All email records currently retained by Resend are loaded. Koa’s signed webhook archive preserves lifecycle diagnostics going forward.';
         renderActivity();
       }catch(error){showStatus(error instanceof Error?error.message:'Unable to load retained history.','error');}

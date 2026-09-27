@@ -84,11 +84,10 @@ function domainOf(value:unknown){
 function roundRate(numerator:number,denominator:number){
   return denominator?Math.round((numerator/denominator)*1000)/10:0;
 }
-function summarizePeriod(rows:any[],days:number,now:number){
-  const cutoff=now-days*24*60*60*1000;
+function summarizeRange(rows:any[],start:number,end:number,includeDomains=false){
   const period=rows.filter((row)=>{
     const at=Date.parse(String(row?.createdAt||''));
-    return Number.isFinite(at)&&at>=cutoff;
+    return Number.isFinite(at)&&at>=start&&at<end;
   });
   let deliveredCount=0,bounced=0,failed=0,suppressed=0,complaints=0;
   const domains=new Map<string,number>();
@@ -99,7 +98,7 @@ function summarizePeriod(rows:any[],days:number,now:number){
     if(status==='failed')failed+=1;
     if(status==='suppressed')suppressed+=1;
     if(status==='complained')complaints+=1;
-    if(problem(status)){
+    if(includeDomains&&problem(status)){
       for(const recipient of addresses(row?.recipients?.length?row.recipients:row?.recipient)){
         const domain=domainOf(recipient);
         if(domain)domains.set(domain,(domains.get(domain)||0)+1);
@@ -108,7 +107,6 @@ function summarizePeriod(rows:any[],days:number,now:number){
   }
   const totalSent=period.length;
   return {
-    days,
     totalSent,
     delivered:deliveredCount,
     deliveryRate:roundRate(deliveredCount,totalSent),
@@ -118,10 +116,44 @@ function summarizePeriod(rows:any[],days:number,now:number){
     failed,
     suppressed,
     complaints,
-    topFailingDomains:[...domains.entries()]
-      .map(([domain,count])=>({domain,count}))
-      .sort((a,b)=>b.count-a.count||a.domain.localeCompare(b.domain))
-      .slice(0,5),
+    topFailingDomains:includeDomains
+      ? [...domains.entries()]
+          .map(([domain,count])=>({domain,count}))
+          .sort((a,b)=>b.count-a.count||a.domain.localeCompare(b.domain))
+          .slice(0,5)
+      : [],
+  };
+}
+function comparisonMetric(current:number,previous:number,higherIsBetter:boolean,comparable:boolean){
+  const delta=Math.round((current-previous)*10)/10;
+  if(!comparable)return {current,previous,delta,state:'no_prior_data'};
+  if(delta===0)return {current,previous,delta,state:'unchanged'};
+  const improved=higherIsBetter?delta>0:delta<0;
+  return {current,previous,delta,state:improved?'improved':'worsened'};
+}
+function summarizePeriod(rows:any[],days:number,now:number){
+  const span=days*24*60*60*1000;
+  const currentStart=now-span;
+  const previousStart=now-span*2;
+  const current=summarizeRange(rows,currentStart,now,true);
+  const previous=summarizeRange(rows,previousStart,currentStart,false);
+  const comparable=previous.totalSent>0;
+  return {
+    days,
+    ...current,
+    previous:{
+      totalSent:previous.totalSent,
+      deliveryRate:previous.deliveryRate,
+      bounceRate:previous.bounceRate,
+      failures:previous.failures,
+      complaints:previous.complaints,
+    },
+    comparison:{
+      deliveryRate:comparisonMetric(current.deliveryRate,previous.deliveryRate,true,comparable),
+      bounceRate:comparisonMetric(current.bounceRate,previous.bounceRate,false,comparable),
+      failures:comparisonMetric(current.failures,previous.failures,false,comparable),
+      complaints:comparisonMetric(current.complaints,previous.complaints,false,comparable),
+    },
   };
 }
 function summaryStore(context:Context){
@@ -131,12 +163,12 @@ function summaryStore(context:Context){
 }
 async function emailAnalyticsSummary(context:Context,force=false){
   const store=summaryStore(context);
-  const cached:any=await store.get('summary-v1',{type:'json'});
+  const cached:any=await store.get('summary-v2',{type:'json'});
   const cachedAt=Date.parse(String(cached?.generatedAt||''));
   if(!force&&Number.isFinite(cachedAt)&&Date.now()-cachedAt<15*60*1000)return cached;
 
   const now=Date.now();
-  const cutoff90=now-90*24*60*60*1000;
+  const cutoff180=now-180*24*60*60*1000;
   const rows:any[]=[];
   const seen=new Set<string>();
   let after='';
@@ -160,8 +192,8 @@ async function emailAnalyticsSummary(context:Context,force=false){
       const at=Date.parse(String(row?.createdAt||''));
       return Number.isFinite(at)?Math.min(min,at):min;
     },Number.POSITIVE_INFINITY);
-    if(!hasMore||!mapped.length||!after||oldest<cutoff90){
-      coverageComplete=!hasMore||oldest<cutoff90;
+    if(!hasMore||!mapped.length||!after||oldest<cutoff180){
+      coverageComplete=!hasMore||oldest<cutoff180;
       break;
     }
   }
@@ -173,18 +205,18 @@ async function emailAnalyticsSummary(context:Context,force=false){
     ok:true,
     generatedAt:new Date().toISOString(),
     retainedRowsScanned:rows.length,
-    coverageComplete90d:coverageComplete,
+    coverageComplete180d:coverageComplete,
     oldestLoadedAt:Number.isFinite(oldestLoaded)?new Date(oldestLoaded).toISOString():'',
     note:coverageComplete
-      ? 'Metrics use all Resend email records needed to cover the last 90 days.'
-      : 'Metrics use the newest 10,000 retained Resend records; very high-volume older activity may be outside this calculation.',
+      ? 'Metrics cover the current and immediately preceding equivalent windows needed for 7, 30, and 90-day comparisons.'
+      : 'Metrics use the newest 10,000 retained Resend records; very high-volume activity may limit the oldest comparison window.',
     periods:[
       summarizePeriod(rows,7,now),
       summarizePeriod(rows,30,now),
       summarizePeriod(rows,90,now),
     ],
   };
-  await store.setJSON('summary-v1',summary);
+  await store.setJSON('summary-v2',summary);
   return summary;
 }
 
@@ -201,6 +233,61 @@ export default async (req:Request,context:Context)=>{
     }catch(error){
       return Response.json({error:error instanceof Error?error.message:'Unable to calculate email analytics.'},{status:400});
     }
+  }
+
+  if(url.searchParams.get('scan')==='domain-failures'){
+    const domain=clean(url.searchParams.get('domain'),180).toLowerCase().replace(/^@/,'');
+    const days=Math.max(1,Math.min(180,Number(url.searchParams.get('days')||30)||30));
+    if(!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)){
+      return Response.json({error:'A valid recipient domain is required.'},{status:400});
+    }
+    const cutoff=Date.now()-days*24*60*60*1000;
+    const matches:any[]=[];
+    const seen=new Set<string>();
+    let after='';
+    let hasMore=true;
+    let complete=false;
+    let pages=0;
+    while(hasMore&&pages<100){
+      const params=new URLSearchParams({limit:'100'});
+      if(after)params.set('after',after);
+      const result=await resend('/emails?'+params.toString());
+      if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to scan email history.',500)},{status:result.status||400});
+      const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
+      const mapped=raw.map(mapEmail);
+      for(const row of mapped){
+        const at=Date.parse(String(row?.createdAt||''));
+        if(!Number.isFinite(at)||at<cutoff||!problem(row.status))continue;
+        const hasDomain=addresses(row?.recipients?.length?row.recipients:row?.recipient).some((recipient)=>domainOf(recipient)===domain);
+        if(hasDomain&&row.emailId&&!seen.has(row.emailId)){
+          seen.add(row.emailId);
+          matches.push(row);
+        }
+      }
+      pages+=1;
+      hasMore=Boolean(result.body?.has_more);
+      after=mapped.length?String(mapped[mapped.length-1]?.emailId||''):'';
+      const oldest=mapped.reduce((min,row)=>{
+        const at=Date.parse(String(row?.createdAt||''));
+        return Number.isFinite(at)?Math.min(min,at):min;
+      },Number.POSITIVE_INFINITY);
+      if(!hasMore||!mapped.length||!after||oldest<cutoff){
+        complete=!hasMore||oldest<cutoff;
+        break;
+      }
+    }
+    matches.sort((a,b)=>Date.parse(String(b.createdAt||''))-Date.parse(String(a.createdAt||'')));
+    return Response.json({
+      ok:true,
+      rows:matches,
+      domain,
+      days,
+      complete,
+      scannedPages:pages,
+      retentionNote:complete
+        ? 'Complete retained-history scan for '+domain+' failures in the last '+days+' days.'
+        : 'Scanned the newest 10,000 retained emails; older matching rows may exist.',
+    },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   const detailId=clean(url.searchParams.get('id'),180);
