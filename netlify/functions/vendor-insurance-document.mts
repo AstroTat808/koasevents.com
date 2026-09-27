@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireAdmin } from './_shared/admin';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
+import { isSyntheticHealthRequest } from './_shared/synthetic-health';
 
 function vendorStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -31,7 +32,7 @@ export default async (req: Request, context: Context) => {
   const store = vendorStoreFor(context);
   const files = filesStoreFor(context);
 
-  if (req.method === 'HEAD' && isAdmin && clean(context.params.vendorId, 100) === '__health__') {
+  if (req.method === 'HEAD' && isAdmin && clean(context.params.vendorId, 100) === '__health__' && isSyntheticHealthRequest(req)) {
     try {
       await Promise.all([
         store.get('vendors/index', { type: 'json' }),
