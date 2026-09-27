@@ -3,7 +3,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 ---
 <BaseLayout noindex title="Koa’s Admin" description="Koa’s Events content administration." canonical="https://koasevents.com/admin/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-16">
-    <div class="container-shell max-w-3xl">
+    <div class="container-shell max-w-5xl">
       <div class="rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]">
         <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
         <h1 class="display mt-4 text-5xl">Content Admin</h1>
@@ -64,34 +64,80 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
           </form>
 
           <div data-role-warning class="hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-5">
-            <p class="font-semibold text-[var(--koa-ink)]">This account is signed in but is not approved for Content Admin.</p>
-            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Use one of the approved Koa’s administrator accounts, then sign in again.</p>
+            <p class="font-semibold text-[var(--koa-ink)]">This account does not currently have access to the Admin workspace.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Admin Home appears automatically when the account has at least one workspace module permission.</p>
             <button data-logout-warning class="mt-4 text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Sign out</button>
           </div>
 
-          <div data-admin-links class="hidden grid gap-4 sm:grid-cols-2">
-            <a data-health-warning href="/admin/health/" class="hidden rounded-[1.3rem] border border-red-300 bg-red-50 p-5 text-red-950 sm:col-span-2">
+          <div data-admin-links class="hidden grid gap-8">
+            <a data-health-warning href="/admin/health/" class="hidden rounded-[1.3rem] border border-red-300 bg-red-50 p-5 text-red-950">
               <span class="text-[.58rem] font-black uppercase tracking-[.1em] text-red-700">System health warning</span>
               <strong data-health-warning-title class="mt-2 block text-lg">A protected Koa’s service needs attention.</strong>
               <span data-health-warning-detail class="mt-1 block text-sm text-red-900/70">Open System Health for details.</span>
             </a>
-            <a href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)] sm:col-span-2"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Create users, assign roles and permissions, deactivate or remove accounts, reset or set passwords, and review security activity.</span></a>
-            <a href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)] sm:col-span-2"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
-            <a href="/admin/crm/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/70">Unified client workspace for contacts, projects, tasks, appointments, workflows, templates, client links, payments and activity history.</span></a>
-            <a href="/admin/quotes/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/70">Manage inquiries, proposals, QuickBooks estimates and invoices, contracts, bookings and conversion analytics.</span></a>
-            <a href="/admin/email/" class="rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-forest)] sm:col-span-2"><span class="display text-3xl">Email</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Control email recipients and routing, reusable recipient groups, sender identities, test routes, and review delivery activity.</span></a>
-            <a href="/admin/profitability/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)] sm:col-span-2"><span class="display text-3xl">Wedding Profitability</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Enter package and add-on costs, target margins, recommended sell prices, and actual event economics in one management dashboard.</span></a>
-            <a href="/admin/quotes/#mobile-bar" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/65">Open the dedicated Mobile Bar pipeline, calculator details, follow-ups, filters and package reporting.</span></a>
-            <a href="/admin/events/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/65">Run booked events: vendors, insurance, floor plans, questionnaires, timelines, checklists and event-day tasks.</span></a>
-            <a href="/admin/calendar/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/70">See every event, deadline, vendor arrival, staffing assignment and scheduling conflict across all bookings.</span></a>
-            <a href="/admin/quickbooks/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">QuickBooks</span><span class="mt-2 block text-sm text-white/65">Connect QuickBooks Online and map the accounting item used for Koa’s estimates and invoices.</span></a>
-            <a href="/admin/security/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/65">Review blocked attempts, suspicious inquiry flags, rate limits, and legitimate inquiry volume.</span></a>
-            <a href="/admin/email-preview/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Email Preview</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Preview automated and staff-sent emails in desktop/mobile layouts and switch between Koa’s Events and Koa’s Mobile Bar branding.</span></a>
-            <a href="/admin/seo/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Local SEO</span><span class="mt-2 block text-sm text-white/65">Track Google Business Profile performance, Search Console rankings, citations and GBP publishing history.</span></a>
-            <a href="/admin/blog/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and delete journal entries.</span></a>
-            <a href="/admin/vendors/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Vendor CRM</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Manage marketplace profiles, Preferred Partners, insurance, verified reviews, internal performance and gallery attribution.</span></a>
-            <a href="/admin/insurance/" class="rounded-[1.3rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">See missing, pending, rejected, expiring and expired vendor certificates and every upcoming event affected.</span></a>
-            <a href="/admin/gallery/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Upload, remove and hide gallery photography.</span></a>
+
+            <section data-admin-section class="grid gap-3">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Sales</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Client relationships, inquiries, proposals, email, and pricing.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-capability="crm.view" href="/admin/crm/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white"><span class="display text-3xl">Business CRM</span><span class="mt-2 block text-sm text-white/70">Unified client workspace for contacts, projects, tasks, appointments, workflows, templates, client links, payments and activity history.</span></a>
+                <a data-admin-module data-capability="sales.view" href="/admin/quotes/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Sales CRM</span><span class="mt-2 block text-sm text-white/70">Manage inquiries, proposals, QuickBooks estimates and invoices, contracts, bookings and conversion analytics.</span></a>
+                <a data-admin-module data-capability="email.view" href="/admin/email/" class="rounded-[1.3rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-6 text-[var(--koa-forest)]"><span class="display text-3xl">Email</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Control email recipients and routing, reusable recipient groups, sender identities, test routes, and review delivery activity.</span></a>
+                <a data-admin-module data-capability="sales.profit_settings" href="/admin/profitability/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Wedding Profitability</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Enter package and add-on costs, target margins, recommended sell prices, and actual event economics in one management dashboard.</span></a>
+                <a data-admin-module data-capability="sales.view" href="/admin/quotes/#mobile-bar" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Mobile Bar CRM</span><span class="mt-2 block text-sm text-white/65">Open the dedicated Mobile Bar pipeline, calculator details, follow-ups, filters and package reporting.</span></a>
+              </div>
+            </section>
+
+            <section data-admin-section class="grid gap-3">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Operations</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Events, schedules, vendors, and compliance.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-capability="events.view" href="/admin/events/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Event Ops</span><span class="mt-2 block text-sm text-white/65">Run booked events: vendors, insurance, floor plans, questionnaires, timelines, checklists and event-day tasks.</span></a>
+                <a data-admin-module data-capability="calendar.view" href="/admin/calendar/" class="rounded-[1.3rem] bg-[var(--koa-clay)] p-6 text-white"><span class="display text-3xl">Master Calendar</span><span class="mt-2 block text-sm text-white/70">See every event, deadline, vendor arrival, staffing assignment and scheduling conflict across all bookings.</span></a>
+                <a data-admin-module data-capability="vendors.view" href="/admin/vendors/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">Vendor CRM</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Manage marketplace profiles, Preferred Partners, insurance, verified reviews, internal performance and gallery attribution.</span></a>
+                <a data-admin-module data-capability="insurance.view" href="/admin/insurance/" class="rounded-[1.3rem] border border-red-200 bg-red-50 p-6 text-red-950"><span class="display text-3xl">Insurance Compliance</span><span class="mt-2 block text-sm text-red-900/65">See missing, pending, rejected, expiring and expired vendor certificates and every upcoming event affected.</span></a>
+              </div>
+            </section>
+
+            <section data-admin-section class="grid gap-3">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Accounting</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Accounting connections and financial workflows.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-capability="quickbooks.view" href="/admin/quickbooks/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">QuickBooks</span><span class="mt-2 block text-sm text-white/65">Connect QuickBooks Online and map the accounting item used for Koa’s estimates and invoices.</span></a>
+              </div>
+            </section>
+
+            <section data-admin-section class="grid gap-3">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Content</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Website content, search visibility, galleries, and email presentation.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-capability="email.view" href="/admin/email-preview/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Email Preview</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Preview automated and staff-sent emails in desktop/mobile layouts and switch between Koa’s Events and Koa’s Mobile Bar branding.</span></a>
+                <a data-admin-module data-capability="seo.view" href="/admin/seo/" class="rounded-[1.3rem] bg-[var(--koa-forest)] p-6 text-white"><span class="display text-3xl">Local SEO</span><span class="mt-2 block text-sm text-white/65">Track Google Business Profile performance, Search Console rankings, citations and GBP publishing history.</span></a>
+                <a data-admin-module data-capability="blog.view" href="/admin/blog/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Blog</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Create, edit, publish and delete journal entries.</span></a>
+                <a data-admin-module data-capability="gallery.view" href="/admin/gallery/" class="rounded-[1.3rem] bg-white p-6 text-[var(--koa-forest)] shadow-sm"><span class="display text-3xl">Gallery</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/55">Upload, remove and hide gallery photography.</span></a>
+              </div>
+            </section>
+
+            <section data-admin-section class="grid gap-3">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Administration</p>
+                <p class="mt-1 text-sm text-[var(--koa-ink)]/50">Users, reliability, and workspace security.</p>
+              </div>
+              <div class="grid gap-4 sm:grid-cols-2">
+                <a data-admin-module data-capability="users.manage" href="/admin/staff/" class="rounded-[1.3rem] bg-[var(--koa-amber-light)] p-6 text-[var(--koa-ink)]"><span class="display text-3xl">User Management</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Create users, assign roles and permissions, deactivate or remove accounts, reset or set passwords, and review security activity.</span></a>
+                <a data-admin-module data-capability="health.view" href="/admin/health/" class="rounded-[1.3rem] border border-emerald-200 bg-emerald-50 p-6 text-[var(--koa-forest)]"><span class="display text-3xl">System Health</span><span class="mt-2 block text-sm text-[var(--koa-ink)]/60">Check protected page startup, CRM/admin APIs, response status, and latency from one read-only dashboard.</span></a>
+                <a data-admin-module data-capability="security.view" href="/admin/security/" class="rounded-[1.3rem] bg-[var(--koa-ink)] p-6 text-white sm:col-span-2"><span class="display text-3xl">Security + Spam</span><span class="mt-2 block text-sm text-white/65">Review blocked attempts, suspicious inquiry flags, rate limits, and legitimate inquiry volume.</span></a>
+              </div>
+            </section>
+
             <button data-logout class="text-left text-xs font-black uppercase tracking-[.12em] text-[var(--koa-clay)]">Sign out</button>
           </div>
         </div>
@@ -100,6 +146,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
   </main>
   <script>
     import { acceptInvite, getUser, handleAuthCallback, login, logout, recoverPassword, requestPasswordRecovery, updateUser } from '@netlify/identity';
+    import { getAdminSession } from '../../lib/admin-session';
 
     const loginForm = document.querySelector('[data-login-form]');
     const inviteForm = document.querySelector('[data-invite-form]');
@@ -197,9 +244,9 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       return approvedAdminEmails.has(email) || roles.map((role) => String(role || '').toLowerCase()).includes('admin');
     }
 
-    async function updateHealthWarning(isAdmin) {
+    async function updateHealthWarning(canViewHealth) {
       const warning=document.querySelector('[data-health-warning]');
-      if(!warning||!isAdmin){warning?.classList.add('hidden');return;}
+      if(!warning||!canViewHealth){warning?.classList.add('hidden');return;}
       try{
         const response=await fetch('/api/admin/health',{cache:'no-store'});
         if(!response.ok)return;
@@ -214,8 +261,44 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
       }catch{}
     }
 
+    function filterAdminModules(capabilities, showAll=false) {
+      const allowedCapabilities=capabilities instanceof Set?capabilities:new Set(capabilities||[]);
+      links?.querySelectorAll('[data-admin-module]').forEach((node)=>{
+        if(!(node instanceof HTMLElement))return;
+        const required=String(node.dataset.capability||'');
+        const allowed=showAll||!required||allowedCapabilities.has(required);
+        node.classList.toggle('hidden',!allowed);
+      });
+      links?.querySelectorAll('[data-admin-section]').forEach((section)=>{
+        if(!(section instanceof HTMLElement))return;
+        const hasVisibleModule=[...section.querySelectorAll('[data-admin-module]')]
+          .some((node)=>node instanceof HTMLElement&&!node.classList.contains('hidden'));
+        section.classList.toggle('hidden',!hasVisibleModule);
+      });
+    }
+
+    async function hydrateDashboardAccess(user) {
+      const session=await getAdminSession();
+      const fallbackAdmin=Boolean(user)&&hasAdminAccess(user);
+      const capabilities=new Set(session?.capabilities||session?.permissions||[]);
+      const canViewDashboard=Boolean(
+        session&&!session.accessBlocked&&capabilities.has('admin.dashboard.view')
+      )||(!session&&fallbackAdmin);
+
+      if(canViewDashboard){
+        filterAdminModules(capabilities,!session&&fallbackAdmin);
+        links?.classList.remove('hidden');
+        roleWarning?.classList.add('hidden');
+      }else{
+        links?.classList.add('hidden');
+        roleWarning?.classList.toggle('hidden',!user);
+      }
+
+      const canViewHealth=canViewDashboard&&((!session&&fallbackAdmin)||capabilities.has('health.view'));
+      updateHealthWarning(canViewHealth);
+    }
+
     function showAuthState(user) {
-      const isAdmin = Boolean(user) && hasAdminAccess(user);
       loginForm?.classList.toggle('hidden', Boolean(user) || Boolean(inviteToken) || recoveryMode);
       inviteForm?.classList.toggle('hidden', !inviteToken);
       recoveryForm?.classList.toggle('hidden', !recoveryMode);
@@ -223,9 +306,16 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
         bootstrapForm?.classList.add('hidden');
         recoveryRequestForm?.classList.add('hidden');
       }
-      links?.classList.toggle('hidden', !isAdmin);
-      roleWarning?.classList.toggle('hidden', !user || isAdmin);
-      updateHealthWarning(isAdmin);
+
+      links?.classList.add('hidden');
+      roleWarning?.classList.add('hidden');
+
+      if(!user){
+        updateHealthWarning(false);
+        return;
+      }
+
+      void hydrateDashboardAccess(user);
     }
 
     async function initialize() {
