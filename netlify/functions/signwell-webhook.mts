@@ -13,6 +13,12 @@ import { markLifecycleEvent } from './_shared/lifecycle';
 
 function sales(context:Context){return context.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
+function offsetDate(date:string,days:number){
+  const parsed=new Date(date);
+  if(Number.isNaN(parsed.getTime()))return '';
+  parsed.setUTCDate(parsed.getUTCDate()+days);
+  return parsed.toISOString().slice(0,10);
+}
 function id(){return 'EVT-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function appendEvent(context:Context,event:any){const s=sales(context);const current:any[]=(await s.get('analytics/events/index',{type:'json'}))||[];await s.setJSON('analytics/events/index',[{id:id(),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));}
 function docId(payload:any){return clean(payload?.data?.object?.id||payload?.data?.document?.id||payload?.document?.id||payload?.data?.id||payload?.document_id||payload?.id,120);}
@@ -99,6 +105,17 @@ export default async(req:Request,context:Context)=>{
       name:clean(koa.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||'Koa’s Events',180),
       signedAt:clean(koa.signed_at||koa.completed_at||now,80),
     };
+
+    const depositDueDate=offsetDate(now,14);
+    const bookingPayments=Array.isArray(record?.booking?.payments)?record.booking.payments:[];
+    if(bookingPayments[0]&&!clean(bookingPayments[0].dueDate,40)){
+      bookingPayments[0].dueDate=depositDueDate;
+    }
+    const proposalSchedule=Array.isArray(record?.proposal?.paymentSchedule)?record.proposal.paymentSchedule:[];
+    if(proposalSchedule[0]&&!clean(proposalSchedule[0].dueDate,40)){
+      proposalSchedule[0].dueDate=depositDueDate;
+    }
+
     record.booking.status=record?.accounting?.quickbooks?.depositPaid?'booked':'deposit_pending';
     if(record?.accounting?.quickbooks?.depositPaid){
       record.stage='booked';
