@@ -12,7 +12,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </div>
       </div>
 
-      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">Sign in with an authorized staff account at <a class="underline" href="/staff/">Koa’s Staff Workspace</a>.</div>
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8"><strong class="text-[var(--koa-forest)]">Event Ops access required.</strong><p class="mt-2 text-sm text-[var(--koa-ink)]/58">You are signed in, but your role does not include Event Ops access.</p></div>
 
       <div data-app class="hidden grid gap-6 xl:grid-cols-[340px_1fr]">
         <aside class="rounded-[1.5rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)] xl:sticky xl:top-5 xl:self-start">
@@ -222,8 +222,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let managerAccess=false;
 
     function userRoles(user){const sources=[user?.roles,user?.appMetadata?.roles,user?.app_metadata?.roles];return (sources.find(Array.isArray)||[]).map((role)=>String(role||'').toLowerCase());}
-    function hasAdminAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);return approvedAdminEmails.has(email)||roles.some((role)=>['admin','staff','sales','manager'].includes(role));}
-    function hasManagerAccess(user){const email=String(user?.email||'').trim().toLowerCase();const roles=userRoles(user);const meta=user?.appMetadata||user?.app_metadata||{};const permissions=Array.isArray(meta.permissions)?meta.permissions.map((p)=>String(p||'').toLowerCase()):[];return approvedAdminEmails.has(email)||roles.includes('admin')||roles.includes('manager')||permissions.includes('event_ops.manage');}
+    function hasAdminAccess(user){return Boolean(!user?.accessBlocked&&(user?.isAdmin||user?.capabilities?.includes('events.view')||user?.permissions?.includes('events.view')));}
+    function hasManagerAccess(user){return Boolean(!user?.accessBlocked&&(user?.isAdmin||user?.capabilities?.includes('event_ops.manage')||user?.permissions?.includes('event_ops.manage')));}
     function applyRoleUi(){
       if(managerAccess)return;
       overviewForm?.querySelectorAll('input,select,textarea,button').forEach((el)=>el.disabled=true);
