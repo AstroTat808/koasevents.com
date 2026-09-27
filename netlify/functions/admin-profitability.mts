@@ -5,6 +5,11 @@ import {
   ADDON_CATALOG_MAPPING,
   recommendedAddOnPrice,
 } from './_shared/wedding-pricing';
+import {
+  getQuickBooksCatalog,
+  saveQuickBooksCatalog,
+  type QuickBooksCatalogItem,
+} from './_shared/quickbooks';
 
 const WEDDING_PACKAGE_IDS = ['gardenia','orchid','hibiscus','signature-wedding'] as const;
 const COST_KEYS = [
@@ -155,6 +160,97 @@ function normalizeCosts(input: any): CostMap {
 
 function sumCosts(costs: CostMap) {
   return COST_KEYS.reduce((sum, key) => sum + money(costs?.[key]), 0);
+}
+
+function recommendedPackagePrice(directCost: unknown, targetMargin: unknown, increment = 500) {
+  const cost = finite(directCost);
+  const target = margin(targetMargin,0.6);
+  const step = Math.max(1,Math.round(finite(increment,1,10_000)));
+  if (cost<=0 || target>=1) return 0;
+  return Math.ceil((cost/(1-target))/step)*step;
+}
+
+type CatalogEconomicsPatch = {
+  id:string;
+  name:string;
+  description?:string;
+  group:QuickBooksCatalogItem['group'];
+  category:QuickBooksCatalogItem['category'];
+  unitLabel:string;
+  unitPrice?:number;
+  fallbackUnitPrice?:number;
+  internalCost:number;
+  targetMargin:number;
+  active?:boolean;
+};
+
+async function upsertCatalogEconomics(context:Context, patches:CatalogEconomicsPatch[]) {
+  const catalog = await getQuickBooksCatalog(context);
+  const byId = new Map(catalog.map(item=>[item.id,item]));
+  const now = new Date().toISOString();
+  for (const patch of patches) {
+    const id=clean(patch.id,80);
+    if(!id)continue;
+    const previous=byId.get(id);
+    const targetPercent=Math.round(margin(patch.targetMargin,0.6)*10000)/100;
+    const item:QuickBooksCatalogItem = {
+      id,
+      name:clean(patch.name || previous?.name || id,100),
+      description:clean(previous?.description || patch.description || '',1000),
+      category:patch.category,
+      group:patch.group,
+      unitLabel:clean(patch.unitLabel || previous?.unitLabel || 'each',40),
+      unitPrice:patch.unitPrice==null
+        ? money(previous?.unitPrice ?? patch.fallbackUnitPrice ?? 0)
+        : money(patch.unitPrice),
+      internalCost:money(patch.internalCost),
+      targetMargin:targetPercent,
+      active:patch.active==null ? previous?.active!==false : patch.active,
+      getExempt:previous?.getExempt===true,
+      source:'catalog-manager',
+      sourceRef:'wedding-profitability',
+      quickBooksItemId:clean(previous?.quickBooksItemId,80),
+      quickBooksItemName:clean(previous?.quickBooksItemName,100),
+      quickBooksType:previous?.quickBooksType || (patch.group==='rentals'?'NonInventory':'Service'),
+      incomeAccountId:clean(previous?.incomeAccountId,80),
+      incomeAccountName:clean(previous?.incomeAccountName,160),
+      updatedAt:now,
+    };
+    byId.set(id,item);
+  }
+  return saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+}
+
+function packageCatalogPatch(row:PackageModel, publishPrice = false):CatalogEconomicsPatch {
+  return {
+    id:row.id,
+    name:row.name,
+    group:'packages',
+    category:'service',
+    unitLabel:'package',
+    unitPrice:publishPrice ? row.price : undefined,
+    fallbackUnitPrice:row.price,
+    internalCost:sumCosts(row.costs),
+    targetMargin:row.targetMargin,
+    active:true,
+  };
+}
+
+function addOnCatalogPatch(row:AddOnModel, publishPrice = false, active?:boolean):CatalogEconomicsPatch {
+  const rental=/rental/i.test(row.category);
+  const mobile=/mobile\s*bar/i.test(row.category);
+  return {
+    id:row.catalogItemId || ADDON_CATALOG_MAPPING[row.id] || row.id,
+    name:row.name,
+    group:mobile?'mobile-bar':rental?'rentals':'add-ons',
+    category:rental?'rental':'service',
+    unitLabel:row.unit || 'each',
+    unitPrice:publishPrice ? row.sellPrice : undefined,
+    fallbackUnitPrice:row.sellPrice,
+    internalCost:row.directCost,
+    targetMargin:row.targetMargin,
+    active,
+  };
 }
 
 function defaultPackages(): PackageModel[] {
@@ -459,13 +555,15 @@ function rebalanceSchedule(rows:any[] | undefined,total:number,depositAmount:num
   return [first,...balanced];
 }
 
-function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:number) {
+function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:number,packageId='') {
   if (record.kind!=='proposal' || !record.proposal || record.proposal.status!=='draft' || record.stage==='booked') return false;
   const lines = Array.isArray(record.proposal.lineItems) ? record.proposal.lineItems : [];
   let changed = false;
   const nextLines = lines.map((line:any)=>{
     const lineId = clean(line?.catalogItemId || line?.id,80);
-    if (lineId!==catalogItemId) return line;
+    const normalizedRecordPackage=normalizeWeddingPackage(record.packageId || record.quote?.state?.startingPoint || '');
+    const packageCollectionMatch=Boolean(packageId && line?.id==='collection' && normalizedRecordPackage===normalizeWeddingPackage(packageId));
+    if (lineId!==catalogItemId && !packageCollectionMatch) return line;
     const quantity = Math.max(1,Math.round(finite(line?.quantity,1,500)));
     changed = true;
     return { ...line, unitPrice:price, amount:money(quantity*price), custom:false };
@@ -509,15 +607,56 @@ async function updateDraftProposalPricing(context:Context,catalogItemId:string,p
   return updated;
 }
 
-async function responseState(context:Context,state:ProfitabilityState) {
+async function updateDraftPackagePricing(context:Context,packageId:string,price:number) {
+  const store = storeFor(context);
   const records = await readSalesRecords(context);
+  let updated = 0;
+  for (const record of records) {
+    if (!recalcDraftProposal(record,packageId,price,packageId)) continue;
+    await store.setJSON('records/'+record.id,record);
+    updated += 1;
+  }
+  if (updated) await store.setJSON('records/index',records.slice(0,1500));
+  return updated;
+}
+
+async function responseState(context:Context,state:ProfitabilityState) {
+  const [records,catalog] = await Promise.all([readSalesRecords(context),getQuickBooksCatalog(context)]);
+  const catalogById=new Map(catalog.map(item=>[item.id,item]));
   const events = mergeCrmEvents(state.events,records);
+  const packages=state.packages.map(row=>{
+    const item=catalogById.get(row.id);
+    return {
+      ...row,
+      catalogPrice:Number(item?.unitPrice||0),
+      catalogInternalCost:Number(item?.internalCost||0),
+      catalogTargetMargin:Number(item?.targetMargin||0)/100,
+      catalogActive:item?.active!==false,
+    };
+  });
+  const addOns=state.addOns.map(row=>{
+    const item=catalogById.get(row.catalogItemId);
+    return {
+      ...row,
+      catalogPrice:Number(item?.unitPrice||0),
+      catalogInternalCost:Number(item?.internalCost||0),
+      catalogTargetMargin:Number(item?.targetMargin||0)/100,
+      catalogActive:item?.active!==false,
+    };
+  });
   const performance = packagePerformance(records,events,state.packages);
   return {
     ...state,
+    packages,
+    addOns,
     events,
     crmSync:{
       bookedWeddingCount:records.filter(isBookedWedding).length,
+      syncedAt:new Date().toISOString(),
+    },
+    catalogSync:{
+      packageCount:packages.filter(row=>row.catalogPrice>0).length,
+      addOnCount:addOns.filter(row=>row.catalogPrice>0).length,
       syncedAt:new Date().toISOString(),
     },
     performance,
@@ -542,12 +681,31 @@ export default async (req:Request,context:Context) => {
   if (action==='save-packages') {
     const incoming = Array.isArray(body?.packages) ? body.packages : [];
     state.packages = defaultPackages().map(fallback=>normalizePackage(incoming.find((row:any)=>clean(row?.id,80)===fallback.id),fallback));
+    await upsertCatalogEconomics(context,state.packages.map(row=>packageCatalogPatch(row,false)));
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
 
+  if (action==='approve-package-price') {
+    const id=normalizeWeddingPackage(body?.id);
+    const row=state.packages.find(pkg=>pkg.id===id);
+    if(!row) return Response.json({ error:'Wedding package not found.' },{ status:404 });
+    const recommended=recommendedPackagePrice(sumCosts(row.costs),row.targetMargin,500);
+    if(recommended<=0) return Response.json({ error:'Enter package direct costs before approving a recommended price.' },{ status:400 });
+    row.price=money(recommended);
+    await upsertCatalogEconomics(context,[packageCatalogPatch(row,true)]);
+    const updatedDraftProposals=await updateDraftPackagePricing(context,row.id,row.price);
+    state=await writeState(context,state,actor);
+    return Response.json({
+      ok:true,
+      approvedPackage:{ id:row.id,price:row.price,updatedDraftProposals },
+      ...await responseState(context,state),
+    });
+  }
+
   if (action==='save-addons') {
     const incoming = Array.isArray(body?.addOns) ? body.addOns : [];
+    const catalogActiveById=new Map<string,boolean|undefined>();
     state.addOns = defaultAddOns().map(fallback=>{
       const previous = state.addOns.find(row=>row.id===fallback.id);
       const next = normalizeAddOn(incoming.find((row:any)=>clean(row?.id,80)===fallback.id),fallback);
@@ -555,13 +713,16 @@ export default async (req:Request,context:Context) => {
         next.approved = false;
         next.approvedAt = '';
         next.approvedBy = '';
+        catalogActiveById.set(next.id,false);
       } else if (previous?.approved) {
         next.approved = true;
         next.approvedAt = previous.approvedAt;
         next.approvedBy = previous.approvedBy;
+        catalogActiveById.set(next.id,true);
       }
       return next;
     });
+    await upsertCatalogEconomics(context,state.addOns.map(row=>addOnCatalogPatch(row,false,catalogActiveById.get(row.id))));
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
@@ -576,6 +737,7 @@ export default async (req:Request,context:Context) => {
     addon.approved = true;
     addon.approvedAt = new Date().toISOString();
     addon.approvedBy = actor;
+    await upsertCatalogEconomics(context,[addOnCatalogPatch(addon,true,true)]);
     const updatedDraftProposals = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice);
     state = await writeState(context,state,actor);
     return Response.json({
@@ -592,6 +754,7 @@ export default async (req:Request,context:Context) => {
     addon.approved = false;
     addon.approvedAt = '';
     addon.approvedBy = '';
+    await upsertCatalogEconomics(context,[addOnCatalogPatch(addon,false,false)]);
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
