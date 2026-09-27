@@ -314,6 +314,22 @@ function importId(){
   return 'CAT-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('').toUpperCase();
 }
 
+async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
+  const stable=(Array.isArray(catalog)?catalog:[])
+    .map(item=>({
+      id:item.id,name:item.name,description:item.description,category:item.category,group:item.group,
+      unitLabel:item.unitLabel,unitPrice:item.unitPrice,internalCost:item.internalCost,targetMargin:item.targetMargin,
+      active:item.active,getExempt:item.getExempt,source:item.source,sourceRef:item.sourceRef,
+      quickBooksItemId:item.quickBooksItemId,quickBooksItemName:item.quickBooksItemName,
+      quickBooksType:item.quickBooksType,incomeAccountId:item.incomeAccountId,incomeAccountName:item.incomeAccountName,
+      updatedAt:item.updatedAt,
+    }))
+    .sort((a,b)=>a.id.localeCompare(b.id));
+  const bytes=new TextEncoder().encode(JSON.stringify(stable));
+  const digest=await crypto.subtle.digest('SHA-256',bytes);
+  return Array.from(new Uint8Array(digest),value=>value.toString(16).padStart(2,'0')).join('');
+}
+
 export default async (req:Request, context:Context)=>{
   const auth=await requireCapability('sales.view',req);
   if(auth.response)return auth.response;
@@ -435,7 +451,8 @@ export default async (req:Request, context:Context)=>{
     const entry={
       id,filename,createdAt:new Date().toISOString(),createdBy:clean(auth.user?.email,240),
       imported:usable.length,newCount:usable.filter((row)=>row.status==='new').length,
-      updatedCount:usable.filter((row)=>row.status==='update').length,duplicateMode,rolledBackAt:'',
+      updatedCount:usable.filter((row)=>row.status==='update').length,duplicateMode,
+      afterFingerprint:await catalogFingerprint(next),rolledBackAt:'',
     };
     const imports=await writeImportHistory(context,entry);
     return Response.json({ok:true,catalog:next,import:entry,imports,summary});
@@ -451,6 +468,10 @@ export default async (req:Request, context:Context)=>{
     }
     const snapshot=await store.get('catalog/imports/snapshots/'+id,{type:'json'}) as any;
     if(!snapshot||!Array.isArray(snapshot.catalog))return Response.json({error:'Import rollback snapshot was not found.'},{status:404});
+    const currentCatalog=await getQuickBooksCatalog(context);
+    if(latestActive.afterFingerprint && await catalogFingerprint(currentCatalog)!==latestActive.afterFingerprint){
+      return Response.json({error:'The catalog changed after this import. Automatic rollback is blocked so later manual, profitability, or QuickBooks changes are not lost.'},{status:409});
+    }
     const catalog=await saveQuickBooksCatalog(context,snapshot.catalog);
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
