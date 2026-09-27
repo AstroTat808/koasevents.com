@@ -543,6 +543,15 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  crm_session_fixture={
+   "email":"qa-manager@koasevents.test","role":"manager","roles":["manager"],"isAdmin":False,
+   "permissions":["crm.view","crm.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"],
+   "capabilities":["crm.view","crm.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"],
+   "accessBlocked":False,
+   "app_metadata":{"roles":["manager"],"permissions":["crm.view","crm.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"]},
+   "appMetadata":{"roles":["manager"],"permissions":["crm.view","crm.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"]}
+  }
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(crm_session_fixture)))
   crm_fixture={
    "access":{"role":"manager","capabilities":["blog.manage","event_ops.manage","crm.destructive","crm.workflows","crm.templates","crm.cleanup_policy","sales.profit_settings"],"email":"qa-manager@koasevents.test"},
    "projects":[],"tasks":[],"appointments":[],"notes":[],"workflows":[],"enrollments":[],"templates":[],"activity":[],"messages":[],
@@ -601,7 +610,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
-  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
   page.route("**/api/admin/quickbooks",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(qbo_fixture)))
   detail=""
   try:
@@ -654,9 +663,16 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
-  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
   page.route("**/api/admin/quotes**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(sales_fixture)))
-  page.route("**/api/admin/quickbooks",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"configuration":{"configured":False},"connection":{"connected":False},"catalog":[]})))
+  page.route("**/api/admin/quickbooks**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"configuration":{"configured":False},"connection":{"connected":False},"catalog":[]})))
+  sales_catalog_fixture={"catalog":[{
+   "id":"qa-rental","name":"QA Rental","description":"QA catalog regression item","group":"rentals","category":"rental",
+   "unitLabel":"each","unitPrice":125,"internalCost":40,"targetMargin":60,"active":True,"getExempt":False,
+   "source":"catalog-manager","sourceRef":"qa","quickBooksItemId":"","quickBooksItemName":"","quickBooksType":"NonInventory",
+   "incomeAccountId":"","incomeAccountName":"","updatedAt":"2026-09-27T00:00:00Z"
+  }],"imports":[]}
+  page.route("**/api/admin/catalog**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(sales_catalog_fixture)))
   detail=""
   try:
    response=page.goto(BASE+"/admin/quotes/",wait_until="domcontentloaded",timeout=45000)
@@ -678,8 +694,18 @@ def admin_mode(browser_name):
     detail="Proposal rule explanation did not display the GET basis. Summary: "+summary[:500]
    elif "2 rules matched" not in overlap or "highest priority" not in overlap:
     detail="Proposal overlap explanation was incomplete. Detail: "+overlap[:500]
-   elif page_errors:
-    detail="Sales CRM proposal explanation JavaScript errors: "+" | ".join(page_errors[:5])
+   else:
+    picker=page.locator("[data-catalog-picker]")
+    if picker.count()!=1:
+     detail="Sales CRM central catalog picker did not render."
+    else:
+     picker.select_option("qa-rental")
+     page.wait_for_function("() => document.body.innerText.includes('QA catalog regression item')",timeout=5000)
+     editor_text=page.locator("[data-proposal-dialog]").inner_text()
+     if "QA catalog regression item" not in editor_text or "$125" not in editor_text:
+      detail="Sales CRM Add from catalog did not add the central catalog item at its current price."
+   if not detail and page_errors:
+    detail="Sales CRM proposal explanation/catalog picker JavaScript errors: "+" | ".join(page_errors[:5])
   except Exception as exc:
    detail="Sales CRM payment-rule explanation regression: "+str(exc)
   results.append({"name":"sales-crm-payment-rule-explanation","path":"/admin/quotes/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":""})
@@ -711,7 +737,7 @@ def admin_mode(browser_name):
   page_errors=[];console_errors=[]
   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
-  page.route("**/api/admin/session",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_session_fixture)))
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_session_fixture)))
   page.route("**/api/gallery",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(gallery_fixture)) if route.request.method=="GET" else route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True})))
   page.route("**/api/admin/vendors",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"vendors":[]})))
   detail=""
