@@ -451,6 +451,7 @@ export default async (req:Request, context:Context)=>{
         updatedAt:new Date().toISOString(),
       };
       byId.set(targetId.toLowerCase(),nextItem);
+      if(existing)byName.delete(existing.name.toLowerCase());
       byName.set(nextItem.name.toLowerCase(),nextItem);
     }
     const next=await saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
