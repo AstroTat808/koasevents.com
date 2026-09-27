@@ -96,7 +96,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let latest:any={routes:[],senders:{},groups:[],activity:{rows:[]}};
     let canManage=false;
 
-    function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[char]||char));}
+    function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));}
     function parseEmails(value){return String(value||'').split(/[\n,;]+/).map((x)=>x.trim().toLowerCase()).filter(Boolean);}
     function makeId(value){return String(value||'group').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||('group-'+Date.now());}
     function showStatus(message,tone='ok'){
@@ -278,7 +278,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     saveButton?.addEventListener('click',async()=>{
       if(!canManage)return;
       const groups=collectGroups();
-      const routes={};
+      const routes:Record<string,{to:string[];cc:string[];bcc:string[];toGroups:string[];ccGroups:string[];bccGroups:string[]}>={};
       for(const route of latest.routes||[]){
         if(route.mode!=='configurable')continue;
         routes[route.id]={to:[],cc:[],bcc:[],toGroups:[],ccGroups:[],bccGroups:[]};
