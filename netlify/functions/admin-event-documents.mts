@@ -48,6 +48,20 @@ async function bookedRecord(context: Context, recordId: string) {
 }
 
 export default async (req: Request, context: Context) => {
+  const syntheticRecordId = clean(context.params.recordId, 100);
+  if (req.method === 'HEAD' && syntheticRecordId === '__health__') {
+    try {
+      await Promise.all([
+        salesStoreFor(context).get('records/index', { type: 'json' }),
+        opsStoreFor(context).get('events/__health__', { type: 'json' }),
+        filesStoreFor(context).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
+      ]);
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+    } catch {
+      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+    }
+  }
+
   const auth = await requireOperations();
   if (auth.response) return auth.response;
   if (req.method !== 'GET' && !hasCapability(auth.user, 'event_ops.manage')) {
