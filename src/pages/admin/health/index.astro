@@ -293,7 +293,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Validates credentials and access scopes independently from service uptime. A credential warning does not automatically mean the underlying service is down.</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-              <span data-credential-health-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking</span>
+              <span data-credential-health-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking credentials</span>
+              <span data-credential-reliability-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Reliability building</span>
               <span data-credential-health-checked class="text-xs text-[var(--koa-ink)]/45">—</span>
             </div>
           </div>
@@ -869,6 +870,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const weeklyUnresolvedList=document.querySelector('[data-weekly-unresolved-list]');
     const weeklySummaryCoverage=document.querySelector('[data-weekly-summary-coverage]');
     const credentialHealthOverall=document.querySelector('[data-credential-health-overall]');
+    const credentialReliabilityOverall=document.querySelector('[data-credential-reliability-overall]');
     const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
     const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
     const credentialHealthHistory=document.querySelector('[data-credential-health-history]');
@@ -1777,15 +1779,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       setHealthSectionStatus(document.querySelector('#health-pages-apis'),allStatus.status,allStatus.count,pagesSummary);
 
-      const credentialState=String(data?.credentialHealth?.overall||'green');
+      const credentialState=String(data?.credentialHealth?.operationalOverall||data?.credentialHealth?.overall||'green');
+      const credentialReliabilityState=String(data?.credentialHealth?.reliability?.overall||'insufficient');
       const credentialRows=Array.isArray(data?.credentialHealth?.rows)?data.credentialHealth.rows:[];
       const credentialProblems=credentialRows.filter((row)=>!row?.ok);
+      const reliabilityLabel=
+        credentialReliabilityState==='red'?'historical reliability critical':
+        credentialReliabilityState==='yellow'?'historical reliability below target':
+        credentialReliabilityState==='green'?'historical reliability healthy':'reliability history still building';
       const credentialSummary=credentialProblems.length
-        ? credentialProblems.length+' credential '+(credentialProblems.length===1?'warning':'warnings')
-        : credentialRows.length?'All credentials healthy':'Credential checks not available yet';
+        ? credentialProblems.length+' current credential '+(credentialProblems.length===1?'warning':'warnings')+' · '+reliabilityLabel
+        : credentialRows.length?'All current credentials valid · '+reliabilityLabel:'Credential checks not available yet';
+      const combinedCredentialSectionState=
+        credentialState==='red'?'red':
+        credentialState==='yellow'?'yellow':
+        credentialReliabilityState==='red'?'red':
+        credentialReliabilityState==='yellow'?'yellow':'green';
       setHealthSectionStatus(
         document.querySelector('#credential-health'),
-        credentialState==='red'?'red':credentialState==='yellow'?'yellow':'green',
+        combinedCredentialSectionState,
         credentialProblems.length,
         credentialSummary
       );
@@ -2918,16 +2930,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderCredentialHealth(summary){
       const health=summary||{};
       latestCredentialHealth=health;
-      const state=String(health.overall||'yellow');
+      const state=String(health.operationalOverall||health.overall||'yellow');
       const overallMap={
-        green:['Credentials healthy','bg-emerald-100 text-emerald-800'],
-        yellow:['Credential attention','bg-amber-100 text-amber-900'],
-        red:['Credential problem','bg-red-100 text-red-800'],
+        green:['All credentials valid','bg-emerald-100 text-emerald-800'],
+        yellow:['Current credential attention','bg-amber-100 text-amber-900'],
+        red:['Current credential problem','bg-red-100 text-red-800'],
       };
       const selected=overallMap[state]||overallMap.yellow;
       if(credentialHealthOverall){
         credentialHealthOverall.textContent=selected[0];
         credentialHealthOverall.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+selected[1];
+      }
+      const reliabilityState=String(health?.reliability?.overall||'insufficient');
+      const reliabilityMap={
+        green:['Reliability healthy','bg-emerald-100 text-emerald-800'],
+        yellow:['Reliability below target','bg-amber-100 text-amber-900'],
+        red:['Reliability critical · historical','bg-red-100 text-red-800'],
+        insufficient:['Reliability building','bg-slate-100 text-slate-700'],
+      };
+      const reliabilitySelected=reliabilityMap[reliabilityState]||reliabilityMap.insufficient;
+      if(credentialReliabilityOverall){
+        credentialReliabilityOverall.textContent=reliabilitySelected[0];
+        credentialReliabilityOverall.className='rounded-full px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] '+reliabilitySelected[1];
       }
       if(credentialHealthChecked)credentialHealthChecked.textContent=health.generatedAt?'Checked '+new Date(health.generatedAt).toLocaleString():'—';
       if(!credentialHealthGrid)return;
