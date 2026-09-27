@@ -417,7 +417,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
 
       <div class="mt-8">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">Editable pricing</p><h3 class="display mt-2 text-3xl">Proposal line items</h3></div><div class="flex flex-wrap gap-2"><select data-catalog-picker class="min-w-[220px] rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-xs font-semibold"><option value="">Add from catalog…</option></select><button type="button" data-add-line class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Custom line +</button></div></div>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p class="eyebrow text-[var(--koa-clay)]">Editable pricing</p><h3 class="display mt-2 text-3xl">Proposal line items</h3></div><div class="flex flex-wrap items-center gap-2"><select data-catalog-picker class="min-w-[260px] rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-xs font-semibold"><option value="">Add from catalog…</option></select><a href="/admin/catalog/" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Manage catalog</a><button type="button" data-add-line class="rounded-full border border-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Custom line +</button></div></div>
         <div data-line-items class="mt-4 grid gap-3"></div>
       </div>
 
@@ -764,6 +764,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let activityRecord = null;
     let bookingRecord = null;
     let qboState = null;
+    let catalogState = { catalog: [] };
     const accountingAlert = document.querySelector('[data-accounting-alert]');
     const accountingAlertCount = document.querySelector('[data-accounting-alert-count]');
     const accountingAlertDetail = document.querySelector('[data-accounting-alert-detail]');
@@ -2975,19 +2976,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const user=await getAdminSession(); if(!hasAdminAccess(user)){unauthorized?.classList.remove('hidden');return;}
       managerAccess=hasManagerAccess(user); applyRoleUi(user);
       ui?.classList.remove('hidden'); if(message)message.textContent='Loading…';
-      const [response,qboResponse]=await Promise.all([
+      const [response,qboResponse,catalogResponse]=await Promise.all([
         fetch('/api/admin/quotes'+(query?'?q='+encodeURIComponent(query):''),{cache:'no-store'}),
-        fetch('/api/admin/quickbooks',{cache:'no-store'})
+        fetch('/api/admin/quickbooks',{cache:'no-store'}),
+        fetch('/api/admin/catalog',{cache:'no-store'})
       ]);
       if(response.status===401)return;
       if(response.status===403){ui?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
       if(!response.ok){if(message)message.textContent='Unable to load CRM data.';return;}
       payload=await response.json();
       qboState=qboResponse.ok?await qboResponse.json():null;
+      catalogState=catalogResponse.ok?await catalogResponse.json():{catalog:[]};
       if(catalogPicker){
         const current=catalogPicker.value;
         catalogPicker.innerHTML='<option value="">Add from catalog…</option>';
-        (qboState?.catalog||[]).filter((item)=>item.active!==false).forEach((item)=>{
+        (catalogState?.catalog||[]).filter((item)=>item.active!==false).forEach((item)=>{
           const option=document.createElement('option');
           option.value=item.id;
           option.textContent=item.name+' · '+money(item.unitPrice)+' / '+(item.unitLabel||'each');
@@ -3046,7 +3049,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     profitForm?.elements.costMode?.addEventListener('change',recalcProfitDialog);
     document.querySelector('[data-add-line]')?.addEventListener('click',()=>addLine());
     catalogPicker?.addEventListener('change',()=>{
-      const item=(qboState?.catalog||[]).find((entry)=>entry.id===catalogPicker.value);
+      const item=(catalogState?.catalog||[]).find((entry)=>entry.id===catalogPicker.value);
       if(!item)return;
       addLine({id:'catalog-'+item.id+'-'+Date.now(),description:item.description||item.name,quantity:1,unitPrice:Number(item.unitPrice||0),custom:false,catalogItemId:item.id,quickBooksItemId:item.quickBooksItemId||'',category:item.category||'service',unitLabel:item.unitLabel||'each',getExempt:item.getExempt===true});
       catalogPicker.value='';
