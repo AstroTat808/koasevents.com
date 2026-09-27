@@ -1628,7 +1628,7 @@ export default async (req: Request, context: Context) => {
       state.amount = requestedType === 'weekend' ? damageSettings.weekendAmount : damageSettings.oneDayAmount;
     }
     if (!state.invoiceId) state.dueDate = offsetDate(record?.customer?.eventDate, -Math.max(0, Number(damageSettings.dueDaysBefore || 30)));
-    state.deductionAmount = Math.min(state.amount, Math.max(0, Math.round(Number(payload?.deductionAmount ?? state.deductionAmount || 0) * 100) / 100));
+    state.deductionAmount = Math.min(state.amount, Math.max(0, Math.round(Number(payload?.deductionAmount ?? state.deductionAmount ?? 0) * 100) / 100));
     state.deductionReason = clean(payload?.deductionReason ?? state.deductionReason,1000);
     state.refundAmount = Math.max(0, Math.round((state.amount - state.deductionAmount) * 100) / 100);
     records = await saveQuickBooksSalesRecord(context, record, records);
