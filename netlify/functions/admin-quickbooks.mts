@@ -91,6 +91,7 @@ function quickBooksState(record: any) {
     estimateId: '',
     estimateDocNumber: '',
     estimateTotal: 0,
+    estimateStatus: '',
     estimateEmailStatus: '',
     estimateLastSyncedAt: '',
     invoices: [],
@@ -219,6 +220,7 @@ async function syncEstimate(context: Context, record: any, itemId: string) {
   state.estimateId = String(estimate.Id);
   state.estimateDocNumber = String(estimate.DocNumber || '');
   state.estimateTotal = Number(estimate.TotalAmt || record.proposal.total || 0);
+  state.estimateStatus = String(estimate.TxnStatus || estimate.Status || '');
   state.estimateEmailStatus = String(estimate.EmailStatus || '');
   state.estimateLastSyncedAt = new Date().toISOString();
   state.lastSyncedAt = state.estimateLastSyncedAt;
@@ -347,6 +349,7 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
     if (estimate) {
       state.estimateDocNumber = String(estimate.DocNumber || state.estimateDocNumber || '');
       state.estimateTotal = Number(estimate.TotalAmt || state.estimateTotal || 0);
+      state.estimateStatus = String(estimate.TxnStatus || estimate.Status || state.estimateStatus || '');
       state.estimateEmailStatus = String(estimate.EmailStatus || '');
       state.estimateLastSyncedAt = new Date().toISOString();
     }
@@ -474,6 +477,21 @@ export function applyQuickBooksReconciliationHistory(
   return { records, transitions, changedRecordIds };
 }
 
+function proposalAccountingTotal(proposal: any) {
+  const stored = Math.round(Number(proposal?.total || 0) * 100) / 100;
+  const subtotal = Math.round(Number(proposal?.subtotal || 0) * 100) / 100;
+  const discount = Math.round(Number(proposal?.discountAmount || 0) * 100) / 100;
+  const taxAmount = Math.round(Number(proposal?.taxAmount || 0) * 100) / 100;
+  const derived = Math.round(Math.max(0, subtotal - discount + taxAmount) * 100) / 100;
+  return {
+    stored,
+    subtotal,
+    discount,
+    taxAmount,
+    grandTotal: derived > 0 ? derived : stored,
+  };
+}
+
 export function buildQuickBooksAccountingAudit(records: any[]) {
   const rows = (Array.isArray(records) ? records : [])
     .filter((record: any) => record?.kind === 'proposal' && record?.proposal)
@@ -485,7 +503,8 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
       );
       const issues: any[] = [];
-      const proposalTotal = Math.round(Number(proposal.total || 0) * 100) / 100;
+      const financials = proposalAccountingTotal(proposal);
+      const proposalTotal = financials.grandTotal;
       const scheduledTotal = Math.round(schedule.reduce((sum: number, item: any) => sum + Number(item.amount || 0), 0) * 100) / 100;
 
       if (Math.abs(moneyDelta(scheduledTotal, proposalTotal)) >= 0.01) {
@@ -550,10 +569,15 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         clientName: clean(record.customer?.name || record.id, 180),
         eventDate: isoDate(record.customer?.eventDate),
         proposalStatus: String(proposal.status || record.status || ''),
+        proposalSubtotal: financials.subtotal,
+        proposalDiscount: financials.discount,
+        proposalTaxAmount: financials.taxAmount,
+        proposalStoredTotal: financials.stored,
         proposalTotal,
         scheduledTotal,
         estimateId: String(qbo.estimateId || ''),
         estimateDocNumber: String(qbo.estimateDocNumber || ''),
+        estimateStatus: String(qbo.estimateStatus || qbo.estimateEmailStatus || ''),
         estimateTotal: qbo.estimateId ? Math.round(Number(qbo.estimateTotal || 0) * 100) / 100 : null,
         invoiceCount: activeInvoices.length,
         issuedTotal,
