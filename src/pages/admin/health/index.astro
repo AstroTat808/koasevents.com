@@ -3006,10 +3006,44 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const r30=row.reliability30d||{};
         const pct=(value)=>typeof value==='number'?String(value.toFixed(value%1?1:0))+'%':'—';
         reliabilityValue.textContent='7d '+pct(r7.percentage)+' · 30d '+pct(r30.percentage);
-        reliabilityBox.append(reliabilityLabel,reliabilityValue);
+        const reliabilityCoverage=document.createElement('p');
+        reliabilityCoverage.className='mt-1 text-[.56rem] leading-4 text-[var(--koa-ink)]/48';
+        reliabilityCoverage.textContent=
+          String(Number(r7.samples||0))+' of '+String(Number(r7.expectedSamples||168))+' expected 7-day samples'
+          +' · '+String(Number(r30.samples||0))+' of '+String(Number(r30.expectedSamples||720))+' expected 30-day samples';
+        reliabilityBox.append(reliabilityLabel,reliabilityValue,reliabilityCoverage);
 
         verificationMeta.append(stateBox,verifiedBox,reliabilityBox);
         card.appendChild(verificationMeta);
+
+        const verificationHttp=String(row.verificationHttp||'').trim();
+        const verifiedPermissions=Array.isArray(row.verifiedPermissions)?row.verifiedPermissions.filter(Boolean):[];
+        if(verificationHttp||verifiedPermissions.length){
+          const verificationDetail=document.createElement('div');
+          verificationDetail.className='mt-3 rounded-lg border border-white/70 bg-white/60 p-3';
+          const verificationTitle=document.createElement('p');
+          verificationTitle.className='text-[.48rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+          verificationTitle.textContent='Live verification detail';
+          verificationDetail.appendChild(verificationTitle);
+          if(verificationHttp){
+            const http=document.createElement('p');
+            http.className='mt-1 text-[.66rem] font-semibold leading-5 text-[var(--koa-forest)]';
+            http.textContent=verificationHttp;
+            verificationDetail.appendChild(http);
+          }
+          if(verifiedPermissions.length){
+            const permissions=document.createElement('div');
+            permissions.className='mt-2 flex flex-wrap gap-1.5';
+            verifiedPermissions.forEach((permission)=>{
+              const chip=document.createElement('span');
+              chip.className='rounded-full bg-emerald-100 px-2.5 py-1 text-[.5rem] font-black uppercase tracking-[.06em] text-emerald-800';
+              chip.textContent=String(permission);
+              permissions.appendChild(chip);
+            });
+            verificationDetail.appendChild(permissions);
+          }
+          card.appendChild(verificationDetail);
+        }
 
         const detail=document.createElement('p');
         detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
