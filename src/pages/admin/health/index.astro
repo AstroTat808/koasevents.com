@@ -896,6 +896,34 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const fixAllSafeReport=document.querySelector('[data-fix-all-safe-report]');
     let latestCredentialHealth={rows:[],history:[],incidentTimeline:[],reliability:{providers:[]}};
     let credentialRetestInFlight=false;
+
+    function closeCredentialStatusHelp(){
+      credentialStatusHelpPanel?.classList.add('hidden');
+      credentialStatusHelpButtons.forEach((button)=>button.setAttribute('aria-expanded','false'));
+    }
+
+    credentialStatusHelpButtons.forEach((button)=>{
+      button.addEventListener('click',(event)=>{
+        event.stopPropagation();
+        const kind=String(button.dataset.credentialStatusHelp||'');
+        const wasOpen=button.getAttribute('aria-expanded')==='true';
+        closeCredentialStatusHelp();
+        if(wasOpen||!credentialStatusHelpPanel)return;
+        const copy=kind==='current'
+          ? 'Current credential status comes from the latest live authentication and permission checks. It answers: “Does this credential work right now?” A green current-status badge means the credential is valid now.'
+          : 'Historical reliability measures hourly verification results starting at the provider’s first successful verification. Failures from before the credential first worked are excluded. Reliability can still be building or recovering even while the current credential is valid.';
+        credentialStatusHelpPanel.textContent=copy;
+        credentialStatusHelpPanel.classList.remove('hidden');
+        button.setAttribute('aria-expanded','true');
+      });
+    });
+    document.addEventListener('click',(event)=>{
+      if(credentialStatusHelpPanel?.classList.contains('hidden'))return;
+      const target=event.target;
+      if(target instanceof Node&&(credentialStatusHelpPanel.contains(target)||credentialStatusHelpButtons.some((button)=>button.contains(target))))return;
+      closeCredentialStatusHelp();
+    });
+
     const office365Operational=document.querySelector('[data-office365-operational]');
     const office365OperationalTitle=document.querySelector('[data-office365-operational-title]');
     const office365OperationalDetail=document.querySelector('[data-office365-operational-detail]');
