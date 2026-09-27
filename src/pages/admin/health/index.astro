@@ -292,10 +292,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h2 class="display mt-2 text-4xl">Credential Health</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Validates credentials and access scopes independently from service uptime. A credential warning does not automatically mean the underlying service is down.</p>
             </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <span data-credential-health-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking credentials</span>
-              <span data-credential-reliability-overall class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Reliability building</span>
-              <span data-credential-health-checked class="text-xs text-[var(--koa-ink)]/45">—</span>
+            <div class="relative">
+              <div class="flex flex-wrap items-center gap-2">
+                <button data-credential-health-overall data-credential-status-help="current" type="button" aria-expanded="false" class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Checking credentials</button>
+                <button data-credential-reliability-overall data-credential-status-help="reliability" type="button" aria-expanded="false" class="rounded-full bg-slate-100 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-slate-700">Reliability building</button>
+                <span data-credential-health-checked class="text-xs text-[var(--koa-ink)]/45">—</span>
+              </div>
+              <div data-credential-status-help-panel class="mt-2 hidden max-w-xl rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 text-xs leading-5 text-[var(--koa-ink)]/62 shadow-sm" role="status"></div>
             </div>
           </div>
           <div data-credential-health-grid class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
@@ -871,6 +874,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const weeklySummaryCoverage=document.querySelector('[data-weekly-summary-coverage]');
     const credentialHealthOverall=document.querySelector('[data-credential-health-overall]');
     const credentialReliabilityOverall=document.querySelector('[data-credential-reliability-overall]');
+    const credentialStatusHelpButtons=[...document.querySelectorAll('[data-credential-status-help]')];
+    const credentialStatusHelpPanel=document.querySelector('[data-credential-status-help-panel]');
     const credentialHealthChecked=document.querySelector('[data-credential-health-checked]');
     const credentialHealthGrid=document.querySelector('[data-credential-health-grid]');
     const credentialHealthHistory=document.querySelector('[data-credential-health-history]');
@@ -2469,11 +2474,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         const thresholdMeta=document.createElement('p');
         thresholdMeta.className='mt-2 text-[.58rem] leading-4 text-[var(--koa-ink)]/45';
-        thresholdMeta.textContent=provider.thresholdActive
+        const firstVerifiedAt=String(provider?.firstVerifiedAt||'');
+        thresholdMeta.textContent=(provider.thresholdActive
           ? '7-day threshold active · '+Number(provider?.periods?.['7d']?.samples||0)+' samples'
-          : 'Threshold starts after '+Number(provider.minimumSamples||24)+' hourly samples.';
+          : 'Threshold starts after '+Number(provider.minimumSamples||24)+' hourly samples.')
+          +(firstVerifiedAt?' · Reliability baseline '+new Date(firstVerifiedAt).toLocaleString():'');
 
-        card.append(top,grid,controls,thresholdMeta);
+        const recovery=provider?.recovery||{};
+        const recoveryNote=document.createElement('p');
+        recoveryNote.className='mt-2 rounded-lg bg-white/80 p-2.5 text-[.6rem] font-semibold leading-4 '+(
+          severity==='red'?'text-red-800':
+          severity==='yellow'?'text-amber-900':'text-[var(--koa-forest)]'
+        );
+        const remaining=Number(recovery.samplesUntilThresholdActive||0);
+        const exitCritical=Number(recovery.healthySamplesToExitCritical||0);
+        const toHealthy=Number(recovery.healthySamplesToHealthy||0);
+        const redThreshold=Number(thresholds.redBelow??95);
+        const yellowThreshold=Number(thresholds.yellowBelow??99);
+        if(!provider.thresholdActive&&remaining>0){
+          recoveryNote.textContent='Recovery estimate · about '+remaining+' more healthy hourly sample'+(remaining===1?'':'s')+' before reliability thresholds activate.';
+        }else if(severity==='red'&&exitCritical>0){
+          recoveryNote.textContent='Recovery estimate · about '+exitCritical+' healthy hourly sample'+(exitCritical===1?'':'s')+' needed to reach '+redThreshold+'% and exit critical.';
+        }else if(severity==='yellow'&&toHealthy>0){
+          recoveryNote.textContent='Recovery estimate · about '+toHealthy+' healthy hourly sample'+(toHealthy===1?'':'s')+' needed to reach '+yellowThreshold+'% and return green.';
+        }else if(severity==='green'){
+          recoveryNote.textContent='Recovery estimate · reliability is currently above the configured healthy threshold.';
+        }else{
+          recoveryNote.textContent='Recovery estimate · waiting for the first successful credential verification.';
+        }
+
+        card.append(top,grid,controls,thresholdMeta,recoveryNote);
         credentialReliabilityGrid.appendChild(card);
       });
       if(!providers.length){
