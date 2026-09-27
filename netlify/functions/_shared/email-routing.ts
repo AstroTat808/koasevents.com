@@ -84,7 +84,17 @@ export async function emailRoutingSummary() {
       bcc: route.mode === 'configurable' ? normalizeEmails(saved.bcc) : [],
     };
   });
-  return { updatedAt:stored.updatedAt||'', updatedBy:stored.updatedBy||'', routes };
+  return {
+    updatedAt:stored.updatedAt||'',
+    updatedBy:stored.updatedBy||'',
+    senders:{
+      leadFrom:clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||'Koa’s Events <leads@koasevents.com>',
+      clientFrom:clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>',
+      clientReplyTo:clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com',
+      vendorFrom:clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>',
+    },
+    routes,
+  };
 }
 
 export async function saveEmailRouting(input:any, actor:string) {
