@@ -248,6 +248,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </article>
           </div>
 
+          <article class="mt-4 rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Webhook delivery status</p>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <strong data-email-webhook-delivery-status class="text-sm text-[var(--koa-forest)]">Checking…</strong>
+                  <span data-email-webhook-delivery-http class="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.07em] text-slate-700"></span>
+                </div>
+                <p data-email-webhook-delivery-detail class="mt-1 text-[.68rem] leading-5 text-[var(--koa-ink)]/50"></p>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button data-test-resend-webhook type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Test Resend webhook</button>
+                <span data-test-resend-webhook-message aria-live="polite" class="text-xs font-semibold text-[var(--koa-ink)]/50"></span>
+              </div>
+            </div>
+          </article>
+
           <article class="mt-5 rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-5">
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -886,6 +903,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const emailHealthMonitoringDetail=document.querySelector('[data-email-health-monitoring-detail]');
     const emailHealthSource=document.querySelector('[data-email-health-source]');
     const emailHealthSourceDetail=document.querySelector('[data-email-health-source-detail]');
+    const emailWebhookDeliveryStatus=document.querySelector('[data-email-webhook-delivery-status]');
+    const emailWebhookDeliveryHttp=document.querySelector('[data-email-webhook-delivery-http]');
+    const emailWebhookDeliveryDetail=document.querySelector('[data-email-webhook-delivery-detail]');
+    const testResendWebhook=document.querySelector('[data-test-resend-webhook]');
+    const testResendWebhookMessage=document.querySelector('[data-test-resend-webhook-message]');
     const emailHealthTemplates=document.querySelector('[data-email-health-templates]');
     const emailHealthTemplateDetail=document.querySelector('[data-email-health-template-detail]');
     const emailHealthChecked=document.querySelector('[data-email-health-checked]');
@@ -2475,6 +2497,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(webhook.detail)parts.push(webhook.detail);
         else if(delivery.apiDetail)parts.push(delivery.apiDetail);
         emailHealthSourceDetail.textContent=parts.join(' · ');
+      }
+
+      const webhookDelivery=delivery.webhookDelivery||{};
+      if(emailWebhookDeliveryStatus){
+        const state=String(webhookDelivery.status||'unknown').toLowerCase();
+        const labels={
+          success:'Successful',
+          failed:'Failed',
+          pending:'Pending',
+          attempting:'Attempting',
+          none:'No events yet',
+          unknown:'Not verified',
+        };
+        emailWebhookDeliveryStatus.textContent=labels[state]||state;
+        emailWebhookDeliveryStatus.className='text-sm font-semibold '+(
+          state==='success'?'text-emerald-800':
+          state==='failed'?'text-red-800':
+          ['pending','attempting'].includes(state)?'text-amber-800':'text-slate-700'
+        );
+      }
+      if(emailWebhookDeliveryHttp){
+        const httpStatus=Number(webhookDelivery?.attempt?.httpStatus||0);
+        emailWebhookDeliveryHttp.textContent=httpStatus?'HTTP '+httpStatus:'';
+        emailWebhookDeliveryHttp.classList.toggle('hidden',!httpStatus);
+        emailWebhookDeliveryHttp.className=(httpStatus?'':'hidden ')+'rounded-full px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.07em] '+(
+          httpStatus>=200&&httpStatus<300?'bg-emerald-100 text-emerald-800':
+          httpStatus?'bg-red-100 text-red-800':'bg-slate-100 text-slate-700'
+        );
+      }
+      if(emailWebhookDeliveryDetail){
+        const detailParts=[];
+        if(webhookDelivery.eventType)detailParts.push(String(webhookDelivery.eventType));
+        const deliveredAt=String(webhookDelivery?.attempt?.sentAt||webhookDelivery.createdAt||'');
+        if(deliveredAt)detailParts.push(new Date(deliveredAt).toLocaleString());
+        if(webhookDelivery.detail)detailParts.push(String(webhookDelivery.detail));
+        emailWebhookDeliveryDetail.textContent=detailParts.join(' · ');
       }
 
       const templates=email.templateCompatibility||{};
@@ -4502,6 +4560,37 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       markDashboardRenderPanel('Section status rollup');
       refreshHealthSectionStatuses(data);
     }
+
+    testResendWebhook?.addEventListener('click',async()=>{
+      if(!(testResendWebhook instanceof HTMLButtonElement))return;
+      const original=testResendWebhook.textContent;
+      testResendWebhook.disabled=true;
+      testResendWebhook.textContent='Testing…';
+      if(testResendWebhookMessage)testResendWebhookMessage.textContent='Replaying a safe existing webhook event…';
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'test-resend-webhook'}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(data?.emailHealth)renderEmailHealth(data.emailHealth,latestHealthSnapshot||null);
+        const result=data?.webhookTest||{};
+        if(!response.ok||result?.ok===false){
+          throw new Error(result?.message||data?.error||'Resend webhook test failed.');
+        }
+        if(testResendWebhookMessage){
+          testResendWebhookMessage.textContent=result?.completed
+            ? ('Success · HTTP '+String(result.httpStatus||'2xx')+' · '+new Date(result.sentAt||Date.now()).toLocaleString())
+            : String(result?.message||'Replay queued; waiting for Resend delivery result.');
+        }
+      }catch(error){
+        if(testResendWebhookMessage)testResendWebhookMessage.textContent=error instanceof Error?error.message:'Resend webhook test failed.';
+      }finally{
+        testResendWebhook.disabled=false;
+        testResendWebhook.textContent=original||'Test Resend webhook';
+      }
+    });
 
     creditRecommendations?.addEventListener('click',async(event)=>{
       const button=event.target?.closest?.('[data-credit-saver-action]');
