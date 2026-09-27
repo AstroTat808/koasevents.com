@@ -3264,6 +3264,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         failed.textContent=String(current.failed||0);
         checked.textContent=current.checkedAt?new Date(current.checkedAt).toLocaleString():'—';
         const hasFailures=Number(current.failed||0)>0;
+        const hasResults=Number(current.passed||0)+Number(current.failed||0)>0;
+
+        // Make the top summary scannable by color:
+        // Passed is green when results exist. Failed is red only when failures exist;
+        // zero failures gets the same healthy green treatment rather than looking alarming.
+        if(passedCard){
+          passedCard.classList.toggle('bg-emerald-50',hasResults);
+          passedCard.classList.toggle('border',hasResults);
+          passedCard.classList.toggle('border-emerald-200',hasResults);
+          passedCard.classList.toggle('bg-white',!hasResults);
+        }
+        passed.className='display mt-3 text-4xl '+(hasResults?'text-emerald-800':'text-[var(--koa-forest)]');
+
+        failedCard.classList.toggle('bg-red-50',hasFailures);
+        failedCard.classList.toggle('border-red-200',hasFailures);
+        failedCard.classList.toggle('bg-emerald-50',hasResults&&!hasFailures);
+        failedCard.classList.toggle('border-emerald-200',hasResults&&!hasFailures);
+        failedCard.classList.toggle('border',hasResults);
+        failedCard.classList.toggle('bg-white',!hasResults);
+        failed.className='display mt-3 text-4xl '+(hasFailures?'text-red-800':hasResults?'text-emerald-800':'text-red-800');
+
         overallCard.disabled=!hasFailures;
         failedCard.disabled=!hasFailures;
         overallCard.setAttribute('aria-disabled',String(!hasFailures));
@@ -3279,6 +3300,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         overall.textContent='No data';
         overallCard.disabled=true;
         failedCard.disabled=true;
+        overallCard.classList.remove('bg-emerald-50','border','border-emerald-200');
+        overallCard.classList.add('bg-white');
+        if(passedCard){
+          passedCard.classList.remove('bg-emerald-50','border','border-emerald-200');
+          passedCard.classList.add('bg-white');
+        }
+        passed.className='display mt-3 text-4xl text-[var(--koa-forest)]';
+        failedCard.classList.remove('bg-red-50','border-red-200','bg-emerald-50','border-emerald-200','border');
+        failedCard.classList.add('bg-white');
+        failed.className='display mt-3 text-4xl text-red-800';
         overallHint.classList.add('hidden');
         failedHint.classList.add('hidden');
         severitySummary.classList.add('hidden');
