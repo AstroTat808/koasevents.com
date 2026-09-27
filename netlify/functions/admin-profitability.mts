@@ -718,7 +718,6 @@ export default async (req:Request,context:Context) => {
         next.approved = true;
         next.approvedAt = previous.approvedAt;
         next.approvedBy = previous.approvedBy;
-        catalogActiveById.set(next.id,true);
       }
       return next;
     });
