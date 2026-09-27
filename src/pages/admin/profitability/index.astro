@@ -469,7 +469,7 @@ const packageMeta = businessRules.venueWeddingPackages.map((p) => ({
     (async()=>{
       const session=await getAdminSession();
       loading?.classList.add('hidden');
-      if(!session||!session.capabilities?.includes('sales.profit_settings')){unauthorized?.classList.remove('hidden');return;}
+      if(!session||session.accessBlocked||(!session.isAdmin&&!session.capabilities?.includes('sales.profit_settings')&&!session.permissions?.includes('sales.profit_settings'))){unauthorized?.classList.remove('hidden');return;}
       app?.classList.remove('hidden');
       try{state=await api();renderAll();resetEventForm();}catch(err){unauthorized?.classList.remove('hidden');app?.classList.add('hidden');unauthorized.querySelector('p')?.append(' '+(err.message||''));}
     })();
