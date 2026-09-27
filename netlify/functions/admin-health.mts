@@ -563,21 +563,28 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 
+    const runWarnings:Array<{section:string;error:string}>=[];
     const [previous,previousHourly]=await Promise.all([
-      readLatestHealth(context),
-      readLatestHourlyHealth(context),
+      safeHealthSection(runWarnings,'Previous health snapshot',()=>readLatestHealth(context),null as any),
+      safeHealthSection(runWarnings,'Previous hourly snapshot',()=>readLatestHourlyHealth(context),null as any),
     ]);
+
+    // The manual check result is the authoritative outcome for this request.
+    // Everything after this point is bookkeeping or dashboard enrichment and must
+    // never turn a successful 41/41 health run into an HTTP failure.
     const current=await runSystemHealth(context,'manual');
-    await applyHealthAlertPolicy(context,current,previousHourly);
-    await persistHealth(context,current);
-    await sendHealthTransitionAlerts(previous,current);
+
+    await safeHealthSection(runWarnings,'Alert policy application',()=>applyHealthAlertPolicy(context,current,previousHourly),null as any);
+    await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
+    await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
+
     const [uptimeHistory,policy,deployments,releases]=await Promise.all([
-      readUptimeHistory(context,2300),
-      readHealthAlertPolicy(context),
-      cachedDeploymentHistory(context),
-      readProductionReleases(context,50),
+      safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
+      safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
+      safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
+      safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
     ]);
-    const enrichmentWarnings:Array<{section:string;error:string}>=[];
+    const enrichmentWarnings=runWarnings;
     const [office365,emailHealth]=await Promise.all([
       safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
       safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
@@ -605,6 +612,7 @@ export default async (req:Request,context:Context) => {
       {} as any,
     );
     return Response.json({
+      ok:true,
       current,uptime,incidents,policy,components:healthComponents(),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
