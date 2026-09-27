@@ -48,7 +48,7 @@ export function signWellConfiguration(){
 }
 
 export function signWellConfigured(){
-  return Boolean(apiKey());
+  return Boolean(apiKey()&&signWellWebhookId());
 }
 
 function headers(){
