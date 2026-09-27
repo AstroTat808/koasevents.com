@@ -2964,6 +2964,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           issue.textContent=String(row.issueType);
           card.appendChild(issue);
         }
+        const verificationState=String(row.verificationState||(!row.configured?'missing':row.ok?'verified':'configured_unverified'));
+        const verificationMeta=document.createElement('div');
+        verificationMeta.className='mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3';
+
+        const stateBox=document.createElement('div');
+        stateBox.className='rounded-lg bg-white/70 p-2.5';
+        const stateLabel=document.createElement('p');
+        stateLabel.className='text-[.48rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        stateLabel.textContent='Verification';
+        const stateValue=document.createElement('p');
+        stateValue.className='mt-1 text-[.68rem] font-semibold '+(
+          verificationState==='verified'?'text-emerald-800':
+          verificationState==='missing'?'text-red-800':
+          verificationState==='verification_failed'?'text-red-800':'text-amber-800'
+        );
+        stateValue.textContent=
+          verificationState==='verified'?'Verified':
+          verificationState==='missing'?'Missing':
+          verificationState==='verification_failed'?'Verification failed':'Configured · awaiting verification';
+        stateBox.append(stateLabel,stateValue);
+
+        const verifiedBox=document.createElement('div');
+        verifiedBox.className='rounded-lg bg-white/70 p-2.5';
+        const verifiedLabel=document.createElement('p');
+        verifiedLabel.className='text-[.48rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        verifiedLabel.textContent='Last verified';
+        const verifiedValue=document.createElement('p');
+        verifiedValue.className='mt-1 text-[.68rem] font-semibold text-[var(--koa-forest)]';
+        verifiedValue.textContent=row.lastVerifiedAt?new Date(row.lastVerifiedAt).toLocaleString():'Never';
+        verifiedBox.append(verifiedLabel,verifiedValue);
+
+        const reliabilityBox=document.createElement('div');
+        reliabilityBox.className='rounded-lg bg-white/70 p-2.5';
+        const reliabilityLabel=document.createElement('p');
+        reliabilityLabel.className='text-[.48rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+        reliabilityLabel.textContent='Reliability';
+        const reliabilityValue=document.createElement('p');
+        reliabilityValue.className='mt-1 text-[.68rem] font-semibold text-[var(--koa-forest)]';
+        const r7=row.reliability7d||{};
+        const r30=row.reliability30d||{};
+        const pct=(value)=>typeof value==='number'?String(value.toFixed(value%1?1:0))+'%':'—';
+        reliabilityValue.textContent='7d '+pct(r7.percentage)+' · 30d '+pct(r30.percentage);
+        reliabilityBox.append(reliabilityLabel,reliabilityValue);
+
+        verificationMeta.append(stateBox,verifiedBox,reliabilityBox);
+        card.appendChild(verificationMeta);
+
         const detail=document.createElement('p');
         detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';
         detail.textContent=(row.status?'HTTP '+row.status+' · ':'')+String(row.detail||'No verification detail recorded.');
