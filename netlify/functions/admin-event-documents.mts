@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
+import { isSyntheticHealthRequest } from './_shared/synthetic-health';
 
 function salesStoreFor(context: Context) {
   return context.deploy.context === 'production'
@@ -49,7 +50,7 @@ async function bookedRecord(context: Context, recordId: string) {
 
 export default async (req: Request, context: Context) => {
   const syntheticRecordId = clean(context.params.recordId, 100);
-  if (req.method === 'HEAD' && syntheticRecordId === '__health__') {
+  if (req.method === 'HEAD' && syntheticRecordId === '__health__' && isSyntheticHealthRequest(req)) {
     try {
       await Promise.all([
         salesStoreFor(context).get('records/index', { type: 'json' }),
