@@ -1555,3 +1555,38 @@ main p.text-sm {
     line-height: 1.35;
   }
 }
+
+
+/* Global click acknowledgement
+   Indicates that a click/tap was registered. It does not imply an async action finished. */
+@keyframes koaClickAcknowledge {
+  0% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+  35% {
+    transform: scale(.965);
+    filter: brightness(.94);
+  }
+  70% {
+    transform: scale(1.015);
+    filter: brightness(1.04);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1);
+  }
+}
+
+.koa-click-feedback {
+  animation: koaClickAcknowledge 420ms cubic-bezier(.2,.8,.2,1);
+  outline: 3px solid color-mix(in srgb, var(--koa-clay, #9b542f) 32%, transparent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .koa-click-feedback {
+    animation: none;
+    outline-width: 3px;
+  }
+}
