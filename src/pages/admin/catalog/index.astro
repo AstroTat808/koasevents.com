@@ -1,0 +1,405 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Catalog Manager | Koa’s Events" description="Central pricing catalog for Koa’s Events proposals, rentals, wedding packages, Mobile Bar and add-ons." canonical="https://koasevents.com/admin/catalog/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-[96rem]">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <h1 class="display mt-3 text-5xl">Catalog Manager</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/55">Loading the central pricing catalog…</p>
+      </section>
+
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Catalog access required</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/60">Viewing requires Sales access. Editing and importing require Sales Profit Settings permission.</p>
+      </section>
+
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-amber-light)]">Single pricing source</p>
+              <h1 class="display mt-3 text-5xl">Catalog Manager</h1>
+              <p class="mt-3 max-w-4xl text-sm leading-6 text-white/68">Wedding collections, rentals, Mobile Bar and add-ons live here. Proposal pricing snapshots the current catalog price when an item is added, so later catalog changes do not rewrite existing proposal lines.</p>
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <a href="/admin/quotes/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Sales CRM</a>
+              <a href="/admin/profitability/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">Profitability</a>
+              <a href="/admin/quickbooks/" class="rounded-full border border-white/25 px-4 py-3 text-[.6rem] font-black uppercase tracking-[.1em] text-white">QuickBooks</a>
+            </div>
+          </div>
+        </header>
+
+        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Pricing database</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Packages, rentals, bar + add-ons</h2>
+              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">The website catalog is seeded automatically. Edit sell price, internal cost, target margin and GET treatment here without re-entering your existing wedding collections.</p>
+            </div>
+            <div data-manage-actions class="flex flex-wrap gap-2">
+              <button data-refresh-website type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Sync website catalog</button>
+              <button data-open-import type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Import CSV / Excel</button>
+              <button data-new-item type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Add item</button>
+            </div>
+          </div>
+
+          <div class="mt-6 grid gap-3 lg:grid-cols-[1fr_220px_auto]">
+            <input data-search placeholder="Search catalog…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm" />
+            <select data-group-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3 text-sm font-semibold">
+              <option value="all">All groups</option>
+              <option value="packages">Wedding packages</option>
+              <option value="rentals">Rentals</option>
+              <option value="mobile-bar">Mobile Bar</option>
+              <option value="add-ons">Add-ons</option>
+              <option value="fees">Fees</option>
+              <option value="other">Other</option>
+            </select>
+            <label class="flex items-center gap-2 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input data-show-archived type="checkbox" /> Archived</label>
+          </div>
+
+          <p data-message class="mt-3 text-sm text-[var(--koa-ink)]/55"></p>
+          <div data-catalog-list class="mt-6 grid gap-3"></div>
+        </section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Import safety</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Recent catalog imports</h2>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Every completed import stores a pre-import snapshot so the catalog can be restored if the file or mapping was wrong.</p>
+            </div>
+          </div>
+          <div data-import-history class="mt-5 grid gap-3"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <dialog data-item-dialog class="w-[min(94vw,780px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <form data-item-form class="max-h-[90vh] overflow-y-auto p-7">
+      <input type="hidden" name="id" />
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Catalog item</p><h2 data-item-title class="display mt-2 text-4xl text-[var(--koa-forest)]">Add item</h2></div>
+        <button data-close-item type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2">×</button>
+      </div>
+      <div class="mt-6 grid gap-4 sm:grid-cols-2">
+        <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Name<input name="name" required maxlength="100" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Business group<select name="group" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="packages">Wedding packages</option><option value="rentals">Rentals</option><option value="mobile-bar">Mobile Bar</option><option value="add-ons">Add-ons</option><option value="fees">Fees</option><option value="other">Other</option></select></label>
+        <label class="grid gap-2 text-sm font-semibold">Accounting category<select name="category" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="service">Service</option><option value="rental">Rental / Non-Inventory</option><option value="mileage">Mileage</option><option value="fee">Fee</option></select></label>
+        <label class="grid gap-2 text-sm font-semibold">Unit<label class="sr-only">Unit</label><input name="unitLabel" placeholder="package, each, hour…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Sell price<input name="unitPrice" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Internal/direct cost<input name="internalCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="grid gap-2 text-sm font-semibold">Target margin %<input name="targetMargin" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+        <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input name="getExempt" type="checkbox" /> GET exempt</label>
+        <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input name="active" type="checkbox" checked /> Active</label>
+        <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Description<textarea name="description" rows="4" maxlength="1000" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+      </div>
+      <p data-item-message class="mt-4 text-sm text-[var(--koa-ink)]/55"></p>
+      <div class="mt-6 flex flex-wrap gap-3"><button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save catalog item</button><button data-close-item type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Cancel</button></div>
+    </form>
+  </dialog>
+
+  <dialog data-import-dialog class="w-[min(96vw,1100px)] rounded-[1.5rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+    <div class="max-h-[92vh] overflow-y-auto p-7">
+      <div class="flex items-start justify-between gap-4">
+        <div><p class="eyebrow text-[var(--koa-clay)]">Safe import</p><h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">CSV / Excel catalog import</h2><p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Upload a file, map its columns, preview duplicates and changes, then commit. Nothing is written during preview.</p></div>
+        <button data-close-import type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2">×</button>
+      </div>
+
+      <section class="mt-6 rounded-xl bg-[var(--koa-sand)]/55 p-5">
+        <div class="grid gap-4 lg:grid-cols-[1fr_220px]">
+          <label class="grid gap-2 text-sm font-semibold">Catalog file<input data-import-file type="file" accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3" /></label>
+          <label class="grid gap-2 text-sm font-semibold">Default group<select data-default-group class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="other">Other / use mapped group</option><option value="packages">Wedding packages</option><option value="rentals">Rentals</option><option value="mobile-bar">Mobile Bar</option><option value="add-ons">Add-ons</option><option value="fees">Fees</option></select></label>
+        </div>
+        <div class="mt-4 flex flex-wrap gap-3"><button data-preview-import type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Preview import</button><span data-import-message class="self-center text-sm text-[var(--koa-ink)]/55"></span></div>
+      </section>
+
+      <section data-mapping-section class="mt-6 hidden">
+        <p class="eyebrow text-[var(--koa-clay)]">Column mapping</p>
+        <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Tell the importer what each column means.</h3>
+        <div data-mapping-grid class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3"></div>
+        <div class="mt-4 grid gap-3 sm:grid-cols-2">
+          <label class="grid gap-2 text-sm font-semibold">Existing item duplicates<select data-duplicate-mode class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="update">Update existing matching item</option><option value="skip">Skip existing matching item</option></select></label>
+        </div>
+      </section>
+
+      <section data-preview-section class="mt-6 hidden">
+        <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Preview</p><h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Review before importing</h3><p data-import-summary class="mt-2 text-sm text-[var(--koa-ink)]/58"></p></div>
+          <button data-commit-import type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Import catalog</button>
+        </div>
+        <div class="mt-4 overflow-x-auto"><table class="min-w-[1000px] w-full border-separate border-spacing-y-2 text-sm"><thead><tr class="text-left text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-3">Row</th><th class="px-3">Status</th><th class="px-3">Name</th><th class="px-3">Group</th><th class="px-3">Sell</th><th class="px-3">Cost</th><th class="px-3">Target margin</th><th class="px-3">GET</th></tr></thead><tbody data-preview-rows></tbody></table></div>
+      </section>
+    </div>
+  </dialog>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const loading=document.querySelector('[data-loading]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    const app=document.querySelector('[data-app]');
+    const summary=document.querySelector('[data-summary]');
+    const list=document.querySelector('[data-catalog-list]');
+    const message=document.querySelector('[data-message]');
+    const search=document.querySelector('[data-search]');
+    const groupFilter=document.querySelector('[data-group-filter]');
+    const showArchived=document.querySelector('[data-show-archived]');
+    const manageActions=document.querySelector('[data-manage-actions]');
+    const history=document.querySelector('[data-import-history]');
+    const itemDialog=document.querySelector('[data-item-dialog]');
+    const itemForm=document.querySelector('[data-item-form]');
+    const itemTitle=document.querySelector('[data-item-title]');
+    const itemMessage=document.querySelector('[data-item-message]');
+    const importDialog=document.querySelector('[data-import-dialog]');
+    const importFile=document.querySelector('[data-import-file]');
+    const defaultGroup=document.querySelector('[data-default-group]');
+    const importMessage=document.querySelector('[data-import-message]');
+    const mappingSection=document.querySelector('[data-mapping-section]');
+    const mappingGrid=document.querySelector('[data-mapping-grid]');
+    const previewSection=document.querySelector('[data-preview-section]');
+    const previewRows=document.querySelector('[data-preview-rows]');
+    const importSummary=document.querySelector('[data-import-summary]');
+    const duplicateMode=document.querySelector('[data-duplicate-mode]');
+
+    let state={catalog:[],imports:[]};
+    let canManage=false;
+    let importPayload=null;
+
+    const groupLabels={packages:'Wedding Packages',rentals:'Rentals','mobile-bar':'Mobile Bar','add-ons':'Add-ons',fees:'Fees',other:'Other'};
+    const mappingLabels={id:'ID / SKU',name:'Name *',description:'Description',group:'Business group',category:'Accounting category',unitLabel:'Unit label',unitPrice:'Sell price',internalCost:'Internal cost',targetMargin:'Target margin %',getExempt:'GET exempt/status',active:'Active/status'};
+
+    function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function margin(item){const price=Number(item.unitPrice||0),cost=Number(item.internalCost||0);return price>0?((price-cost)/price)*100:null;}
+    function marginText(item){const m=margin(item);return m==null?'—':m.toFixed(1)+'%';}
+    function dt(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();}
+    function statusClass(status){if(status==='new')return 'bg-emerald-50 text-emerald-800';if(status==='update')return 'bg-blue-50 text-blue-800';if(status==='duplicate'||status==='invalid')return 'bg-red-50 text-red-700';return 'bg-[var(--koa-sand)] text-[var(--koa-forest)]';}
+
+    async function api(body){
+      const response=await fetch('/api/admin/catalog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(data.error||'Catalog request failed.'),{data});
+      return data;
+    }
+
+    function renderSummary(){
+      if(!summary)return;
+      const active=state.catalog.filter((i)=>i.active!==false);
+      const priced=active.filter((i)=>Number(i.unitPrice)>0);
+      const qbo=active.filter((i)=>i.quickBooksItemId);
+      const cards=[
+        ['Active items',active.length+''],
+        ['Priced items',priced.length+' / '+active.length],
+        ['Wedding packages',active.filter((i)=>i.group==='packages').length+''],
+        ['QBO linked',qbo.length+' / '+active.length],
+      ];
+      summary.innerHTML=cards.map(([label,value])=>'<article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="display mt-2 block text-3xl text-[var(--koa-forest)]">'+esc(value)+'</strong></article>').join('');
+    }
+
+    function visibleCatalog(){
+      const q=String(search?.value||'').trim().toLowerCase();
+      const group=String(groupFilter?.value||'all');
+      const archived=Boolean(showArchived?.checked);
+      return state.catalog.filter((item)=>{
+        if(!archived&&item.active===false)return false;
+        if(group!=='all'&&item.group!==group)return false;
+        if(q&&!([item.name,item.description,item.group,item.category,item.unitLabel].join(' ').toLowerCase().includes(q)))return false;
+        return true;
+      });
+    }
+
+    function renderCatalog(){
+      renderSummary();
+      if(!list)return;
+      const rows=visibleCatalog();
+      list.innerHTML='';
+      if(!rows.length){list.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-6 text-sm text-[var(--koa-ink)]/55">No catalog items match these filters.</div>';return;}
+      rows.forEach((item)=>{
+        const actual=margin(item);
+        const target=Number(item.targetMargin||0);
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        card.innerHTML='<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="text-base text-[var(--koa-forest)]">'+esc(item.name)+'</strong><span class="rounded-full bg-[var(--koa-sand)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+esc(groupLabels[item.group]||item.group)+'</span>'+(item.active===false?'<span class="rounded-full bg-red-50 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-red-700">Archived</span>':'')+'</div><p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">'+esc(item.description||'No description')+'</p><p class="mt-2 text-[.62rem] font-semibold text-[var(--koa-ink)]/45">'+esc(item.category)+' · '+esc(item.unitLabel||'each')+' · '+(item.getExempt?'GET exempt':'GET taxable')+' · source '+esc(item.source||'catalog')+(item.quickBooksItemId?' · QBO #'+esc(item.quickBooksItemId):' · QBO fallback item')+'</p></div><div class="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[490px]"><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Sell</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Cost</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.internalCost)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Margin</p><strong class="mt-1 block text-sm '+(actual!=null&&target>0&&actual+0.001<target?'text-red-700':'text-[var(--koa-forest)]')+'">'+marginText(item)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Target</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+(target?target.toFixed(1)+'%':'—')+'</strong></div></div></div>';
+        if(canManage){
+          const actions=document.createElement('div'); actions.className='mt-3 flex flex-wrap gap-2';
+          const edit=document.createElement('button'); edit.type='button';edit.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';edit.textContent='Edit';edit.addEventListener('click',()=>openItem(item));
+          actions.appendChild(edit);
+          if(item.active!==false){const archive=document.createElement('button');archive.type='button';archive.className='rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-red-700';archive.textContent='Archive';archive.addEventListener('click',()=>archiveItem(item));actions.appendChild(archive);}
+          card.appendChild(actions);
+        }
+        list.appendChild(card);
+      });
+    }
+
+    function renderHistory(){
+      if(!history)return;
+      history.innerHTML='';
+      const rows=Array.isArray(state.imports)?state.imports:[];
+      if(!rows.length){history.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/55">No CSV/Excel imports have been committed yet.</div>';return;}
+      rows.forEach((row)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        card.innerHTML='<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.filename||row.id)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(row.id)+' · '+esc(dt(row.createdAt))+' · '+Number(row.imported||0)+' rows ('+Number(row.newCount||0)+' new, '+Number(row.updatedCount||0)+' updated)</p>'+(row.rolledBackAt?'<p class="mt-2 text-xs font-semibold text-red-700">Rolled back '+esc(dt(row.rolledBackAt))+'</p>':'')+'</div></div>';
+        if(canManage&&!row.rolledBackAt){
+          const button=document.createElement('button');button.type='button';button.className='mt-3 rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-red-700';button.textContent='Rollback this import';button.addEventListener('click',()=>rollback(row));card.appendChild(button);
+        }
+        history.appendChild(card);
+      });
+    }
+
+    function openItem(item=null){
+      if(!canManage)return;
+      itemForm.reset();
+      itemForm.elements.id.value=item?.id||'';
+      itemForm.elements.name.value=item?.name||'';
+      itemForm.elements.group.value=item?.group||'add-ons';
+      itemForm.elements.category.value=item?.category||'service';
+      itemForm.elements.unitLabel.value=item?.unitLabel||'each';
+      itemForm.elements.unitPrice.value=Number(item?.unitPrice||0);
+      itemForm.elements.internalCost.value=Number(item?.internalCost||0);
+      itemForm.elements.targetMargin.value=Number(item?.targetMargin||0);
+      itemForm.elements.getExempt.checked=Boolean(item?.getExempt);
+      itemForm.elements.active.checked=item?.active!==false;
+      itemForm.elements.description.value=item?.description||'';
+      itemTitle.textContent=item?'Edit '+item.name:'Add catalog item';
+      itemMessage.textContent='';
+      itemDialog.showModal();
+    }
+
+    async function archiveItem(item){
+      if(!confirm('Archive '+item.name+'? Existing proposal lines will not be changed.'))return;
+      message.textContent='Archiving '+item.name+'…';
+      try{const data=await api({action:'archive-item',id:item.id});state.catalog=data.catalog||[];renderCatalog();message.textContent=item.name+' archived.';}catch(error){message.textContent=error.message||'Unable to archive item.';}
+    }
+
+    async function rollback(row){
+      if(!confirm('Restore the entire catalog to its state immediately before import '+row.id+'?'))return;
+      message.textContent='Rolling back '+row.id+'…';
+      try{const data=await api({action:'rollback-import',id:row.id});state.catalog=data.catalog||[];state.imports=data.imports||[];renderCatalog();renderHistory();message.textContent='Catalog restored to the pre-import snapshot.';}catch(error){message.textContent=error.message||'Rollback failed.';}
+    }
+
+    function fileToBase64(file){
+      return new Promise((resolve,reject)=>{
+        const reader=new FileReader();
+        reader.onerror=()=>reject(new Error('Unable to read the selected file.'));
+        reader.onload=()=>resolve(String(reader.result||'').split(',').pop()||'');
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function readMapping(){
+      const result={};
+      mappingGrid?.querySelectorAll('[data-map-field]').forEach((select)=>{if(select.value)result[select.dataset.mapField]=select.value;});
+      return result;
+    }
+
+    function renderMapping(headers,mapping){
+      mappingSection?.classList.remove('hidden');
+      if(!mappingGrid)return;
+      mappingGrid.innerHTML='';
+      Object.entries(mappingLabels).forEach(([field,label])=>{
+        const wrapper=document.createElement('label');wrapper.className='grid gap-2 text-sm font-semibold';
+        const title=document.createElement('span');title.textContent=label;
+        const select=document.createElement('select');select.dataset.mapField=field;select.className='rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3';
+        select.innerHTML='<option value="">Not mapped</option>'+headers.map((h)=>'<option value="'+esc(h)+'">'+esc(h)+'</option>').join('');
+        select.value=mapping?.[field]||'';
+        wrapper.append(title,select);mappingGrid.appendChild(wrapper);
+      });
+      mappingGrid.querySelectorAll('select').forEach((select)=>select.addEventListener('change',()=>previewImport(false)));
+    }
+
+    function renderPreview(data){
+      previewSection?.classList.remove('hidden');
+      const s=data.summary||{};
+      importSummary.textContent=Number(s.rows||0)+' rows · '+Number(s.new||0)+' new · '+Number(s.updates||0)+' matching updates · '+Number(s.duplicates||0)+' duplicate rows · '+Number(s.invalid||0)+' invalid.';
+      previewRows.innerHTML='';
+      (data.rows||[]).forEach((row)=>{
+        const item=row.item||{};
+        const tr=document.createElement('tr');tr.className='bg-[var(--koa-ivory)]';
+        tr.innerHTML='<td class="rounded-l-xl px-3 py-3">'+Number(row.rowNumber||0)+'</td><td class="px-3 py-3"><span class="rounded-full px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.07em] '+statusClass(row.status)+'">'+esc(row.status)+'</span></td><td class="px-3 py-3 font-semibold">'+esc(item.name||'')+(row.errors?.length?'<p class="mt-1 text-[.62rem] font-normal text-red-700">'+esc(row.errors.join(' '))+'</p>':'')+'</td><td class="px-3 py-3">'+esc(groupLabels[item.group]||item.group||'')+'</td><td class="px-3 py-3">'+money(item.unitPrice)+'</td><td class="px-3 py-3">'+money(item.internalCost)+'</td><td class="px-3 py-3">'+Number(item.targetMargin||0).toFixed(1)+'%</td><td class="rounded-r-xl px-3 py-3">'+(item.getExempt?'Exempt':'Taxable')+'</td>';
+        previewRows.appendChild(tr);
+      });
+    }
+
+    async function previewImport(resetMapping=true){
+      const file=importFile?.files?.[0];
+      if(!file){importMessage.textContent='Choose a CSV or Excel file first.';return;}
+      try{
+        importMessage.textContent='Reading and validating '+file.name+'…';
+        const base64=importPayload?.filename===file.name?importPayload.base64:await fileToBase64(file);
+        const mapping=resetMapping?undefined:readMapping();
+        const data=await api({action:'preview-import',filename:file.name,base64,mapping,defaultGroup:defaultGroup?.value||'other'});
+        importPayload={filename:file.name,base64,headers:data.headers,mapping:data.mapping};
+        if(resetMapping)renderMapping(data.headers,data.mapping);
+        renderPreview(data);
+        importMessage.textContent='Preview ready. No catalog data has been changed.';
+      }catch(error){
+        const data=error.data||{};
+        if(data.headers&&data.suggestedMapping)renderMapping(data.headers,data.suggestedMapping);
+        importMessage.textContent=error.message||'Unable to preview import.';
+      }
+    }
+
+    async function commitImport(){
+      if(!importPayload){importMessage.textContent='Preview the file first.';return;}
+      const mapping=readMapping();
+      if(!mapping.name){importMessage.textContent='Map a source column to Name before importing.';return;}
+      if(!confirm('Import the previewed catalog rows now? A rollback snapshot will be created first.'))return;
+      try{
+        importMessage.textContent='Creating rollback snapshot and importing catalog…';
+        const data=await api({action:'commit-import',filename:importPayload.filename,base64:importPayload.base64,mapping,defaultGroup:defaultGroup?.value||'other',duplicateMode:duplicateMode?.value||'update'});
+        state.catalog=data.catalog||[];state.imports=data.imports||[];
+        renderCatalog();renderHistory();
+        importMessage.textContent='Import complete: '+Number(data.import?.imported||0)+' rows. Rollback is available in Recent catalog imports.';
+        setTimeout(()=>importDialog?.close(),900);
+      }catch(error){importMessage.textContent=error.message||'Import failed.';}
+    }
+
+    async function load(){
+      const session=await getAdminSession();
+      loading?.classList.add('hidden');
+      if(!session||session.accessBlocked||!session.capabilities?.includes('sales.view')){unauthorized?.classList.remove('hidden');return;}
+      canManage=session.capabilities.includes('sales.profit_settings');
+      manageActions?.classList.toggle('hidden',!canManage);
+      app?.classList.remove('hidden');
+      try{
+        const response=await fetch('/api/admin/catalog',{cache:'no-store'});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Unable to load catalog.');
+        state=data;renderCatalog();renderHistory();
+        message.textContent=state.catalog.length+' catalog items loaded. Website packages and catalog entries are automatically seeded when missing.';
+      }catch(error){message.textContent=error.message||'Unable to load catalog.';}
+    }
+
+    search?.addEventListener('input',renderCatalog);
+    groupFilter?.addEventListener('change',renderCatalog);
+    showArchived?.addEventListener('change',renderCatalog);
+    document.querySelector('[data-new-item]')?.addEventListener('click',()=>openItem());
+    document.querySelectorAll('[data-close-item]').forEach((b)=>b.addEventListener('click',()=>itemDialog?.close()));
+    document.querySelector('[data-open-import]')?.addEventListener('click',()=>{importPayload=null;mappingSection?.classList.add('hidden');previewSection?.classList.add('hidden');if(importMessage)importMessage.textContent='';importDialog?.showModal();});
+    document.querySelector('[data-close-import]')?.addEventListener('click',()=>importDialog?.close());
+    document.querySelector('[data-preview-import]')?.addEventListener('click',()=>previewImport(true));
+    document.querySelector('[data-commit-import]')?.addEventListener('click',commitImport);
+    defaultGroup?.addEventListener('change',()=>{if(importPayload)previewImport(false);});
+
+    itemForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const data=new FormData(itemForm);itemMessage.textContent='Saving…';
+      try{
+        const result=await api({action:'save-item',item:{id:data.get('id'),name:data.get('name'),group:data.get('group'),category:data.get('category'),unitLabel:data.get('unitLabel'),unitPrice:Number(data.get('unitPrice')||0),internalCost:Number(data.get('internalCost')||0),targetMargin:Number(data.get('targetMargin')||0),getExempt:data.get('getExempt')==='on',active:data.get('active')==='on',description:data.get('description')}});
+        state.catalog=result.catalog||[];renderCatalog();itemMessage.textContent='Saved.';setTimeout(()=>itemDialog?.close(),500);
+      }catch(error){itemMessage.textContent=error.message||'Unable to save catalog item.';}
+    });
+
+    document.querySelector('[data-refresh-website]')?.addEventListener('click',async()=>{
+      message.textContent='Synchronizing website catalog…';
+      try{const data=await api({action:'refresh-website-catalog'});state.catalog=data.catalog||[];renderCatalog();message.textContent='Website catalog synchronized: '+Number(data.added||0)+' added, '+Number(data.refreshed||0)+' source items refreshed.';}catch(error){message.textContent=error.message||'Unable to synchronize website catalog.';}
+    });
+
+    load();
+  </script>
+</BaseLayout>
