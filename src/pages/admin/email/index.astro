@@ -1,0 +1,176 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+
+<BaseLayout noindex title="Koa’s Email Routing" description="Control Koa’s automated email destinations." canonical="https://koasevents.com/admin/email/">
+  <main class="koa-admin-page min-h-screen bg-[var(--koa-ivory)] pb-28">
+    <div class="container-shell py-8 sm:py-10">
+      <section data-email-routing-app class="hidden">
+        <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="eyebrow text-[var(--koa-clay)]">Administration · Communications</p>
+            <h1 class="display mt-2 text-5xl text-[var(--koa-forest)] sm:text-6xl">Email</h1>
+            <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">See exactly where Koa’s automated emails go. Internal notification routes can be assigned to one or more To, CC, and BCC recipients. Client and vendor messages remain tied to the actual client/vendor record so they cannot be accidentally redirected.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href="/admin/email-preview/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Email Preview</a>
+            <button data-save-routes type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Save routing</button>
+          </div>
+        </div>
+
+        <div data-email-routing-status class="mt-4 hidden rounded-xl border p-3 text-sm font-semibold"></div>
+
+        <section class="mt-6 rounded-[1.4rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Current sender identities</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">From + Reply-To</h2>
+            </div>
+            <p data-routing-updated class="text-xs text-[var(--koa-ink)]/45"></p>
+          </div>
+          <div data-sender-grid class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+        </section>
+
+        <section class="mt-6">
+          <div class="flex items-end justify-between gap-4">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Destination control</p>
+              <h2 class="display mt-1 text-4xl text-[var(--koa-forest)]">Email routes</h2>
+            </div>
+          </div>
+          <div data-route-grid class="mt-4 grid gap-4 lg:grid-cols-2"></div>
+        </section>
+      </section>
+
+      <section data-email-routing-denied class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Email</p>
+        <h1 class="display mt-2 text-4xl text-[var(--koa-forest)]">Email access required</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/58">You are signed in, but your role does not include Email administration access.</p>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const app=document.querySelector('[data-email-routing-app]');
+    const denied=document.querySelector('[data-email-routing-denied]');
+    const routeGrid=document.querySelector('[data-route-grid]');
+    const senderGrid=document.querySelector('[data-sender-grid]');
+    const saveButton=document.querySelector('[data-save-routes]');
+    const statusNode=document.querySelector('[data-email-routing-status]');
+    const updatedNode=document.querySelector('[data-routing-updated]');
+    let latest={routes:[],senders:{}};
+    let canManage=false;
+
+    function esc(value){return String(value||'').replace(/[&<>"']/g,(char)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]||char));}
+    function showStatus(message,tone='ok'){
+      if(!(statusNode instanceof HTMLElement))return;
+      statusNode.textContent=message;
+      statusNode.classList.remove('hidden','border-emerald-200','bg-emerald-50','text-emerald-900','border-red-200','bg-red-50','text-red-900');
+      statusNode.classList.add(tone==='error'?'border-red-200':'border-emerald-200',tone==='error'?'bg-red-50':'bg-emerald-50',tone==='error'?'text-red-900':'text-emerald-900');
+    }
+    function recipientText(route){
+      if(route.mode==='dynamic'){
+        return route.dynamicSource==='client'?'Client email from CRM/inquiry record':
+          route.dynamicSource==='vendor'?'Vendor email from Vendor CRM/event record':
+          'Currently signed-in staff member';
+      }
+      return (route.to||[]).join(', ')||'Not configured';
+    }
+    function renderSenders(){
+      if(!senderGrid)return;
+      const rows=[
+        ['Lead notifications',latest.senders?.leadFrom||'—'],
+        ['Client emails',latest.senders?.clientFrom||'—'],
+        ['Client Reply-To',latest.senders?.clientReplyTo||'—'],
+        ['Vendor emails',latest.senders?.vendorFrom||'—'],
+      ];
+      senderGrid.innerHTML=rows.map(([label,value])=>'<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><p class="mt-2 break-all text-sm font-semibold text-[var(--koa-forest)]">'+esc(value)+'</p></article>').join('');
+    }
+    function renderRoutes(){
+      if(!routeGrid)return;
+      routeGrid.innerHTML='';
+      for(const route of latest.routes||[]){
+        const card=document.createElement('article');
+        card.className='rounded-[1.2rem] border border-[var(--koa-line)] bg-white p-5 shadow-[0_8px_24px_rgba(7,30,23,.05)]';
+        const top=document.createElement('div');
+        top.className='flex items-start justify-between gap-3';
+        const copy=document.createElement('div');
+        copy.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(route.category)+'</p><h3 class="mt-1 text-lg font-semibold text-[var(--koa-forest)]">'+esc(route.label)+'</h3><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(route.description)+'</p>';
+        const badge=document.createElement('span');
+        badge.className='shrink-0 rounded-full px-2.5 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+(route.mode==='configurable'?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700');
+        badge.textContent=route.mode==='configurable'?'Configurable':'Dynamic';
+        top.append(copy,badge);card.appendChild(top);
+
+        if(route.mode==='dynamic'){
+          const dynamic=document.createElement('div');
+          dynamic.className='mt-4 rounded-xl bg-[var(--koa-ivory)] p-4';
+          dynamic.innerHTML='<p class="text-[.5rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recipient source</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+esc(recipientText(route))+'</p><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/45">Protected dynamic route: the recipient follows the actual record instead of a fixed inbox.</p>';
+          card.appendChild(dynamic);
+        }else{
+          const fields=document.createElement('div');
+          fields.className='mt-4 grid gap-3';
+          for(const kind of ['to','cc','bcc']){
+            const label=document.createElement('label');
+            label.className='grid gap-1.5 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';
+            label.textContent=kind.toUpperCase();
+            const textarea=document.createElement('textarea');
+            textarea.rows=kind==='to'?2:1;
+            textarea.dataset.routeId=route.id;
+            textarea.dataset.routeField=kind;
+            textarea.disabled=!canManage;
+            textarea.value=(route[kind]||[]).join(', ');
+            textarea.placeholder=kind==='to'?'name@example.com':'Optional';
+            textarea.className='min-h-[2.9rem] rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2 text-sm font-semibold normal-case tracking-normal text-[var(--koa-forest)] disabled:bg-slate-50 disabled:text-slate-400';
+            label.appendChild(textarea);fields.appendChild(label);
+          }
+          const fallback=document.createElement('p');
+          fallback.className='text-[.58rem] leading-4 text-[var(--koa-ink)]/42';
+          fallback.textContent='Default/fallback: '+((route.defaultTo||[]).join(', ')||'none');
+          fields.appendChild(fallback);card.appendChild(fields);
+        }
+        routeGrid.appendChild(card);
+      }
+    }
+    function parseEmails(value){return String(value||'').split(/[\n,;]+/).map((x)=>x.trim().toLowerCase()).filter(Boolean);}
+    async function load(){
+      const session=await getAdminSession();
+      const caps=new Set(session?.capabilities||session?.permissions||[]);
+      if(!session||session.accessBlocked||(!session.isAdmin&&!caps.has('email.view'))){denied?.classList.remove('hidden');return;}
+      canManage=Boolean(session.isAdmin||caps.has('email.manage'));
+      app?.classList.remove('hidden');
+      if(saveButton instanceof HTMLButtonElement)saveButton.classList.toggle('hidden',!canManage);
+      const response=await fetch('/api/admin/email-routing',{cache:'no-store'});
+      if(response.status===401)return;
+      if(response.status===403){app?.classList.add('hidden');denied?.classList.remove('hidden');return;}
+      if(!response.ok){showStatus('Unable to load email routing.','error');return;}
+      latest=await response.json();
+      if(updatedNode)updatedNode.textContent=latest.updatedAt?'Last changed '+new Date(latest.updatedAt).toLocaleString()+(latest.updatedBy?' by '+latest.updatedBy:''):'Using default routing';
+      renderSenders();renderRoutes();
+    }
+    saveButton?.addEventListener('click',async()=>{
+      if(!canManage)return;
+      const routes={};
+      for(const route of latest.routes||[]){
+        if(route.mode!=='configurable')continue;
+        routes[route.id]={to:[],cc:[],bcc:[]};
+        document.querySelectorAll('[data-route-id="'+CSS.escape(route.id)+'"]').forEach((node)=>{
+          if(!(node instanceof HTMLTextAreaElement))return;
+          routes[route.id][node.dataset.routeField]=parseEmails(node.value);
+        });
+      }
+      if(saveButton instanceof HTMLButtonElement){saveButton.disabled=true;saveButton.textContent='Saving…';}
+      try{
+        const response=await fetch('/api/admin/email-routing',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({routes})});
+        const result=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(result.error||'Unable to save email routing.');
+        latest=result;renderSenders();renderRoutes();
+        if(updatedNode)updatedNode.textContent='Last changed '+new Date(latest.updatedAt).toLocaleString()+(latest.updatedBy?' by '+latest.updatedBy:'');
+        showStatus('Email routing saved. New internal emails will use these recipients.');
+      }catch(error){showStatus(error instanceof Error?error.message:'Unable to save email routing.','error');}
+      finally{if(saveButton instanceof HTMLButtonElement){saveButton.disabled=false;saveButton.textContent='Save routing';}}
+    });
+    load();
+  </script>
+</BaseLayout>
