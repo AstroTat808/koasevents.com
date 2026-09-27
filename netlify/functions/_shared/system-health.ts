@@ -1,9 +1,11 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
 import { credentialHealthSummary } from './credential-health';
+import { quickBooksWebhookVerifierToken } from './quickbooks';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -154,6 +156,13 @@ const API_CHECKS = [
   ['system-health-api','System Health API','/api/admin/health'],
 ] as const;
 
+const SYNTHETIC_INTEGRATION_COMPONENTS = [
+  {id:'synthetic-event-documents',name:'Event Documents synthetic probe',path:'/api/admin/events/documents/__health__',kind:'api' as const},
+  {id:'synthetic-vendor-insurance-document',name:'Vendor Insurance document synthetic probe',path:'/api/admin/vendors/insurance/__health__',kind:'api' as const},
+  {id:'synthetic-quickbooks-webhook',name:'QuickBooks webhook synthetic probe',path:'/api/webhooks/quickbooks',kind:'api' as const},
+  {id:'synthetic-signwell-webhook',name:'SignWell webhook synthetic probe',path:'/api/webhooks/signwell',kind:'api' as const},
+] as const;
+
 export function healthComponents() {
   return [
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
@@ -170,8 +179,30 @@ export function healthComponents() {
     {id:'resend-webhook',name:'Resend webhook delivery',path:'/api/webhooks/resend',kind:'api' as const},
     {id:'email-template-compatibility',name:'Email template compatibility',path:'build-safety email gate',kind:'api' as const},
     {id:'email-release-sync',name:'Email rendering release sync',path:'email rendering main → production',kind:'api' as const},
+    ...SYNTHETIC_INTEGRATION_COMPONENTS,
     ...API_CHECKS.map(([id,name,path])=>({id,name,path,kind:'api' as const})),
   ];
+}
+
+export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=null) {
+  const components=healthComponents();
+  const pageIds=new Set(PAGE_CHECKS.map(([id])=>id));
+  const apiIds=new Set(API_CHECKS.map(([id])=>id));
+  const pages=components.filter((row)=>pageIds.has(row.id as any)).length;
+  const apis=components.filter((row)=>apiIds.has(row.id as any)).length;
+  const integrations=components.length-pages-apis;
+  const checkedIds=new Set((snapshot?.checks||[]).map((row)=>row.id));
+  const monitored=snapshot?components.filter((row)=>checkedIds.has(row.id)).length:components.length;
+  const total=components.length;
+  return {
+    pages,
+    apis,
+    integrations,
+    total,
+    monitored,
+    percent:total?Math.round((monitored/total)*1000)/10:100,
+    complete:monitored===total,
+  };
 }
 
 function defaultAlertAfter(id:string):1|2 {
@@ -375,6 +406,98 @@ async function timedFetch(url:string, init:RequestInit={}) {
   } catch (error) {
     return {response:null,ms:Date.now()-started,error:error instanceof Error?error.message:'Request failed'};
   }
+}
+
+function syntheticResult(
+  id:string,
+  name:string,
+  path:string,
+  result:{response:Response|null;ms:number;error:string},
+  expectedHeader:string,
+):HealthCheck {
+  const status=result.response?.status||0;
+  const marker=result.response?.headers.get('x-koa-synthetic-check')||'';
+  const ok=Boolean(result.response&&status===204&&marker===expectedHeader);
+  return {
+    id,
+    name,
+    kind:'api',
+    path,
+    ok,
+    status,
+    ms:result.ms,
+    severity:ok?'green':'red',
+    detail:result.error || (ok
+      ? 'Non-destructive synthetic request completed with HTTP 204 and the expected health marker.'
+      : 'Synthetic request did not return the expected HTTP 204 health marker.'),
+  };
+}
+
+async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCheck[]> {
+  const eventDocumentsPromise=timedFetch(origin+'/api/admin/events/documents/__health__',{method:'HEAD'});
+  const vendorInsurancePromise=timedFetch(origin+'/api/admin/vendors/insurance/__health__',{method:'HEAD'});
+
+  const quickBooksToken=clean(quickBooksWebhookVerifierToken(),1000);
+  const quickBooksBody=JSON.stringify({koaHealthCheck:true,eventNotifications:[]});
+  const quickBooksPromise=quickBooksToken
+    ? timedFetch(origin+'/api/webhooks/quickbooks',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'Intuit-Signature':createHmac('sha256',quickBooksToken).update(quickBooksBody,'utf8').digest('base64'),
+          'X-Koa-Health-Check':'1',
+        },
+        body:quickBooksBody,
+      })
+    : Promise.resolve({response:null,ms:0,error:'QuickBooks webhook verifier token is not configured.'});
+
+  const signWellToken=clean(Netlify.env.get('SIGNWELL_WEBHOOK_TOKEN'),1000);
+  const signWellBody=JSON.stringify({koaHealthCheck:true,event:'koa_health_check'});
+  const signWellPromise=signWellToken
+    ? timedFetch(origin+'/api/webhooks/signwell?token='+encodeURIComponent(signWellToken),{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:signWellBody,
+      })
+    : Promise.resolve({response:null,ms:0,error:'SIGNWELL_WEBHOOK_TOKEN is not configured.'});
+
+  const [eventDocuments,vendorInsurance,quickBooks,signWell]=await Promise.all([
+    eventDocumentsPromise,
+    vendorInsurancePromise,
+    quickBooksPromise,
+    signWellPromise,
+  ]);
+
+  return [
+    syntheticResult('synthetic-event-documents','Event Documents synthetic probe','/api/admin/events/documents/:recordId',eventDocuments,'event-documents'),
+    syntheticResult('synthetic-vendor-insurance-document','Vendor Insurance document synthetic probe','/api/admin/vendors/insurance/:vendorId',vendorInsurance,'vendor-insurance-document'),
+    syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/api/webhooks/quickbooks',quickBooks,'quickbooks-webhook'),
+    syntheticResult('synthetic-signwell-webhook','SignWell webhook synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook'),
+  ];
+}
+
+async function syntheticIntegrationChecks(context:Context,origin:string,force:boolean):Promise<HealthCheck[]> {
+  const store=healthStore(context);
+  const cacheKey='synthetic/integrations/latest';
+  if(!force){
+    try{
+      const cached:any=await store.get(cacheKey,{type:'json'});
+      const checkedAt=Date.parse(String(cached?.checkedAt||''));
+      const rows=Array.isArray(cached?.checks)?cached.checks:[];
+      if(rows.length===SYNTHETIC_INTEGRATION_COMPONENTS.length&&Number.isFinite(checkedAt)&&Date.now()-checkedAt<6*60*60*1000){
+        return rows.map((row:any)=>({
+          ...row,
+          detail:clean(String(row?.detail||'')+' · Cached live synthetic verification from '+new Date(checkedAt).toISOString()+'; hourly probes run at most every 6 hours to limit Netlify credit usage.',1200),
+        }));
+      }
+    }catch{}
+  }
+
+  const checks=await runLiveSyntheticIntegrationChecks(origin);
+  try{
+    await store.setJSON(cacheKey,{checkedAt:new Date().toISOString(),checks});
+  }catch{}
+  return checks;
 }
 
 export async function inspectDeploymentSync(context:Context,seed:any={}) {
@@ -914,12 +1037,14 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const credentialHealthPromise=emailHealthPromise.then((emailHealth)=>
     credentialHealthSummary(context,{force:source==='manual',emailHealth})
   );
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth]=await Promise.all([
+  const syntheticChecksPromise=syntheticIntegrationChecks(context,origin,source!=='hourly');
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
     emailHealthPromise,
     credentialHealthPromise,
+    syntheticChecksPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -1162,7 +1287,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
