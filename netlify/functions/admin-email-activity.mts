@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireCapability } from './_shared/admin';
 import { readEmailHealthEvents } from './_shared/email-health';
 
@@ -34,6 +35,7 @@ function routeFor(type:string){
   return 'other';
 }
 function problem(status:string){return ['failed','bounced','complained','suppressed'].includes(status);}
+function delivered(status:string){return ['delivered','opened','clicked'].includes(status);}
 function recommendation(status:string,bounceType:string,bounceSubType:string,message:string){
   const hay=(bounceType+' '+bounceSubType+' '+message).toLowerCase();
   if(status==='complained')return 'Do not resend automatically. Confirm the recipient expected this message and review consent or list source before contacting them again.';
@@ -57,11 +59,150 @@ async function resend(path:string){
     return {ok:false,status:0,body:{message:error instanceof Error?error.message:'Resend request failed.'}};
   }
 }
+function mapEmail(row:any){
+  const status=normalizeStatus(row?.last_event||row?.status||row?.event)||'unknown';
+  const emailType=classify(row?.subject);
+  return {
+    emailId:clean(row?.id,180),
+    resendMessageId:clean(row?.message_id,300)||clean(row?.id,180),
+    recipient:addresses(row?.to).join(', '),
+    recipients:addresses(row?.to),
+    subject:clean(row?.subject,500)||'(subject unavailable)',
+    emailType,
+    route:routeFor(emailType),
+    status,
+    sent:!problem(status),
+    createdAt:clean(row?.created_at||row?.createdAt,100),
+    from:clean(row?.from,300),
+    problem:problem(status),
+  };
+}
+function domainOf(value:unknown){
+  const match=String(value??'').toLowerCase().match(/@([a-z0-9.-]+)(?:>|\s|$)/i);
+  return match?.[1]?.replace(/\.$/,'')||'';
+}
+function roundRate(numerator:number,denominator:number){
+  return denominator?Math.round((numerator/denominator)*1000)/10:0;
+}
+function summarizePeriod(rows:any[],days:number,now:number){
+  const cutoff=now-days*24*60*60*1000;
+  const period=rows.filter((row)=>{
+    const at=Date.parse(String(row?.createdAt||''));
+    return Number.isFinite(at)&&at>=cutoff;
+  });
+  let deliveredCount=0,bounced=0,failed=0,suppressed=0,complaints=0;
+  const domains=new Map<string,number>();
+  for(const row of period){
+    const status=normalizeStatus(row?.status);
+    if(delivered(status))deliveredCount+=1;
+    if(status==='bounced')bounced+=1;
+    if(status==='failed')failed+=1;
+    if(status==='suppressed')suppressed+=1;
+    if(status==='complained')complaints+=1;
+    if(problem(status)){
+      for(const recipient of addresses(row?.recipients?.length?row.recipients:row?.recipient)){
+        const domain=domainOf(recipient);
+        if(domain)domains.set(domain,(domains.get(domain)||0)+1);
+      }
+    }
+  }
+  const totalSent=period.length;
+  return {
+    days,
+    totalSent,
+    delivered:deliveredCount,
+    deliveryRate:roundRate(deliveredCount,totalSent),
+    bounced,
+    bounceRate:roundRate(bounced,totalSent),
+    failures:failed+suppressed,
+    failed,
+    suppressed,
+    complaints,
+    topFailingDomains:[...domains.entries()]
+      .map(([domain,count])=>({domain,count}))
+      .sort((a,b)=>b.count-a.count||a.domain.localeCompare(b.domain))
+      .slice(0,5),
+  };
+}
+function summaryStore(context:Context){
+  return context.deploy.context==='production'
+    ? getStore({name:'koa-email-analytics',consistency:'strong'})
+    : getDeployStore({name:'koa-email-analytics'});
+}
+async function emailAnalyticsSummary(context:Context,force=false){
+  const store=summaryStore(context);
+  const cached:any=await store.get('summary-v1',{type:'json'});
+  const cachedAt=Date.parse(String(cached?.generatedAt||''));
+  if(!force&&Number.isFinite(cachedAt)&&Date.now()-cachedAt<15*60*1000)return cached;
+
+  const now=Date.now();
+  const cutoff90=now-90*24*60*60*1000;
+  const rows:any[]=[];
+  const seen=new Set<string>();
+  let after='';
+  let hasMore=true;
+  let coverageComplete=false;
+  let pages=0;
+  while(hasMore&&pages<100){
+    const params=new URLSearchParams({limit:'100'});
+    if(after)params.set('after',after);
+    const result=await resend('/emails?'+params.toString());
+    if(!result.ok)throw new Error(clean(result.body?.message||'Unable to load email analytics history.',500));
+    const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
+    const mapped=raw.map(mapEmail);
+    for(const row of mapped){
+      if(row.emailId&&!seen.has(row.emailId)){seen.add(row.emailId);rows.push(row);}
+    }
+    pages+=1;
+    hasMore=Boolean(result.body?.has_more);
+    after=mapped.length?String(mapped[mapped.length-1]?.emailId||''):'';
+    const oldest=mapped.reduce((min,row)=>{
+      const at=Date.parse(String(row?.createdAt||''));
+      return Number.isFinite(at)?Math.min(min,at):min;
+    },Number.POSITIVE_INFINITY);
+    if(!hasMore||!mapped.length||!after||oldest<cutoff90){
+      coverageComplete=!hasMore||oldest<cutoff90;
+      break;
+    }
+  }
+  const oldestLoaded=rows.reduce((min,row)=>{
+    const at=Date.parse(String(row?.createdAt||''));
+    return Number.isFinite(at)?Math.min(min,at):min;
+  },Number.POSITIVE_INFINITY);
+  const summary={
+    ok:true,
+    generatedAt:new Date().toISOString(),
+    retainedRowsScanned:rows.length,
+    coverageComplete90d:coverageComplete,
+    oldestLoadedAt:Number.isFinite(oldestLoaded)?new Date(oldestLoaded).toISOString():'',
+    note:coverageComplete
+      ? 'Metrics use all Resend email records needed to cover the last 90 days.'
+      : 'Metrics use the newest 10,000 retained Resend records; very high-volume older activity may be outside this calculation.',
+    periods:[
+      summarizePeriod(rows,7,now),
+      summarizePeriod(rows,30,now),
+      summarizePeriod(rows,90,now),
+    ],
+  };
+  await store.setJSON('summary-v1',summary);
+  return summary;
+}
 
 export default async (req:Request,context:Context)=>{
   const auth=await requireCapability('email.view',req);
   if(auth.response)return auth.response;
   const url=new URL(req.url);
+
+  if(url.searchParams.get('summary')==='1'){
+    try{
+      return Response.json(await emailAnalyticsSummary(context,url.searchParams.get('refresh')==='1'),{
+        headers:{'Cache-Control':'private, max-age=60'},
+      });
+    }catch(error){
+      return Response.json({error:error instanceof Error?error.message:'Unable to calculate email analytics.'},{status:400});
+    }
+  }
+
   const detailId=clean(url.searchParams.get('id'),180);
   if(detailId){
     const [emailResult,events]=await Promise.all([
@@ -108,24 +249,7 @@ export default async (req:Request,context:Context)=>{
   const result=await resend('/emails?'+params.toString());
   if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to load email history.',500)},{status:result.status||400});
   const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
-  const rows=raw.map((row:any)=>{
-    const status=normalizeStatus(row?.last_event||row?.status||row?.event)||'unknown';
-    const emailType=classify(row?.subject);
-    return {
-      emailId:clean(row?.id,180),
-      resendMessageId:clean(row?.message_id,300)||clean(row?.id,180),
-      recipient:addresses(row?.to).join(', '),
-      recipients:addresses(row?.to),
-      subject:clean(row?.subject,500)||'(subject unavailable)',
-      emailType,
-      route:routeFor(emailType),
-      status,
-      sent:!problem(status),
-      createdAt:clean(row?.created_at,100),
-      from:clean(row?.from,300),
-      problem:problem(status),
-    };
-  });
+  const rows=raw.map(mapEmail);
   return Response.json({
     ok:true,
     rows,
