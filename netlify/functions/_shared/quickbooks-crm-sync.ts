@@ -898,10 +898,21 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
 
   await writeRecords(context, records, changedRecordIds);
   const integrations = integrationStore(context);
-  await integrations.setJSON('quickbooks/manual-sync-last', result);
-  const history = ((await integrations.get('quickbooks/manual-sync-history', { type: 'json' })) || []) as any[];
-  await integrations.setJSON('quickbooks/manual-sync-history', [result, ...history].slice(0, 100));
+
+  // Full recovery snapshots belong only in the per-sync detail record. Keeping
+  // them out of the lightweight last/history blobs avoids duplicating entire
+  // CRM records in frequently-read integration state.
   await recordQuickBooksCrmSyncHistory(context, result);
-  await appendSyncEvent(context, result);
-  return result;
+  const recoverySummary = {
+    version: result.recovery.version,
+    crmOnly: true,
+    capturedAt: result.recovery.capturedAt,
+    recordCount: result.recovery.records.length,
+  };
+  const lightweightResult = { ...result, recovery: recoverySummary };
+  await integrations.setJSON('quickbooks/manual-sync-last', lightweightResult);
+  const history = ((await integrations.get('quickbooks/manual-sync-history', { type: 'json' })) || []) as any[];
+  await integrations.setJSON('quickbooks/manual-sync-history', [lightweightResult, ...history].slice(0, 100));
+  await appendSyncEvent(context, lightweightResult);
+  return lightweightResult;
 }
