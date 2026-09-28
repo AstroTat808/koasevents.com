@@ -37,12 +37,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
               <div>
                 <p class="eyebrow text-[var(--koa-amber-light)]">Booked event</p>
-                <h2 data-title class="display mt-3 text-5xl"></h2>
+                <h2 class="display mt-3 text-5xl"><a data-title class="underline decoration-white/20 underline-offset-4 hover:text-[var(--koa-amber-light)]"></a></h2>
                 <p data-meta class="mt-3 text-sm text-white/65"></p>
               </div>
               <div class="flex flex-wrap gap-2">
                 <span data-readiness class="rounded-full border border-white/15 bg-white/[.07] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em]"></span>
-                <a data-crm-link class="rounded-full bg-white px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]" href="/admin/quotes/">Open CRM</a>
+                <a data-crm-link class="rounded-full bg-white px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]" href="/admin/clients/">Open Client Workspace</a>
               </div>
             </div>
           </header>
@@ -356,11 +356,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const events=payload.events||[];
       eventCount.textContent=String(events.length);
       events.forEach((entry)=>{
-        const button=document.createElement('button');button.type='button';
-        button.className='rounded-xl border px-4 py-3 text-left '+(selected?.record?.id===entry.record.id?'border-[var(--koa-amber-light)] bg-white/[.12]':'border-white/10 bg-white/[.05]');
-        button.append(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]',entry.ops.status||'planning'),text('strong','mt-1 block text-sm text-white',entry.record.customer?.name||entry.record.id),text('p','mt-1 text-xs text-white/48',[dateLabel(entry.record.customer?.eventDate),packageLabel(entry.record.packageId)].filter(Boolean).join(' · ')));
-        button.addEventListener('click',()=>selectEvent(entry));
-        eventList.appendChild(button);
+        const card=document.createElement('article');
+        card.className='rounded-xl border px-4 py-3 '+(selected?.record?.id===entry.record.id?'border-[var(--koa-amber-light)] bg-white/[.12]':'border-white/10 bg-white/[.05]');
+        card.appendChild(text('p','text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-amber-light)]',entry.ops.status||'planning'));
+        const name=document.createElement('a');
+        name.href='/admin/clients/?id='+encodeURIComponent(entry.record.id)+'&tab=documents';
+        name.className='mt-1 block text-sm font-bold text-white underline decoration-white/25 underline-offset-4 hover:text-[var(--koa-amber-light)]';
+        name.textContent=entry.record.customer?.name||entry.record.id;
+        card.appendChild(name);
+        card.appendChild(text('p','mt-1 text-xs text-white/48',[dateLabel(entry.record.customer?.eventDate),packageLabel(entry.record.packageId)].filter(Boolean).join(' · ')));
+        const open=document.createElement('button');open.type='button';open.className='mt-3 rounded-full border border-white/15 px-3 py-1.5 text-[.55rem] font-black uppercase tracking-[.07em] text-white/80';open.textContent='Open Event Ops';open.addEventListener('click',()=>selectEvent(entry));
+        card.appendChild(open);
+        eventList.appendChild(card);
       });
       if(!events.length)eventList.appendChild(text('p','text-sm text-white/50','No booked events match this search.'));
     }
@@ -370,7 +377,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       selected=entry;
       if(shouldChoosePriority)activeTab=mobilePriorityTab(entry);
       empty.classList.add('hidden'); detail.classList.remove('hidden');
-      document.querySelector('[data-title]').textContent=entry.record.customer?.name||entry.record.id;
+      const clientTitle=document.querySelector('[data-title]');
+      clientTitle.textContent=entry.record.customer?.name||entry.record.id;
+      clientTitle.href='/admin/clients/?id='+encodeURIComponent(entry.record.id)+'&tab=documents';
+      const crmLink=document.querySelector('[data-crm-link]');
+      crmLink.href='/admin/clients/?id='+encodeURIComponent(entry.record.id)+'&tab=operations';
+      crmLink.textContent='Open Client Workspace';
       document.querySelector('[data-meta]').textContent=[entry.record.customer?.eventDate?dateLabel(entry.record.customer.eventDate):'',packageLabel(entry.record.packageId),entry.record.id].filter(Boolean).join(' · ');
       overviewForm.elements.status.value=entry.ops.status||'planning';
       overviewForm.elements.finalGuestCount.value=String(entry.ops.finalGuestCount||0);

@@ -10,9 +10,9 @@ import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfigu
 import { resolveTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
-type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
-type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
-type Note = { id:string; recordId:string; body:string; createdAt:string; createdBy:string; };
+type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; updatedAt?:string; updatedBy?:string; };
+type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; updatedAt?:string; updatedBy?:string; };
+type Note = { id:string; recordId:string; body:string; createdAt:string; createdBy:string; updatedAt?:string; updatedBy?:string; };
 type WorkflowStep = { id:string; label:string; offsetDays:number; taskTitle:string; };
 type Workflow = { id:string; name:string; description:string; trigger:'manual'|'new-inquiry'|'proposal-sent'|'booked'; steps:WorkflowStep[]; active:boolean; createdAt:string; updatedAt:string; };
 type Enrollment = { id:string; workflowId:string; recordId:string; startedAt:string; createdTaskIds:string[]; };
@@ -778,6 +778,20 @@ export default async (req:Request, context:Context) => {
     return Response.json({ok:true,note:row});
   }
 
+  if (action === 'update-note') {
+    const noteId=clean(body.noteId,100), noteBody=clean(body.body,12000);
+    if (!noteId || !noteBody) return Response.json({error:'noteId and body required'},{status:400});
+    const current=await readIndex<Note>(crm,'notes/index');
+    const target=current.find(x=>x.id===noteId);
+    if (!target) return Response.json({error:'Note not found'},{status:404});
+    target.body=noteBody;
+    target.updatedAt=new Date().toISOString();
+    target.updatedBy=actor;
+    await crm.setJSON('notes/index',current);
+    await appendActivity(crm,target.recordId,'note_updated','Internal note updated');
+    return Response.json({ok:true,note:target});
+  }
+
   if (action === 'add-task') {
     const recordId=clean(body.recordId,100), title=clean(body.title,500);
     if (!title) return Response.json({error:'Task title required'},{status:400});
@@ -787,6 +801,27 @@ export default async (req:Request, context:Context) => {
     await crm.setJSON('tasks/index',[row,...current].slice(0,5000));
     await appendActivity(crm,recordId,'task_created',title);
     return Response.json({ok:true,task:row});
+  }
+
+  if (action === 'update-task') {
+    const taskId=clean(body.taskId,100);
+    const current=await readIndex<Task>(crm,'tasks/index');
+    const target=current.find(x=>x.id===taskId);
+    if (!target) return Response.json({error:'Task not found'},{status:404});
+    const title=clean(body.title,500);
+    if (title) target.title=title;
+    if (body.dueDate !== undefined) target.dueDate=clean(body.dueDate,40);
+    if (body.assignee !== undefined) target.assignee=clean(body.assignee,160);
+    if (['low','normal','high'].includes(body.priority)) target.priority=body.priority;
+    if (['open','done'].includes(body.status)) {
+      target.status=body.status;
+      target.completedAt=target.status==='done' ? (target.completedAt || new Date().toISOString()) : undefined;
+    }
+    target.updatedAt=new Date().toISOString();
+    target.updatedBy=actor;
+    await crm.setJSON('tasks/index',current);
+    await appendActivity(crm,target.recordId,'task_updated',target.title);
+    return Response.json({ok:true,task:target});
   }
 
   if (action === 'toggle-task') {
@@ -843,9 +878,18 @@ export default async (req:Request, context:Context) => {
     const current=await readIndex<Appointment>(crm,'appointments/index');
     const target=current.find(x=>x.id===appointmentId);
     if (!target) return Response.json({error:'Appointment not found'},{status:404});
+    const title=clean(body.title,300);
+    const startsAt=clean(body.startsAt,80);
+    if (title) target.title=title;
+    if (startsAt) target.startsAt=startsAt;
+    if (body.durationMinutes !== undefined) target.durationMinutes=Math.max(15,Math.min(480,Number(body.durationMinutes)||60));
+    if (body.location !== undefined) target.location=clean(body.location,300);
+    if (body.notes !== undefined) target.notes=clean(body.notes,3000);
     if (['scheduled','completed','cancelled'].includes(body.status)) target.status=body.status;
+    target.updatedAt=new Date().toISOString();
+    target.updatedBy=actor;
     await crm.setJSON('appointments/index',current);
-    await appendActivity(crm,target.recordId,'appointment_'+target.status,target.title);
+    await appendActivity(crm,target.recordId,'appointment_updated',target.title+' · '+target.status);
     return Response.json({ok:true,appointment:target});
   }
 

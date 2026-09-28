@@ -78,6 +78,29 @@ function mapEmail(row:any){
     problem:problem(status),
   };
 }
+function salesStore(context:Context){
+  return context.deploy.context==='production'
+    ? getStore({name:'koa-sales',consistency:'strong'})
+    : getDeployStore({name:'koa-sales'});
+}
+async function clientEmailIndex(context:Context){
+  const records:any[]=((await salesStore(context).get('records/index',{type:'json'}))||[]) as any[];
+  const stageWeight=(record:any)=>record?.stage==='booked'?5:record?.kind==='proposal'?4:record?.stage==='proposal'?3:record?.kind==='lead'?2:1;
+  const sorted=[...records]
+    .filter((record)=>record&&record.kind!=='quickbooks-test'&&clean(record?.customer?.email,240).includes('@'))
+    .sort((a,b)=>stageWeight(b)-stageWeight(a)||Date.parse(String(b.updatedAt||b.createdAt||0))-Date.parse(String(a.updatedAt||a.createdAt||0)));
+  const index=new Map<string,{recordId:string;name:string}>();
+  for(const record of sorted){
+    const email=clean(record?.customer?.email,240).toLowerCase();
+    if(email&&!index.has(email))index.set(email,{recordId:clean(record.id,100),name:clean(record?.customer?.name,180)||clean(record.id,100)});
+  }
+  return index;
+}
+function addClientMatch(row:any,index:Map<string,{recordId:string;name:string}>){
+  const candidates=addresses(row?.recipients?.length?row.recipients:row?.recipient).map((value)=>value.toLowerCase());
+  const match=candidates.map((email)=>index.get(email)).find(Boolean);
+  return match?{...row,clientRecordId:match.recordId,clientName:match.name}:row;
+}
 function domainOf(value:unknown){
   const match=String(value??'').toLowerCase().match(/@([a-z0-9.-]+)(?:>|\s|$)/i);
   return match?.[1]?.replace(/\.$/,'')||'';
@@ -276,9 +299,11 @@ export default async (req:Request,context:Context)=>{
       }
     }
     matches.sort((a,b)=>Date.parse(String(b.createdAt||''))-Date.parse(String(a.createdAt||'')));
+    const clientIndex=await clientEmailIndex(context);
+    const enrichedMatches=matches.map((row)=>addClientMatch(row,clientIndex));
     return Response.json({
       ok:true,
-      rows:matches,
+      rows:enrichedMatches,
       domain,
       days,
       complete,
@@ -301,6 +326,9 @@ export default async (req:Request,context:Context)=>{
     const diagnostic=related.find((row:any)=>row?.bounceMessage||row?.failureReason||row?.bounceType)||related[0]||{};
     const status=normalizeStatus(email?.last_event||email?.status||diagnostic?.status);
     const emailType=classify(email?.subject||diagnostic?.subject);
+    const clientIndex=await clientEmailIndex(context);
+    const recipientList=addresses(email?.to?.length?email.to:diagnostic?.to);
+    const clientMatch=recipientList.map((address)=>clientIndex.get(address.toLowerCase())).find(Boolean);
     const bounceType=clean(diagnostic?.bounceType,120);
     const bounceSubType=clean(diagnostic?.bounceSubType,160);
     const reason=clean(diagnostic?.bounceMessage||diagnostic?.failureReason,1000);
@@ -309,8 +337,10 @@ export default async (req:Request,context:Context)=>{
       email:{
         id:detailId,
         resendMessageId:clean(email?.message_id,300)||clean(diagnostic?.messageId,300)||detailId,
-        recipient:addresses(email?.to?.length?email.to:diagnostic?.to).join(', '),
-        recipients:addresses(email?.to?.length?email.to:diagnostic?.to),
+        recipient:recipientList.join(', '),
+        recipients:recipientList,
+        clientRecordId:clientMatch?.recordId||'',
+        clientName:clientMatch?.name||'',
         from:clean(email?.from||diagnostic?.from,300),
         subject:clean(email?.subject||diagnostic?.subject,500),
         createdAt:clean(email?.created_at||diagnostic?.createdAt,100),
@@ -335,7 +365,8 @@ export default async (req:Request,context:Context)=>{
   const result=await resend('/emails?'+params.toString());
   if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to load email history.',500)},{status:result.status||400});
   const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
-  const rows=raw.map(mapEmail);
+  const clientIndex=await clientEmailIndex(context);
+  const rows=raw.map(mapEmail).map((row)=>addClientMatch(row,clientIndex));
   return Response.json({
     ok:true,
     rows,

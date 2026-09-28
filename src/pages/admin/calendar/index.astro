@@ -1394,11 +1394,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       previewItem=item;const visual=visualFor(item);
       previewType.textContent=visual.icon+' '+visual.label;
       previewTitle.textContent=item.title;
-      previewMeta.textContent=dateLabel(item.date)+(item.time?' · '+timeLabel(item.time):'')+' · '+item.customerName;
+      previewMeta.innerHTML='';
+      const previewWhen=text('span','',dateLabel(item.date)+(item.time?' · '+timeLabel(item.time):''));
+      previewMeta.appendChild(previewWhen);
+      if(item.customerName){
+        previewMeta.appendChild(document.createTextNode(' · '));
+        if(item.recordId){
+          const clientLink=document.createElement('a');
+          clientLink.href='/admin/clients/?id='+encodeURIComponent(item.recordId)+'&tab=operations';
+          clientLink.className='font-bold text-[var(--koa-clay)] underline decoration-[var(--koa-line)] underline-offset-4';
+          clientLink.textContent=item.customerName;
+          previewMeta.appendChild(clientLink);
+        }else{
+          previewMeta.appendChild(document.createTextNode(item.customerName));
+        }
+      }
       previewDetail.textContent=item.detail||'No additional details.';
       if(item.owner){previewOwner.textContent='Owner: '+item.owner;previewOwner.classList.remove('hidden');}else{previewOwner.textContent='';previewOwner.classList.add('hidden');}
       if(item.recordId){
-        previewOpen.href='/admin/events/?record='+encodeURIComponent(item.recordId);previewOpen.textContent='Open Event Ops';previewOpen.removeAttribute('target');
+        previewOpen.href='/admin/clients/?id='+encodeURIComponent(item.recordId)+'&tab=operations';previewOpen.textContent='Open Client Workspace';previewOpen.removeAttribute('target');
       }else if(item.externalUrl){
         previewOpen.href=item.externalUrl;previewOpen.textContent='Open Outlook';previewOpen.target='_blank';
       }else{

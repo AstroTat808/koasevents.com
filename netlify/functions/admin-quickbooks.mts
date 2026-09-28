@@ -373,6 +373,18 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
       state.estimateDocNumber = String(estimate.DocNumber || state.estimateDocNumber || '');
       state.estimateTotal = Number(estimate.TotalAmt || state.estimateTotal || 0);
       state.estimateEmailStatus = String(estimate.EmailStatus || '');
+      state.estimateLines = (Array.isArray(estimate.Line) ? estimate.Line : [])
+        .filter((line: any) => line?.DetailType === 'SalesItemLineDetail')
+        .map((line: any, index: number) => ({
+          id: String(line?.Id || 'qbo-line-' + (index + 1)),
+          description: String(line?.Description || line?.SalesItemLineDetail?.ItemRef?.name || 'QuickBooks line ' + (index + 1)),
+          quantity: Number(line?.SalesItemLineDetail?.Qty || 1),
+          unitPrice: Number(line?.SalesItemLineDetail?.UnitPrice || line?.Amount || 0),
+          amount: Number(line?.Amount || 0),
+          itemId: String(line?.SalesItemLineDetail?.ItemRef?.value || ''),
+          itemName: String(line?.SalesItemLineDetail?.ItemRef?.name || ''),
+        }));
+      state.estimateDiscount = Number(estimate.DiscountAmt || 0);
       state.estimateLastSyncedAt = new Date().toISOString();
     }
   }

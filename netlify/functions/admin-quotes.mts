@@ -2179,6 +2179,32 @@ export default async (req: Request, context: Context) => {
     });
     return Response.json({ ok: true, record, targetMargin, targetTotal: total }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
+  if (payload.action === 'update-client') {
+    const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80));
+    if (!record) return Response.json({ error: 'CRM record not found.' }, { status: 404 });
+
+    const customer = payload.customer || {};
+    const before = { ...(record.customer || {}) };
+    record.customer = {
+      name: cleanText(customer.name ?? record.customer?.name, 180),
+      email: cleanText(customer.email ?? record.customer?.email, 240),
+      phone: cleanText(customer.phone ?? record.customer?.phone, 80),
+      eventDate: cleanText(customer.eventDate ?? record.customer?.eventDate, 40),
+      notes: cleanText(customer.notes ?? record.customer?.notes, 4000),
+    };
+    if (payload.packageId !== undefined) record.packageId = normalizePackage(payload.packageId);
+    record.updatedAt = new Date().toISOString();
+    records = await saveRecord(context, record, records);
+    await appendEvent(context, {
+      type: 'client_updated',
+      recordId: record.id,
+      quoteId: record.quoteId || '',
+      packageId: record.packageId || '',
+      detail: 'Client workspace updated contact/event details. Previous values: ' + JSON.stringify(before),
+    });
+    return Response.json({ ok: true, record }, { headers: { 'Cache-Control': 'private, no-store' } });
+  }
+
   if (payload.action === 'update-proposal') {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
     if (!record) return Response.json({ error: 'Proposal not found.' }, { status: 404 });

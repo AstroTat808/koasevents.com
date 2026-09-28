@@ -493,7 +493,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const status=String(row.status||'unknown');
         const isProblem=Boolean(row.problem)||['failed','bounced','complained','suppressed'].includes(status);
         tr.className='border-b border-[var(--koa-line)]/70 align-top '+(isProblem?'cursor-pointer bg-red-50/40 hover:bg-red-50':'');
-        tr.innerHTML='<td class="px-2 py-3 whitespace-nowrap">'+esc(row.createdAt?new Date(row.createdAt).toLocaleString():'—')+'</td><td class="px-2 py-3 max-w-[220px] break-all">'+esc(row.recipient||'—')+'</td><td class="px-2 py-3 max-w-[260px]">'+esc(row.subject||'—')+'</td><td class="px-2 py-3">'+esc(row.emailType||'Other')+'</td><td class="px-2 py-3 font-black '+(isProblem?'text-red-700':status==='delivered'?'text-emerald-700':'text-[var(--koa-forest)]')+'">'+esc(status)+(isProblem?' · details':'')+'</td><td class="px-2 py-3 max-w-[210px] break-all font-mono text-[.68rem]">'+esc(row.resendMessageId||row.emailId||'—')+'</td>';
+        const clientLink=row.clientRecordId?'<a data-client-email-link href="/admin/clients/?id='+encodeURIComponent(row.clientRecordId)+'&tab=communications" class="mb-1 block font-bold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4">'+esc(row.clientName||'Open client')+'</a>':'';
+        tr.innerHTML='<td class="px-2 py-3 whitespace-nowrap">'+esc(row.createdAt?new Date(row.createdAt).toLocaleString():'—')+'</td><td class="px-2 py-3 max-w-[220px] break-all">'+clientLink+'<span>'+esc(row.recipient||'—')+'</span></td><td class="px-2 py-3 max-w-[260px]">'+esc(row.subject||'—')+'</td><td class="px-2 py-3">'+esc(row.emailType||'Other')+'</td><td class="px-2 py-3 font-black '+(isProblem?'text-red-700':status==='delivered'?'text-emerald-700':'text-[var(--koa-forest)]')+'">'+esc(status)+(isProblem?' · details':'')+'</td><td class="px-2 py-3 max-w-[210px] break-all font-mono text-[.68rem]">'+esc(row.resendMessageId||row.emailId||'—')+'</td>';
+        tr.querySelector('[data-client-email-link]')?.addEventListener('click',(event)=>event.stopPropagation());
         if(isProblem)tr.addEventListener('click',()=>loadActivityDetail(String(row.emailId||'')));
         activityBody.appendChild(tr);
       }
@@ -626,13 +628,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const row=result.email||{};
       if(activityDetailTitle)activityDetailTitle.textContent=(row.subject||'Email')+' · '+String(row.status||'unknown');
       if(activityDetailBody)activityDetailBody.innerHTML=[
+        ['Client',row.clientRecordId?'<a href="/admin/clients/?id='+encodeURIComponent(row.clientRecordId)+'&tab=communications" class="font-bold underline decoration-[var(--koa-line)] underline-offset-4">'+esc(row.clientName||row.clientRecordId)+'</a>':'—',true],
         ['Recipient',row.recipient||'—'],
         ['Route',row.route||'—'],
         ['Resend / Message ID',row.resendMessageId||row.id||'—'],
         ['Bounce type',[row.bounceType,row.bounceSubType].filter(Boolean).join(' · ')||'—'],
         ['Reason',row.reason||'No detailed bounce/failure payload is archived for this message.'],
         ['Recommended fix',row.recommendation||'Review the delivery details before retrying.'],
-      ].map(([label,value])=>'<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-red-700">'+esc(label)+'</p><p class="mt-1 break-words text-sm font-semibold text-[var(--koa-forest)]">'+esc(value)+'</p></div>').join('');
+      ].map(([label,value,isHtml])=>'<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-red-700">'+esc(label)+'</p><p class="mt-1 break-words text-sm font-semibold text-[var(--koa-forest)]">'+(isHtml?String(value):esc(value))+'</p></div>').join('');
     }
     function clearActivityPresetVisual(){
       activityPreset='';
