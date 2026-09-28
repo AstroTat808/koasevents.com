@@ -889,7 +889,7 @@ export default async (req: Request, context: Context) => {
       clientName: 'Koa’s Accounting Test',
       type: 'mismatch_detected',
       after: [{ code:'test_balance', label:'Test reconciliation balance', expected:100, actual:95, delta:-5 }],
-    }], 'test-' + now, { test:true });
+    }], 'test-' + now, { test:true, tenant });
     return Response.json({ ok:true, result }, { headers: { 'Cache-Control':'private, no-store' } });
   }
 
