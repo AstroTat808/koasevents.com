@@ -1,6 +1,7 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './tenant-storage';
+import { resolveTenant } from './tenant';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
@@ -313,9 +314,7 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
 }
 
 function healthStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-system-health' });
+  return tenantStoreFor(context, resolveTenant(), 'systemHealth');
 }
 
 function clean(value: unknown, max=500) {
