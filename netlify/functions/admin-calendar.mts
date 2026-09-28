@@ -1,18 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantRows, tenantStore } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import { readOffice365ExternalItems } from './_shared/office365-calendar-sync';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
-}
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
+function opsStoreFor(context: Context) { return tenantStore(context,'eventOps',resolveTenant()); }
 function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}
 function isoDate(value:unknown){
   const raw=clean(value,40);
@@ -90,7 +83,7 @@ export default async(req:Request,context:Context)=>{
   const records=((await salesStoreFor(context).get('records/index',{type:'json'}))||[]) as any[];
   const booked=records.filter((record)=>record?.kind==='proposal'&&record?.stage==='booked'&&record?.proposal?.status==='booked');
   const entries=await Promise.all(booked.map(async(record)=>{
-    const ops:any=(await opsStoreFor(context).get('events/'+record.id,{type:'json'}))||{};
+    const ops:any=(await tenantStore(context,'eventOps',tenant).get('events/'+record.id,{type:'json'}))||{};
     return {record,ops};
   }));
 
@@ -99,7 +92,7 @@ export default async(req:Request,context:Context)=>{
     const record=entry.record,ops=entry.ops||{};
     const eventDate=isoDate(record.customer?.eventDate);
     const customerName=clean(record.customer?.name,180)||record.id;
-    const venueArea=clean(ops.venueArea,180)||'Koa’s Events';
+    const venueArea=clean(ops.venueArea,180)||tenant.displayName;
     const eventType=clean(record.inquiry?.eventType||record.customer?.eventType,120);
     const packageId=clean(record.proposal?.packageId||record.quote?.packageId,120).toLowerCase();
     const eventSubtype=eventType.toLowerCase().includes('wedding')||['gardenia','orchid','hibiscus','signature-wedding'].includes(packageId)?'wedding':'event';
