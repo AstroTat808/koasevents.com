@@ -17,9 +17,11 @@ export type TenantStorageDomain =
   | 'authSecurity'
   | 'staffDirectory'
   | 'staffFiles'
+  | 'staffAudit'
   | 'staffAvailability'
   | 'security'
   | 'systemHealth'
+  | 'calendarSync'
   | 'workspaceAlerts';
 
 type GetOptions = { type?: 'text' | 'json' | 'stream' | 'blob' | 'arrayBuffer' };
@@ -27,15 +29,17 @@ type ListOptions = { prefix?: string };
 
 const CANONICAL_STORE = 'venueloom-data';
 
-function canonicalStore(context: Context) {
+function canonicalStore(context?: Context) {
+  if (!context) return getStore({ name: CANONICAL_STORE, consistency: 'strong' });
   return context.deploy.context === 'production'
     ? getStore({ name: CANONICAL_STORE, consistency: 'strong' })
     : getDeployStore({ name: CANONICAL_STORE });
 }
 
-function compatibilityStore(context: Context, tenant: TenantProfile, domain: TenantStorageDomain) {
+function compatibilityStore(context: Context | undefined, tenant: TenantProfile, domain: TenantStorageDomain) {
   const name = tenant.storage.compatibilityBlobStores[domain];
   if (!name) return null;
+  if (!context) return getStore({ name, consistency: 'strong' });
   return context.deploy.context === 'production'
     ? getStore({ name, consistency: 'strong' })
     : getDeployStore({ name });
@@ -95,7 +99,7 @@ function scopeJsonValue(tenant: TenantProfile, value: any) {
 }
 
 export function tenantStoreFor(
-  context: Context,
+  context: Context | undefined,
   tenant: TenantProfile,
   domain: TenantStorageDomain,
 ) {
@@ -278,7 +282,7 @@ export async function tenantMigrationAudit(
   tenant: TenantProfile,
   domains: TenantStorageDomain[] = [
     'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
-    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAvailability','security','systemHealth','workspaceAlerts',
+    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','workspaceAlerts',
   ],
 ) {
   const canonical=canonicalStore(context);
