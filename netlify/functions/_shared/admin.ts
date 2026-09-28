@@ -22,6 +22,9 @@ export type EffectiveStaffRole = StaffRole | 'custom';
 export const STAFF_CAPABILITIES = [
   'admin.dashboard.view',
   'users.manage',
+  'organization.view',
+  'organization.manage',
+  'billing.manage',
   'crm.view',
   'crm.manage',
   'crm.destructive',
@@ -72,6 +75,7 @@ const ALL_CAPABILITIES = [...STAFF_CAPABILITIES];
 export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
   admin: ALL_CAPABILITIES,
   manager: [
+    'organization.view',
     'crm.view','crm.manage','crm.destructive','crm.workflows','crm.templates','crm.cleanup_policy',
     'email.view','email.manage',
     'sales.view','sales.manage','sales.profit_settings',
@@ -110,6 +114,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     'seo.view','seo.manage',
   ],
   accounting: [
+    'organization.view',
     'crm.view',
     'sales.view',
     'calendar.view',
@@ -133,6 +138,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
 export const PAGE_CAPABILITIES = {
   '/admin/': 'admin.dashboard.view',
   '/admin/staff/': 'users.manage',
+  '/admin/organization/': 'organization.view',
   '/admin/crm/': 'crm.view',
   '/admin/email/': 'email.view',
   '/admin/email-preview/': 'email.view',
