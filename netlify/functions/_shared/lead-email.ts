@@ -1,5 +1,7 @@
 import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
 import { resolveEmailRoute } from './email-routing.ts';
+import { resolveTenant } from './tenant';
+import { tenantEnv } from './tenant-env';
 
 type LeadRecord = {
   id: string;
@@ -370,11 +372,11 @@ function buildText(record: LeadRecord) {
 }
 
 export async function sendLeadNotification(record: LeadRecord) {
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return { sent: false, configured: false, id: '' };
 
   const route = await resolveEmailRoute('lead-notification');
-  const from = String(Netlify.env.get('KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
+  const from = String(tenantEnv(resolveTenant(),'KOA_LEAD_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
   const subject = heading(record) + ' — ' + (record.customer?.name || record.id);
   const requestBody = JSON.stringify({
     from,
@@ -548,7 +550,7 @@ async function sendWithResend(args: {
   bcc?: string[];
   idempotencyKey: string;
 }) {
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return { sent: false, configured: false, id: '' };
 
   try {
@@ -586,11 +588,11 @@ async function sendWithResend(args: {
 
 export async function sendClientConfirmation(record: LeadRecord) {
   const email = String(record.customer?.email || '').trim();
-  if (!email || !email.includes('@')) return { sent: false, configured: Boolean(Netlify.env.get('RESEND_API_KEY')), id: '' };
+  if (!email || !email.includes('@')) return { sent: false, configured: Boolean(tenantEnv(resolveTenant(),'RESEND_API_KEY')), id: '' };
 
   const copy = clientConfirmationCopy(record);
-  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
-  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+  const from = String(tenantEnv(resolveTenant(),'KOA_CLIENT_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
+  const replyTo = String(tenantEnv(resolveTenant(),'KOA_CLIENT_REPLY_TO') || resolveTenant().contact.email).trim();
 
   return sendWithResend({
     to: [email],
@@ -605,7 +607,7 @@ export async function sendClientConfirmation(record: LeadRecord) {
 
 export async function sendResponseReminder(record: LeadRecord, hoursOpen: number) {
   const route = await resolveEmailRoute('lead-response-reminder');
-  const from = String(Netlify.env.get('KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
+  const from = String(tenantEnv(resolveTenant(),'KOA_LEAD_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
   const crmUrl = 'https://koasevents.com/admin/quotes/?q=' + encodeURIComponent(record.id);
   const title = heading(record);
   const clientName = String(record.customer?.name || 'Client name TBD');
@@ -707,12 +709,12 @@ function clientFollowUpCopy(record: LeadRecord) {
 export async function sendClientFollowUp(record: LeadRecord) {
   const email = String(record.customer?.email || '').trim();
   if (!email || !email.includes('@')) {
-    return { sent: false, configured: Boolean(Netlify.env.get('RESEND_API_KEY')), id: '' };
+    return { sent: false, configured: Boolean(tenantEnv(resolveTenant(),'RESEND_API_KEY')), id: '' };
   }
 
   const copy = clientFollowUpCopy(record);
-  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
-  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+  const from = String(tenantEnv(resolveTenant(),'KOA_CLIENT_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
+  const replyTo = String(tenantEnv(resolveTenant(),'KOA_CLIENT_REPLY_TO') || resolveTenant().contact.email).trim();
   const detail = copy.detail
     ? '<div style="margin-top:20px;padding:15px 17px;background:#f5f0e7;border-radius:14px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:21px;font-weight:700;color:#173d30;">' + esc(copy.detail) + '</div>'
     : '';
