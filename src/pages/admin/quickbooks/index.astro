@@ -1145,9 +1145,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(previewMatched)previewMatched.textContent=Number(summary.matched||0);
       if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
       if(previewExcluded)previewExcluded.textContent=Number(summary.excludedCustomers||0);
+      if(previewSuggestedExcluded)previewSuggestedExcluded.textContent=Number(summary.suggestedExclusions||0);
       if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
       if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
-      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' QuickBooks customers · '+Number(summary.activeSyncCustomers??(Number(summary.qboCustomers||0)-Number(summary.excludedCustomers||0)))+' active for sync · '+Number(summary.excludedCustomers||0)+' excluded · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned · '+Number(summary.duplicateFlags||0)+' duplicate/review flag'+(Number(summary.duplicateFlags||0)===1?'':'s')+'.':'';
+      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' QuickBooks customers · '+Number(summary.activeSyncCustomers??(Number(summary.qboCustomers||0)-Number(summary.excludedCustomers||0)))+' active for sync · '+Number(summary.excludedCustomers||0)+' excluded · '+Number(summary.suggestedExclusions||0)+' suggested exclusion'+(Number(summary.suggestedExclusions||0)===1?'':'s')+' · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned · '+Number(summary.duplicateFlags||0)+' duplicate/review flag'+(Number(summary.duplicateFlags||0)===1?'':'s')+'.':'';
 
       const needsDecision=Number(summary.needsDecision||0);
       const unapprovedNew=Number(summary.unapprovedNewImports||0);
@@ -1161,13 +1162,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         bulkEligibleCount?bulkEligibleCount+' low-risk import'+(bulkEligibleCount===1?' is':'s are')+' eligible for guarded bulk review.':'',
         individualCount?individualCount+' row'+(individualCount===1?' requires':'s require')+' individual review because of duplicate evidence or missing reliable contact data.':'',
         ambiguousCount?ambiguousCount+' possible duplicate match'+(ambiguousCount===1?' is':'es are')+' blocked until resolved.':'',
-        'Nothing unresolved can be imported by Run Approved Sync.'
+        Number(summary.suggestedExclusions||0)?Number(summary.suggestedExclusions||0)+' obvious system/test customer'+(Number(summary.suggestedExclusions||0)===1?' has':'s have')+' a suggested exclusion that still requires staff approval.':'',
+        'Nothing unresolved can be imported or excluded automatically by Run Approved Sync.'
       ].filter(Boolean).join(' ');
 
       const plans=Array.isArray(preview?.customerPlans)?preview.customerPlans:[];
       const allBulkEligible=plans.filter((plan)=>String(plan?.decision||'')==='new'&&Boolean(plan?.bulkEligible));
       const allBulkEligibleIds=new Set(allBulkEligible.map((plan)=>String(plan.customerId)));
       [...bulkSelectedNew].forEach((id)=>{if(!allBulkEligibleIds.has(String(id)))bulkSelectedNew.delete(String(id));});
+      const unresolvedIds=new Set(plans.filter(unresolvedExclusionEligible).map((plan)=>String(plan.customerId)));
+      [...bulkSelectedExclude].forEach((id)=>{if(!unresolvedIds.has(String(id)))bulkSelectedExclude.delete(String(id));});
 
       const visiblePlans=plans.filter(previewPlanMatchesFilter);
       const imports=visiblePlans.filter((row)=>['new','approved_new','excluded'].includes(row.decision));
@@ -1178,9 +1182,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(previewFilterCount){
         const activeCount=plans.filter((row)=>String(row?.decision||'')!=='excluded').length;
         const excludedCount=plans.length-activeCount;
-        previewFilterCount.textContent=String(previewFilter?.value||'all')==='excluded'
+        const filterValue=String(previewFilter?.value||'all');
+        previewFilterCount.textContent=filterValue==='excluded'
           ? visiblePlans.length+' of '+excludedCount+' excluded customer'+(excludedCount===1?'':'s')+' shown'
-          : visiblePlans.length+' of '+activeCount+' active sync customer'+(activeCount===1?'':'s')+' shown'+(excludedCount?' · '+excludedCount+' excluded':'');
+          : filterValue==='suggested'
+            ? visiblePlans.length+' suggested exclusion'+(visiblePlans.length===1?'':'s')+' shown'
+            : visiblePlans.length+' of '+activeCount+' active sync customer'+(activeCount===1?'':'s')+' shown'+(excludedCount?' · '+excludedCount+' excluded':'');
       }
       if(previewImports)previewImports.innerHTML=imports.length?imports.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No proposed CRM imports match this view.</p>';
       if(previewMatches)previewMatches.innerHTML=matches.length?matches.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No existing CRM matches match this view.</p>';
@@ -1198,6 +1205,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         bulkApprove.textContent='Approve selected ('+bulkSelectedNew.size+')';
       }
       if(bulkSelectVisible)bulkSelectVisible.disabled=visibleBulk.length===0;
+
+      const unresolvedPlans=plans.filter(unresolvedExclusionEligible);
+      const visibleSuggested=visibleSuggestedExclusionPlans();
+      if(exclusionTools)exclusionTools.classList.toggle('hidden',!preview||(!unresolvedPlans.length&&!Number(summary.excludedCustomers||0)));
+      if(bulkExclusionDetail)bulkExclusionDetail.textContent=
+        Number(summary.suggestedExclusions||0)+' suggested exclusion'+(Number(summary.suggestedExclusions||0)===1?'':'s')+' · '+
+        bulkSelectedExclude.size+' selected for exclusion · '+
+        Number(summary.excludedCustomers||0)+' already excluded. Preview suggestions never apply automatically.';
+      if(bulkExcludeSuggested)bulkExcludeSuggested.disabled=visibleSuggested.length===0;
+      if(bulkExclude){
+        bulkExclude.disabled=bulkSelectedExclude.size===0;
+        bulkExclude.textContent='Exclude selected ('+bulkSelectedExclude.size+')';
+      }
+      if(exclusionReport){
+        const report=Array.isArray(preview?.exclusionReport)?preview.exclusionReport:[];
+        exclusionReport.innerHTML=report.length
+          ? report.map((row)=>'<button type="button" data-exclusion-report-code="'+esc(row.code)+'" class="rounded-full border border-slate-300 bg-white px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.05em] text-slate-700">'+esc(row.label)+' · '+Number(row.count||0)+'</button>').join('')
+          : '<span class="text-[.6rem] text-slate-500">No persistent exclusions yet.</span>';
+        exclusionReport.querySelectorAll('[data-exclusion-report-code]').forEach((button)=>button.addEventListener('click',()=>{
+          if(previewFilter)previewFilter.value='excluded';
+          if(exclusionReasonFilter)exclusionReasonFilter.value=String(button.dataset.exclusionReportCode||'all');
+          renderSyncPreview();
+        }));
+      }
 
       const outbound=Array.isArray(preview?.outbound)?preview.outbound:[];
       if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.map((row)=>'<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid min-w-0 gap-2">'+(row.actions||[]).map(outboundActionHtml).join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
