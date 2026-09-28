@@ -695,20 +695,18 @@ export default async (req:Request, context:Context) => {
     if(!record) return Response.json({error:'CRM record not found'},{status:404});
     const email=clean(record?.customer?.email,240);
     if(!email.includes('@')) return Response.json({error:'Client email address is missing or invalid'},{status:400});
-    const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+    const apiKey=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
     if(!apiKey) return Response.json({error:'Resend is not configured. RESEND_API_KEY is missing.'},{status:503});
 
     const person=staffIdentity(auth.user);
     const rendered=buildStaffEmail(record,subject,messageBody,person);
     const from=clean(
-      Netlify.env.get('VENUELOOM_CLIENT_EMAIL_FROM')
-      || Netlify.env.get('KOA_CLIENT_EMAIL_FROM')
+      tenantEnv(tenant,'CLIENT_EMAIL_FROM','VENUELOOM_CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM')
       || (tenant.displayName+' <'+tenant.contact.email+'>'),
       240,
     );
     const replyTo=clean(
-      Netlify.env.get('VENUELOOM_CLIENT_REPLY_TO')
-      || Netlify.env.get('KOA_CLIENT_REPLY_TO')
+      tenantEnv(tenant,'CLIENT_REPLY_TO','VENUELOOM_CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO')
       || tenant.contact.email,
       240,
     );
