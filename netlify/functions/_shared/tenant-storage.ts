@@ -12,6 +12,8 @@ export type TenantStoreKind =
   | 'vendors'
   | 'integrations'
   | 'email'
+  | 'emailRouting'
+  | 'emailAnalytics'
   | 'health'
   | 'calendar'
   | 'authSecurity';
@@ -25,6 +27,8 @@ const GENERIC_STORE_NAMES: Record<TenantStoreKind,string> = {
   vendors:'venueloom-vendors',
   integrations:'venueloom-integrations',
   email:'venueloom-email',
+  emailRouting:'venueloom-email-routing',
+  emailAnalytics:'venueloom-email-analytics',
   health:'venueloom-health',
   calendar:'venueloom-calendar',
   authSecurity:'venueloom-auth-security',
