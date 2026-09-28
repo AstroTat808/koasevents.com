@@ -199,6 +199,25 @@ def source_mode():
    failures.append("Protected admin workspace directly imports @netlify/identity instead of the resilient server-backed session helper: "+str(path.relative_to(ROOT)))
   if "getAdminSession" not in text:
    failures.append("Protected admin workspace is missing getAdminSession startup authorization: "+str(path.relative_to(ROOT)))
+
+ catalog_admin=(SRC/"pages/admin/catalog/index.astro").read_text(encoding="utf-8",errors="ignore")
+ catalog_api=(ROOT/"netlify/functions/admin-catalog.mts").read_text(encoding="utf-8",errors="ignore")
+ quickbooks_shared=(ROOT/"netlify/functions/_shared/quickbooks.ts").read_text(encoding="utf-8",errors="ignore")
+ profitability_api=(ROOT/"netlify/functions/admin-profitability.mts").read_text(encoding="utf-8",errors="ignore")
+ for label,needle,text in [
+  ("Catalog live audit UI","data-run-audit",catalog_admin),
+  ("Catalog safe reconciliation UI","data-reconcile-audit",catalog_admin),
+  ("Catalog usage impact panel","data-item-usage",catalog_admin),
+  ("Catalog pricing history UI","data-price-history",catalog_admin),
+  ("Catalog usage API action","item-usage",catalog_api),
+  ("Catalog live audit API action","run-audit",catalog_api),
+  ("Catalog safe reconciliation API action","reconcile-safe-audit",catalog_api),
+  ("Catalog QuickBooks price mismatch check","qbo_price_mismatch",catalog_api),
+  ("Catalog price history storage","CatalogPriceHistoryEntry",quickbooks_shared),
+  ("Catalog exact repriced proposal history","draftProposalIds",quickbooks_shared),
+  ("Profitability exact repriced proposal annotation","draftProposalIds:repriced.ids",profitability_api),
+ ]:
+  if needle not in text:failures.append(label+" is missing: "+needle)
  gallery_admin=(SRC/"pages/admin/gallery/index.astro").read_text(encoding="utf-8",errors="ignore")
  gallery_api=(ROOT/"netlify/functions/gallery.mts").read_text(encoding="utf-8",errors="ignore")
  base_layout=(SRC/"layouts/BaseLayout.astro").read_text(encoding="utf-8",errors="ignore")
@@ -777,6 +796,19 @@ def admin_mode(browser_name):
               "qboMatch":{"id":"44","name":"Gardenia Wedding Collection","type":"Service","active":True,"unitPrice":5000,"incomeAccountId":"1","incomeAccountName":"Venue Income"},
               "qboSuggestion":None,"issues":[],"status":"ok"}]
     }}
+   elif action=="reconcile-safe-audit":
+    audit={
+     "checkedAt":"2026-09-27T00:11:00Z","qbo":{"connected":True,"error":""},
+     "getPolicy":{"status":"source-not-itemized","detail":"QA GET policy source check."},
+     "summary":{"total":1,"ok":1,"warnings":0,"errors":0,"publishedPriceMismatches":0,"quickBooksPriceMismatches":0,"categoryMismatches":0,"getExemptReview":0,"qboMapped":1,"qboUnmapped":0},
+     "rows":[{"id":"gardenia","name":"Gardenia Wedding Collection","group":"packages","category":"service","unitPrice":5000,"getExempt":False,
+              "quickBooksItemId":"44","quickBooksItemName":"Wedding Packages:Wedding Package-Gardenia","publicPrice":5000,"sourceExpected":True,
+              "qboMatch":{"id":"44","name":"Wedding Package-Gardenia","fullyQualifiedName":"Wedding Packages:Wedding Package-Gardenia","type":"Service","active":True,"taxable":True,"unitPrice":5000,"incomeAccountId":"1","incomeAccountName":"Venue Income"},
+              "qboSuggestion":None,"issues":[],"status":"ok"}]
+    }
+    catalog_runtime["catalog"][0]["quickBooksItemId"]="44"
+    catalog_runtime["catalog"][0]["quickBooksItemName"]="Wedding Packages:Wedding Package-Gardenia"
+    body={"ok":True,"catalog":catalog_runtime["catalog"],"actions":[{"catalogItemId":"gardenia","action":"mapped","detail":"Linked safe QA mapping."}],"audit":audit}
    elif action=="preview-import":
     body={
      "ok":True,
@@ -834,6 +866,13 @@ def admin_mode(browser_name):
    page.wait_for_selector("[data-audit-list]:not(.hidden)",state="visible",timeout=5000)
    if "Gardenia Wedding Collection" not in page.locator("[data-audit-list]").inner_text() or "Gardenia Wedding Collection #44" not in page.locator("[data-audit-list]").inner_text():
     raise RuntimeError("Catalog live audit did not render the public-price and QuickBooks mapping result.")
+   reconcile_button=page.locator("[data-reconcile-audit]")
+   if reconcile_button.count()!=1 or not reconcile_button.is_visible():
+    raise RuntimeError("Catalog safe reconciliation action was not available to an authorized pricing manager.")
+   reconcile_button.click()
+   page.wait_for_function("() => document.body.innerText.includes('Safe reconciliation complete')",timeout=5000)
+   if "reconcile-safe-audit" not in catalog_runtime["actions"]:
+    raise RuntimeError("Catalog safe reconciliation did not invoke the protected API action.")
    usage_button=page.get_by_role("button",name="Usage",exact=True).first
    usage_button.click()
    page.wait_for_selector("[data-item-usage]:not(.hidden)",state="visible",timeout=5000)
@@ -858,8 +897,8 @@ def admin_mode(browser_name):
    page.wait_for_function("() => document.body.innerText.includes('Rolled back')",timeout=5000)
    if "QA Imported Add-on" in page.locator("[data-catalog-list]").inner_text():
     detail="Catalog rollback did not restore the pre-import catalog state."
-   elif catalog_runtime["actions"][:5]!=["run-audit","item-usage","preview-import","commit-import","rollback-import"]:
-    detail="Catalog Manager audit/usage/import action sequence was incorrect: "+repr(catalog_runtime["actions"])
+   elif catalog_runtime["actions"][:6]!=["run-audit","reconcile-safe-audit","item-usage","preview-import","commit-import","rollback-import"]:
+    detail="Catalog Manager audit/reconciliation/usage/import action sequence was incorrect: "+repr(catalog_runtime["actions"])
    elif page_errors:
     detail="Catalog Manager import/rollback JavaScript errors: "+" | ".join(page_errors[:5])
   except Exception as exc:
