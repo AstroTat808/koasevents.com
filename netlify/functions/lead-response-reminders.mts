@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { sendClientFollowUp, sendResponseReminder } from './_shared/lead-email.ts';
 
 const RESPONSE_TYPES = new Set([
@@ -12,8 +13,6 @@ const RESPONSE_TYPES = new Set([
   'quickbooks_estimate_sent',
 ]);
 
-const HST_OFFSET_MS = -10 * 60 * 60 * 1000;
-
 function hoursSince(value: unknown) {
   const time = Date.parse(String(value || ''));
   if (!Number.isFinite(time)) return 0;
@@ -21,63 +20,61 @@ function hoursSince(value: unknown) {
 }
 
 function reminderBusinessHours() {
-  const configured = Number(Netlify.env.get('KOA_LEAD_RESPONSE_REMINDER_HOURS') || 4);
+  const configured = Number(tenantEnv(resolveTenant(),'LEAD_RESPONSE_REMINDER_HOURS','KOA_LEAD_RESPONSE_REMINDER_HOURS') || 4);
   if (!Number.isFinite(configured)) return 4;
   return Math.min(24, Math.max(1, configured));
 }
 
 function clientFollowUpHours() {
-  const configured = Number(Netlify.env.get('KOA_CLIENT_FOLLOW_UP_HOURS') || 24);
+  const configured = Number(tenantEnv(resolveTenant(),'CLIENT_FOLLOW_UP_HOURS','KOA_CLIENT_FOLLOW_UP_HOURS') || 24);
   if (!Number.isFinite(configured)) return 24;
   return Math.min(168, Math.max(6, configured));
 }
 
 function businessStartHour() {
-  const configured = Number(Netlify.env.get('KOA_BUSINESS_START_HOUR') || 9);
+  const configured = Number(tenantEnv(resolveTenant(),'BUSINESS_START_HOUR','KOA_BUSINESS_START_HOUR') || 9);
   return Number.isFinite(configured) ? Math.min(16, Math.max(0, Math.floor(configured))) : 9;
 }
 
 function businessEndHour() {
   const start = businessStartHour();
-  const configured = Number(Netlify.env.get('KOA_BUSINESS_END_HOUR') || 17);
+  const configured = Number(tenantEnv(resolveTenant(),'BUSINESS_END_HOUR','KOA_BUSINESS_END_HOUR') || 17);
   return Number.isFinite(configured) ? Math.min(24, Math.max(start + 1, Math.floor(configured))) : 17;
 }
 
-function hstLocalMs(utcMs: number) {
-  return utcMs + HST_OFFSET_MS;
+function localBusinessClock(utcMs: number) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: resolveTenant().timezone || 'UTC',
+    weekday: 'short',
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(utcMs));
+  return {
+    weekday: parts.find((part) => part.type === 'weekday')?.value || '',
+    hour: Number(parts.find((part) => part.type === 'hour')?.value || 0),
+  };
 }
 
 function isBusinessOpen(utcMs = Date.now()) {
-  const local = new Date(hstLocalMs(utcMs));
-  const day = local.getUTCDay();
-  const hour = local.getUTCHours();
-  return day >= 1 && day <= 5 && hour >= businessStartHour() && hour < businessEndHour();
+  const local = localBusinessClock(utcMs);
+  return !['Sat','Sun'].includes(local.weekday)
+    && local.hour >= businessStartHour()
+    && local.hour < businessEndHour();
 }
 
 function businessHoursBetween(startValue: unknown, endMs = Date.now()) {
   const startMs = Date.parse(String(startValue || ''));
   if (!Number.isFinite(startMs) || endMs <= startMs) return 0;
 
-  const localStart = hstLocalMs(startMs);
-  const localEnd = hstLocalMs(endMs);
-  const startHour = businessStartHour();
-  const endHour = businessEndHour();
-
-  const firstDay = Math.floor(localStart / 86_400_000) * 86_400_000;
-  const lastDay = Math.floor(localEnd / 86_400_000) * 86_400_000;
+  // Reminder windows are short; sample in 15-minute slices so DST and arbitrary
+  // tenant time zones are handled by Intl rather than a fixed UTC offset.
+  const step = 15 * 60 * 1000;
+  const cappedEnd = Math.min(endMs, startMs + 60 * 86_400_000);
   let milliseconds = 0;
-
-  for (let dayMs = firstDay; dayMs <= lastDay; dayMs += 86_400_000) {
-    const day = new Date(dayMs).getUTCDay();
-    if (day === 0 || day === 6) continue;
-
-    const windowStart = dayMs + startHour * 3_600_000;
-    const windowEnd = dayMs + endHour * 3_600_000;
-    const overlapStart = Math.max(localStart, windowStart);
-    const overlapEnd = Math.min(localEnd, windowEnd);
-    if (overlapEnd > overlapStart) milliseconds += overlapEnd - overlapStart;
+  for (let cursor = startMs; cursor < cappedEnd; cursor += step) {
+    const next = Math.min(cursor + step, cappedEnd);
+    if (isBusinessOpen(cursor + Math.floor((next - cursor) / 2))) milliseconds += next - cursor;
   }
-
   return milliseconds / 3_600_000;
 }
 
@@ -141,11 +138,11 @@ function recentFailure(record: any, records: any[], events: any[], type: string,
   );
 }
 
-export default async (_req: Request, context: Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!isBusinessOpen()) return;
 
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return;
 
   const store = tenantStoreFor(context, resolveTenant(), 'sales');
@@ -247,6 +244,10 @@ export default async (_req: Request, context: Context) => {
     const latestEvents: any[] = (await store.get('analytics/events/index', { type: 'json' })) || [];
     await store.setJSON('analytics/events/index', [...appended, ...latestEvents].slice(0, 10000));
   }
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config: Config = {
