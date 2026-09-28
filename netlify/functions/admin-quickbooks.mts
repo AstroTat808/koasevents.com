@@ -2,7 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
-import { clientTenantProfile, resolveTenant, tenantTaxDefaults } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
 import {
   completeOAuth,
   createOAuthState,
@@ -26,15 +26,19 @@ import {
 } from './_shared/quickbooks';
 
 function salesStoreFor(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'sales');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function integrationStoreFor(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'integrations');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function clean(value: unknown, max = 1200) {
