@@ -1,12 +1,13 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { quickBooksWebhookVerifierToken } from './quickbooks';
 import { syntheticHealthToken } from './synthetic-health';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -310,9 +311,7 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
 }
 
 function healthStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-system-health' });
+  return tenantStoreFor(context, resolveTenant(), 'systemHealth');
 }
 
 function clean(value: unknown, max=500) {
