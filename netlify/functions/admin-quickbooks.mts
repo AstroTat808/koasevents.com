@@ -4,6 +4,14 @@ import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import {
+  buildQuickBooksCrmSyncPreview,
+  getLastQuickBooksCrmSyncPreview,
+  getQuickBooksCrmSyncHistory,
+  getQuickBooksCrmSyncHistoryDetail,
+  saveQuickBooksMatchOverride,
+  validateQuickBooksCrmSyncPreview,
+} from './_shared/quickbooks-crm-sync-review';
+import {
   completeOAuth,
   createOAuthState,
   disconnectQuickBooks,
@@ -603,7 +611,20 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync] = await Promise.all([
+    const view = clean(url.searchParams.get('view'), 40);
+    if (view === 'history') {
+      const limit = Math.max(1, Math.min(500, Number(url.searchParams.get('limit') || 100)));
+      const history = await getQuickBooksCrmSyncHistory(context, limit);
+      return Response.json({ history }, { headers:{ 'Cache-Control':'private, no-store' } });
+    }
+    if (view === 'history-detail') {
+      const syncId = clean(url.searchParams.get('syncId'), 120);
+      const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
+      if (!detail) return Response.json({ error:'QuickBooks sync history entry not found.' }, { status:404 });
+      return Response.json({ detail }, { headers:{ 'Cache-Control':'private, no-store' } });
+    }
+
+    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
@@ -617,6 +638,7 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
       getLastQuickBooksCrmSync(context),
+      getLastQuickBooksCrmSyncPreview(context),
     ]);
     const records = await readQuickBooksSalesRecords(context);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
@@ -659,6 +681,7 @@ export default async (req: Request, context: Context) => {
       productionTest: productionTest || null,
       productionLinkedTest: productionLinkedTest || null,
       manualSync: manualSync || null,
+      manualSyncPreview: manualSyncPreview || null,
       accountingAudit,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -669,9 +692,35 @@ export default async (req: Request, context: Context) => {
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
 
+  if (action === 'preview-two-way') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    const preview = await buildQuickBooksCrmSyncPreview(context, actor);
+    return Response.json({ ok:true, preview }, { headers:{ 'Cache-Control':'private, no-store' } });
+  }
+
+  if (action === 'save-customer-match') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    try {
+      const result = await saveQuickBooksMatchOverride(context, {
+        customerId: clean(payload?.customerId, 100),
+        decision: clean(payload?.decision, 20) as 'match'|'new'|'clear',
+        recordId: clean(payload?.recordId, 120),
+      }, actor);
+      return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to save QuickBooks customer match.' }, { status:409 });
+    }
+  }
+
   if (action === 'sync-two-way') {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
-    const result = await runQuickBooksCrmTwoWaySync(context, actor);
+    const previewId = clean(payload?.previewId, 120);
+    try {
+      await validateQuickBooksCrmSyncPreview(context, previewId);
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Run a fresh QuickBooks sync preview.' }, { status:409 });
+    }
+    const result = await runQuickBooksCrmTwoWaySync(context, actor, previewId);
     const records = await readQuickBooksSalesRecords(context);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
     return Response.json({ ok:true, result, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
