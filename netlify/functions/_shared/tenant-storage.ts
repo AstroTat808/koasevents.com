@@ -69,6 +69,25 @@ async function copyFallbackValue(
   await canonical.set(targetKey, String(value));
 }
 
+function scopeJsonValue(tenant: TenantProfile, value: any) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+      if (entry.tenantId && String(entry.tenantId) !== tenant.id) {
+        throw new Error('Cross-tenant write was blocked.');
+      }
+      return { ...entry, tenantId: tenant.id };
+    });
+  }
+  if (value && typeof value === 'object') {
+    if (value.tenantId && String(value.tenantId) !== tenant.id) {
+      throw new Error('Cross-tenant write was blocked.');
+    }
+    return { ...value, tenantId: tenant.id };
+  }
+  return value;
+}
+
 export function tenantStoreFor(
   context: Context,
   tenant: TenantProfile,
@@ -117,9 +136,10 @@ export function tenantStoreFor(
 
     async setJSON(key: string, value: unknown) {
       const logical = cleanKey(key);
-      await canonical.setJSON(prefix + logical, value);
+      const scopedValue = scopeJsonValue(tenant, value);
+      await canonical.setJSON(prefix + logical, scopedValue);
       if (legacy && tenant.storage.legacyDataBelongsToTenant) {
-        await legacy.setJSON(logical, value);
+        await legacy.setJSON(logical, scopedValue);
       }
     },
 
