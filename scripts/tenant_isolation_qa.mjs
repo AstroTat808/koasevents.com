@@ -127,6 +127,10 @@ for(const file of dynamicPublicRoutes){
   assert.match(text,/runWithTenant\s*\(/,file+' must bind the resolved tenant for nested services');
 }
 
+const adminSource=source('netlify/functions/_shared/admin.ts');
+assert.match(adminSource,/resolveTenantAsync\s*\(/,'admin auth must resolve dynamic organizations');
+assert.match(adminSource,/runWithTenant\s*\(/,'admin auth must bind tenant before security and membership reads');
+
 const storageSource=source('netlify/functions/_shared/tenant-storage.ts');
 assert.match(storageSource,/tenantDataPrefix\(tenant, domain\)/);
 assert.match(storageSource,/Cross-tenant data access was blocked\./);
