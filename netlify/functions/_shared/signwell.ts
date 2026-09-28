@@ -9,17 +9,9 @@ const clean=(v:unknown,max=4000)=>String(v??'').trim().slice(0,max);
 const esc=(v:unknown)=>clean(v,20000).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m] as string));
 const wait=(ms:number)=>new Promise((resolve)=>setTimeout(resolve,ms));
 
-function salesStoreFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
-}
+function salesStoreFor(context:Context){ return tenantStoreFor(context,resolveTenant(),'sales'); }
 
-function healthStoreFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-system-health',consistency:'strong'})
-    : getDeployStore({name:'koa-system-health'});
-}
+function healthStoreFor(context:Context){ return tenantStoreFor(context,resolveTenant(),'systemHealth'); }
 
 function apiKey(){
   return clean(Netlify.env.get('SIGNWELL_API_KEY'),1200);
@@ -36,6 +28,7 @@ export function signWellWebhookEndpoint(){
 }
 
 export function signWellConfiguration(){
+  const tenant=resolveTenant();
   const key=apiKey();
   const webhookId=signWellWebhookId();
   return {
