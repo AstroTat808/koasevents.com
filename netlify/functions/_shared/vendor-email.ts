@@ -1,15 +1,16 @@
 import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
+import { resolveTenant } from './tenant';
 
 function esc(value:unknown){
   return String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m));
 }
 
 function fromAddress(){
-  return String(Netlify.env.get('KOA_VENDOR_EMAIL_FROM')||Netlify.env.get('KOA_CLIENT_EMAIL_FROM')||'Koa’s Events <aloha@koasevents.com>').trim();
+  const tenant=resolveTenant();return String(Netlify.env.get('KOA_VENDOR_EMAIL_FROM')||Netlify.env.get('KOA_CLIENT_EMAIL_FROM')||(tenant.displayName+' <aloha@'+tenant.domains.primary+'>')).trim();
 }
 
 function replyTo(){
-  return String(Netlify.env.get('KOA_CLIENT_REPLY_TO')||'aloha@koasevents.com').trim();
+  return String(Netlify.env.get('KOA_CLIENT_REPLY_TO')||resolveTenant().contact.email).trim();
 }
 
 export async function sendVendorEmail(args:{
