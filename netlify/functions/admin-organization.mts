@@ -402,7 +402,7 @@ export default async (req: Request, context: Context) => {
       } : row),
     }));
     return Response.json({ ok:result.ok, verification:result, organization:updated }, {
-      status:result.ok ? 200 : 409,
+      status:200,
       headers:{ 'Cache-Control':'private, no-store' },
     });
   } else if (action === 'save-integration') {
