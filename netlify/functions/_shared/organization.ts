@@ -491,6 +491,16 @@ export function profileFromOrganization(organization: OrganizationRecord): Tenan
     },
     catalog: { canonicalAliases:{}, quickBooksAliases:{}, bootstrapItems:[], websitePlacements:[] },
     sales: { packageAliases:{}, catalogItemByPackage:{}, weddingPackageIds:[], mobileBarPackageIds:[], privateEventPackageIds:[] },
+    accounting: {
+      damageDeposit: {
+        enabled: false,
+        defaultRentalType: 'one-day',
+        oneDayAmount: 0,
+        weekendAmount: 0,
+        dueDaysBefore: 30,
+        refundWithinDays: 14,
+      },
+    },
     bootstrapAdminEmails: [],
     storage: {
       legacyDataBelongsToTenant: false,
