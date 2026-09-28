@@ -1087,6 +1087,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function visibleSuggestedExclusionPlans(){
+      const plans=Array.isArray(state?.manualSyncPreview?.customerPlans)?state.manualSyncPreview.customerPlans:[];
+      return plans.filter(previewPlanMatchesFilter).filter((plan)=>unresolvedExclusionEligible(plan)&&Boolean(plan?.suggestedExclusion));
+    }
+
+    async function excludeBulkSelected(){
+      const preview=state?.manualSyncPreview;
+      const customerIds=[...bulkSelectedExclude];
+      if(!preview?.previewId)throw new Error('Run Preview Sync first.');
+      if(!customerIds.length)throw new Error('Select at least one unresolved customer to exclude.');
+      const plans=Array.isArray(preview.customerPlans)?preview.customerPlans:[];
+      const selectedPlans=plans.filter((plan)=>customerIds.includes(String(plan.customerId)));
+      const reasonCode=String(bulkExclusionReason?.value||'suggested');
+      if(reasonCode==='suggested'&&selectedPlans.some((plan)=>!plan?.suggestedExclusion?.code)){
+        throw new Error('Use a specific exclusion reason when the selection includes customers without a Preview Sync suggestion.');
+      }
+      const reasonLabel=reasonCode==='suggested'
+        ? 'each customer’s suggested reason'
+        : exclusionReasonLabel(reasonCode);
+      const names=selectedPlans.map((plan)=>plan?.qbo?.name||plan.customerId);
+      if(!confirm('Exclude '+customerIds.length+' QuickBooks customer'+(customerIds.length===1?'':'s')+' from CRM synchronization using '+reasonLabel+'?\n\n'+names.slice(0,10).join('\n')+(names.length>10?'\n…and '+(names.length-10)+' more':'')+'\n\nNothing will be deleted or changed in QuickBooks. These exclusions can be restored later.'))return;
+      const original=bulkExclude?.textContent||'Exclude selected';
+      if(bulkExclude){bulkExclude.disabled=true;bulkExclude.textContent='Excluding…';}
+      try{
+        await api({
+          action:'bulk-exclude-customers',
+          previewId:preview.previewId,
+          customerIds,
+          reasonCode,
+          reason:String(bulkExclusionNote?.value||'').trim(),
+        });
+        bulkSelectedExclude.clear();
+        if(bulkExclusionNote)bulkExclusionNote.value='';
+        await runPreviewSync();
+      }finally{
+        if(bulkExclude)bulkExclude.textContent=original;
+      }
+    }
+
     function outboundActionHtml(action){
       const before=action?.before==null?'':JSON.stringify(action.before,null,2);
       const after=action?.after==null?'':JSON.stringify(action.after,null,2);
