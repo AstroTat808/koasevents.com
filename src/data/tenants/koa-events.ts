@@ -167,7 +167,7 @@ export const koaEventsTenantProfile: TenantProfile = {
       vendors: 'koa-vendors',
       integrations: 'koa-integrations',
       email: 'koa-email',
-      health: 'koa-health',
+      health: 'koa-system-health',
       calendar: 'koa-calendar',
       authSecurity: 'koa-auth-security',
     },
