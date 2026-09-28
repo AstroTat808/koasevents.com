@@ -3,6 +3,7 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
+import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
@@ -126,50 +127,7 @@ function quickBooksState(record: any) {
 }
 
 function proposalLines(record: any, itemId: string) {
-  const proposal = record.proposal || {};
-  const raw = Array.isArray(proposal.lineItems) ? proposal.lineItems : [];
-  const lines = raw.length ? raw.map((line: any) => {
-    const qty = Math.max(1, Number(line.quantity || 1));
-    const amount = Number(line.amount || (qty * Number(line.unitPrice || 0)) || 0);
-    const mappedItemId = clean(line.quickBooksItemId, 80) || itemId;
-    return {
-      Amount: amount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(line.description, 400),
-      SalesItemLineDetail: {
-        ItemRef: { value: mappedItemId },
-        Qty: qty,
-        UnitPrice: qty ? Math.round((amount / qty) * 100) / 100 : amount,
-        TaxCodeRef: { value: 'NON' },
-      },
-    };
-  }) : [{
-    Amount: Number(proposal.subtotal || proposal.total || 0),
-    DetailType: 'SalesItemLineDetail',
-    Description: 'CRM proposal ' + record.id,
-    SalesItemLineDetail: {
-      ItemRef: { value: itemId },
-      Qty: 1,
-      UnitPrice: Number(proposal.subtotal || proposal.total || 0),
-      TaxCodeRef: { value: 'NON' },
-    },
-  }];
-
-  const taxAmount = Math.max(0, Number(proposal.taxAmount || 0));
-  if (taxAmount > 0) {
-    lines.push({
-      Amount: taxAmount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(proposal.taxLabel || 'Tax', 400),
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: taxAmount,
-        TaxCodeRef: { value: 'NON' },
-      },
-    });
-  }
-  return lines;
+  return buildQuickBooksEstimateLines(record, itemId);
 }
 
 async function ensureCustomer(context: Context, record: any) {
