@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 
 type SelectedQuoteItem = {
@@ -158,6 +158,9 @@ function cleanState(input: unknown): QuoteState | null {
 }
 
 export default async (req: Request, context: Context) => {
+  const tenantContext=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenantContext)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenantContext,async()=>{
   const store = storeFor(context, req);
   const id = cleanText(context.params.id, 20).toUpperCase();
 
@@ -244,8 +247,8 @@ export default async (req: Request, context: Context) => {
   }
 
   return new Response('Method not allowed', { status: 405 });
+  });
 };
-
 export const config: Config = {
   path: ['/api/quotes', '/api/quotes/:id'],
 };
