@@ -54,7 +54,8 @@ for (const table of ['memberships','tenant_records','tenant_documents','integrat
   if (!migration.includes('alter table ' + table + ' enable row level security')) {
     failures.push('migration: RLS not enabled for ' + table);
   }
-  if (!migration.includes(table + '_tenant_isolation')) {
+  const policyPattern = new RegExp('create\\s+policy\\s+[a-z0-9_]+\\s+on\\s+'+table+'\\b','i');
+  if (!policyPattern.test(migration)) {
     failures.push('migration: tenant isolation policy missing for ' + table);
   }
 }
