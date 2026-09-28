@@ -1,11 +1,14 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, isApprovedManager, requireCapability } from './_shared/admin';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord } from './_shared/crm-cleanup-audit';
 import { assignmentFor, listOperationalStaff, type OperationalStaff } from './_shared/staff-directory';
 import { appendStaffAudit } from './_shared/staff-audit';
 import { getQuickBooksCatalog, getQuickBooksDepositSettings, type QuickBooksDepositSettings } from './_shared/quickbooks';
 import { readPublishedAddOnPricing } from './_shared/wedding-pricing';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
+import type { TenantProfile } from '../../src/data/tenants';
+import { tenantContractTemplate } from '../../src/data/tenants/contracts';
 
 type QuoteItem = {
   id: string;
@@ -190,15 +193,11 @@ type TrashEntry = {
 };
 
 function quoteStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-quotes', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-quotes' });
+  return tenantStoreFor(context, resolveTenant(), 'quotes');
 }
 
 function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function cleanText(value: unknown, max = 4000) {
@@ -222,53 +221,53 @@ function publicToken() {
   return Array.from(bytes, (value) => value.toString(36).slice(-1)).join('') + idSuffix(6);
 }
 
-function normalizePackage(value: unknown) {
-  const raw = cleanText(value, 80).toLowerCase();
-  if (raw === 'plumeria' || raw === 'signature') return 'signature-wedding';
-  return raw;
+function activeTenant() {
+  return resolveTenant();
 }
 
-const PACKAGE_PRICES: Record<string, number> = {
-  gardenia: 5000,
-  orchid: 10000,
-  hibiscus: 15000,
-  'signature-wedding': 20000,
-  'mobile-oahu': 1500,
-  'mobile-maui': 2000,
-  'mobile-big-island': 2500,
-};
+function normalizePackage(value: unknown, tenant: TenantProfile = activeTenant()) {
+  const raw = cleanText(value, 80).toLowerCase();
+  return tenant.sales.packageAliases[raw] || raw;
+}
 
-const PACKAGE_NAMES: Record<string, string> = {
-  gardenia: 'Gardenia Wedding Collection',
-  orchid: 'Orchid Wedding Collection',
-  hibiscus: 'Hibiscus Wedding Collection',
-  'signature-wedding': 'Koa’s Signature Wedding Experience',
-  'mobile-oahu': 'Koa’s Mobile Bar — Oahu Package',
-  'mobile-maui': 'Koa’s Mobile Bar — Maui Package',
-  'mobile-big-island': 'Koa’s Mobile Bar — Big Island Package',
-  'mobile-custom': 'Koa’s Mobile Bar — Custom Service',
-};
+function packageCatalogId(packageId: string, tenant: TenantProfile = activeTenant()) {
+  const normalized = normalizePackage(packageId, tenant);
+  return tenant.sales.catalogItemByPackage[normalized]
+    || tenant.catalog.canonicalAliases[normalized]
+    || normalized;
+}
 
+function packageSeedItem(packageId: string, tenant: TenantProfile = activeTenant()) {
+  const catalogId = packageCatalogId(packageId, tenant);
+  return tenant.catalog.bootstrapItems.find((item) => item.id === catalogId) || null;
+}
 
-const PACKAGE_CATALOG_IDS: Record<string,string> = {
-  gardenia: 'gardenia',
-  orchid: 'orchid',
-  hibiscus: 'hibiscus',
-  'signature-wedding': 'signature-wedding',
-  'mobile-oahu': 'oahu-bar',
-  'mobile-maui': 'maui-bar',
-  'mobile-big-island': 'big-island-bar',
-};
+function packagePrice(packageId: string, tenant: TenantProfile = activeTenant()) {
+  return finite(packageSeedItem(packageId, tenant)?.unitPrice || 0);
+}
 
-function catalogPackagePrice(prices: Map<string,number>, packageId: string) {
-  const catalogId = PACKAGE_CATALOG_IDS[normalizePackage(packageId)] || normalizePackage(packageId);
+function packageName(packageId: string, tenant: TenantProfile = activeTenant()) {
+  return packageSeedItem(packageId, tenant)?.name || cleanText(packageId, 120) || 'Services';
+}
+
+function isMobileBarPackage(packageId: string, tenant: TenantProfile = activeTenant()) {
+  return tenant.sales.mobileBarPackageIds.includes(normalizePackage(packageId, tenant));
+}
+
+function isWeddingPackage(packageId: string, tenant: TenantProfile = activeTenant()) {
+  return tenant.sales.weddingPackageIds.includes(normalizePackage(packageId, tenant));
+}
+
+function catalogPackagePrice(prices: Map<string,number>, packageId: string, tenant: TenantProfile = activeTenant()) {
+  const catalogId = packageCatalogId(packageId, tenant);
   return { catalogId, price: finite(prices.get(catalogId)) };
 }
 
 
 async function readSalesIndex(context: Context): Promise<SalesRecord[]> {
   const store = salesStoreFor(context);
-  const raw = ((await store.get('records/index', { type: 'json' })) || []) as SalesRecord[];
+  const tenant = activeTenant();
+  const raw = (await readTenantIndex<SalesRecord>(store, tenant, 'records/index')).rows;
   return raw.map((record: any) => ({
     ...record,
     stage: record.stage || (record.kind === 'proposal' ? 'proposal' : record.kind === 'lead' ? 'lead' : 'inquiry'),
@@ -489,52 +488,39 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 }
 
 
-function contractSections(record: SalesRecord) {
-  const proposal = record.proposal;
-  const packageId = normalizePackage(record.packageId);
-  const packageName = PACKAGE_NAMES[packageId] || 'Koa’s Events services';
-  const isMobileBar = packageId.startsWith('mobile-');
-
-  if (isMobileBar) {
-    return [
-      { heading: '1. Event & Service Scope', body: 'This Mobile Bar Services Agreement is between Koa’s Events / Koa’s Mobile Bar (“Koa’s”) and ' + (record.customer?.name || 'the Client') + '. The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal controls the selected package, guest count, service hours, staffing, travel, add-ons, pricing, and other event-specific details.' },
-      { heading: '2. Dry-Bar Alcohol Responsibility', body: 'Koa’s Mobile Bar operates as a dry-bar service. The Client is responsible for purchasing and supplying all alcoholic beverages. Koa’s may provide planning guidance and a shopping list based on the agreed menu and guest count, but the Client remains responsible for the alcohol purchase and availability.' },
-      { heading: '3. Mobile Bar Access, Setup & Utilities', body: 'The Client is responsible for providing safe and reasonably level access for the mobile bar and adequate space for setup, service, and breakdown. Any venue restrictions, access limitations, utility requirements, parking instructions, or load-in rules must be disclosed before the event. Generator hookup or other service equipment will be used as described in the accepted proposal.' },
-      { heading: '4. Staffing, Service Time & Guest Count', body: 'Bartender staffing, service duration, guest count, additional guests, additional service hours, gratuity structure, and any related charges are governed by the accepted proposal. Changes requested after proposal acceptance may require revised pricing and are subject to availability.' },
-      { heading: '5. Travel & Location', body: 'Travel charges are based on the event location and the travel terms shown in the accepted proposal. The Client is responsible for providing an accurate event address and notifying Koa’s of location changes before the event.' },
-      { heading: '6. Payments & Reservation', body: 'The finalized proposal total is $' + Number(proposal?.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized scope. Payment amounts and due dates are those shown in the accepted proposal and booking payment schedule. The event date is not reserved until the required agreement and reservation payment are completed.' },
-      { heading: '7. Add-ons, Custom Items & Final Adjustments', body: 'Custom-priced enhancements, personalized items, glassware, beverage stations, decor, menu presentation, and other selected add-ons are subject to the specifications, lead times, and pricing shown in the final proposal. Any approved changes will be reflected in the CRM proposal and payment records.' },
-      { heading: '8. Safety, Service & Client Cooperation', body: 'Koa’s may pause or stop service when reasonably necessary for guest safety, staff safety, venue compliance, or responsible beverage service. The Client agrees to cooperate with Koa’s staff and venue requirements and to prevent unauthorized self-service from the mobile bar.' },
-      { heading: '9. Electronic Signature & Entire Agreement', body: 'The accepted proposal, this agreement, and any written amendments recorded by Koa’s form the agreement for the mobile bar services. By signing electronically, the Client confirms review of the scope and pricing and agrees that the recorded name, acknowledgement, and timestamp constitute the Client’s electronic signature.' },
-    ];
-  }
-
-  return [
-    { heading: '1. Event Details', body: 'This Event Venue Rental Agreement is between Koa’s Events, 11-3330 Hibiscus St, Mountain View, HI 96771 (“Lessor” or “Koa’s”) and ' + (record.customer?.name || 'the Client') + ' (“Lessee”). The event is scheduled for ' + (record.customer?.eventDate || 'the date shown in the accepted proposal') + '. The accepted proposal and finalized event plan supply the event type, rental period, package, quantities, and other event-specific details.' },
-    { heading: '2. Premises Use & Access', body: 'Lessee is granted exclusive access to the property for the scheduled event. Koa’s Events reserves the right to define accessible areas if only a portion of the venue is being rented. Unauthorized access to non-designated areas is prohibited.' },
-    { heading: '3. Payment Terms', body: 'The finalized proposal total is $' + Number(proposal?.total || 0).toFixed(2) + ' for the ' + packageName + ' and finalized proposal scope. A 10% non-refundable deposit is required to reserve the event date. The first payment is due within 14 days of signing, the second payment is due 90 days before the event, and the final payment is due 60 days before the event. A $150 late fee applies per occurrence; two missed payments may result in event cancellation with no refund.' },
-    { heading: '4. Security / Damage Deposit', body: 'The separate security or damage deposit required for the event is due 30 days before the event. Failure to pay authorizes cancellation by Koa’s. The deposit will be refunded within 14 days after the event, less deductions for damage, excessive cleanup, or breach.' },
-    { heading: '5. Cancellation & Change of Date', body: 'Lessee may cancel within 15 calendar days of signing for a full refund. After that, all payments are non-refundable. Lessee may request one change to the event date by submitting a written request at least eight months before the originally scheduled date, subject to availability. A non-refundable change fee of $500 for single-day rentals or $1,000 for weekend rentals applies. Prior payments transfer to the approved new date; no additional date changes are permitted after the new date is confirmed.' },
-    { heading: '6. Conduct, Safety, and Clean-Up', body: 'Lessee is responsible for guest behavior. Excess-mess cleanup, including vomit or spills, is charged at $50 per hour or per occurrence. All personal items and decor must be removed after the event. Children under 16 must be supervised by an adult. Smoking is allowed only in designated areas.' },
-    { heading: '7. Vendors, Insurance, and Alcohol', body: 'Vendors must carry insurance naming Koa’s as additional insured, with proof due 30 days before the event. Event insurance is required, with the certificate due 60 days before the event. Only pre-approved bartenders are allowed. Self-serve bars and shots after 8:00 PM are prohibited; violation may result in event termination.' },
-    { heading: '8. Intellectual Property & Media Use', body: 'Koa’s reserves all rights to its brand, decor, and imagery. Lessee may not use photos or likenesses of the venue for commercial purposes without written consent. By default, Koa’s may use photos from the event for promotional purposes unless the client opts out in writing.' },
-    { heading: '9. Legal Terms & Electronic Signature', body: 'This Agreement is governed by Hawaii state law. Disputes are to be resolved through mediation, followed by binding arbitration in Hilo, Hawaii if necessary. Neither party is liable for events outside its control (Force Majeure). By signing electronically, Lessee confirms review of the accepted proposal and this Agreement, intends to sign electronically, and agrees that the recorded name, acknowledgement, and timestamp constitute Lessee’s signature.' },
-  ];
+function contractForRecord(record: SalesRecord, tenant: TenantProfile = activeTenant()) {
+  const packageId = normalizePackage(record.packageId, tenant);
+  return tenantContractTemplate(
+    tenant.id,
+    tenant.displayName,
+    isMobileBarPackage(packageId, tenant),
+    {
+      clientName: record.customer?.name || 'the Client',
+      eventDate: record.customer?.eventDate || '',
+      packageName: packageName(packageId, tenant),
+      total: Number(record.proposal?.total || 0),
+    },
+  );
 }
 
-function ensureBooking(record: SalesRecord) {
+function contractSections(record: SalesRecord, tenant: TenantProfile = activeTenant()) {
+  return contractForRecord(record, tenant).sections;
+}
+
+function ensureBooking(record: SalesRecord, tenant: TenantProfile = activeTenant()) {
   if (!record.proposal) return null;
   if (!record.booking) {
+    const contract = contractForRecord(record, tenant);
     record.booking = {
       status: 'contract_pending',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       contract: {
         version: 1,
-        title: normalizePackage(record.packageId).startsWith('mobile-') ? 'Koa’s Mobile Bar Services Agreement' : 'Koa’s Events Venue & Services Agreement',
+        title: contract.title,
         generatedAt: new Date().toISOString(),
         status: 'pending',
-        sections: contractSections(record),
+        sections: contract.sections,
         signature: null,
         koaSignature: null,
       },
@@ -637,7 +623,7 @@ function remindersForRecord(record: SalesRecord) {
     if (!booking?.contract || booking.contract.status !== 'signed') {
       reminders.push({ id:record.id+'-contract', priority:1, type:'contract', title:'Client signature pending', detail:'Proposal is accepted; send or follow up on the booking agreement.', due:'now' });
     } else if (!booking.contract.koaSignature) {
-      reminders.push({ id:record.id+'-countersign', priority:1, type:'contract', title:'Koa countersignature pending', detail:'Client signed the agreement. Koa’s must countersign before the agreement is fully executed.', due:'now' });
+      reminders.push({ id:record.id+'-countersign', priority:1, type:'contract', title:'Organization countersignature pending', detail:'Client signed the agreement. An authorized organization signer must countersign before the agreement is fully executed.', due:'now' });
     }
   }
 
@@ -732,7 +718,7 @@ function bookingSummary(record: SalesRecord) {
     koaSigner: booking?.contract?.koaSignature?.name || '',
     subtotal: Number(record.proposal.subtotal || 0),
     discountAmount: Number(record.proposal.discountAmount || 0),
-    taxRate: 4.712,
+    taxRate: Number(record.proposal.taxRate || 0),
     taxAmount: Number(record.proposal.taxAmount || 0),
     total: Number(record.proposal.total || 0),
     depositAmount: Number(record.proposal.depositAmount || 0),
@@ -750,13 +736,13 @@ function bookingSummary(record: SalesRecord) {
   };
 }
 
-function proposalCategory(packageId = '', inquiry?: Record<string, unknown>) {
-  const normalizedPackage = normalizePackage(packageId);
+function proposalCategory(packageId = '', inquiry?: Record<string, unknown>, tenant: TenantProfile = activeTenant()) {
+  const normalizedPackage = normalizePackage(packageId, tenant);
   const eventType = cleanText((inquiry as any)?.eventType, 120).toLowerCase();
   const service = cleanText((inquiry as any)?.service, 80).toLowerCase();
-  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return 'mobile-bar';
-  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return 'venue-wedding';
-  if (eventType || service) return 'private-event';
+  if (isMobileBarPackage(normalizedPackage, tenant) || service.includes('mobile bar')) return 'mobile-bar';
+  if (isWeddingPackage(normalizedPackage, tenant) || eventType.includes('wedding')) return 'venue-wedding';
+  if (tenant.sales.privateEventPackageIds.includes(normalizedPackage) || eventType || service) return 'private-event';
   return 'default';
 }
 
@@ -846,7 +832,7 @@ function selectedPaymentPreset(
         leadDays == null
           ? 'No usable lead-time dates were available; this rule does not require a lead-time range.'
           : 'Lead time was ' + leadDays + ' days and was inside this rule’s range.',
-        'Contract-value basis was ' + (contractValueBasis === 'beforeGet' ? 'before Hawaiʻi GET' : 'after Hawaiʻi GET') + ' at $' + contractValue.toFixed(2) + ' and was inside this rule’s range.',
+        'Contract-value basis was ' + (contractValueBasis === 'beforeGet' ? 'before tax' : 'after tax') + ' at $' + contractValue.toFixed(2) + ' and was inside this rule’s range.',
         matches.length > 1
           ? matches.length + ' active rules matched; “' + match.name + '” won because it had the highest priority.'
           : 'This was the only active rule that matched.',
@@ -916,18 +902,18 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
   return [{ label:'Reservation deposit', dueDate:'', amount:depositAmount }, ...milestones];
 }
 
-function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>(), catalogPrices = new Map<string, number>()) {
+function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>(), catalogPrices = new Map<string, number>(), tenant: TenantProfile = activeTenant()) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
   const normalizedPackage = normalizePackage(state.startingPoint || packageId);
   const inquiryLines = Array.isArray((inquiry as any)?.estimateLineItems) ? (inquiry as any).estimateLineItems : [];
   const mobileEstimate = finite((inquiry as any)?.estimatedTotal || 0);
   const packageCatalog = catalogPackagePrice(catalogPrices, normalizedPackage);
-  const base = finite(packageCatalog.price || state.basePackagePrice || PACKAGE_PRICES[normalizedPackage] || 0);
+  const base = finite(packageCatalog.price || state.basePackagePrice || packagePrice(normalizedPackage) || 0);
   if (base > 0) {
     lines.push({
       id: 'collection',
-      description: PACKAGE_NAMES[normalizedPackage] || 'Wedding collection',
+      description: packageName(normalizedPackage) || 'Wedding collection',
       quantity: 1,
       unitPrice: base,
       amount: base,
@@ -986,7 +972,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   if (!quote && !lines.length && mobileEstimate > 0) {
     lines.push({
       id: 'mobile-estimate',
-      description: PACKAGE_NAMES[normalizedPackage] || 'Koa’s Mobile Bar estimated service',
+      description: packageName(normalizedPackage) || 'Mobile bar estimated service',
       quantity: 1,
       unitPrice: mobileEstimate,
       amount: mobileEstimate,
@@ -1000,7 +986,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const taxableAfterDiscount = subtotal > 0
     ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
     : 0;
-  const taxRate = 4.712;
+  const taxRate = tenant.tax.enabled ? Number(tenant.tax.customerRate || 0) : 0;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const beforeGetValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
   const total = Math.max(0, Math.round((beforeGetValue + taxAmount) * 100) / 100);
@@ -1188,7 +1174,7 @@ function syncUncommittedBookingPayments(record: SalesRecord, schedule: PaymentIt
   });
 }
 
-function updateProposal(record: SalesRecord, payload: any) {
+function updateProposal(record: SalesRecord, payload: any, tenant: TenantProfile = activeTenant()) {
   const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '', record.packageId || '');
   const lineItems = sanitizeLines(payload.lineItems);
   const subtotal = Math.round(lineItems.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
@@ -1197,7 +1183,7 @@ function updateProposal(record: SalesRecord, payload: any) {
   const taxableAfterDiscount = subtotal > 0
     ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
     : 0;
-  const taxRate = 4.712;
+  const taxRate = tenant.tax.enabled ? Number(tenant.tax.customerRate || 0) : 0;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
   const depositPercent = Math.min(100, Math.max(0, finite(payload.depositPercent ?? effectiveDepositPercent(current), 0, 100)));
@@ -1268,7 +1254,8 @@ function quoteAnalytics(quotes: SavedQuote[]) {
 }
 
 function funnelAnalytics(events: any[], records: SalesRecord[]) {
-  const ids = ['gardenia','orchid','hibiscus','signature-wedding','mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
+  const tenant = activeTenant();
+  const ids = [...tenant.sales.weddingPackageIds, ...tenant.sales.mobileBarPackageIds, ...tenant.sales.privateEventPackageIds];
   return ids.map((packageId) => {
     const views = new Set(events.filter((e) => e.type === 'package_view' && normalizePackage(e.packageId) === packageId).map((e) => e.sessionId || e.id)).size;
     const saves = new Set(events.filter((e) => e.type === 'quote_saved' && normalizePackage(e.packageId) === packageId).map((e) => e.quoteId || e.id)).size;
@@ -1305,7 +1292,7 @@ function mobileBarAnalytics(records: SalesRecord[]) {
   const valueFor = (record: any) => {
     const proposalTotal = finite(record.proposal?.total);
     const websiteEstimate = finite(record.inquiry?.estimatedTotal);
-    const base = PACKAGE_PRICES[normalizePackage(record.packageId || record.inquiry?.mobileBarPackage)] || 0;
+    const base = packagePrice(record.packageId || record.inquiry?.mobileBarPackage) || 0;
     return proposalTotal || websiteEstimate || base;
   };
   const bartendersFor = (record: any) => {
@@ -1359,7 +1346,7 @@ function mobileBarAnalytics(records: SalesRecord[]) {
     };
   });
 
-  const packageIds = ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
+  const packageIds = activeTenant().sales.mobileBarPackageIds;
   const packagePopularity = packageIds.map((packageId) => ({
     packageId,
     inquiries: inquiries.filter((record: any) => normalizePackage(record.packageId || record.inquiry?.mobileBarPackage) === packageId).length,
@@ -1542,8 +1529,9 @@ function staffPerformance(records:SalesRecord[], events:any[], staff:Operational
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireCapability('sales.view', req);
+  const auth = await requireCapability('sales.view', req, context);
   if (auth.response) return auth.response;
+  const tenant = auth.tenant || resolveTenant(req);
 
   if (req.method === 'GET') {
     const url = new URL(req.url);
@@ -1997,7 +1985,7 @@ export default async (req: Request, context: Context) => {
         notes: cleanText(payload.customer?.notes, 4000),
       },
       quote,
-      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing, catalogPricing) : undefined,
+      proposal: kind === 'proposal' ? proposalFromQuote(quote, eventDate, packageId, undefined, depositPercent, depositSettings || undefined, now.slice(0,10), publishedPricing, catalogPricing, tenant) : undefined,
     };
     const matchingOwner=records.find(entry=>entry.quoteId===quoteId&&entry.assignment)?.assignment;
     if(matchingOwner) record.assignment={...matchingOwner};
@@ -2132,7 +2120,7 @@ export default async (req: Request, context: Context) => {
     const preserved = (current.lineItems || []).filter((line) => line.id !== 'margin-target-adjustment');
     const baseSubtotal = preserved.reduce((sum, line) => sum + finite(line.amount), 0);
     const discount = Math.min(baseSubtotal, finite(current.discountAmount));
-    const taxRate = 4.712;
+    const taxRate = tenant.tax.enabled ? Number(tenant.tax.customerRate || 0) : 0;
     const taxMultiplier = 1 + taxRate / 100;
     const requiredTaxable = taxMultiplier > 0 ? targetTotal / taxMultiplier : targetTotal;
     const requiredSubtotal = Math.max(0, requiredTaxable + discount);
@@ -2195,7 +2183,7 @@ export default async (req: Request, context: Context) => {
     const record = records.find((entry) => entry.id === cleanText(payload.recordId, 80) && entry.kind === 'proposal');
     if (!record) return Response.json({ error: 'Proposal not found.' }, { status: 404 });
     const before = record.proposal?.status;
-    updateProposal(record, payload.proposal || {});
+    updateProposal(record, payload.proposal || {}, tenant);
     records = await saveRecord(context, record, records);
     if (before !== 'sent' && record.proposal?.status === 'sent') await appendEvent(context, { type: 'proposal_sent', packageId: record.packageId, recordId: record.id, quoteId: record.quoteId || '' });
     if (before !== 'booked' && record.proposal?.status === 'booked') await appendEvent(context, { type: 'booked', packageId: record.packageId, recordId: record.id, quoteId: record.quoteId || '' });
@@ -2227,13 +2215,13 @@ export default async (req: Request, context: Context) => {
       return Response.json({ error: 'Accepted proposal not found.' }, { status: 404 });
     }
 
-    const booking = ensureBooking(record);
+    const booking = ensureBooking(record, tenant);
     if (!booking || booking.contract.status !== 'signed') {
-      return Response.json({ error: 'Client signature must be recorded before Koa’s countersigns.' }, { status: 400 });
+      return Response.json({ error: 'Client signature must be recorded before the organization countersigns.' }, { status: 400 });
     }
 
     const name = cleanText(payload.name, 180);
-    if (name.length < 2) return Response.json({ error: 'Enter the Koa’s signer name.' }, { status: 400 });
+    if (name.length < 2) return Response.json({ error: 'Enter the organization signer name.' }, { status: 400 });
 
     const now = new Date().toISOString();
     booking.contract.koaSignature = { name, signedAt: now };
@@ -2254,7 +2242,7 @@ export default async (req: Request, context: Context) => {
       recordId: record.id,
       quoteId: record.quoteId || '',
       packageId: record.packageId || '',
-      detail: 'Agreement countersigned for Koa’s Events by ' + name,
+      detail: 'Agreement countersigned for ' + tenant.displayName + ' by ' + name,
     });
     if (record.stage === 'booked') {
       await appendEvent(context, {
