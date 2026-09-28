@@ -1,4 +1,4 @@
-// Release marker: reviewed QuickBooks CRM sync workflow.
+// Release marker: QuickBooks preview filters and CRM rollback recovery.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
