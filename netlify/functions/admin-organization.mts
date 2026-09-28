@@ -11,6 +11,7 @@ import {
 } from './_shared/organization';
 import { resolveTenant } from './_shared/tenant';
 import { tenantMigrationAudit } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { resolveTxt } from 'node:dns/promises';
 
 function clean(value: unknown, max = 1000) {
@@ -155,42 +156,50 @@ function templates(value: unknown): OrganizationTemplate[] {
   }).filter((row) => row.name);
 }
 
-function integrationReadiness() {
-  const has = (...keys: string[]) => keys.every((key) => Boolean(clean(Netlify.env.get(key), 3000)));
+function integrationReadiness(tenant:any) {
+  const has = (...keys: string[]) => keys.every((key) => Boolean(clean(tenantEnv(tenant,key), 3000)));
+  const any = (...keys:string[]) => keys.some((key)=>Boolean(clean(tenantEnv(tenant,key),3000)));
   return {
     quickbooks: {
       configured:
         has('QUICKBOOKS_PRODUCTION_CLIENT_ID','QUICKBOOKS_PRODUCTION_CLIENT_SECRET')
         || has('QUICKBOOKS_CLIENT_ID','QUICKBOOKS_CLIENT_SECRET')
         || has('INTUIT_CLIENT_ID','INTUIT_CLIENT_SECRET'),
-      webhookConfigured: Boolean(
-        clean(Netlify.env.get('QUICKBOOKS_PRODUCTION_WEBHOOK_VERIFIER_TOKEN'), 3000)
-        || clean(Netlify.env.get('QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN'), 3000)
-        || clean(Netlify.env.get('INTUIT_WEBHOOK_VERIFIER_TOKEN'), 3000)
+      webhookConfigured: any(
+        'QUICKBOOKS_PRODUCTION_WEBHOOK_VERIFIER_TOKEN',
+        'QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN',
+        'INTUIT_WEBHOOK_VERIFIER_TOKEN'
       ),
+      credentialScope: tenant.storage.legacyDataBelongsToTenant ? 'tenant-or-legacy' : 'tenant-only',
       settingsUrl: '/admin/quickbooks/',
     },
     signwell: {
       configured: has('SIGNWELL_API_KEY','SIGNWELL_WEBHOOK_ID'),
-      webhookConfigured: Boolean(clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'), 1000)),
+      webhookConfigured: any('SIGNWELL_WEBHOOK_ID'),
+      credentialScope: tenant.storage.legacyDataBelongsToTenant ? 'tenant-or-legacy' : 'tenant-only',
       settingsUrl: '/admin/crm/',
     },
     resend: {
-      configured: Boolean(clean(Netlify.env.get('RESEND_API_KEY'), 3000)),
-      monitoringConfigured: Boolean(clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 3000)),
+      configured: any('RESEND_API_KEY'),
+      monitoringConfigured: any('RESEND_MONITORING_API_KEY'),
+      webhookConfigured: any('RESEND_WEBHOOK_SECRET'),
+      credentialScope: tenant.storage.legacyDataBelongsToTenant ? 'tenant-or-legacy' : 'tenant-only',
       settingsUrl: '/admin/email/',
     },
     microsoft: {
       configured: Boolean(
-        clean(Netlify.env.get('MICROSOFT_CLIENT_ID'), 3000)
-        && clean(Netlify.env.get('MICROSOFT_CLIENT_SECRET'), 3000)
+        any('MICROSOFT_GRAPH_TENANT_ID')
+        && any('MICROSOFT_GRAPH_CLIENT_ID','MICROSOFT_CLIENT_ID')
+        && any('MICROSOFT_GRAPH_CLIENT_SECRET','MICROSOFT_CLIENT_SECRET')
       ),
+      credentialScope: tenant.storage.legacyDataBelongsToTenant ? 'tenant-or-legacy' : 'tenant-only',
       settingsUrl: '/admin/calendar/',
     },
     stripe: {
       configured: Boolean(clean(Netlify.env.get('VENUELOOM_STRIPE_RESTRICTED_KEY'), 3000)),
       webhookConfigured: Boolean(clean(Netlify.env.get('VENUELOOM_STRIPE_WEBHOOK_SECRET'), 3000)),
       priceMapConfigured: Boolean(clean(Netlify.env.get('VENUELOOM_STRIPE_PRICE_MAP'), 10000)),
+      credentialScope: 'platform',
       settingsUrl: '/admin/organization/#subscription',
     },
   };
@@ -237,7 +246,7 @@ export default async (req: Request, context: Context) => {
   const tenant = auth.tenant || resolveTenant(req);
   const organization = auth.organization || await readOrganization(context, tenant);
   const memberships = await listMemberships(context, tenant.id);
-  const integrations = integrationReadiness();
+  const integrations = integrationReadiness(tenant);
 
   if (req.method === 'GET') {
     return Response.json({
@@ -531,7 +540,7 @@ export default async (req: Request, context: Context) => {
   }
 
   const nextMemberships = await listMemberships(context, tenant.id);
-  const nextIntegrations = integrationReadiness();
+  const nextIntegrations = integrationReadiness(tenant);
   return Response.json({
     ok: true,
     organization: updated,
