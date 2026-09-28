@@ -1,5 +1,5 @@
 ---
-import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
 <BaseLayout noindex title="QuickBooks Sync History" description="Review QuickBooks and CRM synchronization history." canonical="https://www.koasevents.com/admin/quickbooks/history/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
@@ -94,7 +94,7 @@ import BaseLayout from '../../../../layouts/BaseLayout.astro';
   </main>
 
   <script>
-    import { getAdminSession } from '../../../../lib/admin-session';
+    import { getAdminSession } from '../../../lib/admin-session';
     const $=(s)=>document.querySelector(s);
     const app=$('[data-app]'), unauthorized=$('[data-unauthorized]');
     const list=$('[data-list]'), search=$('[data-search]'), filter=$('[data-filter]'), count=$('[data-count]');
