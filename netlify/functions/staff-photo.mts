@@ -1,14 +1,12 @@
 import type { Config, Context } from '@netlify/functions';
 import { admin } from '@netlify/identity';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireOperations } from './_shared/admin';
 
 function clean(value:unknown,max=300){return String(value??'').trim().slice(0,max);}
 function metadata(user:any){return user?.user_metadata||user?.userMetadata||{};}
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-staff-files',consistency:'strong'})
-    : getDeployStore({name:'koa-staff-files'});
+function storeFor(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'staffFiles');
 }
 
 export default async(req:Request,context:Context)=>{
@@ -25,7 +23,7 @@ export default async(req:Request,context:Context)=>{
   const meta=metadata(target);
   if(meta?.has_profile_photo!==true)return Response.json({error:'Profile photo not found.'},{status:404});
 
-  const data=await storeFor(context).get('profile-photos/'+userId,{type:'arrayBuffer'});
+  const data=await storeFor(context,auth.tenant).get('profile-photos/'+userId,{type:'arrayBuffer'});
   if(!data)return Response.json({error:'Profile photo not found.'},{status:404});
   const type=clean(meta?.profile_photo_type,80)||'image/jpeg';
   return new Response(data,{headers:{'Content-Type':type,'Cache-Control':'private, max-age=86400, immutable'}});
