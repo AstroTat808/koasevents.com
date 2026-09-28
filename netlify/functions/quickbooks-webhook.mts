@@ -452,7 +452,6 @@ async function handleTenantWebhook(context: Context, payload: any) {
 
   return new Response(null, { status: 200 });
 }
-}
 
 function payloadRealmIds(payload:any){
   return [...new Set(
