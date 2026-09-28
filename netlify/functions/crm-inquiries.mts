@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant.ts';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant.ts';
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
@@ -389,7 +389,7 @@ function json(req: Request, body: unknown, status = 200) {
   return Response.json(body, { status, headers: responseHeaders(req) });
 }
 
-export default async (req: Request, context: Context) => {
+async function handleTenantRequest(req: Request, context: Context) {
   const origin = req.headers.get('origin');
   if (origin && !allowedOrigin(req)) {
     return Response.json({ error: 'Cross-site inquiry capture is not allowed.' }, { status: 403 });
@@ -903,6 +903,11 @@ export default async (req: Request, context: Context) => {
     notificationConfigured,
     ...(turnstileProof ? { turnstileProof } : {}),
   });
+}
+
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
 
 export const config: Config = {
