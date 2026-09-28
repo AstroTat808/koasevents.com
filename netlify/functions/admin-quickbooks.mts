@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
+import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import {
   completeOAuth,
   createOAuthState,
@@ -602,7 +603,7 @@ export default async (req: Request, context: Context) => {
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest] = await Promise.all([
+    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
@@ -615,6 +616,7 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/sandbox-linked-booking-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-smoke-test', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
+      getLastQuickBooksCrmSync(context),
     ]);
     const records = await readQuickBooksSalesRecords(context);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
@@ -656,6 +658,7 @@ export default async (req: Request, context: Context) => {
       linkedTest: linkedTest || null,
       productionTest: productionTest || null,
       productionLinkedTest: productionLinkedTest || null,
+      manualSync: manualSync || null,
       accountingAudit,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -665,6 +668,14 @@ export default async (req: Request, context: Context) => {
   if (!hasCapability(auth.user,'quickbooks.manage')) return Response.json({ error:'Accounting management permission required.' }, { status:403 });
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
+
+  if (action === 'sync-two-way') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    const result = await runQuickBooksCrmTwoWaySync(context, actor);
+    const records = await readQuickBooksSalesRecords(context);
+    const accountingAudit = buildQuickBooksAccountingAudit(records);
+    return Response.json({ ok:true, result, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+  }
 
   if (action === 'test-accounting-alert') {
     const now = new Date().toISOString();
