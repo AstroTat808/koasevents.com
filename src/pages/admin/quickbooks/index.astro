@@ -1559,6 +1559,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       try{
         const data=await api({action:'preview-two-way'});
         state.manualSyncPreview=data.preview||null;
+        if(data?.preview?.suggestedExclusionDismissalCount!=null){
+          state.suggestedExclusionDismissalCount=Number(data.preview.suggestedExclusionDismissalCount||0);
+          renderSuggestedExclusionRules();
+        }
         renderSyncPreview();
         if(twoWaySyncDetail)twoWaySyncDetail.textContent='Review every planned import, match, invoice, payment, balance and outbound update below. Run Approved Sync stays disabled until every proposed new CRM import is explicitly approved and every ambiguous match is resolved.';
       }catch(err){
