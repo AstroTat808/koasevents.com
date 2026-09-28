@@ -161,6 +161,16 @@ export const koaEventsTenantProfile: TenantProfile = {
     compatibilityBlobStores: {
       sales: 'koa-sales',
       integrations: 'koa-integrations',
+      crm: 'koa-crm',
+      eventOps: 'koa-event-ops',
+      vendors: 'koa-vendors',
+      eventFiles: 'koa-event-files',
+      vendorFiles: 'koa-vendor-files',
+      emailAnalytics: 'koa-email-analytics',
+      authSecurity: 'koa-auth-security',
+      staffDirectory: 'koa-staff-directory',
+      systemHealth: 'koa-system-health',
+      workspaceAlerts: 'koa-workspace-alerts',
     },
   },
   legal: {
