@@ -296,6 +296,83 @@ async function office365HealthSummary(context:Context,deployments:any=null){
   };
 }
 
+function accountingHealthSummary(latest:any,history:any[]){
+  const rows=[latest,...(Array.isArray(history)?history:[])].filter(Boolean);
+  const seen=new Set<string>();
+  const samples=rows
+    .filter((snapshot:any)=>{
+      const key=String(snapshot?.id||snapshot?.checkedAt||'');
+      if(!key||seen.has(key))return false;
+      seen.add(key);
+      return true;
+    })
+    .map((snapshot:any)=>{
+      const check=(Array.isArray(snapshot?.checks)?snapshot.checks:[]).find((row:any)=>row?.id==='quickbooks-tax-invariant');
+      return check?{
+        checkedAt:String(snapshot.checkedAt||''),
+        source:String(snapshot.source||''),
+        alerted:(snapshot.alertFailedIds||[]).includes('quickbooks-tax-invariant'),
+        ok:Boolean(check.ok),
+        severity:String(check.severity||''),
+        status:Number(check.status||0),
+        detail:String(check.detail||''),
+        accountingDetails:check.accountingDetails||null,
+      }:null;
+    })
+    .filter(Boolean)
+    .sort((a:any,b:any)=>Date.parse(b.checkedAt)-Date.parse(a.checkedAt));
+
+  const latestSample:any=samples[0]||null;
+  const lastSuccessful:any=samples.find((sample:any)=>sample.ok)||null;
+  const failures=samples.filter((sample:any)=>!sample.ok).slice(0,12);
+  const chronological=[...samples].reverse();
+  const alertHistory:any[]=[];
+  let prior:any=null;
+  for(const sample of chronological){
+    if(!prior){
+      if(!sample.ok||sample.alerted){
+        alertHistory.push({
+          checkedAt:sample.checkedAt,
+          type:sample.alerted?'alerted':'failed',
+          severity:sample.severity,
+          detail:sample.detail,
+        });
+      }
+      prior=sample;
+      continue;
+    }
+    const becameFailed=prior.ok&&!sample.ok;
+    const recovered=!prior.ok&&sample.ok;
+    const becameAlerted=!prior.alerted&&sample.alerted;
+    const liveStatusChanged=String(prior?.accountingDetails?.liveNonTaxStatus||'')!==String(sample?.accountingDetails?.liveNonTaxStatus||'');
+    if(becameAlerted||becameFailed||recovered||liveStatusChanged){
+      alertHistory.push({
+        checkedAt:sample.checkedAt,
+        type:recovered?'recovered':becameAlerted?'alerted':becameFailed?'failed':'configuration_changed',
+        severity:sample.severity,
+        detail:sample.detail,
+        liveNonTaxStatus:String(sample?.accountingDetails?.liveNonTaxStatus||'unverified'),
+      });
+    }
+    prior=sample;
+  }
+
+  return {
+    latest:latestSample,
+    expectedTotal:Number(latestSample?.accountingDetails?.expectedTotal||15706.80),
+    actualTotal:Number(latestSample?.accountingDetails?.actualTotal||0),
+    taxablePayload:Number(latestSample?.accountingDetails?.taxablePayload||0),
+    liveNonTaxStatus:String(latestSample?.accountingDetails?.liveNonTaxStatus||'unverified'),
+    liveNonTaxVerified:Boolean(latestSample?.accountingDetails?.liveNonTaxVerified),
+    liveNonTaxId:String(latestSample?.accountingDetails?.liveNonTaxId||''),
+    liveNonTaxName:String(latestSample?.accountingDetails?.liveNonTaxName||''),
+    lastSuccessfulAt:String(lastSuccessful?.checkedAt||''),
+    failures,
+    alertHistory:alertHistory.reverse().slice(0,20),
+    sampleCount:samples.length,
+  };
+}
+
 export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
   if(auth.response) return auth.response;
@@ -598,8 +675,9 @@ export default async (req:Request,context:Context) => {
     await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
     await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
 
-    const [uptimeHistory,policy,deployments,releases]=await Promise.all([
+    const [uptimeHistory,healthHistory,policy,deployments,releases]=await Promise.all([
       safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
+      safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
       safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
       safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
       safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
@@ -634,6 +712,7 @@ export default async (req:Request,context:Context) => {
     return Response.json({
       ok:true,
       current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      accountingHealth:accountingHealthSummary(current,healthHistory),
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -649,7 +728,7 @@ export default async (req:Request,context:Context) => {
         passed:latest.passed,
         failed:latest.failed,
         failedIds:latest.failedIds,
-        checks:latest.checks.map(row=>({id:row.id,name:row.name,kind:row.kind,ok:row.ok,status:row.status,detail:row.detail,severity:row.severity,issueType:row.issueType||null})),
+        checks:latest.checks.map(row=>({id:row.id,name:row.name,kind:row.kind,ok:row.ok,status:row.status,detail:row.detail,severity:row.severity,issueType:row.issueType||null,accountingDetails:row.accountingDetails||null})),
       }:null,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -701,6 +780,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
+    accountingHealth:accountingHealthSummary(latest,history),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
