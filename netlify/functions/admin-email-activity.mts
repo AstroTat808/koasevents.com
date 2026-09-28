@@ -79,9 +79,7 @@ function mapEmail(row:any){
   };
 }
 function salesStore(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
+  return tenantStoreFor(context,resolveTenant(),'sales');
 }
 async function clientEmailIndex(context:Context){
   const records:any[]=((await salesStore(context).get('records/index',{type:'json'}))||[]) as any[];
