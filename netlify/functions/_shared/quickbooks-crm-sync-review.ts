@@ -519,6 +519,7 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
       warningCount: Array.isArray(row?.warnings) ? row.warnings.length : 0,
       changeCount: Array.isArray(row?.changes) ? row.changes.length : 0,
       legacy: true,
+      legacyIndex: index,
     }));
   }
   const summary = {
@@ -565,6 +566,24 @@ export async function getQuickBooksCrmSyncHistory(context: Context, limit = 100)
 export async function getQuickBooksCrmSyncHistoryDetail(context: Context, syncId: string) {
   const id = clean(syncId, 120);
   if (!id) return null;
-  const detail = await integrationStore(context).get('quickbooks/manual-sync-history/' + id, { type:'json' }) as any;
-  return detail || null;
+  const store = integrationStore(context);
+  const detail = await store.get('quickbooks/manual-sync-history/' + id, { type:'json' }) as any;
+  if (detail) return detail;
+
+  const index = ((await store.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
+  const summary = index.find((row) => clean(row?.syncId, 120) === id);
+  if (summary?.legacy) {
+    const legacy = ((await store.get('quickbooks/manual-sync-history', { type:'json' })) || []) as any[];
+    const legacyRow = legacy[Number(summary.legacyIndex)];
+    if (legacyRow) {
+      return {
+        ...legacyRow,
+        syncId: id,
+        legacy: true,
+        changes: Array.isArray(legacyRow?.changes) ? legacyRow.changes : [],
+        legacyNote: 'This sync predates before/after audit capture. Only metadata that was recorded at the time is available.',
+      };
+    }
+  }
+  return null;
 }
