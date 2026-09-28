@@ -95,6 +95,7 @@ export type TenantProfile = {
       emailRouting: string;
       authSecurity: string;
       staffDirectory: string;
+      staffFiles: string;
       staffAvailability: string;
       security: string;
       systemHealth: string;
