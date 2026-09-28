@@ -1,7 +1,7 @@
 // Release marker: Configurable QuickBooks suggested exclusions and guided review.
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
-import { resolveTenant, tenantBlobStoreName } from './tenant';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import {
   configuredServiceItemId,
   getQuickBooksSettings,
@@ -20,19 +20,11 @@ const SUGGESTED_EXCLUSION_RULES_KEY = 'quickbooks/suggested-exclusion-rules';
 const SUGGESTED_EXCLUSION_DISMISSALS_KEY = 'quickbooks/suggested-exclusion-dismissals';
 
 function salesStore(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'sales');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function integrationStore(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function clean(value: unknown, max = 1200) {
