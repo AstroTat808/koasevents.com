@@ -4,9 +4,6 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - codex/p0-tenant-hardening
 
 permissions:
   contents: read
