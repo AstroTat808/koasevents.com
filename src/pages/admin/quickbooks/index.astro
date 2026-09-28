@@ -1412,6 +1412,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
       if(previewExcluded)previewExcluded.textContent=Number(summary.excludedCustomers||0);
       if(previewSuggestedExcluded)previewSuggestedExcluded.textContent=Number(summary.suggestedExclusions||0);
+      if(reviewSuggestedExclusions){
+        const suggestionCount=Number(summary.suggestedExclusions||0);
+        reviewSuggestedExclusions.classList.toggle('hidden',!preview||suggestionCount===0);
+        reviewSuggestedExclusions.textContent='Review suggested exclusions ('+suggestionCount+')';
+        reviewSuggestedExclusions.disabled=suggestionCount===0;
+        if(suggestionCount===0&&suggestedReviewDialog?.open)suggestedReviewDialog.close();
+      }
       if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
       if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
       if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' QuickBooks customers · '+Number(summary.activeSyncCustomers??(Number(summary.qboCustomers||0)-Number(summary.excludedCustomers||0)))+' active for sync · '+Number(summary.excludedCustomers||0)+' excluded · '+Number(summary.suggestedExclusions||0)+' suggested exclusion'+(Number(summary.suggestedExclusions||0)===1?'':'s')+' · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned · '+Number(summary.duplicateFlags||0)+' duplicate/review flag'+(Number(summary.duplicateFlags||0)===1?'':'s')+'.':'';
@@ -2332,6 +2339,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       twoWaySync?.classList.toggle('hidden',!connected);
       syncHistory?.classList.toggle('hidden',!connected);
       twoWaySyncPanel?.classList.toggle('hidden',!connected);
+      suggestionRulesPanel?.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
       catalogSection?.classList.toggle('hidden',!connected);
       getSection?.classList.toggle('hidden',!connected);
@@ -2350,6 +2358,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Last completed sync '+when(sync.completedAt)+' · '+Number(sync.crm?.created||0)+' imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.changes?.length||0)+' recorded change(s). Run a new preview before the next sync.'
           : 'Preview is required before the first full synchronization. The bulk sync never creates a payment or invoice in QuickBooks.';
       }
+      renderSuggestedExclusionRules();
       renderSyncPreview();
       renderSyncReconciliation();
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
@@ -2592,6 +2601,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
     previewTwoWay?.addEventListener('click',runPreviewSync);
+    addSuggestionRule?.addEventListener('click',()=>{
+      state.suggestedExclusionRules=Array.isArray(state?.suggestedExclusionRules)?state.suggestedExclusionRules:[];
+      state.suggestedExclusionRules.push({
+        id:'custom-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,7),
+        enabled:true,
+        field:'name',
+        operator:'exact',
+        value:'',
+        reasonCode:'system_customer',
+      });
+      renderSuggestedExclusionRules();
+      suggestionRuleList?.querySelector('[data-suggestion-rule-row]:last-child [data-rule-value]')?.focus();
+    });
+    saveSuggestionRules?.addEventListener('click',()=>saveSuggestedExclusionRulesFromUi().catch((err)=>{
+      if(suggestionRuleMessage)suggestionRuleMessage.textContent=err.message||'Unable to save suggested-exclusion rules.';
+    }));
+    resetSuggestionRules?.addEventListener('click',()=>restoreDefaultSuggestedExclusionRules().catch((err)=>{
+      if(suggestionRuleMessage)suggestionRuleMessage.textContent=err.message||'Unable to restore default suggested-exclusion rules.';
+    }));
+    resetSuggestionReviews?.addEventListener('click',()=>resetReviewedSuggestedExclusions().catch((err)=>{
+      if(suggestionRuleMessage)suggestionRuleMessage.textContent=err.message||'Unable to reset reviewed suggestions.';
+    }));
+    reviewSuggestedExclusions?.addEventListener('click',openSuggestedExclusionReview);
+    suggestedReviewClose?.addEventListener('click',()=>{currentSuggestedReviewCustomerId='';suggestedReviewDialog?.close();});
+    suggestedReviewKeep?.addEventListener('click',()=>keepCurrentSuggestedExclusionInReview().catch((err)=>alert(err.message||'Unable to keep this customer in normal review.')));
+    suggestedReviewExclude?.addEventListener('click',()=>excludeCurrentSuggestedExclusion().catch((err)=>alert(err.message||'Unable to exclude this suggested customer.')));
     previewFilter?.addEventListener('change',renderSyncPreview);
     exclusionReasonFilter?.addEventListener('change',()=>{
       const reason=String(exclusionReasonFilter?.value||'all');
