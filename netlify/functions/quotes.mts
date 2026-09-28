@@ -38,15 +38,6 @@ type SavedQuote = {
   state: QuoteState;
 };
 
-const ALLOWED_STARTING_POINTS = new Set([
-  '',
-  'gardenia',
-  'orchid',
-  'hibiscus',
-  'signature-wedding',
-  'ala-carte',
-]);
-
 const ID_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const QUOTE_TTL_DAYS = 180;
 
@@ -92,11 +83,11 @@ function cleanText(value: unknown, max = 240) {
 function cleanState(input: unknown): QuoteState | null {
   if (!input || typeof input !== 'object') return null;
   const raw = input as Record<string, unknown>;
-  const startingPoint = cleanText(raw.startingPoint, 40);
-  if (!ALLOWED_STARTING_POINTS.has(startingPoint)) return null;
+  const startingPoint = cleanText(raw.startingPoint, 80);
+  if (startingPoint && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(startingPoint)) return null;
 
   const guestCount = Math.round(finiteNumber(raw.guestCount, 0));
-  if (guestCount < 1 || guestCount > 100) return null;
+  if (guestCount < 1 || guestCount > 10000) return null;
 
   const selectedRaw = Array.isArray(raw.selected) ? raw.selected.slice(0, 60) : [];
   const selected: SelectedQuoteItem[] = selectedRaw
@@ -188,7 +179,8 @@ export default async (req: Request, context: Context) => {
     if (origin && origin !== requestOrigin) {
       return Response.json({ error: 'Cross-site quote saves are not allowed.' }, { status: 403 });
     }
-    if (req.headers.get('x-koa-quote-save') !== '1') {
+    const quoteSaveHeader=req.headers.get('x-venueloom-quote-save')||req.headers.get('x-koa-quote-save');
+    if (quoteSaveHeader !== '1') {
       return Response.json({ error: 'Missing quote-save request header.' }, { status: 400 });
     }
 
