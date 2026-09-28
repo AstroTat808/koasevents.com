@@ -879,6 +879,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return ({
         quickbooks_test_customer:'QuickBooks test customer',
         square_system_customer:'Square system customer',
+        system_customer:'System / integration customer',
         vendor_non_client:'Vendor / non-client',
         duplicate:'Duplicate',
         other:'Other',
@@ -887,6 +888,210 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function unresolvedExclusionEligible(plan){
       return ['new','ambiguous'].includes(String(plan?.decision||''));
+    }
+
+    function suggestedRuleReasonOptions(selected){
+      const options=[
+        ['quickbooks_test_customer','QuickBooks test customer'],
+        ['square_system_customer','Square system customer'],
+        ['system_customer','System / integration customer'],
+        ['vendor_non_client','Vendor / non-client'],
+        ['duplicate','Duplicate'],
+        ['other','Other'],
+      ];
+      return options.map(([value,label])=>'<option value="'+esc(value)+'" '+(String(selected||'')===value?'selected':'')+'>'+esc(label)+'</option>').join('');
+    }
+
+    function suggestedRuleRowHtml(rule,index){
+      const field=String(rule?.field||'name');
+      const operator=String(rule?.operator||'exact');
+      const value=String(rule?.value||'');
+      return '<article data-suggestion-rule-row data-rule-id="'+esc(rule?.id||('rule-'+index))+'" class="grid min-w-0 gap-2 rounded-xl border border-[var(--koa-line)] bg-white p-3 lg:grid-cols-[auto_minmax(0,.75fr)_minmax(0,.75fr)_minmax(0,1.3fr)_minmax(0,1fr)_auto] lg:items-end">'+
+        '<label class="flex items-center gap-2 pb-2 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]"><input data-rule-enabled type="checkbox" '+(rule?.enabled!==false?'checked':'')+' class="h-4 w-4" /> Active</label>'+
+        '<label class="grid gap-1 text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Match in<select data-rule-field class="rounded-lg border border-[var(--koa-line)] bg-white px-2.5 py-2 text-xs font-semibold normal-case tracking-normal"><option value="name" '+(field==='name'?'selected':'')+'>Customer name</option><option value="notes" '+(field==='notes'?'selected':'')+'>QuickBooks notes</option></select></label>'+
+        '<label class="grid gap-1 text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Condition<select data-rule-operator class="rounded-lg border border-[var(--koa-line)] bg-white px-2.5 py-2 text-xs font-semibold normal-case tracking-normal"><option value="exact" '+(operator==='exact'?'selected':'')+'>Exactly matches</option><option value="contains" '+(operator==='contains'?'selected':'')+'>Contains phrase</option></select></label>'+
+        '<label class="grid min-w-0 gap-1 text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Value<input data-rule-value type="text" maxlength="160" value="'+esc(value)+'" placeholder="e.g. Stripe Customer" class="min-w-0 rounded-lg border border-[var(--koa-line)] bg-white px-2.5 py-2 text-xs font-semibold normal-case tracking-normal" /></label>'+
+        '<label class="grid min-w-0 gap-1 text-[.5rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Classify as<select data-rule-reason class="min-w-0 rounded-lg border border-[var(--koa-line)] bg-white px-2.5 py-2 text-xs font-semibold normal-case tracking-normal">'+suggestedRuleReasonOptions(rule?.reasonCode||'system_customer')+'</select></label>'+
+        '<button data-remove-suggestion-rule type="button" class="rounded-full border border-red-200 bg-red-50 px-3 py-2 text-[.5rem] font-black uppercase tracking-[.06em] text-red-700">Remove</button>'+
+      '</article>';
+    }
+
+    function renderSuggestedExclusionRules(){
+      if(!suggestionRuleList)return;
+      const rules=Array.isArray(state?.suggestedExclusionRules)?state.suggestedExclusionRules:[];
+      suggestionRuleList.innerHTML=rules.length
+        ? rules.map(suggestedRuleRowHtml).join('')
+        : '<div class="rounded-xl border border-dashed border-[var(--koa-line)] bg-white p-4 text-xs leading-5 text-[var(--koa-ink)]/50">No suggestion rules are configured. Preview Sync will not automatically flag system/test customers until you add a rule or restore the defaults.</div>';
+      suggestionRuleList.querySelectorAll('[data-remove-suggestion-rule]').forEach((button)=>button.addEventListener('click',()=>{
+        const row=button.closest('[data-suggestion-rule-row]');
+        const id=String(row?.dataset?.ruleId||'');
+        state.suggestedExclusionRules=rules.filter((rule)=>String(rule?.id||'')!==id);
+        renderSuggestedExclusionRules();
+      }));
+      const active=rules.filter((rule)=>rule?.enabled!==false).length;
+      const dismissed=Number(state?.suggestedExclusionDismissalCount||0);
+      if(suggestionRuleMeta)suggestionRuleMeta.textContent=active+' active rule'+(active===1?'':'s')+' · '+dismissed+' reviewed suggestion'+(dismissed===1?'':'s')+' kept in normal review.';
+      if(resetSuggestionReviews)resetSuggestionReviews.disabled=dismissed===0;
+    }
+
+    function readSuggestedExclusionRules(){
+      if(!suggestionRuleList)return [];
+      return [...suggestionRuleList.querySelectorAll('[data-suggestion-rule-row]')].map((row,index)=>({
+        id:String(row.dataset.ruleId||('custom-'+Date.now().toString(36)+'-'+index)),
+        enabled:Boolean(row.querySelector('[data-rule-enabled]')?.checked),
+        field:String(row.querySelector('[data-rule-field]')?.value||'name'),
+        operator:String(row.querySelector('[data-rule-operator]')?.value||'exact'),
+        value:String(row.querySelector('[data-rule-value]')?.value||'').trim(),
+        reasonCode:String(row.querySelector('[data-rule-reason]')?.value||'system_customer'),
+      }));
+    }
+
+    async function saveSuggestedExclusionRulesFromUi(){
+      const rules=readSuggestedExclusionRules();
+      const blank=rules.find((rule)=>!rule.value);
+      if(blank)throw new Error('Every suggested-exclusion rule needs a value.');
+      const original=saveSuggestionRules?.textContent||'Save rules';
+      if(saveSuggestionRules){saveSuggestionRules.disabled=true;saveSuggestionRules.textContent='Saving…';}
+      if(suggestionRuleMessage)suggestionRuleMessage.textContent='Saving rules…';
+      try{
+        const data=await api({action:'save-suggested-exclusion-rules',rules});
+        state.suggestedExclusionRules=Array.isArray(data?.rules)?data.rules:rules;
+        state.suggestedExclusionDismissalCount=Number(data?.suggestedExclusionDismissalCount||0);
+        renderSuggestedExclusionRules();
+        if(suggestionRuleMessage)suggestionRuleMessage.textContent='Saved. Preview Sync will use these rules on the next scan. Previously reviewed suggestions were reset because the rule set changed.';
+        if(state?.connection?.connected)await runPreviewSync();
+      }finally{
+        if(saveSuggestionRules){saveSuggestionRules.disabled=false;saveSuggestionRules.textContent=original;}
+      }
+    }
+
+    async function restoreDefaultSuggestedExclusionRules(){
+      if(!confirm('Restore the built-in suggested-exclusion rules? This replaces the current rule list and resets previously reviewed suggestions.'))return;
+      const original=resetSuggestionRules?.textContent||'Restore defaults';
+      if(resetSuggestionRules){resetSuggestionRules.disabled=true;resetSuggestionRules.textContent='Restoring…';}
+      try{
+        const data=await api({action:'reset-suggested-exclusion-rules'});
+        state.suggestedExclusionRules=Array.isArray(data?.rules)?data.rules:[];
+        state.suggestedExclusionDismissalCount=0;
+        renderSuggestedExclusionRules();
+        if(suggestionRuleMessage)suggestionRuleMessage.textContent='Default system/test-customer rules restored.';
+        if(state?.connection?.connected)await runPreviewSync();
+      }finally{
+        if(resetSuggestionRules){resetSuggestionRules.disabled=false;resetSuggestionRules.textContent=original;}
+      }
+    }
+
+    async function resetReviewedSuggestedExclusions(){
+      const count=Number(state?.suggestedExclusionDismissalCount||0);
+      if(!count)return;
+      if(!confirm('Reset '+count+' reviewed suggestion'+(count===1?'':'s')+'? Those customers will be evaluated by the current rules again on the next Preview Sync.'))return;
+      const original=resetSuggestionReviews?.textContent||'Reset reviewed suggestions';
+      if(resetSuggestionReviews){resetSuggestionReviews.disabled=true;resetSuggestionReviews.textContent='Resetting…';}
+      try{
+        await api({action:'clear-suggested-exclusion-dismissals'});
+        state.suggestedExclusionDismissalCount=0;
+        renderSuggestedExclusionRules();
+        if(suggestionRuleMessage)suggestionRuleMessage.textContent='Reviewed-suggestion history reset.';
+        if(state?.connection?.connected)await runPreviewSync();
+      }finally{
+        if(resetSuggestionReviews){resetSuggestionReviews.disabled=false;resetSuggestionReviews.textContent=original;}
+      }
+    }
+
+    function suggestedReviewPlans(){
+      const plans=Array.isArray(state?.manualSyncPreview?.customerPlans)?state.manualSyncPreview.customerPlans:[];
+      return plans
+        .filter((plan)=>unresolvedExclusionEligible(plan)&&Boolean(plan?.suggestedExclusion))
+        .sort((a,b)=>String(a?.qbo?.name||'').localeCompare(String(b?.qbo?.name||'')));
+    }
+
+    function renderSuggestedReview(){
+      const plans=suggestedReviewPlans();
+      if(!plans.length){
+        currentSuggestedReviewCustomerId='';
+        if(suggestedReviewDialog?.open)suggestedReviewDialog.close();
+        return;
+      }
+      let plan=plans.find((row)=>String(row?.customerId||'')===String(currentSuggestedReviewCustomerId||''));
+      if(!plan){
+        plan=plans[0];
+        currentSuggestedReviewCustomerId=String(plan.customerId||'');
+      }
+      const suggestion=plan?.suggestedExclusion||{};
+      const f=plan?.financial||{};
+      const evidence=Array.isArray(suggestion?.evidence)?suggestion.evidence.map((value)=>String(value||'').replaceAll('_',' ')):[];
+      if(suggestedReviewTitle)suggestedReviewTitle.textContent=String(plan?.qbo?.name||plan.customerId||'Flagged customer');
+      if(suggestedReviewProgress)suggestedReviewProgress.textContent=plans.length+' suggested exclusion'+(plans.length===1?'':'s')+' remaining in this Preview Sync · QuickBooks customer #'+String(plan.customerId||'');
+      if(suggestedReviewBody)suggestedReviewBody.innerHTML=
+        '<section class="rounded-xl border border-amber-200 bg-amber-50 p-4"><div class="flex flex-wrap items-center gap-2"><strong class="text-sm text-amber-950">Suggested: '+esc(suggestion.label||exclusionReasonLabel(suggestion.code))+'</strong><span class="rounded-full bg-white px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] text-amber-800">'+esc(suggestion.confidence||'high')+' confidence</span></div><p class="mt-2 text-xs leading-5 text-amber-950/75">'+esc(suggestion.reason||'Configured rule matched this customer.')+'</p><div class="mt-3 rounded-lg bg-white/70 p-3 text-[.62rem] leading-5 text-amber-950/70"><strong>Rule</strong><p class="mt-1">'+esc((suggestion.ruleField==='notes'?'QuickBooks notes':'Customer name')+' · '+(suggestion.ruleOperator==='contains'?'contains phrase':'exactly matches')+' · “'+String(suggestion.ruleValue||'')+'”')+'</p>'+(evidence.length?'<p class="mt-1">Evidence: '+esc(evidence.join(' · '))+'</p>':'')+'</div></section>'+
+        '<section class="mt-4 grid gap-3 sm:grid-cols-2"><article class="rounded-xl border border-[var(--koa-line)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">QuickBooks identity</p><p class="mt-2 break-all text-xs font-semibold">'+esc(plan?.qbo?.email||'No email')+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(plan?.qbo?.phone||'No phone')+(plan?.qbo?.eventDate?' · event '+esc(plan.qbo.eventDate):'')+'</p></article><article class="rounded-xl border border-[var(--koa-line)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Financial history</p><p class="mt-2 text-xs font-semibold">'+Number(f.estimates||0)+' estimates · '+Number(f.invoices||0)+' invoices · '+Number(f.payments||0)+' payments</p><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+money(f.invoiceTotal||0)+' invoiced · '+money(f.openBalance||0)+' open</p></article></section>'+
+        '<section class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><strong class="text-xs text-[var(--koa-forest)]">Current CRM review state</strong><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(duplicateRiskText(plan)||'No duplicate-risk warning.')+'</p><p class="mt-2 text-[.62rem] leading-5 text-[var(--koa-ink)]/45">Exclude as suggested stores the exclusion and removes this customer from active CRM sync. Keep in normal review dismisses only this rule suggestion; the customer stays in the normal import/match review queue. Neither action changes or deletes the QuickBooks customer.</p></section>';
+    }
+
+    function openSuggestedExclusionReview(){
+      const plans=suggestedReviewPlans();
+      if(!plans.length){
+        alert('There are no suggested exclusions in the current Preview Sync.');
+        return;
+      }
+      if(!plans.some((row)=>String(row.customerId||'')===String(currentSuggestedReviewCustomerId||''))){
+        currentSuggestedReviewCustomerId=String(plans[0].customerId||'');
+      }
+      renderSuggestedReview();
+      suggestedReviewDialog?.showModal();
+    }
+
+    async function keepCurrentSuggestedExclusionInReview(){
+      const plan=suggestedReviewPlans().find((row)=>String(row.customerId||'')===String(currentSuggestedReviewCustomerId||''));
+      if(!plan?.suggestedExclusion)return;
+      const original=suggestedReviewKeep?.textContent||'Keep in normal review';
+      if(suggestedReviewKeep)suggestedReviewKeep.disabled=true;
+      if(suggestedReviewExclude)suggestedReviewExclude.disabled=true;
+      if(suggestedReviewKeep)suggestedReviewKeep.textContent='Saving…';
+      try{
+        const data=await api({
+          action:'dismiss-suggested-exclusion',
+          previewId:String(state?.manualSyncPreview?.previewId||''),
+          customerId:String(plan.customerId||''),
+          ruleSignature:String(plan.suggestedExclusion.ruleSignature||''),
+        });
+        state.suggestedExclusionDismissalCount=Number(data?.suggestedExclusionDismissalCount||0);
+        currentSuggestedReviewCustomerId='';
+        await runPreviewSync();
+        renderSuggestedExclusionRules();
+        if(suggestedReviewPlans().length)openSuggestedExclusionReview();
+        else suggestedReviewDialog?.close();
+      }finally{
+        if(suggestedReviewKeep){suggestedReviewKeep.disabled=false;suggestedReviewKeep.textContent=original;}
+        if(suggestedReviewExclude)suggestedReviewExclude.disabled=false;
+      }
+    }
+
+    async function excludeCurrentSuggestedExclusion(){
+      const plan=suggestedReviewPlans().find((row)=>String(row.customerId||'')===String(currentSuggestedReviewCustomerId||''));
+      if(!plan?.suggestedExclusion)return;
+      const suggestion=plan.suggestedExclusion;
+      const original=suggestedReviewExclude?.textContent||'Exclude as suggested';
+      if(suggestedReviewKeep)suggestedReviewKeep.disabled=true;
+      if(suggestedReviewExclude){suggestedReviewExclude.disabled=true;suggestedReviewExclude.textContent='Excluding…';}
+      try{
+        bulkSelectedExclude.delete(String(plan.customerId||''));
+        bulkSelectedNew.delete(String(plan.customerId||''));
+        await saveMatch(
+          String(plan.customerId||''),
+          'exclude',
+          '',
+          String(suggestion.reason||suggestion.label||'Approved suggested exclusion.'),
+          String(suggestion.code||'other'),
+        );
+        currentSuggestedReviewCustomerId='';
+        await runPreviewSync();
+        if(suggestedReviewPlans().length)openSuggestedExclusionReview();
+        else suggestedReviewDialog?.close();
+      }finally{
+        if(suggestedReviewKeep)suggestedReviewKeep.disabled=false;
+        if(suggestedReviewExclude){suggestedReviewExclude.disabled=false;suggestedReviewExclude.textContent=original;}
+      }
     }
 
     function exclusionSuggestionHtml(plan){
