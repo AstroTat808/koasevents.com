@@ -662,3 +662,127 @@ export async function listPlatformSupportSessions(context:Context|undefined,limi
   const rows=((await controlStore(context).get('support-sessions/history',{type:'json'}))||[]) as PlatformSupportSession[];
   return rows.slice(0,Math.max(1,Math.min(500,limit)));
 }
+
+
+export type PlatformAuditEvent = {
+  id: string;
+  type: string;
+  tenantId: string;
+  actorUserId: string;
+  actorEmail: string;
+  detail: string;
+  createdAt: string;
+  metadata: Record<string, unknown>;
+};
+
+export async function appendPlatformAuditEvent(
+  context:Context|undefined,
+  event:{type:string;tenantId?:string;actorUserId:string;actorEmail:string;detail:string;metadata?:Record<string,unknown>},
+) {
+  const row:PlatformAuditEvent={
+    id:'pa_'+crypto.randomUUID().replaceAll('-','').slice(0,28),
+    type:clean(event.type,100),
+    tenantId:clean(event.tenantId,120),
+    actorUserId:clean(event.actorUserId,160),
+    actorEmail:clean(event.actorEmail,240).toLowerCase(),
+    detail:clean(event.detail,1000),
+    createdAt:new Date().toISOString(),
+    metadata:event.metadata&&typeof event.metadata==='object'?event.metadata:{},
+  };
+  const store=controlStore(context);
+  const rows=((await store.get('platform-audit/history',{type:'json'}))||[]) as PlatformAuditEvent[];
+  await store.setJSON('platform-audit/history',[row,...rows].slice(0,5000));
+  return row;
+}
+
+export async function listPlatformAuditEvents(context:Context|undefined,limit=500) {
+  const rows=((await controlStore(context).get('platform-audit/history',{type:'json'}))||[]) as PlatformAuditEvent[];
+  return rows.slice(0,Math.max(1,Math.min(5000,limit)));
+}
+
+export type OrganizationDeletionRequest = {
+  id: string;
+  tenantId: string;
+  slug: string;
+  requestedByUserId: string;
+  requestedByEmail: string;
+  reason: string;
+  requestedAt: string;
+  eligibleAt: string;
+  canceledAt: string;
+  completedAt: string;
+};
+
+export async function createOrganizationDeletionRequest(
+  context:Context|undefined,
+  input:{tenantId:string;slug:string;requestedByUserId:string;requestedByEmail:string;reason:string;holdHours?:number},
+) {
+  const tenantId=clean(input.tenantId,120);
+  const slug=clean(input.slug,120);
+  const reason=clean(input.reason,1000);
+  if(!tenantId||!slug||!reason)throw new Error('Tenant, confirmation slug, and deletion reason are required.');
+  const organization=await readOrganizationById(context,tenantId);
+  if(!organization)throw new Error('Organization not found.');
+  if(organization.slug!==slug)throw new Error('Organization slug confirmation did not match.');
+  const holdHours=Math.max(24,Math.min(24*30,Number(input.holdHours||24)));
+  const now=new Date();
+  const row:OrganizationDeletionRequest={
+    id:'delete_'+crypto.randomUUID().replaceAll('-','').slice(0,28),
+    tenantId,
+    slug,
+    requestedByUserId:clean(input.requestedByUserId,160),
+    requestedByEmail:clean(input.requestedByEmail,240).toLowerCase(),
+    reason,
+    requestedAt:now.toISOString(),
+    eligibleAt:new Date(now.getTime()+holdHours*60*60*1000).toISOString(),
+    canceledAt:'',
+    completedAt:'',
+  };
+  const store=controlStore(context);
+  await store.setJSON('deletion-requests/'+tenantId+'/latest',row);
+  const history=((await store.get('deletion-requests/history',{type:'json'}))||[]) as OrganizationDeletionRequest[];
+  await store.setJSON('deletion-requests/history',[row,...history].slice(0,2000));
+  return row;
+}
+
+export async function readOrganizationDeletionRequest(context:Context|undefined,tenantId:string) {
+  return await controlStore(context).get('deletion-requests/'+clean(tenantId,120)+'/latest',{type:'json'}) as OrganizationDeletionRequest|null;
+}
+
+export async function cancelOrganizationDeletionRequest(context:Context|undefined,tenantId:string) {
+  const current=await readOrganizationDeletionRequest(context,tenantId);
+  if(!current)return null;
+  const next={...current,canceledAt:new Date().toISOString()};
+  const store=controlStore(context);
+  await store.setJSON('deletion-requests/'+current.tenantId+'/latest',next);
+  const history=((await store.get('deletion-requests/history',{type:'json'}))||[]) as OrganizationDeletionRequest[];
+  await store.setJSON('deletion-requests/history',[next,...history.filter((row)=>row.id!==next.id)].slice(0,2000));
+  return next;
+}
+
+export async function markOrganizationDeletionCompleted(context:Context|undefined,tenantId:string) {
+  const current=await readOrganizationDeletionRequest(context,tenantId);
+  if(!current)return null;
+  const next={...current,completedAt:new Date().toISOString()};
+  const store=controlStore(context);
+  await store.setJSON('deletion-requests/'+current.tenantId+'/latest',next);
+  const history=((await store.get('deletion-requests/history',{type:'json'}))||[]) as OrganizationDeletionRequest[];
+  await store.setJSON('deletion-requests/history',[next,...history.filter((row)=>row.id!==next.id)].slice(0,2000));
+  return next;
+}
+
+export async function deleteOrganizationControlPlane(context:Context|undefined,tenantId:string) {
+  const id=clean(tenantId,120);
+  const store=controlStore(context);
+  const organization=await readOrganizationById(context,id);
+  if(!organization)return false;
+  const memberships=await listMemberships(context,id);
+  for(const membership of memberships){
+    await store.delete('memberships/'+id+'/'+membership.userId);
+  }
+  await store.delete('memberships/'+id+'/index');
+  await store.delete('organizations/'+id);
+  const index=await listOrganizations(context);
+  await store.setJSON('organizations/index',index.filter((row)=>row.id!==id));
+  return true;
+}
