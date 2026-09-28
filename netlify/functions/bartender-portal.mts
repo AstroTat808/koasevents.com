@@ -13,7 +13,10 @@ function isMobile(record:any){
 }
 function eventDate(record:any){return clean(record?.customer?.eventDate,20);}
 function packageLabel(id:string){
-  return ({'mobile-oahu':'Oahu','mobile-maui':'Maui','mobile-big-island':'Big Island','mobile-custom':'Custom'} as Record<string,string>)[id]||id||'Mobile Bar';
+  const tenant=resolveTenant();
+  const item=(tenant.catalog.bootstrapItems||[]).find((row:any)=>row.id===id||row.sourceRef===id);
+  if(item?.name)return String(item.name);
+  return id ? id.replace(/[-_]+/g,' ').replace(/\b\w/g,(ch)=>ch.toUpperCase()) : 'Mobile Bar';
 }
 function activeAssignment(record:any,bartenderId:string){
   return (Array.isArray(record?.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[])
@@ -27,8 +30,9 @@ function performance(record:any,bartenderId:string){
   return (Array.isArray(record?.booking?.bartenderPerformance)?record.booking.bartenderPerformance:[])
     .find((entry:any)=>clean(entry?.bartenderId,80)===bartenderId);
 }
-function hawaiiDateKey(now=new Date()){
-  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+function tenantDateKey(now=new Date()){
+  const tenant=resolveTenant();
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:tenant.timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const map=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
   return map.year+'-'+map.month+'-'+map.day;
 }
@@ -160,7 +164,7 @@ export default async(req:Request,context:Context)=>{
   if(action==='clock-in'){
     const assignment=activeAssignment(record,bartender.id);
     if(assignment?.responseStatus==='declined')return Response.json({error:'Declined shifts cannot be clocked in.'},{status:409});
-    if(eventDate(record)!==hawaiiDateKey())return Response.json({error:'Clock-in is available on the assigned event date in Hawaiʻi time.'},{status:409});
+    if(eventDate(record)!==tenantDateKey())return Response.json({error:'Clock-in is available on the assigned event date in the organization timezone.'},{status:409});
     const cards=Array.isArray(record.booking.bartenderTimecards)?record.booking.bartenderTimecards:[];
     const existing=cards.find((entry:any)=>clean(entry?.bartenderId,80)===bartender.id);
     if(existing?.clockInAt&&!existing?.clockOutAt)return Response.json({error:'Already clocked in.'},{status:409});
