@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
 import {
+  createOrganization,
   listMemberships,
   readOrganization,
   saveOrganization,
@@ -10,6 +11,7 @@ import {
 } from './_shared/organization';
 import { resolveTenant } from './_shared/tenant';
 import { tenantMigrationAudit } from './_shared/tenant-storage';
+import { resolveTxt } from 'node:dns/promises';
 
 function clean(value: unknown, max = 1000) {
   return String(value ?? '').trim().slice(0, max);
@@ -36,6 +38,84 @@ function hostname(value: unknown) {
 
 function domainId(host: string) {
   return 'domain_' + host.replace(/[^a-z0-9]+/g, '_').slice(0, 80);
+}
+
+function domainVerificationToken(host: string) {
+  return 'vl_' + crypto.randomUUID().replaceAll('-', '') + '_' + host.replace(/[^a-z0-9]/g,'').slice(0,24);
+}
+
+async function verifyDomainOwnership(host: string, token: string) {
+  const record = '_venueloom.' + host;
+  try {
+    const rows = await resolveTxt(record);
+    const values = rows.map((parts) => parts.join('')).map((value) => value.trim());
+    const expected = 'venueloom-verification=' + token;
+    return {
+      ok: values.includes(expected),
+      record,
+      expected,
+      values: values.slice(0, 20),
+      error: values.includes(expected) ? '' : 'Verification TXT record was not found.',
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      record,
+      expected: 'venueloom-verification=' + token,
+      values: [] as string[],
+      error: error instanceof Error ? error.message : 'DNS lookup failed.',
+    };
+  }
+}
+
+function stripePriceId(plan: string, interval: 'monthly'|'annual') {
+  const raw = clean(Netlify.env.get('VENUELOOM_STRIPE_PRICE_MAP'), 20000);
+  if (!raw) return '';
+  try {
+    const parsed = JSON.parse(raw);
+    const nested = parsed?.[plan]?.[interval];
+    if (nested) return clean(nested, 200);
+    return clean(parsed?.[plan + ':' + interval] || parsed?.[plan + '_' + interval] || '', 200);
+  } catch {
+    return '';
+  }
+}
+
+async function stripePost(path: string, body: URLSearchParams) {
+  const key = clean(Netlify.env.get('VENUELOOM_STRIPE_RESTRICTED_KEY'), 4000);
+  if (!key) throw new Error('VenueLoom Stripe restricted key is not configured.');
+  const response = await fetch('https://api.stripe.com/v1/' + path.replace(/^\/+/, ''), {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer ' + key,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+    signal: AbortSignal.timeout(15000),
+  });
+  const data:any = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(clean(data?.error?.message || 'Stripe request failed.', 500));
+  return data;
+}
+
+function validateCatalogRows(value: unknown) {
+  const rows = Array.isArray(value) ? value.slice(0, 2000) : [];
+  const errors:any[] = [];
+  const ids = new Set<string>();
+  const names = new Set<string>();
+  rows.forEach((row:any,index:number) => {
+    const id = clean(row?.id, 100).toLowerCase();
+    const name = clean(row?.name, 180);
+    const price = Number(row?.unitPrice ?? row?.price ?? 0);
+    if (!id) errors.push({ row:index + 1, field:'id', error:'Catalog item ID is required.' });
+    if (!name) errors.push({ row:index + 1, field:'name', error:'Catalog item name is required.' });
+    if (!Number.isFinite(price) || price < 0) errors.push({ row:index + 1, field:'unitPrice', error:'Unit price must be zero or greater.' });
+    if (id && ids.has(id)) errors.push({ row:index + 1, field:'id', error:'Duplicate catalog item ID.' });
+    if (name && names.has(name.toLowerCase())) errors.push({ row:index + 1, field:'name', error:'Duplicate catalog item name.' });
+    if (id) ids.add(id);
+    if (name) names.add(name.toLowerCase());
+  });
+  return { rows:rows.length, valid:rows.length > 0 && errors.length === 0, errors:errors.slice(0,200) };
 }
 
 function featureFlags(value: unknown) {
@@ -186,6 +266,32 @@ export default async (req: Request, context: Context) => {
 
   let updated = organization;
 
+  if (action === 'create-organization') {
+    if (auth.membership?.role !== 'admin') {
+      return Response.json({ error:'Only an organization administrator can create a new VenueLoom organization.' }, { status:403 });
+    }
+    try {
+      const created = await createOrganization(context, {
+        slug: clean(body.slug,100),
+        displayName: clean(body.displayName,180),
+        legalName: clean(body.legalName,220),
+        email: clean(body.email,240),
+        locale: clean(body.locale,60),
+        currency: clean(body.currency,8),
+        timezone: clean(body.timezone,100),
+        country: clean(body.country,100),
+      }, { id:auth.user?.id, email:auth.user?.email });
+      return Response.json({
+        ok:true,
+        created,
+        tenantSelector: created.organization.id,
+        onboardingUrl: '/admin/organization/',
+      }, { status:201, headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to create organization.' }, { status:400 });
+    }
+  }
+
   if (action === 'run-migration-audit') {
     const migrationAudit = await tenantMigrationAudit(context, tenant);
     return Response.json({ ok:true, migrationAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
@@ -267,12 +373,110 @@ export default async (req: Request, context: Context) => {
           : 'custom',
         status: previous?.status === 'verified' ? 'verified' : 'pending',
         primary: row?.primary === true,
+        verificationToken: previous?.verificationToken || domainVerificationToken(host),
+        verifiedAt: previous?.verifiedAt || '',
+        lastCheckedAt: previous?.lastCheckedAt || '',
+        verificationError: previous?.verificationError || '',
       };
     }).filter((row) => row.hostname);
     if (next.filter((row) => row.primary).length > 1) {
       return Response.json({ error: 'Choose only one primary domain.' }, { status: 400 });
     }
     updated = await saveOrganization(context, tenant, (current) => ({ ...current, domains: next }));
+  } else if (action === 'verify-domain') {
+    const host = hostname(body.hostname);
+    const current = (organization.domains || []).find((row:any) => row.hostname === host);
+    if (!current) return Response.json({ error:'Save the domain before verifying it.' }, { status:404 });
+    const token = current.verificationToken || domainVerificationToken(host);
+    const result = await verifyDomainOwnership(host, token);
+    const checkedAt = new Date().toISOString();
+    updated = await saveOrganization(context, tenant, (currentOrg) => ({
+      ...currentOrg,
+      domains: (currentOrg.domains || []).map((row:any) => row.hostname === host ? {
+        ...row,
+        verificationToken: token,
+        status: result.ok ? 'verified' : 'failed',
+        verifiedAt: result.ok ? (row.verifiedAt || checkedAt) : '',
+        lastCheckedAt: checkedAt,
+        verificationError: result.ok ? '' : result.error,
+      } : row),
+    }));
+    return Response.json({ ok:result.ok, verification:result, organization:updated }, {
+      status:result.ok ? 200 : 409,
+      headers:{ 'Cache-Control':'private, no-store' },
+    });
+  } else if (action === 'save-integration') {
+    const provider = clean(body.provider,40) as any;
+    const allowed = new Set(['quickbooks','signwell','resend','microsoft','stripe']);
+    if (!allowed.has(provider)) return Response.json({ error:'Unsupported integration provider.' }, { status:400 });
+    updated = await saveOrganization(context, tenant, (currentOrg) => ({
+      ...currentOrg,
+      integrations: (currentOrg.integrations || []).map((row:any) => row.provider === provider ? {
+        ...row,
+        enabled: body.enabled !== false,
+        status: ['not_configured','configured','connected','attention'].includes(clean(body.status,40))
+          ? clean(body.status,40) as any
+          : row.status,
+        remoteAccountId: clean(body.remoteAccountId,180),
+        remoteAccountName: clean(body.remoteAccountName,240),
+        credentialRef: clean(body.credentialRef,240),
+        connectedAt: clean(body.connectedAt,80) || row.connectedAt,
+        lastVerifiedAt: clean(body.lastVerifiedAt,80) || row.lastVerifiedAt,
+      } : row),
+    }));
+  } else if (action === 'validate-catalog-import') {
+    const validation = validateCatalogRows(body.items);
+    if (validation.valid) {
+      updated = await saveOrganization(context, tenant, (currentOrg) => ({
+        ...currentOrg,
+        onboarding: {
+          ...currentOrg.onboarding,
+          completedSteps: [...new Set([...(currentOrg.onboarding?.completedSteps || []), 'catalog'])],
+        },
+      }));
+    }
+    return Response.json({ ok:validation.valid, validation, organization:updated }, {
+      status:validation.valid ? 200 : 422,
+      headers:{ 'Cache-Control':'private, no-store' },
+    });
+  } else if (action === 'create-subscription-checkout') {
+    if (!hasCapability(auth.user, 'billing.manage')) {
+      return Response.json({ error:'Billing management permission required.' }, { status:403 });
+    }
+    const plan = clean(body.plan || organization.subscription?.plan,100);
+    const interval = body.interval === 'annual' ? 'annual' : 'monthly';
+    const priceId = stripePriceId(plan, interval);
+    if (!plan || !priceId) return Response.json({ error:'No Stripe price is configured for this plan and interval.' }, { status:409 });
+
+    let customerId = clean(organization.subscription?.stripeCustomerId,180);
+    if (!customerId) {
+      const customer = await stripePost('customers', new URLSearchParams({
+        email: clean(body.billingEmail || organization.subscription?.billingEmail || organization.contact.email,240),
+        name: organization.displayName,
+        'metadata[tenant_id]': tenant.id,
+        'metadata[tenant_slug]': organization.slug,
+      }));
+      customerId = clean(customer.id,180);
+      updated = await saveOrganization(context, tenant, (currentOrg) => ({
+        ...currentOrg,
+        subscription: { ...currentOrg.subscription, stripeCustomerId:customerId, plan, interval },
+      }));
+    }
+
+    const origin = new URL(req.url).origin;
+    const session = await stripePost('checkout/sessions', new URLSearchParams({
+      mode:'subscription',
+      customer:customerId,
+      'line_items[0][price]':priceId,
+      'line_items[0][quantity]':String(Math.max(1,Math.round(num(body.seats || organization.subscription?.seats || 1,1,10000)))),
+      success_url: origin + '/admin/organization/?subscription=success#subscription',
+      cancel_url: origin + '/admin/organization/?subscription=canceled#subscription',
+      'subscription_data[metadata][tenant_id]':tenant.id,
+      'metadata[tenant_id]':tenant.id,
+    }));
+    return Response.json({ ok:true, checkoutUrl:clean(session.url,2000), sessionId:clean(session.id,180), customerId }, {
+      headers:{ 'Cache-Control':'private, no-store' },
+    });
   } else if (action === 'save-templates') {
     updated = await saveOrganization(context, tenant, (current) => ({
       ...current,
