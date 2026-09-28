@@ -72,6 +72,7 @@ export type TenantProfile = {
   catalog: TenantCatalogConfig;
   bootstrapAdminEmails: string[];
   storage: {
+    legacyDataBelongsToTenant: boolean;
     compatibilityBlobStores: {
       sales: string;
       integrations: string;
