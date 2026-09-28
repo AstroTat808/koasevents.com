@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { requireAdmin } from './_shared/admin';
 import {
@@ -11,15 +12,11 @@ import {
 import { markLifecycleEvent } from './_shared/lifecycle';
 
 function integrationStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function salesStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function verifySignature(rawBody: string, signature: string, verifierToken: string) {
@@ -445,12 +442,12 @@ export default async (req: Request, context: Context) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
-  if (req.headers.get('x-koa-health-check') === '1' && payload?.koaHealthCheck === true) {
+  if (req.headers.get('x-venueloom-health-check') === '1' && payload?.venueLoomHealthCheck === true) {
     return new Response(null, {
       status: 204,
       headers: {
         'Cache-Control': 'no-store',
-        'X-Koa-Synthetic-Check': 'quickbooks-webhook',
+        'X-VenueLoom-Synthetic-Check': 'quickbooks-webhook',
       },
     });
   }

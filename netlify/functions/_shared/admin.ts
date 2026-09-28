@@ -1,11 +1,9 @@
 import { getStore } from '@netlify/blobs';
+import type { Context } from '@netlify/functions';
 import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
-
-const ADMIN_EMAILS = new Set([
-  'chris@sibel.org',
-  'koasadmin@koasevents.com',
-]);
+import { resolveTenant, tenantBlobStoreName } from './tenant';
+import { buildTenantContext } from './organization';
 
 export const ROLE_IDS = [
   'admin',
@@ -24,6 +22,9 @@ export type EffectiveStaffRole = StaffRole | 'custom';
 export const STAFF_CAPABILITIES = [
   'admin.dashboard.view',
   'users.manage',
+  'organization.view',
+  'organization.manage',
+  'billing.manage',
   'crm.view',
   'crm.manage',
   'crm.destructive',
@@ -74,6 +75,7 @@ const ALL_CAPABILITIES = [...STAFF_CAPABILITIES];
 export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
   admin: ALL_CAPABILITIES,
   manager: [
+    'organization.view',
     'crm.view','crm.manage','crm.destructive','crm.workflows','crm.templates','crm.cleanup_policy',
     'email.view','email.manage',
     'sales.view','sales.manage','sales.profit_settings',
@@ -112,6 +114,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     'seo.view','seo.manage',
   ],
   accounting: [
+    'organization.view',
     'crm.view',
     'sales.view',
     'calendar.view',
@@ -135,6 +138,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
 export const PAGE_CAPABILITIES = {
   '/admin/': 'admin.dashboard.view',
   '/admin/staff/': 'users.manage',
+  '/admin/organization/': 'organization.view',
   '/admin/crm/': 'crm.view',
   '/admin/email/': 'email.view',
   '/admin/email-preview/': 'email.view',
@@ -168,7 +172,8 @@ export const DEFAULT_AUTH_SECURITY_POLICY: AuthSecurityPolicy = {
 };
 
 function securityStore() {
-  return getStore({ name:'koa-auth-security', consistency:'strong' });
+  const tenant = resolveTenant();
+  return getStore({ name:tenantBlobStoreName(tenant,'authSecurity'), consistency:'strong' });
 }
 
 function clean(value: unknown, max = 300) {
@@ -202,13 +207,13 @@ function normalizedPermissions(user: any) {
   );
 }
 
-function roleFromUser(user: any): EffectiveStaffRole | 'deactivated' | 'none' {
+function roleFromUser(user: any, tenant = (() => { try { return resolveTenant(); } catch { return null; } })()): EffectiveStaffRole | 'deactivated' | 'none' {
   if (!user) return 'none';
   const email = clean(user?.email, 240).toLowerCase();
   const meta = metadataFor(user);
   const roles = normalizedRoles(user);
   if (roles.includes('deactivated') || meta?.active === false) return 'deactivated';
-  if (ADMIN_EMAILS.has(email)) return 'admin';
+  if (tenant?.bootstrapAdminEmails?.map((value:string)=>value.toLowerCase()).includes(email)) return 'admin';
 
   const direct = normalizeRoleValue(user?.role);
   const candidates = [...roles, direct];
@@ -338,7 +343,7 @@ export function passwordSecurityFor(user: any, sessionUser: any, policy: AuthSec
   };
 }
 
-export async function getAccessContext(req?:Request) {
+export async function getAccessContext(req?:Request, context?:Context) {
   const sessionUser = await getUser();
   if (!sessionUser) {
     return {
@@ -348,6 +353,10 @@ export async function getAccessContext(req?:Request) {
       capabilities:[] as StaffCapability[],
       policy:await readAuthSecurityPolicy(),
       security:null,
+      tenant:null,
+      tenantContext:null,
+      membership:null,
+      organization:null,
     };
   }
 
@@ -359,11 +368,16 @@ export async function getAccessContext(req?:Request) {
   }
 
   const policy = await readAuthSecurityPolicy();
-  const role = roleFromUser(authoritativeUser);
+  const tenant = resolveTenant(req);
+  const role = roleFromUser(authoritativeUser, tenant);
   const capabilities = capabilitiesFor(authoritativeUser);
   const security = passwordSecurityFor(authoritativeUser, sessionUser, policy);
   const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
   if(managedSession?.revoked) security.sessionRevoked = true;
+
+  const tenantContext = role === 'none' || role === 'deactivated'
+    ? null
+    : await buildTenantContext(context, tenant, authoritativeUser, role, capabilities);
 
   return {
     sessionUser,
@@ -372,6 +386,10 @@ export async function getAccessContext(req?:Request) {
     capabilities,
     policy,
     security,
+    tenant:tenantContext?.profile || tenant,
+    tenantContext,
+    membership:tenantContext?.membership || null,
+    organization:tenantContext?.organization || null,
   };
 }
 
@@ -384,6 +402,9 @@ function blockedResponse(ctx: Awaited<ReturnType<typeof getAccessContext>>) {
   }
   if (ctx.role === 'deactivated' || ctx.role === 'none') {
     return Response.json({ error:'Account access is disabled.', code:'account_disabled' }, { status:403 });
+  }
+  if (!ctx.tenantContext) {
+    return Response.json({ error:'This account does not have access to the selected organization.', code:'tenant_access_denied' }, { status:403 });
   }
   if (ctx.security?.sessionRevoked) {
     return Response.json({ error:'This session has been revoked. Sign in again.', code:'session_revoked' }, { status:401 });
@@ -398,8 +419,8 @@ function blockedResponse(ctx: Awaited<ReturnType<typeof getAccessContext>>) {
   return null;
 }
 
-export async function requireAdmin(req?:Request) {
-  const ctx = await getAccessContext(req);
+export async function requireAdmin(req?:Request, context?:Context) {
+  const ctx = await getAccessContext(req, context);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role !== 'admin') {
@@ -411,11 +432,11 @@ export async function requireAdmin(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, response:null, tenant:ctx.tenant, tenantContext:ctx.tenantContext, membership:ctx.membership, organization:ctx.organization };
 }
 
-export async function requireManager(req?:Request) {
-  const ctx = await getAccessContext(req);
+export async function requireManager(req?:Request, context?:Context) {
+  const ctx = await getAccessContext(req, context);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!['admin','manager'].includes(ctx.role)) {
@@ -427,11 +448,11 @@ export async function requireManager(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, response:null, tenant:ctx.tenant, tenantContext:ctx.tenantContext, membership:ctx.membership, organization:ctx.organization };
 }
 
-export async function requireCapability(capability: StaffCapability, req?:Request) {
-  const ctx = await getAccessContext(req);
+export async function requireCapability(capability: StaffCapability, req?:Request, context?:Context) {
+  const ctx = await getAccessContext(req, context);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (!ctx.capabilities.includes(capability)) {
@@ -443,11 +464,11 @@ export async function requireCapability(capability: StaffCapability, req?:Reques
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, response:null, tenant:ctx.tenant, tenantContext:ctx.tenantContext, membership:ctx.membership, organization:ctx.organization };
 }
 
-export async function requireOperations(req?:Request) {
-  const ctx = await getAccessContext(req);
+export async function requireOperations(req?:Request, context?:Context) {
+  const ctx = await getAccessContext(req, context);
   const blocked = blockedResponse(ctx);
   if (blocked) return { user:null, response:blocked };
   if (ctx.role === 'none' || ctx.role === 'deactivated') {
@@ -459,5 +480,5 @@ export async function requireOperations(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, response:null, tenant:ctx.tenant, tenantContext:ctx.tenantContext, membership:ctx.membership, organization:ctx.organization };
 }

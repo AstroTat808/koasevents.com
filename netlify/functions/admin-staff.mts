@@ -9,11 +9,13 @@ import {
   readAuthSecurityPolicy,
   saveAuthSecurityPolicy,
   passwordSecurityFor,
+  capabilitiesFor,
   type StaffRole,
 } from './_shared/admin';
 import { appendStaffAudit, readStaffAudit } from './_shared/staff-audit';
+import { resolveTenant } from './_shared/tenant';
+import { ensureMembership, readMembership, saveMembership } from './_shared/organization';
 
-const PROTECTED_ADMIN_EMAILS = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
 const USER_ROLES = new Set<string>(ROLE_IDS);
 
 const CAPABILITY_LABELS:Record<string,string>={
@@ -52,7 +54,8 @@ const CAPABILITY_LABELS:Record<string,string>={
 function clean(value:unknown,max=300){return String(value||'').trim().slice(0,max);}
 function normalizeEmail(value:unknown){return clean(value,240).toLowerCase();}
 function normalizeRole(value:unknown){return clean(value,60).toLowerCase().replaceAll('-','_').replaceAll(' ','_');}
-function strongTemporaryPassword(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);const raw=Array.from(bytes,b=>b.toString(36).padStart(2,'0')).join('');return 'Koa!'+raw.slice(0,28)+'9a';}
+function strongTemporaryPassword(){const bytes=new Uint8Array(32);crypto.getRandomValues(bytes);const raw=Array.from(bytes,b=>b.toString(36).padStart(2,'0')).join('');return 'VL!'+raw.slice(0,28)+'9a';}
+function protectedAdminEmails(tenant:any){return new Set((tenant?.bootstrapAdminEmails||[]).map((value:any)=>normalizeEmail(value)));}
 function validatePassword(value:unknown){const password=String(value??'');if(password.length<10)return{ok:false,error:'Password must be at least 10 characters.'};if(password.length>128)return{ok:false,error:'Password must be 128 characters or fewer.'};return{ok:true,password};}
 function metadataFor(user:any){return user?.appMetadata||user?.app_metadata||{};}
 function userMetadataFor(user:any){return user?.userMetadata||user?.user_metadata||{};}
@@ -60,9 +63,9 @@ function rolesFor(user:any){const candidates=[user?.roles,user?.appMetadata?.rol
 function permissionsFor(user:any){const values=metadataFor(user)?.permissions;return Array.isArray(values)?values.map((permission:any)=>clean(permission,100).toLowerCase()).filter((permission:string)=>STAFF_CAPABILITIES.includes(permission as any)):[];}
 function sessionVersion(user:any){const n=Number(metadataFor(user)?.sessionVersion??0);return Number.isFinite(n)&&n>=0?Math.floor(n):0;}
 function isDeactivated(user:any){return rolesFor(user).includes('deactivated')||metadataFor(user)?.active===false;}
-function effectiveRole(user:any):StaffRole|'custom'|'deactivated'|'none'{
+function effectiveRole(user:any,tenant:any=(()=>{try{return resolveTenant();}catch{return null;}})()):StaffRole|'custom'|'deactivated'|'none'{
   const email=normalizeEmail(user?.email);
-  if(PROTECTED_ADMIN_EMAILS.has(email))return 'admin';
+  if(protectedAdminEmails(tenant).has(email))return 'admin';
   if(isDeactivated(user))return 'deactivated';
   const candidates=[...rolesFor(user),normalizeRole(user?.role)];
   for(const role of ROLE_IDS)if(candidates.includes(role))return role;
@@ -75,10 +78,11 @@ function normalizedJobTitle(user:any){return clean(userMetadataFor(user)?.job_ti
 function publicRoleLabel(role:string){return (ROLE_LABELS as Record<string,string>)[role]||role.replaceAll('_',' ');}
 async function allUsers(){return await admin.listUsers({page:1,perPage:200});}
 function activeAdminCount(users:any[]){return users.filter(user=>!isDeactivated(user)&&effectiveRole(user)==='admin').length;}
-function ensureCanModifyTarget(actor:any,target:any,action:string){
+function ensureCanModifyTarget(actor:any,target:any,action:string,tenant:any){
   const actorEmail=normalizeEmail(actor?.email),targetEmail=normalizeEmail(target?.email);
+  const protectedEmails=protectedAdminEmails(tenant);
   const actorId=clean(actor?.id,120),targetId=clean(target?.id,120);
-  if(PROTECTED_ADMIN_EMAILS.has(targetEmail)&&!PROTECTED_ADMIN_EMAILS.has(actorEmail))return 'Only a protected Koa’s administrator can modify another protected administrator account.';
+  if(protectedEmails.has(targetEmail)&&!protectedEmails.has(actorEmail))return 'Only a protected organization administrator can modify another protected administrator account.';
   if(actorId&&actorId===targetId&&['deactivate','delete','revoke-sessions'].includes(action))return 'You cannot perform that action on the account you are currently using.';
   return '';
 }
@@ -101,7 +105,7 @@ async function normalizeUser(user:any,policy:any){
     createdAt:clean(user?.createdAt||user?.created_at,80),
     updatedAt:clean(user?.updatedAt||user?.updated_at,80),
     lastSignInAt:clean(user?.lastSignInAt||user?.last_sign_in_at,80),
-    protected:PROTECTED_ADMIN_EMAILS.has(normalizeEmail(user?.email)),
+    protected:protectedAdminEmails((()=>{try{return resolveTenant();}catch{return null;}})()).has(normalizeEmail(user?.email)),
     security:{
       forcePasswordChange:security.forcePasswordChange,
       passwordChangedAt:security.passwordChangedAt,
@@ -113,15 +117,36 @@ async function normalizeUser(user:any,policy:any){
   };
 }
 
+function userBelongsToTenant(user:any,tenant:any){
+  const configuredTenant=clean(metadataFor(user)?.tenantId,120);
+  if(configuredTenant)return configuredTenant===tenant.id;
+  return tenant?.storage?.legacyDataBelongsToTenant===true;
+}
+
+async function syncTenantMembership(context:Context,tenant:any,user:any,status?:'active'|'suspended'|'removed'){
+  const role=effectiveRole(user,tenant);
+  const membership=await ensureMembership(context,tenant,user,role,capabilitiesFor(user));
+  if(!membership)return null;
+  if(status&&membership.status!==status)return saveMembership(context,{...membership,status});
+  return membership;
+}
+
 export default async(req:Request,context:Context)=>{
-  const auth=await requireAdmin(req);if(auth.response)return auth.response;
+  const auth=await requireAdmin(req,context);if(auth.response)return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
   const actor=normalizeEmail(auth.user?.email)||'admin';
   const actorId=clean(auth.user?.id,120);
   const policy=await readAuthSecurityPolicy();
 
   if(req.method==='GET'){
     const [users,audit]=await Promise.all([allUsers(),readStaffAudit(context,500)]);
-    const normalized=await Promise.all(users.map((user:any)=>normalizeUser(user,policy)));
+    const tenantUsers=users.filter((user:any)=>userBelongsToTenant(user,tenant));
+    await Promise.all(tenantUsers.map(async(user:any)=>{
+      const role=effectiveRole(user,tenant);
+      const status=role==='deactivated'?'suspended':'active';
+      return syncTenantMembership(context,tenant,user,status);
+    }));
+    const normalized=await Promise.all(tenantUsers.map((user:any)=>normalizeUser(user,policy)));
     normalized.sort((a,b)=>{
       const order:Record<string,number>={admin:0,manager:1,event_coordinator:2,vendor_manager:3,content_editor:4,accounting:5,sales:6,custom:7,read_only:8,deactivated:9,none:10};
       return (order[a.role]??99)-(order[b.role]??99)||a.email.localeCompare(b.email);
@@ -159,7 +184,7 @@ export default async(req:Request,context:Context)=>{
     const email=normalizeEmail(body.email),name=clean(body.name,180),jobTitle=clean(body.jobTitle,120),role=normalizeRole(body.role),setupMode=clean(body.setupMode||'email',20).toLowerCase();
     if(!email.includes('@'))return Response.json({error:'A valid email is required.'},{status:400});
     if(!name)return Response.json({error:'Name is required.'},{status:400});
-    if(!USER_ROLES.has(role))return Response.json({error:'Choose a valid Koa’s role.'},{status:400});
+    if(!USER_ROLES.has(role))return Response.json({error:'Choose a valid organization role.'},{status:400});
     if(!['email','manual'].includes(setupMode))return Response.json({error:'Choose email setup or set password now.'},{status:400});
     const users=await allUsers();if(users.find((user:any)=>normalizeEmail(user?.email)===email))return Response.json({error:'That email already has an account. Edit the existing user instead.'},{status:409});
 
@@ -174,6 +199,8 @@ export default async(req:Request,context:Context)=>{
           roles:[role],
           active:true,
           permissions:[],
+          tenantId:tenant.id,
+          organizationId:tenant.id,
           forcePasswordChange:setupMode==='manual'||policy.requireChangeOnAdminSet,
           passwordChangedAt:setupMode==='manual'?now:'',
           sessionVersion:0,
@@ -187,6 +214,7 @@ export default async(req:Request,context:Context)=>{
       try{await requestPasswordRecovery(email);setupEmailSent=true;}
       catch(error){setupEmailError=error instanceof Error?clean(error.message,500):'Password setup email failed.';}
     }
+    await syncTenantMembership(context,tenant,created,'active');
     await appendStaffAudit(context,{actor,action:'user_created',subjectId:clean(created?.id,120),subjectEmail:email,detail:'Created '+publicRoleLabel(role)+' account for '+email+(jobTitle?' · '+jobTitle:'')+'.',metadata:{role,jobTitle,setupMode,setupEmailSent}});
     return Response.json({ok:true,user:await normalizeUser(created,policy),setupMode,setupEmailSent,setupEmailError,message:setupMode==='email'?(setupEmailSent?'Account created and password setup email sent.':'Account created, but the setup email could not be sent.'):'Account created with the password you set. A password change will be required at next sign-in.'});
   }
@@ -194,7 +222,7 @@ export default async(req:Request,context:Context)=>{
   const userId=clean(body.userId,120);if(!userId)return Response.json({error:'User ID required.'},{status:400});
   const current:any=await admin.getUser(userId);if(!current)return Response.json({error:'User not found.'},{status:404});
   const email=normalizeEmail(current?.email);
-  const guardError=ensureCanModifyTarget(auth.user,current,action);if(guardError)return Response.json({error:guardError},{status:403});
+  const guardError=ensureCanModifyTarget(auth.user,current,action,tenant);if(guardError)return Response.json({error:guardError},{status:403});
 
   if(action==='reset-password'||action==='resend-setup'){
     const nextVersion=sessionVersion(current)+1;
@@ -251,13 +279,14 @@ export default async(req:Request,context:Context)=>{
   }
 
   if(action==='set-role'){
-    const role=normalizeRole(body.role);if(!USER_ROLES.has(role))return Response.json({error:'Choose a valid Koa’s role.'},{status:400});
+    const role=normalizeRole(body.role);if(!USER_ROLES.has(role))return Response.json({error:'Choose a valid organization role.'},{status:400});
     const previous=effectiveRole(current);
     if(current?.id===actorId&&role!=='admin')return Response.json({error:'You cannot remove Administrator access from the account you are currently using.'},{status:403});
-    if(PROTECTED_ADMIN_EMAILS.has(email)&&role!=='admin')return Response.json({error:'Protected administrator accounts must remain Administrators.'},{status:403});
+    if(protectedAdminEmails(tenant).has(email)&&role!=='admin')return Response.json({error:'Protected administrator accounts must remain Administrators.'},{status:403});
     if(previous==='admin'&&role!=='admin'){const users=await allUsers();if(activeAdminCount(users)<=1)return Response.json({error:'At least one active Administrator account must remain.'},{status:409});}
     const nextVersion=sessionVersion(current)+1;
     const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,customRoleId:undefined,customRoleName:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
+    await syncTenantMembership(context,tenant,updated,'active');
     await appendStaffAudit(context,{actor,action:'user_role_changed',subjectId:userId,subjectEmail:email,detail:'Changed role for '+email+' from '+previous+' to '+role+'. Existing sessions were revoked.',metadata:{from:previous,to:role,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
@@ -268,15 +297,17 @@ export default async(req:Request,context:Context)=>{
     const permissions=[...new Set(requested.filter((value:string)=>STAFF_CAPABILITIES.includes(value as any)))];
     const nextVersion=sessionVersion(current)+1;
     const updated:any=await admin.updateUser(userId,{app_metadata:{...metadataFor(current),permissions,sessionVersion:nextVersion}});
+    await syncTenantMembership(context,tenant,updated,'active');
     await appendStaffAudit(context,{actor,action:'user_permissions_changed',subjectId:userId,subjectEmail:email,detail:'Updated individual permissions for '+email+'. Existing sessions were revoked.',metadata:{from:permissionsFor(current),to:permissions,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
 
   if(action==='deactivate'){
-    if(PROTECTED_ADMIN_EMAILS.has(email))return Response.json({error:'Protected administrator accounts cannot be deactivated.'},{status:403});
+    if(protectedAdminEmails(tenant).has(email))return Response.json({error:'Protected administrator accounts cannot be deactivated.'},{status:403});
     if(effectiveRole(current)==='admin'){const users=await allUsers();if(activeAdminCount(users)<=1)return Response.json({error:'At least one active Administrator account must remain.'},{status:409});}
     const previous=effectiveRole(current),nextVersion=sessionVersion(current)+1;
     const updated:any=await admin.updateUser(userId,{role:'deactivated',app_metadata:{...metadataFor(current),roles:['deactivated'],active:false,previousRole:previous==='deactivated'?clean(metadataFor(current)?.previousRole,60)||'sales':previous,permissions:permissionsFor(current),sessionVersion:nextVersion}});
+    await syncTenantMembership(context,tenant,updated,'suspended');
     await appendStaffAudit(context,{actor,action:'user_deactivated',subjectId:userId,subjectEmail:email,detail:'Deactivated '+email+' and revoked existing sessions.',metadata:{previousRole:previous,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
@@ -286,14 +317,17 @@ export default async(req:Request,context:Context)=>{
     const role=USER_ROLES.has(requested)?requested:USER_ROLES.has(stored)?stored:'sales';
     const nextVersion=sessionVersion(current)+1;
     const updated:any=await admin.updateUser(userId,{role,app_metadata:{...metadataFor(current),roles:[role],active:true,previousRole:undefined,customRoleId:undefined,customRoleName:undefined,permissions:permissionsFor(current),sessionVersion:nextVersion}});
+    await syncTenantMembership(context,tenant,updated,'active');
     await appendStaffAudit(context,{actor,action:'user_reactivated',subjectId:userId,subjectEmail:email,detail:'Reactivated '+email+' as '+role+'.',metadata:{role,sessionVersion:nextVersion}});
     return Response.json({ok:true,user:await normalizeUser(updated,policy)});
   }
 
   if(action==='delete'){
-    if(PROTECTED_ADMIN_EMAILS.has(email))return Response.json({error:'Protected administrator accounts cannot be deleted.'},{status:403});
+    if(protectedAdminEmails(tenant).has(email))return Response.json({error:'Protected administrator accounts cannot be deleted.'},{status:403});
     if(effectiveRole(current)==='admin'){const users=await allUsers();if(activeAdminCount(users)<=1)return Response.json({error:'At least one active Administrator account must remain.'},{status:409});}
-    await appendStaffAudit(context,{actor,action:'user_deleted',subjectId:userId,subjectEmail:email,detail:'Permanently deleted account '+email+'.',metadata:{role:effectiveRole(current),permissions:permissionsFor(current)}});
+    await appendStaffAudit(context,{actor,action:'user_deleted',subjectId:userId,subjectEmail:email,detail:'Permanently deleted account '+email+'.',metadata:{role:effectiveRole(current,tenant),permissions:permissionsFor(current)}});
+    const membership=await readMembership(context,tenant.id,userId);
+    if(membership)await saveMembership(context,{...membership,status:'removed'});
     await admin.deleteUser(userId);return Response.json({ok:true,deletedId:userId});
   }
 

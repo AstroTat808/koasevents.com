@@ -1,5 +1,4 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
 import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
@@ -8,6 +7,8 @@ import { appendStaffAudit } from './_shared/staff-audit';
 import { recordCrmStartupSignal } from './_shared/system-health';
 import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfiguration, signWellConfigured } from './_shared/signwell';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -19,15 +20,11 @@ type Template = { id:string; type:'email'|'form'|'questionnaire'|'proposal-note'
 type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; updatedAt:string; };
 type Activity = { id:string; recordId:string; type:string; detail:string; createdAt:string; };
 
-function crmStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-crm', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-crm' });
+function crmStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'crm');
 }
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 function clean(v: unknown, max = 4000) { return String(v ?? '').trim().slice(0, max); }
 function id(prefix='CRM') {
@@ -49,13 +46,13 @@ async function appendActivity(store:any, recordId:string, type:string, detail:st
 
 function staffIdentity(user:any) {
   const metadata = user?.user_metadata || user?.userMetadata || {};
-  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Koa’s Events Team', 180);
+  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Team Member', 180);
   const explicitTitle = clean(metadata?.title || metadata?.job_title || metadata?.jobTitle, 120);
   const role = operationsRole(user);
   const roleTitle = role && role !== 'custom' && role in ROLE_LABELS ? ROLE_LABELS[role as keyof typeof ROLE_LABELS] : '';
   return {
     name,
-    title: explicitTitle || roleTitle || 'Koa’s Events Team',
+    title: explicitTitle || roleTitle || 'Team Member',
     pronouns: clean(metadata?.pronouns,80),
     roleDescription: clean(metadata?.role_description || metadata?.roleDescription,220),
     showTitle: metadata?.signature_show_title !== false,
@@ -130,16 +127,17 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 }
 
 export default async (req:Request, context:Context) => {
-  const auth = await requireCapability('crm.view', req);
+  const auth = await requireCapability('crm.view', req, context);
   if (auth.response) return auth.response;
 
-  const crm = crmStoreFor(context);
-  const sales = salesStoreFor(context);
+  const tenant = auth.tenant || resolveTenant(req);
+  const crm = crmStoreFor(context, req);
+  const sales = salesStoreFor(context, req);
 
   if (req.method === 'GET') {
     const requestUrl=new URL(req.url);
     const signWellPdfRecordId=clean(requestUrl.searchParams.get('signwellPdf'),100);
-    const salesRecords = await readIndex<any>(sales,'records/index');
+    const salesRecords = (await readTenantIndex<any>(sales,tenant,'records/index')).rows;
 
     if(signWellPdfRecordId){
       const record=salesRecords.find((entry:any)=>entry?.id===signWellPdfRecordId);
@@ -148,7 +146,7 @@ export default async (req:Request, context:Context) => {
       if(!key)return Response.json({error:'A stored signed SignWell PDF is not available for this project yet.'},{status:404});
       const pdf=await eventStoreFor(context).get(key,{type:'arrayBuffer'});
       if(!pdf)return Response.json({error:'The signed SignWell PDF reference exists, but the stored file could not be found.'},{status:404});
-      const safeName=('Koa-Signed-Agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
+      const safeName=(clean(tenant.slug,80)+'-signed-agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
       return new Response(pdf,{
         headers:{
           'Content-Type':'application/pdf',
@@ -268,7 +266,7 @@ export default async (req:Request, context:Context) => {
     const localDateKey=(iso:string)=>{
       const d=new Date(iso);
       if(Number.isNaN(d.getTime())) return '';
-      const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+      const parts=new Intl.DateTimeFormat(tenant.locale||'en-US',{timeZone:tenant.timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
       const year=parts.find((p)=>p.type==='year')?.value||'';
       const month=parts.find((p)=>p.type==='month')?.value||'';
       const day=parts.find((p)=>p.type==='day')?.value||'';
@@ -276,7 +274,7 @@ export default async (req:Request, context:Context) => {
     };
     const weekStartKey=(dateKey:string)=>{
       if(!dateKey) return '';
-      const d=new Date(dateKey+'T12:00:00-10:00');
+      const d=new Date(dateKey+'T12:00:00Z');
       const day=d.getDay();
       const offset=day===0?-6:1-day;
       d.setDate(d.getDate()+offset);
@@ -284,7 +282,7 @@ export default async (req:Request, context:Context) => {
     };
     const labelDate=(key:string)=>{
       const d=new Date(key+'T12:00:00-10:00');
-      return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric'}).format(d);
+      return new Intl.DateTimeFormat(tenant.locale||'en-US',{timeZone:tenant.timezone||'UTC',month:'short',day:'numeric'}).format(d);
     };
     const roundPct=(n:number,d:number)=>d>0?Math.round((n/d)*1000)/10:null;
     const allAudit=[...(cleanupAudit||[])].sort((a:any,b:any)=>Date.parse(a.createdAt)-Date.parse(b.createdAt));
@@ -702,14 +700,24 @@ export default async (req:Request, context:Context) => {
 
     const person=staffIdentity(auth.user);
     const rendered=buildStaffEmail(record,subject,messageBody,person);
-    const from=clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>';
-    const replyTo=clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com';
+    const from=clean(
+      Netlify.env.get('VENUELOOM_CLIENT_EMAIL_FROM')
+      || Netlify.env.get('KOA_CLIENT_EMAIL_FROM')
+      || (tenant.displayName+' <'+tenant.contact.email+'>'),
+      240,
+    );
+    const replyTo=clean(
+      Netlify.env.get('VENUELOOM_CLIENT_REPLY_TO')
+      || Netlify.env.get('KOA_CLIENT_REPLY_TO')
+      || tenant.contact.email,
+      240,
+    );
     const sendId='CRM-'+id('EMAIL');
     let resendId='';
     try{
       const response=await fetch('https://api.resend.com/emails',{
         method:'POST',
-        headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-staff-client-'+recordId+'-'+sendId).slice(0,256)},
+        headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('venueloom-staff-client-'+tenant.id+'-'+recordId+'-'+sendId).slice(0,256)},
         body:JSON.stringify({from,to:[email],subject,html:rendered.html,text:rendered.text,reply_to:replyTo}),
         signal:AbortSignal.timeout(12_000),
       });

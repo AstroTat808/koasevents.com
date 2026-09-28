@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import {
   getCompletedPdf,
   eventStoreFor,
@@ -11,7 +12,7 @@ import {
 } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function sales(context:Context){return context.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
+function sales(context:Context){return tenantStoreFor(context,resolveTenant(),'sales');}
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
 function id(){return 'EVT-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function appendEvent(context:Context,event:any){const s=sales(context);const current:any[]=(await s.get('analytics/events/index',{type:'json'}))||[];await s.setJSON('analytics/events/index',[{id:id(),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));}
@@ -31,7 +32,7 @@ export default async(req:Request,context:Context)=>{
   }
 
   if(await signWellWebhookReplaySeen(context,verification)){
-    return new Response(null,{status:200,headers:{'Cache-Control':'no-store','X-Koa-SignWell-Replay':'duplicate'}});
+    return new Response(null,{status:200,headers:{'Cache-Control':'no-store','X-VenueLoom-SignWell-Replay':'duplicate'}});
   }
 
   const name=eventName(payload);
@@ -45,7 +46,7 @@ export default async(req:Request,context:Context)=>{
     ]);
     return new Response(null,{
       status:204,
-      headers:{'Cache-Control':'no-store','X-Koa-Synthetic-Check':'signwell-webhook'},
+      headers:{'Cache-Control':'no-store','X-VenueLoom-Synthetic-Check':'signwell-webhook'},
     });
   }
 
@@ -96,7 +97,7 @@ export default async(req:Request,context:Context)=>{
       acknowledgement:'Signed through SignWell.',
     };
     record.booking.contract.koaSignature={
-      name:clean(koa.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||'Koa’s Events',180),
+      name:clean(koa.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||resolveTenant().displayName,180),
       signedAt:clean(koa.signed_at||koa.completed_at||now,80),
     };
     record.booking.status=record?.accounting?.quickbooks?.depositPaid?'booked':'deposit_pending';

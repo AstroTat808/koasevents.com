@@ -1,21 +1,10 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
-}
-function filesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-files', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-files' });
-}
+function salesStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'sales'); }
+function opsStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'eventOps'); }
+function filesStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'eventFiles'); }
 function clean(value: unknown, max = 1000) {
   return String(value || '').trim().slice(0, max);
 }
@@ -31,17 +20,17 @@ const ALLOWED=new Set([
 const CATEGORIES=new Set(['insurance','floor_plan','vendor','questionnaire']);
 const MAX_BYTES=20*1024*1024;
 
-async function lookup(context:Context,token:string){
-  const sales=salesStoreFor(context);
-  const records=((await sales.get('records/index',{type:'json'})) || []) as any[];
+async function lookup(context:Context,tenant:any,token:string){
+  const sales=salesStoreFor(context,tenant);
+  const records=(await readTenantIndex<any>(sales,tenant,'records/index')).rows;
   const record=records.find((entry:any)=>entry?.kind==='proposal' && entry?.proposal?.publicToken===token);
   if(!record) return {record:null,ops:null};
   if(record.stage!=='booked' || record.proposal?.status!=='booked') return {record:null,ops:null};
-  const ops=await opsStoreFor(context).get('events/'+record.id,{type:'json'}) as any;
+  const ops=await opsStoreFor(context,tenant).get('events/'+record.id,{type:'json'}) as any;
   return {record,ops};
 }
 async function appendEvent(context:Context,event:Record<string,unknown>){
-  const store=salesStoreFor(context);
+  const store=salesStoreFor(context,resolveTenant());
   const current=(await store.get('analytics/events/index',{type:'json'})) || [];
   await store.setJSON('analytics/events/index',[{id:id('EVT'),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));
 }
@@ -51,12 +40,13 @@ export default async(req:Request,context:Context)=>{
   const documentId=clean(context.params.documentId,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token)) return Response.json({error:'Invalid planning link.'},{status:400});
 
-  const {record,ops}=await lookup(context,token);
+  const tenant=resolveTenant(req);
+  const {record,ops}=await lookup(context,tenant,token);
   if(!record) return Response.json({error:'Planning portal not found or not yet available.'},{status:404});
   if(!ops) return Response.json({error:'Open the planning portal before uploading documents.'},{status:409});
   ops.documents ||= [];
 
-  const store=filesStoreFor(context);
+  const store=filesStoreFor(context,tenant);
 
   if(req.method==='POST' && !documentId){
     const form=await req.formData();
@@ -83,7 +73,7 @@ export default async(req:Request,context:Context)=>{
     await store.set('documents/'+record.id+'/'+docId,await file.arrayBuffer());
     ops.documents=[meta,...ops.documents.filter((entry:any)=>entry.id!==docId)].slice(0,200);
     ops.updatedAt=new Date().toISOString();
-    await opsStoreFor(context).setJSON('events/'+record.id,ops);
+    await opsStoreFor(context,tenant).setJSON('events/'+record.id,ops);
     await appendEvent(context,{
       type:'client_document_uploaded',
       recordId:record.id,quoteId:record.quoteId||'',packageId:record.packageId||'',
@@ -110,7 +100,7 @@ export default async(req:Request,context:Context)=>{
     await store.delete(key);
     ops.documents=ops.documents.filter((entry:any)=>entry.id!==documentId);
     ops.updatedAt=new Date().toISOString();
-    await opsStoreFor(context).setJSON('events/'+record.id,ops);
+    await opsStoreFor(context,tenant).setJSON('events/'+record.id,ops);
     await appendEvent(context,{
       type:'client_document_removed',
       recordId:record.id,quoteId:record.quoteId||'',packageId:record.packageId||'',

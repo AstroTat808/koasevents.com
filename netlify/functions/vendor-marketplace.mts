@@ -1,11 +1,12 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { applyMasterInsuranceToAssignments, masterInsuranceForEvent } from './_shared/vendor-insurance-sync.ts';
 
-function sales(c:Context){return c.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
-function ops(c:Context){return c.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
-function vendors(c:Context){return c.deploy.context==='production'?getStore({name:'koa-vendors',consistency:'strong'}):getDeployStore({name:'koa-vendors'});}
+function sales(c:Context,tenant:any){return tenantStoreFor(c,tenant,'sales');}
+function ops(c:Context,tenant:any){return tenantStoreFor(c,tenant,'eventOps');}
+function vendors(c:Context,tenant:any){return tenantStoreFor(c,tenant,'vendors');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 function id(prefix='REQ'){return prefix+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function list(store:any,key:string){return ((await store.get(key,{type:'json'}))||[]) as any[];}
@@ -57,8 +58,9 @@ function publicVendor(v:any,reviews:any[],record:any,event:any){
 export default async(req:Request,context:Context)=>{
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid marketplace link.'},{status:400});
-  const ss=sales(context),os=ops(context),vs=vendors(context);
-  const records=await list(ss,'records/index');const record=records.find(r=>r?.kind==='proposal'&&r?.proposal?.publicToken===token);
+  const tenant=resolveTenant(req);
+  const ss=sales(context,tenant),os=ops(context,tenant),vs=vendors(context,tenant);
+  const records=(await readTenantIndex<any>(ss,tenant,'records/index')).rows;const record=records.find(r=>r?.kind==='proposal'&&r?.proposal?.publicToken===token);
   if(!record)return Response.json({error:'Client portal not found.'},{status:404});
   if(record.stage!=='booked')return Response.json({error:'Vendor Marketplace becomes available after booking.'},{status:403});
   let event:any=await os.get('events/'+record.id,{type:'json'});if(!event)event={recordId:record.id,vendors:[],documents:[]};
@@ -80,7 +82,7 @@ export default async(req:Request,context:Context)=>{
   const body:any=await req.json().catch(()=>null);const action=clean(body?.action,50),vendorId=clean(body?.vendorId,100),vendor=all.find(v=>v.id===vendorId);
   if(['toggle-favorite','select-vendor','remove-vendor','submit-review','request-availability','request-introduction'].includes(action)&&!vendor)return Response.json({error:'Vendor not found.'},{status:404});
   if(action==='toggle-favorite'){const current=await list(vs,'favorites/'+record.id);const next=current.includes(vendorId)?current.filter(x=>x!==vendorId):[vendorId,...current].slice(0,200);await vs.setJSON('favorites/'+record.id,next);return Response.json({ok:true,favorites:next});}
-  if(action==='select-vendor'){const existing=(event.vendors||[]).find((v:any)=>v.marketplaceVendorId===vendorId);if(!existing){const insurance=masterInsuranceForEvent(vendor,record.customer?.eventDate);(event.vendors||=[]).push({id:id('V'),marketplaceVendorId:vendor.id,company:vendor.name,contact:vendor.contactName||'',role:vendor.category,email:vendor.email||'',phone:vendor.phone||'',arrivalTime:'',insuranceStatus:insurance.status,insuranceSource:'vendor_master',insuranceExpiresAt:insurance.expiresAt,insuranceVerifiedAt:insurance.verifiedAt,insuranceIssue:insurance.issue,insuranceDocumentId:insurance.documentId,insuranceSyncedAt:new Date().toISOString(),notes:'Selected through Koa’s Vendor Marketplace'});}event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
+  if(action==='select-vendor'){const existing=(event.vendors||[]).find((v:any)=>v.marketplaceVendorId===vendorId);if(!existing){const insurance=masterInsuranceForEvent(vendor,record.customer?.eventDate);(event.vendors||=[]).push({id:id('V'),marketplaceVendorId:vendor.id,company:vendor.name,contact:vendor.contactName||'',role:vendor.category,email:vendor.email||'',phone:vendor.phone||'',arrivalTime:'',insuranceStatus:insurance.status,insuranceSource:'vendor_master',insuranceExpiresAt:insurance.expiresAt,insuranceVerifiedAt:insurance.verifiedAt,insuranceIssue:insurance.issue,insuranceDocumentId:insurance.documentId,insuranceSyncedAt:new Date().toISOString(),notes:'Selected through the organization Vendor Marketplace'});}event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
   if(action==='remove-vendor'){event.vendors=(event.vendors||[]).filter((v:any)=>v.marketplaceVendorId!==vendorId);event.updatedAt=new Date().toISOString();await os.setJSON('events/'+record.id,event);return Response.json({ok:true});}
   if(action==='request-availability'||action==='request-introduction'){
     const type=action==='request-availability'?'availability':'introduction';
@@ -89,15 +91,15 @@ export default async(req:Request,context:Context)=>{
     const row={id:id('VR'),type,recordId:record.id,vendorId,status:type==='availability'?'requested':'introduced',clientName:clean(record.customer?.name,180),clientEmail:clean(record.customer?.email,240),eventDate:clean(record.customer?.eventDate,40),message:clean(body?.message,1600),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};
     await vs.setJSON('requests/index',[row,...requests].slice(0,10000));
     const portalToken=clean(vendor.portalToken,100);
-    const vendorUrl=portalToken?'https://koasevents.com/vendor-portal/?token='+encodeURIComponent(portalToken):'';
+    const vendorUrl=portalToken?'https://'+tenant.domains.primary+'/vendor-portal/?token='+encodeURIComponent(portalToken):'';
     const clientDetail=[row.clientName,row.eventDate?'Event: '+row.eventDate:'',record.packageId||'',row.message].filter(Boolean).join(' · ');
-    await sendVendorEmail({to:[vendor.email],subject:type==='availability'?'Koa’s availability request for '+row.eventDate:'Koa’s client introduction — '+row.clientName,title:type==='availability'?'A Koa’s client is checking your availability.':'A Koa’s client would like an introduction.',body:type==='availability'?'Please let us know whether you are available, possibly available, or unavailable for this event.':'The client asked Koa’s to connect you. You may reply to this email to continue the conversation.',detail:clientDetail,actionLabel:vendorUrl?'Open Vendor Portal':'Reply to Koa’s',actionUrl:vendorUrl,idempotencyKey:'vendor-'+type+'-'+row.id});
+    await sendVendorEmail({to:[vendor.email],subject:type==='availability'?tenant.displayName+' availability request for '+row.eventDate:tenant.displayName+' client introduction — '+row.clientName,title:type==='availability'?'A '+tenant.displayName+' client is checking your availability.':'A '+tenant.displayName+' client would like an introduction.',body:type==='availability'?'Please let us know whether you are available, possibly available, or unavailable for this event.':'The client asked '+tenant.displayName+' to connect you. You may reply to this email to continue the conversation.',detail:clientDetail,actionLabel:vendorUrl?'Open Vendor Portal':'Reply to '+tenant.displayName,actionUrl:vendorUrl,idempotencyKey:'vendor-'+type+'-'+row.id});
     if(type==='introduction'&&row.clientEmail){
-      await sendVendorEmail({to:[row.clientEmail,vendor.email],subject:'Introduction: '+row.clientName+' + '+vendor.name,title:'You’re connected.',body:'Koa’s has introduced you both so you can discuss availability, services, pricing, and fit directly.',detail:[vendor.name,vendor.email||'',row.eventDate?'Event: '+row.eventDate:''].filter(Boolean).join(' · '),idempotencyKey:'client-vendor-intro-'+row.id});
+      await sendVendorEmail({to:[row.clientEmail,vendor.email],subject:'Introduction: '+row.clientName+' + '+vendor.name,title:'You’re connected.',body:tenant.displayName+' has introduced you both so you can discuss availability, services, pricing, and fit directly.',detail:[vendor.name,vendor.email||'',row.eventDate?'Event: '+row.eventDate:''].filter(Boolean).join(' · '),idempotencyKey:'client-vendor-intro-'+row.id});
     }
     return Response.json({ok:true,request:row});
   }
-  if(action==='submit-review'){const eventDate=clean(record.customer?.eventDate,40);if(!eventDate||eventDate>new Date().toISOString().slice(0,10))return Response.json({error:'Reviews open after your event date.'},{status:403});const used=(event.vendors||[]).some((v:any)=>v.marketplaceVendorId===vendorId);if(!used)return Response.json({error:'Only vendors on your Koa’s event team can be reviewed.'},{status:403});const prior=reviews.find(r=>r.recordId===record.id&&r.vendorId===vendorId);const s=(v:unknown)=>Math.max(1,Math.min(5,Math.round(Number(v)||0)));const row={id:prior?.id||id(),recordId:record.id,vendorId,status:'pending',clientName:clean(record.customer?.name,180),eventDate,overall:s(body?.overall),communication:s(body?.communication),professionalism:s(body?.professionalism),quality:s(body?.quality),value:s(body?.value),wouldHireAgain:Boolean(body?.wouldHireAgain),comment:clean(body?.comment,3000),createdAt:prior?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};await vs.setJSON('reviews/index',[row,...reviews.filter(r=>r.id!==row.id)].slice(0,10000));return Response.json({ok:true,review:row});}
+  if(action==='submit-review'){const eventDate=clean(record.customer?.eventDate,40);if(!eventDate||eventDate>new Date().toISOString().slice(0,10))return Response.json({error:'Reviews open after your event date.'},{status:403});const used=(event.vendors||[]).some((v:any)=>v.marketplaceVendorId===vendorId);if(!used)return Response.json({error:'Only vendors on your event team can be reviewed.'},{status:403});const prior=reviews.find(r=>r.recordId===record.id&&r.vendorId===vendorId);const s=(v:unknown)=>Math.max(1,Math.min(5,Math.round(Number(v)||0)));const row={id:prior?.id||id(),recordId:record.id,vendorId,status:'pending',clientName:clean(record.customer?.name,180),eventDate,overall:s(body?.overall),communication:s(body?.communication),professionalism:s(body?.professionalism),quality:s(body?.quality),value:s(body?.value),wouldHireAgain:Boolean(body?.wouldHireAgain),comment:clean(body?.comment,3000),createdAt:prior?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};await vs.setJSON('reviews/index',[row,...reviews.filter(r=>r.id!==row.id)].slice(0,10000));return Response.json({ok:true,review:row});}
   return Response.json({error:'Unknown marketplace action.'},{status:400});
 };
 export const config:Config={path:'/api/vendor-marketplace/:token'};

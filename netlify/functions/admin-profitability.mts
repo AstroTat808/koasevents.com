@@ -1,5 +1,4 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireCapability } from './_shared/admin';
 import {
   ADDON_CATALOG_MAPPING,
@@ -12,8 +11,11 @@ import {
   type CatalogSaveAudit,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
+import type { TenantProfile } from '../../src/data/tenants';
+import { tenantProfitabilityPackageDefaults } from '../../src/data/tenants/profitability';
 
-const WEDDING_PACKAGE_IDS = ['gardenia','orchid','hibiscus','signature-wedding'] as const;
 const COST_KEYS = [
   'laborSetup','flowers','cake','mobileBar','cleaning','cottage',
   'rentalsInventory','coordination','photoBooth','lightingAv',
@@ -108,9 +110,7 @@ type SalesRecord = {
 };
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function clean(value: unknown, max = 600) {
@@ -132,18 +132,13 @@ function margin(value: unknown, fallback = 0.6) {
   return Math.min(0.9, Math.max(0.05, n));
 }
 
-function normalizeWeddingPackage(value: unknown) {
+function normalizeWeddingPackage(value: unknown, tenant: TenantProfile = resolveTenant()) {
   const raw = clean(value, 100).toLowerCase().replaceAll('_','-').replaceAll(' ','-');
-  if (raw === 'plumeria' || raw === 'signature' || raw === 'signature-wedding-experience') return 'signature-wedding';
-  if (raw.includes('gardenia')) return 'gardenia';
-  if (raw.includes('orchid')) return 'orchid';
-  if (raw.includes('hibiscus')) return 'hibiscus';
-  if (raw.includes('signature')) return 'signature-wedding';
-  return raw;
+  return tenant.sales.packageAliases[raw] || raw;
 }
 
-function isWeddingPackage(value: unknown): value is (typeof WEDDING_PACKAGE_IDS)[number] {
-  return WEDDING_PACKAGE_IDS.includes(normalizeWeddingPackage(value) as any);
+function isWeddingPackage(value: unknown, tenant: TenantProfile = resolveTenant()) {
+  return tenant.sales.weddingPackageIds.includes(normalizeWeddingPackage(value, tenant));
 }
 
 function emptyCosts(): CostMap {
@@ -263,25 +258,11 @@ function addOnCatalogPatch(row:AddOnModel, publishPrice = false, active?:boolean
   };
 }
 
-function defaultPackages(): PackageModel[] {
-  return [
-    {
-      id:'gardenia', name:'Gardenia Intimate Wedding', price:5000, includedGuests:20, targetMargin:0.72,
-      costs:{ laborSetup:400,flowers:150,cake:175,mobileBar:0,cleaning:150,cottage:0,rentalsInventory:0,coordination:250,photoBooth:0,lightingAv:0,parkingStaffing:0,otherDirect:0 },
-    },
-    {
-      id:'orchid', name:'Orchid Wedding Day', price:10000, includedGuests:30, targetMargin:0.72,
-      costs:{ laborSetup:800,flowers:150,cake:0,mobileBar:0,cleaning:250,cottage:0,rentalsInventory:150,coordination:500,photoBooth:0,lightingAv:75,parkingStaffing:0,otherDirect:0 },
-    },
-    {
-      id:'hibiscus', name:'Hibiscus Wedding Weekend', price:15000, includedGuests:50, targetMargin:0.70,
-      costs:{ laborSetup:1200,flowers:150,cake:0,mobileBar:0,cleaning:350,cottage:500,rentalsInventory:250,coordination:900,photoBooth:0,lightingAv:100,parkingStaffing:0,otherDirect:0 },
-    },
-    {
-      id:'signature-wedding', name:'Koa’s Signature Wedding Experience', price:20000, includedGuests:50, targetMargin:0.66,
-      costs:{ laborSetup:1500,flowers:1000,cake:500,mobileBar:900,cleaning:400,cottage:500,rentalsInventory:500,coordination:1200,photoBooth:400,lightingAv:300,parkingStaffing:250,otherDirect:300 },
-    },
-  ];
+function defaultPackages(tenant: TenantProfile = resolveTenant()): PackageModel[] {
+  return tenantProfitabilityPackageDefaults(tenant).map((row)=>({
+    ...row,
+    costs:{...row.costs},
+  }));
 }
 
 function defaultAddOns(): AddOnModel[] {
@@ -292,8 +273,8 @@ function defaultAddOns(): AddOnModel[] {
     ['floral-upgrade','Floral design upgrade','Design','per upgrade',0,0.45,0,50,'Use vendor invoice + delivery + handling labor as direct cost.'],
     ['cake-upgrade','Cake upgrade / allowance overage','Food','per upgrade',0,0.40,0,25,'Use bakery invoice + pickup/delivery/handling cost.'],
     ['photo-booth-extra-hour','Photo booth additional hour','Entertainment','per hour',0,0.70,0,25,'Include attendant labor and consumables when applicable.'],
-    ['decor-upgrade','Premium décor upgrade','Design','per upgrade',0,0.70,0,50,'For Koa-owned inventory, use handling/setup/cleaning plus a wear-and-replacement allowance.'],
-    ['rental-upgrade','Rental inventory upgrade','Rentals','per line / bundle',0,0.75,0,25,'Use incremental handling, setup, cleaning and replacement reserve for Koa-owned inventory; use vendor invoice for outside rentals.'],
+    ['decor-upgrade','Premium décor upgrade','Design','per upgrade',0,0.70,0,50,'For organization-owned inventory, use handling/setup/cleaning plus a wear-and-replacement allowance.'],
+    ['rental-upgrade','Rental inventory upgrade','Rentals','per line / bundle',0,0.75,0,25,'Use incremental handling, setup, cleaning and replacement reserve for organization-owned inventory; use vendor invoice for outside rentals.'],
     ['coordination-extra-hour','Additional coordination hour','Labor','per hour',0,0.65,0,25,'Direct cost should use loaded labor cost, not wage-only cost.'],
   ] as const;
   return rows.map(([id,name,category,unit,directCost,targetMargin,sellPrice,priceIncrement,note]) => ({
@@ -365,9 +346,8 @@ function normalizeEvent(input: any, existing?: ActualEvent, preserveUpdatedAt = 
   };
 }
 
-async function readSalesRecords(context: Context): Promise<SalesRecord[]> {
-  const raw = await storeFor(context).get('records/index',{ type:'json' }) as SalesRecord[] | null;
-  return Array.isArray(raw) ? raw : [];
+async function readSalesRecords(context: Context, tenant: TenantProfile = resolveTenant()): Promise<SalesRecord[]> {
+  return (await readTenantIndex<SalesRecord>(storeFor(context), tenant, 'records/index')).rows;
 }
 
 function packageIdForRecord(record:SalesRecord) {
@@ -410,21 +390,21 @@ function packagePriceForRecord(record:SalesRecord) {
   );
 }
 
-function addOnsForRecord(record:SalesRecord) {
+function addOnsForRecord(record:SalesRecord, tenant:TenantProfile = resolveTenant()) {
   const lines = Array.isArray(record.proposal?.lineItems) ? record.proposal!.lineItems! : [];
   return normalizeEventAddOns(lines.filter((line:any) => {
     const id = clean(line?.id || line?.catalogItemId,80);
-    return id !== 'collection' && !WEDDING_PACKAGE_IDS.includes(normalizeWeddingPackage(id) as any);
+    return id !== 'collection' && !tenant.sales.weddingPackageIds.includes(normalizeWeddingPackage(id,tenant));
   }));
 }
 
-function isBookedWedding(record:SalesRecord) {
+function isBookedWedding(record:SalesRecord, tenant:TenantProfile = resolveTenant()) {
   const packageId = packageIdForRecord(record);
   const booked = record.stage === 'booked' || record.status === 'booked' || record.proposal?.status === 'booked';
-  return record.kind === 'proposal' && booked && isWeddingPackage(packageId);
+  return record.kind === 'proposal' && booked && isWeddingPackage(packageId,tenant);
 }
 
-function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent): ActualEvent {
+function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent, tenant:TenantProfile = resolveTenant()): ActualEvent {
   const now = new Date().toISOString();
   const packageId = packageIdForRecord(record);
   return {
@@ -435,7 +415,7 @@ function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent): ActualEv
     revenue:revenueForRecord(record),
     packagePrice:packagePriceForRecord(record),
     guestCount:guestCountForRecord(record),
-    addOns:addOnsForRecord(record),
+    addOns:addOnsForRecord(record,tenant),
     crmRecordId:clean(record.id,100),
     crmSynced:true,
     costs:existing?.costs || emptyCosts(),
@@ -445,9 +425,9 @@ function crmEventFromRecord(record:SalesRecord, existing?:ActualEvent): ActualEv
   };
 }
 
-function mergeCrmEvents(storedEvents:ActualEvent[],records:SalesRecord[]) {
+function mergeCrmEvents(storedEvents:ActualEvent[],records:SalesRecord[],tenant:TenantProfile = resolveTenant()) {
   const savedByCrm = new Map(storedEvents.filter(e=>e.crmRecordId).map(e=>[e.crmRecordId,e]));
-  const crmEvents = records.filter(isBookedWedding).map(record=>crmEventFromRecord(record,savedByCrm.get(clean(record.id,100))));
+  const crmEvents = records.filter((record)=>isBookedWedding(record,tenant)).map(record=>crmEventFromRecord(record,savedByCrm.get(clean(record.id,100)),tenant));
   const crmIds = new Set(crmEvents.map(e=>e.crmRecordId));
   const manualOrHistorical = storedEvents.filter(e=>!e.crmRecordId || !crmIds.has(e.crmRecordId));
   return [...crmEvents,...manualOrHistorical]
@@ -455,13 +435,13 @@ function mergeCrmEvents(storedEvents:ActualEvent[],records:SalesRecord[]) {
     .sort((a,b)=>(b.eventDate || b.updatedAt).localeCompare(a.eventDate || a.updatedAt));
 }
 
-function packagePerformance(records:SalesRecord[],events:ActualEvent[],packages:PackageModel[]) {
-  return WEDDING_PACKAGE_IDS.map(packageId => {
+function packagePerformance(records:SalesRecord[],events:ActualEvent[],packages:PackageModel[],tenant:TenantProfile = resolveTenant()) {
+  return tenant.sales.weddingPackageIds.map(packageId => {
     const packageName = packages.find(p=>p.id===packageId)?.name || packageId;
     const rows = records.filter(r=>packageIdForRecord(r)===packageId);
     const inquiries = rows.filter(r=>r.kind==='inquiry').length;
     const proposals = rows.filter(r=>r.kind==='proposal').length;
-    const bookedRows = rows.filter(isBookedWedding);
+    const bookedRows = rows.filter((record)=>isBookedWedding(record,tenant));
     const bookings = bookedRows.length;
     const bookedValue = bookedRows.reduce((sum,r)=>sum+revenueForRecord(r),0);
     const actualRows = events.filter(e=>e.packageId===packageId && sumCosts(e.costs)>0);
@@ -504,9 +484,9 @@ function evidenceLeaders(performance:any[]) {
   };
 }
 
-async function readState(context:Context):Promise<ProfitabilityState> {
+async function readState(context:Context,tenant:TenantProfile = resolveTenant()):Promise<ProfitabilityState> {
   const saved = await storeFor(context).get('settings/wedding-profitability',{ type:'json' }) as Partial<ProfitabilityState> | null;
-  const defaults = defaultPackages();
+  const defaults = defaultPackages(tenant);
   const savedPackages = Array.isArray(saved?.packages) ? saved!.packages! : [];
   const packages = defaults.map(fallback=>normalizePackage(savedPackages.find((row:any)=>clean(row?.id,80)===fallback.id),fallback));
 
@@ -565,7 +545,7 @@ function rebalanceSchedule(rows:any[] | undefined,total:number,depositAmount:num
   return [first,...balanced];
 }
 
-function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:number,packageId='') {
+function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:number,packageId='',tenant:TenantProfile = resolveTenant()) {
   if (record.kind!=='proposal' || !record.proposal || record.proposal.status!=='draft' || record.stage==='booked') return false;
   const lines = Array.isArray(record.proposal.lineItems) ? record.proposal.lineItems : [];
   let changed = false;
@@ -584,7 +564,7 @@ function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:numbe
   const discountAmount = Math.min(subtotal,money(record.proposal.discountAmount));
   const taxableGross = nextLines.filter((line:any)=>line?.getExempt!==true).reduce((sum:number,line:any)=>sum+finite(line?.amount),0);
   const taxableAfterDiscount = subtotal>0 ? Math.max(0,taxableGross-(discountAmount*taxableGross/subtotal)) : 0;
-  const taxRate = 4.712;
+  const taxRate = tenant.tax.enabled ? Number(tenant.tax.customerRate || 0) : 0;
   const taxAmount = money(taxableAfterDiscount*taxRate/100);
   const total = money(subtotal-discountAmount+taxAmount);
   const depositPercent = finite(record.proposal.depositPercent,0,100);
@@ -604,12 +584,12 @@ function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:numbe
   return true;
 }
 
-async function updateDraftProposalPricing(context:Context,catalogItemId:string,price:number) {
+async function updateDraftProposalPricing(context:Context,catalogItemId:string,price:number,tenant:TenantProfile = resolveTenant()) {
   const store = storeFor(context);
   const records = await readSalesRecords(context);
   const ids:string[] = [];
   for (const record of records) {
-    if (!recalcDraftProposal(record,catalogItemId,price)) continue;
+    if (!recalcDraftProposal(record,catalogItemId,price,'',tenant)) continue;
     await store.setJSON('records/'+record.id,record);
     ids.push(record.id);
   }
@@ -617,12 +597,12 @@ async function updateDraftProposalPricing(context:Context,catalogItemId:string,p
   return { count:ids.length, ids };
 }
 
-async function updateDraftPackagePricing(context:Context,packageId:string,price:number) {
+async function updateDraftPackagePricing(context:Context,packageId:string,price:number,tenant:TenantProfile = resolveTenant()) {
   const store = storeFor(context);
   const records = await readSalesRecords(context);
   const ids:string[] = [];
   for (const record of records) {
-    if (!recalcDraftProposal(record,packageId,price,packageId)) continue;
+    if (!recalcDraftProposal(record,packageId,price,packageId,tenant)) continue;
     await store.setJSON('records/'+record.id,record);
     ids.push(record.id);
   }
@@ -630,10 +610,10 @@ async function updateDraftPackagePricing(context:Context,packageId:string,price:
   return { count:ids.length, ids };
 }
 
-async function responseState(context:Context,state:ProfitabilityState) {
-  const [records,catalog] = await Promise.all([readSalesRecords(context),getQuickBooksCatalog(context)]);
+async function responseState(context:Context,state:ProfitabilityState,tenant:TenantProfile = resolveTenant()) {
+  const [records,catalog] = await Promise.all([readSalesRecords(context,tenant),getQuickBooksCatalog(context)]);
   const catalogById=new Map(catalog.map(item=>[item.id,item]));
-  const events = mergeCrmEvents(state.events,records);
+  const events = mergeCrmEvents(state.events,records,tenant);
   const packages=state.packages.map(row=>{
     const item=catalogById.get(row.id);
     return {
@@ -654,14 +634,14 @@ async function responseState(context:Context,state:ProfitabilityState) {
       catalogActive:item?.active!==false,
     };
   });
-  const performance = packagePerformance(records,events,state.packages);
+  const performance = packagePerformance(records,events,state.packages,tenant);
   return {
     ...state,
     packages,
     addOns,
     events,
     crmSync:{
-      bookedWeddingCount:records.filter(isBookedWedding).length,
+      bookedWeddingCount:records.filter((record)=>isBookedWedding(record,tenant)).length,
       syncedAt:new Date().toISOString(),
     },
     catalogSync:{
@@ -675,12 +655,13 @@ async function responseState(context:Context,state:ProfitabilityState) {
 }
 
 export default async (req:Request,context:Context) => {
-  const auth = await requireCapability('sales.profit_settings',req);
+  const auth = await requireCapability('sales.profit_settings',req,context);
   if (auth.response) return auth.response;
+  const tenant = auth.tenant || resolveTenant(req);
 
-  let state = await readState(context);
+  let state = await readState(context,tenant);
   if (req.method==='GET') {
-    return Response.json(await responseState(context,state),{ headers:{ 'Cache-Control':'private, no-store' } });
+    return Response.json(await responseState(context,state,tenant),{ headers:{ 'Cache-Control':'private, no-store' } });
   }
   if (req.method!=='POST') return new Response('Method not allowed',{ status:405 });
 
@@ -690,18 +671,18 @@ export default async (req:Request,context:Context) => {
 
   if (action==='save-packages') {
     const incoming = Array.isArray(body?.packages) ? body.packages : [];
-    state.packages = defaultPackages().map(fallback=>normalizePackage(incoming.find((row:any)=>clean(row?.id,80)===fallback.id),fallback));
+    state.packages = defaultPackages(tenant).map(fallback=>normalizePackage(incoming.find((row:any)=>clean(row?.id,80)===fallback.id),fallback));
     await upsertCatalogEconomics(
       context,
       state.packages.map(row=>packageCatalogPatch(row,false)),
       {actor,source:'wedding-profitability-assumptions',note:'Saved wedding package cost and target-margin assumptions.'},
     );
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,...await responseState(context,state) });
+    return Response.json({ ok:true,...await responseState(context,state,tenant) });
   }
 
   if (action==='approve-package-price') {
-    const id=normalizeWeddingPackage(body?.id);
+    const id=normalizeWeddingPackage(body?.id,tenant);
     const row=state.packages.find(pkg=>pkg.id===id);
     if(!row) return Response.json({ error:'Wedding package not found.' },{ status:404 });
     const recommended=recommendedPackagePrice(sumCosts(row.costs),row.targetMargin,500);
@@ -712,7 +693,7 @@ export default async (req:Request,context:Context) => {
       [packageCatalogPatch(row,true)],
       {actor,source:'wedding-profitability',sourceRef:row.id,note:'Published recommended wedding package price from Wedding Profitability.'},
     );
-    const repriced=await updateDraftPackagePricing(context,row.id,row.price);
+    const repriced=await updateDraftPackagePricing(context,row.id,row.price,tenant);
     await annotateCatalogPriceHistory(context,{
       catalogItemId:row.id,
       source:'wedding-profitability',
@@ -725,7 +706,7 @@ export default async (req:Request,context:Context) => {
     return Response.json({
       ok:true,
       approvedPackage:{ id:row.id,price:row.price,updatedDraftProposals:repriced.count,updatedDraftProposalIds:repriced.ids },
-      ...await responseState(context,state),
+      ...await responseState(context,state,tenant),
     });
   }
 
@@ -753,7 +734,7 @@ export default async (req:Request,context:Context) => {
       {actor,source:'wedding-profitability-assumptions',note:'Saved add-on cost and target-margin assumptions.'},
     );
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,...await responseState(context,state) });
+    return Response.json({ ok:true,...await responseState(context,state,tenant) });
   }
 
   if (action==='approve-addon-price') {
@@ -771,7 +752,7 @@ export default async (req:Request,context:Context) => {
       [addOnCatalogPatch(addon,true,true)],
       {actor,source:'wedding-profitability',sourceRef:addon.id,note:'Published recommended add-on price from Wedding Profitability.'},
     );
-    const repriced = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice);
+    const repriced = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice,tenant);
     await annotateCatalogPriceHistory(context,{
       catalogItemId:addon.catalogItemId,
       source:'wedding-profitability',
@@ -784,7 +765,7 @@ export default async (req:Request,context:Context) => {
     return Response.json({
       ok:true,
       approved:{ id:addon.id,catalogItemId:addon.catalogItemId,price:addon.sellPrice,updatedDraftProposals:repriced.count,updatedDraftProposalIds:repriced.ids },
-      ...await responseState(context,state),
+      ...await responseState(context,state,tenant),
     });
   }
 
@@ -801,16 +782,16 @@ export default async (req:Request,context:Context) => {
       {actor,source:'wedding-profitability-unpublish',sourceRef:addon.id,note:'Unpublished add-on from new proposal selection.'},
     );
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,...await responseState(context,state) });
+    return Response.json({ ok:true,...await responseState(context,state,tenant) });
   }
 
   if (action==='upsert-event') {
-    const records = await readSalesRecords(context);
-    const merged = mergeCrmEvents(state.events,records);
+    const records = await readSalesRecords(context,tenant);
+    const merged = mergeCrmEvents(state.events,records,tenant);
     const id = clean(body?.event?.id,100);
     const existing = id ? merged.find(row=>row.id===id) : undefined;
     const event = normalizeEvent(body?.event,existing);
-    if (!isWeddingPackage(event.packageId)) return Response.json({ error:'Choose a wedding package.' },{ status:400 });
+    if (!isWeddingPackage(event.packageId,tenant)) return Response.json({ error:'Choose a wedding package.' },{ status:400 });
     if (event.revenue<=0) return Response.json({ error:'Enter event revenue.' },{ status:400 });
 
     if (existing?.crmRecordId) {
@@ -826,7 +807,7 @@ export default async (req:Request,context:Context) => {
     }
     state.events = [event,...state.events.filter(row=>row.id!==event.id && (!event.crmRecordId || row.crmRecordId!==event.crmRecordId))].slice(0,300);
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,event,...await responseState(context,state) });
+    return Response.json({ ok:true,event,...await responseState(context,state,tenant) });
   }
 
   if (action==='delete-event') {
@@ -835,14 +816,14 @@ export default async (req:Request,context:Context) => {
     if (row?.crmRecordId) return Response.json({ error:'CRM-synced weddings cannot be deleted here. Update the booking in Sales CRM instead.' },{ status:409 });
     state.events = state.events.filter(event=>event.id!==id);
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,...await responseState(context,state) });
+    return Response.json({ ok:true,...await responseState(context,state,tenant) });
   }
 
   if (action==='reset-planning-assumptions') {
-    state.packages = defaultPackages();
+    state.packages = defaultPackages(tenant);
     state.addOns = defaultAddOns();
     state = await writeState(context,state,actor);
-    return Response.json({ ok:true,...await responseState(context,state) });
+    return Response.json({ ok:true,...await responseState(context,state,tenant) });
   }
 
   return Response.json({ error:'Unknown action.' },{ status:400 });

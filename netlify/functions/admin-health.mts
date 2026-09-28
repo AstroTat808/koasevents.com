@@ -217,20 +217,20 @@ async function office365HealthSummary(context:Context,deployments:any=null){
         ? 'yellow'
         : 'green';
 
-  const hawaiiDate=(value:any)=>{
+  const tenantDate=(value:any)=>{
     const d=new Date(value);
     if(Number.isNaN(d.getTime()))return '';
-    const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+    const parts=new Intl.DateTimeFormat(resolveTenant().locale,{timeZone:resolveTenant().timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
     const by=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
     return by.year+'-'+by.month+'-'+by.day;
   };
   const dailyKeys:string[]=[];
   for(let i=29;i>=0;i--){
     const d=new Date(Date.now()-i*24*60*60*1000);
-    dailyKeys.push(hawaiiDate(d));
+    dailyKeys.push(tenantDate(d));
   }
   const trend=dailyKeys.map((day)=>{
-    const runs=allRuns.filter((run:any)=>hawaiiDate(run?.completedAt||run?.startedAt)===day);
+    const runs=allRuns.filter((run:any)=>tenantDate(run?.completedAt||run?.startedAt)===day);
     const totalRuns=runs.length;
     const successfulRuns=runs.filter((run:any)=>run?.status==='success').length;
     const conflictRuns=runs.filter((run:any)=>Number(run?.totals?.conflicted||0)>0).length;

@@ -1,24 +1,19 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireOperations } from './_shared/admin';
 import { isSyntheticHealthRequest } from './_shared/synthetic-health';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
+function opsStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'eventOps');
 }
 
-function filesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-files', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-files' });
+function filesStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'eventFiles');
 }
 
 function clean(value: unknown, max = 1000) {
@@ -43,8 +38,9 @@ const ALLOWED = new Set([
 const CATEGORY = new Set(['insurance','floor_plan','vendor','questionnaire','other']);
 const MAX_BYTES = 20 * 1024 * 1024;
 
-async function bookedRecord(context: Context, recordId: string) {
-  const list = ((await salesStoreFor(context).get('records/index', { type: 'json' })) || []) as any[];
+async function bookedRecord(context: Context, req: Request, recordId: string) {
+  const tenant=resolveTenant(req);
+  const list = (await readTenantIndex<any>(salesStoreFor(context,req),tenant,'records/index')).rows;
   return list.find((entry) => entry?.id === recordId && entry?.stage === 'booked' && entry?.kind === 'proposal') || null;
 }
 
@@ -53,17 +49,17 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'HEAD' && syntheticRecordId === '__health__' && isSyntheticHealthRequest(req)) {
     try {
       await Promise.all([
-        salesStoreFor(context).get('records/index', { type: 'json' }),
-        opsStoreFor(context).get('events/__health__', { type: 'json' }),
-        filesStoreFor(context).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
+        salesStoreFor(context,req).get('records/index', { type: 'json' }),
+        opsStoreFor(context,req).get('events/__health__', { type: 'json' }),
+        filesStoreFor(context,req).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
-      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
     } catch {
-      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
     }
   }
 
-  const auth = await requireOperations();
+  const auth = await requireOperations(req,context);
   if (auth.response) return auth.response;
   if (req.method !== 'GET' && !hasCapability(auth.user, 'event_ops.manage')) {
     return Response.json({ error: 'Manager permission required to change event documents.' }, { status: 403 });
@@ -73,11 +69,11 @@ export default async (req: Request, context: Context) => {
   const documentId = clean(context.params.documentId, 100);
   if (!recordId) return Response.json({ error: 'Booked-event record ID required.' }, { status: 400 });
 
-  const record = await bookedRecord(context, recordId);
+  const record = await bookedRecord(context, req, recordId);
   if (!record) return Response.json({ error: 'Booked event not found.' }, { status: 404 });
 
-  const opsStore = opsStoreFor(context);
-  const filesStore = filesStoreFor(context);
+  const opsStore = opsStoreFor(context,req);
+  const filesStore = filesStoreFor(context,req);
   const ops: any = await opsStore.get('events/' + recordId, { type: 'json' });
   if (!ops) return Response.json({ error: 'Open the event in Event Ops before uploading documents.' }, { status: 409 });
   ops.documents ||= [];

@@ -1,22 +1,19 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
+function salesStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'sales'); }
 
 function clean(value: unknown, max = 500) {
   return String(value || '').trim().slice(0, max);
 }
 
-async function records(context: Context) {
-  const store = salesStoreFor(context);
-  return { store, list: ((await store.get('records/index', { type: 'json' })) || []) as any[] };
+async function records(context: Context,tenant:any) {
+  const store = salesStoreFor(context,tenant);
+  return { store, list: (await readTenantIndex<any>(store,tenant,'records/index')).rows };
 }
 
 async function appendEvent(store: any, event: Record<string, unknown>) {
@@ -31,7 +28,7 @@ async function appendEvent(store: any, event: Record<string, unknown>) {
   }, ...current].slice(0, 10000));
 }
 
-function publicRecord(record: any) {
+function publicRecord(record: any,tenant:any) {
   const proposal = record?.proposal || {};
   const quoteState = record?.quote?.state || {};
   const originalLines = [];
@@ -82,7 +79,7 @@ function publicRecord(record: any) {
     lineItems: proposal.lineItems || [],
     subtotal: Number(proposal.subtotal || 0),
     discountAmount: Number(proposal.discountAmount || 0),
-    taxRate: proposal.taxRate == null ? 4.712 : Number(proposal.taxRate),
+    taxRate: proposal.taxRate == null ? Number(tenant.tax?.customerRate||0) : Number(proposal.taxRate),
     taxAmount: Number(proposal.taxAmount || 0),
     total: Number(proposal.total || 0),
     depositAmount: Number(proposal.depositAmount || 0),
@@ -110,7 +107,8 @@ export default async (req: Request, context: Context) => {
   const token = clean(context.params.token, 80);
   if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) return Response.json({ error: 'Invalid proposal link.' }, { status: 400 });
 
-  const { store, list } = await records(context);
+  const tenant=resolveTenant(req);
+  const { store, list } = await records(context,tenant);
   const record = list.find((entry: any) => entry?.kind === 'proposal' && entry?.proposal?.publicToken === token);
   if (!record) return Response.json({ error: 'Proposal not found.' }, { status: 404 });
 
@@ -142,7 +140,7 @@ export default async (req: Request, context: Context) => {
         detail: 'Client viewed the proposal.',
       });
     }
-    return Response.json({ proposal: publicRecord(record) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ proposal: publicRecord(record,tenant) }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   if (req.method === 'POST') {
@@ -229,7 +227,7 @@ export default async (req: Request, context: Context) => {
     await store.setJSON('records/' + record.id, record);
     await store.setJSON('records/index', next);
 
-    return Response.json({ ok: true, proposal: publicRecord(record) }, { headers: { 'Cache-Control': 'private, no-store' } });
+    return Response.json({ ok: true, proposal: publicRecord(record,tenant) }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
   return new Response('Method not allowed', { status: 405 });

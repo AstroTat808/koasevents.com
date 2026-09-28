@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import { readEmailHealthEvents } from './_shared/email-health';
 
@@ -50,7 +51,7 @@ async function resend(path:string){
   if(!key)return {ok:false,status:0,body:{message:'RESEND_MONITORING_API_KEY is not configured.'}};
   try{
     const response=await fetch('https://api.resend.com'+path,{
-      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','User-Agent':'KoaEvents-EmailActivity/1.0'},
+      headers:{Authorization:'Bearer '+key,'Content-Type':'application/json','User-Agent':'VenueLoom-EmailActivity/1.0'},
       signal:AbortSignal.timeout(10000),
     });
     const body:any=await response.json().catch(()=>({}));
@@ -157,9 +158,7 @@ function summarizePeriod(rows:any[],days:number,now:number){
   };
 }
 function summaryStore(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-email-analytics',consistency:'strong'})
-    : getDeployStore({name:'koa-email-analytics'});
+  return tenantStoreFor(context,resolveTenant(),'emailAnalytics');
 }
 async function emailAnalyticsSummary(context:Context,force=false){
   const store=summaryStore(context);
@@ -343,7 +342,7 @@ export default async (req:Request,context:Context)=>{
     hasMore:Boolean(result.body?.has_more),
     nextAfter:rows.length?rows[rows.length-1].emailId:'',
     previousBefore:rows.length?rows[0].emailId:'',
-    retentionNote:'History is limited to email records retained by the connected Resend account. Koa’s signed webhook archive preserves lifecycle diagnostics going forward.',
+    retentionNote:'History is limited to email records retained by the connected Resend account. The tenant-scoped signed webhook archive preserves lifecycle diagnostics going forward.',
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 

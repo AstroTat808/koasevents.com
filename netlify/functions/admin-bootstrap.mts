@@ -1,10 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { admin, requestPasswordRecovery } from '@netlify/identity';
-
-const APPROVED_ADMIN_EMAILS = new Set([
-  'chris@sibel.org',
-  'koasadmin@koasevents.com',
-]);
+import { tenantProfiles } from '../../src/data/tenants';
 
 function clean(value: unknown, max = 300) {
   return String(value || '').trim().slice(0, max);
@@ -18,7 +14,7 @@ function randomPassword() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
   const raw = Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('');
-  return 'Koa!' + raw.slice(0, 24) + '9a';
+  return 'VL!' + raw.slice(0, 24) + '9a';
 }
 
 function metadataFor(user: any) {
@@ -35,16 +31,21 @@ export default async (req: Request, _context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const origin = clean(req.headers.get('origin'), 300);
-  if (!['https://koasevents.com', 'https://www.koasevents.com'].includes(origin)) {
-    return Response.json({ error: 'This account setup request must come from the Koa’s Events admin page.' }, { status: 403 });
+  const allowedOrigins = new Set(tenantProfiles.flatMap((tenant) => [
+    'https://' + tenant.domains.admin,
+    'https://www.' + tenant.domains.admin,
+  ]));
+  if (!allowedOrigins.has(origin)) {
+    return Response.json({ error: 'This account setup request must come from an approved organization admin page.' }, { status: 403 });
   }
 
   const body: any = await req.json().catch(() => null);
   const email = normalizeEmail(body?.email);
 
-  if (!APPROVED_ADMIN_EMAILS.has(email)) {
+  const approvedAdminEmails = new Set(tenantProfiles.flatMap((tenant) => tenant.bootstrapAdminEmails).map((value) => normalizeEmail(value)));
+  if (!approvedAdminEmails.has(email)) {
     return Response.json(
-      { error: 'This email is not approved for Koa’s administrator access.' },
+      { error: 'This email is not approved for administrator access.' },
       { status: 403 },
     );
   }
@@ -76,7 +77,7 @@ export default async (req: Request, _context: Context) => {
           permissions: [],
         },
         user_metadata: {
-          full_name: email === 'chris@sibel.org' ? 'Chris Sibel' : 'Koa’s Admin',
+          full_name: email.split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g,(ch)=>ch.toUpperCase()),
         },
       },
     });
