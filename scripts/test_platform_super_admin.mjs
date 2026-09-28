@@ -16,7 +16,27 @@ assert.match(api,/stripeCheckoutStarted:false/,'sandbox provisioning must not st
 assert.match(org,/support-sessions\/history/,'support sessions must be auditable');
 assert.match(org,/expiresAt/,'support sessions must have an expiry');
 assert.match(page,/Read-only support mode/,'UI must clearly identify support impersonation as read-only');
-assert.match(page,/Create safe sandbox tenant/,'UI must expose isolated Tenant #2 provisioning');
+assert.match(page,/Create \+ prove sandbox isolation/,'UI must expose isolated Tenant #2 provisioning with live proof');
+assert.match(api,/action==='run-isolation-proof'/,'platform must expose live sandbox-to-Koa isolation proof');
+assert.match(api,/TENANT_STORAGE_DOMAINS/,'isolation proof must cover every tenant storage domain');
+assert.match(api,/koaDataTouched:false/,'isolation proof must never mutate Koa');
+assert.match(api,/sandboxProbesCleanedUp:true/,'isolation probes must be cleaned up');
+assert.match(api,/action==='set-tenant-status'/,'tenant suspension and reactivation must be platform-managed');
+assert.match(api,/Koa Tenant #1 suspension\/reactivation is blocked/,'Tenant #1 suspension must have a hard safety block');
+assert.match(api,/action==='update-plan'/,'plan changes must be platform-managed');
+assert.match(api,/subscription_items/,'active Stripe subscriptions must be updated at Stripe, not only locally');
+assert.match(api,/action==='save-entitlements'/,'feature entitlements must be platform-managed');
+assert.match(api,/view==='support-audit\.csv'/,'support audit CSV export must exist');
+assert.match(api,/view==='usage'/,'platform usage metrics endpoint must exist');
+assert.match(api,/action==='request-deletion'/,'organization deletion must use a staged request');
+assert.match(api,/holdHours:24/,'organization deletion must have a minimum cooling-off period');
+assert.match(api,/action==='finalize-deletion'/,'organization deletion must require a separate finalization action');
+assert.match(api,/DELETE /,'final deletion must require destructive confirmation text');
+assert.match(org,/deletion-requests\/history/,'deletion requests must be retained in the control-plane audit history');
+assert.match(org,/platform-audit\/history/,'platform mutations must be auditable');
+assert.match(page,/Usage metrics/,'UI must expose platform-wide usage metrics');
+assert.match(page,/Feature entitlements/,'UI must expose per-tenant feature entitlements');
+assert.match(page,/Organization deletion safeguards/,'UI must explain deletion safeguards');
 assert.doesNotMatch(api,/@netlify\/blobs/,'platform function must not bypass the control-plane/storage abstractions');
 
 console.log('VenueLoom Super Admin regression test passed.');
