@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
@@ -91,9 +92,7 @@ function idSuffix(bytesCount = 6) {
 }
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-security', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-security' });
+  return tenantStoreFor(context, resolveTenant(), 'security');
 }
 
 function securitySecret() {
