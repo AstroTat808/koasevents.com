@@ -1,8 +1,8 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
-import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant, tenantTaxDefaults } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
@@ -46,19 +46,11 @@ import {
 } from './_shared/quickbooks';
 
 function salesStoreFor(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'sales');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function integrationStoreFor(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function clean(value: unknown, max = 1200) {
