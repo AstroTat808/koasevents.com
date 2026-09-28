@@ -8,6 +8,7 @@ import { quickBooksWebhookVerifierToken } from './quickbooks';
 import { syntheticHealthToken } from './synthetic-health';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -471,7 +472,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
       })
     : Promise.resolve({response:null,ms:0,error:'QuickBooks webhook verifier token is not configured.'});
 
-  const signWellWebhookId=clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'),1000);
+  const signWellWebhookId=clean(tenantEnv(resolveTenant(),'SIGNWELL_WEBHOOK_ID'),1000);
   const signWellEventType='koa_health_check';
   const signWellEventTime=Math.floor(Date.now()/1000);
   const signWellHash=signWellWebhookId
@@ -1783,26 +1784,29 @@ function esc(value:unknown){
 }
 
 async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+  const tenant=resolveTenant();
+  const brand=tenant.displayName || 'VenueLoom tenant';
+  const adminUrl='https://'+tenant.domains.admin+'/admin/health/';
+  const apiKey=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
   if(!apiKey) return {channel:'email',sent:false,reason:'resend-not-configured'};
 
-  const configured=clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
-    || 'chris@sibel.org';
+  const configured=clean(tenantEnv(tenant,'HEALTH_ALERT_EMAILS','KOA_HEALTH_ALERT_EMAILS'),500)
+    || clean(tenantEnv(tenant,'LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO'),500)
+    || clean(tenant.contact.email,500);
   const recipients=configured.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
   if(!recipients.length) return {channel:'email',sent:false,reason:'no-recipient'};
 
-  const from=clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
-    || 'Koa’s Events <leads@koasevents.com>';
+  const from=clean(tenantEnv(tenant,'HEALTH_ALERT_FROM','KOA_HEALTH_ALERT_FROM'),240)
+    || clean(tenantEnv(tenant,'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)
+    || (brand+' <'+tenant.contact.email+'>');
   const fullyRecovered=(current.alertFailedIds||[]).length===0;
   const subject=fullyRecovered
-    ? 'Koa’s System Health recovered'
-    : 'Koa’s System Health alert — '+failedNames.length+' confirmed check'+(failedNames.length===1?'':'s')+' failing';
+    ? brand+' System Health recovered'
+    : brand+' System Health alert — '+failedNames.length+' confirmed check'+(failedNames.length===1?'':'s')+' failing';
   const summary=fullyRecovered
-    ? 'All monitored Koa’s admin/staff services are healthy again.'
+    ? 'All monitored '+brand+' admin/staff services are healthy again.'
     : 'The health monitor detected a change in system health.';
-  const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Koa’s System Health alert</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
+  const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>'+brand+' System Health alert</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
     +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
     +emailHeader({brand:'events',eyebrow:'System Health',title:fullyRecovered?'System recovered':'Health change detected'})
@@ -1813,17 +1817,17 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
     +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
     +'<p style="font-size:12px;color:#66736d">Checked '+esc(current.checkedAt)+' · '+failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s')+'</p>'
-    +emailButton({href:'https://koasevents.com/admin/health/',label:'Open System Health',marginTop:20})
+    +emailButton({href:adminUrl,label:'Open System Health',marginTop:20})
     +emailSignature()
     +'</td></tr></table></td></tr></table></body></html>';
   const text=[
     emailGreetingText('Team'),'',
-    'Koa’s Events System Health',summary,
+    brand+' System Health',summary,
     brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
     failedNames.length?'Still failing: '+failedNames.join(', '):'',
     'Checked: '+current.checkedAt,
-    'System Health: https://koasevents.com/admin/health/','',
+    'System Health: '+adminUrl,'',
     emailSignatureText(),
   ].filter(Boolean).join('\n');
   try{
@@ -1842,16 +1846,19 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
 }
 
 async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
-  const webhook=clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
+  const tenant=resolveTenant();
+  const brand=tenant.displayName || 'VenueLoom tenant';
+  const adminUrl='https://'+tenant.domains.admin+'/admin/health/';
+  const webhook=clean(tenantEnv(tenant,'HEALTH_SLACK_WEBHOOK_URL','KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(!webhook) return {channel:'slack',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
   const lines=[
-    recovered?'✅ *Koa’s System Health recovered*':'🚨 *Koa’s System Health changed*',
+    recovered?'✅ *'+brand+' System Health recovered*':'🚨 *'+brand+' System Health changed*',
     brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
     recoveredNames.length?'*Recovered:* '+recoveredNames.join(', '):'',
     failedNames.length?'*Still failing:* '+failedNames.join(', '):'',
     failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s'),
-    '<https://koasevents.com/admin/health/|Open System Health>',
+    '<'+adminUrl+'|Open System Health>',
   ].filter(Boolean);
   try{
     const response=await fetch(webhook,{
@@ -1867,18 +1874,21 @@ async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recov
 }
 
 async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
-  const sid=clean(Netlify.env.get('TWILIO_ACCOUNT_SID'),200);
-  const token=clean(Netlify.env.get('TWILIO_AUTH_TOKEN'),300);
-  const from=clean(Netlify.env.get('TWILIO_FROM_NUMBER'),80);
-  const recipients=clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
+  const tenant=resolveTenant();
+  const brand=tenant.displayName || 'VenueLoom tenant';
+  const adminUrl='https://'+tenant.domains.admin+'/admin/health/';
+  const sid=clean(tenantEnv(tenant,'TWILIO_ACCOUNT_SID'),200);
+  const token=clean(tenantEnv(tenant,'TWILIO_AUTH_TOKEN'),300);
+  const from=clean(tenantEnv(tenant,'TWILIO_FROM_NUMBER'),80);
+  const recipients=clean(tenantEnv(tenant,'HEALTH_SMS_TO','KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
   if(!sid||!token||!from||!recipients.length) return {channel:'sms',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
   const parts=[
-    recovered?'Koa’s System Health recovered.':'Koa’s System Health alert.',
+    recovered?brand+' System Health recovered.':brand+' System Health alert.',
     brokenNames.length?'New failing: '+brokenNames.join(', ')+'.':'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', ')+'.':'',
     failedNames.length?'Still failing: '+failedNames.join(', ')+'.':'',
-    'https://koasevents.com/admin/health/',
+    adminUrl,
   ].filter(Boolean);
   const body=parts.join(' ').slice(0,1200);
   const auth='Basic '+btoa(sid+':'+token);
