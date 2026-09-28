@@ -20,6 +20,14 @@ for(const entry of fs.readdirSync(root,{withFileTypes:true})){
   const dynamic=/\bresolveTenantAsync\s*\(/.test(text)&&/\brunWithTenant\s*\(/.test(text);
   const authorized=/\b(?:requireCapability|requireAdmin|requireManager|requireOperations|getAccessContext)\s*\(/.test(text);
   const iterated=scheduled&&/\brunForEachTenant\s*\(/.test(text);
+  const unsafeAuthorizedResolve=authorized
+    && /\b(?:const|let)\s+tenant\s*=\s*resolveTenant\s*\(\s*req\s*\)/.test(text)
+    && !/\btenant\s*=\s*auth\.tenant\s*\|\|\s*resolveTenant\s*\(\s*req\s*\)/.test(text);
+
+  if(unsafeAuthorizedResolve){
+    failures.push(entry.name+': authorized request discards auth.tenant and re-resolves synchronously');
+    continue;
+  }
 
   if(webhook)continue; // webhook-specific invariants are enforced by tenant_isolation_qa.mjs
   if(dynamic||authorized||iterated)continue;
