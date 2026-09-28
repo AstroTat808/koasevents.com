@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { runForEachTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
   cachedDeploymentHistory,
@@ -9,7 +10,7 @@ import {
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
 
-export default async (_req:Request,context:Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if(context.deploy.context!=='production') return;
   const [previous,previousHourly]=await Promise.all([
     readLatestHealth(context),
@@ -20,6 +21,10 @@ export default async (_req:Request,context:Context) => {
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
   await cachedDeploymentHistory(context);
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config:Config={schedule:'@hourly'};
