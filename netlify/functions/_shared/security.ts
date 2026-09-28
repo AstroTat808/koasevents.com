@@ -1,6 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { resolveTenant } from './tenant';
-import { tenantStoreFor } from './tenant-storage';
+import { resolveTenant } from './tenant.ts';
+import { tenantStoreFor } from './tenant-storage.ts';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
