@@ -81,6 +81,8 @@ export type TenantProfile = {
       vendors?: string;
       integrations?: string;
       email?: string;
+      emailRouting?: string;
+      emailAnalytics?: string;
       health?: string;
       calendar?: string;
       authSecurity?: string;
