@@ -11,13 +11,14 @@
     "build:safety": "node scripts/build_safety_check.mjs",
     "audit:tenant": "node scripts/audit_tenant_hardcoding.mjs",
     "audit:tenant:strict": "node scripts/audit_tenant_hardcoding.mjs --strict-platform",
-    "prebuild": "npm run build:safety && npm run audit:tenant:strict && npm run audit:tenant:storage && npm run audit:tenant:integrations && npm run test:tenant:isolation && npm run test:tenant-isolation && npm run test:accounting && npm run test:invoice-repair",
+    "prebuild": "npm run build:safety && npm run audit:tenant:strict && npm run audit:tenant:storage && npm run audit:tenant:integrations && npm run audit:tenant:schedules && npm run test:tenant:isolation && npm run test:tenant-isolation && npm run test:accounting && npm run test:invoice-repair",
     "test:tenant:isolation": "node scripts/test_tenant_isolation.mjs",
     "test:tenant-isolation": "node scripts/tenant_isolation_qa.mjs",
     "test:accounting": "node scripts/test_quickbooks_accounting_regression.mjs",
     "test:invoice-repair": "node scripts/test_quickbooks_invoice_repair_safety.mjs",
     "audit:tenant:storage": "node scripts/audit_tenant_storage_access.mjs",
-    "audit:tenant:integrations": "node scripts/audit_tenant_integration_env.mjs"
+    "audit:tenant:integrations": "node scripts/audit_tenant_integration_env.mjs",
+    "audit:tenant:schedules": "node scripts/audit_tenant_scheduled_jobs.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",
