@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendReviewRequest } from './_shared/review-email.ts';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
 
@@ -49,7 +50,7 @@ export default async (_req: Request, context: Context) => {
   const delayDays = configuredDays('KOA_REVIEW_REQUEST_DELAY_DAYS', 1, 1, 14);
   const lookbackDays = configuredDays('KOA_REVIEW_REQUEST_LOOKBACK_DAYS', 14, delayDays, 60);
 
-  const store = getStore({ name: 'koa-sales', consistency: 'strong' });
+  const store = tenantStoreFor(context, resolveTenant(), 'sales');
   const records: any[] = (await store.get('records/index', { type: 'json' })) || [];
   const now = new Date().toISOString();
   const appended: any[] = [];
