@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import {
   applyQuickBooksReconciliationHistory,
   buildQuickBooksAccountingAudit,
@@ -59,7 +60,7 @@ export default async (_req: Request, context: Context) => {
   const runAt = new Date().toISOString();
   const alertTransitions = reconciliation.transitions.filter((entry: any) => ['mismatch_detected','resolved'].includes(entry.type));
   const alerts = await sendAccountingTransitionAlerts(alertTransitions, runAt);
-  const store = getStore({ name: 'koa-integrations', consistency: 'strong' });
+  const store = tenantStoreFor(context,resolveTenant(),'integrations');
   await store.setJSON('quickbooks/accounting-hourly-last', {
     ...audit,
     runAt,
