@@ -41,10 +41,11 @@ for (const file of surfaces) {
 
 const storage = fs.readFileSync('netlify/functions/_shared/tenant-storage.ts','utf8');
 const storageAssertions = [
-  [storage.includes("'tenants/' + tenant.id + '/' + domain + '/'"), 'canonical keys must include tenant ID and domain'],
-  [storage.includes('Cross-tenant data access was blocked.'), 'cross-tenant JSON writes/reads must throw'],
-  [storage.includes('String(row.tenantId) !== tenant.id'), 'row normalization must reject another tenant ID'],
-  [storage.includes('tenantId: tenant.id'), 'tenant records must be stamped with the active tenant ID'],
+  [storage.includes("from './tenant-boundary.mjs'"), 'tenant storage must delegate pure ownership/key logic to tenant-boundary'],
+  [storage.includes('tenantDataPrefix'), 'tenant storage must use canonical tenant prefixes'],
+  [storage.includes('normalizeTenantRows'), 'tenant storage must normalize tenant-owned rows'],
+  [storage.includes('stampTenantId'), 'tenant storage must stamp tenant ownership'],
+  [storage.includes('Cross-tenant data access was blocked.'), 'cross-tenant JSON access must still be rejected at the storage boundary'],
 ];
 for (const [ok,message] of storageAssertions) if (!ok) failures.push('tenant-storage: ' + message);
 
