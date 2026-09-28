@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
@@ -13,7 +14,7 @@ function daysUntil(date:unknown){
 export default async(_req:Request,context:Context)=>{
   if(context.deploy.context!=='production')return;
   if(!(await shouldRunScheduledJob(context,'vendor-insurance-reminders')))return;
-  const store=getStore({name:'koa-vendors',consistency:'strong'});
+  const store=tenantStoreFor(context,resolveTenant(),'vendors');
   const vendors:any[]=(await store.get('vendors/index',{type:'json'}))||[];
   let changed=false;const now=new Date().toISOString();
   for(const vendor of vendors){
