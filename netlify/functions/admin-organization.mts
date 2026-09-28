@@ -9,6 +9,7 @@ import {
   type OrganizationVenue,
 } from './_shared/organization';
 import { resolveTenant } from './_shared/tenant';
+import { tenantMigrationAudit } from './_shared/tenant-storage';
 
 function clean(value: unknown, max = 1000) {
   return String(value ?? '').trim().slice(0, max);
@@ -184,6 +185,11 @@ export default async (req: Request, context: Context) => {
   const action = clean(body.action, 80);
 
   let updated = organization;
+
+  if (action === 'run-migration-audit') {
+    const migrationAudit = await tenantMigrationAudit(context, tenant);
+    return Response.json({ ok:true, migrationAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+  }
 
   if (action === 'save-identity') {
     updated = await saveOrganization(context, tenant, (current) => ({
