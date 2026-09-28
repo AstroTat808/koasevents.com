@@ -851,7 +851,16 @@ function outboundCustomerChanges(record: any, customer: any) {
   const desiredEmail = clean(record?.customer?.email, 240);
   const desiredPhone = clean(record?.customer?.phone, 80);
   if (!customer) {
-    changes.push({ field:'customer', before:'Not in QuickBooks', after:desiredDisplay, action:'create' });
+    changes.push({
+      field:'Customer',
+      before:null,
+      after:{
+        displayName:desiredDisplay,
+        email:desiredEmail || '',
+        phone:desiredPhone || '',
+      },
+      action:'create',
+    });
     return changes;
   }
   const compare = (field: string, before: unknown, after: unknown) => {
@@ -955,9 +964,12 @@ export function buildQuickBooksCrmSyncReconciliation(preview: any, result: any) 
       .filter(Boolean),
   ).size;
 
+  const actualCustomerOutcomes = Array.isArray(result?.customerOutcomes) ? result.customerOutcomes : [];
+  const actualCreated = actualCustomerOutcomes.filter((row: any) => clean(row?.outcome,40) === 'create').length;
+  const actualMatched = actualCustomerOutcomes.filter((row: any) => clean(row?.outcome,40) === 'match_refresh').length;
   const countComparisons = [
-    { key:'crm_created', label:'CRM customers created', predicted:Number(predicted.crmCustomersCreated || 0), actual:Number(result?.crm?.created || 0) },
-    { key:'crm_matched', label:'CRM customers matched/refreshed', predicted:Number(predicted.crmCustomersMatched || 0), actual:Number(result?.crm?.matched || 0) },
+    { key:'crm_created', label:'CRM customers created', predicted:Number(predicted.crmCustomersCreated || 0), actual:actualCreated },
+    { key:'crm_matched', label:'CRM customers matched/refreshed', predicted:Number(predicted.crmCustomersMatched || 0), actual:actualMatched },
     { key:'crm_skipped', label:'Customers skipped/excluded', predicted:Number(predicted.crmCustomersSkipped || 0), actual:actualSkipped },
     { key:'duplicates', label:'Duplicate matches blocked', predicted:Number(predicted.crmCustomersBlockedDuplicates || 0), actual:Number(result?.skipped?.ambiguous || 0) },
     { key:'qbo_records', label:'CRM records written back to QuickBooks', predicted:Number(predicted.quickBooksRecordsWritten || 0), actual:actualQboRecords },
@@ -1220,6 +1232,17 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
   const quickBooksWritableActions = outbound.flatMap((row) =>
     (Array.isArray(row.actions) ? row.actions : []).map((action: any) => ({ ...action, recordId:row.recordId, name:row.name })),
   );
+  const uniqueWritableOperationKeys = new Set(
+    quickBooksWritableActions
+      .filter((action: any) => ['create','update'].includes(String(action?.action || '')))
+      .map((action: any) => [String(action.recordId || ''),String(action.type || '')].join(':')),
+  );
+  const uniqueWriteCount = (type: string, actionName: string) => new Set(
+    quickBooksWritableActions
+      .filter((action: any) => action.type === type && action.action === actionName)
+      .map((action: any) => String(action.recordId || ''))
+      .filter(Boolean),
+  ).size;
   const executionSummary = {
     crmCustomersCreated: customerPlans.filter((row) => row.executionDisposition === 'create').length,
     crmCustomersMatched: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
@@ -1230,11 +1253,11 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     crmCustomersBlockedDuplicates: customerPlans.filter((row) => row.executionDisposition === 'blocked_duplicate').length,
     crmCustomersRefreshed: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
     quickBooksRecordsWritten: new Set(quickBooksWritableActions.filter((action: any) => ['create','update'].includes(String(action?.action || ''))).map((action: any) => String(action.recordId || ''))).size,
-    quickBooksActionsWritten: quickBooksWritableActions.filter((action: any) => ['create','update'].includes(String(action?.action || ''))).length,
-    quickBooksCustomerCreates: quickBooksWritableActions.filter((action: any) => action.type === 'customer' && action.action === 'create').length,
-    quickBooksCustomerUpdates: quickBooksWritableActions.filter((action: any) => action.type === 'customer' && action.action === 'update').length,
-    quickBooksEstimateCreates: quickBooksWritableActions.filter((action: any) => action.type === 'estimate' && action.action === 'create').length,
-    quickBooksEstimateUpdates: quickBooksWritableActions.filter((action: any) => action.type === 'estimate' && action.action === 'update').length,
+    quickBooksActionsWritten: uniqueWritableOperationKeys.size,
+    quickBooksCustomerCreates: uniqueWriteCount('customer','create'),
+    quickBooksCustomerUpdates: uniqueWriteCount('customer','update'),
+    quickBooksEstimateCreates: uniqueWriteCount('estimate','create'),
+    quickBooksEstimateUpdates: uniqueWriteCount('estimate','update'),
     quickBooksBlockedActions: quickBooksWritableActions.filter((action: any) => action.action === 'blocked').length,
     ready: Number(summary.needsDecision || 0) === 0,
   };
