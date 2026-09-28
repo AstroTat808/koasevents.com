@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 
 type SelectedQuoteItem = {
   id: string;
@@ -49,20 +50,16 @@ const ALLOWED_STARTING_POINTS = new Set([
 const ID_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
 const QUOTE_TTL_DAYS = 180;
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-quotes', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-quotes' });
+function storeFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'quotes');
 }
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
-async function appendQuoteSavedEvent(context: Context, saved: SavedQuote) {
-  const store = salesStoreFor(context);
+async function appendQuoteSavedEvent(context: Context, req: Request, saved: SavedQuote) {
+  const store = salesStoreFor(context, req);
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   const bytes = new Uint8Array(6);
   crypto.getRandomValues(bytes);
@@ -161,7 +158,7 @@ function cleanState(input: unknown): QuoteState | null {
 }
 
 export default async (req: Request, context: Context) => {
-  const store = storeFor(context);
+  const store = storeFor(context, req);
   const id = cleanText(context.params.id, 20).toUpperCase();
 
   if (req.method === 'GET' && id) {
@@ -232,7 +229,7 @@ export default async (req: Request, context: Context) => {
     };
 
     await store.setJSON('quotes/' + newId, saved);
-    await appendQuoteSavedEvent(context, saved);
+    await appendQuoteSavedEvent(context, req, saved);
 
     return Response.json({
       ok: true,
