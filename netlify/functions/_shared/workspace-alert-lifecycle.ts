@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 type WorkspaceSeverity = 'urgent' | 'upcoming' | 'info';
 type WorkspaceAlertDetail = {
@@ -25,9 +26,7 @@ function clean(value: unknown, max = 220) {
 }
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-workspace-alerts', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-workspace-alerts' });
+  return tenantStoreFor(context, resolveTenant(), 'workspaceAlerts');
 }
 
 function occurrenceId() {
