@@ -10,6 +10,7 @@ import {
 
 const QUERY_PAGE_SIZE = 1000;
 const QUERY_MAX_PAGES = 10;
+const CRM_RECORD_LIMIT = 1500;
 const PREVIEW_MAX_AGE_MS = 30 * 60 * 1000;
 const MATCH_OVERRIDES_KEY = 'quickbooks/customer-match-overrides';
 const PREVIEW_LAST_KEY = 'quickbooks/sync-preview-last';
@@ -871,7 +872,7 @@ function outboundEstimatePlan(record: any, estimate: any, serviceItemId: string)
 export async function buildQuickBooksCrmSyncPreview(context: Context, actor = '') {
   const generatedAt = new Date().toISOString();
   const store = salesStore(context);
-  const records = (((await store.get('records/index', { type: 'json' })) || []) as any[]).filter(Boolean).slice(0, 1500);
+  const records = (((await store.get('records/index', { type: 'json' })) || []) as any[]).filter(Boolean).slice(0, CRM_RECORD_LIMIT);
   const [customers, estimates, invoices, payments, overrides, settings] = await Promise.all([
     qboRows(context, 'Customer'),
     qboRows(context, 'Estimate'),
@@ -937,6 +938,24 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     };
   });
 
+  let remainingImportCapacity = Math.max(0, CRM_RECORD_LIMIT - records.length);
+  for (const plan of customerPlans) {
+    if (plan.decision === 'approved_new') {
+      if (remainingImportCapacity > 0) {
+        plan.executionDisposition = 'create';
+        remainingImportCapacity -= 1;
+      } else {
+        plan.executionDisposition = 'skip_capacity';
+      }
+    } else if (plan.decision === 'new') {
+      plan.executionDisposition = 'skip_unapproved';
+    } else if (plan.decision === 'ambiguous') {
+      plan.executionDisposition = 'blocked_duplicate';
+    } else {
+      plan.executionDisposition = 'match_refresh';
+    }
+  }
+
   const serviceItemId = clean(settings?.serviceItemId || configuredServiceItemId(), 100);
   const outbound = records
     .filter((record) => clean(record?.accounting?.quickbooks?.origin, 40) !== 'quickbooks' && clean(record?.source, 80) !== 'quickbooks-import')
@@ -984,11 +1003,13 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     (Array.isArray(row.actions) ? row.actions : []).map((action: any) => ({ ...action, recordId:row.recordId, name:row.name })),
   );
   const executionSummary = {
-    crmCustomersCreated: customerPlans.filter((row) => row.decision === 'approved_new' && row.action === 'import_new').length,
-    crmCustomersMatched: customerPlans.filter((row) => ['linked','auto_match','approved_match'].includes(String(row.decision || '')) && row.action === 'refresh_match').length,
-    crmCustomersSkipped: customerPlans.filter((row) => row.decision === 'new').length,
-    crmCustomersBlockedDuplicates: customerPlans.filter((row) => row.decision === 'ambiguous').length,
-    crmCustomersRefreshed: customerPlans.filter((row) => row.action === 'refresh_match').length,
+    crmCustomersCreated: customerPlans.filter((row) => row.executionDisposition === 'create').length,
+    crmCustomersMatched: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
+    crmCustomersSkipped: customerPlans.filter((row) => ['skip_unapproved','skip_capacity'].includes(String(row.executionDisposition || ''))).length,
+    crmCustomersSkippedUnapproved: customerPlans.filter((row) => row.executionDisposition === 'skip_unapproved').length,
+    crmCustomersSkippedCapacity: customerPlans.filter((row) => row.executionDisposition === 'skip_capacity').length,
+    crmCustomersBlockedDuplicates: customerPlans.filter((row) => row.executionDisposition === 'blocked_duplicate').length,
+    crmCustomersRefreshed: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
     quickBooksRecordsWritten: new Set(quickBooksWritableActions.filter((action: any) => ['create','update'].includes(String(action?.action || ''))).map((action: any) => String(action.recordId || ''))).size,
     quickBooksActionsWritten: quickBooksWritableActions.filter((action: any) => ['create','update'].includes(String(action?.action || ''))).length,
     quickBooksCustomerCreates: quickBooksWritableActions.filter((action: any) => action.type === 'customer' && action.action === 'create').length,
