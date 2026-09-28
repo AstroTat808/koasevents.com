@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendClientFollowUp, sendResponseReminder } from './_shared/lead-email.ts';
 
@@ -141,7 +141,7 @@ function recentFailure(record: any, records: any[], events: any[], type: string,
   );
 }
 
-export default async (_req: Request, context: Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!isBusinessOpen()) return;
 
@@ -247,6 +247,10 @@ export default async (_req: Request, context: Context) => {
     const latestEvents: any[] = (await store.get('analytics/events/index', { type: 'json' })) || [];
     await store.setJSON('analytics/events/index', [...appended, ...latestEvents].slice(0, 10000));
   }
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config: Config = {
