@@ -1745,6 +1745,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     previewTwoWay?.addEventListener('click',runPreviewSync);
     previewFilter?.addEventListener('change',renderSyncPreview);
     previewSearch?.addEventListener('input',renderSyncPreview);
+    bulkSelectVisible?.addEventListener('click',()=>{
+      visibleBulkEligiblePlans().forEach((plan)=>bulkSelectedNew.add(String(plan.customerId)));
+      renderSyncPreview();
+    });
+    bulkClear?.addEventListener('click',()=>{bulkSelectedNew.clear();renderSyncPreview();});
+    bulkApprove?.addEventListener('click',()=>approveBulkSelected().catch((err)=>alert(err.message||'Unable to bulk approve selected customers.')));
     exportPreviewCsv?.addEventListener('click',()=>downloadPreviewAudit('csv').catch((err)=>alert(err.message||'Unable to export CSV audit.')));
     exportPreviewPdf?.addEventListener('click',()=>downloadPreviewAudit('pdf').catch((err)=>alert(err.message||'Unable to export PDF audit.')));
     twoWaySync?.addEventListener('click',async()=>{
