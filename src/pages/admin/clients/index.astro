@@ -102,6 +102,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div data-qbo-docs class="mt-4 grid gap-3 md:grid-cols-2"></div>
           </div>
           <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Separate refundable liability</p>
+                <h2 class="display mt-2 text-3xl">Refundable Damage Deposit</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Tracked separately from event revenue. The QuickBooks deposit invoice uses a NON-taxable line and a dedicated liability item; paid deposits can only be resolved through an explicit refund/deduction action.</p>
+              </div>
+              <span data-damage-deposit-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-slate-700">Not configured</span>
+            </div>
+            <div data-damage-deposit-unavailable class="mt-5 hidden rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-950"></div>
+            <form data-damage-deposit-form class="mt-5 grid gap-4">
+              <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <label class="grid gap-2 text-sm font-semibold">Rental type<select name="rentalType" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="one-day">One-day event</option><option value="weekend">Weekend event</option></select></label>
+                <label class="grid gap-2 text-sm font-semibold">Deposit amount<input name="amount" type="text" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Due date<input name="dueDate" type="date" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Refund due<input name="refundDueDate" type="date" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 px-4 py-3" /></label>
+              </div>
+              <div data-damage-deposit-summary class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"></div>
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="grid gap-2 text-sm font-semibold">Documented deduction<input name="deductionAmount" type="number" min="0" step=".01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Deduction reason<input name="deductionReason" maxlength="1000" placeholder="Required if retaining any amount" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              </div>
+              <div class="flex flex-wrap items-center gap-2">
+                <button data-damage-save type="submit" class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Save Deposit Details</button>
+                <button data-damage-create type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Create QuickBooks Deposit Invoice</button>
+                <button data-damage-sync type="button" class="rounded-full bg-[var(--koa-clay)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Sync Deposit</button>
+              </div>
+              <div data-damage-refund-panel class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+                <label class="flex items-start gap-3 text-sm"><input data-damage-refund-approve type="checkbox" class="mt-1 h-4 w-4"><span><strong class="text-[var(--koa-forest)]">I approve posting the refund/deduction to QuickBooks.</strong><span class="mt-1 block text-xs leading-5 text-[var(--koa-ink)]/50">This action requires the deposit invoice to be fully paid. Any documented deduction releases liability to the configured deduction-income account; the remaining amount is returned from the configured refund bank account.</span></span></label>
+                <button data-damage-refund type="button" class="mt-3 rounded-full bg-[var(--koa-ink)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Post Refund / Deduction</button>
+              </div>
+            </form>
+          </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
             <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Audit trail</p>
@@ -257,6 +290,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let crmPayload=null;
     let session=null;
     let repairPreview=null;
+    let damageSettings=null;
+    let damageSettingsTenant=null;
+    let quickBooksConnected=false;
 
     const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));
     const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
@@ -448,6 +484,86 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
     }
 
+    function offsetDateString(value,days){
+      const raw=String(value||'').slice(0,10);
+      if(!raw)return '';
+      const date=new Date(raw+'T12:00:00Z');
+      if(Number.isNaN(date.getTime()))return '';
+      date.setUTCDate(date.getUTCDate()+Number(days||0));
+      return date.toISOString().slice(0,10);
+    }
+
+    function renderDamageDeposit(){
+      const form=document.querySelector('[data-damage-deposit-form]');
+      if(!form)return;
+      const unavailable=document.querySelector('[data-damage-deposit-unavailable]');
+      const badge=document.querySelector('[data-damage-deposit-status]');
+      const settings=damageSettings||{};
+      const tenantDefaults=damageSettingsTenant?.accounting?.damageDeposit||{};
+      const existing=record.accounting?.damageDeposit||null;
+      const rentalType=existing?.rentalType||tenantDefaults.defaultRentalType||'one-day';
+      const defaultAmount=rentalType==='weekend'?Number(settings.weekendAmount||tenantDefaults.weekendAmount||0):Number(settings.oneDayAmount||tenantDefaults.oneDayAmount||0);
+      const amount=Number(existing?.amount??defaultAmount);
+      const dueDate=existing?.dueDate||offsetDateString(record.customer?.eventDate,-Number(settings.dueDaysBefore??tenantDefaults.dueDaysBefore??30));
+      const refundDueDate=existing?.refundDueDate||offsetDateString(record.customer?.eventDate,Number(settings.refundWithinDays??tenantDefaults.refundWithinDays??14));
+      const status=existing?.status||'not_invoiced';
+      const invoiceBalance=Number(existing?.invoiceBalance??amount);
+      const deduction=Number(existing?.deductionAmount||0);
+      const refundAmount=Number(existing?.refundAmount??Math.max(0,amount-deduction));
+      form.elements.rentalType.value=rentalType;
+      form.elements.amount.value=money(amount);
+      form.elements.dueDate.value=dueDate;
+      form.elements.refundDueDate.value=refundDueDate;
+      form.elements.deductionAmount.value=deduction;
+      form.elements.deductionReason.value=existing?.deductionReason||'';
+
+      const configured=Boolean(settings.enabled!==false&&settings.liabilityAccountId&&settings.itemId);
+      const badgeMap={
+        not_invoiced:['Not invoiced','bg-slate-100 text-slate-700'],
+        invoiced:['Invoice open','bg-amber-100 text-amber-900'],
+        paid:['Paid · refund pending','bg-sky-100 text-sky-800'],
+        paid_with_pending_resolution:['Paid · review deductions','bg-sky-100 text-sky-800'],
+        refunded:['Refunded','bg-emerald-100 text-emerald-800'],
+        refunded_with_deduction:['Refunded with deduction','bg-emerald-100 text-emerald-800'],
+      };
+      const badgeData=badgeMap[status]||[String(status).replace(/_/g,' '),'bg-slate-100 text-slate-700'];
+      if(badge){
+        badge.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] '+badgeData[1];
+        badge.textContent=badgeData[0];
+      }
+
+      if(unavailable){
+        unavailable.classList.toggle('hidden',configured&&quickBooksConnected);
+        unavailable.textContent=!quickBooksConnected
+          ? 'QuickBooks is not connected. Connect it from QuickBooks Setup before creating or resolving a refundable deposit.'
+          : !configured
+            ? 'Finish Refundable Damage Deposit setup in QuickBooks Admin: choose the liability account, refund bank account, and dedicated QuickBooks item.'
+            : '';
+      }
+
+      document.querySelector('[data-damage-deposit-summary]').innerHTML=
+        card('QuickBooks document',existing?.invoiceDocNumber?'#'+existing.invoiceDocNumber:(existing?.invoiceId||'Not created'),existing?.invoiceId?'Separate liability invoice':'Does not count toward event revenue')+
+        card('Invoice balance',money(invoiceBalance),existing?.paidAt?'Paid '+when(existing.paidAt):'QuickBooks source of truth')+
+        card('Planned refund',money(refundAmount),deduction>0?'Deduction '+money(deduction):'No deduction recorded')+
+        card('Refund transaction',existing?.refundTransactionId||'Not posted',existing?.refundedAt?when(existing.refundedAt):'');
+
+      const locked=Boolean(existing?.invoiceId);
+      form.elements.rentalType.disabled=locked;
+      const saveButton=document.querySelector('[data-damage-save]');
+      const createButton=document.querySelector('[data-damage-create]');
+      const syncButton=document.querySelector('[data-damage-sync]');
+      const refundButton=document.querySelector('[data-damage-refund]');
+      if(saveButton)saveButton.disabled=!quickBooksConnected;
+      if(createButton){
+        createButton.disabled=!configured||!quickBooksConnected||Boolean(existing?.invoiceId);
+        createButton.textContent=existing?.invoiceId?'Deposit Invoice Created':'Create QuickBooks Deposit Invoice';
+      }
+      if(syncButton)syncButton.disabled=!quickBooksConnected||!existing?.invoiceId;
+      if(refundButton)refundButton.disabled=!configured||!quickBooksConnected||!existing?.invoiceId||invoiceBalance>0.005||Boolean(existing?.refundTransactionId);
+      const refundPanel=document.querySelector('[data-damage-refund-panel]');
+      if(refundPanel)refundPanel.classList.toggle('opacity-50',Boolean(refundButton?.disabled));
+    }
+
     function renderAccounting(){
       const proposal=record.proposal||{};
       const qbo=record.accounting?.quickbooks||{};
@@ -515,6 +631,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         }).join('')+
         card('Last synced',when(qbo.lastSyncedAt||qbo.estimateLastSyncedAt));
       renderRepairHistory(qbo);
+      renderDamageDeposit();
     }
 
     function lineEditor(line,index){
@@ -763,9 +880,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         return;
       }
 
-      const [salesResponse,businessResponse]=await Promise.all([
+      const [salesResponse,businessResponse,damageResponse]=await Promise.all([
         fetch('/api/admin/quotes?q='+encodeURIComponent(clientRecordId),{cache:'no-store'}),
-        fetch('/api/admin/crm',{cache:'no-store'})
+        fetch('/api/admin/crm',{cache:'no-store'}),
+        fetch('/api/admin/quickbooks?view=damage-deposit-settings',{cache:'no-store'})
       ]);
 
       if(salesResponse.status===403){
@@ -780,6 +898,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       const salesData=await salesResponse.json().catch(()=>({}));
       crmPayload=businessResponse.ok?await businessResponse.json().catch(()=>null):null;
+      const damageData=damageResponse.ok?await damageResponse.json().catch(()=>null):null;
+      damageSettings=damageData?.damageDepositSettings||null;
+      damageSettingsTenant=damageData?.tenant||null;
+      quickBooksConnected=Boolean(damageData?.connection?.connected);
       record=(salesData.records||[]).find((entry)=>entry.id===clientRecordId)||null;
 
       if(!record){
@@ -969,6 +1091,94 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         await load('communications');
       }catch(error){
         message.textContent=error.message||'Unable to send email.';
+      }
+    });
+
+    document.querySelector('[data-damage-deposit-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      if(!record)return;
+      const form=event.currentTarget;
+      message.textContent='Saving refundable damage-deposit details…';
+      try{
+        await qboPost({
+          action:'update-damage-deposit',
+          recordId:record.id,
+          rentalType:form.elements.rentalType.value,
+          deductionAmount:Number(form.elements.deductionAmount.value||0),
+          deductionReason:form.elements.deductionReason.value,
+        });
+        message.textContent='Refundable damage-deposit details saved.';
+        await load('accounting');
+      }catch(error){
+        message.textContent=error.message||'Unable to save refundable damage-deposit details.';
+      }
+    });
+
+    document.querySelector('[data-damage-deposit-form]')?.elements?.rentalType?.addEventListener('change',(event)=>{
+      if(record?.accounting?.damageDeposit?.invoiceId)return;
+      const type=event.target.value;
+      const form=document.querySelector('[data-damage-deposit-form]');
+      if(form)form.elements.amount.value=money(type==='weekend'?damageSettings?.weekendAmount:damageSettings?.oneDayAmount);
+    });
+
+    document.querySelector('[data-damage-create]')?.addEventListener('click',async()=>{
+      if(!record)return;
+      message.textContent='Creating the separate refundable damage-deposit invoice in QuickBooks…';
+      try{
+        const form=document.querySelector('[data-damage-deposit-form]');
+        await qboPost({
+          action:'update-damage-deposit',
+          recordId:record.id,
+          rentalType:form?.elements?.rentalType?.value||'one-day',
+          deductionAmount:Number(form?.elements?.deductionAmount?.value||0),
+          deductionReason:form?.elements?.deductionReason?.value||'',
+        });
+        await qboPost({action:'create-damage-deposit-invoice',recordId:record.id});
+        message.textContent='Refundable damage-deposit invoice created in QuickBooks as a separate liability.';
+        await load('accounting');
+      }catch(error){
+        message.textContent=error.message||'Unable to create the refundable damage-deposit invoice.';
+      }
+    });
+
+    document.querySelector('[data-damage-sync]')?.addEventListener('click',async()=>{
+      if(!record)return;
+      message.textContent='Refreshing refundable damage-deposit status from QuickBooks…';
+      try{
+        await qboPost({action:'sync-damage-deposit',recordId:record.id});
+        message.textContent='Refundable damage-deposit status refreshed.';
+        await load('accounting');
+      }catch(error){
+        message.textContent=error.message||'Unable to sync the refundable damage deposit.';
+      }
+    });
+
+    document.querySelector('[data-damage-refund]')?.addEventListener('click',async()=>{
+      if(!record)return;
+      const approved=Boolean(document.querySelector('[data-damage-refund-approve]')?.checked);
+      if(!approved){
+        message.textContent='Approve the QuickBooks refund/deduction before posting it.';
+        return;
+      }
+      const form=document.querySelector('[data-damage-deposit-form]');
+      const deductionAmount=Number(form?.elements?.deductionAmount?.value||0);
+      const deductionReason=String(form?.elements?.deductionReason?.value||'').trim();
+      if(deductionAmount>0&&!deductionReason){
+        message.textContent='Enter a deduction reason before retaining any part of the refundable deposit.';
+        return;
+      }
+      message.textContent='Posting approved refundable damage-deposit resolution to QuickBooks…';
+      try{
+        await qboPost({
+          action:'refund-damage-deposit',
+          recordId:record.id,
+          deductionAmount,
+          deductionReason,
+        });
+        message.textContent='Refundable damage deposit resolved in QuickBooks.';
+        await load('accounting');
+      }catch(error){
+        message.textContent=error.message||'Unable to resolve the refundable damage deposit.';
       }
     });
 
