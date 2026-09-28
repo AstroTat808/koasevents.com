@@ -156,11 +156,7 @@ function summarizePeriod(rows:any[],days:number,now:number){
     },
   };
 }
-function summaryStore(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-email-analytics',consistency:'strong'})
-    : getDeployStore({name:'koa-email-analytics'});
-}
+function summaryStore(context:Context){return tenantStore(context,'emailAnalytics',resolveTenant());}
 async function emailAnalyticsSummary(context:Context,force=false){
   const store=summaryStore(context);
   const cached:any=await store.get('summary-v2',{type:'json'});
@@ -343,7 +339,7 @@ export default async (req:Request,context:Context)=>{
     hasMore:Boolean(result.body?.has_more),
     nextAfter:rows.length?rows[rows.length-1].emailId:'',
     previousBefore:rows.length?rows[0].emailId:'',
-    retentionNote:'History is limited to email records retained by the connected Resend account. Koa’s signed webhook archive preserves lifecycle diagnostics going forward.',
+    retentionNote:'History is limited to email records retained by the connected Resend account. The signed webhook archive preserves lifecycle diagnostics going forward.',
   },{headers:{'Cache-Control':'private, no-store'}});
 };
 
