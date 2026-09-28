@@ -335,7 +335,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function reconcileAudit(){
       if(!canManage)return;
-      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will link only unique known QuickBooks matches and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. GET/taxability differences remain review-only because no item-level exemption policy is documented. Ambiguous mappings and intentional pricing overrides will not be changed.');
+      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will restore website-defined catalog classifications, link only unique known QuickBooks matches, and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. GET/taxability differences remain review-only because no item-level exemption policy is documented. Ambiguous mappings and intentional pricing overrides will not be changed.');
       if(!ok)return;
       if(auditMessage)auditMessage.textContent='Applying safe catalog reconciliation…';
       try{
