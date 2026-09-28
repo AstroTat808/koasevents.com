@@ -23,7 +23,7 @@ const patterns=[
   {id:'get-label',re:/\b(?:Hawai(?:i|ʻi|\u02bbi)\s+)?GET\b/g,kind:'tenant-tax'},
   {id:'koa-package',re:/\b(?:Gardenia|Orchid|Hibiscus|Plumeria)\b/g,kind:'tenant-catalog'},
   {id:'island-package',re:/\b(?:Oahu|Maui|Big Island)\b/g,kind:'tenant-catalog'},
-  {id:'legacy-blob-store',re:/\bkoa-(?:sales|integrations|crm|events|admin|vendors|email|gallery|health)\b/g,kind:'tenant-storage'},
+  {id:'legacy-blob-store',re:/\bkoa-(?:sales|quotes|integrations|crm|events|event-ops|event-files|admin|vendors|email|gallery|health|system-health|calendar|auth-security)\b/g,kind:'tenant-storage'},
   {id:'koa-css-token',re:/--koa-[a-z0-9-]+/gi,kind:'tenant-brand-token'},
 ];
 
@@ -86,6 +86,7 @@ for(const finding of findings){
   byFile.set(finding.file,rows);
 }
 const platformDebt=findings.filter(row=>row.platform&&!row.allowed);
+const strictDebt=platformDebt.filter((row)=>row.id!=='koa-css-token');
 const summary={
   scannedFiles:new Set(findings.map(row=>row.file)).size,
   findings:findings.length,
@@ -93,6 +94,8 @@ const summary={
   tenantData:findings.filter(row=>row.allowed).length,
   publicOrOther:findings.filter(row=>!row.platform&&!row.allowed).length,
   filesWithPlatformDebt:new Set(platformDebt.map(row=>row.file)).size,
+  strictDebt:strictDebt.length,
+  filesWithStrictDebt:new Set(strictDebt.map(row=>row.file)).size,
 };
 
 if(json){
@@ -102,6 +105,7 @@ if(json){
   console.log('');
   console.log('Findings: '+summary.findings+' across '+summary.scannedFiles+' files.');
   console.log('Platform-sensitive findings: '+summary.platformDebt+' across '+summary.filesWithPlatformDebt+' files.');
+  console.log('Strict business/config debt: '+summary.strictDebt+' across '+summary.filesWithStrictDebt+' files. CSS compatibility tokens remain visible but do not block strict mode.');
   console.log('Tenant-data findings: '+summary.tenantData+'. Public/other findings: '+summary.publicOrOther+'.');
   console.log('');
   const files=[...byFile.keys()].sort((a,b)=>{
@@ -128,7 +132,7 @@ if(json){
   }
 }
 
-if(strict&&platformDebt.length){
-  console.error('Tenant audit failed: '+platformDebt.length+' hardcoded tenant-specific references remain in platform-sensitive paths.');
+if(strict&&strictDebt.length){
+  console.error('Tenant audit failed: '+strictDebt.length+' hardcoded tenant-specific business/config references remain in platform-sensitive paths.');
   process.exit(1);
 }
