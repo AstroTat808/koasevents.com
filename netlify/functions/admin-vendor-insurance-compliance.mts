@@ -3,7 +3,7 @@ import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sync.ts';
 
-function store(c:Context,tenant:any,domain:'vendors'|'sales'|'eventOps'){return tenantStoreFor(c,tenant,domain);}):getDeployStore({name});}
+function store(c:Context,tenant:any,domain:'vendors'|'sales'|'eventOps'){return tenantStoreFor(c,tenant,domain);}
 function daysUntil(date:unknown){const raw=String(date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const target=Date.parse(raw+'T00:00:00Z');const today=Date.parse(todayHst()+'T00:00:00Z');return Math.ceil((target-today)/86400000);}
 export default async(_req:Request,context:Context)=>{
   const auth=await requireCapability('insurance.view', _req);if(auth.response)return auth.response;
