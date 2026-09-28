@@ -1,13 +1,13 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Client Workspace | Koa’s Events" description="Unified Koa’s Events client workspace." canonical="https://www.koasevents.com/admin/clients/">
+<BaseLayout noindex title="Client Workspace | Koa’s Events" description="Unified Koa’s Events client workspace." canonical="https://koasevents.com/admin/clients/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-8">
     <div class="container-shell max-w-7xl">
       <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8">
         <strong class="text-[var(--koa-forest)]">CRM access required.</strong>
+        <p class="mt-2 text-sm text-[var(--koa-ink)]/55">Your current staff role does not include access to this client record.</p>
       </div>
-
 
       <div data-app class="hidden">
         <header class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
@@ -22,12 +22,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div class="flex flex-wrap gap-2">
               <a href="/admin/quotes/" class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Sales CRM</a>
+              <a href="/admin/crm/" class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Business CRM</a>
               <a href="/admin/quickbooks/#accounting-audit" class="rounded-full border border-[var(--koa-line)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Accounting Audit</a>
               <button data-sync type="button" class="rounded-full bg-[var(--koa-clay)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Sync & Recheck</button>
             </div>
           </div>
+
           <nav data-tabs class="mt-6 flex gap-2 overflow-x-auto border-t border-[var(--koa-line)] pt-5">
-            <button type="button" data-tab="overview" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">overview</button><button type="button" data-tab="accounting" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">accounting</button><button type="button" data-tab="proposal" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">proposal</button><button type="button" data-tab="payments" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">payments</button><button type="button" data-tab="documents" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">documents</button><button type="button" data-tab="communications" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">communications</button><button type="button" data-tab="activity" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">activity</button><button type="button" data-tab="data" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">data</button>
+            <button type="button" data-tab="overview" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Overview</button>
+            <button type="button" data-tab="accounting" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Accounting</button>
+            <button type="button" data-tab="proposal" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Proposal</button>
+            <button type="button" data-tab="payments" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Payments</button>
+            <button type="button" data-tab="operations" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Operations</button>
+            <button type="button" data-tab="documents" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Documents</button>
+            <button type="button" data-tab="communications" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Communications</button>
+            <button type="button" data-tab="activity" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Activity</button>
+            <button type="button" data-tab="data" class="whitespace-nowrap rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Data Audit</button>
           </nav>
         </header>
 
@@ -35,7 +45,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
         <section data-panel="overview" class="mt-5 grid gap-5 lg:grid-cols-[1.15fr_.85fr]">
           <form data-client-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
-            <p class="eyebrow text-[var(--koa-clay)]">Authoritative CRM record</p>
+            <p class="eyebrow text-[var(--koa-clay)]">Authoritative Sales CRM record</p>
             <h2 class="display mt-2 text-3xl">Client + event</h2>
             <div class="mt-5 grid gap-4 sm:grid-cols-2">
               <label class="grid gap-2 text-sm font-semibold">Client name<input name="name" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
@@ -47,7 +57,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div class="mt-5 flex flex-wrap items-center gap-3">
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save client</button>
-              <span class="text-xs text-[var(--koa-ink)]/45">Edits write back to the existing Sales CRM record; no duplicate client record is created.</span>
+              <span class="text-xs text-[var(--koa-ink)]/45">Edits update the existing Sales CRM record; no duplicate client record is created.</span>
             </div>
           </form>
 
@@ -87,41 +97,125 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div><p class="eyebrow text-[var(--koa-clay)]">Proposal source of truth</p><h2 class="display mt-2 text-3xl">Pricing + line items</h2></div>
               <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save proposal</button>
             </div>
-            <div data-proposal-lines class="mt-5 grid gap-3"></div>
-            <button data-add-line type="button" class="mt-3 rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add line item</button>
-            <div class="mt-6 grid gap-4 sm:grid-cols-3">
-              <label class="grid gap-2 text-sm font-semibold">Discount<input name="discountAmount" type="number" step=".01" min="0" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Deposit %<input name="depositPercent" type="number" step=".1" min="0" max="100" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-              <label class="grid gap-2 text-sm font-semibold">Proposal status<select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option>draft</option><option>sent</option><option>viewed</option><option>accepted</option><option>declined</option><option>expired</option><option>booked</option></select></label>
-              <label class="grid gap-2 text-sm font-semibold sm:col-span-3">Client-facing notes<textarea name="notesToClient" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+            <div data-proposal-empty class="hidden mt-5 rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/58">This client does not have a proposal record yet. Promote the opportunity from Sales CRM before editing proposal pricing.</div>
+            <div data-proposal-editor>
+              <div data-proposal-lines class="mt-5 grid gap-3"></div>
+              <button data-add-line type="button" class="mt-3 rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Add line item</button>
+              <div class="mt-6 grid gap-4 sm:grid-cols-3">
+                <label class="grid gap-2 text-sm font-semibold">Discount<input name="discountAmount" type="number" step=".01" min="0" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Deposit %<input name="depositPercent" type="number" step=".1" min="0" max="100" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+                <label class="grid gap-2 text-sm font-semibold">Proposal status<select name="status" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option>draft</option><option>sent</option><option>viewed</option><option>accepted</option><option>declined</option><option>expired</option><option>booked</option></select></label>
+                <label class="grid gap-2 text-sm font-semibold sm:col-span-3">Client-facing notes<textarea name="notesToClient" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+              </div>
+              <div data-proposal-totals class="mt-5 rounded-xl bg-[var(--koa-sand)] p-4 text-sm"></div>
             </div>
-            <div data-proposal-totals class="mt-5 rounded-xl bg-[var(--koa-sand)] p-4 text-sm"></div>
           </form>
         </section>
 
         <section data-panel="payments" class="mt-5 hidden grid gap-5">
-          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7"><p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p><div data-payments class="mt-4 grid gap-3"></div></div>
-        </section>
-
-        <section data-panel="documents" class="mt-5 hidden grid gap-5">
           <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
-            <p class="eyebrow text-[var(--koa-clay)]">Contracts + documents</p>
-            <div data-documents class="mt-4 grid gap-3"></div>
+            <p class="eyebrow text-[var(--koa-clay)]">Payment schedule</p>
+            <div data-payments class="mt-4 grid gap-3"></div>
           </div>
         </section>
 
-        <section data-panel="communications" class="mt-5 hidden grid gap-5">
-          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7"><p class="eyebrow text-[var(--koa-clay)]">Communication status</p><div data-comms class="mt-4 grid gap-3"></div></div>
+        <section data-panel="operations" class="mt-5 hidden grid gap-5 xl:grid-cols-2">
+          <form data-project-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7 xl:col-span-2">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Business CRM metadata</p><h2 class="display mt-2 text-3xl">Project details, tags + custom fields</h2></div>
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save project details</button>
+            </div>
+            <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label class="grid gap-2 text-sm font-semibold">Project status<input name="projectStatus" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Owner<input name="owner" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Company<input name="company" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Partner name<input name="partnerName" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Address<input name="address" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Business line<select name="businessLine" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="events">Events</option><option value="mobile-bar">Mobile Bar</option><option value="wild-ones">Wild Ones</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Project type<input name="projectType" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Source detail<input name="sourceDetail" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Tags<input name="tags" placeholder="VIP, wedding, referral" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            </div>
+            <div class="mt-6">
+              <div class="flex items-center justify-between gap-3">
+                <strong class="text-sm text-[var(--koa-forest)]">Custom fields</strong>
+                <button data-add-custom type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Add custom field</button>
+              </div>
+              <div data-custom-fields class="mt-3 grid gap-2"></div>
+            </div>
+          </form>
+
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Internal notes</p>
+            <form data-note-form class="mt-4 grid gap-3">
+              <textarea name="body" rows="4" placeholder="Add an internal note…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea>
+              <button class="justify-self-start rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Add note</button>
+            </form>
+            <div data-notes class="mt-5 grid gap-3"></div>
+          </div>
+
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Tasks</p>
+            <form data-task-form class="mt-4 grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Task<input name="title" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Due date<input name="dueDate" type="date" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Priority<select name="priority" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="normal">Normal</option><option value="high">High</option><option value="low">Low</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Assignee<input name="assignee" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <button class="justify-self-start rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Add task</button>
+            </form>
+            <div data-tasks class="mt-5 grid gap-3"></div>
+          </div>
+
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7 xl:col-span-2">
+            <p class="eyebrow text-[var(--koa-clay)]">Appointments</p>
+            <form data-appointment-form class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Title<input name="title" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Starts<input name="startsAt" type="datetime-local" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Duration (minutes)<input name="durationMinutes" type="number" min="15" max="480" value="60" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Location<input name="location" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold md:col-span-2">Notes<input name="notes" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <button class="justify-self-start rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Schedule appointment</button>
+            </form>
+            <div data-appointments class="mt-5 grid gap-3"></div>
+          </div>
+        </section>
+
+        <section data-panel="documents" class="mt-5 hidden grid gap-5 lg:grid-cols-2">
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Contracts + accounting documents</p>
+            <div data-documents class="mt-4 grid gap-3"></div>
+          </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">SignWell</p>
+            <div data-signwell class="mt-4 grid gap-3"></div>
+          </div>
+        </section>
+
+        <section data-panel="communications" class="mt-5 hidden grid gap-5 lg:grid-cols-[.85fr_1.15fr]">
+          <form data-email-form class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Send client email</p>
+            <p data-email-to class="mt-2 text-sm text-[var(--koa-ink)]/55"></p>
+            <label class="mt-4 grid gap-2 text-sm font-semibold">Subject<input name="subject" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+            <label class="mt-4 grid gap-2 text-sm font-semibold">Message<textarea name="body" rows="9" required class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
+            <button class="mt-4 rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Send email</button>
+          </form>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Communication history</p>
+            <div data-comms class="mt-4 grid gap-3"></div>
+          </div>
         </section>
 
         <section data-panel="activity" class="mt-5 hidden grid gap-5">
-          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7"><p class="eyebrow text-[var(--koa-clay)]">Client activity</p><div data-activity class="mt-4 grid gap-3"></div></div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <p class="eyebrow text-[var(--koa-clay)]">Client activity</p>
+            <div data-activity class="mt-4 grid gap-3"></div>
+          </div>
         </section>
 
         <section data-panel="data" class="mt-5 hidden grid gap-5">
           <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
             <p class="eyebrow text-[var(--koa-clay)]">Existing data audit</p>
-            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">This is a read-only view of the existing record families already stored for this client. It is intentionally not a second database.</p>
+            <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/55">This is a read-only map of the existing record families used by this workspace. It is intentionally not a second database.</p>
             <div data-data-map class="mt-5 grid gap-3 md:grid-cols-2"></div>
           </div>
         </section>
@@ -133,37 +227,67 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     import { getAdminSession } from '../../../lib/admin-session';
 
     const app=document.querySelector('[data-app]');
-    const clientRecordId=new URL(location.href).searchParams.get('id')||'';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const message=document.querySelector('[data-message]');
+    const clientRecordId=new URL(location.href).searchParams.get('id')||'';
     let record=null;
     let crmPayload=null;
+    let session=null;
 
-    const money=(v)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(v||0));
-    const esc=(v)=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
-    const when=(v)=>v?new Date(v).toLocaleString():'—';
-    const hasAccess=(u)=>Boolean(u&&!u.accessBlocked&&(u.isAdmin||u.capabilities?.includes('sales.view')||u.permissions?.includes('sales.view')));
+    const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));
+    const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
+    const when=(value)=>value?new Date(value).toLocaleString():'—';
+    const hasAccess=(user)=>Boolean(user&&!user.accessBlocked&&(user.isAdmin||user.capabilities?.includes('sales.view')||user.capabilities?.includes('crm.view')||user.permissions?.includes('sales.view')||user.permissions?.includes('crm.view')));
 
-    async function crmPost(body){
-      const res=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error||'CRM request failed.'); return data;
+    async function salesPost(body){
+      const response=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Sales CRM request failed.');
+      return data;
     }
+
+    async function businessPost(body){
+      const response=await fetch('/api/admin/crm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Business CRM request failed.');
+      return data;
+    }
+
     async function qboPost(body){
-      const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error||'QuickBooks request failed.'); return data;
+      const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'QuickBooks request failed.');
+      return data;
     }
 
     function card(label,value,detail=''){
       return '<div class="rounded-xl bg-[var(--koa-sand)]/55 p-4"><p class="text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="mt-1 block break-words text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong>'+(detail?'<p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">'+esc(detail)+'</p>':'')+'</div>';
     }
 
+    function activeTab(){
+      return new URL(location.href).searchParams.get('tab')||'overview';
+    }
+
     function activateTab(tab){
-      document.querySelectorAll('[data-panel]').forEach(p=>p.classList.toggle('hidden',p.dataset.panel!==tab));
-      document.querySelectorAll('[data-tab]').forEach(b=>{
-        const active=b.dataset.tab===tab;
-        b.classList.toggle('bg-[var(--koa-forest)]',active); b.classList.toggle('text-white',active);
+      const allowed=new Set(['overview','accounting','proposal','payments','operations','documents','communications','activity','data']);
+      const next=allowed.has(tab)?tab:'overview';
+      document.querySelectorAll('[data-panel]').forEach((panel)=>panel.classList.toggle('hidden',panel.dataset.panel!==next));
+      document.querySelectorAll('[data-tab]').forEach((button)=>{
+        const active=button.dataset.tab===next;
+        button.classList.toggle('bg-[var(--koa-forest)]',active);
+        button.classList.toggle('text-white',active);
       });
-      const url=new URL(location.href); url.searchParams.set('tab',tab); history.replaceState({},'',url);
+      const url=new URL(location.href);
+      url.searchParams.set('tab',next);
+      history.replaceState({},'',url);
+    }
+
+    function businessProject(){
+      return (crmPayload?.projects||[]).find((row)=>row.id===record?.id||row.recordId===record?.id)||null;
+    }
+
+    function linkedRows(key){
+      return (crmPayload?.[key]||[]).filter((row)=>row.recordId===record?.id);
     }
 
     function fillHeader(){
@@ -173,138 +297,537 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function renderOverview(){
-      const f=document.querySelector('[data-client-form]');
-      f.elements.name.value=record.customer?.name||'';
-      f.elements.email.value=record.customer?.email||'';
-      f.elements.phone.value=record.customer?.phone||'';
-      f.elements.eventDate.value=String(record.customer?.eventDate||'').slice(0,10);
-      f.elements.packageId.value=record.packageId||record.quote?.state?.startingPoint||'';
-      f.elements.notes.value=record.customer?.notes||'';
-      const p=record.proposal||{}; const b=record.bookingSummary||{};
+      const form=document.querySelector('[data-client-form]');
+      form.elements.name.value=record.customer?.name||'';
+      form.elements.email.value=record.customer?.email||'';
+      form.elements.phone.value=record.customer?.phone||'';
+      form.elements.eventDate.value=String(record.customer?.eventDate||'').slice(0,10);
+      form.elements.packageId.value=record.packageId||record.quote?.state?.startingPoint||'';
+      form.elements.notes.value=record.customer?.notes||'';
+
+      const proposal=record.proposal||{};
+      const booking=record.bookingSummary||{};
       document.querySelector('[data-summary]').innerHTML=
-        card('Contract value',money(p.total||0),p.status||'No proposal')+
-        card('Paid',money(b.paymentsReceived||0),b.paymentStatus||'')+
-        card('Remaining',money(b.remainingBalance??p.total??0),'CRM booking balance')+
-        card('Guest count',record.quote?.state?.guestCount||record.inquiry?.guestCount||'—','')+
-        card('Contract',record.booking?.contract?.status||'Not generated','')+
-        card('Owner',record.assignment?.name||'Unassigned',record.assignment?.email||'');
+        card('Contract value',money(proposal.total||0),proposal.status||'No proposal')+
+        card('Paid',money(booking.paymentsReceived||0),booking.paymentStatus||'')+
+        card('Remaining',money(booking.remainingBalance??proposal.total??0),'CRM booking balance')+
+        card('Guest count',record.quote?.state?.guestCount||record.inquiry?.guestCount||'—')+
+        card('Contract',record.booking?.contract?.status||'Not generated')+
+        card('Owner',record.assignment?.name||businessProject()?.meta?.owner||'Unassigned',record.assignment?.email||'');
+
       document.querySelector('[data-source]').innerHTML=[
-        ['Source',record.source||'—'],['Business line',record.inquiry?.service||record.inquiry?.eventType||'—'],['Quote ID',record.quoteId||'—'],['Created',when(record.createdAt)],['Updated',when(record.updatedAt)]
-      ].map(([a,b])=>'<div class="flex justify-between gap-4 border-b border-[var(--koa-line)] py-2"><span class="text-[var(--koa-ink)]/45">'+esc(a)+'</span><strong class="break-all text-right">'+esc(b)+'</strong></div>').join('');
+        ['Source',record.source||'—'],
+        ['Business line',businessProject()?.businessLine||record.inquiry?.service||record.inquiry?.eventType||'—'],
+        ['Quote ID',record.quoteId||'—'],
+        ['Created',when(record.createdAt)],
+        ['Updated',when(record.updatedAt)]
+      ].map(([label,value])=>'<div class="flex justify-between gap-4 border-b border-[var(--koa-line)] py-2"><span class="text-[var(--koa-ink)]/45">'+esc(label)+'</span><strong class="break-all text-right">'+esc(value)+'</strong></div>').join('');
     }
 
-    function normalizeDesc(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+    function normalizeDesc(value){
+      return String(value||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    }
+
     function renderAccounting(){
-      const p=record.proposal||{}; const qb=record.accounting?.quickbooks||{}; const diff=Number(qb.estimateTotal||0)-Number(p.total||0);
-      const reconciled=Math.abs(diff)<0.01;
-      document.querySelector('[data-accounting-hero]').innerHTML='<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p class="eyebrow '+(reconciled?'text-[var(--koa-forest)]':'text-red-700')+'">'+(reconciled?'Reconciled':'Accounting reconciliation warning')+'</p><h2 class="display mt-2 text-4xl">'+money(p.total||0)+' CRM · '+money(qb.estimateTotal||0)+' QuickBooks</h2><p class="mt-2 text-sm '+(reconciled?'text-[var(--koa-ink)]/55':'text-red-700')+'">Difference '+money(diff)+' · Estimate '+esc(qb.estimateDocNumber?'#'+qb.estimateDocNumber:'not linked')+'</p></div><div class="grid grid-cols-2 gap-2 text-sm">'+card('CRM subtotal',money(p.subtotal||0))+card('CRM tax',money(p.taxAmount||0))+card('Discount',money(p.discountAmount||0))+card('QBO total',money(qb.estimateTotal||0))+'</div></div>';
+      const proposal=record.proposal||{};
+      const qbo=record.accounting?.quickbooks||{};
+      const difference=Number(qbo.estimateTotal||0)-Number(proposal.total||0);
+      const reconciled=Math.abs(difference)<0.01;
 
-      const crm=(p.lineItems||[]).map((l,i)=>({id:l.id||'crm-'+i,description:l.description||'CRM line '+(i+1),quantity:Number(l.quantity||1),unitPrice:Number(l.unitPrice||0),amount:Number(l.amount||0)}));
-      const qbo=(qb.estimateLines||[]).map((l,i)=>({...l,id:l.id||'qbo-'+i}));
+      document.querySelector('[data-accounting-hero]').innerHTML='<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p class="eyebrow '+(reconciled?'text-[var(--koa-forest)]':'text-red-700')+'">'+(reconciled?'Reconciled':'Accounting reconciliation warning')+'</p><h2 class="display mt-2 text-4xl">'+money(proposal.total||0)+' CRM · '+money(qbo.estimateTotal||0)+' QuickBooks</h2><p class="mt-2 text-sm '+(reconciled?'text-[var(--koa-ink)]/55':'text-red-700')+'">Difference '+money(difference)+' · Estimate '+esc(qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'not linked')+'</p></div><div class="grid grid-cols-2 gap-2 text-sm">'+card('CRM subtotal',money(proposal.subtotal||0))+card('CRM tax',money(proposal.taxAmount||0))+card('Discount',money(proposal.discountAmount||0))+card('QBO total',money(qbo.estimateTotal||0))+'</div></div>';
+
+      const crmLines=(proposal.lineItems||[]).map((line,index)=>({
+        id:line.id||'crm-'+index,
+        description:line.description||'CRM line '+(index+1),
+        quantity:Number(line.quantity||1),
+        unitPrice:Number(line.unitPrice||0),
+        amount:Number(line.amount||0)
+      }));
+      const qboLines=(qbo.estimateLines||[]).map((line,index)=>({...line,id:line.id||'qbo-'+index}));
       const used=new Set();
-      const rows=crm.map((line,i)=>{
-        let qi=qbo.findIndex((q,j)=>!used.has(j)&&normalizeDesc(q.description)===normalizeDesc(line.description));
-        if(qi<0 && i<qbo.length && !used.has(i))qi=i;
-        const q=qi>=0?qbo[qi]:null; if(qi>=0)used.add(qi);
-        return {crm:line,qbo:q,delta:Number(q?.amount||0)-Number(line.amount||0)};
+      const rows=crmLines.map((line,index)=>{
+        let match=qboLines.findIndex((candidate,qboIndex)=>!used.has(qboIndex)&&normalizeDesc(candidate.description)===normalizeDesc(line.description));
+        if(match<0&&index<qboLines.length&&!used.has(index))match=index;
+        const qboLine=match>=0?qboLines[match]:null;
+        if(match>=0)used.add(match);
+        return {crm:line,qbo:qboLine,delta:Number(qboLine?.amount||0)-Number(line.amount||0)};
       });
-      qbo.forEach((q,i)=>{if(!used.has(i))rows.push({crm:null,qbo:q,delta:Number(q.amount||0)});});
-      const html='<table class="min-w-[860px] w-full text-sm"><thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] uppercase tracking-[.08em] text-[var(--koa-ink)]/45"><th class="pb-3">Line</th><th class="pb-3">CRM qty × unit</th><th class="pb-3 text-right">CRM</th><th class="pb-3">QuickBooks qty × unit</th><th class="pb-3 text-right">QBO</th><th class="pb-3 text-right">Difference</th></tr></thead><tbody>'+rows.map(r=>'<tr class="border-b border-[var(--koa-line)]/70"><td class="py-3 pr-4 font-semibold">'+esc(r.crm?.description||r.qbo?.description||'Unmatched line')+'</td><td class="py-3 pr-4">'+(r.crm?esc(r.crm.quantity)+' × '+money(r.crm.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(r.crm?money(r.crm.amount):'—')+'</td><td class="py-3 pr-4">'+(r.qbo?esc(r.qbo.quantity||1)+' × '+money(r.qbo.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(r.qbo?money(r.qbo.amount):'—')+'</td><td class="py-3 text-right font-bold '+(Math.abs(r.delta)>=.01?'text-red-700':'text-[var(--koa-forest)]')+'">'+money(r.delta)+'</td></tr>').join('')+'</tbody></table>';
-      document.querySelector('[data-line-diff]').innerHTML=qb.estimateLines?.length?html:'<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Run Sync & Recheck to capture the current QuickBooks estimate line items, then this table will identify the exact differing lines.</div>';
+      qboLines.forEach((line,index)=>{
+        if(!used.has(index))rows.push({crm:null,qbo:line,delta:Number(line.amount||0)});
+      });
 
-      const invoices=Array.isArray(qb.invoices)?qb.invoices:[];
+      if(!qbo.estimateLines?.length){
+        document.querySelector('[data-line-diff]').innerHTML='<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">Run Sync & Recheck to capture the current QuickBooks estimate line items. The next refresh will show the exact line differences.</div>';
+      }else{
+        document.querySelector('[data-line-diff]').innerHTML='<table class="min-w-[880px] w-full text-sm"><thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] uppercase tracking-[.08em] text-[var(--koa-ink)]/45"><th class="pb-3">Line</th><th class="pb-3">CRM qty × unit</th><th class="pb-3 text-right">CRM</th><th class="pb-3">QuickBooks qty × unit</th><th class="pb-3 text-right">QBO</th><th class="pb-3 text-right">Difference</th></tr></thead><tbody>'+rows.map((row)=>'<tr class="border-b border-[var(--koa-line)]/70"><td class="py-3 pr-4 font-semibold">'+esc(row.crm?.description||row.qbo?.description||'Unmatched line')+'</td><td class="py-3 pr-4">'+(row.crm?esc(row.crm.quantity)+' × '+money(row.crm.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(row.crm?money(row.crm.amount):'—')+'</td><td class="py-3 pr-4">'+(row.qbo?esc(row.qbo.quantity||1)+' × '+money(row.qbo.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(row.qbo?money(row.qbo.amount):'—')+'</td><td class="py-3 text-right font-bold '+(Math.abs(row.delta)>=0.01?'text-red-700':'text-[var(--koa-forest)]')+'">'+money(row.delta)+'</td></tr>').join('')+'</tbody></table>';
+      }
+
+      const invoices=Array.isArray(qbo.invoices)?qbo.invoices:[];
       document.querySelector('[data-qbo-docs]').innerHTML=
-        card('Customer',qb.customerDisplayName||'Not linked',qb.customerId?'QBO #'+qb.customerId:'')+
-        card('Estimate',qb.estimateDocNumber?'#'+qb.estimateDocNumber:'Not linked',money(qb.estimateTotal||0))+
-        invoices.map(x=>card('Invoice '+(x.docNumber?'#'+x.docNumber:''),money(x.total||x.amount||0),'Balance '+money(x.balance||0)+' · '+(x.emailStatus||''))).join('')+
-        card('Last synced',when(qb.lastSyncedAt||qb.estimateLastSyncedAt),'');
+        card('Customer',qbo.customerDisplayName||'Not linked',qbo.customerId?'QBO #'+qbo.customerId:'')+
+        card('Estimate',qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'Not linked',money(qbo.estimateTotal||0))+
+        invoices.map((invoice)=>card('Invoice '+(invoice.docNumber?'#'+invoice.docNumber:''),money(invoice.total||invoice.amount||0),'Balance '+money(invoice.balance||0)+' · '+(invoice.emailStatus||''))).join('')+
+        card('Last synced',when(qbo.lastSyncedAt||qbo.estimateLastSyncedAt));
     }
 
     function lineEditor(line,index){
       return '<div data-line-row class="grid gap-2 rounded-xl border border-[var(--koa-line)] p-3 md:grid-cols-[1fr_90px_130px_130px_auto]"><input name="description" value="'+esc(line.description||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm" placeholder="Description"><input name="quantity" type="number" min=".01" step=".01" value="'+esc(line.quantity||1)+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><input name="unitPrice" type="number" step=".01" value="'+esc(line.unitPrice||0)+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><input name="amount" type="number" step=".01" value="'+esc(line.amount||0)+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><button type="button" data-remove-line class="rounded-lg border border-red-200 px-3 py-2 text-xs font-black uppercase text-red-700">Remove</button><input type="hidden" name="id" value="'+esc(line.id||'line-'+index)+'"></div>';
     }
-    function renderProposal(){
-      const p=record.proposal; const form=document.querySelector('[data-proposal-form]');
-      if(!p){form.innerHTML='<p class="text-sm">This client does not have a proposal record yet. Promote the record to a proposal in Sales CRM first.</p>';return;}
-      form.elements.discountAmount.value=p.discountAmount||0; form.elements.depositPercent.value=p.depositPercent||0; form.elements.status.value=p.status||'draft'; form.elements.notesToClient.value=p.notesToClient||'';
-      const list=document.querySelector('[data-proposal-lines]'); list.innerHTML=(p.lineItems||[]).map(lineEditor).join('');
-      bindLineRows();
-      document.querySelector('[data-proposal-totals]').innerHTML='<div class="grid gap-2 sm:grid-cols-4">'+card('Subtotal',money(p.subtotal))+card('Tax',money(p.taxAmount))+card('Total',money(p.total))+card('Deposit',money(p.depositAmount))+'</div>';
-    }
-    function bindLineRows(){document.querySelectorAll('[data-remove-line]').forEach(b=>b.onclick=()=>b.closest('[data-line-row]')?.remove());}
-    function collectLines(){
-      return [...document.querySelectorAll('[data-line-row]')].map((row,i)=>{
-        const v=n=>row.querySelector('[name="'+n+'"]')?.value;
-        const qty=Math.max(.01,Number(v('quantity')||1)); const unit=Number(v('unitPrice')||0); const amt=Number(v('amount')||qty*unit);
-        return {id:v('id')||'line-'+(i+1),description:v('description')||'Line item',quantity:qty,unitPrice:unit,amount:amt,custom:true};
+
+    function bindLineRows(){
+      document.querySelectorAll('[data-remove-line]').forEach((button)=>{
+        button.onclick=()=>button.closest('[data-line-row]')?.remove();
       });
     }
 
+    function collectLines(){
+      return [...document.querySelectorAll('[data-line-row]')].map((row,index)=>{
+        const value=(name)=>row.querySelector('[name="'+name+'"]')?.value;
+        const quantity=Math.max(0.01,Number(value('quantity')||1));
+        const unitPrice=Number(value('unitPrice')||0);
+        const amount=Number(value('amount')||quantity*unitPrice);
+        return {id:value('id')||'line-'+(index+1),description:value('description')||'Line item',quantity,unitPrice,amount,custom:true};
+      });
+    }
+
+    function renderProposal(){
+      const proposal=record.proposal;
+      const form=document.querySelector('[data-proposal-form]');
+      const empty=document.querySelector('[data-proposal-empty]');
+      const editor=document.querySelector('[data-proposal-editor]');
+      empty.classList.toggle('hidden',Boolean(proposal));
+      editor.classList.toggle('hidden',!proposal);
+      if(!proposal)return;
+
+      form.elements.discountAmount.value=proposal.discountAmount||0;
+      form.elements.depositPercent.value=proposal.depositPercent||0;
+      form.elements.status.value=proposal.status||'draft';
+      form.elements.notesToClient.value=proposal.notesToClient||'';
+      const list=document.querySelector('[data-proposal-lines]');
+      list.innerHTML=(proposal.lineItems||[]).map(lineEditor).join('');
+      bindLineRows();
+      document.querySelector('[data-proposal-totals]').innerHTML='<div class="grid gap-2 sm:grid-cols-4">'+card('Subtotal',money(proposal.subtotal))+card('Tax',money(proposal.taxAmount))+card('Total',money(proposal.total))+card('Deposit',money(proposal.depositAmount))+'</div>';
+    }
+
     function renderPayments(){
-      const p=record.proposal||{}; const b=record.bookingSummary||{}; const rows=b.payments?.length?b.payments:p.paymentSchedule||[];
-      document.querySelector('[data-payments]').innerHTML=rows.length?rows.map(x=>'<div class="grid gap-2 rounded-xl border border-[var(--koa-line)] p-4 sm:grid-cols-[1fr_130px_140px_120px] sm:items-center"><strong>'+esc(x.label||'Payment')+'</strong><span>'+esc(x.dueDate||'No due date')+'</span><span class="font-bold">'+money(x.amount||0)+'</span><span class="text-xs font-black uppercase tracking-[.06em]">'+esc(x.status||'scheduled')+'</span>'+(x.docNumber?'<p class="sm:col-span-4 text-xs text-[var(--koa-ink)]/45">QuickBooks invoice #'+esc(x.docNumber)+' · balance '+money(x.balance||0)+'</p>':'')+'</div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No payment schedule is stored.</p>';
+      const proposal=record.proposal||{};
+      const booking=record.bookingSummary||{};
+      const rows=booking.payments?.length?booking.payments:proposal.paymentSchedule||[];
+      document.querySelector('[data-payments]').innerHTML=rows.length?rows.map((row)=>'<div class="grid gap-2 rounded-xl border border-[var(--koa-line)] p-4 sm:grid-cols-[1fr_130px_140px_120px] sm:items-center"><strong>'+esc(row.label||'Payment')+'</strong><span>'+esc(row.dueDate||'No due date')+'</span><span class="font-bold">'+money(row.amount||0)+'</span><span class="text-xs font-black uppercase tracking-[.06em]">'+esc(row.status||'scheduled')+'</span>'+(row.docNumber?'<p class="sm:col-span-4 text-xs text-[var(--koa-ink)]/45">QuickBooks invoice #'+esc(row.docNumber)+' · balance '+money(row.balance||0)+'</p>':'')+'</div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No payment schedule is stored.</p>';
+    }
+
+    function customRow(key='',value=''){
+      return '<div data-custom-row class="grid gap-2 sm:grid-cols-[.65fr_1fr_auto]"><input name="customKey" value="'+esc(key)+'" placeholder="Field name" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><input name="customValue" value="'+esc(value)+'" placeholder="Value" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><button type="button" data-remove-custom class="rounded-lg border border-red-200 px-3 py-2 text-xs font-black uppercase text-red-700">Remove</button></div>';
+    }
+
+    function bindCustomRows(){
+      document.querySelectorAll('[data-remove-custom]').forEach((button)=>{
+        button.onclick=()=>button.closest('[data-custom-row]')?.remove();
+      });
+    }
+
+    function renderOperations(){
+      const project=businessProject();
+      const meta=project?.meta||{};
+      const form=document.querySelector('[data-project-form]');
+      form.elements.projectStatus.value=meta.projectStatus||'';
+      form.elements.owner.value=meta.owner||record.assignment?.name||'';
+      form.elements.company.value=meta.company||'';
+      form.elements.partnerName.value=meta.partnerName||'';
+      form.elements.address.value=meta.address||'';
+      form.elements.businessLine.value=project?.businessLine||meta.businessLine||'events';
+      form.elements.projectType.value=project?.projectType||meta.projectType||'';
+      form.elements.sourceDetail.value=meta.sourceDetail||'';
+      form.elements.tags.value=(meta.tags||[]).join(', ');
+      const custom=Object.entries(meta.customFields||{});
+      document.querySelector('[data-custom-fields]').innerHTML=(custom.length?custom:[['','']]).map(([key,value])=>customRow(key,value)).join('');
+      bindCustomRows();
+
+      const notes=linkedRows('notes').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+      document.querySelector('[data-notes]').innerHTML=notes.length?notes.map((note)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><p class="whitespace-pre-wrap text-sm leading-6">'+esc(note.body||'')+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/45">'+esc(note.createdBy||'')+' · '+esc(when(note.createdAt))+'</p></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No Business CRM notes yet.</p>';
+
+      const tasks=linkedRows('tasks').sort((a,b)=>String(a.status).localeCompare(String(b.status))||String(a.dueDate||'').localeCompare(String(b.dueDate||'')));
+      document.querySelector('[data-tasks]').innerHTML=tasks.length?tasks.map((task)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-start justify-between gap-3"><div><strong class="'+(task.status==='done'?'line-through opacity-60':'')+'">'+esc(task.title||'Task')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(task.dueDate||'No due date')+' · '+esc(task.priority||'normal')+(task.assignee?' · '+esc(task.assignee):'')+'</p></div><button type="button" data-toggle-task="'+esc(task.id)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">'+(task.status==='done'?'Reopen':'Complete')+'</button></div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No tasks yet.</p>';
+      document.querySelectorAll('[data-toggle-task]').forEach((button)=>{
+        button.addEventListener('click',async()=>{
+          button.disabled=true;
+          try{
+            await businessPost({action:'toggle-task',taskId:button.dataset.toggleTask});
+            message.textContent='Task updated.';
+            await load('operations');
+          }catch(error){
+            message.textContent=error.message||'Unable to update task.';
+            button.disabled=false;
+          }
+        });
+      });
+
+      const appointments=linkedRows('appointments').sort((a,b)=>String(a.startsAt||'').localeCompare(String(b.startsAt||'')));
+      document.querySelector('[data-appointments]').innerHTML=appointments.length?appointments.map((appointment)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong>'+esc(appointment.title||'Appointment')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(when(appointment.startsAt))+' · '+esc(appointment.durationMinutes||60)+' min'+(appointment.location?' · '+esc(appointment.location):'')+'</p><p class="mt-2 text-sm text-[var(--koa-ink)]/58">'+esc(appointment.notes||'')+'</p></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em]">'+esc(appointment.status||'scheduled')+'</span>'+(appointment.status==='scheduled'?'<button type="button" data-appointment-status="'+esc(appointment.id)+'" data-status="completed" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Complete</button><button type="button" data-appointment-status="'+esc(appointment.id)+'" data-status="cancelled" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700">Cancel</button>':'')+'</div></div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No appointments yet.</p>';
+      document.querySelectorAll('[data-appointment-status]').forEach((button)=>{
+        button.addEventListener('click',async()=>{
+          button.disabled=true;
+          try{
+            await businessPost({action:'update-appointment',appointmentId:button.dataset.appointmentStatus,status:button.dataset.status});
+            message.textContent='Appointment updated.';
+            await load('operations');
+          }catch(error){
+            message.textContent=error.message||'Unable to update appointment.';
+            button.disabled=false;
+          }
+        });
+      });
     }
 
     function renderDocuments(){
       const contract=record.booking?.contract;
-      const qb=record.accounting?.quickbooks||{};
+      const qbo=record.accounting?.quickbooks||{};
       const docs=[];
       if(contract)docs.push(['Venue agreement',contract.status||'pending','Generated '+when(contract.generatedAt)+(contract.signature?.signedAt?' · Client signed '+when(contract.signature.signedAt):'')]);
-      if(qb.estimateId)docs.push(['QuickBooks estimate',qb.estimateDocNumber?'#'+qb.estimateDocNumber:qb.estimateId,money(qb.estimateTotal||0)]);
-      (qb.invoices||[]).forEach(x=>docs.push(['QuickBooks invoice',x.docNumber?'#'+x.docNumber:x.invoiceId,money(x.total||x.amount||0)]));
-      document.querySelector('[data-documents]').innerHTML=docs.length?docs.map(d=>card(d[0],d[1],d[2])).join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No contract or accounting documents are linked on this record yet.</p>';
+      if(qbo.estimateId)docs.push(['QuickBooks estimate',qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:qbo.estimateId,money(qbo.estimateTotal||0)]);
+      (qbo.invoices||[]).forEach((invoice)=>docs.push(['QuickBooks invoice',invoice.docNumber?'#'+invoice.docNumber:invoice.invoiceId,money(invoice.total||invoice.amount||0)]));
+      document.querySelector('[data-documents]').innerHTML=docs.length?docs.map((doc)=>card(doc[0],doc[1],doc[2])).join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No contract or accounting documents are linked on this record yet.</p>';
+
+      const config=crmPayload?.integrations?.signwell||{};
+      const signwell=record.booking?.contract?.signwell||{};
+      const accepted=['accepted','booked'].includes(String(record.proposal?.status||''));
+      const createDisabled=!config.configured||!accepted||Boolean(signwell.documentId);
+      const retrieveDisabled=!config.configured||!signwell.documentId;
+      const signedLink=signwell.signedPdfStored?'<a target="_blank" rel="noopener" href="/api/admin/crm?signwellPdf='+encodeURIComponent(record.id)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Open signed PDF</a>':'';
+      document.querySelector('[data-signwell]').innerHTML=
+        card('Connection',config.configured?'Configured':'Needs configuration',config.testMode?'Test mode':'Production mode')+
+        card('Document',signwell.documentId||'Not created',signwell.status||'not sent')+
+        card('Signed PDF',signwell.signedPdfStored?'Stored':'Not stored',signwell.signedPdfStoredAt?when(signwell.signedPdfStoredAt):'')+
+        '<div class="flex flex-wrap gap-2"><button data-signwell-create type="button" '+(createDisabled?'disabled':'')+' class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.06em] text-white disabled:cursor-not-allowed disabled:opacity-40">Create / send agreement</button><button data-signwell-pdf type="button" '+(retrieveDisabled?'disabled':'')+' class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)] disabled:cursor-not-allowed disabled:opacity-40">Retrieve signed PDF</button>'+signedLink+'</div>'+
+        (!accepted?'<p class="text-xs text-amber-800">The proposal must be accepted before SignWell can create the agreement.</p>':'')+
+        (signwell.lastError?'<p class="text-xs text-red-700">'+esc(signwell.lastError)+'</p>':'');
+
+      document.querySelector('[data-signwell-create]')?.addEventListener('click',async()=>{
+        message.textContent='Creating SignWell agreement…';
+        try{
+          await businessPost({action:'create-signwell-agreement',recordId:record.id});
+          message.textContent='SignWell agreement created.';
+          await load('documents');
+        }catch(error){
+          message.textContent=error.message||'Unable to create SignWell agreement.';
+        }
+      });
+
+      document.querySelector('[data-signwell-pdf]')?.addEventListener('click',async()=>{
+        message.textContent='Retrieving completed SignWell PDF…';
+        try{
+          await businessPost({action:'retrieve-signwell-pdf',recordId:record.id});
+          message.textContent='Signed PDF stored.';
+          await load('documents');
+        }catch(error){
+          message.textContent=error.message||'Unable to retrieve signed PDF.';
+        }
+      });
     }
 
     function renderComms(){
-      const comm=record.communications||{}; const entries=Object.entries(comm);
-      document.querySelector('[data-comms]').innerHTML=entries.length?entries.map(([k,v])=>card(k,v.status||'unknown',(v.messageId?'Message '+v.messageId+' · ':'')+when(v.sentAt||v.updatedAt))).join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No communication status entries are stored on this sales record.</p>';
+      document.querySelector('[data-email-to]').textContent='To: '+(record.customer?.email||'No client email');
+      const communicationEntries=Object.entries(record.communications||{}).map(([key,value])=>({
+        title:key,
+        status:value?.status||'unknown',
+        detail:(value?.messageId?'Message '+value.messageId+' · ':'')+when(value?.sentAt||value?.updatedAt)
+      }));
+      const messages=linkedRows('messages').map((entry)=>({
+        title:entry.subject||entry.type||'Client message',
+        status:entry.status||'sent',
+        detail:(entry.to||entry.recipient||record.customer?.email||'')+' · '+when(entry.createdAt||entry.sentAt)
+      }));
+      const combined=[...communicationEntries,...messages];
+      document.querySelector('[data-comms]').innerHTML=combined.length?combined.map((entry)=>card(entry.title,entry.status,entry.detail)).join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No communication history is stored for this client.</p>';
     }
+
     function renderActivity(){
-      const rows=record.timeline||[];
-      document.querySelector('[data-activity]').innerHTML=rows.length?rows.map(x=>'<div class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-center justify-between gap-2"><strong>'+esc(String(x.type||'activity').replace(/_/g,' '))+'</strong><span class="text-xs text-[var(--koa-ink)]/45">'+esc(when(x.createdAt))+'</span></div><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">'+esc(x.detail||'')+'</p></div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No client activity is stored.</p>';
+      const salesTimeline=record.timeline||[];
+      const businessTimeline=linkedRows('activity');
+      const rows=[...salesTimeline,...businessTimeline].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
+      document.querySelector('[data-activity]').innerHTML=rows.length?rows.map((entry)=>'<div class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-center justify-between gap-2"><strong>'+esc(String(entry.type||'activity').replace(/_/g,' '))+'</strong><span class="text-xs text-[var(--koa-ink)]/45">'+esc(when(entry.createdAt))+'</span></div><p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">'+esc(entry.detail||'')+'</p></div>').join(''):'<p class="text-sm text-[var(--koa-ink)]/50">No client activity is stored.</p>';
     }
+
     function renderData(){
+      const project=businessProject();
       const families=[
-        ['Client/contact','record.customer'],['Inquiry','record.inquiry'],['Saved quote','record.quote'],['Proposal + pricing','record.proposal'],['Booking + contract','record.booking'],['Payment view','record.bookingSummary'],['QuickBooks mirror','record.accounting.quickbooks'],['Communications','record.communications'],['Profitability','record.profitModel'],['Assignment','record.assignment'],['Security/lead quality','record.security'],['Activity timeline','record.timeline']
+        ['Client/contact',record.customer,'Sales CRM · record.customer'],
+        ['Inquiry',record.inquiry,'Sales CRM · record.inquiry'],
+        ['Saved quote',record.quote,'Sales CRM · record.quote'],
+        ['Proposal + pricing',record.proposal,'Sales CRM · record.proposal'],
+        ['Booking + contract',record.booking,'Sales CRM · record.booking'],
+        ['Payment view',record.bookingSummary,'Sales CRM derived bookingSummary'],
+        ['QuickBooks mirror',record.accounting?.quickbooks,'Sales CRM · record.accounting.quickbooks'],
+        ['Communications',record.communications,'Sales CRM · record.communications'],
+        ['Profitability',record.profitModel,'Sales CRM · record.profitModel'],
+        ['Assignment',record.assignment,'Sales CRM · record.assignment'],
+        ['Security/lead quality',record.security,'Sales CRM · record.security'],
+        ['Business CRM project metadata',project?.meta,'Business CRM · projects'],
+        ['Business CRM notes',linkedRows('notes'),'Business CRM · notes'],
+        ['Business CRM tasks',linkedRows('tasks'),'Business CRM · tasks'],
+        ['Appointments',linkedRows('appointments'),'Business CRM · appointments'],
+        ['Workflow enrollments',linkedRows('enrollments'),'Business CRM · enrollments'],
+        ['Client messages',linkedRows('messages'),'Business CRM · client messages'],
+        ['SignWell',record.booking?.contract?.signwell,'Booking contract · SignWell state'],
+        ['Activity timeline',[...(record.timeline||[]),...linkedRows('activity')],'Sales + Business CRM activity']
       ];
-      document.querySelector('[data-data-map]').innerHTML=families.map(([label,path])=>{
-        const val=path.split('.').slice(1).reduce((a,k)=>a?.[k],record); const present=val!=null && (typeof val!=='object'||Object.keys(val).length);
-        return '<div class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex items-center justify-between gap-3"><strong>'+esc(label)+'</strong><span class="rounded-full px-2 py-1 text-[.55rem] font-black uppercase '+(present?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-500')+'">'+(present?'Stored':'Not present')+'</span></div><p class="mt-2 text-xs font-mono text-[var(--koa-ink)]/45">'+esc(path)+'</p></div>';
+      document.querySelector('[data-data-map]').innerHTML=families.map(([label,value,source])=>{
+        const present=Array.isArray(value)?value.length>0:value!=null&&(typeof value!=='object'||Object.keys(value).length>0);
+        const detail=Array.isArray(value)?value.length+' linked record(s)':source;
+        return '<div class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex items-center justify-between gap-3"><strong>'+esc(label)+'</strong><span class="rounded-full px-2 py-1 text-[.55rem] font-black uppercase '+(present?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-500')+'">'+(present?'Stored':'Not present')+'</span></div><p class="mt-2 text-xs text-[var(--koa-ink)]/45">'+esc(detail)+'</p></div>';
       }).join('');
     }
-    function renderAll(){fillHeader();renderOverview();renderAccounting();renderProposal();renderPayments();renderDocuments();renderComms();renderActivity();renderData();}
 
-    async function load(){
-      const user=await getAdminSession();
-      if(!hasAccess(user)){unauthorized.classList.remove('hidden');return;}
-      const res=await fetch('/api/admin/quotes?q='+encodeURIComponent(clientRecordId),{cache:'no-store'});
-      if(res.status===403){unauthorized.classList.remove('hidden');return;}
-      const data=await res.json().catch(()=>({}));
-      record=(data.records||[]).find(r=>r.id===clientRecordId)||(data.records||[])[0]||null;
-      if(!record){app.classList.remove('hidden');document.querySelector('[data-name]').textContent='Client not found';message.textContent='No CRM record matched '+clientRecordId+'.';return;}
-      app.classList.remove('hidden'); renderAll();
-      activateTab(new URL(location.href).searchParams.get('tab')||'overview');
+    function renderAll(){
+      fillHeader();
+      renderOverview();
+      renderAccounting();
+      renderProposal();
+      renderPayments();
+      renderOperations();
+      renderDocuments();
+      renderComms();
+      renderActivity();
+      renderData();
     }
 
-    document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
-    document.querySelector('[data-client-form]')?.addEventListener('submit',async e=>{
-      e.preventDefault(); const f=e.currentTarget; message.textContent='Saving client…';
-      try{await crmPost({action:'update-client',recordId:record.id,customer:{name:f.elements.name.value,email:f.elements.email.value,phone:f.elements.phone.value,eventDate:f.elements.eventDate.value,notes:f.elements.notes.value},packageId:f.elements.packageId.value});message.textContent='Client saved.';await load();}
-      catch(err){message.textContent=err.message||'Unable to save client.';}
+    async function load(tab){
+      session=await getAdminSession();
+      if(!hasAccess(session)){
+        unauthorized.classList.remove('hidden');
+        return;
+      }
+      if(!clientRecordId){
+        app.classList.remove('hidden');
+        document.querySelector('[data-name]').textContent='Choose a client';
+        message.textContent='This Client Workspace URL is missing a client record ID.';
+        return;
+      }
+
+      const [salesResponse,businessResponse]=await Promise.all([
+        fetch('/api/admin/quotes?q='+encodeURIComponent(clientRecordId),{cache:'no-store'}),
+        fetch('/api/admin/crm',{cache:'no-store'})
+      ]);
+
+      if(salesResponse.status===403){
+        unauthorized.classList.remove('hidden');
+        return;
+      }
+      if(!salesResponse.ok){
+        app.classList.remove('hidden');
+        message.textContent='Unable to load the Sales CRM record.';
+        return;
+      }
+
+      const salesData=await salesResponse.json().catch(()=>({}));
+      crmPayload=businessResponse.ok?await businessResponse.json().catch(()=>null):null;
+      record=(salesData.records||[]).find((entry)=>entry.id===clientRecordId)||null;
+
+      if(!record){
+        app.classList.remove('hidden');
+        document.querySelector('[data-name]').textContent='Client not found';
+        message.textContent='No CRM record matched '+clientRecordId+'.';
+        return;
+      }
+
+      app.classList.remove('hidden');
+      renderAll();
+      activateTab(tab||activeTab());
+    }
+
+    document.querySelectorAll('[data-tab]').forEach((button)=>{
+      button.addEventListener('click',()=>activateTab(button.dataset.tab));
     });
-    document.querySelector('[data-proposal-form]')?.addEventListener('submit',async e=>{
-      e.preventDefault(); if(!record?.proposal)return; const f=e.currentTarget; message.textContent='Saving proposal…';
-      try{await crmPost({action:'update-proposal',recordId:record.id,proposal:{lineItems:collectLines(),discountAmount:Number(f.elements.discountAmount.value||0),depositPercent:Number(f.elements.depositPercent.value||0),status:f.elements.status.value,notesToClient:f.elements.notesToClient.value,customer:record.customer,paymentSchedule:record.proposal.paymentSchedule}});message.textContent='Proposal saved and totals recalculated.';await load();activateTab('proposal');}
-      catch(err){message.textContent=err.message||'Unable to save proposal.';}
+
+    document.querySelector('[data-client-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      message.textContent='Saving client…';
+      try{
+        await salesPost({
+          action:'update-client',
+          recordId:record.id,
+          customer:{
+            name:form.elements.name.value,
+            email:form.elements.email.value,
+            phone:form.elements.phone.value,
+            eventDate:form.elements.eventDate.value,
+            notes:form.elements.notes.value
+          },
+          packageId:form.elements.packageId.value
+        });
+        message.textContent='Client saved.';
+        await load('overview');
+      }catch(error){
+        message.textContent=error.message||'Unable to save client.';
+      }
     });
-    document.querySelector('[data-add-line]')?.addEventListener('click',()=>{const list=document.querySelector('[data-proposal-lines]');list.insertAdjacentHTML('beforeend',lineEditor({id:'custom-'+Date.now(),description:'',quantity:1,unitPrice:0,amount:0},list.children.length));bindLineRows();});
+
+    document.querySelector('[data-proposal-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      if(!record?.proposal)return;
+      const form=event.currentTarget;
+      message.textContent='Saving proposal…';
+      try{
+        await salesPost({
+          action:'update-proposal',
+          recordId:record.id,
+          proposal:{
+            lineItems:collectLines(),
+            discountAmount:Number(form.elements.discountAmount.value||0),
+            depositPercent:Number(form.elements.depositPercent.value||0),
+            status:form.elements.status.value,
+            notesToClient:form.elements.notesToClient.value,
+            customer:record.customer,
+            paymentSchedule:record.proposal.paymentSchedule
+          }
+        });
+        message.textContent='Proposal saved and totals recalculated.';
+        await load('proposal');
+      }catch(error){
+        message.textContent=error.message||'Unable to save proposal.';
+      }
+    });
+
+    document.querySelector('[data-add-line]')?.addEventListener('click',()=>{
+      const list=document.querySelector('[data-proposal-lines]');
+      list.insertAdjacentHTML('beforeend',lineEditor({id:'custom-'+Date.now(),description:'',quantity:1,unitPrice:0,amount:0},list.children.length));
+      bindLineRows();
+    });
+
+    document.querySelector('[data-add-custom]')?.addEventListener('click',()=>{
+      const list=document.querySelector('[data-custom-fields]');
+      list.insertAdjacentHTML('beforeend',customRow('',''));
+      bindCustomRows();
+    });
+
+    document.querySelector('[data-project-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const customFields={};
+      document.querySelectorAll('[data-custom-row]').forEach((row)=>{
+        const key=String(row.querySelector('[name="customKey"]')?.value||'').trim();
+        const value=String(row.querySelector('[name="customValue"]')?.value||'').trim();
+        if(key)customFields[key]=value;
+      });
+      message.textContent='Saving Business CRM project details…';
+      try{
+        await businessPost({
+          action:'save-project',
+          recordId:record.id,
+          projectStatus:form.elements.projectStatus.value,
+          owner:form.elements.owner.value,
+          company:form.elements.company.value,
+          address:form.elements.address.value,
+          partnerName:form.elements.partnerName.value,
+          sourceDetail:form.elements.sourceDetail.value,
+          businessLine:form.elements.businessLine.value,
+          projectType:form.elements.projectType.value,
+          tags:String(form.elements.tags.value||'').split(/[,\n]/).map((value)=>value.trim()).filter(Boolean),
+          customFields
+        });
+        message.textContent='Project details saved.';
+        await load('operations');
+      }catch(error){
+        message.textContent=error.message||'Unable to save project details.';
+      }
+    });
+
+    document.querySelector('[data-note-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const body=String(form.elements.body.value||'').trim();
+      if(!body)return;
+      message.textContent='Adding note…';
+      try{
+        await businessPost({action:'add-note',recordId:record.id,body});
+        form.reset();
+        message.textContent='Note added.';
+        await load('operations');
+      }catch(error){
+        message.textContent=error.message||'Unable to add note.';
+      }
+    });
+
+    document.querySelector('[data-task-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      message.textContent='Adding task…';
+      try{
+        await businessPost({
+          action:'add-task',
+          recordId:record.id,
+          title:form.elements.title.value,
+          dueDate:form.elements.dueDate.value,
+          assignee:form.elements.assignee.value,
+          priority:form.elements.priority.value
+        });
+        form.reset();
+        form.elements.priority.value='normal';
+        message.textContent='Task added.';
+        await load('operations');
+      }catch(error){
+        message.textContent=error.message||'Unable to add task.';
+      }
+    });
+
+    document.querySelector('[data-appointment-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      message.textContent='Scheduling appointment…';
+      try{
+        await businessPost({
+          action:'schedule-appointment',
+          recordId:record.id,
+          title:form.elements.title.value,
+          startsAt:form.elements.startsAt.value,
+          durationMinutes:Number(form.elements.durationMinutes.value||60),
+          location:form.elements.location.value,
+          notes:form.elements.notes.value
+        });
+        form.reset();
+        form.elements.durationMinutes.value='60';
+        message.textContent='Appointment scheduled.';
+        await load('operations');
+      }catch(error){
+        message.textContent=error.message||'Unable to schedule appointment.';
+      }
+    });
+
+    document.querySelector('[data-email-form]')?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      message.textContent='Sending client email…';
+      try{
+        const result=await businessPost({
+          action:'send-client-email',
+          recordId:record.id,
+          subject:form.elements.subject.value,
+          body:form.elements.body.value
+        });
+        form.reset();
+        message.textContent='Email sent'+(result.messageId?' · '+result.messageId:'')+'.';
+        await load('communications');
+      }catch(error){
+        message.textContent=error.message||'Unable to send email.';
+      }
+    });
+
     async function sync(){
-      if(!record)return; message.textContent='Refreshing QuickBooks estimate, invoices and payments…';
-      try{await qboPost({action:'sync-and-recheck',recordId:record.id});message.textContent='QuickBooks refreshed. Reconciliation recalculated.';await load();activateTab('accounting');}
-      catch(err){message.textContent=err.message||'Unable to sync QuickBooks.';}
+      if(!record)return;
+      message.textContent='Refreshing QuickBooks estimate, invoices and payments…';
+      try{
+        await qboPost({action:'sync-and-recheck',recordId:record.id});
+        message.textContent='QuickBooks refreshed. Reconciliation recalculated.';
+        await load('accounting');
+      }catch(error){
+        message.textContent=error.message||'Unable to sync QuickBooks.';
+      }
     }
+
     document.querySelector('[data-sync]')?.addEventListener('click',sync);
     document.querySelector('[data-sync-2]')?.addEventListener('click',sync);
+
     load();
   </script>
 </BaseLayout>
