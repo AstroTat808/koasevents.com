@@ -320,6 +320,7 @@ export type CatalogPriceHistoryEntry = {
   oldActualMargin: number | null;
   newActualMargin: number | null;
   draftProposalsUpdated: number;
+  draftProposalIds: string[];
 };
 
 export type CatalogSaveAudit = {
@@ -328,6 +329,7 @@ export type CatalogSaveAudit = {
   sourceRef?: string;
   note?: string;
   draftProposalsUpdated?: number;
+  draftProposalIds?: string[];
 };
 
 export type QuickBooksGetSettings = {
@@ -449,6 +451,9 @@ export async function getCatalogPriceHistory(
       oldActualMargin: row?.oldActualMargin == null ? null : Number(row.oldActualMargin),
       newActualMargin: row?.newActualMargin == null ? null : Number(row.newActualMargin),
       draftProposalsUpdated: Math.max(0, Math.round(Number(row?.draftProposalsUpdated || 0))),
+      draftProposalIds: Array.isArray(row?.draftProposalIds)
+        ? row.draftProposalIds.map((value:any)=>cleanHistoryText(value,100)).filter(Boolean).slice(0,100)
+        : [],
     }))
     .filter((row:CatalogPriceHistoryEntry) => row.id && row.catalogItemId);
 }
@@ -460,6 +465,7 @@ export async function annotateCatalogPriceHistory(
     source?: string;
     newPrice?: number;
     draftProposalsUpdated?: number;
+    draftProposalIds?: string[];
     note?: string;
   },
 ) {
@@ -478,6 +484,9 @@ export async function annotateCatalogPriceHistory(
   rows[index] = {
     ...rows[index],
     draftProposalsUpdated: Math.max(0, Math.round(Number(update.draftProposalsUpdated ?? rows[index]?.draftProposalsUpdated ?? 0))),
+    draftProposalIds: Array.isArray(update.draftProposalIds)
+      ? update.draftProposalIds.map(value=>cleanHistoryText(value,100)).filter(Boolean).slice(0,100)
+      : (Array.isArray(rows[index]?.draftProposalIds) ? rows[index].draftProposalIds : []),
     note: cleanHistoryText(update.note ?? rows[index]?.note ?? '', 500),
   };
   await store.setJSON(catalogPriceHistoryKey(), rows.slice(0, 2000));
@@ -716,6 +725,9 @@ export async function saveQuickBooksCatalog(
       oldActualMargin: catalogActualMargin(oldPrice, previous?.internalCost || 0),
       newActualMargin: catalogActualMargin(newPrice, item.internalCost || 0),
       draftProposalsUpdated: Math.max(0, Math.round(Number(audit.draftProposalsUpdated || 0))),
+      draftProposalIds: Array.isArray(audit.draftProposalIds)
+        ? audit.draftProposalIds.map(value=>cleanHistoryText(value,100)).filter(Boolean).slice(0,100)
+        : [],
     });
   }
 
