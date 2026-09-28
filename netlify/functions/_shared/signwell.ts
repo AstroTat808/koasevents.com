@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const API='https://www.signwell.com/api/v1';
@@ -14,16 +15,16 @@ function salesStoreFor(context:Context){ return tenantStoreFor(context,resolveTe
 function healthStoreFor(context:Context){ return tenantStoreFor(context,resolveTenant(),'systemHealth'); }
 
 function apiKey(){
-  return clean(Netlify.env.get('SIGNWELL_API_KEY'),1200);
+  return clean(tenantEnv(resolveTenant(),'SIGNWELL_API_KEY'),1200);
 }
 
 export function signWellWebhookId(){
-  return clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'),240);
+  return clean(tenantEnv(resolveTenant(),'SIGNWELL_WEBHOOK_ID'),240);
 }
 
 export function signWellWebhookEndpoint(){
   const tenant=resolveTenant();
-  const origin=clean(Netlify.env.get('URL'),500)||('https://'+tenant.domains.primary);
+  const origin=clean(tenantEnv(tenant,'URL'),500)||('https://'+tenant.domains.primary);
   return origin.replace(/\/$/,'')+'/api/webhooks/signwell';
 }
 
@@ -36,9 +37,9 @@ export function signWellConfiguration(){
     webhookIdConfigured:Boolean(webhookId),
     webhookId,
     webhookEndpoint:signWellWebhookEndpoint(),
-    koaSignerEmail:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_EMAIL')||tenant.contact.email,240),
-    koaSignerName:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
-    testMode:String(Netlify.env.get('SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true',
+    koaSignerEmail:clean(tenantEnv(tenant,'SIGNWELL_SIGNER_EMAIL','SIGNWELL_KOA_SIGNER_EMAIL')||tenant.contact.email,240),
+    koaSignerName:clean(tenantEnv(tenant,'SIGNWELL_SIGNER_NAME','SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
+    testMode:String(tenantEnv(tenant,'SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true',
   };
 }
 
@@ -331,7 +332,7 @@ export async function createSignWellContract(record:any,origin:string){
     apply_signing_order:true,embedded_signing:true,embedded_signing_notifications:true,with_signature_page:true,
     reminders:true,expires_in:14,allow_decline:true,allow_reassign:false,
     redirect_url:origin+'/portal/?token='+encodeURIComponent(record.proposal?.publicToken||''),
-    metadata:{record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
+    metadata:{tenant_id:resolveTenant().id,record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
     custom_requester_name:resolveTenant().displayName,custom_requester_email:resolveTenant().contact.email
   };
   const doc=await sw('/documents',{method:'POST',body:JSON.stringify(payload)});
