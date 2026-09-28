@@ -123,9 +123,11 @@ async function graph(path:string,accessToken:string,init:RequestInit={}){
   if(!res.ok)throw new Error('Microsoft Graph '+res.status+': '+clean(payload?.error?.message||res.statusText,800));
   return payload;
 }
-let cachedCalendarPath='';
+const cachedCalendarPath=new Map<string,string>();
 async function calendarPath(accessToken:string){
-  if(cachedCalendarPath)return cachedCalendarPath;
+  const tenant=resolveTenant();
+  const cached=cachedCalendarPath.get(tenant.id);
+  if(cached)return cached;
   const cfg=env();
   if(!cfg.calendarOwner)throw new Error('Microsoft calendar owner is not configured.');
   let calendarId=cfg.calendarId;
@@ -135,8 +137,9 @@ async function calendarPath(accessToken:string){
     if(!target?.id)throw new Error('Microsoft calendar "'+cfg.calendarName+'" was not found for '+cfg.calendarOwner+'.');
     calendarId=clean(target.id,500);
   }
-  cachedCalendarPath='/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars/'+encodeURIComponent(calendarId);
-  return cachedCalendarPath;
+  const path='/users/'+encodeURIComponent(cfg.calendarOwner)+'/calendars/'+encodeURIComponent(calendarId);
+  cachedCalendarPath.set(tenant.id,path);
+  return path;
 }
 
 export async function verifyOffice365Credentials(){
@@ -176,8 +179,25 @@ export async function verifyOffice365Credentials(){
     };
   }
 }
+function timezoneOffset(date:string,timeZone:string){
+  const probe=new Date(date+'T12:00:00Z');
+  try{
+    const parts=new Intl.DateTimeFormat('en-US',{
+      timeZone,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',
+    }).formatToParts(probe);
+    const values=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
+    const localAsUtc=Date.UTC(Number(values.year),Number(values.month)-1,Number(values.day),Number(values.hour),Number(values.minute),Number(values.second));
+    const minutes=Math.round((localAsUtc-probe.getTime())/60000);
+    const sign=minutes>=0?'+':'-';
+    const abs=Math.abs(minutes);
+    return sign+String(Math.floor(abs/60)).padStart(2,'0')+':'+String(abs%60).padStart(2,'0');
+  }catch{return '+00:00';}
+}
 async function listEvents(accessToken:string,start:string,end:string){
-  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
+  const tenant=resolveTenant();
+  const startOffset=timezoneOffset(start,tenant.timezone);
+  const endOffset=timezoneOffset(end,tenant.timezone);
+  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00'+startOffset)+'&endDateTime='+encodeURIComponent(end+'T23:59:59'+endOffset)+'&$top=999';
   const rows:GraphEvent[]=[];
   while(next){
     const payload:any=await graph(next,accessToken);
