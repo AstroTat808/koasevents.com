@@ -1,4 +1,4 @@
-// Release marker: QuickBooks preview filters and CRM rollback recovery.
+// Release marker: QuickBooks guarded bulk review and duplicate evidence.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
