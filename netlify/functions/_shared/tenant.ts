@@ -1,4 +1,6 @@
 import { tenantByHost, tenantById, tenantProfiles, type TenantProfile } from '../../../src/data/tenants';
+import type { Context } from '@netlify/functions';
+import { profileFromOrganization, readOrganizationByHost, readOrganizationById } from './organization';
 
 function clean(value: unknown, max = 500) {
   return String(value ?? '').trim().slice(0, max);
@@ -57,4 +59,35 @@ export function tenantStoragePrefix(tenant: TenantProfile) {
 
 export function tenantBlobStoreName(tenant: TenantProfile, kind: 'sales' | 'integrations') {
   return tenant.storage.compatibilityBlobStores[kind];
+}
+
+
+export async function resolveTenantAsync(req?: Request, context?: Context): Promise<TenantProfile> {
+  let queryTenant = '';
+  try { queryTenant = clean(req ? new URL(req.url).searchParams.get('tenant') : '', 120); } catch {}
+  const requestedId = clean(req?.headers.get('x-venueloom-tenant') || queryTenant, 120);
+  if (requestedId) {
+    const staticTenant = tenantById(requestedId);
+    if (staticTenant) return staticTenant;
+    const dynamic = await readOrganizationById(context, requestedId);
+    if (dynamic) return profileFromOrganization(dynamic);
+  }
+
+  const host = requestHost(req);
+  const staticByHost = tenantByHost(host);
+  if (staticByHost) return staticByHost;
+  const dynamicByHost = await readOrganizationByHost(context, host);
+  if (dynamicByHost) return profileFromOrganization(dynamicByHost);
+
+  const configuredId = clean(Netlify.env.get('VENUELOOM_DEFAULT_TENANT_ID'), 120);
+  if (configuredId) {
+    const configured = tenantById(configuredId);
+    if (configured) return configured;
+    const dynamic = await readOrganizationById(context, configuredId);
+    if (dynamic) return profileFromOrganization(dynamic);
+    throw new Error('Configured VenueLoom tenant was not found: ' + configuredId);
+  }
+
+  if (tenantProfiles.length === 1) return tenantProfiles[0];
+  throw new Error('Unable to resolve VenueLoom tenant for this request.');
 }
