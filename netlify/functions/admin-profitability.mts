@@ -718,7 +718,7 @@ export default async (req:Request,context:Context) => {
       source:'wedding-profitability',
       newPrice:row.price,
       draftProposalsUpdated:repriced.count,
-      draftProposalIdsUpdated:repriced.ids,
+      draftProposalIds:repriced.ids,
       note:'Published recommended wedding package price from Wedding Profitability.',
     });
     state=await writeState(context,state,actor);
@@ -777,7 +777,7 @@ export default async (req:Request,context:Context) => {
       source:'wedding-profitability',
       newPrice:addon.sellPrice,
       draftProposalsUpdated:repriced.count,
-      draftProposalIdsUpdated:repriced.ids,
+      draftProposalIds:repriced.ids,
       note:'Published recommended add-on price from Wedding Profitability.',
     });
     state = await writeState(context,state,actor);
