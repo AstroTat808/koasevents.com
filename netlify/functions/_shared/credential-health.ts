@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import { checkResendSendAccess, emailHealthSummary, listResendEmails } from './email-health';
 import { verifyQuickBooksCredentials } from './quickbooks';
 import { verifyOffice365Credentials } from './office365-calendar-sync';
@@ -161,9 +162,7 @@ function clean(value: unknown, max=800) {
 }
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-system-health' });
+  return tenantStoreFor(context, resolveTenant(), 'systemHealth');
 }
 
 function classifyCredentialFailure(input: { configured: boolean; status: number; detail: string }): CredentialIssueType {
