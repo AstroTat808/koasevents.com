@@ -4,6 +4,7 @@ import type { TenantProfile } from '../../../src/data/tenants';
 
 export type TenantStorageDomain =
   | 'sales'
+  | 'quotes'
   | 'integrations'
   | 'crm'
   | 'eventOps'
