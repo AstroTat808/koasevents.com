@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions';
 import { Buffer } from 'node:buffer';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 type StoredConnection = {
   realmId: string;
@@ -27,11 +28,7 @@ function integrationStore(context: Context) {
 }
 
 function env(...names: string[]) {
-  for (const name of names) {
-    const value = String(Netlify.env.get(name) || '').trim();
-    if (value) return value;
-  }
-  return '';
+  return tenantEnv(resolveTenant(), ...names);
 }
 
 function config() {
