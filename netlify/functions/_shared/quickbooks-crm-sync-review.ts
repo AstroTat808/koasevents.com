@@ -502,7 +502,25 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
   const detail = { ...result, syncId };
   await store.setJSON('quickbooks/manual-sync-history/' + syncId, detail);
 
-  const current = ((await store.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
+  let current = ((await store.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
+  if (!current.length) {
+    const legacy = ((await store.get('quickbooks/manual-sync-history', { type:'json' })) || []) as any[];
+    current = legacy.map((row: any, index: number) => ({
+      syncId: clean(row?.syncId, 120) || ('LEGACY-' + index + '-' + clean(row?.completedAt, 40).replace(/[^0-9]/g, '')),
+      status: clean(row?.status, 40),
+      startedAt: clean(row?.startedAt, 80),
+      completedAt: clean(row?.completedAt, 80),
+      actor: clean(row?.actor, 180),
+      previewId: clean(row?.previewId, 120),
+      qbo: row?.qbo || {},
+      crm: row?.crm || {},
+      pushed: row?.pushed || {},
+      conflictCount: Array.isArray(row?.conflicts) ? row.conflicts.length : 0,
+      warningCount: Array.isArray(row?.warnings) ? row.warnings.length : 0,
+      changeCount: Array.isArray(row?.changes) ? row.changes.length : 0,
+      legacy: true,
+    }));
+  }
   const summary = {
     syncId,
     status: clean(detail.status, 40),
@@ -524,11 +542,11 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
 export async function getQuickBooksCrmSyncHistory(context: Context, limit = 100) {
   const store = integrationStore(context);
   const index = ((await store.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
-  if (index.length) return index.slice(0, Math.max(1, Math.min(500, Number(limit) || 100)));
+  if (index.length) return index.slice(0, Math.max(1, Math.min(5000, Number(limit) || 100)));
 
   // Backward compatibility for runs created before the dedicated history index.
   const legacy = ((await store.get('quickbooks/manual-sync-history', { type:'json' })) || []) as any[];
-  return legacy.slice(0, Math.max(1, Math.min(500, Number(limit) || 100))).map((row, index) => ({
+  return legacy.slice(0, Math.max(1, Math.min(5000, Number(limit) || 100))).map((row, index) => ({
     syncId: clean(row?.syncId, 120) || 'LEGACY-' + index,
     status: clean(row?.status, 40),
     startedAt: clean(row?.startedAt, 80),
