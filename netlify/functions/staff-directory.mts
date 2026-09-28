@@ -1,16 +1,14 @@
 import type { Config, Context } from '@netlify/functions';
 import { admin } from '@netlify/identity';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { capabilitiesFor, operationsRole, requireOperations, ROLE_LABELS } from './_shared/admin';
 
 function clean(value:unknown,max=300){return String(value??'').trim().slice(0,max);}
 function metadata(user:any){return user?.user_metadata||user?.userMetadata||{};}
 function appMeta(user:any){return user?.app_metadata||user?.appMetadata||{};}
 function normalize(value:unknown){return clean(value,300).toLowerCase();}
-function storeFor(context:Context,name:string){
-  return context.deploy.context==='production'
-    ? getStore({name,consistency:'strong'})
-    : getDeployStore({name});
+function storeFor(context:Context,tenant:any,domain:'crm'|'sales'|'eventOps'){
+  return tenantStoreFor(context,tenant,domain);
 }
 function areaLabels(user:any){
   const caps=new Set(capabilitiesFor(user));
@@ -55,16 +53,16 @@ export default async(req:Request,context:Context)=>{
 
   const [usersRaw,crmProjects,crmTasks,salesRecords]=await Promise.all([
     admin.listUsers({page:1,perPage:200}),
-    storeFor(context,'koa-crm').get('projects/index',{type:'json'}).catch(()=>[]) as Promise<any[]>,
+    storeFor(context,auth.tenant,'crm').get('projects/index',{type:'json'}).catch(()=>[]) as Promise<any[]>,
     storeFor(context,'koa-crm').get('tasks/index',{type:'json'}).catch(()=>[]) as Promise<any[]>,
-    storeFor(context,'koa-sales').get('records/index',{type:'json'}).catch(()=>[]) as Promise<any[]>,
+    storeFor(context,auth.tenant,'sales').get('records/index',{type:'json'}).catch(()=>[]) as Promise<any[]>,
   ]);
   const users:any[]=Array.isArray(usersRaw)?usersRaw:[];
   const projects=Array.isArray(crmProjects)?crmProjects:[];
   const tasks=Array.isArray(crmTasks)?crmTasks:[];
   const records=Array.isArray(salesRecords)?salesRecords:[];
   const recordMap=new Map(records.map((r:any)=>[clean(r?.id,120),r]));
-  const opsStore=storeFor(context,'koa-event-ops');
+  const opsStore=storeFor(context,auth.tenant,'eventOps');
   const today=hawaiiDateKey();
   const weekEnd=offsetDateKey(today,7);
 
