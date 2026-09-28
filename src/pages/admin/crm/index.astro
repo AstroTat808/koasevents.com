@@ -125,6 +125,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </section>
 
+            <section data-quickbooks-panel class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Accounting mirror</p>
+                  <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">QuickBooks</h3>
+                  <p data-quickbooks-summary class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55"></p>
+                </div>
+                <a href="/admin/quickbooks/" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open QuickBooks sync</a>
+              </div>
+              <div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Customer</p><p data-quickbooks-customer class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-quickbooks-customer-id class="mt-1 text-[.66rem] leading-5 text-[var(--koa-ink)]/48"></p></article>
+                <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Estimate</p><p data-quickbooks-estimate class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-quickbooks-estimate-detail class="mt-1 text-[.66rem] leading-5 text-[var(--koa-ink)]/48"></p></article>
+                <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Invoices</p><p data-quickbooks-invoices class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-quickbooks-invoices-detail class="mt-1 text-[.66rem] leading-5 text-[var(--koa-ink)]/48"></p></article>
+                <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Payments</p><p data-quickbooks-payments class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">—</p><p data-quickbooks-payments-detail class="mt-1 text-[.66rem] leading-5 text-[var(--koa-ink)]/48"></p></article>
+              </div>
+              <div data-quickbooks-documents class="mt-4 grid gap-2"></div>
+            </section>
+
             <section data-signwell-panel class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
@@ -782,6 +800,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-detail-proposal]').textContent=p.proposal?((p.proposal.status||'proposal')+' · '+money(p.proposal.total)):'—';
     const payments=p.booking?.payments||[]; const paid=payments.filter(x=>x.status==='paid').reduce((s,x)=>s+Number(x.amount||0),0); const total=payments.reduce((s,x)=>s+Number(x.amount||0),0);
     $('[data-detail-payments]').textContent=payments.length?money(paid)+' / '+money(total):'—';
+
+    const qbo=p.accounting?.quickbooks||{};
+    const qboPanel=$('[data-quickbooks-panel]');
+    const qboInvoices=Array.isArray(qbo.invoices)?qbo.invoices:[];
+    const qboPayments=Array.isArray(qbo.payments)?qbo.payments:[];
+    const qboEstimates=Array.isArray(qbo.estimates)?qbo.estimates:[];
+    const hasQbo=Boolean(qbo.customerId||qbo.estimateId||qboInvoices.length||qboPayments.length);
+    if(qboPanel)qboPanel.classList.toggle('hidden',!hasQbo);
+    if(hasQbo){
+      const source=String(qbo.origin||'crm')==='quickbooks'?'Imported from QuickBooks':'Linked from CRM';
+      const last=qbo.lastSyncedAt?fmt(qbo.lastSyncedAt):'not yet synchronized';
+      $('[data-quickbooks-summary]').textContent=source+' · last sync '+last+'. QuickBooks remains the financial source of truth for invoice balances and payments.';
+      $('[data-quickbooks-customer]').textContent=qbo.customerDisplayName||p.customer?.name||'Linked customer';
+      $('[data-quickbooks-customer-id]').textContent=qbo.customerId?'QuickBooks customer #'+qbo.customerId:'Customer ID not linked';
+      const estimate=qboEstimates.find(x=>String(x.estimateId||'')===String(qbo.estimateId||''))||qboEstimates[0]||null;
+      $('[data-quickbooks-estimate]').textContent=estimate||qbo.estimateId?('#'+String(estimate?.docNumber||qbo.estimateDocNumber||estimate?.estimateId||qbo.estimateId||'')):'No estimate';
+      $('[data-quickbooks-estimate-detail]').textContent=estimate||qbo.estimateId?money(Number(estimate?.total??qbo.estimateTotal||0))+' · '+String(estimate?.emailStatus||qbo.estimateEmailStatus||estimate?.status||'status unavailable'):'No QuickBooks estimate linked';
+      const openBalance=qboInvoices.reduce((sum,x)=>sum+Math.max(0,Number(x.balance||0)),0);
+      const invoiced=qboInvoices.reduce((sum,x)=>sum+Number(x.total??x.amount||0),0);
+      $('[data-quickbooks-invoices]').textContent=qboInvoices.length+' invoice'+(qboInvoices.length===1?'':'s')+' · '+money(openBalance)+' open';
+      $('[data-quickbooks-invoices-detail]').textContent=money(invoiced)+' invoiced · '+money(Number(qbo.totalPaid||Math.max(0,invoiced-openBalance)))+' paid';
+      const paymentTotal=Number(qbo.paymentTotal||qboPayments.reduce((sum,x)=>sum+Number(x.total||0),0));
+      $('[data-quickbooks-payments]').textContent=qboPayments.length+' payment'+(qboPayments.length===1?'':'s')+' · '+money(paymentTotal);
+      $('[data-quickbooks-payments-detail]').textContent=qbo.depositPaid?'Reservation/deposit is paid':'Deposit status '+(qboInvoices.length?'not fully paid':'not available');
+      const docs=[];
+      qboEstimates.slice(0,3).forEach(x=>docs.push('<div class="flex flex-col gap-1 rounded-xl border border-[var(--koa-line)] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Estimate</p><strong class="text-sm">#'+esc(x.docNumber||x.estimateId||'')+'</strong></div><p class="text-xs text-[var(--koa-ink)]/55">'+esc(x.txnDate||'')+' · '+money(Number(x.total||0))+' · '+esc(x.emailStatus||x.status||'')+'</p></div>'));
+      qboInvoices.slice(0,8).forEach(x=>docs.push('<div class="flex flex-col gap-1 rounded-xl border border-[var(--koa-line)] p-3 sm:flex-row sm:items-center sm:justify-between"><div><p class="text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Invoice</p><strong class="text-sm">#'+esc(x.docNumber||x.invoiceId||'')+'</strong></div><p class="text-xs text-[var(--koa-ink)]/55">'+esc(x.dueDate||x.txnDate||'')+' · '+money(Number(x.total??x.amount||0))+' · '+money(Number(x.balance||0))+' open · '+esc(x.status||'')+'</p></div>'));
+      $('[data-quickbooks-documents]').innerHTML=docs.join('');
+    }
+
     const links=[]; if(p.proposal?.publicToken)links.push('<a target="_blank" href="/proposal/?token='+encodeURIComponent(p.proposal.publicToken)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Proposal</a>');
     if(p.stage==='booked')links.push('<a href="/admin/events/?recordId='+encodeURIComponent(p.id)+'" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Event Ops</a>');
     links.push('<a href="/planning/?record='+encodeURIComponent(p.id)+'" target="_blank" class="rounded-full border border-white/15 bg-white/[.06] px-3 py-2 text-[.6rem] font-black uppercase tracking-[.08em]">Client planning</a>');
