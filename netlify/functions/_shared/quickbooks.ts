@@ -302,6 +302,34 @@ export type QuickBooksCatalogItem = {
   updatedAt: string;
 };
 
+export type CatalogPriceHistoryEntry = {
+  id: string;
+  catalogItemId: string;
+  itemName: string;
+  changedAt: string;
+  changedBy: string;
+  source: string;
+  sourceRef: string;
+  note: string;
+  oldPrice: number;
+  newPrice: number;
+  oldInternalCost: number;
+  newInternalCost: number;
+  oldTargetMargin: number;
+  newTargetMargin: number;
+  oldActualMargin: number | null;
+  newActualMargin: number | null;
+  draftProposalsUpdated: number;
+};
+
+export type CatalogSaveAudit = {
+  actor?: string;
+  source?: string;
+  sourceRef?: string;
+  note?: string;
+  draftProposalsUpdated?: number;
+};
+
 export type QuickBooksGetSettings = {
   enabled: boolean;
   label: string;
@@ -368,6 +396,92 @@ function catalogKey() {
 
 function getSettingsKey() {
   return 'quickbooks/get-settings/' + config().environment;
+}
+
+function catalogPriceHistoryKey() {
+  return 'quickbooks/catalog-price-history/' + config().environment;
+}
+
+function cleanHistoryText(value: unknown, max = 300) {
+  return String(value ?? '').trim().slice(0, max);
+}
+
+function catalogActualMargin(price: unknown, cost: unknown) {
+  const sell = Math.max(0, Number(price || 0));
+  const direct = Math.max(0, Number(cost || 0));
+  if (!Number.isFinite(sell) || sell <= 0) return null;
+  return Math.round((((sell - direct) / sell) * 100) * 100) / 100;
+}
+
+function catalogHistoryId() {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return 'PRICE-' + new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14) + '-' +
+    Array.from(bytes, value => value.toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+
+export async function getCatalogPriceHistory(
+  context: Context,
+  options: { catalogItemId?: string; limit?: number } = {},
+): Promise<CatalogPriceHistoryEntry[]> {
+  const raw = await integrationStore(context).get(catalogPriceHistoryKey(), { type: 'json' }) as any;
+  const rows = Array.isArray(raw) ? raw : [];
+  const itemId = cleanHistoryText(options.catalogItemId, 80);
+  const limit = Math.min(500, Math.max(1, Number(options.limit || 150)));
+  return rows
+    .filter((row:any) => !itemId || String(row?.catalogItemId || '') === itemId)
+    .slice(0, limit)
+    .map((row:any) => ({
+      id: cleanHistoryText(row?.id, 100),
+      catalogItemId: cleanHistoryText(row?.catalogItemId, 80),
+      itemName: cleanHistoryText(row?.itemName, 160),
+      changedAt: cleanHistoryText(row?.changedAt, 60),
+      changedBy: cleanHistoryText(row?.changedBy, 240),
+      source: cleanHistoryText(row?.source, 120),
+      sourceRef: cleanHistoryText(row?.sourceRef, 180),
+      note: cleanHistoryText(row?.note, 500),
+      oldPrice: Math.max(0, Number(row?.oldPrice || 0)),
+      newPrice: Math.max(0, Number(row?.newPrice || 0)),
+      oldInternalCost: Math.max(0, Number(row?.oldInternalCost || 0)),
+      newInternalCost: Math.max(0, Number(row?.newInternalCost || 0)),
+      oldTargetMargin: Math.max(0, Number(row?.oldTargetMargin || 0)),
+      newTargetMargin: Math.max(0, Number(row?.newTargetMargin || 0)),
+      oldActualMargin: row?.oldActualMargin == null ? null : Number(row.oldActualMargin),
+      newActualMargin: row?.newActualMargin == null ? null : Number(row.newActualMargin),
+      draftProposalsUpdated: Math.max(0, Math.round(Number(row?.draftProposalsUpdated || 0))),
+    }))
+    .filter((row:CatalogPriceHistoryEntry) => row.id && row.catalogItemId);
+}
+
+export async function annotateCatalogPriceHistory(
+  context: Context,
+  update: {
+    catalogItemId: string;
+    source?: string;
+    newPrice?: number;
+    draftProposalsUpdated?: number;
+    note?: string;
+  },
+) {
+  const store = integrationStore(context);
+  const raw = await store.get(catalogPriceHistoryKey(), { type: 'json' }) as any;
+  const rows = Array.isArray(raw) ? raw : [];
+  const itemId = cleanHistoryText(update.catalogItemId, 80);
+  const source = cleanHistoryText(update.source, 120);
+  const targetPrice = update.newPrice == null ? null : Math.round(Math.max(0, Number(update.newPrice || 0)) * 100) / 100;
+  const index = rows.findIndex((row:any) =>
+    String(row?.catalogItemId || '') === itemId &&
+    (!source || String(row?.source || '') === source) &&
+    (targetPrice == null || Math.abs(Number(row?.newPrice || 0) - targetPrice) < 0.005)
+  );
+  if (index < 0) return null;
+  rows[index] = {
+    ...rows[index],
+    draftProposalsUpdated: Math.max(0, Math.round(Number(update.draftProposalsUpdated ?? rows[index]?.draftProposalsUpdated ?? 0))),
+    note: cleanHistoryText(update.note ?? rows[index]?.note ?? '', 500),
+  };
+  await store.setJSON(catalogPriceHistoryKey(), rows.slice(0, 2000));
+  return rows[index];
 }
 
 function depositSettingsKey() {
@@ -541,7 +655,12 @@ export async function getQuickBooksCatalog(context: Context): Promise<QuickBooks
   })).filter((item: QuickBooksCatalogItem) => item.id && item.name);
 }
 
-export async function saveQuickBooksCatalog(context: Context, catalog: QuickBooksCatalogItem[]) {
+export async function saveQuickBooksCatalog(
+  context: Context,
+  catalog: QuickBooksCatalogItem[],
+  audit: CatalogSaveAudit = {},
+) {
+  const previousCatalog = await getQuickBooksCatalog(context);
   const cleanCatalog = (Array.isArray(catalog) ? catalog : []).slice(0, 500).map((item) => ({
     id: String(item.id || '').trim().slice(0, 80),
     name: String(item.name || '').trim().slice(0, 100),
@@ -563,7 +682,48 @@ export async function saveQuickBooksCatalog(context: Context, catalog: QuickBook
     incomeAccountName: String(item.incomeAccountName || '').trim().slice(0, 160),
     updatedAt: String(item.updatedAt || new Date().toISOString()),
   })).filter((item) => item.id && item.name);
-  await integrationStore(context).setJSON(catalogKey(), cleanCatalog);
+  const store = integrationStore(context);
+  await store.setJSON(catalogKey(), cleanCatalog);
+
+  const previousById = new Map(previousCatalog.map(item => [item.id, item]));
+  const changedAt = new Date().toISOString();
+  const changedBy = cleanHistoryText(audit.actor || 'system', 240) || 'system';
+  const source = cleanHistoryText(audit.source || 'catalog-save', 120) || 'catalog-save';
+  const sourceRef = cleanHistoryText(audit.sourceRef || '', 180);
+  const note = cleanHistoryText(audit.note || '', 500);
+  const priceChanges: CatalogPriceHistoryEntry[] = [];
+
+  for (const item of cleanCatalog) {
+    const previous = previousById.get(item.id);
+    const oldPrice = Math.round(Math.max(0, Number(previous?.unitPrice || 0)) * 100) / 100;
+    const newPrice = Math.round(Math.max(0, Number(item.unitPrice || 0)) * 100) / 100;
+    if (Math.abs(oldPrice - newPrice) < 0.005) continue;
+    priceChanges.push({
+      id: catalogHistoryId(),
+      catalogItemId: item.id,
+      itemName: item.name,
+      changedAt,
+      changedBy,
+      source,
+      sourceRef,
+      note,
+      oldPrice,
+      newPrice,
+      oldInternalCost: Math.max(0, Number(previous?.internalCost || 0)),
+      newInternalCost: Math.max(0, Number(item.internalCost || 0)),
+      oldTargetMargin: Math.max(0, Number(previous?.targetMargin || 0)),
+      newTargetMargin: Math.max(0, Number(item.targetMargin || 0)),
+      oldActualMargin: catalogActualMargin(oldPrice, previous?.internalCost || 0),
+      newActualMargin: catalogActualMargin(newPrice, item.internalCost || 0),
+      draftProposalsUpdated: Math.max(0, Math.round(Number(audit.draftProposalsUpdated || 0))),
+    });
+  }
+
+  if (priceChanges.length) {
+    const currentHistory = await store.get(catalogPriceHistoryKey(), { type: 'json' }) as any;
+    const rows = Array.isArray(currentHistory) ? currentHistory : [];
+    await store.setJSON(catalogPriceHistoryKey(), [...priceChanges, ...rows].slice(0, 2000));
+  }
   return cleanCatalog;
 }
 
