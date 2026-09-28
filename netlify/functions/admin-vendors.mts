@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
@@ -8,7 +9,7 @@ type VendorStatus='draft'|'published'|'paused';
 type PartnerTier='preferred'|'verified'|'community';
 type InsuranceStatus='not_requested'|'requested'|'received'|'approved'|'expired';
 
-function storeFor(context:Context){return context.deploy.context==='production'?getStore({name:'koa-vendors',consistency:'strong'}):getDeployStore({name:'koa-vendors'});}
+function storeFor(context:Context){return tenantStore(context,'vendors',resolveTenant());}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 function arr(v:unknown,max=50){return Array.isArray(v)?v.map(x=>clean(x,300)).filter(Boolean).slice(0,max):[];}
 function id(prefix='VEN'){return prefix+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
@@ -79,10 +80,11 @@ function sanitize(body:any,current:any={}){
 
 export default async(req:Request,context:Context)=>{
   const auth=await requireCapability('vendors.view', req); if(auth.response)return auth.response;
-  const store=storeFor(context);
-  const vendors=await list(store,'vendors/index');
+  const tenant=auth.tenant||resolveTenant(req);
+  const store=tenantStore(context,'vendors',tenant);
+  const vendors=tenantRows(await list(store,'vendors/index'),tenant);
   if(req.method==='GET'){
-    const [reviews,requests]=await Promise.all([list(store,'reviews/index'),list(store,'requests/index')]);
+    const [reviewsRaw,requestsRaw]=await Promise.all([list(store,'reviews/index'),list(store,'requests/index')]);const reviews=tenantRows(reviewsRaw,tenant);const requests=tenantRows(requestsRaw,tenant);
     const enriched=vendors.map(v=>{const rows=reviews.filter(r=>r.vendorId===v.id&&r.status==='published');const avg=rows.length?rows.reduce((s,r)=>s+Number(r.overall||0),0)/rows.length:0;return {...v,reviewSummary:{count:rows.length,average:Number(avg.toFixed(1))}};});
     return Response.json({vendors:enriched,reviews,requests},{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -91,7 +93,7 @@ export default async(req:Request,context:Context)=>{
   const body:any=await req.json().catch(()=>null); const action=clean(body?.action,40);
   if(action==='save-vendor'){
     const current=vendors.find(v=>v.id===body?.vendor?.id)||{};
-    const vendor=sanitize(body?.vendor,current);
+    const vendor=stampTenant(sanitize(body?.vendor,current),tenant);
     if(!vendor.name||!vendor.category)return Response.json({error:'Vendor name and category are required.'},{status:400});
     const next=[vendor,...vendors.filter(v=>v.id!==vendor.id)];
     await store.setJSON('vendors/index',next.slice(0,2000));
@@ -111,19 +113,19 @@ export default async(req:Request,context:Context)=>{
     await store.setJSON('vendors/index',vendors);
     const affectedEvents=await syncVendorInsuranceToUpcomingEvents(context,vendor);
     if(String(vendor.email||'').includes('@')){
-      await sendVendorEmail({to:[vendor.email],subject:decision==='approve'?'Koa’s insurance certificate approved':'Koa’s insurance certificate needs an update',title:decision==='approve'?'Your insurance certificate is approved.':'Your insurance certificate needs an update.',body:decision==='approve'?'Koa’s has reviewed and approved your current insurance certificate.':'Koa’s reviewed your insurance certificate and needs an updated submission before it can be approved.',detail:decision==='approve'?(vendor.insurance.expiresAt?'Expiration: '+vendor.insurance.expiresAt:'Approved'):vendor.insurance.rejectionReason,actionLabel:'Open Vendor Portal',actionUrl:'https://koasevents.com/vendor-portal/?token='+encodeURIComponent(vendor.portalToken),idempotencyKey:'koa-insurance-review-'+vendor.id+'-'+vendor.insurance.reviewedAt});
+      await sendVendorEmail({to:[vendor.email],subject:decision==='approve'?tenant.displayName+' insurance certificate approved':tenant.displayName+' insurance certificate needs an update',title:decision==='approve'?'Your insurance certificate is approved.':'Your insurance certificate needs an update.',body:decision==='approve'?tenant.displayName+' has reviewed and approved your current insurance certificate.':tenant.displayName+' reviewed your insurance certificate and needs an updated submission before it can be approved.',detail:decision==='approve'?(vendor.insurance.expiresAt?'Expiration: '+vendor.insurance.expiresAt:'Approved'):vendor.insurance.rejectionReason,actionLabel:'Open Vendor Portal',actionUrl:'https://'+tenant.domains.primary+'/vendor-portal/?token='+encodeURIComponent(vendor.portalToken),idempotencyKey:'insurance-review-'+tenant.id+'-'+vendor.id+'-'+vendor.insurance.reviewedAt});
     }
     return Response.json({ok:true,vendor,affectedEvents});
   }
   if(action==='send-portal-invite'){
     const vendor=vendors.find(v=>v.id===body?.vendorId);if(!vendor)return Response.json({error:'Vendor not found.'},{status:404});
     if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending a portal invite.'},{status:400});
-    const url='https://koasevents.com/vendor-portal/?token='+encodeURIComponent(vendor.portalToken);
-    const result=await sendVendorEmail({to:[vendor.email],subject:'Your Koa’s Vendor Portal',title:'Your Koa’s Vendor Portal is ready.',body:'Use this private link to keep your marketplace profile and insurance information current and to respond to availability requests from Koa’s clients.',detail:'Keep this private link for your team. Koa’s retains control of Preferred/Verified status, reviews and internal performance records.',actionLabel:'Open Vendor Portal',actionUrl:url,idempotencyKey:'koa-vendor-portal-'+vendor.id+'-'+new Date().toISOString().slice(0,10)});
+    const url='https://'+tenant.domains.primary+'/vendor-portal/?token='+encodeURIComponent(vendor.portalToken);
+    const result=await sendVendorEmail({to:[vendor.email],subject:'Your '+tenant.displayName+' Vendor Portal',title:'Your Vendor Portal is ready.',body:'Use this private link to keep your marketplace profile and insurance information current and to respond to availability requests from clients.',detail:'Keep this private link for your team. The venue retains control of partner status, reviews and internal performance records.',actionLabel:'Open Vendor Portal',actionUrl:url,idempotencyKey:'vendor-portal-'+tenant.id+'-'+vendor.id+'-'+new Date().toISOString().slice(0,10)});
     return Response.json({ok:true,sent:result.sent,url});
   }
   if(action==='moderate-review'){
-    const reviews=await list(store,'reviews/index');const row=reviews.find(r=>r.id===body?.reviewId);if(!row)return Response.json({error:'Review not found.'},{status:404});
+    const reviews=tenantRows(await list(store,'reviews/index'),tenant);const row=reviews.find(r=>r.id===body?.reviewId);if(!row)return Response.json({error:'Review not found.'},{status:404});
     row.status=body?.status==='published'?'published':'hidden';row.moderatedAt=new Date().toISOString();
     await store.setJSON('reviews/index',reviews);return Response.json({ok:true,review:row});
   }
