@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendClientFollowUp, sendResponseReminder } from './_shared/lead-email.ts';
 
 const RESPONSE_TYPES = new Set([
@@ -147,7 +148,7 @@ export default async (_req: Request, context: Context) => {
   const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
   if (!apiKey) return;
 
-  const store = getStore({ name: 'koa-sales', consistency: 'strong' });
+  const store = tenantStoreFor(context, resolveTenant(), 'sales');
   const records: any[] = (await store.get('records/index', { type: 'json' })) || [];
   const events: any[] = (await store.get('analytics/events/index', { type: 'json' })) || [];
   const reminderThreshold = reminderBusinessHours();
