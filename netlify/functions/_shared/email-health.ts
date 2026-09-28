@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type EmailHealthEvent = {
   id: string;
@@ -49,9 +50,7 @@ const COMPATIBILITY_CHECKS = [
 ] as const;
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-system-health' });
+  return tenantStoreFor(context, resolveTenant(), 'emailAnalytics');
 }
 
 function clean(value: unknown, max = 500) {
