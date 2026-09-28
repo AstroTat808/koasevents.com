@@ -274,7 +274,7 @@ export async function readHealthAlertPolicy(context:Context):Promise<HealthAlert
       const saved:any=byId.get(rule.id);
       return {
         id:rule.id,
-        alertAfter:saved?.alertAfter===1?1:2,
+        alertAfter:saved ? (saved?.alertAfter===1?1:2) : rule.alertAfter,
         publicVisible:Boolean(saved?.publicVisible),
         publicName:clean(saved?.publicName,120)||rule.publicName,
       };
@@ -302,7 +302,7 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
       const saved:any=byId.get(rule.id);
       return {
         id:rule.id,
-        alertAfter:saved?.alertAfter===1?1:2,
+        alertAfter:saved ? (saved?.alertAfter===1?1:2) : rule.alertAfter,
         publicVisible:Boolean(saved?.publicVisible),
         publicName:clean(saved?.publicName,120)||rule.publicName,
       };
