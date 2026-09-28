@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { createSignWellContract, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
@@ -165,7 +165,7 @@ function publicBooking(record: any) {
   };
 }
 
-export default async (req: Request, context: Context) => {
+async function handleTenantRequest(req: Request, context: Context) {
   const token = clean(context.params.token, 100);
   if (!/^[A-Za-z0-9_-]{24,100}$/.test(token)) {
     return Response.json({ error: 'Invalid booking link.' }, { status: 400 });
@@ -279,6 +279,11 @@ export default async (req: Request, context: Context) => {
   }
 
   return new Response('Method not allowed', { status: 405 });
+}
+
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
 
 export const config: Config = { path: '/api/bookings/:token' };
