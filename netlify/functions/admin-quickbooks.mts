@@ -153,19 +153,10 @@ function proposalLines(record: any, itemId: string) {
     },
   }];
 
-  const getAmount = Math.max(0, Number(proposal.taxAmount || 0));
-  if (getAmount > 0) {
-    lines.push({
-      Amount: getAmount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(proposal.taxLabel || 'Tax', 400),
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: getAmount,
-      },
-    });
-  }
+  // QuickBooks calculates sales tax on taxable estimate lines using the
+  // company's tax configuration. The CRM's proposal.taxAmount is already
+  // included in proposal.total, but it must not be emitted as another
+  // taxable SalesItem line or QuickBooks will tax the tax amount again.
   return lines;
 }
 
