@@ -1,25 +1,12 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { belongsToTenant, stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { hasCapability, requireOperations } from './_shared/admin';
 import { isSyntheticHealthRequest } from './_shared/synthetic-health';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
-
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
-}
-
-function filesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-files', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-files' });
-}
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
+function opsStoreFor(context: Context) { return tenantStore(context,'eventOps',resolveTenant()); }
+function filesStoreFor(context: Context) { return tenantStore(context,'eventFiles',resolveTenant()); }
 
 function clean(value: unknown, max = 1000) {
   return String(value || '').trim().slice(0, max);
@@ -44,7 +31,8 @@ const CATEGORY = new Set(['insurance','floor_plan','vendor','questionnaire','oth
 const MAX_BYTES = 20 * 1024 * 1024;
 
 async function bookedRecord(context: Context, recordId: string) {
-  const list = ((await salesStoreFor(context).get('records/index', { type: 'json' })) || []) as any[];
+  const tenant=resolveTenant();
+  const list = tenantRows(((await tenantStore(context,'sales',tenant).get('records/index', { type: 'json' })) || []) as any[],tenant);
   return list.find((entry) => entry?.id === recordId && entry?.stage === 'booked' && entry?.kind === 'proposal') || null;
 }
 
@@ -57,14 +45,15 @@ export default async (req: Request, context: Context) => {
         opsStoreFor(context).get('events/__health__', { type: 'json' }),
         filesStoreFor(context).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
-      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
     } catch {
-      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
     }
   }
 
-  const auth = await requireOperations();
+  const auth = await requireOperations(req);
   if (auth.response) return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
   if (req.method !== 'GET' && !hasCapability(auth.user, 'event_ops.manage')) {
     return Response.json({ error: 'Manager permission required to change event documents.' }, { status: 403 });
   }
@@ -78,7 +67,8 @@ export default async (req: Request, context: Context) => {
 
   const opsStore = opsStoreFor(context);
   const filesStore = filesStoreFor(context);
-  const ops: any = await opsStore.get('events/' + recordId, { type: 'json' });
+  let ops: any = await opsStore.get('events/' + recordId, { type: 'json' });
+  if (ops && !belongsToTenant(ops,tenant)) return Response.json({ error:'Event belongs to another organization.' },{status:403});
   if (!ops) return Response.json({ error: 'Open the event in Event Ops before uploading documents.' }, { status: 409 });
   ops.documents ||= [];
 
@@ -93,6 +83,7 @@ export default async (req: Request, context: Context) => {
     const category = CATEGORY.has(categoryRaw) ? categoryRaw : 'other';
     const docId = id();
     const meta = {
+      tenant_id:tenant.id,
       id: docId,
       name: clean(file.name, 240) || 'document',
       label: clean(form.get('label'), 240) || clean(file.name, 240) || 'Document',
@@ -106,7 +97,7 @@ export default async (req: Request, context: Context) => {
     await filesStore.set('documents/' + recordId + '/' + docId, await file.arrayBuffer());
     ops.documents = [meta, ...ops.documents.filter((entry: any) => entry.id !== docId)].slice(0, 200);
     ops.updatedAt = new Date().toISOString();
-    await opsStore.setJSON('events/' + recordId, ops);
+    ops=stampTenant(ops,tenant);await opsStore.setJSON('events/' + recordId, ops);
 
     return Response.json({ ok: true, document: meta, documents: ops.documents }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
@@ -131,7 +122,7 @@ export default async (req: Request, context: Context) => {
     await filesStore.delete(key);
     ops.documents = ops.documents.filter((entry: any) => entry.id !== documentId);
     ops.updatedAt = new Date().toISOString();
-    await opsStore.setJSON('events/' + recordId, ops);
+    ops=stampTenant(ops,tenant);await opsStore.setJSON('events/' + recordId, ops);
     return Response.json({ ok: true, documents: ops.documents }, { headers: { 'Cache-Control': 'private, no-store' } });
   }
 
