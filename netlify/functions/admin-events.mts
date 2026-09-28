@@ -1,10 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
 import { buildVendorOperations, ensureVendorBriefState, sanitizeSetupItems } from './_shared/vendor-event-ops.ts';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 type Vendor = {
   id: string;
@@ -93,21 +94,15 @@ type EventOps = {
   setupItems: any[];
 };
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
+function opsStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'eventOps');
 }
-function vendorStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendors' });
+function vendorStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'vendors');
 }
 
 function clean(value: unknown, max = 1200) {
@@ -141,7 +136,7 @@ function seedQuestionnaire(): QuestionAnswer[] {
     ['event', 'Confirm the final guest count.'],
     ['event', 'What time should guests begin arriving?'],
     ['event', 'Are there accessibility, mobility, or special accommodation needs?'],
-    ['ceremony', 'Will the ceremony be held at Koa’s? If yes, where and what setup do you want?'],
+    ['ceremony', 'Will the ceremony be held at the venue? If yes, where and what setup do you want?'],
     ['ceremony', 'How many ceremony chairs are needed, and are there aisle, arch, microphone, or processional requirements?'],
     ['reception', 'Where will the reception be held, and will it use the same space as the ceremony?'],
     ['reception', 'What meal style are you planning: plated, buffet, family-style, food stations, food truck, or something else?'],
@@ -150,8 +145,8 @@ function seedQuestionnaire(): QuestionAnswer[] {
     ['layout', 'What is the rain/weather backup layout, and will any furniture need to move or flip between ceremony and reception?'],
     ['vendors', 'Are all vendors finalized? List any vendors still pending.'],
     ['vendors', 'Are there vendor power, water, staging, loading, or parking requirements?'],
-    ['rentals', 'Which Koa’s rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
-    ['bar', 'Will alcohol be served? If yes, are you using Koa’s Mobile Bar, another approved bartender, beer/wine only, cocktails, or a full bar?'],
+    ['rentals', 'Which venue rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
+    ['bar', 'Will alcohol be served? If yes, are you using the venue’s mobile bar service, another approved bartender, beer/wine only, cocktails, or a full bar?'],
     ['bar', 'Where will bar service be located, and do you need cocktail-hour service, a satellite/second bar, or special beverage stations?'],
     ['decor', 'What decor, floral, signage, cake, or specialty installation details need coordination?'],
     ['timeline', 'List special entrances, announcements, dances, speeches, ceremonies, performances, or surprise moments.'],
@@ -218,7 +213,7 @@ function seedTasks(): EventTask[] {
   ];
 }
 
-function defaultOps(record: any): EventOps {
+function defaultOps(record: any, tenant: any): EventOps {
   const eventDate = clean(record?.customer?.eventDate, 40);
   const guestCount = Math.round(num(record?.quote?.state?.guestCount || record?.inquiry?.guestCount, 0, 1000));
   const now = new Date().toISOString();
@@ -233,7 +228,7 @@ function defaultOps(record: any): EventOps {
     eventStart: '',
     eventEnd: '',
     teardownEnd: '',
-    venueArea: 'Koa’s Events',
+    venueArea: tenant.displayName || 'Venue',
     notes: '',
     vendors: [],
     vendorRequirements: seedVendorRequirements(),
@@ -338,8 +333,8 @@ function sanitizeTasks(input: unknown): EventTask[] {
   })).filter((row) => row.task);
 }
 
-async function appendEvent(context: Context, event: Record<string, unknown>) {
-  const store = salesStoreFor(context);
+async function appendEvent(context: Context, event: Record<string, unknown>, req?: Request) {
+  const store = salesStoreFor(context, req);
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [{
     id: id('EVT'),
@@ -349,12 +344,14 @@ async function appendEvent(context: Context, event: Record<string, unknown>) {
 }
 
 export default async (req: Request, context: Context) => {
-  const auth = await requireCapability('events.view', req);
+  const auth = await requireCapability('events.view', req, context);
   if (auth.response) return auth.response;
+  const tenant = auth.tenant || resolveTenant(req);
 
-  const salesStore = salesStoreFor(context);
-  const opsStore = opsStoreFor(context);
-  const records = ((await salesStore.get('records/index', { type: 'json' })) || []) as any[];
+  const salesStore = salesStoreFor(context, req);
+  const opsStore = opsStoreFor(context, req);
+  const vendorStore = vendorStoreFor(context, req);
+  const records = (await readTenantIndex<any>(salesStore, tenant, 'records/index')).rows;
 
   if (req.method === 'GET') {
     const url = new URL(req.url);
@@ -375,12 +372,12 @@ export default async (req: Request, context: Context) => {
     const events = await Promise.all(booked.slice(0, 300).map(async (record) => {
       let ops = await opsStore.get('events/' + record.id, { type: 'json' }) as EventOps | null;
       if (!ops) {
-        ops = defaultOps(record);
+        ops = defaultOps(record, tenant);
         await opsStore.setJSON('events/' + record.id, ops);
       }
       const mergedQuestionnaire=ensureQuestionnaire((ops.questionnaire||[]) as QuestionAnswer[]);
       if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
-      const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+      const masterVendorsForEvent:any[]=(await vendorStore.get('vendors/index',{type:'json'}))||[];
       const beforeVendorState=JSON.stringify(ops.vendors||[]);
       ops.vendors=ensureVendorBriefState(ops.vendors||[]) as any;
       if(!Array.isArray((ops as any).setupItems))(ops as any).setupItems=[];
@@ -432,7 +429,7 @@ export default async (req: Request, context: Context) => {
   if (!record) return Response.json({ error: 'Booked event not found.' }, { status: 404 });
 
   let ops = await opsStore.get('events/' + recordId, { type: 'json' }) as EventOps | null;
-  if (!ops) ops = defaultOps(record);
+  if (!ops) ops = defaultOps(record, tenant);
 
   if (action === 'save-overview') {
     const statusValues = new Set(['planning','ready','event_day','complete']);
@@ -443,14 +440,14 @@ export default async (req: Request, context: Context) => {
     ops.eventStart = clean(payload?.eventStart, 20);
     ops.eventEnd = clean(payload?.eventEnd, 20);
     ops.teardownEnd = clean(payload?.teardownEnd, 20);
-    ops.venueArea = clean(payload?.venueArea, 180) || 'Koa’s Events';
+    ops.venueArea = clean(payload?.venueArea, 180) || tenant.displayName || 'Venue';
     ops.notes = clean(payload?.notes, 12000);
     if ((ops as any).vendorRequirementsMode !== 'manual') {
       ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
       (ops as any).vendorRequirementsMode = 'auto';
     }
   } else if (action === 'save-vendors') {
-    const masterVendors:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+    const masterVendors:any[]=(await vendorStore.get('vendors/index',{type:'json'}))||[];
     ops.vendors = applyMasterInsuranceToAssignments(sanitizeVendors(payload?.vendors), masterVendors, record.customer?.eventDate);
   } else if (action === 'save-vendor-brief-details') {
     const incoming=ensureVendorBriefState(payload?.vendors||[]);
@@ -466,9 +463,9 @@ export default async (req: Request, context: Context) => {
     const vendor:any=(ops.vendors||[]).find((v:any)=>String(v.id)===clean(payload?.vendorId,100));
     if(!vendor)return Response.json({error:'Vendor assignment not found.'},{status:404});
     if(!String(vendor.email||'').includes('@'))return Response.json({error:'Vendor email is required before sending the Event Brief.'},{status:400});
-    const url='https://koasevents.com/vendor-brief/?token='+encodeURIComponent(vendor.briefToken);
+    const url='https://'+tenant.domains.primary+'/vendor-brief/?token='+encodeURIComponent(vendor.briefToken);
     const assigned=sanitizeSetupItems((ops as any).setupItems||[]).filter((item:any)=>[item.responsibleVendorId,item.deliveryVendorId,item.setupVendorId,item.removalVendorId].includes(vendor.id));
-    const result=await sendVendorEmail({to:[vendor.email],subject:'Koa’s Event Brief — '+(record.customer?.eventDate||'upcoming event'),title:'Your Koa’s Event Brief is ready.',body:'Please review your arrival, load-in, setup/removal responsibilities, venue instructions, and applicable Koa’s rules, then acknowledge the brief before the event.',detail:[vendor.role,record.customer?.eventDate?'Event: '+record.customer.eventDate:'',vendor.arrivalTime?'Arrival: '+vendor.arrivalTime:'',assigned.length?assigned.length+' setup assignment'+(assigned.length===1?'':'s'):''].filter(Boolean).join(' · '),actionLabel:'Review Event Brief',actionUrl:url,idempotencyKey:'koa-event-brief-'+record.id+'-'+vendor.id+'-'+String(vendor.briefSentAt||'first')});
+    const result=await sendVendorEmail({to:[vendor.email],subject:tenant.displayName+' Event Brief — '+(record.customer?.eventDate||'upcoming event'),title:'Your '+tenant.displayName+' Event Brief is ready.',body:'Please review your arrival, load-in, setup/removal responsibilities, venue instructions, and applicable venue rules, then acknowledge the brief before the event.',detail:[vendor.role,record.customer?.eventDate?'Event: '+record.customer.eventDate:'',vendor.arrivalTime?'Arrival: '+vendor.arrivalTime:'',assigned.length?assigned.length+' setup assignment'+(assigned.length===1?'':'s'):''].filter(Boolean).join(' · '),actionLabel:'Review Event Brief',actionUrl:url,idempotencyKey:'venueloom-event-brief-'+tenant.id+'-'+record.id+'-'+vendor.id+'-'+String(vendor.briefSentAt||'first')});
     vendor.briefSentAt=new Date().toISOString();
     vendor.briefLastMessageId=result.id||'';
   } else if (action === 'save-vendor-requirements') {
