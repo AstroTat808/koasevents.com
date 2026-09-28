@@ -1,6 +1,6 @@
-import { businessRules } from '../businessRules';
-import { catalogItems, type CatalogItem } from '../catalog';
-import type { TenantCatalogSeedItem, TenantProfile } from './types';
+import { businessRules } from '../businessRules.ts';
+import { catalogItems, type CatalogItem } from '../catalog.ts';
+import type { TenantCatalogSeedItem, TenantProfile } from './types.ts';
 
 function money(value: unknown) {
   const n = Number(String(value ?? '').replace(/[$,%\s,]/g, ''));
