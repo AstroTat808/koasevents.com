@@ -24,7 +24,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p data-status class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button data-two-way-sync type="button" class="hidden rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Sync CRM ↔ QuickBooks</button>
+              <button data-preview-two-way type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-white px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Preview Sync</button>
+              <button data-two-way-sync type="button" disabled class="hidden rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white disabled:cursor-not-allowed disabled:opacity-40">Run Approved Sync</button>
+              <a data-sync-history href="/admin/quickbooks/history/" class="hidden rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Sync History</a>
               <button data-connect type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Connect QuickBooks</button>
               <button data-disconnect type="button" class="hidden rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Disconnect</button>
             </div>
@@ -33,10 +35,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Manual two-way synchronization</p>
-                <p data-two-way-sync-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Ready to synchronize.</p>
-                <p data-two-way-sync-detail class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Imports QuickBooks customers, estimates, invoices and payments into CRM, then safely updates linked QuickBooks customers and issued estimates from CRM.</p>
+                <p data-two-way-sync-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Run Preview Sync before applying changes.</p>
+                <p data-two-way-sync-detail class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Preview is read-only for CRM and QuickBooks business data. Ambiguous customers must be resolved before Run Approved Sync is enabled.</p>
               </div>
               <a href="/admin/crm/" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open CRM</a>
+            </div>
+
+            <div data-sync-preview class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
+              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">New CRM imports</p><strong data-preview-new class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Matched</p><strong data-preview-matched class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Already linked</p><strong data-preview-linked class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">CRM → QBO actions</p><strong data-preview-outbound class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Needs decision</p><strong data-preview-ambiguous class="display mt-2 block text-3xl text-[var(--koa-clay)]">0</strong></article>
+              </div>
+
+              <section data-match-review class="mt-5 hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div><p class="text-xs font-black uppercase tracking-[.08em] text-amber-900">Duplicate review required</p><p class="mt-1 text-xs leading-5 text-amber-950/65">Choose the correct CRM client for each QuickBooks customer, or explicitly approve importing it as a new CRM record.</p></div>
+                  <span data-match-review-count class="rounded-full bg-amber-900 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-white"></span>
+                </div>
+                <div data-match-review-list class="mt-4 grid gap-4"></div>
+              </section>
+
+              <div class="mt-5 grid gap-4 xl:grid-cols-3">
+                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Will import</p><div data-preview-imports class="mt-3 grid gap-2"></div></section>
+                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Will match / refresh</p><div data-preview-matches class="mt-3 grid gap-2"></div></section>
+                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">CRM → QuickBooks updates</p><div data-preview-outbound-list class="mt-3 grid gap-2"></div></section>
+              </div>
+              <p data-preview-generated class="mt-4 text-xs text-[var(--koa-ink)]/45"></p>
             </div>
           </div>
           <div data-config-warning class="mt-6 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/20 p-5">
@@ -393,10 +420,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const connect=document.querySelector('[data-connect]');
     const disconnect=document.querySelector('[data-disconnect]');
+    const previewTwoWay=document.querySelector('[data-preview-two-way]');
     const twoWaySync=document.querySelector('[data-two-way-sync]');
+    const syncHistory=document.querySelector('[data-sync-history]');
     const twoWaySyncPanel=document.querySelector('[data-two-way-sync-panel]');
     const twoWaySyncStatus=document.querySelector('[data-two-way-sync-status]');
     const twoWaySyncDetail=document.querySelector('[data-two-way-sync-detail]');
+    const syncPreview=document.querySelector('[data-sync-preview]');
+    const previewNew=document.querySelector('[data-preview-new]');
+    const previewMatched=document.querySelector('[data-preview-matched]');
+    const previewLinked=document.querySelector('[data-preview-linked]');
+    const previewOutbound=document.querySelector('[data-preview-outbound]');
+    const previewAmbiguous=document.querySelector('[data-preview-ambiguous]');
+    const previewImports=document.querySelector('[data-preview-imports]');
+    const previewMatches=document.querySelector('[data-preview-matches]');
+    const previewOutboundList=document.querySelector('[data-preview-outbound-list]');
+    const previewGenerated=document.querySelector('[data-preview-generated]');
+    const matchReview=document.querySelector('[data-match-review]');
+    const matchReviewCount=document.querySelector('[data-match-review-count]');
+    const matchReviewList=document.querySelector('[data-match-review-list]');
     const company=document.querySelector('[data-company]');
     const status=document.querySelector('[data-status]');
     const warning=document.querySelector('[data-config-warning]');
@@ -518,6 +560,89 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
     function auditValue(value){return value==null?'—':money(value);}
+    function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));}
+
+    function compactPlanRow(plan){
+      const f=plan.financial||{};
+      return '<article class="rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="text-sm text-[var(--koa-forest)]">'+esc(plan.qbo?.name||plan.name||'Unnamed customer')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(plan.qbo?.email||plan.email||'No email')+'</p>'+(plan.matchedRecordId?'<p class="mt-1 text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(plan.matchedRecordId)+'</p>':'')+(plan.financial?'<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/48">'+Number(f.estimates||0)+' estimate(s) · '+Number(f.invoices||0)+' invoice(s) · '+Number(f.payments||0)+' payment(s) · '+money(f.openBalance||0)+' open</p>':'')+'</article>';
+    }
+
+    async function saveMatch(customerId,decision,recordId=''){
+      const result=await api({action:'save-customer-match',customerId,decision,recordId});
+      return result;
+    }
+
+    function renderSyncPreview(){
+      const preview=state?.manualSyncPreview;
+      if(!syncPreview)return;
+      const valid=Boolean(preview?.previewId&&preview?.generatedAt&&Date.parse(preview.expiresAt||0)>Date.now());
+      syncPreview.classList.toggle('hidden',!preview);
+      const summary=preview?.summary||{};
+      if(previewNew)previewNew.textContent=Number(summary.newImports||0);
+      if(previewMatched)previewMatched.textContent=Number(summary.matched||0);
+      if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
+      if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
+      if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
+      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' QuickBooks customers scanned.':'';
+
+      const plans=Array.isArray(preview?.customerPlans)?preview.customerPlans:[];
+      const imports=plans.filter((row)=>['new','approved_new'].includes(row.decision));
+      const matches=plans.filter((row)=>['linked','auto_match','approved_match'].includes(row.decision));
+      const ambiguous=plans.filter((row)=>row.decision==='ambiguous');
+      if(previewImports)previewImports.innerHTML=imports.length?imports.slice(0,100).map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No new CRM customer imports.</p>';
+      if(previewMatches)previewMatches.innerHTML=matches.length?matches.slice(0,100).map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No customer matches to refresh.</p>';
+
+      const outbound=Array.isArray(preview?.outbound)?preview.outbound:[];
+      if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.slice(0,100).map((row)=>'<article class="rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid gap-1">'+(row.actions||[]).map((action)=>'<p class="text-xs text-[var(--koa-ink)]/55">'+esc(action.type||'Update')+' · '+esc(action.field||action.action||'update')+(action.before!=null&&action.after!=null?' · '+esc(typeof action.before==='object'?JSON.stringify(action.before):action.before)+' → '+esc(typeof action.after==='object'?JSON.stringify(action.after):action.after):'')+'</p>').join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
+
+      if(matchReview)matchReview.classList.toggle('hidden',ambiguous.length===0);
+      if(matchReviewCount)matchReviewCount.textContent=ambiguous.length+' decision'+(ambiguous.length===1?'':'s');
+      if(matchReviewList){
+        matchReviewList.innerHTML=ambiguous.map((plan)=>{
+          const q=plan.qbo||{};
+          const candidates=Array.isArray(plan.candidates)?plan.candidates:[];
+          return '<article class="rounded-xl border border-amber-200 bg-white p-4"><div class="grid gap-4 lg:grid-cols-[.8fr_1.2fr]"><div class="rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+' · '+esc(q.phone||'No phone')+'</p><p class="mt-2 text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full border border-amber-300 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-amber-900">Import as new CRM client</button></div><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Possible CRM matches</p><div class="mt-2 grid gap-2">'+candidates.map((candidate)=>'<div class="rounded-xl border border-[var(--koa-line)] p-3"><div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+' · '+esc(candidate.phone||'No phone')+'</p><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-1 text-[.62rem] font-semibold text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p></div><button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button></div></div>').join('')+'</div></div></div></article>';
+        }).join('');
+
+        matchReviewList.querySelectorAll('[data-match-qbo]').forEach((button)=>button.addEventListener('click',async()=>{
+          button.disabled=true;button.textContent='Saving…';
+          try{await saveMatch(button.dataset.matchQbo,'match',button.dataset.matchRecord);await runPreviewSync();}
+          catch(err){alert(err.message||'Unable to save customer match.');button.disabled=false;button.textContent='Use this CRM client';}
+        }));
+        matchReviewList.querySelectorAll('[data-match-new]').forEach((button)=>button.addEventListener('click',async()=>{
+          if(!confirm('Approve importing this QuickBooks customer as a new CRM client instead of matching an existing record?'))return;
+          button.disabled=true;button.textContent='Saving…';
+          try{await saveMatch(button.dataset.matchNew,'new','');await runPreviewSync();}
+          catch(err){alert(err.message||'Unable to approve new CRM import.');button.disabled=false;button.textContent='Import as new CRM client';}
+        }));
+      }
+
+      const needsDecision=Number(summary.needsDecision||0);
+      if(twoWaySync)twoWaySync.disabled=!valid||needsDecision>0;
+      if(twoWaySyncStatus&&preview){
+        twoWaySyncStatus.textContent=needsDecision>0
+          ? needsDecision+' customer match'+(needsDecision===1?' needs':'es need')+' your decision before sync can run.'
+          : valid?'Preview approved for execution. Review the lists below, then run the sync.':'Preview expired. Run Preview Sync again.';
+      }
+    }
+
+    async function runPreviewSync(){
+      if(!previewTwoWay)return;
+      const original=previewTwoWay.textContent;
+      previewTwoWay.disabled=true;previewTwoWay.textContent='Previewing…';
+      if(twoWaySync)twoWaySync.disabled=true;
+      if(twoWaySyncStatus)twoWaySyncStatus.textContent='Building a read-only sync preview…';
+      if(twoWaySyncDetail)twoWaySyncDetail.textContent='Scanning QuickBooks customers, estimates, invoices and payments and comparing them with CRM records. No customer, estimate, invoice or payment is being changed.';
+      try{
+        const data=await api({action:'preview-two-way'});
+        state.manualSyncPreview=data.preview||null;
+        renderSyncPreview();
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent='Review every planned import, match, outbound update and duplicate decision below. Run Approved Sync stays disabled until ambiguous matches are resolved.';
+      }catch(err){
+        if(twoWaySyncStatus)twoWaySyncStatus.textContent='Preview could not be generated.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=err.message||'QuickBooks preview failed.';
+      }finally{previewTwoWay.disabled=false;previewTwoWay.textContent=original;}
+    }
     function renderAccountingAudit(){
       const audit=state?.accountingAudit||{};
       const rows=Array.isArray(audit.rows)?audit.rows:[];
@@ -1248,7 +1373,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       warning.querySelector('[data-redirect-uri]').textContent=state?.configuration?.redirectUri||window.location.origin+'/.netlify/functions/quickbooks-callback';
       connect.classList.toggle('hidden',!configured||connected);
       disconnect.classList.toggle('hidden',!connected);
+      previewTwoWay?.classList.toggle('hidden',!connected);
       twoWaySync?.classList.toggle('hidden',!connected);
+      syncHistory?.classList.toggle('hidden',!connected);
       twoWaySyncPanel?.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
       catalogSection?.classList.toggle('hidden',!connected);
@@ -1264,11 +1391,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           : 'Ready to connect Koa’s QuickBooks Online company.';
       if(twoWaySyncStatus&&twoWaySyncDetail){
         const sync=state?.manualSync;
-        twoWaySyncStatus.textContent=sync?.completedAt?'Last two-way sync: '+when(sync.completedAt):'No full two-way sync has been run yet.';
         twoWaySyncDetail.textContent=sync?.completedAt
-          ? Number(sync.crm?.created||0)+' CRM customer(s) imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.qbo?.estimates||0)+' QBO estimate(s) · '+Number(sync.qbo?.invoices||0)+' invoice(s) · '+Number(sync.qbo?.payments||0)+' payment(s) · '+Number(sync.conflicts?.length||0)+' conflict(s) · '+Number(sync.warnings?.length||0)+' warning(s).'
-          : 'Imports QuickBooks customers, estimates, invoices and payments into CRM, then safely updates linked QuickBooks customers and issued estimates from CRM. The bulk sync never creates a payment or invoice in QuickBooks.';
+          ? 'Last completed sync '+when(sync.completedAt)+' · '+Number(sync.crm?.created||0)+' imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.changes?.length||0)+' recorded change(s). Run a new preview before the next sync.'
+          : 'Preview is required before the first full synchronization. The bulk sync never creates a payment or invoice in QuickBooks.';
       }
+      renderSyncPreview();
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
@@ -1340,6 +1467,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
+    previewTwoWay?.addEventListener('click',runPreviewSync);
     twoWaySync?.addEventListener('click',async()=>{
       const original=twoWaySync.textContent;
       twoWaySync.disabled=true;
@@ -1347,12 +1475,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(twoWaySyncStatus)twoWaySyncStatus.textContent='Synchronizing QuickBooks and CRM…';
       if(twoWaySyncDetail)twoWaySyncDetail.textContent='Reading customers, estimates, invoices and payments, matching records, then applying safe outbound CRM customer and estimate updates.';
       try{
-        const data=await api({action:'sync-two-way'});
+        const previewId=String(state?.manualSyncPreview?.previewId||'');
+        if(!previewId)throw new Error('Run Preview Sync first.');
+        const data=await api({action:'sync-two-way',previewId});
         state.manualSync=data.result||null;
+        state.manualSyncPreview=null;
         state.accountingAudit=data.accountingAudit||state.accountingAudit;
         const result=data.result||{};
         if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync completed '+when(result.completedAt)+'.';
-        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.changes?.length||0)+' recorded changes · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings.';
+        renderSyncPreview();
         renderAccountingAudit();
       }catch(err){
         if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync did not complete.';
