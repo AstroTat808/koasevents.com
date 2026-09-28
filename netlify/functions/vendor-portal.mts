@@ -1,11 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 function storeFor(c:Context,req?:Request){return tenantStoreFor(c,resolveTenant(req),'vendors');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 async function list(store:any,key:string){return ((await store.get(key,{type:'json'}))||[]) as any[];}
 function arr(v:unknown,max=40){return Array.isArray(v)?v.map(x=>clean(x,300)).filter(Boolean).slice(0,max):[];}
-export default async(req:Request,context:Context)=>{
+async function handleTenantRequest(req:Request,context:Context){
   const token=clean(context.params.token,120);
   if(!/^vnd_[A-Za-z0-9]{24,100}$/.test(token))return Response.json({error:'Invalid vendor portal link.'},{status:400});
   const store=storeFor(context,req);const vendors=await list(store,'vendors/index');const vendor=vendors.find(v=>v.portalToken===token);
@@ -28,5 +28,11 @@ export default async(req:Request,context:Context)=>{
     row.status=status;row.vendorNote=clean(body?.note,1600);row.respondedAt=new Date().toISOString();row.updatedAt=row.respondedAt;await store.setJSON('requests/index',requests);return Response.json({ok:true,request:row});
   }
   return Response.json({error:'Unknown vendor portal action.'},{status:400});
+}
+
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
+
 export const config:Config={path:'/api/vendor-portal/:token'};
