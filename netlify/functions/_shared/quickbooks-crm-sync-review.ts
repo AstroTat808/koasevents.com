@@ -681,6 +681,7 @@ export async function getQuickBooksCrmSyncHistory(context: Context, limit = 100)
     warningCount: Array.isArray(row?.warnings) ? row.warnings.length : 0,
     changeCount: Array.isArray(row?.changes) ? row.changes.length : 0,
     legacy: true,
+    legacyIndex: index,
   }));
 }
 
@@ -693,9 +694,12 @@ export async function getQuickBooksCrmSyncHistoryDetail(context: Context, syncId
 
   const index = ((await store.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
   const summary = index.find((row) => clean(row?.syncId, 120) === id);
-  if (summary?.legacy) {
+  const legacyIndex = summary?.legacy
+    ? Number(summary.legacyIndex)
+    : (/^LEGACY-(\d+)/.test(id) ? Number(id.match(/^LEGACY-(\d+)/)?.[1]) : NaN);
+  if (Number.isFinite(legacyIndex)) {
     const legacy = ((await store.get('quickbooks/manual-sync-history', { type:'json' })) || []) as any[];
-    const legacyRow = legacy[Number(summary.legacyIndex)];
+    const legacyRow = legacy[legacyIndex];
     if (legacyRow) {
       return {
         ...legacyRow,
