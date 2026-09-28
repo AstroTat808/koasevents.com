@@ -48,6 +48,7 @@ export function clientTenantProfile(tenant: TenantProfile) {
     timezone: tenant.timezone,
     domains: tenant.domains,
     tax: tenant.tax,
+    accounting: tenant.accounting,
   };
 }
 
