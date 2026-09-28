@@ -58,3 +58,21 @@ export function tenantStoragePrefix(tenant: TenantProfile) {
 export function tenantBlobStoreName(tenant: TenantProfile, kind: 'sales' | 'integrations') {
   return tenant.storage.compatibilityBlobStores[kind];
 }
+
+export function tenantCatalogCanonicalId(tenant:TenantProfile,value:unknown){
+  const raw=String(value??'').trim().toLowerCase().replaceAll('_','-').replaceAll(' ','-');
+  return tenant.catalog.canonicalAliases[raw] || raw;
+}
+
+export function tenantCatalogItem(tenant:TenantProfile,value:unknown){
+  const id=tenantCatalogCanonicalId(tenant,value);
+  return tenant.catalog.bootstrapItems.find((item)=>item.id===id) || null;
+}
+
+export function tenantCatalogName(tenant:TenantProfile,value:unknown){
+  return tenantCatalogItem(tenant,value)?.name || String(value??'').trim();
+}
+
+export function tenantCatalogPrice(tenant:TenantProfile,value:unknown){
+  return Number(tenantCatalogItem(tenant,value)?.unitPrice || 0);
+}
