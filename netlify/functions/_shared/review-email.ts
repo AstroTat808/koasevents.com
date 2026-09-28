@@ -1,4 +1,5 @@
 import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
+import { resolveTenant } from './tenant';
 
 type ReviewRecord = {
   id: string;
@@ -60,8 +61,8 @@ function html(record: ReviewRecord) {
             emailHeader({ brand, eyebrow: brandName, title: 'Mahalo for celebrating with us.' }) +
             '<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px;">' +
               emailGreeting(firstName(record)) +
-              '<div style="padding-top:10px;font-family:Georgia,Times New Roman,serif;font-size:34px;line-height:40px;font-weight:700;color:#173d30;">Would you share your Koa’s experience?</div>' +
-              '<div style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">Thank you for trusting ' + esc(brandName) + ' with your celebration' + (eventDate ? ' on ' + esc(eventDate) : '') + '. If you have a moment, we would be grateful if you shared an honest Google review. Your feedback helps future couples and hosts understand what it is actually like to celebrate with Koa’s.</div>' +
+              '<div style="padding-top:10px;font-family:Georgia,Times New Roman,serif;font-size:34px;line-height:40px;font-weight:700;color:#173d30;">Would you share your experience?</div>' +
+              '<div style="padding-top:16px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">Thank you for trusting ' + esc(brandName) + ' with your celebration' + (eventDate ? ' on ' + esc(eventDate) : '') + '. If you have a moment, we would be grateful if you shared an honest Google review. Your feedback helps future couples and hosts understand what it is actually like to celebrate with us.</div>' +
               emailButton({ href: url, label: 'Share a Google review →', marginTop: 22 }) +
               '<div style="padding-top:22px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">If there is anything you would rather tell us directly, simply reply to this email. We read every note.</div>' +
               emailSignature() +
@@ -84,7 +85,7 @@ function text(record: ReviewRecord) {
     '',
     'Mahalo for celebrating with ' + brandName + (eventDate ? ' on ' + eventDate : '') + '.',
     '',
-    'If you have a moment, we would be grateful if you shared an honest Google review. Your feedback helps future couples and hosts understand what it is actually like to celebrate with Koa’s.',
+    'If you have a moment, we would be grateful if you shared an honest Google review. Your feedback helps future couples and hosts understand what it is actually like to celebrate with us.',
     '',
     'Share a Google review:',
     reviewUrl(),
@@ -105,8 +106,9 @@ export async function sendReviewRequest(record: ReviewRecord) {
   }
 
   const brandName = emailBrandName(emailBrandForRecord(record));
-  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
-  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+  const tenant=resolveTenant();
+  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || (tenant.displayName+' <aloha@'+tenant.domains.primary+'>')).trim();
+  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || tenant.contact.email).trim();
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
@@ -114,7 +116,7 @@ export async function sendReviewRequest(record: ReviewRecord) {
       headers: {
         Authorization: 'Bearer ' + apiKey,
         'Content-Type': 'application/json',
-        'Idempotency-Key': ('koa-google-review-' + record.id).slice(0, 256),
+        'Idempotency-Key': ('venueloom-review-'+resolveTenant().id+'-' + record.id).slice(0, 256),
       },
       body: JSON.stringify({
         from,
