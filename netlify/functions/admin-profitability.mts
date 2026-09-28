@@ -607,27 +607,27 @@ function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:numbe
 async function updateDraftProposalPricing(context:Context,catalogItemId:string,price:number) {
   const store = storeFor(context);
   const records = await readSalesRecords(context);
-  let updated = 0;
+  const ids:string[] = [];
   for (const record of records) {
     if (!recalcDraftProposal(record,catalogItemId,price)) continue;
     await store.setJSON('records/'+record.id,record);
-    updated += 1;
+    ids.push(record.id);
   }
-  if (updated) await store.setJSON('records/index',records.slice(0,1500));
-  return updated;
+  if (ids.length) await store.setJSON('records/index',records.slice(0,1500));
+  return { count:ids.length, ids };
 }
 
 async function updateDraftPackagePricing(context:Context,packageId:string,price:number) {
   const store = storeFor(context);
   const records = await readSalesRecords(context);
-  let updated = 0;
+  const ids:string[] = [];
   for (const record of records) {
     if (!recalcDraftProposal(record,packageId,price,packageId)) continue;
     await store.setJSON('records/'+record.id,record);
-    updated += 1;
+    ids.push(record.id);
   }
-  if (updated) await store.setJSON('records/index',records.slice(0,1500));
-  return updated;
+  if (ids.length) await store.setJSON('records/index',records.slice(0,1500));
+  return { count:ids.length, ids };
 }
 
 async function responseState(context:Context,state:ProfitabilityState) {
@@ -712,18 +712,19 @@ export default async (req:Request,context:Context) => {
       [packageCatalogPatch(row,true)],
       {actor,source:'wedding-profitability',sourceRef:row.id,note:'Published recommended wedding package price from Wedding Profitability.'},
     );
-    const updatedDraftProposals=await updateDraftPackagePricing(context,row.id,row.price);
+    const repriced=await updateDraftPackagePricing(context,row.id,row.price);
     await annotateCatalogPriceHistory(context,{
       catalogItemId:row.id,
       source:'wedding-profitability',
       newPrice:row.price,
-      draftProposalsUpdated:updatedDraftProposals,
+      draftProposalsUpdated:repriced.count,
+      draftProposalIds:repriced.ids,
       note:'Published recommended wedding package price from Wedding Profitability.',
     });
     state=await writeState(context,state,actor);
     return Response.json({
       ok:true,
-      approvedPackage:{ id:row.id,price:row.price,updatedDraftProposals },
+      approvedPackage:{ id:row.id,price:row.price,updatedDraftProposals:repriced.count,updatedDraftProposalIds:repriced.ids },
       ...await responseState(context,state),
     });
   }
@@ -770,18 +771,19 @@ export default async (req:Request,context:Context) => {
       [addOnCatalogPatch(addon,true,true)],
       {actor,source:'wedding-profitability',sourceRef:addon.id,note:'Published recommended add-on price from Wedding Profitability.'},
     );
-    const updatedDraftProposals = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice);
+    const repriced = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice);
     await annotateCatalogPriceHistory(context,{
       catalogItemId:addon.catalogItemId,
       source:'wedding-profitability',
       newPrice:addon.sellPrice,
-      draftProposalsUpdated:updatedDraftProposals,
+      draftProposalsUpdated:repriced.count,
+      draftProposalIds:repriced.ids,
       note:'Published recommended add-on price from Wedding Profitability.',
     });
     state = await writeState(context,state,actor);
     return Response.json({
       ok:true,
-      approved:{ id:addon.id,catalogItemId:addon.catalogItemId,price:addon.sellPrice,updatedDraftProposals },
+      approved:{ id:addon.id,catalogItemId:addon.catalogItemId,price:addon.sellPrice,updatedDraftProposals:repriced.count,updatedDraftProposalIds:repriced.ids },
       ...await responseState(context,state),
     });
   }
