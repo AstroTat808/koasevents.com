@@ -12,15 +12,11 @@ import {
 import { markLifecycleEvent } from './_shared/lifecycle';
 
 function integrationStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function salesStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function verifySignature(rawBody: string, signature: string, verifierToken: string) {
