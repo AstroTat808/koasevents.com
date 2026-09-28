@@ -255,6 +255,54 @@ export async function saveOrganization(
   return next;
 }
 
+
+export function effectiveTenantProfile(profile: TenantProfile, organization: OrganizationRecord): TenantProfile {
+  const primaryDomain = organization.domains.find((domain) => domain.primary && domain.status === 'verified')
+    || organization.domains.find((domain) => domain.status === 'verified');
+  const appDomain = organization.domains.find((domain) => domain.kind === 'app' && domain.status === 'verified');
+  return {
+    ...profile,
+    displayName: organization.displayName || profile.displayName,
+    legalName: organization.legalName || profile.legalName,
+    locale: organization.locale || profile.locale,
+    currency: organization.currency || profile.currency,
+    timezone: organization.timezone || profile.timezone,
+    domains: {
+      primary: primaryDomain?.hostname || profile.domains.primary,
+      admin: appDomain?.hostname || primaryDomain?.hostname || profile.domains.admin,
+    },
+    contact: {
+      ...profile.contact,
+      email: organization.contact.email || profile.contact.email,
+      phone: organization.contact.phone || profile.contact.phone,
+      phoneDisplay: organization.contact.phone || profile.contact.phoneDisplay,
+      venueAddress: organization.contact.venueAddress || profile.contact.venueAddress,
+      mailingAddress: organization.contact.mailingAddress || profile.contact.mailingAddress,
+    },
+    brand: {
+      ...profile.brand,
+      tagline: organization.branding.tagline || profile.brand.tagline,
+      logoPath: organization.branding.logoPath || profile.brand.logoPath,
+    },
+    tax: {
+      ...profile.tax,
+      id: organization.taxProfile.id || profile.tax.id,
+      label: organization.taxProfile.label || profile.tax.label,
+      kind: (organization.taxProfile.kind || profile.tax.kind) as TenantProfile['tax']['kind'],
+      enabled: organization.taxProfile.enabled,
+      statutoryRate: Number(organization.taxProfile.statutoryRate || 0),
+      customerRate: Number(organization.taxProfile.customerRate || 0),
+      maxPassOnRate: Number(organization.taxProfile.maxPassOnRate || 0),
+      defaultTaxable: organization.taxProfile.defaultTaxable,
+    },
+  };
+}
+
+export async function readEffectiveTenant(context: Context | undefined, profile: TenantProfile) {
+  const organization = await readOrganization(context, profile);
+  return effectiveTenantProfile(profile, organization);
+}
+
 export async function readMembership(context: Context | undefined, tenantId: string, userId: string) {
   if (!tenantId || !userId) return null;
   return await controlStore(context).get('memberships/' + tenantId + '/' + userId, { type: 'json' }) as MembershipRecord | null;
@@ -333,12 +381,13 @@ export async function buildTenantContext(
   capabilities: string[],
 ): Promise<TenantContext | null> {
   const organization = await readOrganization(context, profile);
+  const effectiveProfile = effectiveTenantProfile(profile, organization);
   const membership = await ensureMembership(context, profile, user, role, capabilities);
   if (!membership || membership.status !== 'active') return null;
   return {
     tenantId: profile.id,
     organization,
     membership,
-    profile,
+    profile: effectiveProfile,
   };
 }
