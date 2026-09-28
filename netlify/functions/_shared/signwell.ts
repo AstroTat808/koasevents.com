@@ -332,7 +332,7 @@ export async function createSignWellContract(record:any,origin:string){
     apply_signing_order:true,embedded_signing:true,embedded_signing_notifications:true,with_signature_page:true,
     reminders:true,expires_in:14,allow_decline:true,allow_reassign:false,
     redirect_url:origin+'/portal/?token='+encodeURIComponent(record.proposal?.publicToken||''),
-    metadata:{record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
+    metadata:{tenant_id:resolveTenant().id,record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
     custom_requester_name:resolveTenant().displayName,custom_requester_email:resolveTenant().contact.email
   };
   const doc=await sw('/documents',{method:'POST',body:JSON.stringify(payload)});
