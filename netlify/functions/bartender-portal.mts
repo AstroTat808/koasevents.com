@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 
 function storeFor(context:Context,req:Request){
@@ -86,6 +86,9 @@ function upsertPerformanceHours(record:any,bartender:any,hours:number,now:string
   record.booking.bartenderPerformance=[...rows.filter((entry:any)=>clean(entry?.bartenderId,80)!==bartender.id),next];
 }
 export default async(req:Request,context:Context)=>{
+  const tenantContext=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenantContext)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenantContext,async()=>{
   const token=clean(context.params.token,120);
   if(!token||token.length<20)return Response.json({error:'Invalid bartender portal link.'},{status:400});
   const store=storeFor(context,req);
@@ -183,5 +186,6 @@ export default async(req:Request,context:Context)=>{
   }
 
   return Response.json({error:'Unknown bartender portal action.'},{status:400});
+  });
 };
 export const config:Config={path:'/api/bartender/:token'};
