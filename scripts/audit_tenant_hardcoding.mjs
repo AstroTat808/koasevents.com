@@ -59,6 +59,8 @@ const strictPlatformFiles=new Set([
   'netlify/functions/admin-session.mts',
   'netlify/functions/admin-staff.mts',
   'netlify/functions/admin-vendors.mts',
+  'netlify/functions/crm-inquiries.mts',
+  'netlify/functions/crm-events.mts',
   'netlify/functions/public-client-portal.mts',
   'netlify/functions/public-planning-documents.mts',
   'netlify/functions/public-planning.mts',
