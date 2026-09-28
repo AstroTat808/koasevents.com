@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 const HAWAII_TZ = 'Hawaiian Standard Time';
 const MARKER_PREFIX = 'KOA_RECORD_ID:';
@@ -8,10 +9,9 @@ function clean(value: unknown, max=1000){return String(value||'').trim().slice(0
 function isoDate(value:unknown){const raw=clean(value,40);return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';}
 function timeValue(value:unknown){const raw=clean(value,10);return /^\d{2}:\d{2}$/.test(raw)?raw:'';}
 function addDays(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
-function storeFor(context:Context,name:string){return context.deploy.context==='production'?getStore({name,consistency:'strong'}):getDeployStore({name});}
-function salesStore(context:Context){return storeFor(context,'koa-sales');}
-function opsStore(context:Context){return storeFor(context,'koa-event-ops');}
-function syncStore(context:Context){return storeFor(context,'koa-calendar-sync');}
+function salesStore(context:Context){return tenantStoreFor(context,resolveTenant(),'sales');}
+function opsStore(context:Context){return tenantStoreFor(context,resolveTenant(),'eventOps');}
+function syncStore(context:Context){return tenantStoreFor(context,resolveTenant(),'calendarSync');}
 
 type GraphEvent={
   id:string;
