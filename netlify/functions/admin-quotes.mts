@@ -905,15 +905,15 @@ function configuredPaymentSchedule(settings: QuickBooksDepositSettings, total: n
 function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId = '', inquiry?: Record<string, unknown>, configuredPercent = 10, scheduleSettings?: QuickBooksDepositSettings, bookingDate = '', publishedPrices = new Map<string, number>(), catalogPrices = new Map<string, number>(), tenant: TenantProfile = activeTenant()) {
   const lines: ProposalLine[] = [];
   const state = quote?.state || {};
-  const normalizedPackage = normalizePackage(state.startingPoint || packageId);
+  const normalizedPackage = normalizePackage(state.startingPoint || packageId, tenant);
   const inquiryLines = Array.isArray((inquiry as any)?.estimateLineItems) ? (inquiry as any).estimateLineItems : [];
   const mobileEstimate = finite((inquiry as any)?.estimatedTotal || 0);
-  const packageCatalog = catalogPackagePrice(catalogPrices, normalizedPackage);
-  const base = finite(packageCatalog.price || state.basePackagePrice || packagePrice(normalizedPackage) || 0);
+  const packageCatalog = catalogPackagePrice(catalogPrices, normalizedPackage, tenant);
+  const base = finite(packageCatalog.price || state.basePackagePrice || packagePrice(normalizedPackage, tenant) || 0);
   if (base > 0) {
     lines.push({
       id: 'collection',
-      description: packageName(normalizedPackage) || 'Wedding collection',
+      description: packageName(normalizedPackage, tenant) || 'Collection',
       quantity: 1,
       unitPrice: base,
       amount: base,
@@ -972,7 +972,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   if (!quote && !lines.length && mobileEstimate > 0) {
     lines.push({
       id: 'mobile-estimate',
-      description: packageName(normalizedPackage) || 'Mobile bar estimated service',
+      description: packageName(normalizedPackage, tenant) || 'Mobile bar estimated service',
       quantity: 1,
       unitPrice: mobileEstimate,
       amount: mobileEstimate,
@@ -1175,7 +1175,7 @@ function syncUncommittedBookingPayments(record: SalesRecord, schedule: PaymentIt
 }
 
 function updateProposal(record: SalesRecord, payload: any, tenant: TenantProfile = activeTenant()) {
-  const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '', record.packageId || '');
+  const current = record.proposal || proposalFromQuote(record.quote || null, record.customer?.eventDate || '', record.packageId || '', undefined, 10, undefined, '', new Map(), new Map(), tenant);
   const lineItems = sanitizeLines(payload.lineItems);
   const subtotal = Math.round(lineItems.reduce((sum, line) => sum + line.amount, 0) * 100) / 100;
   const discountAmount = Math.min(subtotal, finite(payload.discountAmount));
