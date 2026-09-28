@@ -6,6 +6,7 @@ import type { TenantProfile } from '../../../src/data/tenants';
 export type TenantStoreKind =
   | 'sales'
   | 'crm'
+  | 'quotes'
   | 'eventOps'
   | 'eventFiles'
   | 'vendors'
@@ -18,6 +19,7 @@ export type TenantStoreKind =
 const GENERIC_STORE_NAMES: Record<TenantStoreKind,string> = {
   sales:'venueloom-sales',
   crm:'venueloom-crm',
+  quotes:'venueloom-quotes',
   eventOps:'venueloom-event-ops',
   eventFiles:'venueloom-event-files',
   vendors:'venueloom-vendors',
