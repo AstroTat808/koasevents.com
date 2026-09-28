@@ -497,6 +497,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </form>
         </dialog>
 
+        <section data-damage-deposit-settings-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Refundable liability</p>
+              <h2 class="display mt-3 text-4xl">Refundable Damage Deposit Setup</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Configure the organization’s separate refundable deposit workflow. These amounts are not proposal revenue; the dedicated QuickBooks item maps to a liability account and deposit invoices are forced NON-taxable.</p>
+            </div>
+            <span data-damage-deposit-config-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+          </div>
+          <form data-damage-deposit-settings-form class="mt-6 grid gap-4">
+            <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] p-4 text-sm font-semibold"><input name="enabled" type="checkbox" class="h-4 w-4" /> Enable refundable deposits</label>
+              <label class="grid gap-2 text-sm font-semibold">One-day amount<input name="oneDayAmount" type="number" min="0" step=".01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Weekend amount<input name="weekendAmount" type="number" min="0" step=".01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Invoice due days before event<input name="dueDaysBefore" type="number" min="0" max="365" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Refund within days after event<input name="refundWithinDays" type="number" min="0" max="365" step="1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
+              <label class="grid gap-2 text-sm font-semibold">Liability account<select name="liabilityAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose liability account</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Refund bank account<select name="refundBankAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose bank account</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Deduction income account<select name="deductionIncomeAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose income account</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Refundable-deposit item<select name="itemId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Create / choose item</option></select></label>
+            </div>
+            <div class="rounded-xl bg-[var(--koa-sand)]/45 p-4 text-sm">
+              <strong class="text-[var(--koa-forest)]">Dedicated QuickBooks item</strong>
+              <p data-damage-deposit-item class="mt-1 text-[var(--koa-ink)]/55">Not mapped. Saving with a liability account will attempt to create “Refundable Damage Deposit” in QuickBooks.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save Refundable Deposit Setup</button>
+              <button data-refresh-damage-deposit-accounts type="button" class="rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Refresh Accounts</button>
+              <p data-damage-deposit-settings-message class="text-sm text-[var(--koa-ink)]/52"></p>
+            </div>
+          </form>
+        </section>
+
         <section data-production-test class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <p class="eyebrow text-[var(--koa-clay)]">Controlled production test</p>
           <h2 class="display mt-3 text-4xl">Verify the real QuickBooks company safely</h2>
@@ -746,6 +779,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const depositSection=document.querySelector('[data-deposit-section]');
     const depositForm=document.querySelector('[data-deposit-form]');
     const depositMessage=document.querySelector('[data-deposit-message]');
+    const damageDepositSettingsSection=document.querySelector('[data-damage-deposit-settings-section]');
+    const damageDepositSettingsForm=document.querySelector('[data-damage-deposit-settings-form]');
+    const damageDepositSettingsMessage=document.querySelector('[data-damage-deposit-settings-message]');
+    const damageDepositConfigStatus=document.querySelector('[data-damage-deposit-config-status]');
+    const damageDepositItem=document.querySelector('[data-damage-deposit-item]');
+    const refreshDamageDepositAccounts=document.querySelector('[data-refresh-damage-deposit-accounts]');
     const testAccountingAlert=document.querySelector('[data-test-accounting-alert]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemSelect=document.querySelector('[data-item-form] select[name="item"]');
@@ -789,6 +828,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const refreshAudit=document.querySelector('[data-refresh-audit]');
     let state=null;
     let items=[];
+    let damageDepositAccounts=null;
     const bulkSelectedNew=new Set();
     const bulkSelectedExclude=new Set();
     let pendingExclusionCustomerId='';
@@ -2334,6 +2374,60 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function fillAccountSelect(select,rows,selectedId){
+      if(!select)return;
+      const current=String(selectedId||'');
+      select.innerHTML='<option value="">Choose account</option>';
+      (Array.isArray(rows)?rows:[]).forEach((row)=>{
+        const option=document.createElement('option');
+        option.value=String(row.id||'');
+        option.textContent=String(row.name||row.id||'')+(row.type?' · '+row.type:'');
+        option.dataset.name=String(row.name||'');
+        select.appendChild(option);
+      });
+      select.value=current;
+    }
+
+    async function loadDamageDepositAccounts(){
+      if(!state?.connection?.connected||!damageDepositSettingsForm)return;
+      if(refreshDamageDepositAccounts)refreshDamageDepositAccounts.disabled=true;
+      try{
+        damageDepositAccounts=await api({action:'list-damage-deposit-accounts'});
+        const settings=state?.damageDepositSettings||{};
+        fillAccountSelect(damageDepositSettingsForm.elements.liabilityAccountId,damageDepositAccounts.liabilityAccounts,settings.liabilityAccountId);
+        fillAccountSelect(damageDepositSettingsForm.elements.refundBankAccountId,damageDepositAccounts.bankAccounts,settings.refundBankAccountId);
+        fillAccountSelect(damageDepositSettingsForm.elements.deductionIncomeAccountId,damageDepositAccounts.incomeAccounts,settings.deductionIncomeAccountId);
+        fillAccountSelect(damageDepositSettingsForm.elements.itemId,damageDepositAccounts.items,settings.itemId);
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='QuickBooks account and item choices refreshed.';
+      }catch(err){
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent=err.message||'Unable to load QuickBooks accounts.';
+      }finally{
+        if(refreshDamageDepositAccounts)refreshDamageDepositAccounts.disabled=false;
+      }
+    }
+
+    function renderDamageDepositSettings(){
+      const settings=state?.damageDepositSettings;
+      if(!damageDepositSettingsForm||!settings)return;
+      damageDepositSettingsForm.elements.enabled.checked=settings.enabled!==false;
+      damageDepositSettingsForm.elements.oneDayAmount.value=String(settings.oneDayAmount??0);
+      damageDepositSettingsForm.elements.weekendAmount.value=String(settings.weekendAmount??0);
+      damageDepositSettingsForm.elements.dueDaysBefore.value=String(settings.dueDaysBefore??30);
+      damageDepositSettingsForm.elements.refundWithinDays.value=String(settings.refundWithinDays??14);
+      fillAccountSelect(damageDepositSettingsForm.elements.liabilityAccountId,damageDepositAccounts?.liabilityAccounts||[],settings.liabilityAccountId);
+      fillAccountSelect(damageDepositSettingsForm.elements.refundBankAccountId,damageDepositAccounts?.bankAccounts||[],settings.refundBankAccountId);
+      fillAccountSelect(damageDepositSettingsForm.elements.deductionIncomeAccountId,damageDepositAccounts?.incomeAccounts||[],settings.deductionIncomeAccountId);
+      fillAccountSelect(damageDepositSettingsForm.elements.itemId,damageDepositAccounts?.items||[],settings.itemId);
+      const configured=Boolean(settings.enabled!==false&&settings.liabilityAccountId&&settings.itemId&&settings.refundBankAccountId);
+      if(damageDepositConfigStatus){
+        damageDepositConfigStatus.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] '+(configured?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900');
+        damageDepositConfigStatus.textContent=configured?'Configured':'Needs setup';
+      }
+      if(damageDepositItem)damageDepositItem.textContent=settings.itemId
+        ? (settings.itemName||'Refundable Damage Deposit')+' · QuickBooks item #'+settings.itemId+' · liability '+(settings.liabilityAccountName||settings.liabilityAccountId||'')
+        : 'Not mapped. Saving with a liability account will attempt to create “Refundable Damage Deposit” in QuickBooks.';
+    }
+
     function render(){
       const configured=Boolean(state?.configuration?.configured);
       const connected=Boolean(state?.connection?.connected);
@@ -2350,6 +2444,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       catalogSection?.classList.toggle('hidden',!connected);
       getSection?.classList.toggle('hidden',!connected);
       depositSection?.classList.toggle('hidden',!connected);
+      damageDepositSettingsSection?.classList.toggle('hidden',!connected);
       sandboxTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='sandbox');
       productionTest?.classList.toggle('hidden',!connected||state?.configuration?.environment!=='production');
       company.textContent=connected?(state.connection.companyName||'QuickBooks company connected'):'Not connected';
@@ -2428,10 +2523,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(ruleSimBooking()&&!ruleSimBooking().value)ruleSimBooking().value=new Date().toISOString().slice(0,10);
         if(ruleSimEvent()&&!ruleSimEvent().value){const d=new Date();d.setFullYear(d.getFullYear()+1);ruleSimEvent().value=d.toISOString().slice(0,10);}
       }
+      renderDamageDepositSettings();
       renderCatalog();
       renderDiagnostics();
       renderAccountingAudit();
-      if(connected)loadItems();
+      if(connected){loadItems();if(!damageDepositAccounts)loadDamageDepositAccounts();}
     }
 
     async function downloadPreviewAudit(format){
@@ -2603,6 +2699,37 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(params.get('connected')==='1')status.textContent='QuickBooks connection completed.';
       if(params.get('qbo')==='error')status.textContent='QuickBooks connection did not complete. Check the Intuit app redirect URI and credentials.';
     }
+
+    damageDepositSettingsForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const form=event.currentTarget;
+      const accountName=(name)=>String(form.elements[name]?.selectedOptions?.[0]?.dataset?.name||'');
+      if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='Saving refundable damage-deposit setup…';
+      try{
+        const result=await api({
+          action:'save-damage-deposit-settings',
+          enabled:form.elements.enabled.checked,
+          oneDayAmount:Number(form.elements.oneDayAmount.value||0),
+          weekendAmount:Number(form.elements.weekendAmount.value||0),
+          dueDaysBefore:Number(form.elements.dueDaysBefore.value||0),
+          refundWithinDays:Number(form.elements.refundWithinDays.value||0),
+          liabilityAccountId:form.elements.liabilityAccountId.value,
+          liabilityAccountName:accountName('liabilityAccountId'),
+          refundBankAccountId:form.elements.refundBankAccountId.value,
+          refundBankAccountName:accountName('refundBankAccountId'),
+          deductionIncomeAccountId:form.elements.deductionIncomeAccountId.value,
+          deductionIncomeAccountName:accountName('deductionIncomeAccountId'),
+          itemId:form.elements.itemId.value,
+          itemName:accountName('itemId')||state?.damageDepositSettings?.itemName||'Refundable Damage Deposit',
+        });
+        state.damageDepositSettings=result.damageDepositSettings;
+        renderDamageDepositSettings();
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='Refundable damage-deposit setup saved.';
+      }catch(err){
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent=err.message||'Unable to save refundable damage-deposit setup.';
+      }
+    });
+    refreshDamageDepositAccounts?.addEventListener('click',loadDamageDepositAccounts);
 
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
