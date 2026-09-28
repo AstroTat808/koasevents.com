@@ -43,6 +43,14 @@ function money(value: unknown) {
   return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
 }
 
+function jsonClone<T = any>(value: T): T {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function sameJson(a: unknown, b: unknown) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
 export function normalizeQuickBooksMatchEmail(value: unknown) {
   return clean(value, 240).toLowerCase();
 }
@@ -656,6 +664,8 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
     conflictCount: Array.isArray(detail.conflicts) ? detail.conflicts.length : 0,
     warningCount: Array.isArray(detail.warnings) ? detail.warnings.length : 0,
     changeCount: Array.isArray(detail.changes) ? detail.changes.length : 0,
+    rollbackStatus: clean(detail?.rollback?.status, 40),
+    rolledBackAt: clean(detail?.rollback?.completedAt, 80),
     clients: [...new Set((Array.isArray(detail.changes) ? detail.changes : []).map((change: any) => clean(change?.clientName, 180)).filter(Boolean))].slice(0, 250),
   };
   await store.setJSON(HISTORY_INDEX_KEY, [summary, ...current.filter((row) => row?.syncId !== syncId)].slice(0, 5000));
@@ -712,4 +722,117 @@ export async function getQuickBooksCrmSyncHistoryDetail(context: Context, syncId
     }
   }
   return null;
+}
+
+
+export async function previewQuickBooksCrmSyncRollback(context: Context, syncId: string) {
+  const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
+  if (!detail) throw new Error('QuickBooks sync history entry not found.');
+  const recoveryRows = Array.isArray(detail?.recovery?.records) ? detail.recovery.records : [];
+  if (!recoveryRows.length) {
+    throw new Error('This sync does not contain CRM recovery snapshots. Only syncs created after rollback protection was enabled can be restored.');
+  }
+
+  const store = salesStore(context);
+  const records = (((await store.get('records/index', { type:'json' })) || []) as any[]).filter(Boolean);
+  const currentById = new Map(records.map((record) => [String(record.id), record]));
+  const rows = recoveryRows.map((row: any) => {
+    const recordId = clean(row?.recordId, 120);
+    const current = currentById.get(recordId) || null;
+    const before = row?.before ?? null;
+    const after = row?.after ?? null;
+    const createdBySync = Boolean(row?.createdBySync || before == null);
+
+    if (createdBySync) {
+      if (!current) {
+        return { recordId, clientName:clean(row?.clientName,180), action:'already_absent', safe:false, reason:'The sync-created CRM record is already absent.', before, after, current:null };
+      }
+      if (!sameJson(current, after)) {
+        return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:false, reason:'The CRM record changed after the sync and will not be deleted automatically.', before, after, current:jsonClone(current) };
+      }
+      return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:true, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
+    }
+
+    if (!current) {
+      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, reason:'The CRM record no longer exists.', before, after, current:null };
+    }
+    if (!sameJson(current, after)) {
+      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, reason:'The CRM record changed after the sync and will not be overwritten automatically.', before, after, current:jsonClone(current) };
+    }
+    return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:true, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
+  });
+
+  return {
+    syncId: clean(detail.syncId || syncId, 120),
+    completedAt: clean(detail.completedAt, 80),
+    actor: clean(detail.actor, 180),
+    crmOnly: true,
+    alreadyRolledBack: clean(detail?.rollback?.status, 40) === 'completed',
+    safeCount: rows.filter((row: any) => row.safe).length,
+    conflictCount: rows.filter((row: any) => !row.safe).length,
+    rows,
+  };
+}
+
+export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: string, actor = '') {
+  const preview = await previewQuickBooksCrmSyncRollback(context, syncId);
+  if (preview.alreadyRolledBack) throw new Error('This sync has already been rolled back.');
+
+  const safeRows = preview.rows.filter((row: any) => row.safe);
+  if (!safeRows.length) throw new Error('No CRM records are currently safe to restore.');
+
+  const sales = salesStore(context);
+  const records = (((await sales.get('records/index', { type:'json' })) || []) as any[]).filter(Boolean);
+  const byId = new Map(records.map((record) => [String(record.id), record]));
+  const restored: any[] = [];
+  const deleted: any[] = [];
+
+  for (const row of safeRows) {
+    if (row.action === 'delete_created') {
+      byId.delete(String(row.recordId));
+      await sales.delete('records/' + row.recordId);
+      deleted.push({ recordId:row.recordId, clientName:row.clientName });
+      continue;
+    }
+    if (row.before) {
+      const restoredRecord = jsonClone(row.before);
+      byId.set(String(row.recordId), restoredRecord);
+      await sales.setJSON('records/' + row.recordId, restoredRecord);
+      restored.push({ recordId:row.recordId, clientName:row.clientName });
+    }
+  }
+
+  const nextRecords = [...byId.values()]
+    .sort((a: any, b: any) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')))
+    .slice(0, 1500);
+  await sales.setJSON('records/index', nextRecords);
+
+  const integrations = integrationStore(context);
+  const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
+  const completedAt = new Date().toISOString();
+  const rollback = {
+    status:'completed',
+    completedAt,
+    actor:clean(actor,180),
+    restored,
+    deleted,
+    conflicts:preview.rows.filter((row: any) => !row.safe).map((row: any) => ({
+      recordId:row.recordId,
+      clientName:row.clientName,
+      reason:row.reason,
+    })),
+  };
+  const nextDetail = { ...detail, rollback };
+  await integrations.setJSON('quickbooks/manual-sync-history/' + clean(syncId,120), nextDetail);
+
+  const index = ((await integrations.get(HISTORY_INDEX_KEY, { type:'json' })) || []) as any[];
+  if (index.length) {
+    await integrations.setJSON(HISTORY_INDEX_KEY, index.map((row: any) =>
+      clean(row?.syncId,120) === clean(syncId,120)
+        ? { ...row, rollbackStatus:'completed', rolledBackAt:completedAt }
+        : row
+    ));
+  }
+
+  return { ...rollback, syncId:clean(syncId,120), crmOnly:true };
 }
