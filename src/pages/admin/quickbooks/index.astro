@@ -1780,6 +1780,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(note)note.textContent='Preview total '+money(totalScheduled)+' · deposit '+money(deposit)+' · post-deposit balance '+money(remaining)+(eventDate?' · sample event '+formatPreviewDate(eventDate):'');
     }
 
+    function reconciliationValue(value){
+      if(value===undefined||value===null||value==='')return '—';
+      if(typeof value==='number')return Number.isInteger(value)?String(value):String(Math.round(value*100)/100);
+      return String(value);
+    }
+
+    function renderSyncReconciliation(){
+      const reconciliation=state?.manualSync?.reconciliation||null;
+      if(!syncReconciliation)return;
+      syncReconciliation.classList.toggle('hidden',!reconciliation);
+      if(!reconciliation)return;
+
+      const deviations=Array.isArray(reconciliation.deviations)?reconciliation.deviations:[];
+      const matched=String(reconciliation.status||'')==='matched'&&deviations.length===0;
+      if(syncReconciliationStatus){
+        syncReconciliationStatus.textContent=matched?'Matched preview':deviations.length+' deviation'+(deviations.length===1?'':'s');
+        syncReconciliationStatus.className='self-start rounded-full border px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] '+(matched?'border-emerald-200 bg-emerald-50 text-emerald-800':'border-amber-200 bg-amber-50 text-amber-900');
+      }
+      if(syncReconciliationMeta)syncReconciliationMeta.textContent='Preview '+String(reconciliation.previewId||state?.manualSync?.previewId||'—')+' · predicted '+when(reconciliation.predictedAt)+' · completed '+when(reconciliation.completedAt||state?.manualSync?.completedAt)+'. '+(matched?'Every tracked execution count and customer/write outcome matched the approved preview.':'Anything below differed from the approved preview or produced a runtime warning/conflict.');
+
+      const comparisons=Array.isArray(reconciliation.countComparisons)?reconciliation.countComparisons:[];
+      if(syncReconciliationCounts)syncReconciliationCounts.innerHTML=comparisons.length
+        ? comparisons.map((row)=>'<article class="rounded-xl border '+(row?.matched?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50')+' p-3"><p class="text-[.52rem] font-black uppercase tracking-[.06em] '+(row?.matched?'text-emerald-800':'text-amber-900')+'">'+esc(row?.label||row?.key||'Comparison')+'</p><div class="mt-2 flex items-end justify-between gap-3"><div><p class="text-[.5rem] font-black uppercase tracking-[.05em] text-[var(--koa-ink)]/40">Predicted</p><strong class="text-lg text-[var(--koa-forest)]">'+esc(reconciliationValue(row?.predicted))+'</strong></div><div class="text-right"><p class="text-[.5rem] font-black uppercase tracking-[.05em] text-[var(--koa-ink)]/40">Actual</p><strong class="text-lg '+(row?.matched?'text-emerald-800':'text-amber-900')+'">'+esc(reconciliationValue(row?.actual))+'</strong></div></div></article>').join('')
+        : '<p class="text-xs text-[var(--koa-ink)]/45">No count comparisons were recorded for this sync.</p>';
+
+      if(syncReconciliationDeviations){
+        if(!deviations.length){
+          syncReconciliationDeviations.innerHTML='<div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><strong class="text-sm text-emerald-900">Execution matched the approved Preview Sync.</strong><p class="mt-1 text-xs leading-5 text-emerald-900/65">No unexpected customer outcomes, QuickBooks writes, count differences, conflicts, or runtime warnings were recorded.</p></div>';
+        }else{
+          syncReconciliationDeviations.innerHTML='<div class="flex items-end justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.07em] text-amber-900">Execution differences</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Review each difference before treating the sync as fully reconciled.</p></div></div><div class="mt-2 grid gap-2">'+deviations.map((row)=>{
+            const title=String(row?.type||'deviation').replaceAll('_',' ').replaceAll('-',' ');
+            const identity=[row?.name,row?.recordId?'CRM '+row.recordId:'',row?.customerId?'QBO #'+row.customerId:''].filter(Boolean).join(' · ');
+            const comparison=(row?.predicted!==undefined||row?.actual!==undefined)
+              ? '<p class="mt-2 text-[.6rem] font-semibold text-amber-950">Predicted '+esc(reconciliationValue(row?.predicted))+' · actual '+esc(reconciliationValue(row?.actual))+'</p>'
+              : '';
+            return '<article class="rounded-xl border border-amber-200 bg-amber-50 p-3"><strong class="text-xs capitalize text-amber-950">'+esc(title)+'</strong>'+(identity?'<p class="mt-1 break-words text-[.58rem] text-[var(--koa-ink)]/50">'+esc(identity)+'</p>':'')+(row?.detail?'<p class="mt-2 break-words text-[.62rem] leading-5 text-amber-950/75">'+esc(row.detail)+'</p>':'')+comparison+'</article>';
+          }).join('')+'</div>';
+        }
+      }
+    }
+
     function render(){
       const configured=Boolean(state?.configuration?.configured);
       const connected=Boolean(state?.connection?.connected);
@@ -1810,6 +1851,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           : 'Preview is required before the first full synchronization. The bulk sync never creates a payment or invoice in QuickBooks.';
       }
       renderSyncPreview();
+      renderSyncReconciliation();
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
@@ -2022,8 +2064,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         state.accountingAudit=data.accountingAudit||state.accountingAudit;
         const result=data.result||{};
         if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync completed '+when(result.completedAt)+'.';
-        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.changes?.length||0)+' recorded changes · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.changes?.length||0)+' recorded changes · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings · reconciliation '+(String(result?.reconciliation?.status||'not recorded')==='matched'?'matched preview':Number(result?.reconciliation?.deviationCount||0)+' deviation(s)')+'.';
         renderSyncPreview();
+        renderSyncReconciliation();
         renderAccountingAudit();
       }catch(err){
         if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync did not complete.';
