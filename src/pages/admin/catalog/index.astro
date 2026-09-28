@@ -40,7 +40,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Catalog audit</h2>
               <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Compare every catalog item against the current public pricing source and the live connected QuickBooks item mapping. GET exemptions are flagged when the repository has no item-level exemption rule supporting them.</p>
             </div>
-            <button data-run-audit type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Run live audit</button>
+            <div class="flex flex-wrap gap-2">
+              <button data-run-audit type="button" class="rounded-full border border-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Run live audit</button>
+              <button data-reconcile-audit type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Fix safe issues</button>
+            </div>
           </div>
           <p data-audit-message class="mt-4 text-sm text-[var(--koa-ink)]/55">Run the audit to verify current prices, groups/categories, GET flags and QuickBooks mappings.</p>
           <div data-audit-summary class="mt-5 hidden grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
@@ -188,6 +191,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const auditMessage=document.querySelector('[data-audit-message]');
     const auditSummary=document.querySelector('[data-audit-summary]');
     const auditList=document.querySelector('[data-audit-list]');
+    const reconcileAuditButton=document.querySelector('[data-reconcile-audit]');
     const itemDialog=document.querySelector('[data-item-dialog]');
     const itemUsage=document.querySelector('[data-item-usage]');
     const itemUsageLoading=document.querySelector('[data-item-usage-loading]');
@@ -279,7 +283,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         const oldMargin=row.oldActualMargin==null?'—':Number(row.oldActualMargin).toFixed(1)+'%';
         const newMargin=row.newActualMargin==null?'—':Number(row.newActualMargin).toFixed(1)+'%';
-        const proposalIds=Array.isArray(row.draftProposalIds)?row.draftProposalIds:[];
+        const proposalIds=Array.isArray(row.draftProposalIdsUpdated)?row.draftProposalIdsUpdated:[];
         const oldTarget=Number(row.oldTargetMargin||0)>0?Number(row.oldTargetMargin).toFixed(1)+'%':'—';
         const newTarget=Number(row.newTargetMargin||0)>0?Number(row.newTargetMargin).toFixed(1)+'%':'—';
         card.innerHTML='<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.itemName||row.catalogItemId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(dt(row.changedAt))+' · '+esc(row.changedBy||'system')+' · '+esc(row.source||'catalog')+(row.sourceRef?' · '+esc(row.sourceRef):'')+'</p>'+(row.note?'<p class="mt-2 text-xs text-[var(--koa-ink)]/55">'+esc(row.note)+'</p>':'')+(proposalIds.length?'<p class="mt-2 text-[.65rem] text-[var(--koa-ink)]/50">Draft proposals updated: '+proposalIds.map(id=>'<a class="underline" href="/admin/quotes/?q='+encodeURIComponent(id)+'">'+esc(id)+'</a>').join(' · ')+'</p>':'')+'</div><div class="grid grid-cols-2 gap-2 sm:grid-cols-5"><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Old</p><strong>'+money(row.oldPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">New</p><strong>'+money(row.newPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Actual margin</p><strong>'+esc(oldMargin)+' → '+esc(newMargin)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Target margin</p><strong>'+esc(oldTarget)+' → '+esc(newTarget)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Draft proposals</p><strong>'+Number(row.draftProposalsUpdated||0)+'</strong></div></div></div>';
@@ -326,6 +330,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         state.audit=data.audit;renderAudit();
       }catch(error){
         if(auditMessage)auditMessage.textContent=error.message||'Catalog audit failed.';
+      }
+    }
+
+    async function reconcileAudit(){
+      if(!canManage)return;
+      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will link only unique known QuickBooks matches, align QuickBooks taxable flags to the Catalog Manager GET setting, and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. Ambiguous mappings and intentional pricing overrides will not be changed.');
+      if(!ok)return;
+      if(auditMessage)auditMessage.textContent='Applying safe catalog reconciliation…';
+      try{
+        const data=await api({action:'reconcile-safe-audit'});
+        state.catalog=data.catalog||state.catalog||[];
+        state.audit=data.audit||null;
+        renderCatalog();renderAudit();
+        await refreshMetadata();
+        const actions=Array.isArray(data.actions)?data.actions:[];
+        if(auditMessage)auditMessage.textContent='Safe reconciliation complete · '+actions.length+' change'+(actions.length===1?'':'s')+' applied. Last checked '+dt(state.audit?.checkedAt)+'.';
+      }catch(error){
+        if(auditMessage)auditMessage.textContent=error.message||'Safe reconciliation failed.';
       }
     }
 
@@ -520,6 +542,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!session||session.accessBlocked||!session.capabilities?.includes('sales.view')){unauthorized?.classList.remove('hidden');return;}
       canManage=session.capabilities.includes('sales.profit_settings');
       manageActions?.classList.toggle('hidden',!canManage);
+      reconcileAuditButton?.classList.toggle('hidden',!canManage);
       app?.classList.remove('hidden');
       try{
         const response=await fetch('/api/admin/catalog',{cache:'no-store'});
@@ -535,6 +558,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     showArchived?.addEventListener('change',renderCatalog);
     document.querySelector('[data-new-item]')?.addEventListener('click',()=>openItem());
     document.querySelector('[data-run-audit]')?.addEventListener('click',runAudit);
+    reconcileAuditButton?.addEventListener('click',reconcileAudit);
     document.querySelectorAll('[data-close-item]').forEach((b)=>b.addEventListener('click',()=>itemDialog?.close()));
     document.querySelector('[data-open-import]')?.addEventListener('click',()=>{importPayload=null;mappingSection?.classList.add('hidden');previewSection?.classList.add('hidden');if(importMessage)importMessage.textContent='';importDialog?.showModal();});
     document.querySelector('[data-close-import]')?.addEventListener('click',()=>importDialog?.close());
