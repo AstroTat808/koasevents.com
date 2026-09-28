@@ -1,6 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { admin } from '@netlify/identity';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireOperations } from './_shared/admin';
 import { appendStaffAudit } from './_shared/staff-audit';
 
@@ -9,17 +9,15 @@ const MAX_BYTES=2*1024*1024;
 
 function clean(value:unknown,max=300){return String(value??'').trim().slice(0,max);}
 function metadata(user:any){return user?.user_metadata||user?.userMetadata||{};}
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-staff-files',consistency:'strong'})
-    : getDeployStore({name:'koa-staff-files'});
+function storeFor(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'staffFiles');
 }
 
 export default async(req:Request,context:Context)=>{
   const auth=await requireOperations(req);
   if(auth.response)return auth.response;
   const user:any=auth.user;
-  const store=storeFor(context);
+  const store=storeFor(context,auth.tenant);
   const key='profile-photos/'+clean(user.id,120);
 
   if(req.method==='POST'){
