@@ -75,6 +75,7 @@ export type TenantProfile = {
     legacyDataBelongsToTenant: boolean;
     compatibilityBlobStores: {
       sales: string;
+      quotes: string;
       integrations: string;
       crm: string;
       eventOps: string;
