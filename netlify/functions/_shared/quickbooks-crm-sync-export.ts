@@ -25,6 +25,9 @@ function auditRows(preview: any) {
     qboEstimates: Number(summary.qboEstimates || 0),
     qboInvoices: Number(summary.qboInvoices || 0),
     qboPayments: Number(summary.qboPayments || 0),
+    activeSyncCustomers: Number(summary.activeSyncCustomers || 0),
+    excludedCustomers: Number(summary.excludedCustomers || 0),
+    suggestedExclusions: Number(summary.suggestedExclusions || 0),
     newImports: Number(summary.newImports || 0),
     matched: Number(summary.matched || 0),
     linked: Number(summary.linked || 0),
@@ -52,6 +55,14 @@ function auditRows(preview: any) {
       duplicateRiskScore: Number(plan?.duplicateRisk?.score || 0),
       duplicateRiskSignals: (Array.isArray(plan?.duplicateRisk?.signals) ? plan.duplicateRisk.signals : []).map((value: any) => clean(value,80)).join(' | '),
       bulkEligible: Boolean(plan?.bulkEligible),
+      exclusionReasonCode: clean(plan?.exclusion?.reasonCode, 80),
+      exclusionReasonLabel: clean(plan?.exclusion?.reasonLabel, 120),
+      exclusionReason: clean(plan?.exclusion?.reason, 500),
+      suggestedExclusionCode: clean(plan?.suggestedExclusion?.code, 80),
+      suggestedExclusionLabel: clean(plan?.suggestedExclusion?.label, 120),
+      suggestedExclusionConfidence: clean(plan?.suggestedExclusion?.confidence, 40),
+      suggestedExclusionReason: clean(plan?.suggestedExclusion?.reason, 500),
+      suggestedExclusionEvidence: (Array.isArray(plan?.suggestedExclusion?.evidence) ? plan.suggestedExclusion.evidence : []).map((value: any) => clean(value,120)).join(' | '),
       crmRecordId: clean(plan?.matchedRecordId, 120),
       predictedRecordId: clean(plan?.predictedRecordId, 120),
       candidateRecordIds: (Array.isArray(plan?.candidates) ? plan.candidates : []).map((row: any) => clean(row?.recordId, 120)).filter(Boolean).join(' | '),
@@ -155,12 +166,14 @@ export function buildQuickBooksCrmPreviewCsv(preview: any) {
   const headers = [
     'section','rowType','previewId','generatedAt','actor',
     'customerId','customerName','email','phone','eventDate',
-    'decision','action','reason','duplicateRiskLevel','duplicateRiskScore','duplicateRiskSignals','bulkEligible','crmRecordId','predictedRecordId','candidateRecordIds',
+    'decision','action','reason','duplicateRiskLevel','duplicateRiskScore','duplicateRiskSignals','bulkEligible',
+    'exclusionReasonCode','exclusionReasonLabel','exclusionReason','suggestedExclusionCode','suggestedExclusionLabel','suggestedExclusionConfidence','suggestedExclusionReason','suggestedExclusionEvidence',
+    'crmRecordId','predictedRecordId','candidateRecordIds',
     'candidateName','candidateEmail','candidatePhone','candidateEventDate','candidateStage','currentQuickBooksCustomerId','candidateRiskLevel','candidateScore','candidateSignals',
     'estimateCount','estimateTotal','invoiceCount','invoiceTotal','openBalance','paymentCount','paymentTotal',
     'documentId','documentNumber','txnDate','dueDate','total','balance','emailStatus',
     'estimateId','actionType','field','before','after','crmBefore','projectedAfter',
-    'qboCustomers','qboEstimates','qboInvoices','qboPayments','newImports','matched','linked','needsDecision','duplicateFlags','bulkEligibleNewImports','needsIndividualReview','crmOutboundActions',
+    'qboCustomers','qboEstimates','qboInvoices','qboPayments','activeSyncCustomers','excludedCustomers','suggestedExclusions','newImports','matched','linked','needsDecision','duplicateFlags','bulkEligibleNewImports','needsIndividualReview','crmOutboundActions',
   ];
   const lines = [
     headers.map(csvCell).join(','),
@@ -233,6 +246,9 @@ function previewPdfLines(preview: any) {
   detail('Estimates', summary.qboEstimates);
   detail('Invoices', summary.qboInvoices);
   detail('Payments', summary.qboPayments);
+  detail('Active sync customers', summary.activeSyncCustomers);
+  detail('Excluded customers', summary.excludedCustomers);
+  detail('Suggested exclusions', summary.suggestedExclusions);
   detail('New CRM imports', summary.newImports);
   detail('Matched', summary.matched);
   detail('Already linked', summary.linked);
@@ -253,6 +269,14 @@ function previewPdfLines(preview: any) {
     detail('Reason', plan?.reason, 12);
     detail('Duplicate risk', [plan?.duplicateRisk?.level, plan?.duplicateRisk?.score ? 'score ' + plan.duplicateRisk.score : '', ...(Array.isArray(plan?.duplicateRisk?.signals) ? plan.duplicateRisk.signals : [])].filter(Boolean).join(' | '), 12);
     detail('Bulk eligible', plan?.bulkEligible ? 'Yes - low-risk only' : 'No', 12);
+    if (plan?.exclusion) {
+      detail('Exclusion reason', [plan.exclusion.reasonLabel, plan.exclusion.reasonCode, plan.exclusion.reason].filter(Boolean).join(' | '), 12);
+      detail('Excluded by', [plan.exclusion.excludedBy, plan.exclusion.excludedAt].filter(Boolean).join(' | '), 12);
+    }
+    if (plan?.suggestedExclusion) {
+      detail('Suggested exclusion', [plan.suggestedExclusion.label, plan.suggestedExclusion.confidence, plan.suggestedExclusion.reason].filter(Boolean).join(' | '), 12);
+      detail('Suggestion evidence', (Array.isArray(plan.suggestedExclusion.evidence) ? plan.suggestedExclusion.evidence : []).join(' | '), 12);
+    }
     detail('Matched CRM record', plan?.matchedRecordId, 12);
     detail('Predicted CRM record', plan?.predictedRecordId, 12);
 
