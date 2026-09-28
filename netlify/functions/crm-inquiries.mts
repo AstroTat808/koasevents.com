@@ -543,7 +543,7 @@ export default async (req: Request, context: Context) => {
       ipFingerprint: sourceFingerprint,
       messageFingerprint: security.messageFingerprint,
       ...identity,
-      detail: 'Submission blocked by the Koa’s inquiry risk screen.',
+      detail: 'Submission blocked by the inquiry risk screen.',
     });
     await applyAutomaticBlocks(context, securityEvent, [securityEvent, ...recentSecurityEvents]);
     return json(req, {
