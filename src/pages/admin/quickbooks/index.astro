@@ -8,7 +8,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin · Accounting</p>
           <h1 class="display mt-3 text-5xl">QuickBooks Online</h1>
-          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks is Koa’s financial system of record for estimates, invoices and payments. The CRM stores only QuickBooks IDs, document numbers, balances and sync timestamps.</p>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks is Koa’s financial system of record for estimates, invoices and payments. The CRM keeps a synchronized accounting mirror—customer links, document numbers, line summaries, balances, payment references, statuses and sync timestamps—so staff can work from either system.</p>
         </div>
         
       </div>
@@ -24,8 +24,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p data-status class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/58"></p>
             </div>
             <div class="flex flex-wrap gap-2">
+              <button data-two-way-sync type="button" class="hidden rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Sync CRM ↔ QuickBooks</button>
               <button data-connect type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Connect QuickBooks</button>
               <button data-disconnect type="button" class="hidden rounded-full border border-[var(--koa-line)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">Disconnect</button>
+            </div>
+          </div>
+          <div data-two-way-sync-panel class="mt-6 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-5">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Manual two-way synchronization</p>
+                <p data-two-way-sync-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Ready to synchronize.</p>
+                <p data-two-way-sync-detail class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Imports QuickBooks customers, estimates, invoices and payments into CRM, then safely updates linked QuickBooks customers and issued estimates from CRM.</p>
+              </div>
+              <a href="/admin/crm/" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open CRM</a>
             </div>
           </div>
           <div data-config-warning class="mt-6 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/20 p-5">
@@ -382,6 +393,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const connect=document.querySelector('[data-connect]');
     const disconnect=document.querySelector('[data-disconnect]');
+    const twoWaySync=document.querySelector('[data-two-way-sync]');
+    const twoWaySyncPanel=document.querySelector('[data-two-way-sync-panel]');
+    const twoWaySyncStatus=document.querySelector('[data-two-way-sync-status]');
+    const twoWaySyncDetail=document.querySelector('[data-two-way-sync-detail]');
     const company=document.querySelector('[data-company]');
     const status=document.querySelector('[data-status]');
     const warning=document.querySelector('[data-config-warning]');
@@ -1233,6 +1248,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       warning.querySelector('[data-redirect-uri]').textContent=state?.configuration?.redirectUri||window.location.origin+'/.netlify/functions/quickbooks-callback';
       connect.classList.toggle('hidden',!configured||connected);
       disconnect.classList.toggle('hidden',!connected);
+      twoWaySync?.classList.toggle('hidden',!connected);
+      twoWaySyncPanel?.classList.toggle('hidden',!connected);
       itemSection.classList.toggle('hidden',!connected);
       catalogSection?.classList.toggle('hidden',!connected);
       getSection?.classList.toggle('hidden',!connected);
@@ -1245,6 +1262,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         : connected
           ? 'Connected to realm '+state.connection.realmId+(state.connection.connectedAt?' · connected '+new Date(state.connection.connectedAt).toLocaleString():'')
           : 'Ready to connect Koa’s QuickBooks Online company.';
+      if(twoWaySyncStatus&&twoWaySyncDetail){
+        const sync=state?.manualSync;
+        twoWaySyncStatus.textContent=sync?.completedAt?'Last two-way sync: '+when(sync.completedAt):'No full two-way sync has been run yet.';
+        twoWaySyncDetail.textContent=sync?.completedAt
+          ? Number(sync.crm?.created||0)+' CRM customer(s) imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.qbo?.estimates||0)+' QBO estimate(s) · '+Number(sync.qbo?.invoices||0)+' invoice(s) · '+Number(sync.qbo?.payments||0)+' payment(s) · '+Number(sync.conflicts?.length||0)+' conflict(s) · '+Number(sync.warnings?.length||0)+' warning(s).'
+          : 'Imports QuickBooks customers, estimates, invoices and payments into CRM, then safely updates linked QuickBooks customers and issued estimates from CRM. The bulk sync never creates a payment or invoice in QuickBooks.';
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
@@ -1316,6 +1339,28 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     connect?.addEventListener('click',async()=>{status.textContent='Starting QuickBooks authorization…';try{const data=await api({action:'connect'});window.location.href=data.url;}catch(err){status.textContent=err.message||'Unable to start QuickBooks authorization.';}});
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
+    twoWaySync?.addEventListener('click',async()=>{
+      const original=twoWaySync.textContent;
+      twoWaySync.disabled=true;
+      twoWaySync.textContent='Syncing…';
+      if(twoWaySyncStatus)twoWaySyncStatus.textContent='Synchronizing QuickBooks and CRM…';
+      if(twoWaySyncDetail)twoWaySyncDetail.textContent='Reading customers, estimates, invoices and payments, matching records, then applying safe outbound CRM customer and estimate updates.';
+      try{
+        const data=await api({action:'sync-two-way'});
+        state.manualSync=data.result||null;
+        state.accountingAudit=data.accountingAudit||state.accountingAudit;
+        const result=data.result||{};
+        if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync completed '+when(result.completedAt)+'.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings.';
+        renderAccountingAudit();
+      }catch(err){
+        if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync did not complete.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=err.message||'QuickBooks synchronization failed.';
+      }finally{
+        twoWaySync.disabled=false;
+        twoWaySync.textContent=original;
+      }
+    });
     refreshItems?.addEventListener('click',loadItems);
     itemSelect?.addEventListener('change',()=>{
       const selected=items.find((item)=>item.id===itemSelect.value);
