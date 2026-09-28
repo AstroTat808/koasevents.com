@@ -9,6 +9,7 @@ import { credentialHealthSummary } from './credential-health';
 import { qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { evaluateAccountingTaxInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
+import { tenantEnv } from './tenant-env';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -486,7 +487,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
       })
     : Promise.resolve({response:null,ms:0,error:'QuickBooks webhook verifier token is not configured.'});
 
-  const signWellWebhookId=clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'),1000);
+  const signWellWebhookId=clean(tenantEnv(resolveTenant(),'SIGNWELL_WEBHOOK_ID'),1000);
   const signWellEventType='koa_health_check';
   const signWellEventTime=Math.floor(Date.now()/1000);
   const signWellHash=signWellWebhookId
@@ -1905,17 +1906,17 @@ function esc(value:unknown){
 }
 
 async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+  const apiKey=clean(tenantEnv(resolveTenant(),'RESEND_API_KEY'),500);
   if(!apiKey) return {channel:'email',sent:false,reason:'resend-not-configured'};
 
-  const configured=clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
+  const configured=clean(tenantEnv(resolveTenant(),'HEALTH_ALERT_EMAILS','KOA_HEALTH_ALERT_EMAILS'),500)
+    || clean(tenantEnv(resolveTenant(),'LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO'),500)
     || 'chris@sibel.org';
   const recipients=configured.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
   if(!recipients.length) return {channel:'email',sent:false,reason:'no-recipient'};
 
-  const from=clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
+  const from=clean(tenantEnv(resolveTenant(),'HEALTH_ALERT_FROM','KOA_HEALTH_ALERT_FROM'),240)
+    || clean(tenantEnv(resolveTenant(),'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)
     || 'Koa’s Events <leads@koasevents.com>';
   const fullyRecovered=(current.alertFailedIds||[]).length===0;
   const subject=fullyRecovered
