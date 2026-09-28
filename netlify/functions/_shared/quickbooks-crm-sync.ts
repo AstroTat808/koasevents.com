@@ -269,8 +269,11 @@ function applyFinancialMirror(record: any, customer: any, estimateRows: any[], i
   const hasInvoice = invoices.length > 0;
   const hasEstimate = estimates.length > 0;
   record.kind = hasEstimate || hasInvoice || hasPayment ? 'proposal' : 'inquiry';
-  record.stage = hasPayment ? 'booked' : (hasEstimate || hasInvoice ? 'proposal' : 'lead');
-  record.status = hasPayment ? 'booked' : (hasEstimate || hasInvoice ? 'proposal' : 'lead');
+  // Financial history alone must never create an operational booking. The
+  // existing CRM booking flow still requires the signed contract + deposit
+  // rules before the project can move to Booked.
+  record.stage = hasEstimate || hasInvoice || hasPayment ? 'proposal' : 'lead';
+  record.status = hasEstimate || hasInvoice || hasPayment ? 'proposal' : 'lead';
 
   const proposalTotal = money(primaryEstimate?.total || invoices.reduce((sum, row) => sum + Number(row.total || 0), 0));
   if (hasEstimate || hasInvoice || hasPayment) {
@@ -292,7 +295,7 @@ function applyFinancialMirror(record: any, customer: any, estimateRows: any[], i
 
     record.proposal = {
       ...(record.proposal || {}),
-      status: hasPayment ? 'booked' : (hasInvoice ? 'accepted' : 'sent'),
+      status: hasInvoice || hasPayment ? 'accepted' : 'sent',
       subtotal: proposalTotal,
       discountAmount: 0,
       taxAmount: 0,
@@ -308,24 +311,9 @@ function applyFinancialMirror(record: any, customer: any, estimateRows: any[], i
       source: 'quickbooks-import',
     };
 
-    if (hasInvoice || hasPayment) {
-      record.booking = {
-        ...(record.booking || {}),
-        status: hasPayment ? 'booked' : (record.booking?.status || 'pending'),
-        payments: schedule.map((milestone: any) => {
-          const invoice = invoices.find((row) => row.paymentId === milestone.id);
-          return {
-            id: milestone.id,
-            label: milestone.label,
-            dueDate: milestone.dueDate,
-            amount: milestone.amount,
-            status: invoice && Number(invoice.balance || 0) <= 0 ? 'paid' : 'pending',
-            paidAt: invoice && Number(invoice.balance || 0) <= 0 ? invoice.paidAt || now : undefined,
-            reference: invoice?.docNumber || '',
-          };
-        }),
-      };
-    }
+    // Keep imported invoice/payment milestones in the accounting mirror and
+    // proposal schedule. Do not synthesize a booking object from accounting
+    // history because Event Ops is gated by the real contract workflow.
   }
 
   record.updatedAt = now;
