@@ -74,14 +74,14 @@ function scopeJsonValue(tenant: TenantProfile, value: any) {
     return value.map((entry) => {
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
       if (entry.tenantId && String(entry.tenantId) !== tenant.id) {
-        throw new Error('Cross-tenant write was blocked.');
+        throw new Error('Cross-tenant data access was blocked.');
       }
       return { ...entry, tenantId: tenant.id };
     });
   }
   if (value && typeof value === 'object') {
     if (value.tenantId && String(value.tenantId) !== tenant.id) {
-      throw new Error('Cross-tenant write was blocked.');
+      throw new Error('Cross-tenant data access was blocked.');
     }
     return { ...value, tenantId: tenant.id };
   }
@@ -106,7 +106,14 @@ export function tenantStoreFor(
       const logical = cleanKey(key);
       const scoped = prefix + logical;
       const current = await canonical.get(scoped, options as any);
-      if (current != null) return current;
+      if (current != null) {
+        if (options?.type !== 'json') return current;
+        const scopedCurrent = scopeJsonValue(tenant, current);
+        if (JSON.stringify(scopedCurrent) !== JSON.stringify(current)) {
+          await canonical.setJSON(scoped, scopedCurrent);
+        }
+        return scopedCurrent;
+      }
       if (!legacy || !tenant.storage.legacyDataBelongsToTenant) return null;
 
       const fallback = await legacy.get(logical, options as any);
