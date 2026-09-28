@@ -312,9 +312,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       tax.elements.defaultTaxable.checked=org.taxProfile?.defaultTaxable!==false;
       tax.elements.enabled.checked=org.taxProfile?.enabled!==false;
 
-      const venuesNode=$('[data-venues]');venuesNode.innerHTML='';(org.venues||[]).forEach((row)=>venuesNode.appendChild(venueRow(row)));
-      const domainsNode=$('[data-domains]');domainsNode.innerHTML='';(org.domains||[]).forEach((row)=>domainsNode.appendChild(domainRow(row)));
-      const templatesNode=$('[data-templates]');templatesNode.innerHTML='';(org.templates||[]).forEach((row)=>templatesNode.appendChild(templateRow(row)));
+      const venuesNode=$('[data-venues]');
+      venuesNode.innerHTML='';
+      (org.venues||[]).forEach((row)=>venuesNode.appendChild(venueRow(row)));
+      const domainsNode=$('[data-domains]');
+      domainsNode.innerHTML='';
+      (org.domains||[]).forEach((row)=>domainsNode.appendChild(domainRow(row)));
+      const templatesNode=$('[data-templates]');
+      templatesNode.innerHTML='';
+      (org.templates||[]).forEach((row)=>templatesNode.appendChild(templateRow(row)));
 
       const onboard=state.onboarding||[];
       const done=onboard.filter((row)=>row.complete).length;
