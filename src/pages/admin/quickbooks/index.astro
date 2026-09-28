@@ -516,6 +516,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Liability account<select name="liabilityAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose liability account</option></select></label>
               <label class="grid gap-2 text-sm font-semibold">Refund bank account<select name="refundBankAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose bank account</option></select></label>
               <label class="grid gap-2 text-sm font-semibold">Deduction income account<select name="deductionIncomeAccountId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Choose income account</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Refundable-deposit item<select name="itemId" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="">Create / choose item</option></select></label>
             </div>
             <div class="rounded-xl bg-[var(--koa-sand)]/45 p-4 text-sm">
               <strong class="text-[var(--koa-forest)]">Dedicated QuickBooks item</strong>
@@ -2396,7 +2397,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         fillAccountSelect(damageDepositSettingsForm.elements.liabilityAccountId,damageDepositAccounts.liabilityAccounts,settings.liabilityAccountId);
         fillAccountSelect(damageDepositSettingsForm.elements.refundBankAccountId,damageDepositAccounts.bankAccounts,settings.refundBankAccountId);
         fillAccountSelect(damageDepositSettingsForm.elements.deductionIncomeAccountId,damageDepositAccounts.incomeAccounts,settings.deductionIncomeAccountId);
-        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='QuickBooks account choices refreshed.';
+        fillAccountSelect(damageDepositSettingsForm.elements.itemId,damageDepositAccounts.items,settings.itemId);
+        if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent='QuickBooks account and item choices refreshed.';
       }catch(err){
         if(damageDepositSettingsMessage)damageDepositSettingsMessage.textContent=err.message||'Unable to load QuickBooks accounts.';
       }finally{
@@ -2415,6 +2417,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       fillAccountSelect(damageDepositSettingsForm.elements.liabilityAccountId,damageDepositAccounts?.liabilityAccounts||[],settings.liabilityAccountId);
       fillAccountSelect(damageDepositSettingsForm.elements.refundBankAccountId,damageDepositAccounts?.bankAccounts||[],settings.refundBankAccountId);
       fillAccountSelect(damageDepositSettingsForm.elements.deductionIncomeAccountId,damageDepositAccounts?.incomeAccounts||[],settings.deductionIncomeAccountId);
+      fillAccountSelect(damageDepositSettingsForm.elements.itemId,damageDepositAccounts?.items||[],settings.itemId);
       const configured=Boolean(settings.enabled!==false&&settings.liabilityAccountId&&settings.itemId&&settings.refundBankAccountId);
       if(damageDepositConfigStatus){
         damageDepositConfigStatus.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] '+(configured?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900');
@@ -2716,8 +2719,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           refundBankAccountName:accountName('refundBankAccountId'),
           deductionIncomeAccountId:form.elements.deductionIncomeAccountId.value,
           deductionIncomeAccountName:accountName('deductionIncomeAccountId'),
-          itemId:state?.damageDepositSettings?.itemId||'',
-          itemName:state?.damageDepositSettings?.itemName||'Refundable Damage Deposit',
+          itemId:form.elements.itemId.value,
+          itemName:accountName('itemId')||state?.damageDepositSettings?.itemName||'Refundable Damage Deposit',
         });
         state.damageDepositSettings=result.damageDepositSettings;
         renderDamageDepositSettings();
