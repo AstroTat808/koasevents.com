@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { resolveTenant } from './_shared/tenant.ts';
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
+import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
@@ -680,7 +681,7 @@ export default async (req: Request, context: Context) => {
     } : null,
   };
 
-  const notificationConfigured = Boolean(String(Netlify.env.get('RESEND_API_KEY') || '').trim());
+  const notificationConfigured = Boolean(tenantEnv(resolveTenant(req),'RESEND_API_KEY'));
 
   if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
     const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
