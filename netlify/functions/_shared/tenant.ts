@@ -63,15 +63,6 @@ export function tenantBlobStoreName(tenant: TenantProfile, kind: 'sales' | 'inte
 
 
 export async function resolveTenantAsync(req?: Request, context?: Context): Promise<TenantProfile> {
-  const configuredId = clean(Netlify.env.get('VENUELOOM_DEFAULT_TENANT_ID'), 120);
-  if (configuredId) {
-    const configured = tenantById(configuredId);
-    if (configured) return configured;
-    const dynamic = await readOrganizationById(context, configuredId);
-    if (dynamic) return profileFromOrganization(dynamic);
-    throw new Error('Configured VenueLoom tenant was not found: ' + configuredId);
-  }
-
   let queryTenant = '';
   try { queryTenant = clean(req ? new URL(req.url).searchParams.get('tenant') : '', 120); } catch {}
   const requestedId = clean(req?.headers.get('x-venueloom-tenant') || queryTenant, 120);
@@ -80,6 +71,15 @@ export async function resolveTenantAsync(req?: Request, context?: Context): Prom
     if (staticTenant) return staticTenant;
     const dynamic = await readOrganizationById(context, requestedId);
     if (dynamic) return profileFromOrganization(dynamic);
+  }
+
+  const configuredId = clean(Netlify.env.get('VENUELOOM_DEFAULT_TENANT_ID'), 120);
+  if (configuredId) {
+    const configured = tenantById(configuredId);
+    if (configured) return configured;
+    const dynamic = await readOrganizationById(context, configuredId);
+    if (dynamic) return profileFromOrganization(dynamic);
+    throw new Error('Configured VenueLoom tenant was not found: ' + configuredId);
   }
 
   const host = requestHost(req);
