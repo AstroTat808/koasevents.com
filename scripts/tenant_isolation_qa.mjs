@@ -139,6 +139,7 @@ const scheduledTenantJobs=[
   'netlify/functions/office365-calendar-sync.mts',
   'netlify/functions/vendor-insurance-reminders.mts',
   'netlify/functions/post-deploy-verification.mts',
+  'netlify/functions/review-requests.mts',
 ];
 for(const file of scheduledTenantJobs){
   const text=source(file);
