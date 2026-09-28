@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 export type EmailHealthEvent = {
   id: string;
@@ -51,6 +52,16 @@ const COMPATIBILITY_CHECKS = [
 
 function storeFor(context: Context) {
   return tenantStoreFor(context, resolveTenant(), 'emailAnalytics');
+}
+
+function tenantSetting(...names:string[]){ return tenantEnv(resolveTenant(),...names); }
+function tenantOrigin(){
+  const tenant=resolveTenant();
+  const host=tenant.domains.primary||tenant.domains.admin;
+  return host ? 'https://'+host : '';
+}
+function resendWebhookEndpoint(){
+  return tenantSetting('RESEND_WEBHOOK_ENDPOINT') || (tenantOrigin() ? tenantOrigin()+'/api/webhooks/resend' : '');
 }
 
 function clean(value: unknown, max = 500) {
@@ -116,7 +127,9 @@ function statusCounts(rows: any[], cutoffMs: number) {
 }
 
 async function checkLogo() {
-  const url = 'https://koasevents.com/brand/koa-mark.png';
+  const tenant=resolveTenant();
+  const logo=String(tenant.brand.logoPath||'').trim();
+  const url=/^https?:\/\//i.test(logo) ? logo : (tenantOrigin()+ (logo.startsWith('/')?logo:'/'+logo));
   const started = Date.now();
   try {
     const response = await fetch(url, {
@@ -149,7 +162,7 @@ async function checkLogo() {
 }
 
 export async function checkResendSendAccess() {
-  const apiKey = clean(Netlify.env.get('RESEND_API_KEY'), 500);
+  const apiKey = clean(tenantSetting('RESEND_API_KEY'), 500);
   if (!apiKey) {
     return {
       ok: false,
@@ -197,12 +210,10 @@ export async function checkResendSendAccess() {
   }
 }
 
-const RESEND_WEBHOOK_ENDPOINT = 'https://koasevents.com/api/webhooks/resend';
-
 async function checkResendWebhookConfig() {
-  const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
-  const signingSecretConfigured = clean(Netlify.env.get('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
-  const endpoint = RESEND_WEBHOOK_ENDPOINT;
+  const apiKey = clean(tenantSetting('RESEND_MONITORING_API_KEY'), 500);
+  const signingSecretConfigured = clean(tenantSetting('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
+  const endpoint = resendWebhookEndpoint();
 
   if (!apiKey) {
     return {
@@ -281,7 +292,7 @@ function webhookEventRows(body:any){
 }
 
 async function listResendWebhookEvents(webhookId:string, limit=10) {
-  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  const apiKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
   if(!apiKey||!webhookId)return {ok:false,status:0,rows:[] as any[],detail:'Resend monitoring credential or webhook id is unavailable.'};
   try{
     const response=await fetch(
@@ -301,7 +312,7 @@ async function listResendWebhookEvents(webhookId:string, limit=10) {
 }
 
 async function listResendWebhookAttempts(webhookId:string,eventId:string,limit=10) {
-  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  const apiKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
   if(!apiKey||!webhookId||!eventId)return {ok:false,status:0,rows:[] as any[],detail:'Resend monitoring credential, webhook id, or event id is unavailable.'};
   try{
     const response=await fetch(
@@ -408,7 +419,7 @@ export async function testResendWebhookDelivery() {
   const event=events.rows.find((row:any)=>['success','failed'].includes(clean(row?.status,40).toLowerCase()));
   if(!event?.id)throw new Error('No completed Resend webhook event is available to replay safely.');
 
-  const apiKey=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  const apiKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
   const eventId=clean(event.id,180);
   const startedAt=Date.now();
   const replay=await fetch(
@@ -459,7 +470,7 @@ export async function testResendWebhookDelivery() {
 }
 
 export async function listResendEmails() {
-  const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
+  const apiKey = clean(tenantSetting('RESEND_MONITORING_API_KEY'), 500);
   if (!apiKey) {
     return {
       ok: false,
