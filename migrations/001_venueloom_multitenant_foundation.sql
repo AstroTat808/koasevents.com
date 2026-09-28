@@ -3,6 +3,7 @@
 -- Apply this migration only after the Postgres environment is connected and Koa validation snapshots pass.
 
 create extension if not exists pgcrypto;
+create extension if not exists citext;
 
 create table if not exists organizations (
   id uuid primary key default gen_random_uuid(),
