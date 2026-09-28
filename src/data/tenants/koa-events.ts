@@ -202,6 +202,8 @@ export const koaEventsTenantProfile: TenantProfile = {
       emailRouting: 'koa-email-routing',
       authSecurity: 'koa-auth-security',
       staffDirectory: 'koa-staff-directory',
+      staffAvailability: 'koa-staff-availability',
+      security: 'koa-security',
       systemHealth: 'koa-system-health',
       workspaceAlerts: 'koa-workspace-alerts',
     },
