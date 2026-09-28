@@ -75,6 +75,16 @@ export type TenantProfile = {
     compatibilityBlobStores: {
       sales: string;
       integrations: string;
+      crm: string;
+      eventOps: string;
+      vendors: string;
+      eventFiles: string;
+      vendorFiles: string;
+      emailAnalytics: string;
+      authSecurity: string;
+      staffDirectory: string;
+      systemHealth: string;
+      workspaceAlerts: string;
     };
   };
   legal: {
