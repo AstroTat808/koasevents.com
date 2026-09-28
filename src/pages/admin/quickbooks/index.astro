@@ -487,7 +487,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         row.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         row.innerHTML='<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/52"></p><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><button type="button" data-edit class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Edit</button><button type="button" data-archive class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Archive</button></div></div>';
         row.querySelector('strong').textContent=item.name+(item.active===false?' · archived':'');
-        row.querySelectorAll('p')[0].textContent=(item.category||'service')+' · $'+Number(item.unitPrice||0).toFixed(2)+' / '+(item.unitLabel||'each')+(item.getExempt?' · GET exempt':' · GET taxable');
+        row.querySelectorAll('p')[0].textContent=(item.category||'service')+' · $'+Number(item.unitPrice||0).toFixed(2)+' / '+(item.unitLabel||'each')+(item.getExempt?' · '+String(state?.getSettings?.label||state?.tenant?.tax?.label||'Tax')+' exempt':' · '+String(state?.getSettings?.label||state?.tenant?.tax?.label||'Tax')+' taxable');
         row.querySelectorAll('p')[1].textContent='QBO '+(item.quickBooksType||'Service')+' #'+(item.quickBooksItemId||'not linked')+(item.incomeAccountName?' · '+item.incomeAccountName:'');
         row.querySelector('[data-edit]').addEventListener('click',()=>openCatalogItem(item));
         row.querySelector('[data-archive]').disabled=item.active===false;
@@ -988,7 +988,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const card=document.createElement('div');card.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950';
         const title=document.createElement('strong');title.textContent='“'+a.name+'” overlaps “'+b.name+'”.';
         const detail=document.createElement('div');detail.className='mt-1 leading-5';
-        detail.textContent='Winner: “'+winner.name+'” because it appears above “'+loser.name+'” in priority order.'+(indeterminateBasis?' These rules use different GET bases, so overlap depends on the actual GET amount; the simulator will show the winner for a specific proposal.':'');
+        detail.textContent='Winner: “'+winner.name+'” because it appears above “'+loser.name+'” in priority order.'+(indeterminateBasis?' These rules use different tax bases, so overlap depends on the actual tax amount; the simulator will show the winner for a specific proposal.':'');
         card.append(title,detail);list.appendChild(card);
       });
     }
@@ -1003,7 +1003,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const bookingDate=String(ruleSimBooking()?.value||'');
       const eventDate=String(ruleSimEvent()?.value||'');
       const afterGetValue=Math.max(0,Number(ruleSimValue()?.value||0));
-      const getRate=Number(state?.getSettings?.customerRate||4.712)/100;
+      const getRate=Number(state?.getSettings?.customerRate??state?.tenant?.tax?.customerRate??0)/100;
       const beforeGetValue=getRate>0?afterGetValue/(1+getRate):afterGetValue;
       const leadDays=ruleLeadDays(bookingDate,eventDate);
       const rules=readAutoRules();
@@ -1045,7 +1045,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(rule.maxContractValue!=null&&value>rule.maxContractValue)return false;
         return true;
       });
-      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(winnerValue)+' '+(matched.contractValueBasis==='beforeGet'?'before GET':'after GET')+' contract value'+(allMatches.length>1?' · '+allMatches.length+' rules matched; this one wins by priority':'');
+      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(winnerValue)+' '+(matched.contractValueBasis==='beforeGet'?'before tax':'after tax')+' contract value'+(allMatches.length>1?' · '+allMatches.length+' rules matched; this one wins by priority':'');
       result.append(eyebrow,heading,presetLine,detail);
     }
 
