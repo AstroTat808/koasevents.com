@@ -208,6 +208,7 @@ export const koaEventsTenantProfile: TenantProfile = {
       security: 'koa-security',
       systemHealth: 'koa-system-health',
       calendarSync: 'koa-calendar-sync',
+      userPreferences: 'koa-admin-home-layout',
       workspaceAlerts: 'koa-workspace-alerts',
     },
   },
