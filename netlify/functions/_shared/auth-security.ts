@@ -1,7 +1,8 @@
 import { emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
-import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type AuthEventType = 'login_success'|'login_failed'|'suspicious_login'|'session_revoked'|'sessions_revoked';
 export type AuthEvent = {
@@ -32,7 +33,7 @@ export type ManagedSession = {
   revokedBy:string;
 };
 
-function store(){return getStore({name:'koa-auth-security',consistency:'strong'});}
+function store(){return tenantStoreFor(undefined,resolveTenant(),'authSecurity');}
 function clean(v:unknown,max=800){return String(v||'').trim().slice(0,max);}
 function id(prefix:string){return prefix+'-'+crypto.randomUUID().replaceAll('-','').slice(0,18).toUpperCase();}
 function cookie(req:Request,name:string){
