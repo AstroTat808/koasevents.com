@@ -73,8 +73,28 @@ export default async (req:Request) => {
       : security.forcePasswordChange ? 'password_change_required'
       : '',
     security,
-    app_metadata:{roles:[ctx.role],permissions:ctx.capabilities},
-    appMetadata:{roles:[ctx.role],permissions:ctx.capabilities},
+    tenant:ctx.tenant ? {
+      id:ctx.tenant.id,
+      slug:ctx.tenant.slug,
+      displayName:ctx.organization?.displayName || ctx.tenant.displayName,
+      locale:ctx.organization?.locale || ctx.tenant.locale,
+      currency:ctx.organization?.currency || ctx.tenant.currency,
+      timezone:ctx.organization?.timezone || ctx.tenant.timezone,
+    } : null,
+    organization:ctx.organization || null,
+    membership:ctx.membership || null,
+    app_metadata:{
+      roles:[ctx.role],
+      permissions:ctx.capabilities,
+      tenantId:ctx.tenant?.id || '',
+      membershipId:ctx.membership?.id || '',
+    },
+    appMetadata:{
+      roles:[ctx.role],
+      permissions:ctx.capabilities,
+      tenantId:ctx.tenant?.id || '',
+      membershipId:ctx.membership?.id || '',
+    },
   }, { headers:{'Cache-Control':'private, no-store'} });
 };
 
