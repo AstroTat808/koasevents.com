@@ -48,6 +48,10 @@ function money(value: unknown) {
   return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
 }
 
+function jsonClone<T = any>(value: T): T {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
 function normalizeEmail(value: unknown) {
   return clean(value, 240).toLowerCase();
 }
@@ -623,6 +627,7 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   const existingRecords = ((await store.get('records/index', { type: 'json' })) || []) as any[];
   const records = existingRecords.filter(Boolean).slice(0, CRM_RECORD_LIMIT);
   const recordsBefore = records.length;
+  const recordsBeforeById = new Map(records.map((record) => [String(record.id), jsonClone(record)]));
 
   // Pull all supported accounting entities first. This gives the sync a stable
   // financial snapshot while CRM-origin writes happen later in the same run.
@@ -844,6 +849,16 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   }
 
   const completedAt = new Date().toISOString();
+  const recoveryRecords = records
+    .filter((record) => changedRecordIds.has(String(record.id)))
+    .map((record) => ({
+      recordId: clean(record?.id, 120),
+      clientName: clean(record?.customer?.name, 180),
+      before: recordsBeforeById.has(String(record.id)) ? recordsBeforeById.get(String(record.id)) : null,
+      after: jsonClone(record),
+      createdBySync: !recordsBeforeById.has(String(record.id)),
+    }));
+
   const syncId = 'QBSYNC-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix();
   const result = {
     syncId,
@@ -873,6 +888,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     conflicts,
     warnings,
     changes,
+    recovery: {
+      version: 1,
+      crmOnly: true,
+      capturedAt: completedAt,
+      records: recoveryRecords,
+    },
   };
 
   await writeRecords(context, records, changedRecordIds);
