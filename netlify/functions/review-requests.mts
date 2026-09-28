@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendReviewRequest } from './_shared/review-email.ts';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
@@ -40,7 +40,7 @@ function eventId() {
   return 'EVT-' + crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
 }
 
-export default async (_req: Request, context: Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!(await shouldRunScheduledJob(context,'review-requests'))) return;
 
@@ -104,6 +104,10 @@ export default async (_req: Request, context: Context) => {
     const currentEvents: any[] = (await store.get('analytics/events/index', { type: 'json' })) || [];
     await store.setJSON('analytics/events/index', [...appended, ...currentEvents].slice(0, 10000));
   }
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config: Config = {
