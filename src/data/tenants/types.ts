@@ -71,6 +71,12 @@ export type TenantProfile = {
   tax: TenantTaxProfile;
   catalog: TenantCatalogConfig;
   bootstrapAdminEmails: string[];
+  storage: {
+    compatibilityBlobStores: {
+      sales: string;
+      integrations: string;
+    };
+  };
   legal: {
     governingLawLabel: string;
     disputeVenueLabel: string;
