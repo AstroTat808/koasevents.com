@@ -46,10 +46,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
 
             <div data-sync-preview class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
-              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">New CRM imports</p><strong data-preview-new class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Matched</p><strong data-preview-matched class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Already linked</p><strong data-preview-linked class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+                <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Excluded</p><strong data-preview-excluded class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">CRM → QBO actions</p><strong data-preview-outbound class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Needs decision</p><strong data-preview-ambiguous class="display mt-2 block text-3xl text-[var(--koa-clay)]">0</strong></article>
               </div>
@@ -71,6 +72,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                     <option value="balance">Has Open Balance</option>
                     <option value="decision">Needs Decision</option>
                     <option value="duplicates">Likely Duplicates / Review</option>
+                    <option value="excluded">Excluded from Sync</option>
                   </select>
                 </label>
                 <label class="grid min-w-0 gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Search preview
@@ -119,6 +121,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
               <p data-preview-generated class="mt-4 text-xs text-[var(--koa-ink)]/45"></p>
             </div>
+
+            <section data-sync-reconciliation class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Post-sync reconciliation</p>
+                  <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Prediction vs actual execution</h3>
+                  <p data-sync-reconciliation-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50"></p>
+                </div>
+                <span data-sync-reconciliation-status class="self-start rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]"></span>
+              </div>
+              <div data-sync-reconciliation-counts class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"></div>
+              <div data-sync-reconciliation-deviations class="mt-4 grid gap-2"></div>
+            </section>
           </div>
           <div data-config-warning class="mt-6 hidden rounded-xl border border-[var(--koa-amber)]/35 bg-[var(--koa-amber-light)]/20 p-5">
             <p class="font-semibold text-[var(--koa-ink)]">Intuit app credentials are not configured on Netlify yet.</p>
@@ -523,6 +538,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const previewNew=document.querySelector('[data-preview-new]');
     const previewMatched=document.querySelector('[data-preview-matched]');
     const previewLinked=document.querySelector('[data-preview-linked]');
+    const previewExcluded=document.querySelector('[data-preview-excluded]');
     const previewOutbound=document.querySelector('[data-preview-outbound]');
     const previewAmbiguous=document.querySelector('[data-preview-ambiguous]');
     const previewImports=document.querySelector('[data-preview-imports]');
@@ -552,6 +568,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const syncConfirmWarning=document.querySelector('[data-sync-confirm-warning]');
     const syncConfirmCancel=document.querySelector('[data-sync-confirm-cancel]');
     const syncConfirmExecute=document.querySelector('[data-sync-confirm-execute]');
+    const syncReconciliation=document.querySelector('[data-sync-reconciliation]');
+    const syncReconciliationMeta=document.querySelector('[data-sync-reconciliation-meta]');
+    const syncReconciliationStatus=document.querySelector('[data-sync-reconciliation-status]');
+    const syncReconciliationCounts=document.querySelector('[data-sync-reconciliation-counts]');
+    const syncReconciliationDeviations=document.querySelector('[data-sync-reconciliation-deviations]');
     const bulkReview=document.querySelector('[data-bulk-review]');
     const bulkReviewDetail=document.querySelector('[data-bulk-review-detail]');
     const bulkSelectVisible=document.querySelector('[data-bulk-select-visible]');
