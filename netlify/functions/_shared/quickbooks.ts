@@ -739,27 +739,46 @@ export async function saveQuickBooksCatalog(
   return cleanCatalog;
 }
 
-export async function getQuickBooksGetSettings(context: Context): Promise<QuickBooksGetSettings> {
+function cleanTaxRate(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(parsed * 1000) / 1000));
+}
+
+// Legacy function name retained while the CRM migrates from a Koa-specific GET model
+// to tenant-defined tax profiles. No jurisdiction-specific defaults live here.
+export async function getQuickBooksGetSettings(
+  context: Context,
+  defaults: Partial<QuickBooksGetSettings> = {},
+): Promise<QuickBooksGetSettings> {
   const stored = await integrationStore(context).get(getSettingsKey(), { type: 'json' }) as any;
+  const label = String(stored?.label || defaults.label || 'Tax').trim().slice(0, 80) || 'Tax';
+  const statutoryRate = cleanTaxRate(stored?.statutoryRate ?? defaults.statutoryRate, 0);
+  const customerRate = cleanTaxRate(stored?.customerRate ?? defaults.customerRate, statutoryRate);
+  const maxPassOnRate = cleanTaxRate(stored?.maxPassOnRate ?? defaults.maxPassOnRate, customerRate);
   return {
-    enabled: true,
-    label: String(stored?.label || 'Hawaiʻi GET').trim().slice(0, 80),
-    statutoryRate: 4.5,
-    customerRate: 4.712,
-    maxPassOnRate: 4.712,
-    quickBooksItemId: String(stored?.quickBooksItemId || '').trim().slice(0, 80),
-    quickBooksItemName: String(stored?.quickBooksItemName || '').trim().slice(0, 100),
+    enabled: stored?.enabled == null ? defaults.enabled !== false : stored.enabled !== false,
+    label,
+    statutoryRate,
+    customerRate,
+    maxPassOnRate,
+    quickBooksItemId: String(stored?.quickBooksItemId || defaults.quickBooksItemId || '').trim().slice(0, 80),
+    quickBooksItemName: String(stored?.quickBooksItemName || defaults.quickBooksItemName || '').trim().slice(0, 100),
   };
 }
 
-export async function saveQuickBooksGetSettings(context: Context, settings: Partial<QuickBooksGetSettings>) {
-  const current = await getQuickBooksGetSettings(context);
+export async function saveQuickBooksGetSettings(
+  context: Context,
+  settings: Partial<QuickBooksGetSettings>,
+  defaults: Partial<QuickBooksGetSettings> = {},
+) {
+  const current = await getQuickBooksGetSettings(context, defaults);
   const next: QuickBooksGetSettings = {
-    enabled: true,
-    label: String(settings.label ?? current.label ?? 'Hawaiʻi GET').trim().slice(0, 80) || 'Hawaiʻi GET',
-    statutoryRate: 4.5,
-    customerRate: 4.712,
-    maxPassOnRate: 4.712,
+    enabled: settings.enabled == null ? current.enabled : settings.enabled !== false,
+    label: String(settings.label ?? current.label ?? 'Tax').trim().slice(0, 80) || 'Tax',
+    statutoryRate: cleanTaxRate(settings.statutoryRate ?? current.statutoryRate, current.statutoryRate),
+    customerRate: cleanTaxRate(settings.customerRate ?? current.customerRate, current.customerRate),
+    maxPassOnRate: cleanTaxRate(settings.maxPassOnRate ?? current.maxPassOnRate, current.maxPassOnRate),
     quickBooksItemId: String(settings.quickBooksItemId ?? current.quickBooksItemId ?? '').trim().slice(0, 80),
     quickBooksItemName: String(settings.quickBooksItemName ?? current.quickBooksItemName ?? '').trim().slice(0, 100),
   };
