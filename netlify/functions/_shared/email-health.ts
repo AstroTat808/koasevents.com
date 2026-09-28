@@ -166,7 +166,7 @@ export async function checkResendSendAccess() {
       headers: {
         Authorization: 'Bearer ' + apiKey,
         'Content-Type': 'application/json',
-        'User-Agent': 'KoaEvents-EmailHealth/1.0',
+        'User-Agent': 'VenueLoom-EmailHealth/1.0',
       },
       signal: AbortSignal.timeout(10000),
     });
@@ -196,12 +196,12 @@ export async function checkResendSendAccess() {
   }
 }
 
-const RESEND_WEBHOOK_ENDPOINT = 'https://koasevents.com/api/webhooks/resend';
+function resendWebhookEndpoint(){return 'https://'+resolveTenant().domains.primary+'/api/webhooks/resend';}
 
 async function checkResendWebhookConfig() {
   const apiKey = clean(Netlify.env.get('RESEND_MONITORING_API_KEY'), 500);
   const signingSecretConfigured = clean(Netlify.env.get('RESEND_WEBHOOK_SECRET'), 500).startsWith('whsec_');
-  const endpoint = RESEND_WEBHOOK_ENDPOINT;
+  const endpoint = resendWebhookEndpoint();
 
   if (!apiKey) {
     return {
@@ -222,7 +222,7 @@ async function checkResendWebhookConfig() {
       headers: {
         Authorization: 'Bearer ' + apiKey,
         'Content-Type': 'application/json',
-        'User-Agent': 'KoaEvents-EmailHealth/1.0',
+        'User-Agent': 'VenueLoom-EmailHealth/1.0',
       },
       signal: AbortSignal.timeout(10000),
     });
@@ -271,7 +271,7 @@ function resendHeaders(apiKey:string) {
   return {
     Authorization: 'Bearer ' + apiKey,
     'Content-Type': 'application/json',
-    'User-Agent': 'KoaEvents-EmailHealth/1.0',
+    'User-Agent': 'VenueLoom-EmailHealth/1.0',
   };
 }
 
@@ -474,7 +474,7 @@ export async function listResendEmails() {
       headers: {
         Authorization: 'Bearer ' + apiKey,
         'Content-Type': 'application/json',
-        'User-Agent': 'KoaEvents-EmailHealth/1.0',
+        'User-Agent': 'VenueLoom-EmailHealth/1.0',
       },
       signal: AbortSignal.timeout(10000),
     });
