@@ -20,6 +20,10 @@ export type OrganizationDomain = {
   kind: 'app' | 'portal' | 'marketing' | 'custom';
   status: 'pending' | 'verified' | 'failed';
   primary: boolean;
+  verificationToken?: string;
+  verifiedAt?: string;
+  lastCheckedAt?: string;
+  verificationError?: string;
 };
 
 export type OrganizationTemplate = {
@@ -39,6 +43,7 @@ export type OrganizationIntegration = {
   remoteAccountName: string;
   connectedAt: string;
   lastVerifiedAt: string;
+  credentialRef?: string;
 };
 
 export type OrganizationSubscription = {
