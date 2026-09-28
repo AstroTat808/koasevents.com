@@ -666,6 +666,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const previewReviewWarning=document.querySelector('[data-preview-review-warning]');
     const previewReviewWarningTitle=document.querySelector('[data-preview-review-warning-title]');
     const previewReviewWarningDetail=document.querySelector('[data-preview-review-warning-detail]');
+    const suggestionRulesPanel=document.querySelector('[data-suggestion-rules-panel]');
+    const suggestionRuleList=document.querySelector('[data-suggestion-rule-list]');
+    const suggestionRuleMeta=document.querySelector('[data-suggestion-rule-meta]');
+    const suggestionRuleMessage=document.querySelector('[data-suggestion-rule-message]');
+    const addSuggestionRule=document.querySelector('[data-add-suggestion-rule]');
+    const saveSuggestionRules=document.querySelector('[data-save-suggestion-rules]');
+    const resetSuggestionRules=document.querySelector('[data-reset-suggestion-rules]');
+    const resetSuggestionReviews=document.querySelector('[data-reset-suggestion-reviews]');
     const exportPreviewCsv=document.querySelector('[data-export-preview-csv]');
     const exportPreviewPdf=document.querySelector('[data-export-preview-pdf]');
     const matchReview=document.querySelector('[data-match-review]');
@@ -704,6 +712,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const exclusionSuggestion=document.querySelector('[data-exclusion-suggestion]');
     const exclusionCancel=document.querySelector('[data-exclusion-cancel]');
     const exclusionSubmit=document.querySelector('[data-exclusion-submit]');
+    const reviewSuggestedExclusions=document.querySelector('[data-review-suggested-exclusions]');
+    const suggestedReviewDialog=document.querySelector('[data-suggested-review-dialog]');
+    const suggestedReviewTitle=document.querySelector('[data-suggested-review-title]');
+    const suggestedReviewProgress=document.querySelector('[data-suggested-review-progress]');
+    const suggestedReviewBody=document.querySelector('[data-suggested-review-body]');
+    const suggestedReviewClose=document.querySelector('[data-suggested-review-close]');
+    const suggestedReviewKeep=document.querySelector('[data-suggested-review-keep]');
+    const suggestedReviewExclude=document.querySelector('[data-suggested-review-exclude]');
     const bulkReview=document.querySelector('[data-bulk-review]');
     const bulkReviewDetail=document.querySelector('[data-bulk-review-detail]');
     const bulkSelectVisible=document.querySelector('[data-bulk-select-visible]');
@@ -774,6 +790,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const bulkSelectedNew=new Set();
     const bulkSelectedExclude=new Set();
     let pendingExclusionCustomerId='';
+    let currentSuggestedReviewCustomerId='';
 
     function tenantLocale(){return state?.tenant?.locale||'en-US';}
     function tenantCurrency(){return state?.tenant?.currency||'USD';}
