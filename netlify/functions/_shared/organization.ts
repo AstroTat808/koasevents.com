@@ -592,3 +592,73 @@ export async function createOrganization(
   await saveMembership(context, membership);
   return { organization, membership, profile: profileFromOrganization(organization) };
 }
+
+
+export type PlatformSupportSession = {
+  id: string;
+  token: string;
+  tenantId: string;
+  adminUserId: string;
+  adminEmail: string;
+  reason: string;
+  readOnly: true;
+  createdAt: string;
+  expiresAt: string;
+  endedAt: string;
+};
+
+export async function createPlatformSupportSession(
+  context: Context | undefined,
+  input: { tenantId:string; adminUserId:string; adminEmail:string; reason:string; ttlMinutes?:number },
+) {
+  const tenantId=clean(input.tenantId,120);
+  const adminUserId=clean(input.adminUserId,160);
+  const adminEmail=clean(input.adminEmail,240).toLowerCase();
+  const reason=clean(input.reason,500);
+  if(!tenantId||!adminUserId||!adminEmail||!reason) throw new Error('Tenant, administrator, and support reason are required.');
+  const organization=await readOrganizationById(context,tenantId);
+  if(!organization) throw new Error('Organization not found.');
+  const ttl=Math.max(5,Math.min(30,Number(input.ttlMinutes||15)));
+  const now=new Date();
+  const token='vls_'+crypto.randomUUID().replaceAll('-','')+crypto.randomUUID().replaceAll('-','');
+  const session:PlatformSupportSession={
+    id:'support_'+crypto.randomUUID().replaceAll('-','').slice(0,24),
+    token,
+    tenantId,
+    adminUserId,
+    adminEmail,
+    reason,
+    readOnly:true,
+    createdAt:now.toISOString(),
+    expiresAt:new Date(now.getTime()+ttl*60_000).toISOString(),
+    endedAt:'',
+  };
+  const store=controlStore(context);
+  await store.setJSON('support-sessions/by-token/'+token,session);
+  const history=((await store.get('support-sessions/history',{type:'json'}))||[]) as PlatformSupportSession[];
+  await store.setJSON('support-sessions/history',[session,...history].slice(0,1000));
+  return session;
+}
+
+export async function readPlatformSupportSession(context:Context|undefined,token:string) {
+  const key=clean(token,220);
+  if(!key)return null;
+  return await controlStore(context).get('support-sessions/by-token/'+key,{type:'json'}) as PlatformSupportSession|null;
+}
+
+export async function endPlatformSupportSession(context:Context|undefined,token:string,adminUserId:string) {
+  const current=await readPlatformSupportSession(context,token);
+  if(!current)return null;
+  if(current.adminUserId!==clean(adminUserId,160))throw new Error('Support session belongs to another administrator.');
+  const ended={...current,endedAt:new Date().toISOString()};
+  const store=controlStore(context);
+  await store.setJSON('support-sessions/by-token/'+current.token,ended);
+  const history=((await store.get('support-sessions/history',{type:'json'}))||[]) as PlatformSupportSession[];
+  await store.setJSON('support-sessions/history',[ended,...history.filter((row)=>row.id!==ended.id)].slice(0,1000));
+  return ended;
+}
+
+export async function listPlatformSupportSessions(context:Context|undefined,limit=100) {
+  const rows=((await controlStore(context).get('support-sessions/history',{type:'json'}))||[]) as PlatformSupportSession[];
+  return rows.slice(0,Math.max(1,Math.min(500,limit)));
+}
