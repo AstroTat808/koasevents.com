@@ -1,6 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { admin } from '@netlify/identity';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 
 type AvailabilityStatus='available'|'tentative'|'unavailable'|'pto';
@@ -19,17 +19,15 @@ function dateKey(value:unknown){
   const raw=clean(value,20);
   return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';
 }
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-staff-availability',consistency:'strong'})
-    : getDeployStore({name:'koa-staff-availability'});
+function storeFor(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'staffAvailability');
 }
-async function readRows(context:Context){
-  const rows=await storeFor(context).get('availability/index',{type:'json'}).catch(()=>[]);
+async function readRows(context:Context,tenant:any){
+  const rows=await storeFor(context,tenant).get('availability/index',{type:'json'}).catch(()=>[]);
   return Array.isArray(rows)?rows as AvailabilityRow[]:[];
 }
-async function writeRows(context:Context,rows:AvailabilityRow[]){
-  await storeFor(context).setJSON('availability/index',rows.slice(0,12000));
+async function writeRows(context:Context,tenant:any,rows:AvailabilityRow[]){
+  await storeFor(context,tenant).setJSON('availability/index',rows.slice(0,12000));
 }
 function allowedStatus(value:unknown):AvailabilityStatus|null{
   const status=clean(value,30).toLowerCase();
@@ -46,7 +44,7 @@ export default async(req:Request,context:Context)=>{
     const start=dateKey(url.searchParams.get('start'));
     const end=dateKey(url.searchParams.get('end'));
     const email=normalizeEmail(url.searchParams.get('email'));
-    const rows=(await readRows(context))
+    const rows=(await readRows(context,auth.tenant))
       .filter((row)=>!email||row.email===email)
       .filter((row)=>!start||row.date>=start)
       .filter((row)=>!end||row.date<=end)
@@ -72,12 +70,12 @@ export default async(req:Request,context:Context)=>{
   const target=users.find((user:any)=>normalizeEmail(user?.email)===email);
   if(!target)return Response.json({error:'Staff account not found.'},{status:404});
 
-  const rows=await readRows(context);
+  const rows=await readRows(context,auth.tenant);
   const now=new Date().toISOString();
   const next=rows.filter((row)=>!(row.email===email&&row.date===date));
   next.push({email,date,status,note,updatedAt:now,updatedBy:actorEmail});
   next.sort((a,b)=>a.date.localeCompare(b.date)||a.email.localeCompare(b.email));
-  await writeRows(context,next);
+  await writeRows(context,auth.tenant,next);
 
   return Response.json({
     ok:true,
