@@ -6,8 +6,10 @@ import {
   recommendedAddOnPrice,
 } from './_shared/wedding-pricing';
 import {
+  annotateCatalogPriceHistory,
   getQuickBooksCatalog,
   saveQuickBooksCatalog,
+  type CatalogSaveAudit,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
 
@@ -184,7 +186,11 @@ type CatalogEconomicsPatch = {
   active?:boolean;
 };
 
-async function upsertCatalogEconomics(context:Context, patches:CatalogEconomicsPatch[]) {
+async function upsertCatalogEconomics(
+  context:Context,
+  patches:CatalogEconomicsPatch[],
+  audit:CatalogSaveAudit={source:'wedding-profitability'},
+) {
   const catalog = await getQuickBooksCatalog(context);
   const byId = new Map(catalog.map(item=>[item.id,item]));
   const now = new Date().toISOString();
@@ -218,7 +224,11 @@ async function upsertCatalogEconomics(context:Context, patches:CatalogEconomicsP
     };
     byId.set(id,item);
   }
-  return saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+  return saveQuickBooksCatalog(
+    context,
+    [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+    audit,
+  );
 }
 
 function packageCatalogPatch(row:PackageModel, publishPrice = false):CatalogEconomicsPatch {
@@ -681,7 +691,11 @@ export default async (req:Request,context:Context) => {
   if (action==='save-packages') {
     const incoming = Array.isArray(body?.packages) ? body.packages : [];
     state.packages = defaultPackages().map(fallback=>normalizePackage(incoming.find((row:any)=>clean(row?.id,80)===fallback.id),fallback));
-    await upsertCatalogEconomics(context,state.packages.map(row=>packageCatalogPatch(row,false)));
+    await upsertCatalogEconomics(
+      context,
+      state.packages.map(row=>packageCatalogPatch(row,false)),
+      {actor,source:'wedding-profitability-assumptions',note:'Saved wedding package cost and target-margin assumptions.'},
+    );
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
@@ -693,8 +707,19 @@ export default async (req:Request,context:Context) => {
     const recommended=recommendedPackagePrice(sumCosts(row.costs),row.targetMargin,500);
     if(recommended<=0) return Response.json({ error:'Enter package direct costs before approving a recommended price.' },{ status:400 });
     row.price=money(recommended);
-    await upsertCatalogEconomics(context,[packageCatalogPatch(row,true)]);
+    await upsertCatalogEconomics(
+      context,
+      [packageCatalogPatch(row,true)],
+      {actor,source:'wedding-profitability',sourceRef:row.id,note:'Published recommended wedding package price from Wedding Profitability.'},
+    );
     const updatedDraftProposals=await updateDraftPackagePricing(context,row.id,row.price);
+    await annotateCatalogPriceHistory(context,{
+      catalogItemId:row.id,
+      source:'wedding-profitability',
+      newPrice:row.price,
+      draftProposalsUpdated:updatedDraftProposals,
+      note:'Published recommended wedding package price from Wedding Profitability.',
+    });
     state=await writeState(context,state,actor);
     return Response.json({
       ok:true,
@@ -721,7 +746,11 @@ export default async (req:Request,context:Context) => {
       }
       return next;
     });
-    await upsertCatalogEconomics(context,state.addOns.map(row=>addOnCatalogPatch(row,false,catalogActiveById.get(row.id))));
+    await upsertCatalogEconomics(
+      context,
+      state.addOns.map(row=>addOnCatalogPatch(row,false,catalogActiveById.get(row.id))),
+      {actor,source:'wedding-profitability-assumptions',note:'Saved add-on cost and target-margin assumptions.'},
+    );
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
@@ -736,8 +765,19 @@ export default async (req:Request,context:Context) => {
     addon.approved = true;
     addon.approvedAt = new Date().toISOString();
     addon.approvedBy = actor;
-    await upsertCatalogEconomics(context,[addOnCatalogPatch(addon,true,true)]);
+    await upsertCatalogEconomics(
+      context,
+      [addOnCatalogPatch(addon,true,true)],
+      {actor,source:'wedding-profitability',sourceRef:addon.id,note:'Published recommended add-on price from Wedding Profitability.'},
+    );
     const updatedDraftProposals = await updateDraftProposalPricing(context,addon.catalogItemId,addon.sellPrice);
+    await annotateCatalogPriceHistory(context,{
+      catalogItemId:addon.catalogItemId,
+      source:'wedding-profitability',
+      newPrice:addon.sellPrice,
+      draftProposalsUpdated:updatedDraftProposals,
+      note:'Published recommended add-on price from Wedding Profitability.',
+    });
     state = await writeState(context,state,actor);
     return Response.json({
       ok:true,
@@ -753,7 +793,11 @@ export default async (req:Request,context:Context) => {
     addon.approved = false;
     addon.approvedAt = '';
     addon.approvedBy = '';
-    await upsertCatalogEconomics(context,[addOnCatalogPatch(addon,false,false)]);
+    await upsertCatalogEconomics(
+      context,
+      [addOnCatalogPatch(addon,false,false)],
+      {actor,source:'wedding-profitability-unpublish',sourceRef:addon.id,note:'Unpublished add-on from new proposal selection.'},
+    );
     state = await writeState(context,state,actor);
     return Response.json({ ok:true,...await responseState(context,state) });
   }
