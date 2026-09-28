@@ -492,8 +492,8 @@ export function profileFromOrganization(organization: OrganizationRecord): Tenan
       legacyDataBelongsToTenant: false,
       compatibilityBlobStores: {
         sales:'', quotes:'', integrations:'', crm:'', eventOps:'', vendors:'', eventFiles:'', vendorFiles:'',
-        emailAnalytics:'', emailRouting:'', authSecurity:'', staffDirectory:'', staffFiles:'', staffAvailability:'',
-        security:'', systemHealth:'', workspaceAlerts:'',
+        emailAnalytics:'', emailRouting:'', authSecurity:'', staffDirectory:'', staffFiles:'', staffAudit:'', staffAvailability:'',
+        security:'', systemHealth:'', calendarSync:'', workspaceAlerts:'',
       },
     },
     legal: { governingLawLabel:'', disputeVenueLabel:'' },
