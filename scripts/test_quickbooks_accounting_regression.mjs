@@ -9,14 +9,14 @@ const record = {
   proposal: {
     lineItems: [{
       id: 'hibiscus',
-      description: 'Hibiscus Wedding Collection',
+      description: 'Representative Event Collection',
       quantity: 1,
       unitPrice: 15000,
       amount: 15000,
     }],
     subtotal: 15000,
     discountAmount: 0,
-    taxLabel: 'Hawaiʻi GET',
+    taxLabel: 'GET',
     taxAmount: 706.80,
     total: 15706.80,
   },
