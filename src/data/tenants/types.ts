@@ -67,6 +67,7 @@ export type TenantProfile = {
   brand: {
     tagline: string;
     logoPath: string;
+    mobileName?: string;
   };
   tax: TenantTaxProfile;
   catalog: TenantCatalogConfig;
