@@ -248,7 +248,8 @@ function checkCatalogFeatureContracts() {
     ]],
     ['netlify/functions/admin-quotes.mts', [
       ['central catalog pricing reader', 'getQuickBooksCatalog'],
-      ['package catalog IDs', 'PACKAGE_CATALOG_IDS'],
+      ['tenant package catalog map', 'tenant.sales.catalogItemByPackage'],
+      ['tenant catalog alias fallback', 'tenant.catalog.canonicalAliases'],
       ['package catalog pricing map', 'catalogPricing'],
       ['catalog package line snapshot', 'catalogItemId: packageCatalog.catalogId'],
     ]],
