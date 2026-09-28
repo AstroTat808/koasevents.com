@@ -703,6 +703,16 @@ async function buildAccountingRepairPreview(
 
   const safeCodes = new Set(['estimate_total','estimate_missing','stored_balance']);
   const blockedIssues = (auditRow.issues || []).filter((issue: any) => !safeCodes.has(String(issue?.code || '')));
+  const missingServiceItem = changes.some((change: any) => change?.writesQuickBooks) && !clean(itemId, 80);
+  if (missingServiceItem) {
+    blockedIssues.push({
+      code: 'service_item_missing',
+      label: 'QuickBooks service item mapping',
+      expected: 'Configured service item',
+      actual: 'Not configured',
+      delta: null,
+    });
+  }
   const previewId = 'ARP-' + idSuffix() + '-' + Date.now().toString(36).toUpperCase();
   const createdAt = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
@@ -722,7 +732,7 @@ async function buildAccountingRepairPreview(
       'Run the accounting reconciliation again.',
       'Record the approved repair and before/after result in Client Workspace Activity.',
     ],
-    canApply: changes.length > 0,
+    canApply: changes.length > 0 && !missingServiceItem,
     noChangesNeeded: changes.length === 0 && (auditRow.issues || []).length === 0,
   };
   await integrationStoreFor(context).setJSON(repairPreviewKey(previewId), preview);
@@ -936,6 +946,36 @@ async function applyAccountingRepair(
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
   const actor = clean((auth.user as any)?.email || (auth.user as any)?.user_metadata?.email || 'staff', 240) || 'staff';
+
+  if (action === 'preview-accounting-repair') {
+    const recordId = clean(payload?.recordId, 100);
+    let records = await readQuickBooksSalesRecords(context);
+    const record = records.find((entry: any) => entry.id === recordId && entry.kind === 'proposal');
+    if (!record) return Response.json({ error:'Proposal record not found.' }, { status:404 });
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    try {
+      const result = await buildAccountingRepairPreview(context, tenant, record, records, itemId, actor);
+      return Response.json({ ok:true, ...result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview the accounting repair.' }, { status:409 });
+    }
+  }
+
+  if (action === 'apply-accounting-repair') {
+    try {
+      const result = await applyAccountingRepair(
+        context,
+        tenant,
+        clean(payload?.previewId, 120),
+        payload?.approved === true,
+        actor,
+      );
+      return Response.json({ ok:true, ...result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to apply the accounting repair.' }, { status:409 });
+    }
+  }
 
   if (action === 'preview-two-way') {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
