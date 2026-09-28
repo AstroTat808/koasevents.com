@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
 import { tenantEnv } from './_shared/tenant-env';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
+import { profileFromOrganization, readOrganizationById } from './_shared/organization';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import {
   getCompletedPdf,
@@ -21,11 +22,8 @@ function docId(payload:any){return clean(payload?.data?.object?.id||payload?.dat
 function eventName(payload:any){return clean(payload?.event?.type||payload?.event_type||payload?.type||payload?.data?.event,120).toLowerCase();}
 function recipients(payload:any){return payload?.data?.object?.recipients||payload?.data?.document?.recipients||payload?.document?.recipients||payload?.data?.recipients||[];}
 
-export default async(req:Request,context:Context)=>{
+async function handleTenantWebhook(req:Request,context:Context,payload:any){
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
-
-  const payload:any=await req.json().catch(()=>null);
-  if(!payload)return new Response('Invalid JSON',{status:400});
 
   const verification=verifySignWellWebhookEvent(payload,300);
   if(!verification.ok){
@@ -137,6 +135,36 @@ export default async(req:Request,context:Context)=>{
   await recordSignWellWebhookReplay(context,verification);
 
   return new Response(null,{status:200,headers:{'Cache-Control':'no-store'}});
+};
+
+
+function payloadTenantId(payload:any){
+  return clean(
+    payload?.data?.object?.metadata?.tenant_id
+    || payload?.data?.document?.metadata?.tenant_id
+    || payload?.document?.metadata?.tenant_id
+    || payload?.data?.metadata?.tenant_id
+    || payload?.metadata?.tenant_id,
+    120,
+  );
+}
+
+export default async(req:Request,context:Context)=>{
+  if(req.method!=='POST')return new Response('Method not allowed',{status:405});
+  const payload:any=await req.json().catch(()=>null);
+  if(!payload)return new Response('Invalid JSON',{status:400});
+
+  const tenantId=payloadTenantId(payload);
+  let tenant;
+  if(tenantId){
+    const organization=await readOrganizationById(context,tenantId);
+    if(!organization)return new Response('Unknown tenant',{status:401,headers:{'Cache-Control':'no-store'}});
+    tenant=profileFromOrganization(organization);
+  }else{
+    tenant=await resolveTenantAsync(req,context);
+  }
+
+  return runWithTenant(tenant,()=>handleTenantWebhook(req,context,payload));
 };
 
 export const config:Config={path:'/api/webhooks/signwell'};
