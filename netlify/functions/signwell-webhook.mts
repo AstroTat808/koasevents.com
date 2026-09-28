@@ -1,4 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
+import { tenantEnv } from './_shared/tenant-env';
 import { resolveTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import {
@@ -97,7 +98,7 @@ export default async(req:Request,context:Context)=>{
       acknowledgement:'Signed through SignWell.',
     };
     record.booking.contract.koaSignature={
-      name:clean(koa.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||resolveTenant().displayName,180),
+      name:clean(koa.name||tenantEnv(resolveTenant(),'SIGNWELL_SIGNER_NAME','SIGNWELL_KOA_SIGNER_NAME')||resolveTenant().displayName,180),
       signedAt:clean(koa.signed_at||koa.completed_at||now,80),
     };
     record.booking.status=record?.accounting?.quickbooks?.depositPaid?'booked':'deposit_pending';
