@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant.ts';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant.ts';
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
 
 const ALLOWED_TYPES = new Set(['package_view']);
@@ -12,7 +12,7 @@ function clean(value: unknown, max = 120) {
   return String(value || '').trim().slice(0, max);
 }
 
-export default async (req: Request, context: Context) => {
+async function handleTenantRequest(req: Request, context: Context) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
   const origin = req.headers.get('origin');
   const requestOrigin = new URL(req.url).origin;
@@ -40,6 +40,11 @@ export default async (req: Request, context: Context) => {
   }
 
   return Response.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } });
+}
+
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
 
 export const config: Config = { path: '/api/crm/events' };
