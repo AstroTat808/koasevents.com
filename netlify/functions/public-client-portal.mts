@@ -1,9 +1,10 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
-function sales(context:Context){return context.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
-function crm(context:Context){return context.deploy.context==='production'?getStore({name:'koa-crm',consistency:'strong'}):getDeployStore({name:'koa-crm'});}
-function ops(context:Context){return context.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
+function sales(context:Context,tenant:any){return tenantStoreFor(context,tenant,'sales');}
+function crm(context:Context,tenant:any){return tenantStoreFor(context,tenant,'crm');}
+function ops(context:Context,tenant:any){return tenantStoreFor(context,tenant,'eventOps');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 function id(p='MSG'){return p+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function idx<T>(store:any,key:string):Promise<T[]>{return ((await store.get(key,{type:'json'}))||[]) as T[];}
@@ -15,13 +16,14 @@ function paymentSummary(record:any){
 export default async(req:Request,context:Context)=>{
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid portal link.'},{status:400});
-  const ss=sales(context), cs=crm(context);
-  const records:any[]=await idx<any>(ss,'records/index');
+  const tenant=resolveTenant(req);
+  const ss=sales(context,tenant), cs=crm(context,tenant);
+  const records:any[]=(await readTenantIndex<any>(ss,tenant,'records/index')).rows;
   const record=records.find(r=>r?.kind==='proposal'&&r?.proposal?.publicToken===token);
   if(!record)return Response.json({error:'Client portal not found.'},{status:404});
   if(req.method==='GET'){
     const [appointments,messages]=await Promise.all([idx<any>(cs,'appointments/index'),idx<any>(cs,'client-messages/index')]);
-    const eventOps:any=record.stage==='booked'?await ops(context).get('events/'+record.id,{type:'json'}):null;
+    const eventOps:any=record.stage==='booked'?await ops(context,tenant).get('events/'+record.id,{type:'json'}):null;
     const contract=record.booking?.contract||null;
     return Response.json({project:{
       id:record.id,stage:record.stage,status:record.status,customerName:record.customer?.name||'',eventDate:record.customer?.eventDate||'',packageId:record.packageId||'',
