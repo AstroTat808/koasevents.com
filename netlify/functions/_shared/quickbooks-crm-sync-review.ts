@@ -192,7 +192,7 @@ export function buildQuickBooksCustomerMatchEvidence(
   invoices: any[] = [],
   payments: any[] = [],
 ): QuickBooksCustomerMatchEvidence {
-  const ids = (rows: any[], key: string) => [...new Set(rows.map((row) => clean(row?.[key] ?? row?.Id, 120)).filter(Boolean))];
+  const ids = (rows: any[], key: string) => [...new Set(rows.map((row) => clean(row?.[key] ?? row?.id ?? row?.Id, 120)).filter(Boolean))];
   const totals = [
     ...estimates.map((row) => money(row?.total ?? row?.TotalAmt)),
     ...invoices.map((row) => money(row?.total ?? row?.TotalAmt)),
