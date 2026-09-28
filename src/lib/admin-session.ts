@@ -31,6 +31,9 @@ export type AdminSession = {
   capabilities: string[];
   accessBlocked: boolean;
   blockReason: ''|'account_disabled'|'session_revoked'|'password_expired'|'password_change_required';
+  tenant: null | { id:string; slug:string; displayName:string; locale:string; currency:string; timezone:string };
+  organization: any | null;
+  membership: any | null;
   security: {
     forcePasswordChange: boolean;
     passwordChangedAt: string;
@@ -41,8 +44,8 @@ export type AdminSession = {
     tokenSessionVersion: number;
     sessionRevoked: boolean;
   };
-  app_metadata: { roles:string[]; permissions:string[] };
-  appMetadata: { roles:string[]; permissions:string[] };
+  app_metadata: { roles:string[]; permissions:string[]; tenantId?:string; membershipId?:string };
+  appMetadata: { roles:string[]; permissions:string[]; tenantId?:string; membershipId?:string };
 };
 
 export async function getAdminSession():Promise<AdminSession|null> {
