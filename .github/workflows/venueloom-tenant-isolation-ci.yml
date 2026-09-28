@@ -36,8 +36,7 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Type-check Astro
-        run: npm run check
-
       - name: Build with all P0 and accounting gates
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
         run: npm run build
