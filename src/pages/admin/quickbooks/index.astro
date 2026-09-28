@@ -1866,7 +1866,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return {
         crmCustomersCreated:plans.filter((row)=>row.decision==='approved_new'&&row.action==='import_new').length,
         crmCustomersMatched:plans.filter((row)=>['linked','auto_match','approved_match'].includes(String(row.decision||''))&&row.action==='refresh_match').length,
-        crmCustomersSkipped:plans.filter((row)=>row.decision==='new').length,
+        crmCustomersSkipped:plans.filter((row)=>row.decision==='new'||String(row?.executionDisposition||'').startsWith('skip_')).length,
+        crmCustomersSkippedUnapproved:plans.filter((row)=>row.decision==='new').length,
+        crmCustomersSkippedCapacity:plans.filter((row)=>row.executionDisposition==='skip_capacity').length,
         crmCustomersBlockedDuplicates:plans.filter((row)=>row.decision==='ambiguous').length,
         quickBooksRecordsWritten:new Set(writable.filter((row)=>['create','update'].includes(String(row.action||''))).map((row)=>String(row.recordId||''))).size,
         quickBooksActionsWritten:writable.filter((row)=>['create','update'].includes(String(row.action||''))).length,
@@ -1905,15 +1907,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
       const plans=Array.isArray(preview.customerPlans)?preview.customerPlans:[];
       const outbound=Array.isArray(preview.outbound)?preview.outbound:[];
-      const created=planNames(plans,(row)=>row.decision==='approved_new'&&row.action==='import_new');
-      const matched=planNames(plans,(row)=>['linked','auto_match','approved_match'].includes(String(row.decision||''))&&row.action==='refresh_match');
-      const skipped=planNames(plans,(row)=>row.decision==='new');
-      const blocked=planNames(plans,(row)=>row.decision==='ambiguous');
+      const created=planNames(plans,(row)=>row.executionDisposition==='create'||(!row.executionDisposition&&row.decision==='approved_new'&&row.action==='import_new'));
+      const matched=planNames(plans,(row)=>row.executionDisposition==='match_refresh'||(!row.executionDisposition&&['linked','auto_match','approved_match'].includes(String(row.decision||''))&&row.action==='refresh_match'));
+      const skipped=planNames(plans,(row)=>String(row.executionDisposition||'').startsWith('skip_')||(!row.executionDisposition&&row.decision==='new'));
+      const blocked=planNames(plans,(row)=>row.executionDisposition==='blocked_duplicate'||(!row.executionDisposition&&row.decision==='ambiguous'));
       if(syncConfirmMeta)syncConfirmMeta.textContent='Preview '+String(preview.previewId)+' · generated '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+'. These counts are tied to this exact preview ID; the server rejects a stale or replaced preview.';
       if(syncConfirmSummary)syncConfirmSummary.innerHTML=
         preflightCard('Create in CRM',execution.crmCustomersCreated,created.length+' approved new customer'+(created.length===1?'':'s'),'success')+
         preflightCard('Match / refresh',execution.crmCustomersMatched,matched.length+' existing CRM customer'+(matched.length===1?'':'s'))+
-        preflightCard('Skip',execution.crmCustomersSkipped,'Unapproved new customers','warning')+
+        preflightCard('Skip',execution.crmCustomersSkipped,Number(execution.crmCustomersSkippedCapacity||0)?Number(execution.crmCustomersSkippedCapacity||0)+' due to CRM capacity; '+Number(execution.crmCustomersSkippedUnapproved||0)+' unapproved':Number(execution.crmCustomersSkippedUnapproved||0)+' unapproved new customers','warning')+
         preflightCard('Blocked duplicates',execution.crmCustomersBlockedDuplicates,'Ambiguous duplicate matches',execution.crmCustomersBlockedDuplicates?'danger':'success')+
         preflightCard('Write to QBO',execution.quickBooksRecordsWritten,Number(execution.quickBooksActionsWritten||0)+' customer/estimate write action'+(Number(execution.quickBooksActionsWritten||0)===1?'':'s'),'success');
       if(syncConfirmDetails)syncConfirmDetails.innerHTML=
@@ -1921,7 +1923,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         '<section class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/30 p-4"><strong class="text-sm text-[var(--koa-forest)]">QuickBooks write-back</strong><div class="mt-4 grid gap-2 text-xs leading-5 text-[var(--koa-ink)]/60"><p><strong class="text-[var(--koa-forest)]">'+Number(execution.quickBooksCustomerCreates||0)+'</strong> customer create(s)</p><p><strong class="text-[var(--koa-forest)]">'+Number(execution.quickBooksCustomerUpdates||0)+'</strong> customer update(s)</p><p><strong class="text-[var(--koa-forest)]">'+Number(execution.quickBooksEstimateCreates||0)+'</strong> estimate create(s)</p><p><strong class="text-[var(--koa-forest)]">'+Number(execution.quickBooksEstimateUpdates||0)+'</strong> estimate update(s)</p><p><strong class="'+(Number(execution.quickBooksBlockedActions||0)?'text-amber-800':'text-[var(--koa-forest)]')+'">'+Number(execution.quickBooksBlockedActions||0)+'</strong> blocked outbound action(s)</p><p class="mt-2 text-[.6rem] text-[var(--koa-ink)]/45">'+outbound.length+' CRM record(s) contain proposed outbound QuickBooks actions in this preview.</p></div></section>';
       if(syncConfirmWarning)syncConfirmWarning.textContent='Invoices and payments remain QuickBooks-owned. Run Approved Sync may create or update QuickBooks customers and issued estimates shown in the preview, while mirroring QuickBooks estimates, invoices, payments and balances into CRM. It will not manufacture an invoice or payment.';
       if(syncConfirmExecute){
-        syncConfirmExecute.disabled=Number(execution.crmCustomersSkipped||0)>0||Number(execution.crmCustomersBlockedDuplicates||0)>0;
+        syncConfirmExecute.disabled=false;
         syncConfirmExecute.textContent='Run approved sync now';
       }
       syncConfirmDialog?.showModal();
