@@ -99,7 +99,7 @@ function defaultOps(record:any) {
   const now=new Date().toISOString();
   const seeded:any={
     recordId:record.id,createdAt:now,updatedAt:now,status:'planning',
-    finalGuestCount:guestCount,setupStart:'',guestArrival:'',eventStart:'',eventEnd:'',teardownEnd:'',venueArea:'Koa’s Events',
+    finalGuestCount:guestCount,setupStart:'',guestArrival:'',eventStart:'',eventEnd:'',teardownEnd:'',venueArea:resolveTenant().displayName,
     notes:'',vendors:[],vendorRequirements:seedVendorRequirements(),vendorRequirementsMode:'auto',questionnaire:seedQuestionnaire(),timeline:[],checklist:seedChecklist(eventDate),tasks:seedTasks(),documents:[]
   };
   seeded.vendorRequirements=suggestVendorRequirements(record,seeded).map((r)=>({category:r.category,importance:r.importance,note:r.note}));
