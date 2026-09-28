@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 function salesStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'sales'); }
@@ -35,7 +35,7 @@ async function appendEvent(context:Context,event:Record<string,unknown>){
   await store.setJSON('analytics/events/index',[{id:id('EVT'),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));
 }
 
-export default async(req:Request,context:Context)=>{
+async function handleTenantRequest(req:Request,context:Context){
   const token=clean(context.params.token,100);
   const documentId=clean(context.params.documentId,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token)) return Response.json({error:'Invalid planning link.'},{status:400});
@@ -110,6 +110,11 @@ export default async(req:Request,context:Context)=>{
   }
 
   return new Response('Method not allowed',{status:405});
+}
+
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
 
 export const config:Config={
