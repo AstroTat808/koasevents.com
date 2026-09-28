@@ -665,6 +665,7 @@ export default async (req: Request, context: Context) => {
   if (!hasCapability(auth.user,'quickbooks.manage')) return Response.json({ error:'Accounting management permission required.' }, { status:403 });
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
+  const actor = clean((auth.user as any)?.email || (auth.user as any)?.user_metadata?.email || 'staff', 240) || 'staff';
 
   if (action === 'test-accounting-alert') {
     const now = new Date().toISOString();
@@ -836,7 +837,12 @@ export default async (req: Request, context: Context) => {
     };
     const catalog = [item, ...existingCatalog.filter((entry: any) => entry.id !== id)]
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
-    await saveQuickBooksCatalog(context, catalog as any);
+    await saveQuickBooksCatalog(context, catalog as any, {
+      actor,
+      source:'quickbooks-item-save',
+      sourceRef:String(qboItem.Id || ''),
+      note:'Saved catalog item and QuickBooks item mapping.',
+    });
     return Response.json({ ok: true, item, catalog });
   }
 
@@ -846,7 +852,12 @@ export default async (req: Request, context: Context) => {
     const item = existingCatalog.find((entry: any) => entry.id === id);
     if (!item) return Response.json({ error: 'Catalog item not found.' }, { status: 404 });
     const catalog = existingCatalog.map((entry: any) => entry.id === id ? { ...entry, active: false, updatedAt: new Date().toISOString() } : entry);
-    await saveQuickBooksCatalog(context, catalog as any);
+    await saveQuickBooksCatalog(context, catalog as any, {
+      actor,
+      source:'quickbooks-catalog-archive',
+      sourceRef:id,
+      note:'Archived catalog item from the QuickBooks workspace.',
+    });
     return Response.json({ ok: true, catalog });
   }
 
@@ -883,7 +894,11 @@ export default async (req: Request, context: Context) => {
     const importedIds = new Set(imported.map((entry: any) => entry.quickBooksItemId));
     const catalog = [...imported, ...existing.filter((entry: any) => !importedIds.has(entry.quickBooksItemId))]
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
-    await saveQuickBooksCatalog(context, catalog as any);
+    await saveQuickBooksCatalog(context, catalog as any, {
+      actor,
+      source:'quickbooks-import',
+      note:'Imported or refreshed catalog items from live QuickBooks Products & Services.',
+    });
     return Response.json({ ok: true, catalog, importedCount: imported.length });
   }
 
