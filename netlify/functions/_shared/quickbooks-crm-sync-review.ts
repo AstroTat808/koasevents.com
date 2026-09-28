@@ -399,8 +399,8 @@ function previewRecordSnapshot(record: any) {
   };
 }
 
-function projectedRecordSnapshot(record: any, customer: any, financial: any) {
-  const origin = clean(record?.accounting?.quickbooks?.origin, 40) === 'quickbooks' || clean(record?.source, 80) === 'quickbooks-import';
+function projectedRecordSnapshot(record: any, customer: any, financial: any, predictedRecordId = '') {
+  const origin = !record || clean(record?.accounting?.quickbooks?.origin, 40) === 'quickbooks' || clean(record?.source, 80) === 'quickbooks-import';
   const hasFinancial = Number(financial.estimates || 0) + Number(financial.invoices || 0) + Number(financial.payments || 0) > 0;
   const base = previewRecordSnapshot(record) || {
     recordId: '',
@@ -415,6 +415,7 @@ function projectedRecordSnapshot(record: any, customer: any, financial: any) {
   const totalPaid = money(Number(financial.invoiceTotal || 0) - Number(financial.openBalance || 0));
   return {
     ...base,
+    recordId: clean(base.recordId || predictedRecordId, 120),
     stage: origin ? (hasFinancial ? 'proposal' : 'lead') : base.stage,
     status: origin ? (hasFinancial ? 'proposal' : 'lead') : base.status,
     customer: origin ? {
@@ -506,13 +507,24 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     const customerId = clean(customer?.Id, 100);
     const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides);
     const financial = customerFinancialSummary(customerId, estimateGroups, invoiceGroups, paymentGroups);
+    let predictedRecordId = '';
+    if (['new','approved_new'].includes(match.status)) {
+      const safe = clean(customerId, 100).replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-') || 'UNKNOWN';
+      const baseId = 'QBO-CUST-' + safe;
+      predictedRecordId = baseId;
+      let counter = 2;
+      while (indexes.recordsById.has(predictedRecordId)) {
+        predictedRecordId = baseId + '-' + counter;
+        counter += 1;
+      }
+    }
     const action = match.status === 'ambiguous'
       ? 'needs_decision'
       : ['new','approved_new'].includes(match.status)
         ? 'import_new'
         : 'refresh_match';
     const before = match.record ? previewRecordSnapshot(match.record) : null;
-    const after = match.status === 'ambiguous' ? null : projectedRecordSnapshot(match.record, customer, financial);
+    const after = match.status === 'ambiguous' ? null : projectedRecordSnapshot(match.record, customer, financial, predictedRecordId);
     return {
       customerId,
       qbo: {
@@ -524,6 +536,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       decision: match.status,
       reason: match.reason,
       matchedRecordId: clean(match.record?.id, 120),
+      predictedRecordId,
       candidates: match.candidates,
       financial,
       before,
