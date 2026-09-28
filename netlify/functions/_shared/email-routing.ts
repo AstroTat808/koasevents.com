@@ -190,9 +190,9 @@ export async function emailRoutingSummary() {
     updatedBy:stored.updatedBy||'',
     groups,
     senders:{
-      leadFrom:clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||'Koa’s Events <leads@koasevents.com>',
+      leadFrom:clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||tenantSender('leads'),
       clientFrom:clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha'),
-      clientReplyTo:clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com',
+      clientReplyTo:clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||resolveTenant().contact.email,
       vendorFrom:clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha'),
     },
     routes,
