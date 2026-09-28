@@ -21,8 +21,10 @@ jobs:
         with:
           node-version: 20
 
-      - name: Audit tenant storage boundary
-        run: node scripts/audit_tenant_storage_access.mjs
+      - name: Audit tenant storage and integration boundaries
+        run: |
+          node scripts/audit_tenant_storage_access.mjs
+          node scripts/audit_tenant_integration_env.mjs
 
       - name: Run cross-tenant regression tests
         run: |
