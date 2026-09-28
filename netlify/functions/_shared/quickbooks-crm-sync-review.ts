@@ -199,6 +199,15 @@ export function resolveQuickBooksCustomerMatch(
   const hintedId = qboRecordIdHint(customer);
   if (hintedId && indexes.recordsById.has(hintedId)) {
     const hinted = indexes.recordsById.get(hintedId);
+    const hintedQboId = clean(hinted?.accounting?.quickbooks?.customerId, 100);
+    if (hintedQboId && hintedQboId !== customerId) {
+      return {
+        status: 'ambiguous',
+        reason: 'hinted-record-linked-elsewhere',
+        record: null,
+        candidates: [candidateView(hinted, 'QuickBooks notes point to this CRM record, but it is linked to another QuickBooks customer')],
+      };
+    }
     return {
       status: 'linked',
       reason: 'qbo-crm-id-hint',
@@ -226,8 +235,12 @@ export function resolveQuickBooksCustomerMatch(
 
   const candidates = [...candidateMap.values()].map(({ record, reasons }) => candidateView(record, reasons.join(' · ')));
   if (candidates.length === 1) {
-    const record = indexes.recordsById.get(candidates[0].recordId);
-    return { status: 'auto_match', reason: candidates[0].reason, record, candidates };
+    const candidate = candidates[0];
+    if (candidate.currentQuickBooksCustomerId && candidate.currentQuickBooksCustomerId !== customerId) {
+      return { status:'ambiguous', reason:'candidate-linked-elsewhere', record:null, candidates };
+    }
+    const record = indexes.recordsById.get(candidate.recordId);
+    return { status: 'auto_match', reason: candidate.reason, record, candidates };
   }
   if (candidates.length > 1) {
     return { status: 'ambiguous', reason: 'multiple-crm-candidates', record: null, candidates };
@@ -333,6 +346,96 @@ function customerFinancialSummary(customerId: string, estimateGroups: Map<string
     invoiceTotal: money(invoices.reduce((sum, row) => sum + Number(row?.TotalAmt || 0), 0)),
     openBalance: money(invoices.reduce((sum, row) => sum + Math.max(0, Number(row?.Balance || 0)), 0)),
     paymentTotal: money(payments.reduce((sum, row) => sum + Number(row?.TotalAmt || 0), 0)),
+    estimateDocs: estimates.map((row) => ({
+      id: clean(row?.Id, 100),
+      docNumber: clean(row?.DocNumber, 100),
+      txnDate: isoDate(row?.TxnDate),
+      total: money(row?.TotalAmt),
+      emailStatus: clean(row?.EmailStatus, 80),
+    })),
+    invoiceDocs: invoices.map((row) => ({
+      id: clean(row?.Id, 100),
+      docNumber: clean(row?.DocNumber, 100),
+      txnDate: isoDate(row?.TxnDate),
+      dueDate: isoDate(row?.DueDate),
+      total: money(row?.TotalAmt),
+      balance: money(row?.Balance),
+      emailStatus: clean(row?.EmailStatus, 80),
+    })),
+    paymentDocs: payments.map((row) => ({
+      id: clean(row?.Id, 100),
+      txnDate: isoDate(row?.TxnDate),
+      total: money(row?.TotalAmt),
+    })),
+  };
+}
+
+function previewRecordSnapshot(record: any) {
+  if (!record) return null;
+  const qbo = record?.accounting?.quickbooks || {};
+  return {
+    recordId: clean(record?.id, 120),
+    stage: clean(record?.stage || record?.kind, 80),
+    status: clean(record?.status, 80),
+    customer: {
+      name: clean(record?.customer?.name, 180),
+      email: clean(record?.customer?.email, 240),
+      phone: clean(record?.customer?.phone, 80),
+      eventDate: clean(record?.customer?.eventDate, 40),
+    },
+    proposal: record?.proposal ? {
+      status: clean(record.proposal.status, 80),
+      total: money(record.proposal.total),
+    } : null,
+    quickbooks: {
+      customerId: clean(qbo.customerId, 100),
+      estimateId: clean(qbo.estimateId, 100),
+      invoiceCount: Array.isArray(qbo.invoices) ? qbo.invoices.length : 0,
+      paymentCount: Array.isArray(qbo.payments) ? qbo.payments.length : 0,
+      totalInvoiced: money(qbo.totalInvoiced),
+      totalPaid: money(qbo.totalPaid),
+      balanceDue: money(qbo.balanceDue),
+    },
+  };
+}
+
+function projectedRecordSnapshot(record: any, customer: any, financial: any) {
+  const origin = clean(record?.accounting?.quickbooks?.origin, 40) === 'quickbooks' || clean(record?.source, 80) === 'quickbooks-import';
+  const hasFinancial = Number(financial.estimates || 0) + Number(financial.invoices || 0) + Number(financial.payments || 0) > 0;
+  const base = previewRecordSnapshot(record) || {
+    recordId: '',
+    stage: hasFinancial ? 'proposal' : 'lead',
+    status: hasFinancial ? 'proposal' : 'lead',
+    customer: { name:'', email:'', phone:'', eventDate:'' },
+    proposal: null,
+    quickbooks: {},
+  };
+  const estimateDocs = Array.isArray(financial.estimateDocs) ? financial.estimateDocs : [];
+  const primaryEstimate = estimateDocs[0] || null;
+  const totalPaid = money(Number(financial.invoiceTotal || 0) - Number(financial.openBalance || 0));
+  return {
+    ...base,
+    stage: origin ? (hasFinancial ? 'proposal' : 'lead') : base.stage,
+    status: origin ? (hasFinancial ? 'proposal' : 'lead') : base.status,
+    customer: origin ? {
+      name: baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName, 180),
+      email: qboCustomerEmail(customer),
+      phone: qboCustomerPhone(customer),
+      eventDate: eventDateFromDisplayName(customer?.DisplayName),
+    } : base.customer,
+    proposal: origin && hasFinancial ? {
+      status: Number(financial.invoices || 0) + Number(financial.payments || 0) > 0 ? 'accepted' : 'sent',
+      total: money(primaryEstimate?.total || financial.invoiceTotal || 0),
+    } : base.proposal,
+    quickbooks: {
+      customerId: clean(customer?.Id, 100),
+      estimateId: clean(primaryEstimate?.id, 100),
+      invoiceCount: Number(financial.invoices || 0),
+      paymentCount: Number(financial.payments || 0),
+      totalInvoiced: money(financial.invoiceTotal),
+      totalPaid,
+      balanceDue: money(financial.openBalance),
+    },
   };
 }
 
@@ -408,6 +511,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       : ['new','approved_new'].includes(match.status)
         ? 'import_new'
         : 'refresh_match';
+    const before = match.record ? previewRecordSnapshot(match.record) : null;
+    const after = match.status === 'ambiguous' ? null : projectedRecordSnapshot(match.record, customer, financial);
     return {
       customerId,
       qbo: {
@@ -421,6 +526,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       matchedRecordId: clean(match.record?.id, 120),
       candidates: match.candidates,
       financial,
+      before,
+      after,
       action,
     };
   });
@@ -535,6 +642,7 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
     conflictCount: Array.isArray(detail.conflicts) ? detail.conflicts.length : 0,
     warningCount: Array.isArray(detail.warnings) ? detail.warnings.length : 0,
     changeCount: Array.isArray(detail.changes) ? detail.changes.length : 0,
+    clients: [...new Set((Array.isArray(detail.changes) ? detail.changes : []).map((change: any) => clean(change?.clientName, 180)).filter(Boolean))].slice(0, 250),
   };
   await store.setJSON(HISTORY_INDEX_KEY, [summary, ...current.filter((row) => row?.syncId !== syncId)].slice(0, 5000));
   return detail;
