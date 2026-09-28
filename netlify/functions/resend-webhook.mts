@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { recordEmailHealthEvent } from './_shared/email-health';
 
 type CommunicationState = {
@@ -143,7 +144,7 @@ export default async (req: Request, context: Context) => {
   const status = normalizeStatus(payload?.type);
   if (!status) return new Response(null, { status: 204 });
 
-  const store = getStore({ name: 'koa-sales', consistency: 'strong' });
+  const store = tenantStoreFor(context, resolveTenant(req), 'sales');
   const records: any[] = (await store.get('records/index', { type: 'json' })) || [];
   const matches: Array<{ record: any; key: string }> = [];
 
