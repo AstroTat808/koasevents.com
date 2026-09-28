@@ -193,15 +193,15 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
         '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:10px;border-collapse:collapse;">' +
           '<tr>' +
             '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#9993;</td>' +
-            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="mailto:aloha@koasevents.com" style="color:#173d30;text-decoration:none;">aloha@koasevents.com</a></td>' +
+            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="mailto:' + esc(contactEmail) + '" style="color:#173d30;text-decoration:none;">' + esc(contactEmail) + '</a></td>' +
           '</tr>' +
           '<tr>' +
             '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#9742;</td>' +
-            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="tel:+18448085627" style="color:#173d30;text-decoration:none;">(844) 808-KOAS</a></td>' +
+            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="tel:' + esc(phoneHref) + '" style="color:#173d30;text-decoration:none;">' + esc(phoneDisplay) + '</a></td>' +
           '</tr>' +
           '<tr>' +
             '<td width="24" valign="top" style="padding:2px 7px 2px 0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#8b5a3c;">&#8599;</td>' +
-            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="https://www.koasevents.com" style="color:#173d30;text-decoration:none;">www.koasevents.com</a></td>' +
+            '<td style="padding:2px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;"><a href="https://' + esc(domain) + '" style="color:#173d30;text-decoration:none;">' + esc(domain) + '</a></td>' +
           '</tr>' +
         '</table>' +
       '</td></tr>' +
