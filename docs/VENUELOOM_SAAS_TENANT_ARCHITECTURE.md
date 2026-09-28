@@ -516,3 +516,7 @@ A module is not SaaS-ready until:
 - tests include at least two materially different tenants;
 - cross-tenant access tests fail closed;
 - audit logs identify tenant, actor, source and target record.
+
+## Foundation release status
+
+Phase 0 tenant-boundary guardrails are active in the codebase. Koa's Events is the only registered tenant; storage compatibility remains intentionally single-tenant until the P0 data-isolation migration is completed.
