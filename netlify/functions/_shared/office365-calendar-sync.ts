@@ -12,7 +12,7 @@ function recordMarkerPrefixes(){
     ...(activeTenant().calendar.legacyRecordMarkerPrefixes||[]),
   ].map((value)=>clean(value,120)).filter(Boolean))];
 }
-function regexEscape(value:string){return value.replace(/[.*+?^\${}()|[\]\\]/g,'\\function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}');}
+function regexEscape(value:string){return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');}
 function zonedInstant(date:string,time:string,timeZone:string){
   const [year,month,day]=date.split('-').map(Number);
   const [hour,minute]=time.split(':').map(Number);
