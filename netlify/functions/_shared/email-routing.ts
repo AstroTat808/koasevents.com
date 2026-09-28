@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
 
 export type EmailRouteId =
   | 'lead-notification'
@@ -54,7 +55,7 @@ type StoredRouting = {
 };
 
 const CATALOG: Omit<EmailRoute,'to'|'cc'|'bcc'|'directTo'|'directCc'|'directBcc'|'toGroups'|'ccGroups'|'bccGroups'|'defaultTo'|'from'|'replyTo'>[] = [
-  { id:'lead-notification', label:'New lead notification', category:'Sales CRM', description:'Internal notification when a new website inquiry or lead reaches Koa’s.', mode:'configurable' },
+  { id:'lead-notification', label:'New lead notification', category:'Sales CRM', description:'Internal notification when a new website inquiry or lead reaches the organization.', mode:'configurable' },
   { id:'lead-response-reminder', label:'Lead response reminder', category:'Sales CRM', description:'Internal reminder when a lead is still waiting for a staff response.', mode:'configurable' },
   { id:'client-confirmation', label:'Client inquiry confirmation', category:'Client automation', description:'Automatic confirmation sent to the email address entered by the client.', mode:'dynamic', dynamicSource:'client' },
   { id:'client-follow-up', label:'24-hour client follow-up', category:'Client automation', description:'Automatic follow-up sent to the lead/client email address.', mode:'dynamic', dynamicSource:'client' },
@@ -89,33 +90,42 @@ function slug(value:unknown){
 
 function defaultsFor(id: EmailRouteId) {
   if (id === 'lead-notification' || id === 'lead-response-reminder') {
+    const tenant=resolveTenant();
     const env = clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),240).toLowerCase();
-    return normalizeEmails(env || 'aloha@koasevents.com');
+    return normalizeEmails(env || tenant.contact.email);
   }
   return [];
 }
 
+function tenantSender(localPart='hello'){const tenant=resolveTenant();return tenant.displayName+' <'+localPart+'@'+tenant.domains.primary+'>';}
+
 function senderFor(id:EmailRouteId){
   if(id==='lead-notification'||id==='lead-response-reminder'){
-    return clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||'Koa’s Events <leads@koasevents.com>';
+    return clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||tenantSender('leads');
   }
   if(id==='vendor-event-brief'||id==='vendor-insurance-reminder'){
-    return clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>';
+    return clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha');
   }
-  return clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>';
+  return clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha');
 }
 
 function replyToFor(id:EmailRouteId){
   if(id==='lead-notification') return 'Client email from inquiry record';
-  return clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com';
+  return clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||resolveTenant().contact.email;
 }
 
 function store() {
-  return getStore({ name:'koa-email-routing', consistency:'strong' });
+  const tenant=resolveTenant();
+  const name=tenant.storage.compatibilityBlobStores.emailRouting||'venueloom-email-routing';
+  return getStore({ name, consistency:'strong' });
+}
+function routingKey(key:string){
+  const tenant=resolveTenant();
+  return tenant.storage.compatibilityBlobStores.emailRouting ? key : 'tenants/'+tenant.id+'/'+key;
 }
 
 async function readStored(): Promise<StoredRouting> {
-  const raw:any=(await store().get('settings',{type:'json'}))||{};
+  const raw:any=(await store().get(routingKey('settings'),{type:'json'}))||{};
   return {
     updatedAt:clean(raw?.updatedAt,100),
     updatedBy:clean(raw?.updatedBy,240),
@@ -181,9 +191,9 @@ export async function emailRoutingSummary() {
     groups,
     senders:{
       leadFrom:clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||'Koa’s Events <leads@koasevents.com>',
-      clientFrom:clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>',
+      clientFrom:clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha'),
       clientReplyTo:clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com',
-      vendorFrom:clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>',
+      vendorFrom:clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||tenantSender('aloha'),
     },
     routes,
   };
@@ -217,7 +227,7 @@ export async function saveEmailRouting(input:any, actor:string) {
     groups,
     routes:nextRoutes,
   };
-  await store().setJSON('settings',next);
+  await store().setJSON(routingKey('settings'),next);
   return emailRoutingSummary();
 }
 
