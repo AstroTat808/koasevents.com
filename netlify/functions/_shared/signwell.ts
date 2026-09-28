@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const API='https://www.signwell.com/api/v1';
@@ -14,16 +15,16 @@ function salesStoreFor(context:Context){ return tenantStoreFor(context,resolveTe
 function healthStoreFor(context:Context){ return tenantStoreFor(context,resolveTenant(),'systemHealth'); }
 
 function apiKey(){
-  return clean(Netlify.env.get('SIGNWELL_API_KEY'),1200);
+  return clean(tenantEnv(resolveTenant(),'SIGNWELL_API_KEY'),1200);
 }
 
 export function signWellWebhookId(){
-  return clean(Netlify.env.get('SIGNWELL_WEBHOOK_ID'),240);
+  return clean(tenantEnv(resolveTenant(),'SIGNWELL_WEBHOOK_ID'),240);
 }
 
 export function signWellWebhookEndpoint(){
   const tenant=resolveTenant();
-  const origin=clean(Netlify.env.get('URL'),500)||('https://'+tenant.domains.primary);
+  const origin=clean(tenantEnv(tenant,'URL'),500)||('https://'+tenant.domains.primary);
   return origin.replace(/\/$/,'')+'/api/webhooks/signwell';
 }
 
@@ -36,9 +37,9 @@ export function signWellConfiguration(){
     webhookIdConfigured:Boolean(webhookId),
     webhookId,
     webhookEndpoint:signWellWebhookEndpoint(),
-    koaSignerEmail:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_EMAIL')||tenant.contact.email,240),
-    koaSignerName:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
-    testMode:String(Netlify.env.get('SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true',
+    koaSignerEmail:clean(tenantEnv(tenant,'SIGNWELL_SIGNER_EMAIL','SIGNWELL_KOA_SIGNER_EMAIL')||tenant.contact.email,240),
+    koaSignerName:clean(tenantEnv(tenant,'SIGNWELL_SIGNER_NAME','SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
+    testMode:String(tenantEnv(tenant,'SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true',
   };
 }
 
