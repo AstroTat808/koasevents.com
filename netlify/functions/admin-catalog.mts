@@ -12,8 +12,8 @@ import {
   saveQuickBooksCatalog,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
-import { catalogItems as websiteCatalogItems, type CatalogItem as WebsiteCatalogItem } from '../../src/data/catalog';
-import { businessRules } from '../../src/data/businessRules';
+import { clientTenantProfile, resolveTenant, tenantBlobStoreName } from './_shared/tenant';
+import type { TenantProfile } from '../../src/data/tenants';
 
 type ImportMapping = Partial<Record<
   'id' | 'name' | 'description' | 'group' | 'category' | 'unitLabel' | 'unitPrice' |
@@ -33,16 +33,18 @@ type ImportRow = {
 const IMPORT_LIMIT_BYTES = 2 * 1024 * 1024;
 const IMPORT_LIMIT_ROWS = 1000;
 
-function storeFor(context: Context) {
+function storeFor(context: Context, tenant: TenantProfile) {
+  const name=tenantBlobStoreName(tenant,'integrations');
   return context.deploy.context === 'production'
-    ? getStore({ name:'koa-integrations', consistency:'strong' })
-    : getDeployStore({ name:'koa-integrations' });
+    ? getStore({ name, consistency:'strong' })
+    : getDeployStore({ name });
 }
 
-function salesStoreFor(context: Context) {
+function salesStoreFor(context: Context, tenant: TenantProfile) {
+  const name=tenantBlobStoreName(tenant,'sales');
   return context.deploy.context === 'production'
-    ? getStore({ name:'koa-sales', consistency:'strong' })
-    : getDeployStore({ name:'koa-sales' });
+    ? getStore({ name, consistency:'strong' })
+    : getDeployStore({ name });
 }
 
 function clean(value: unknown, max = 1000) {
@@ -99,60 +101,36 @@ function normalizeCategory(value: unknown, group: QuickBooksCatalogItem['group']
   return 'service';
 }
 
-function groupForWebsite(item: WebsiteCatalogItem): QuickBooksCatalogItem['group'] {
-  if(item.category==='packages')return 'packages';
-  if(item.category==='bar')return 'mobile-bar';
-  if(['furniture','tabletop','decor','production'].includes(item.category))return 'rentals';
-  return 'add-ons';
-}
-
-function unitForWebsite(item: WebsiteCatalogItem) {
-  if(item.estimatedUnitLabel)return clean(item.estimatedUnitLabel,40);
-  if(item.quantityLabel)return clean(item.quantityLabel,40).replace(/^additional\s+/i,'').toLowerCase();
-  if(item.category==='packages')return 'package';
-  return 'each';
-}
-
-function priceForWebsite(item: WebsiteCatalogItem) {
-  if(Number(item.publishedUnitPrice)>0)return money(item.publishedUnitPrice);
-  if(Number(item.estimatedUnitPrice)>0)return money(item.estimatedUnitPrice);
-  const match=String(item.priceLabel||'').match(/\$\s*([\d,]+(?:\.\d{1,2})?)/);
-  return match ? money(match[1]) : 0;
-}
-
-function websiteSeed(): QuickBooksCatalogItem[] {
+function tenantCatalogSeed(tenant: TenantProfile): QuickBooksCatalogItem[] {
   const now=new Date().toISOString();
-  return websiteCatalogItems.map((item) => {
-    const group=groupForWebsite(item);
-    return {
-      id:clean(item.id,80),
-      name:clean(item.name,100),
-      description:clean(item.description,1000),
-      category:normalizeCategory('',group),
-      group,
-      unitLabel:unitForWebsite(item),
-      unitPrice:priceForWebsite(item),
-      internalCost:0,
-      targetMargin:0,
-      active:true,
-      getExempt:false,
-      source:'website',
-      sourceRef:clean(item.id,160),
-      quickBooksItemId:'',
-      quickBooksItemName:'',
-      quickBooksType:group==='rentals' ? 'NonInventory' : 'Service',
-      incomeAccountId:'',
-      incomeAccountName:'',
-      updatedAt:now,
-    };
-  }).filter((item)=>item.id&&item.name);
+  return tenant.catalog.bootstrapItems.map((item) => ({
+    id:clean(item.id,80),
+    name:clean(item.name,100),
+    description:clean(item.description,1000),
+    category:item.category,
+    group:item.group,
+    unitLabel:clean(item.unitLabel,40)||'each',
+    unitPrice:money(item.unitPrice),
+    internalCost:0,
+    targetMargin:0,
+    active:item.active!==false,
+    getExempt:item.taxExempt===true,
+    source:'website',
+    sourceRef:clean(item.sourceRef||item.id,160),
+    quickBooksItemId:'',
+    quickBooksItemName:'',
+    quickBooksType:item.quickBooksType,
+    incomeAccountId:'',
+    incomeAccountName:'',
+    updatedAt:now,
+  })).filter((item)=>item.id&&item.name);
 }
 
-async function ensureWebsiteCatalog(context: Context) {
+async function ensureWebsiteCatalog(context: Context, tenant: TenantProfile) {
   const existing=await getQuickBooksCatalog(context);
   const byId=new Map(existing.map((item)=>[item.id,item]));
   let changed=false;
-  for(const seed of websiteSeed()){
+  for(const seed of tenantCatalogSeed(tenant)){
     if(byId.has(seed.id))continue;
     byId.set(seed.id,seed);
     changed=true;
@@ -161,15 +139,15 @@ async function ensureWebsiteCatalog(context: Context) {
   return saveQuickBooksCatalog(
     context,
     [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
-    {actor:'system',source:'website-seed',note:'Seeded missing items from the public website catalog.'},
+    {actor:'system',source:'tenant-catalog-seed',sourceRef:tenant.id,note:'Seeded missing items from the tenant catalog configuration.'},
   );
 }
 
-async function refreshWebsiteCatalog(context: Context, actor = 'system') {
+async function refreshWebsiteCatalog(context: Context, tenant: TenantProfile, actor = 'system') {
   const existing=await getQuickBooksCatalog(context);
   const byId=new Map(existing.map((item)=>[item.id,item]));
   let added=0, refreshed=0;
-  for(const seed of websiteSeed()){
+  for(const seed of tenantCatalogSeed(tenant)){
     const prior=byId.get(seed.id);
     if(!prior){
       byId.set(seed.id,seed); added+=1; continue;
@@ -193,58 +171,46 @@ async function refreshWebsiteCatalog(context: Context, actor = 'system') {
   const catalog=await saveQuickBooksCatalog(
     context,
     [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
-    {actor,source:'website-sync',note:'Synchronized website-owned catalog items from the public catalog source.'},
+    {actor,source:'tenant-catalog-sync',sourceRef:tenant.id,note:'Synchronized tenant-owned catalog items from tenant configuration.'},
   );
   return {catalog,added,refreshed};
 }
 
-
-function normalizePackageCatalogId(value: unknown) {
+function normalizeCatalogId(value: unknown, tenant: TenantProfile) {
   const raw=clean(value,100).toLowerCase().replaceAll('_','-').replace(/\s+/g,'-');
   if(!raw)return '';
-  if(raw==='plumeria'||raw==='signature'||raw==='signature-wedding-experience'||raw.includes('signature'))return 'signature-wedding';
-  if(raw.includes('gardenia'))return 'gardenia';
-  if(raw.includes('orchid'))return 'orchid';
-  if(raw.includes('hibiscus'))return 'hibiscus';
-  if(raw==='mobile-oahu'||raw==='oahu'||raw==='oahu-mobile-bar-package')return 'oahu-bar';
-  if(raw==='mobile-maui'||raw==='maui'||raw==='maui-mobile-bar-package')return 'maui-bar';
-  if(raw==='mobile-big-island'||raw==='big-island'||raw==='big-island-mobile-bar-package')return 'big-island-bar';
-  return raw;
+  return tenant.catalog.canonicalAliases[raw]||raw;
 }
 
-function websitePlacementsForItem(item:QuickBooksCatalogItem) {
-  const placements:Array<{path:string;label:string}>=[
-    {path:'/catalog/',label:'Rental + enhancement catalog'},
-  ];
-  if(item.group==='packages'){
-    placements.push({path:'/venue/packages/',label:'Wedding packages'});
-    placements.push({path:'/weddings/',label:'Weddings overview'});
-    if(item.id==='signature-wedding')placements.push({path:'/signature-wedding/',label:'Signature Wedding Experience'});
-  }
-  if(item.group==='mobile-bar'){
-    placements.push({path:'/mobile-bar/',label:'Mobile Bar'});
-  }
-  return placements.filter((row,index,all)=>all.findIndex(other=>other.path===row.path)===index);
+function websitePlacementsForItem(item:QuickBooksCatalogItem, tenant: TenantProfile) {
+  return tenant.catalog.websitePlacements
+    .filter((rule)=>{
+      const itemMatch=!rule.itemIds?.length||rule.itemIds.includes(item.id);
+      const groupMatch=!rule.groups?.length||rule.groups.includes(item.group);
+      return itemMatch&&groupMatch;
+    })
+    .map((rule)=>({path:rule.path,label:rule.label}))
+    .filter((row,index,all)=>all.findIndex(other=>other.path===row.path)===index);
 }
 
-async function readSalesRecords(context:Context) {
-  const raw=await salesStoreFor(context).get('records/index',{type:'json'}) as any;
+async function readSalesRecords(context:Context,tenant:TenantProfile) {
+  const raw=await salesStoreFor(context,tenant).get('records/index',{type:'json'}) as any;
   return Array.isArray(raw)?raw:[];
 }
 
-function proposalUsesCatalogItem(record:any,item:QuickBooksCatalogItem) {
+function proposalUsesCatalogItem(record:any,item:QuickBooksCatalogItem,tenant:TenantProfile) {
   if(record?.kind!=='proposal'||!record?.proposal)return false;
   const lines=Array.isArray(record.proposal.lineItems)?record.proposal.lineItems:[];
   if(lines.some((line:any)=>clean(line?.catalogItemId||line?.id,80)===item.id))return true;
   if(item.group==='packages'){
-    const packageId=normalizePackageCatalogId(record?.packageId||record?.quote?.state?.startingPoint||record?.inquiry?.venuePackage||record?.inquiry?.packageInterest||'');
+    const packageId=normalizeCatalogId(record?.packageId||record?.quote?.state?.startingPoint||record?.inquiry?.venuePackage||record?.inquiry?.packageInterest||'',tenant);
     if(packageId===item.id && lines.some((line:any)=>clean(line?.id,80)==='collection'))return true;
   }
   return false;
 }
 
-function proposalUsage(records:any[],item:QuickBooksCatalogItem) {
-  const used=records.filter(record=>proposalUsesCatalogItem(record,item));
+function proposalUsage(records:any[],item:QuickBooksCatalogItem,tenant:TenantProfile) {
+  const used=records.filter(record=>proposalUsesCatalogItem(record,item,tenant));
   const statuses:Record<string,number>={};
   used.forEach((record:any)=>{
     const status=clean(record?.proposal?.status||record?.stage||record?.status||'unknown',40)||'unknown';
@@ -306,16 +272,16 @@ function transactionUsage(transactions:any[],item:QuickBooksCatalogItem) {
   };
 }
 
-async function itemUsage(context:Context,item:QuickBooksCatalogItem) {
+async function itemUsage(context:Context,item:QuickBooksCatalogItem,tenant:TenantProfile) {
   const [records,qbo,history]=await Promise.all([
-    readSalesRecords(context),
+    readSalesRecords(context,tenant),
     loadQuickBooksTransactions(context),
     getCatalogPriceHistory(context,{catalogItemId:item.id,limit:20}),
   ]);
   return {
     catalogItemId:item.id,
-    proposals:proposalUsage(records,item),
-    website:{count:websitePlacementsForItem(item).length,placements:websitePlacementsForItem(item)},
+    proposals:proposalUsage(records,item,tenant),
+    website:{count:websitePlacementsForItem(item,tenant).length,placements:websitePlacementsForItem(item,tenant)},
     quickBooks:{
       connected:qbo.connected,
       error:qbo.error,
@@ -324,22 +290,6 @@ async function itemUsage(context:Context,item:QuickBooksCatalogItem) {
     priceHistory:history,
   };
 }
-
-const QBO_CATALOG_ALIASES:Record<string,string[]>={
-  gardenia:['Wedding Packages:Wedding Package-Gardenia'],
-  orchid:['Wedding Packages:Wedding Package-Orchid'],
-  hibiscus:['Wedding Packages:Wedding Package-Hibiscus'],
-  'signature-wedding':['Wedding Packages:Wedding Package-Plumeria'],
-  'oahu-bar':['Bar:Bar Package-Oahu'],
-  'maui-bar':['Bar:Bar Package-Maui'],
-  'big-island-bar':['Bar:Bar Package-Big Island'],
-  'bar-additional-hour':['Bar:Mobile Bar - Additional Hour'],
-  'ceremony-chair':['Tables & Chairs:Chairs-White/Resin'],
-  'reception-chair':['Tables & Chairs:Chairs-White/Resin'],
-  'round-table':['Tables & Chairs:Table-60-inch/Round'],
-  'rectangle-table':['Tables & Chairs:Table-6-Ft/Rectangle'],
-  glassware:['Bar:Glassware - Cocktail Glass','Bar:Glassware - Champange Flutes','Bar:Glassware - Wine Glasses'],
-};
 
 async function loadQuickBooksItems(context:Context) {
   const connection=await getQuickBooksConnection(context);
@@ -378,9 +328,9 @@ function qboNameIndex(items:any[]) {
   return index;
 }
 
-function qboCandidatesForItem(item:QuickBooksCatalogItem,index:Map<string,any[]>) {
+function qboCandidatesForItem(item:QuickBooksCatalogItem,index:Map<string,any[]>,tenant:TenantProfile) {
   const names=[
-    ...(QBO_CATALOG_ALIASES[item.id]||[]),
+    ...(tenant.catalog.quickBooksAliases[item.id]||[]),
     clean(item.quickBooksItemName,160),
     clean(item.name,160),
   ].filter(Boolean);
@@ -391,26 +341,12 @@ function qboCandidatesForItem(item:QuickBooksCatalogItem,index:Map<string,any[]>
   return [...byId.values()];
 }
 
-function expectedWebsitePrice(itemId:string,seedById:Map<string,QuickBooksCatalogItem>) {
-  const seed=seedById.get(itemId);
-  if(!seed)return 0;
-  const packageById:Record<string,number>=Object.fromEntries(
-    businessRules.venueWeddingPackages.map((pkg:any)=>[
-      pkg.name==='Plumeria'?'signature-wedding':String(pkg.name||'').toLowerCase(),
-      Number(pkg.price||0),
-    ]),
-  );
-  const mobileById:Record<string,number>=Object.fromEntries(
-    businessRules.mobileBar.packages.map((pkg:any)=>[
-      String(pkg.name||'').toLowerCase()==='big island'?'big-island-bar':String(pkg.name||'').toLowerCase()+'-bar',
-      Number(pkg.price||0),
-    ]),
-  );
-  return money(packageById[itemId]||mobileById[itemId]||seed.unitPrice||0);
+function expectedReferencePrice(itemId:string,seedById:Map<string,QuickBooksCatalogItem>) {
+  return money(seedById.get(itemId)?.unitPrice||0);
 }
 
-async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) {
-  const seedById=new Map(websiteSeed().map(item=>[item.id,item]));
+async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[],tenant:TenantProfile) {
+  const seedById=new Map(tenantCatalogSeed(tenant).map(item=>[item.id,item]));
   const qbo=await loadQuickBooksItems(context);
   const qboById=new Map(qbo.items.map((item:any)=>[item.id,item]));
   const catalogByQboId=new Map<string,QuickBooksCatalogItem[]>();
@@ -423,7 +359,7 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
   const rows=catalog.map((item)=>{
     const issues:Array<{code:string;severity:'warning'|'error';detail:string}>=[];
     const expected=seedById.get(item.id);
-    const publicPrice=expectedWebsitePrice(item.id,seedById);
+    const publicPrice=expectedReferencePrice(item.id,seedById);
     if(expected){
       if(item.group!==expected.group)issues.push({code:'group_mismatch',severity:'error',detail:'Catalog group is '+item.group+'; website source expects '+expected.group+'.'});
       if(item.category!==expected.category)issues.push({code:'category_mismatch',severity:'error',detail:'Accounting category is '+item.category+'; website source expects '+expected.category+'.'});
@@ -431,8 +367,12 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
         issues.push({code:'price_mismatch',severity:'warning',detail:'Catalog price '+money(item.unitPrice).toFixed(2)+' differs from published/source price '+publicPrice.toFixed(2)+'.'});
       }
     }
-    if(item.getExempt){
-      issues.push({code:'get_exemption_unverified',severity:'warning',detail:'GET exempt is enabled, but no item-level exemption rule is documented in the current website/business-rule source.'});
+    if(item.getExempt && !tenant.tax.exemptionPolicy.itemLevelRulesConfigured){
+      issues.push({
+        code:'tax_exemption_unverified',
+        severity:'warning',
+        detail:tenant.tax.label+' exemption is enabled, but the tenant tax profile requires manual review. '+tenant.tax.exemptionPolicy.reviewMessage,
+      });
     }
 
     let qboMatch:any=null;
@@ -446,7 +386,7 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
         }
       }
       if(!qboMatch){
-        qboCandidates=qboCandidatesForItem(item,qboByName);
+        qboCandidates=qboCandidatesForItem(item,qboByName,tenant);
         if(qboCandidates.length===1)qboSuggestion=qboCandidates[0];
         if(!item.quickBooksItemId){
           issues.push({
@@ -484,7 +424,7 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
         }
         const expectedTaxable=item.getExempt!==true;
         if(Boolean(live.taxable)!==expectedTaxable){
-          issues.push({code:'qbo_tax_mismatch',severity:'warning',detail:'QuickBooks taxable flag does not match the Catalog Manager GET setting. This is review-only because the repository has no item-level GET exemption policy.'});
+          issues.push({code:'qbo_tax_mismatch',severity:'warning',detail:'QuickBooks taxable flag does not match the Catalog Manager '+tenant.tax.label+' setting. '+tenant.tax.exemptionPolicy.reviewMessage});
         }
       }
     }
@@ -501,9 +441,12 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
   return {
     checkedAt:new Date().toISOString(),
     qbo:{connected:qbo.connected,error:qbo.error},
-    getPolicy:{
-      status:'source-not-itemized',
-      detail:'The current repository does not define item-level Hawaiʻi GET exemptions. Catalog items default to GET taxable; any explicit exemption is flagged for review. Live QuickBooks Taxable flags are compared to the Catalog Manager setting.',
+    taxPolicy:{
+      id:tenant.tax.id,
+      label:tenant.tax.label,
+      status:tenant.tax.exemptionPolicy.mode,
+      detail:tenant.tax.exemptionPolicy.reviewMessage,
+      defaultTaxable:tenant.tax.defaultTaxable,
     },
     summary:{
       total:rows.length,
@@ -514,7 +457,7 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
       quickBooksPriceMismatches:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_price_mismatch')).length,
       qboSharedMappings:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_mapping_shared')).length,
       categoryMismatches:rows.filter(row=>row.issues.some(issue=>['group_mismatch','category_mismatch'].includes(issue.code))).length,
-      getExemptReview:rows.filter(row=>row.issues.some(issue=>issue.code==='get_exemption_unverified'||issue.code==='qbo_tax_mismatch')).length,
+      taxReview:rows.filter(row=>row.issues.some(issue=>issue.code==='tax_exemption_unverified'||issue.code==='qbo_tax_mismatch')).length,
       qboMapped:rows.filter(row=>Boolean(row.qboMatch)).length,
       qboUnmapped:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_unmapped')).length,
     },
@@ -522,8 +465,8 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
   };
 }
 
-async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCatalogItem[],actor:string) {
-  const seedById=new Map(websiteSeed().map(item=>[item.id,item]));
+async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCatalogItem[],actor:string,tenant:TenantProfile) {
+  const seedById=new Map(tenantCatalogSeed(tenant).map(item=>[item.id,item]));
   const qbo=await loadQuickBooksItems(context);
   if(!qbo.connected)throw new Error('QuickBooks is not connected.');
   if(qbo.error)throw new Error(qbo.error);
@@ -534,18 +477,18 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
 
   for(const item of next){
     const expected=seedById.get(item.id);
-    const publicPrice=expectedWebsitePrice(item.id,seedById);
+    const publicPrice=expectedReferencePrice(item.id,seedById);
     if(expected && (item.group!==expected.group || item.category!==expected.category)){
       const before=item.group+'/'+item.category;
       item.group=expected.group;
       item.category=expected.category;
       item.quickBooksType=expected.category==='rental'?'NonInventory':'Service';
       item.updatedAt=new Date().toISOString();
-      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the website catalog source.'});
+      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the tenant catalog source.'});
     }
     let live=item.quickBooksItemId?qboById.get(item.quickBooksItemId):null;
     if(!live){
-      const candidates=qboCandidatesForItem(item,qboByName);
+      const candidates=qboCandidatesForItem(item,qboByName,tenant);
       if(candidates.length===1)live=candidates[0];
     }
     if(!live)continue;
@@ -568,9 +511,9 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
       shouldUpdate=true;
       actions.push({catalogItemId:item.id,action:'qbo-price',detail:'Updated QuickBooks price from '+money(live.unitPrice).toFixed(2)+' to '+publicPrice.toFixed(2)+'.'});
     }
-    // GET/taxability mismatches are intentionally audit-only. The repository does
-    // not define item-level Hawaiʻi GET exemptions, so this workflow must not make
-    // an accounting taxability decision on the owner's behalf.
+    // Tenant taxability mismatches are audit-only unless the tenant tax profile
+    // explicitly defines item-level exemption rules. VenueLoom core never assumes
+    // a jurisdiction-specific tax treatment.
     if(shouldUpdate){
       if(!live.syncToken)throw new Error('QuickBooks item '+live.id+' is missing SyncToken; safe reconciliation stopped.');
       await qboUpdate(context,'item',patch);
@@ -580,9 +523,9 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
   const saved=await saveQuickBooksCatalog(
     context,
     next.sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
-    {actor,source:'catalog-audit-reconcile',note:'Applied safe website classification, Catalog Manager ↔ QuickBooks mapping, and conflict-free QuickBooks price reconciliation. GET/taxability differences remain review-only.'},
+    {actor,source:'catalog-audit-reconcile',sourceRef:tenant.id,note:'Applied safe tenant catalog classification, Catalog Manager ↔ QuickBooks mapping, and conflict-free QuickBooks price reconciliation. Taxability differences remain governed by the tenant tax profile.'},
   );
-  return {catalog:saved,actions,audit:await runCatalogAudit(context,saved)};
+  return {catalog:saved,actions,audit:await runCatalogAudit(context,saved,tenant)};
 }
 
 function headerKey(value: unknown) {
@@ -707,15 +650,15 @@ export function buildImportRows(rawRows:Record<string,string>[], mapping:ImportM
   });
 }
 
-async function readImportHistory(context:Context){
-  const store=storeFor(context);
+async function readImportHistory(context:Context,tenant:TenantProfile){
+  const store=storeFor(context,tenant);
   const raw=await store.get('catalog/imports/index',{type:'json'}) as any;
   return Array.isArray(raw)?raw.slice(0,20):[];
 }
 
-async function writeImportHistory(context:Context,entry:any){
-  const store=storeFor(context);
-  const current=await readImportHistory(context);
+async function writeImportHistory(context:Context,tenant:TenantProfile,entry:any){
+  const store=storeFor(context,tenant);
+  const current=await readImportHistory(context,tenant);
   const next=[entry,...current.filter((row:any)=>row.id!==entry.id)].slice(0,20);
   await store.setJSON('catalog/imports/index',next);
   return next;
@@ -745,14 +688,15 @@ export async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
 export default async (req:Request, context:Context)=>{
   const auth=await requireCapability('sales.view',req);
   if(auth.response)return auth.response;
+  const tenant=resolveTenant(req);
 
   if(req.method==='GET'){
     const [catalog,imports,priceHistory]=await Promise.all([
-      ensureWebsiteCatalog(context),
-      readImportHistory(context),
+      ensureWebsiteCatalog(context,tenant),
+      readImportHistory(context,tenant),
       getCatalogPriceHistory(context,{limit:150}),
     ]);
-    return Response.json({catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({tenant:clientTenantProfile(tenant),catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
 
@@ -762,15 +706,15 @@ export default async (req:Request, context:Context)=>{
 
   if(action==='item-usage'){
     const id=clean(payload?.id,80);
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const item=catalog.find(entry=>entry.id===id);
     if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
-    return Response.json({ok:true,usage:await itemUsage(context,item)},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({ok:true,usage:await itemUsage(context,item,tenant)},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='run-audit'){
-    const catalog=await ensureWebsiteCatalog(context);
-    return Response.json({ok:true,audit:await runCatalogAudit(context,catalog)},{headers:{'Cache-Control':'private, no-store'}});
+    const catalog=await ensureWebsiteCatalog(context,tenant);
+    return Response.json({ok:true,audit:await runCatalogAudit(context,catalog,tenant)},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(!hasCapability(auth.user,'sales.profit_settings')){
@@ -778,18 +722,18 @@ export default async (req:Request, context:Context)=>{
   }
 
   if(action==='reconcile-safe-audit'){
-    const catalog=await ensureWebsiteCatalog(context);
-    const result=await reconcileSafeCatalogIssues(context,catalog,actor);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
+    const result=await reconcileSafeCatalogIssues(context,catalog,actor,tenant);
     return Response.json({ok:true,...result});
   }
 
   if(action==='refresh-website-catalog'){
-    const result=await refreshWebsiteCatalog(context,actor);
+    const result=await refreshWebsiteCatalog(context,tenant,actor);
     return Response.json({ok:true,...result});
   }
 
   if(action==='save-item'){
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const input=payload?.item||{};
     const requestedId=clean(input.id,80);
     const name=clean(input.name,100);
@@ -827,7 +771,7 @@ export default async (req:Request, context:Context)=>{
 
   if(action==='archive-item'){
     const id=clean(payload?.id,80);
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const item=catalog.find((entry)=>entry.id===id);
     if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
     const next=await saveQuickBooksCatalog(
@@ -846,7 +790,7 @@ export default async (req:Request, context:Context)=>{
     if(!mapping.name){
       return Response.json({error:'Map one source column to Name before importing.',headers:file.headers,suggestedMapping:suggestMapping(file.headers)},{status:400});
     }
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const rows=buildImportRows(file.rows,mapping,defaultGroup,catalog);
     const summary={
       rows:rows.length,
@@ -868,7 +812,7 @@ export default async (req:Request, context:Context)=>{
     const usable=rows.filter((row)=>row.status!=='invalid'&&row.status!=='duplicate'&&(duplicateMode==='update'||row.status!=='update'));
     if(!usable.length)return Response.json({error:'No valid catalog rows are available to import.',summary},{status:400});
     const id=importId();
-    const store=storeFor(context);
+    const store=storeFor(context,tenant);
     await store.setJSON('catalog/imports/snapshots/'+id,{catalog,createdAt:new Date().toISOString(),filename});
     const byId=new Map(catalog.map((item)=>[item.id.toLowerCase(),item]));
     const byName=new Map(catalog.map((item)=>[item.name.toLowerCase(),item]));
@@ -903,14 +847,14 @@ export default async (req:Request, context:Context)=>{
       updatedCount:usable.filter((row)=>row.status==='update').length,duplicateMode,
       afterFingerprint:await catalogFingerprint(next),rolledBackAt:'',
     };
-    const imports=await writeImportHistory(context,entry);
+    const imports=await writeImportHistory(context,tenant,entry);
     return Response.json({ok:true,catalog:next,import:entry,imports,summary});
   }
 
   if(action==='rollback-import'){
     const id=clean(payload?.id,100);
-    const store=storeFor(context);
-    const history=await readImportHistory(context);
+    const store=storeFor(context,tenant);
+    const history=await readImportHistory(context,tenant);
     const latestActive=history.find((row:any)=>!row?.rolledBackAt);
     if(!latestActive||latestActive.id!==id){
       return Response.json({error:'Only the most recent active import can be rolled back. Roll back newer imports first so catalog history stays consistent.'},{status:409});
@@ -928,7 +872,7 @@ export default async (req:Request, context:Context)=>{
     );
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
-    const imports=await writeImportHistory(context,entry);
+    const imports=await writeImportHistory(context,tenant,entry);
     return Response.json({ok:true,catalog,imports,rollback:entry});
   }
 

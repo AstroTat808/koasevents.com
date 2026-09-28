@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
+import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import {
   buildQuickBooksCrmSyncPreview,
@@ -36,15 +37,19 @@ import {
 } from './_shared/quickbooks';
 
 function salesStoreFor(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'sales');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function integrationStoreFor(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'integrations');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function clean(value: unknown, max = 1200) {
@@ -144,7 +149,7 @@ function proposalLines(record: any, itemId: string) {
     lines.push({
       Amount: getAmount,
       DetailType: 'SalesItemLineDetail',
-      Description: clean(proposal.taxLabel || 'Hawaiʻi GET', 400),
+      Description: clean(proposal.taxLabel || 'Tax', 400),
       SalesItemLineDetail: {
         ItemRef: { value: itemId },
         Qty: 1,
@@ -283,7 +288,7 @@ async function createMilestoneInvoice(context: Context, record: any, itemId: str
     'Scheduled milestone amount: $' + amount.toFixed(2),
     'Proposal subtotal: $' + Number(proposal.subtotal || 0).toFixed(2),
     'Discount: $' + Number(proposal.discountAmount || 0).toFixed(2),
-    'Hawaiʻi GET 4.712%: $' + Number(proposal.taxAmount || 0).toFixed(2),
+    clean(proposal.taxLabel || 'Tax', 80) + (Number(proposal.taxRate || 0) > 0 ? ' ' + Number(proposal.taxRate || 0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'') + '%' : '') + ': $' + Number(proposal.taxAmount || 0).toFixed(2),
     'Proposal total: $' + proposalTotal.toFixed(2),
     'Deposit (' + (Math.round(depositPercent * 1000) / 1000) + '%): $' + Number(proposal.depositAmount || 0).toFixed(2),
     'Payments received: $' + paymentsReceived.toFixed(2),
@@ -611,6 +616,8 @@ export default async (req: Request, context: Context) => {
 
   const auth = await requireCapability('quickbooks.view', req);
   if (auth.response) return auth.response;
+  const tenant = resolveTenant(req);
+  const taxDefaults = tenantTaxDefaults(tenant);
 
   if (req.method === 'GET') {
     const view = clean(url.searchParams.get('view'), 40);
@@ -639,7 +646,7 @@ export default async (req: Request, context: Context) => {
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
-      getQuickBooksGetSettings(context),
+      getQuickBooksGetSettings(context, taxDefaults),
       getQuickBooksDepositSettings(context),
       integrationStoreFor(context).get('quickbooks/webhook-last-receipt', { type: 'json' }),
       integrationStoreFor(context).get('quickbooks/webhook-receipts/index', { type: 'json' }),
@@ -681,6 +688,7 @@ export default async (req: Request, context: Context) => {
         connectedAt: connection.connectedAt,
         refreshExpiresAt: connection.refreshExpiresAt || '',
       } : { connected: false },
+      tenant: clientTenantProfile(tenant),
       settings,
       catalog,
       getSettings,
@@ -819,12 +827,14 @@ export default async (req: Request, context: Context) => {
 
   if (action === 'save-get-settings') {
     const getSettings = await saveQuickBooksGetSettings(context, {
-      enabled: true,
-      label: clean(payload?.label || 'Hawaiʻi GET', 80),
-      customerRate: 4.712,
+      enabled: payload?.enabled == null ? tenant.tax.enabled : payload.enabled !== false,
+      label: clean(payload?.label || tenant.tax.label || 'Tax', 80),
+      statutoryRate: Number(payload?.statutoryRate ?? tenant.tax.statutoryRate),
+      customerRate: Number(payload?.customerRate ?? tenant.tax.customerRate),
+      maxPassOnRate: Number(payload?.maxPassOnRate ?? tenant.tax.maxPassOnRate),
       quickBooksItemId: clean(payload?.quickBooksItemId, 80),
       quickBooksItemName: clean(payload?.quickBooksItemName, 100),
-    });
+    }, taxDefaults);
     return Response.json({ ok: true, getSettings });
   }
 
