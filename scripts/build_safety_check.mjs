@@ -288,6 +288,71 @@ function checkCatalogFeatureContracts() {
   }
 }
 
+function checkVenueLoomTenantFoundation() {
+  const required = [
+    ['src/data/tenants/types.ts', [
+      ['generic tenant profile type', 'export type TenantProfile'],
+      ['generic tenant tax profile type', 'export type TenantTaxProfile'],
+      ['tenant catalog configuration', 'export type TenantCatalogConfig'],
+    ]],
+    ['src/data/tenants/koa-events.ts', [
+      ['Koa Tenant 1 profile', "id: 'koa-events'"],
+      ['Koa tax profile', "label: 'Hawaiʻi GET'"],
+      ['Koa package alias configuration', "gardenia: 'gardenia'"],
+      ['Koa QuickBooks alias configuration', "'Wedding Packages:Wedding Package-Gardenia'"],
+    ]],
+    ['netlify/functions/_shared/tenant.ts', [
+      ['request tenant resolver', 'export function resolveTenant'],
+      ['client-safe tenant profile', 'export function clientTenantProfile'],
+      ['tenant tax defaults', 'export function tenantTaxDefaults'],
+    ]],
+    ['netlify/functions/admin-catalog.mts', [
+      ['tenant resolver usage', 'const tenant=resolveTenant(req)'],
+      ['tenant catalog bootstrap', 'tenant.catalog.bootstrapItems'],
+      ['tenant QBO aliases', 'tenant.catalog.quickBooksAliases'],
+      ['tenant tax label', 'tenant.tax.label'],
+    ]],
+    ['netlify/functions/_shared/quickbooks.ts', [
+      ['jurisdiction-neutral tax default', "defaults.label || 'Tax'"],
+      ['configurable statutory rate', 'settings.statutoryRate ?? current.statutoryRate'],
+      ['configurable customer rate', 'settings.customerRate ?? current.customerRate'],
+    ]],
+  ];
+
+  for (const [file, requirements] of required) {
+    if (!fs.existsSync(file)) {
+      failures.push(file + ': required VenueLoom tenant foundation source is missing');
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    for (const [label, needle] of requirements) {
+      if (!text.includes(needle)) failures.push(file + ': missing ' + label + ' contract: ' + needle);
+    }
+  }
+
+  const genericCatalogFiles = [
+    'netlify/functions/admin-catalog.mts',
+    'src/pages/admin/catalog/index.astro',
+  ];
+  const forbidden = [
+    'Hawaiʻi GET',
+    'Hawaii GET',
+    'Gardenia',
+    'Orchid',
+    'Hibiscus',
+    'Plumeria',
+    'Wedding Packages:Wedding Package-',
+    'Bar:Bar Package-Oahu',
+  ];
+  for (const file of genericCatalogFiles) {
+    if (!fs.existsSync(file)) continue;
+    const text = fs.readFileSync(file, 'utf8');
+    for (const needle of forbidden) {
+      if (text.includes(needle)) failures.push(file + ': tenant-specific value leaked into VenueLoom Catalog Manager core: ' + needle);
+    }
+  }
+}
+
 function checkScript(file) {
   const text = fs.readFileSync(file, 'utf8');
   const kind = file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -358,6 +423,7 @@ for (const file of roots.flatMap(walk)) {
 checkEmailCompatibility();
 checkEmailFeatureContracts();
 checkCatalogFeatureContracts();
+checkVenueLoomTenantFoundation();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
