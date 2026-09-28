@@ -356,6 +356,4 @@ export async function getCompletedPdf(documentId:string){
   throw new Error(lastDetail+' · HTTP '+lastStatus);
 }
 
-export function eventStoreFor(context:Context){
-  return context.deploy.context==='production'?getStore({name:'koa-event-files',consistency:'strong'}):getDeployStore({name:'koa-event-files'});
-}
+export function eventStoreFor(context:Context){ return tenantStoreFor(context,resolveTenant(),'eventFiles'); }
