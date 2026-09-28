@@ -26,6 +26,7 @@ jobs:
           node scripts/audit_tenant_storage_access.mjs
           node scripts/audit_tenant_integration_env.mjs
           node scripts/audit_tenant_scheduled_jobs.mjs
+          node scripts/audit_tenant_request_context.mjs
 
       - name: Run cross-tenant regression tests
         run: |
