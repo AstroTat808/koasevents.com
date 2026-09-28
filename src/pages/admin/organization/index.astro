@@ -31,6 +31,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </header>
 
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+            <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">VenueLoom provisioning</p><h2 class="mt-2 text-2xl font-black text-stone-900">Create another organization</h2><p class="mt-2 text-sm text-stone-600">Creates a clean tenant with no Koa legacy storage. Your account becomes its initial organization administrator.</p></div>
+          </div>
+          <form data-create-org-form class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label class="grid gap-2 text-sm font-semibold">Organization name<input name="displayName" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            <label class="grid gap-2 text-sm font-semibold">Slug<input name="slug" required placeholder="example-venue" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            <label class="grid gap-2 text-sm font-semibold">Billing / admin email<input name="email" type="email" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            <label class="grid gap-2 text-sm font-semibold">Timezone<input name="timezone" required placeholder="America/Los_Angeles" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            <button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white sm:col-span-2 xl:col-span-1">Create organization</button>
+            <p data-create-org-message class="self-center text-sm text-stone-600 sm:col-span-2 xl:col-span-3"></p>
+          </form>
+        </section>
+
         <section class="grid gap-4 xl:grid-cols-[.7fr_1.3fr]">
           <article class="rounded-3xl bg-white p-6 shadow-sm">
             <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Onboarding</p>
@@ -198,7 +212,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Billing email<input name="billingEmail" type="email" class="rounded-xl border border-stone-300 px-4 py-3"></label>
             </div>
             <div data-subscription-status class="mt-4 rounded-2xl bg-stone-100 p-4 text-sm text-stone-700"></div>
-            <div class="mt-5 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save billing profile</button><span data-subscription-message class="text-sm text-stone-600"></span></div>
+            <div class="mt-5 flex flex-wrap items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save billing profile</button><button data-start-subscription type="button" class="rounded-full border border-stone-300 px-5 py-3 text-xs font-black uppercase tracking-[.1em]">Start Stripe checkout</button><span data-subscription-message class="text-sm text-stone-600"></span></div>
           </form>
         </section>
       </div>
@@ -215,6 +229,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let state=null;
     let canManage=false;
     let canBill=false;
+    const selectedTenant=new URLSearchParams(location.search).get('tenant')||'';
+    const tenantHeaders=()=>selectedTenant?{'x-venueloom-tenant':selectedTenant}:{};
 
     const flagDefinitions=[
       ['crm','Business CRM'],['sales','Sales CRM'],['events','Event Ops'],['vendors','Vendor CRM'],
@@ -228,7 +244,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function statusPill(ok){return ok?'<span class="rounded-full bg-emerald-100 px-2 py-1 text-[.62rem] font-black uppercase tracking-[.06em] text-emerald-800">Ready</span>':'<span class="rounded-full bg-amber-100 px-2 py-1 text-[.62rem] font-black uppercase tracking-[.06em] text-amber-800">Needs setup</span>';}
 
     async function post(payload){
-      const response=await fetch('/api/admin/organization',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const response=await fetch('/api/admin/organization',{method:'POST',headers:{'Content-Type':'application/json',...tenantHeaders()},body:JSON.stringify(payload)});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Object.assign(new Error(data.error||'Organization request failed.'),{data});
       state={...state,...data};
@@ -254,11 +270,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function domainRow(row={}){
       const el=document.createElement('article');
       el.className='grid gap-3 rounded-2xl border border-stone-200 p-4 sm:grid-cols-[1fr_140px_auto]';
-      el.innerHTML='<label class="grid gap-1 text-xs font-bold">Hostname<input data-host class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Type<select data-kind class="rounded-lg border border-stone-300 bg-white px-3 py-2"><option value="app">App</option><option value="portal">Portal</option><option value="marketing">Marketing</option><option value="custom">Custom</option></select></label><label class="flex items-center gap-2 self-end pb-2 text-xs font-bold"><input data-primary type="checkbox"> Primary</label><div data-status class="text-xs text-stone-500 sm:col-span-2"></div><button data-remove type="button" class="justify-self-start text-xs font-bold text-red-700">Remove</button>';
+      el.innerHTML='<label class="grid gap-1 text-xs font-bold">Hostname<input data-host class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Type<select data-kind class="rounded-lg border border-stone-300 bg-white px-3 py-2"><option value="app">App</option><option value="portal">Portal</option><option value="marketing">Marketing</option><option value="custom">Custom</option></select></label><label class="flex items-center gap-2 self-end pb-2 text-xs font-bold"><input data-primary type="checkbox"> Primary</label><div data-status class="text-xs text-stone-500 sm:col-span-2"></div><div data-verification class="text-xs text-stone-500 sm:col-span-3"></div><button data-verify type="button" class="justify-self-start rounded-full border border-stone-300 px-3 py-2 text-xs font-bold">Verify DNS</button><button data-remove type="button" class="justify-self-start text-xs font-bold text-red-700">Remove</button>';
       el.querySelector('[data-host]').value=row.hostname||'';
       el.querySelector('[data-kind]').value=row.kind||'custom';
       el.querySelector('[data-primary]').checked=row.primary===true;
       el.querySelector('[data-status]').textContent='Status: '+(row.status||'new');
+      el.querySelector('[data-verification]').textContent=row.verificationToken?'TXT _venueloom.'+(row.hostname||'')+' = venueloom-verification='+row.verificationToken:'Save the domain to generate its DNS verification token.';
+      el.querySelector('[data-verify]').disabled=!row.hostname||!row.verificationToken;
+      el.querySelector('[data-verify]').addEventListener('click',async()=>{setMessage('[data-domains-message]','Checking DNS…');try{const data=await post({action:'verify-domain',hostname:row.hostname});setMessage('[data-domains-message]',data.verification?.ok?'Domain verified.':(data.verification?.error||'Verification record not found yet.'));}catch(error){setMessage('[data-domains-message]',error.message);}});
       el.querySelector('[data-remove]').addEventListener('click',()=>el.remove());
       return el;
     }
@@ -388,9 +407,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     });
     $('[data-subscription-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-subscription-message]','Saving…');try{await post({action:'save-subscription',...formObject(e.currentTarget)});setMessage('[data-subscription-message]','Saved.');}catch(error){setMessage('[data-subscription-message]',error.message);}});
+    $('[data-start-subscription]')?.addEventListener('click',async()=>{const form=$('[data-subscription-form]');setMessage('[data-subscription-message]','Creating Stripe checkout…');try{const data=await post({action:'create-subscription-checkout',...formObject(form)});if(data.checkoutUrl)location.href=data.checkoutUrl;else setMessage('[data-subscription-message]','Stripe did not return a checkout URL.');}catch(error){setMessage('[data-subscription-message]',error.message);}});
+    $('[data-create-org-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-create-org-message]','Creating organization…');try{const response=await fetch('/api/admin/organization',{method:'POST',headers:{'Content-Type':'application/json',...tenantHeaders()},body:JSON.stringify({action:'create-organization',...formObject(e.currentTarget)})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Unable to create organization.');setMessage('[data-create-org-message]','Created. Opening '+data.created.organization.displayName+'…');location.href='/admin/organization/?tenant='+encodeURIComponent(data.tenantSelector);}catch(error){setMessage('[data-create-org-message]',error.message);}});
     $('[data-run-migration-audit]')?.addEventListener('click',async()=>{setMessage('[data-migration-message]','Comparing legacy and tenant-scoped storage…');try{const data=await post({action:'run-migration-audit'});state.migrationAudit=data.migrationAudit;render();setMessage('[data-migration-message]',data.migrationAudit?.summary?.safeToRetireLegacy?'All storage domains passed the retirement safety checks.':'Audit complete. Legacy storage remains protected until the missing objects and fingerprint mismatches reach zero.');}catch(error){setMessage('[data-migration-message]',error.message);}});
         $('[data-activate]')?.addEventListener('click',async()=>{setMessage('[data-activate-message]','Checking onboarding…');try{await post({action:'activate'});setMessage('[data-activate-message]','Organization activated.');}catch(error){const missing=error.data?.incomplete?.join(', ');setMessage('[data-activate-message]',error.message+(missing?' Missing: '+missing+'.':''));}});
-    $('[data-invite-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();const form=e.currentTarget;setMessage('[data-invite-message]','Creating account…');try{const response=await fetch('/api/admin/staff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create-user',setupMode:'email',...formObject(form)})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Unable to invite team member.');setMessage('[data-invite-message]',data.message||'Invitation created.');form.reset();const refreshed=await fetch('/api/admin/organization',{cache:'no-store'});if(refreshed.ok){state=await refreshed.json();render();}}catch(error){setMessage('[data-invite-message]',error.message);}});
+    $('[data-invite-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();const form=e.currentTarget;setMessage('[data-invite-message]','Creating account…');try{const response=await fetch('/api/admin/staff',{method:'POST',headers:{'Content-Type':'application/json',...tenantHeaders()},body:JSON.stringify({action:'create-user',setupMode:'email',...formObject(form)})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Unable to invite team member.');setMessage('[data-invite-message]',data.message||'Invitation created.');form.reset();const refreshed=await fetch('/api/admin/organization',{cache:'no-store',headers:tenantHeaders()});if(refreshed.ok){state=await refreshed.json();render();}}catch(error){setMessage('[data-invite-message]',error.message);}});
 
     async function load(){
       const session=await getAdminSession();
@@ -398,7 +419,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!session||!session.capabilities?.includes('organization.view')){unauthorized.classList.remove('hidden');return;}
       canManage=session.capabilities.includes('organization.manage');
       canBill=session.capabilities.includes('billing.manage');
-      const response=await fetch('/api/admin/organization',{cache:'no-store'});
+      const response=await fetch('/api/admin/organization',{cache:'no-store',headers:tenantHeaders()});
       const data=await response.json().catch(()=>({}));
       if(!response.ok){unauthorized.classList.remove('hidden');unauthorized.querySelector('p:last-child').textContent=data.error||'Unable to load organization settings.';return;}
       state=data;
