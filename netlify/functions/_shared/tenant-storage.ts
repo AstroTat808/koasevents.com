@@ -1,4 +1,5 @@
 import type { Context } from '@netlify/functions';
+import { createHash } from 'node:crypto';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import type { TenantProfile } from '../../../src/data/tenants';
 
@@ -243,4 +244,109 @@ export async function readTenantIndex<T extends Record<string, any>>(
   const normalized = normalizeTenantRows(tenant, raw);
   if (normalized.changed) await store.setJSON(key, normalized.rows);
   return normalized;
+}
+
+const MIGRATION_CRITICAL_KEYS: Partial<Record<TenantStorageDomain, string[]>> = {
+  sales: ['records/index','analytics/events/index','settings/wedding-profitability','settings/mobile-bar-profitability'],
+  crm: ['settings','templates/index','cleanup/audit/index'],
+  eventOps: ['events/index'],
+  vendors: ['vendors/index'],
+  integrations: ['quickbooks/connection','quickbooks/catalog','quickbooks/settings'],
+  emailAnalytics: ['activity/index'],
+  systemHealth: ['history/index'],
+  workspaceAlerts: ['index'],
+};
+
+function stableJson(value:any):string {
+  if(Array.isArray(value)) return '['+value.map(stableJson).join(',')+']';
+  if(value && typeof value==='object') {
+    return '{'+Object.keys(value).sort().map((key)=>JSON.stringify(key)+':'+stableJson(value[key])).join(',')+'}';
+  }
+  return JSON.stringify(value);
+}
+
+function jsonHash(value:any) {
+  return createHash('sha256').update(stableJson(value)).digest('hex');
+}
+
+export async function tenantMigrationAudit(
+  context: Context,
+  tenant: TenantProfile,
+  domains: TenantStorageDomain[] = [
+    'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
+    'emailAnalytics','authSecurity','staffDirectory','systemHealth','workspaceAlerts',
+  ],
+) {
+  const canonical=canonicalStore(context);
+  const results:any[]=[];
+
+  for(const domain of domains) {
+    const prefix=tenantDataPrefix(tenant,domain);
+    const legacy=compatibilityStore(context,tenant,domain);
+    const canonicalList=await canonical.list({prefix});
+    const canonicalKeys=new Set((canonicalList.blobs||[]).map((blob:any)=>{
+      const key=String(blob.key||'');
+      return key.startsWith(prefix)?key.slice(prefix.length):key;
+    }));
+
+    const legacyList=legacy && tenant.storage.legacyDataBelongsToTenant
+      ? await legacy.list({})
+      : {blobs:[] as any[]};
+    const legacyKeys=new Set((legacyList.blobs||[]).map((blob:any)=>String(blob.key||'')));
+
+    const missingCanonical=[...legacyKeys].filter((key)=>!canonicalKeys.has(key)).sort();
+    const canonicalOnly=[...canonicalKeys].filter((key)=>!legacyKeys.has(key)).sort();
+    const critical:any[]=[];
+
+    for(const key of MIGRATION_CRITICAL_KEYS[domain]||[]) {
+      const legacyValue=legacy && tenant.storage.legacyDataBelongsToTenant
+        ? await legacy.get(key,{type:'json'} as any).catch(()=>null)
+        : null;
+      const canonicalValue=await canonical.get(prefix+key,{type:'json'} as any).catch(()=>null);
+      const normalizedLegacy=legacyValue==null?null:scopeJsonValue(tenant,legacyValue);
+      const normalizedCanonical=canonicalValue==null?null:scopeJsonValue(tenant,canonicalValue);
+      critical.push({
+        key,
+        legacyPresent:legacyValue!=null,
+        canonicalPresent:canonicalValue!=null,
+        legacyHash:normalizedLegacy==null?'':jsonHash(normalizedLegacy),
+        canonicalHash:normalizedCanonical==null?'':jsonHash(normalizedCanonical),
+        matches:normalizedLegacy==null
+          ? canonicalValue==null
+          : canonicalValue!=null && jsonHash(normalizedLegacy)===jsonHash(normalizedCanonical),
+      });
+    }
+
+    results.push({
+      domain,
+      legacyStore:tenant.storage.compatibilityBlobStores[domain]||'',
+      legacyCount:legacyKeys.size,
+      canonicalCount:canonicalKeys.size,
+      missingCanonicalCount:missingCanonical.length,
+      canonicalOnlyCount:canonicalOnly.length,
+      missingCanonical:missingCanonical.slice(0,100),
+      canonicalOnly:canonicalOnly.slice(0,100),
+      critical,
+      safeToRetireLegacy:
+        missingCanonical.length===0
+        && critical.every((row)=>row.matches),
+    });
+  }
+
+  return {
+    tenantId:tenant.id,
+    generatedAt:new Date().toISOString(),
+    canonicalStore:CANONICAL_STORE,
+    legacyDataBelongsToTenant:tenant.storage.legacyDataBelongsToTenant,
+    domains:results,
+    summary:{
+      domains:results.length,
+      safeDomains:results.filter((row)=>row.safeToRetireLegacy).length,
+      legacyObjects:results.reduce((sum,row)=>sum+row.legacyCount,0),
+      canonicalObjects:results.reduce((sum,row)=>sum+row.canonicalCount,0),
+      missingCanonical:results.reduce((sum,row)=>sum+row.missingCanonicalCount,0),
+      criticalMismatches:results.reduce((sum,row)=>sum+row.critical.filter((item:any)=>!item.matches).length,0),
+      safeToRetireLegacy:results.every((row)=>row.safeToRetireLegacy),
+    },
+  };
 }
