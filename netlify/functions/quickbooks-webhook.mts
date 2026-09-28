@@ -1,5 +1,5 @@
 import type { Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { listActiveTenantProfiles, resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { requireAdmin } from './_shared/admin';
@@ -410,48 +410,8 @@ async function diagnostics(context: Context) {
   };
 }
 
-export default async (req: Request, context: Context) => {
-  if (req.method === 'GET') {
-    const auth = await requireAdmin();
-    if (auth.response) return auth.response;
-    return Response.json(await diagnostics(context), {
-      headers: { 'Cache-Control': 'private, no-store' },
-    });
-  }
 
-  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
-
-  const verifierToken = quickBooksWebhookVerifierToken();
-  if (!verifierToken) {
-    console.error('QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN is not configured');
-    return new Response('Webhook verifier is not configured', { status: 503 });
-  }
-
-  const rawBody = await req.text();
-  const signature = req.headers.get('intuit-signature') || '';
-
-  if (!verifySignature(rawBody, signature, verifierToken)) {
-    console.warn('Rejected QuickBooks webhook with invalid signature');
-    return new Response('Invalid signature', { status: 401 });
-  }
-
-  let payload: any;
-  try {
-    payload = JSON.parse(rawBody || '{}');
-  } catch {
-    return new Response('Invalid JSON', { status: 400 });
-  }
-
-  if (req.headers.get('x-venueloom-health-check') === '1' && payload?.venueLoomHealthCheck === true) {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Cache-Control': 'no-store',
-        'X-VenueLoom-Synthetic-Check': 'quickbooks-webhook',
-      },
-    });
-  }
-
+async function handleTenantWebhook(context: Context, payload: any) {
   const notifications = Array.isArray(payload?.eventNotifications) ? payload.eventNotifications : [];
   const receipt = {
     receivedAt: new Date().toISOString(),
@@ -491,4 +451,71 @@ export default async (req: Request, context: Context) => {
   await updateLinkedBookingTestStatus(context, processed);
 
   return new Response(null, { status: 200 });
+}
+
+function payloadRealmIds(payload:any){
+  return [...new Set(
+    (Array.isArray(payload?.eventNotifications)?payload.eventNotifications:[])
+      .map((notification:any)=>String(notification?.realmId||'').trim())
+      .filter(Boolean)
+  )];
+}
+
+async function resolveQuickBooksWebhookTenant(context:Context,payload:any,rawBody:string,signature:string){
+  const realmIds=payloadRealmIds(payload);
+  if(!realmIds.length)return null;
+  const tenants=await listActiveTenantProfiles(context);
+  for(const tenant of tenants){
+    const matches=await runWithTenant(tenant,async()=>{
+      const verifierToken=quickBooksWebhookVerifierToken();
+      if(!verifierToken||!verifySignature(rawBody,signature,verifierToken))return false;
+      const connection=await getQuickBooksConnection(context).catch(()=>null);
+      return Boolean(connection?.realmId&&realmIds.includes(String(connection.realmId)));
+    });
+    if(matches)return tenant;
+  }
+  return null;
+}
+
+export default async (req: Request, context: Context) => {
+  if (req.method === 'GET') {
+    const auth = await requireAdmin();
+    if (auth.response) return auth.response;
+    const tenant=await resolveTenantAsync(req,context);
+    return runWithTenant(tenant,async()=>Response.json(await diagnostics(context), {
+      headers: { 'Cache-Control': 'private, no-store' },
+    }));
+  }
+
+  if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+
+  const rawBody = await req.text();
+  const signature = req.headers.get('intuit-signature') || '';
+  let payload: any;
+  try {
+    payload = JSON.parse(rawBody || '{}');
+  } catch {
+    return new Response('Invalid JSON', { status: 400 });
+  }
+
+  if (req.headers.get('x-venueloom-health-check') === '1' && payload?.venueLoomHealthCheck === true) {
+    const tenant=await resolveTenantAsync(req,context);
+    return runWithTenant(tenant,()=>{
+      const verifierToken=quickBooksWebhookVerifierToken();
+      if(!verifierToken)return new Response('Webhook verifier is not configured',{status:503});
+      if(!verifySignature(rawBody,signature,verifierToken))return new Response('Invalid signature',{status:401});
+      return new Response(null,{status:204,headers:{
+        'Cache-Control':'no-store',
+        'X-VenueLoom-Synthetic-Check':'quickbooks-webhook',
+      }});
+    });
+  }
+
+  const tenant=await resolveQuickBooksWebhookTenant(context,payload,rawBody,signature);
+  if(!tenant){
+    console.warn('Rejected QuickBooks webhook that did not match a tenant realm and verifier.');
+    return new Response('Invalid signature or tenant realm',{status:401});
+  }
+
+  return runWithTenant(tenant,()=>handleTenantWebhook(context,payload));
 };
