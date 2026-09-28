@@ -1124,6 +1124,22 @@ export default async (req: Request, context: Context) => {
 
   if (req.method === 'GET') {
     const view = clean(url.searchParams.get('view'), 40);
+    if (view === 'damage-deposit-settings') {
+      const [connection, damageDepositSettings] = await Promise.all([
+        getQuickBooksConnection(context),
+        getQuickBooksDamageDepositSettings(context),
+      ]);
+      return Response.json({
+        connection: connection ? {
+          connected:true,
+          companyName:connection.companyName || '',
+          connectedAt:connection.connectedAt,
+        } : { connected:false },
+        tenant:clientTenantProfile(tenant),
+        damageDepositSettings,
+      }, { headers:{'Cache-Control':'private, no-store'} });
+    }
+
     if (view === 'history') {
       const limit = Math.max(1, Math.min(5000, Number(url.searchParams.get('limit') || 100)));
       const history = await getQuickBooksCrmSyncHistory(context, limit);
