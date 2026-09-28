@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStore } from './tenant-storage';
 
 export type EmailHealthEvent = {
   id: string;
@@ -48,11 +49,7 @@ const COMPATIBILITY_CHECKS = [
   'plain-text alternative',
 ] as const;
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-system-health', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-system-health' });
-}
+function storeFor(context: Context) { return tenantStore(context,'health',resolveTenant()); }
 
 function clean(value: unknown, max = 500) {
   return String(value ?? '').trim().slice(0, max);
@@ -117,11 +114,12 @@ function statusCounts(rows: any[], cutoffMs: number) {
 }
 
 async function checkLogo() {
-  const url = 'https://koasevents.com/brand/koa-mark.png';
+  const tenant=resolveTenant();
+  const url = 'https://'+tenant.domains.primary+tenant.brand.logoPath;
   const started = Date.now();
   try {
     const response = await fetch(url, {
-      headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'KoaEvents-EmailHealth/1.0' },
+      headers: { 'Cache-Control': 'no-cache', 'User-Agent': 'VenueLoom-EmailHealth/1.0' },
       signal: AbortSignal.timeout(8000),
     });
     const contentType = response.headers.get('content-type') || '';
@@ -134,7 +132,7 @@ async function checkLogo() {
       ms: Date.now() - started,
       contentType,
       contentLength: Number.isFinite(contentLength) ? contentLength : 0,
-      detail: ok ? 'Koa source logo asset is reachable as PNG; sent emails embed this PNG inline via CID.' : 'Koa source logo asset did not return a healthy PNG response.',
+      detail: ok ? tenant.displayName+' source logo asset is reachable as PNG; sent emails embed this PNG inline via CID.' : tenant.displayName+' source logo asset did not return a healthy PNG response.',
     };
   } catch (error) {
     return {
