@@ -1,10 +1,9 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
+function storeFor(context:Context,req:Request){
+  return tenantStoreFor(context,resolveTenant(req),'sales');
 }
 function clean(value:unknown,max=1200){return String(value??'').trim().slice(0,max);}
 function num(value:unknown,min=0,max=100000){const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):0;}
@@ -89,7 +88,7 @@ function upsertPerformanceHours(record:any,bartender:any,hours:number,now:string
 export default async(req:Request,context:Context)=>{
   const token=clean(context.params.token,120);
   if(!token||token.length<20)return Response.json({error:'Invalid bartender portal link.'},{status:400});
-  const store=storeFor(context);
+  const store=storeFor(context,req);
   let records=((await store.get('records/index',{type:'json'}))||[]) as any[];
   const settings=((await store.get('settings/mobile-bar-profitability',{type:'json'}))||{}) as any;
   const bartenders=Array.isArray(settings?.staffing?.bartenders)?settings.staffing.bartenders:[];
