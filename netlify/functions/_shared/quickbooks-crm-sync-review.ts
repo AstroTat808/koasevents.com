@@ -889,7 +889,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
   const customerById = new Map(customers.filter((row) => row?.Id).map((row) => [String(row.Id), row]));
   const estimateById = new Map(estimates.filter((row) => row?.Id).map((row) => [String(row.Id), row]));
 
-  const customerPlans = customers.map((customer) => {
+  const customerPlans: any[] = customers.map((customer) => {
     const customerId = clean(customer?.Id, 100);
     const financial = customerFinancialSummary(customerId, estimateGroups, invoiceGroups, paymentGroups);
     const evidence = buildQuickBooksCustomerMatchEvidence(
