@@ -1,10 +1,13 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 function sales(context:Context,req:Request){return tenantStoreFor(context,resolveTenant(req),'sales');}
 function files(context:Context,req:Request){return tenantStoreFor(context,resolveTenant(req),'eventFiles');}
 function clean(v:unknown,max=100){return String(v??'').trim().slice(0,max);}
 export default async(req:Request,context:Context)=>{
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
   if(req.method!=='GET')return new Response('Method not allowed',{status:405});
   const token=clean(context.params.token,100);
   const records:any[]=(await sales(context,req).get('records/index',{type:'json'}))||[];
@@ -16,5 +19,6 @@ export default async(req:Request,context:Context)=>{
   if(!data)return Response.json({error:'The signed agreement file is missing.'},{status:404});
   const safe=String(record.customer?.name||'Client').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'Client';
   return new Response(data,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="Koa-Agreement-'+safe+'.pdf"','Cache-Control':'private, no-store'}});
+  });
 };
 export const config:Config={path:'/api/client-portal/contract/:token'};
