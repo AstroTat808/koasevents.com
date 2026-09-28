@@ -847,10 +847,12 @@ export async function saveQuickBooksBulkExclusionOverrides(
 ) {
   const previewId = clean(input.previewId, 120);
   const ids = [...new Set((Array.isArray(input.customerIds) ? input.customerIds : []).map((id) => clean(id,100)).filter(Boolean))].slice(0, 200);
-  const reasonCode = normalizeQuickBooksExclusionReasonCode(input.reasonCode);
+  const rawReasonCode = clean(input.reasonCode, 60);
+  const useSuggestedReasons = rawReasonCode === 'suggested';
+  const fixedReasonCode = useSuggestedReasons ? '' : normalizeQuickBooksExclusionReasonCode(rawReasonCode);
   if (!previewId) throw new Error('Preview Sync ID is required.');
   if (!ids.length) throw new Error('Select at least one unresolved QuickBooks customer to exclude.');
-  if (!reasonCode) throw new Error('Choose an exclusion reason before bulk exclusion.');
+  if (!useSuggestedReasons && !fixedReasonCode) throw new Error('Choose an exclusion reason before bulk exclusion.');
 
   const preview = await getLastQuickBooksCrmSyncPreview(context);
   if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
@@ -864,23 +866,39 @@ export async function saveQuickBooksBulkExclusionOverrides(
   const plans = new Map((Array.isArray(preview.customerPlans) ? preview.customerPlans : []).map((plan: any) => [clean(plan?.customerId,100), plan]));
   const invalid = ids
     .map((id) => ({ id, plan:plans.get(id) }))
-    .filter(({ plan }: any) => !plan || !['new','ambiguous'].includes(clean(plan?.decision,40)));
+    .filter(({ plan }: any) => {
+      if (!plan || !['new','ambiguous'].includes(clean(plan?.decision,40))) return true;
+      if (useSuggestedReasons && !normalizeQuickBooksExclusionReasonCode(plan?.suggestedExclusion?.code)) return true;
+      return false;
+    });
 
   if (invalid.length) {
     const names = invalid.slice(0,5).map(({ id, plan }: any) => clean(plan?.qbo?.name || id,180)).join(', ');
-    throw new Error('Bulk exclusion is limited to unresolved new/import or duplicate-review customers. Review individually: ' + names + (invalid.length > 5 ? ' and ' + (invalid.length - 5) + ' more' : '') + '.');
+    const qualifier = useSuggestedReasons
+      ? 'Bulk suggested-reason exclusion is limited to unresolved customers with a high-confidence suggested exclusion.'
+      : 'Bulk exclusion is limited to unresolved new/import or duplicate-review customers.';
+    throw new Error(qualifier + ' Review individually: ' + names + (invalid.length > 5 ? ' and ' + (invalid.length - 5) + ' more' : '') + '.');
   }
 
   const integrations = integrationStore(context);
   const overrides = await getQuickBooksMatchOverrides(context);
   const approvedAt = new Date().toISOString();
   const approvedBy = clean(actor,180);
-  const reasonLabel = quickBooksExclusionReasonLabel(reasonCode);
-  const reason = clean(input.reason || reasonLabel, 500);
   const excluded: any[] = [];
 
   for (const id of ids) {
     const plan: any = plans.get(id);
+    const reasonCode = useSuggestedReasons
+      ? normalizeQuickBooksExclusionReasonCode(plan?.suggestedExclusion?.code)
+      : fixedReasonCode;
+    if (!reasonCode) continue;
+    const reasonLabel = quickBooksExclusionReasonLabel(reasonCode);
+    const reason = clean(
+      input.reason ||
+      (useSuggestedReasons ? plan?.suggestedExclusion?.reason : '') ||
+      reasonLabel,
+      500,
+    );
     const override: QuickBooksMatchOverride = {
       customerId:id,
       decision:'exclude',
@@ -899,11 +917,20 @@ export async function saveQuickBooksBulkExclusionOverrides(
       customerName:override.customerName,
       reasonCode,
       reasonLabel,
+      reason,
     });
   }
 
   await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
-  return { previewId, approvedAt, approvedBy, reasonCode, reasonLabel, reason, excluded };
+  return {
+    previewId,
+    approvedAt,
+    approvedBy,
+    reasonMode:useSuggestedReasons ? 'suggested' : 'fixed',
+    reasonCode:fixedReasonCode || '',
+    reasonLabel:fixedReasonCode ? quickBooksExclusionReasonLabel(fixedReasonCode) : 'Suggested reason per customer',
+    excluded,
+  };
 }
 
 function customerFinancialSummary(customerId: string, estimateGroups: Map<string, any[]>, invoiceGroups: Map<string, any[]>, paymentGroups: Map<string, any[]>) {
