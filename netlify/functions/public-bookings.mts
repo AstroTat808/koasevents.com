@@ -1,12 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { createSignWellContract, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
 function clean(value: unknown, max = 1000) {
@@ -172,7 +171,7 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: 'Invalid booking link.' }, { status: 400 });
   }
 
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, req);
   const list = ((await store.get('records/index', { type: 'json' })) || []) as any[];
   const record = list.find((entry: any) => entry?.kind === 'proposal' && entry?.proposal?.publicToken === token);
   if (!record) return Response.json({ error: 'Booking not found.' }, { status: 404 });
