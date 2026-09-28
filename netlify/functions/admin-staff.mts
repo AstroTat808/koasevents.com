@@ -82,7 +82,7 @@ function ensureCanModifyTarget(actor:any,target:any,action:string,tenant:any){
   const actorEmail=normalizeEmail(actor?.email),targetEmail=normalizeEmail(target?.email);
   const protectedEmails=protectedAdminEmails(tenant);
   const actorId=clean(actor?.id,120),targetId=clean(target?.id,120);
-  if(protectedEmails.has(targetEmail)&&!protectedEmails.has(actorEmail))return 'Only a protected Koa’s administrator can modify another protected administrator account.';
+  if(protectedEmails.has(targetEmail)&&!protectedEmails.has(actorEmail))return 'Only a protected organization administrator can modify another protected administrator account.';
   if(actorId&&actorId===targetId&&['deactivate','delete','revoke-sessions'].includes(action))return 'You cannot perform that action on the account you are currently using.';
   return '';
 }
