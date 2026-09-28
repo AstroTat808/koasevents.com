@@ -36,9 +36,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div>
                 <p class="text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Manual two-way synchronization</p>
                 <p data-two-way-sync-status class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Run Preview Sync before applying changes.</p>
-                <p data-two-way-sync-detail class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Preview is read-only for CRM and QuickBooks business data. Ambiguous customers must be resolved before Run Approved Sync is enabled.</p>
+                <p data-two-way-sync-detail class="mt-1 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">Preview is read-only for CRM and QuickBooks business data. Every proposed new CRM import must be explicitly approved, and ambiguous matches must be resolved, before Run Approved Sync is enabled.</p>
               </div>
-              <a href="/admin/crm/" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open CRM</a>
+              <div class="flex shrink-0 flex-wrap gap-2">
+                <button data-export-preview-csv type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</button>
+                <button data-export-preview-pdf type="button" class="hidden rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export PDF</button>
+                <a href="/admin/crm/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Open CRM</a>
+              </div>
             </div>
 
             <div data-sync-preview class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
@@ -50,9 +54,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <article class="rounded-xl bg-white p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">Needs decision</p><strong data-preview-ambiguous class="display mt-2 block text-3xl text-[var(--koa-clay)]">0</strong></article>
               </div>
 
-              <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                <label class="grid gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Preview customer filter
-                  <select data-preview-filter class="rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-xs font-semibold normal-case tracking-normal text-[var(--koa-ink)]">
+              <section data-preview-review-warning class="mt-4 hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <strong data-preview-review-warning-title class="text-sm text-amber-950"></strong>
+                <p data-preview-review-warning-detail class="mt-1 text-xs leading-5 text-amber-950/65"></p>
+              </section>
+
+              <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+                <label class="grid min-w-0 gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Preview customer filter
+                  <select data-preview-filter class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-xs font-semibold normal-case tracking-normal text-[var(--koa-ink)]">
                     <option value="all">All customers</option>
                     <option value="new">New Imports</option>
                     <option value="auto">Auto-Matched</option>
@@ -63,21 +72,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                     <option value="decision">Needs Decision</option>
                   </select>
                 </label>
-                <span data-preview-filter-count class="text-xs font-semibold text-[var(--koa-ink)]/48"></span>
+                <label class="grid min-w-0 gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Search preview
+                  <input data-preview-search type="search" placeholder="Customer, email, CRM ID, QBO ID…" class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white px-3 py-2.5 text-xs font-semibold normal-case tracking-normal text-[var(--koa-ink)]" />
+                </label>
+                <span data-preview-filter-count class="pb-2 text-xs font-semibold text-[var(--koa-ink)]/48"></span>
               </div>
 
               <section data-match-review class="mt-5 hidden rounded-xl border border-amber-200 bg-amber-50 p-4">
                 <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                  <div><p class="text-xs font-black uppercase tracking-[.08em] text-amber-900">Duplicate review required</p><p class="mt-1 text-xs leading-5 text-amber-950/65">Choose the correct CRM client for each QuickBooks customer, or explicitly approve importing it as a new CRM record.</p></div>
+                  <div><p class="text-xs font-black uppercase tracking-[.08em] text-amber-900">Customer decisions required</p><p class="mt-1 text-xs leading-5 text-amber-950/65">New CRM imports require explicit approval. Ambiguous matches require you to choose the correct CRM client or approve a new import. Run Approved Sync remains disabled until every decision is resolved.</p></div>
                   <span data-match-review-count class="rounded-full bg-amber-900 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-white"></span>
                 </div>
                 <div data-match-review-list class="mt-4 grid gap-4"></div>
               </section>
 
-              <div class="mt-5 grid gap-4 xl:grid-cols-3">
-                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Will import</p><div data-preview-imports class="mt-3 grid gap-2"></div></section>
-                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Will match / refresh</p><div data-preview-matches class="mt-3 grid gap-2"></div></section>
-                <section class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">CRM → QuickBooks updates</p><div data-preview-outbound-list class="mt-3 grid gap-2"></div></section>
+              <div class="mt-5 grid min-w-0 gap-4 xl:grid-cols-2">
+                <section class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white p-4">
+                  <p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">1 · Proposed CRM imports</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">QuickBooks customers that do not yet have a confirmed CRM record. Unapproved imports cannot be synchronized.</p>
+                  <div data-preview-imports class="mt-3 grid max-h-[70vh] min-w-0 gap-2 overflow-y-auto pr-1"></div>
+                </section>
+                <section class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white p-4">
+                  <p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">2 · Existing CRM matches</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Customers already linked, auto-matched, or explicitly matched by staff.</p>
+                  <div data-preview-matches class="mt-3 grid max-h-[70vh] min-w-0 gap-2 overflow-y-auto pr-1"></div>
+                </section>
+                <section class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white p-4 xl:col-span-2">
+                  <p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">3 · CRM → QuickBooks updates</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Only CRM-origin customer and estimate fields shown here would be written to QuickBooks. Invoices and payments remain QuickBooks-owned.</p>
+                  <div data-preview-outbound-list class="mt-3 grid min-w-0 gap-2 lg:grid-cols-2"></div>
+                </section>
               </div>
               <p data-preview-generated class="mt-4 text-xs text-[var(--koa-ink)]/45"></p>
             </div>
@@ -459,7 +483,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const previewOutboundList=document.querySelector('[data-preview-outbound-list]');
     const previewGenerated=document.querySelector('[data-preview-generated]');
     const previewFilter=document.querySelector('[data-preview-filter]');
+    const previewSearch=document.querySelector('[data-preview-search]');
     const previewFilterCount=document.querySelector('[data-preview-filter-count]');
+    const previewReviewWarning=document.querySelector('[data-preview-review-warning]');
+    const previewReviewWarningTitle=document.querySelector('[data-preview-review-warning-title]');
+    const previewReviewWarningDetail=document.querySelector('[data-preview-review-warning-detail]');
+    const exportPreviewCsv=document.querySelector('[data-export-preview-csv]');
+    const exportPreviewPdf=document.querySelector('[data-export-preview-pdf]');
     const matchReview=document.querySelector('[data-match-review]');
     const matchReviewCount=document.querySelector('[data-match-review-count]');
     const matchReviewList=document.querySelector('[data-match-review-list]');
@@ -592,17 +622,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function compactPlanRow(plan){
       const f=plan.financial||{};
+      const decision=String(plan.decision||'');
       const estimateDocs=Array.isArray(f.estimateDocs)?f.estimateDocs:[];
       const invoiceDocs=Array.isArray(f.invoiceDocs)?f.invoiceDocs:[];
       const paymentDocs=Array.isArray(f.paymentDocs)?f.paymentDocs:[];
       const docs=[
-        ...estimateDocs.map((row)=>'Estimate #'+String(row.docNumber||row.id||'')+' · '+money(row.total||0)+' · '+String(row.emailStatus||'')),
+        ...estimateDocs.map((row)=>'Estimate #'+String(row.docNumber||row.id||'')+' · '+money(row.total||0)+(row.emailStatus?' · '+String(row.emailStatus):'')),
         ...invoiceDocs.map((row)=>'Invoice #'+String(row.docNumber||row.id||'')+' · '+money(row.total||0)+' · '+money(row.balance||0)+' open · due '+String(row.dueDate||'—')),
         ...paymentDocs.map((row)=>'Payment #'+String(row.id||'')+' · '+money(row.total||0)+' · '+String(row.txnDate||'—')),
       ];
-      const exact='<details class="mt-3 rounded-lg border border-[var(--koa-line)] bg-white p-3"><summary class="cursor-pointer text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Review exact values</summary>'+(docs.length?'<div class="mt-3 grid gap-1">'+docs.map((row)=>'<p class="text-xs text-[var(--koa-ink)]/55">'+esc(row)+'</p>').join('')+'</div>':'<p class="mt-3 text-xs text-[var(--koa-ink)]/45">No QuickBooks financial documents for this customer.</p>')+'<div class="mt-3 grid gap-2"><div class="rounded-lg bg-red-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-red-800">CRM before</p><pre class="mt-1 overflow-x-auto whitespace-pre-wrap break-words text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.before??null,null,2))+'</pre></div><div class="rounded-lg bg-emerald-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-emerald-800">Projected after</p><pre class="mt-1 overflow-x-auto whitespace-pre-wrap break-words text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.after??null,null,2))+'</pre></div></div></details>';
-      const approval=['approved_match','approved_new'].includes(String(plan.decision||''))?'<div class="mt-3 flex items-center justify-between gap-2"><span class="rounded-full bg-emerald-100 px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-emerald-800">Staff approved</span><button type="button" data-match-reset="'+esc(plan.customerId)+'" class="rounded-full border border-[var(--koa-line)] bg-white px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Reset decision</button></div>':'';
-      return '<article class="rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="text-sm text-[var(--koa-forest)]">'+esc(plan.qbo?.name||plan.name||'Unnamed customer')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(plan.qbo?.email||plan.email||'No email')+'</p>'+(plan.matchedRecordId?'<p class="mt-1 text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(plan.matchedRecordId)+'</p>':plan.predictedRecordId?'<p class="mt-1 text-[.62rem] font-bold text-[var(--koa-clay)]">Will create CRM '+esc(plan.predictedRecordId)+'</p>':'')+(plan.financial?'<p class="mt-2 text-[.62rem] text-[var(--koa-ink)]/48">'+Number(f.estimates||0)+' estimate(s) · '+Number(f.invoices||0)+' invoice(s) · '+Number(f.payments||0)+' payment(s) · '+money(f.openBalance||0)+' open</p>':'')+approval+exact+'</article>';
+      const statusLabel=decision==='new'?'Needs approval':decision==='approved_new'?'Approved new import':decision==='auto_match'?'Auto-matched':decision==='approved_match'?'Staff-approved match':decision==='linked'?'Already linked':decision==='ambiguous'?'Needs match decision':decision||'Review';
+      const statusClass=['new','ambiguous'].includes(decision)?'bg-amber-100 text-amber-900':['approved_new','approved_match'].includes(decision)?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700';
+      const exact='<details class="mt-3 min-w-0 rounded-lg border border-[var(--koa-line)] bg-white p-3"><summary class="cursor-pointer text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Review exact values</summary>'+(docs.length?'<div class="mt-3 grid min-w-0 gap-1">'+docs.map((row)=>'<p class="min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(row)+'</p>').join('')+'</div>':'<p class="mt-3 text-xs text-[var(--koa-ink)]/45">No QuickBooks financial documents for this customer.</p>')+'<div class="mt-3 grid min-w-0 gap-2 lg:grid-cols-2"><div class="min-w-0 rounded-lg bg-red-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-red-800">CRM before</p><pre class="mt-1 max-h-72 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.before??null,null,2))+'</pre></div><div class="min-w-0 rounded-lg bg-emerald-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-emerald-800">Projected after</p><pre class="mt-1 max-h-72 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.after??null,null,2))+'</pre></div></div></details>';
+      let controls='';
+      if(['approved_match','approved_new'].includes(decision)){
+        controls='<button type="button" data-match-reset="'+esc(plan.customerId)+'" class="rounded-full border border-[var(--koa-line)] bg-white px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Reset decision</button>';
+      }else if(decision==='new'){
+        controls='<button type="button" data-match-new="'+esc(plan.customerId)+'" class="rounded-full bg-amber-900 px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-white">Approve new import</button>';
+      }
+      return '<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(plan.qbo?.name||plan.name||'Unnamed customer')+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/50">'+esc(plan.qbo?.email||plan.email||'No email')+'</p></div><span class="shrink-0 self-start rounded-full px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+esc(statusLabel)+'</span></div>'+(plan.matchedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(plan.matchedRecordId)+'</p>':plan.predictedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">Proposed CRM '+esc(plan.predictedRecordId)+'</p>':'')+(plan.reason?'<p class="mt-1 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+esc(plan.reason)+'</p>':'')+(plan.financial?'<p class="mt-2 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+Number(f.estimates||0)+' estimate(s) · '+Number(f.invoices||0)+' invoice(s) · '+Number(f.payments||0)+' payment(s) · '+money(f.openBalance||0)+' open</p>':'')+(controls?'<div class="mt-3 flex flex-wrap gap-2">'+controls+'</div>':'')+exact+'</article>';
     }
 
     async function saveMatch(customerId,decision,recordId=''){
@@ -612,14 +650,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function previewPlanMatchesFilter(plan){
       const value=String(previewFilter?.value||'all');
-      if(value==='new')return ['new','approved_new'].includes(String(plan?.decision||''));
-      if(value==='auto')return String(plan?.decision||'')==='auto_match';
-      if(value==='approved')return ['approved_match','approved_new'].includes(String(plan?.decision||''));
-      if(value==='invoices')return Number(plan?.financial?.invoices||0)>0;
-      if(value==='payments')return Number(plan?.financial?.payments||0)>0;
-      if(value==='balance')return Number(plan?.financial?.openBalance||0)>0.009;
-      if(value==='decision')return String(plan?.decision||'')==='ambiguous';
-      return true;
+      const decision=String(plan?.decision||'');
+      let matches=true;
+      if(value==='new')matches=['new','approved_new'].includes(decision);
+      else if(value==='auto')matches=decision==='auto_match';
+      else if(value==='approved')matches=['approved_match','approved_new'].includes(decision);
+      else if(value==='invoices')matches=Number(plan?.financial?.invoices||0)>0;
+      else if(value==='payments')matches=Number(plan?.financial?.payments||0)>0;
+      else if(value==='balance')matches=Number(plan?.financial?.openBalance||0)>0.009;
+      else if(value==='decision')matches=['new','ambiguous'].includes(decision);
+      if(!matches)return false;
+      const query=String(previewSearch?.value||'').trim().toLowerCase();
+      if(!query)return true;
+      const haystack=[
+        plan?.customerId,plan?.qbo?.name,plan?.qbo?.email,plan?.qbo?.phone,plan?.qbo?.eventDate,
+        plan?.matchedRecordId,plan?.predictedRecordId,plan?.decision,plan?.reason,
+        ...(Array.isArray(plan?.financial?.estimateDocs)?plan.financial.estimateDocs.map((row)=>row?.docNumber||row?.id):[]),
+        ...(Array.isArray(plan?.financial?.invoiceDocs)?plan.financial.invoiceDocs.map((row)=>row?.docNumber||row?.id):[]),
+      ].join(' ').toLowerCase();
+      return haystack.includes(query);
+    }
+
+    function wirePreviewDecisionButtons(container){
+      if(!container)return;
+      container.querySelectorAll('[data-match-reset]').forEach((button)=>button.addEventListener('click',async()=>{
+        button.disabled=true;button.textContent='Resetting…';
+        try{await saveMatch(button.dataset.matchReset,'clear','');await runPreviewSync();}
+        catch(err){alert(err.message||'Unable to reset matching decision.');button.disabled=false;button.textContent='Reset decision';}
+      }));
+      container.querySelectorAll('[data-match-new]').forEach((button)=>button.addEventListener('click',async()=>{
+        if(!confirm('Approve importing this QuickBooks customer as a new CRM client? Review the customer, invoices, payments and exact before/after values first.'))return;
+        button.disabled=true;button.textContent='Approving…';
+        try{await saveMatch(button.dataset.matchNew,'new','');await runPreviewSync();}
+        catch(err){alert(err.message||'Unable to approve new CRM import.');button.disabled=false;button.textContent='Approve new import';}
+      }));
+    }
+
+    function outboundActionHtml(action){
+      const before=action?.before==null?'':JSON.stringify(action.before,null,2);
+      const after=action?.after==null?'':JSON.stringify(action.after,null,2);
+      const title=[action?.type||'Update',action?.field||action?.action||'change'].filter(Boolean).join(' · ');
+      return '<div class="min-w-0 rounded-lg border border-[var(--koa-line)] bg-white p-3"><strong class="block break-words text-xs text-[var(--koa-forest)]">'+esc(title)+'</strong>'+(action?.reason?'<p class="mt-1 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+esc(action.reason)+'</p>':'')+((before||after)?'<details class="mt-2 min-w-0"><summary class="cursor-pointer text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Exact before / after</summary><div class="mt-2 grid min-w-0 gap-2 lg:grid-cols-2"><div class="min-w-0 rounded-lg bg-red-50 p-2"><p class="text-[.5rem] font-black uppercase tracking-[.06em] text-red-800">Before</p><pre class="mt-1 max-h-56 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.62rem] leading-5 text-[var(--koa-ink)]/60">'+esc(before||'null')+'</pre></div><div class="min-w-0 rounded-lg bg-emerald-50 p-2"><p class="text-[.5rem] font-black uppercase tracking-[.06em] text-emerald-800">After</p><pre class="mt-1 max-h-56 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.62rem] leading-5 text-[var(--koa-ink)]/60">'+esc(after||'null')+'</pre></div></div></details>':'')+'</div>';
     }
 
     function renderSyncPreview(){
@@ -627,38 +698,49 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!syncPreview)return;
       const valid=Boolean(preview?.previewId&&preview?.generatedAt&&Date.parse(preview.expiresAt||0)>Date.now());
       syncPreview.classList.toggle('hidden',!preview);
+      exportPreviewCsv?.classList.toggle('hidden',!preview);
+      exportPreviewPdf?.classList.toggle('hidden',!preview);
       const summary=preview?.summary||{};
       if(previewNew)previewNew.textContent=Number(summary.newImports||0);
       if(previewMatched)previewMatched.textContent=Number(summary.matched||0);
       if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
       if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
       if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
-      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' QuickBooks customers scanned.':'';
+      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' customers · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned.':'';
+
+      const needsDecision=Number(summary.needsDecision||0);
+      const unapprovedNew=Number(summary.unapprovedNewImports||0);
+      const ambiguousCount=Number(summary.ambiguousMatches||0);
+      if(previewReviewWarning)previewReviewWarning.classList.toggle('hidden',!preview||needsDecision===0);
+      if(previewReviewWarningTitle)previewReviewWarningTitle.textContent=needsDecision===1?'1 customer decision must be reviewed before sync.':needsDecision+' customer decisions must be reviewed before sync.';
+      if(previewReviewWarningDetail)previewReviewWarningDetail.textContent=[
+        unapprovedNew?unapprovedNew+' proposed new CRM import'+(unapprovedNew===1?' requires':'s require')+' explicit approval.':'',
+        ambiguousCount?ambiguousCount+' ambiguous match'+(ambiguousCount===1?' requires':'es require')+' a CRM match decision.':'',
+        'Nothing in these unresolved rows will be imported by Run Approved Sync.'
+      ].filter(Boolean).join(' ');
 
       const plans=Array.isArray(preview?.customerPlans)?preview.customerPlans:[];
       const visiblePlans=plans.filter(previewPlanMatchesFilter);
       const imports=visiblePlans.filter((row)=>['new','approved_new'].includes(row.decision));
       const matches=visiblePlans.filter((row)=>['linked','auto_match','approved_match'].includes(row.decision));
-      const ambiguous=visiblePlans.filter((row)=>row.decision==='ambiguous');
+      const reviewPlans=visiblePlans.filter((row)=>['new','ambiguous'].includes(row.decision));
       if(previewFilterCount)previewFilterCount.textContent=visiblePlans.length+' of '+plans.length+' customer'+(plans.length===1?'':'s')+' shown';
-      if(previewImports)previewImports.innerHTML=imports.length?imports.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No new CRM customer imports match this filter.</p>';
-      if(previewMatches)previewMatches.innerHTML=matches.length?matches.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No customer matches to refresh match this filter.</p>';
-      [previewImports,previewMatches].filter(Boolean).forEach((container)=>container.querySelectorAll('[data-match-reset]').forEach((button)=>button.addEventListener('click',async()=>{
-        button.disabled=true;button.textContent='Resetting…';
-        try{await saveMatch(button.dataset.matchReset,'clear','');await runPreviewSync();}
-        catch(err){alert(err.message||'Unable to reset matching decision.');button.disabled=false;button.textContent='Reset decision';}
-      })));
+      if(previewImports)previewImports.innerHTML=imports.length?imports.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No proposed CRM imports match this view.</p>';
+      if(previewMatches)previewMatches.innerHTML=matches.length?matches.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No existing CRM matches match this view.</p>';
+      wirePreviewDecisionButtons(previewImports);
+      wirePreviewDecisionButtons(previewMatches);
 
       const outbound=Array.isArray(preview?.outbound)?preview.outbound:[];
-      if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.map((row)=>'<article class="rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid gap-1">'+(row.actions||[]).map((action)=>'<p class="text-xs text-[var(--koa-ink)]/55">'+esc(action.type||'Update')+' · '+esc(action.field||action.action||'update')+(action.before!=null&&action.after!=null?' · '+esc(typeof action.before==='object'?JSON.stringify(action.before):action.before)+' → '+esc(typeof action.after==='object'?JSON.stringify(action.after):action.after):'')+'</p>').join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
+      if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.map((row)=>'<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid min-w-0 gap-2">'+(row.actions||[]).map(outboundActionHtml).join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
 
-      if(matchReview)matchReview.classList.toggle('hidden',ambiguous.length===0);
-      if(matchReviewCount)matchReviewCount.textContent=ambiguous.length+' decision'+(ambiguous.length===1?'':'s');
+      if(matchReview)matchReview.classList.toggle('hidden',reviewPlans.length===0);
+      if(matchReviewCount)matchReviewCount.textContent=reviewPlans.length+' decision'+(reviewPlans.length===1?'':'s');
       if(matchReviewList){
-        matchReviewList.innerHTML=ambiguous.map((plan)=>{
+        matchReviewList.innerHTML=reviewPlans.map((plan)=>{
           const q=plan.qbo||{};
           const candidates=Array.isArray(plan.candidates)?plan.candidates:[];
-          return '<article class="rounded-xl border border-amber-200 bg-white p-4"><div class="grid gap-4 lg:grid-cols-[.8fr_1.2fr]"><div class="rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+' · '+esc(q.phone||'No phone')+'</p><p class="mt-2 text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open · '+money(plan.financial?.paymentTotal||0)+' payments recorded</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full border border-amber-300 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-amber-900">Import as new CRM client</button></div><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Possible CRM matches</p><div class="mt-2 grid gap-2">'+candidates.map((candidate)=>'<div class="rounded-xl border border-[var(--koa-line)] p-3"><div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><strong class="text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+' · '+esc(candidate.phone||'No phone')+'</p><p class="mt-1 text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-1 text-[.62rem] font-semibold text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p></div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked to QBO #'+esc(candidate.currentQuickBooksCustomerId)+'</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>').join('')+'</div></div></div></article>';
+          const noCandidate=String(plan.decision||'')==='new';
+          return '<article class="min-w-0 rounded-xl border border-amber-200 bg-white p-4"><div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><div class="min-w-0 rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block min-w-0 break-words text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/55">'+esc(q.phone||'No phone')+'</p><p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full bg-amber-900 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Approve as new CRM client</button></div><div class="min-w-0"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+(noCandidate?'Why this needs approval':'Possible CRM matches')+'</p>'+(noCandidate?'<div class="mt-2 rounded-xl border border-[var(--koa-line)] p-3"><strong class="text-sm">No CRM candidate was found automatically.</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52">Review the customer name, email, invoices, payments and exact projected CRM record. Approve the new import only when you are satisfied this is not an existing CRM client.</p></div>':'<div class="mt-2 grid min-w-0 gap-2">'+candidates.map((candidate)=>'<div class="min-w-0 rounded-xl border border-[var(--koa-line)] p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] font-semibold text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p></div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked elsewhere</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>').join('')+'</div>')+'</div></div></article>';
         }).join('');
 
         matchReviewList.querySelectorAll('[data-match-qbo]').forEach((button)=>button.addEventListener('click',async()=>{
@@ -666,20 +748,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           try{await saveMatch(button.dataset.matchQbo,'match',button.dataset.matchRecord);await runPreviewSync();}
           catch(err){alert(err.message||'Unable to save customer match.');button.disabled=false;button.textContent='Use this CRM client';}
         }));
-        matchReviewList.querySelectorAll('[data-match-new]').forEach((button)=>button.addEventListener('click',async()=>{
-          if(!confirm('Approve importing this QuickBooks customer as a new CRM client instead of matching an existing record?'))return;
-          button.disabled=true;button.textContent='Saving…';
-          try{await saveMatch(button.dataset.matchNew,'new','');await runPreviewSync();}
-          catch(err){alert(err.message||'Unable to approve new CRM import.');button.disabled=false;button.textContent='Import as new CRM client';}
-        }));
+        wirePreviewDecisionButtons(matchReviewList);
       }
 
-      const needsDecision=Number(summary.needsDecision||0);
       if(twoWaySync)twoWaySync.disabled=!valid||needsDecision>0;
       if(twoWaySyncStatus&&preview){
         twoWaySyncStatus.textContent=needsDecision>0
-          ? needsDecision+' customer match'+(needsDecision===1?' needs':'es need')+' your decision before sync can run.'
-          : valid?'Preview approved for execution. Review the lists below, then run the sync.':'Preview expired. Run Preview Sync again.';
+          ? needsDecision+' customer decision'+(needsDecision===1?' needs':'s need')+' review before sync can run.'
+          : valid?'Preview approved for execution. All customer decisions are resolved; review the audit, then run the sync.':'Preview expired. Run Preview Sync again.';
       }
     }
 
@@ -694,7 +770,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await api({action:'preview-two-way'});
         state.manualSyncPreview=data.preview||null;
         renderSyncPreview();
-        if(twoWaySyncDetail)twoWaySyncDetail.textContent='Review every planned import, match, outbound update and duplicate decision below. Run Approved Sync stays disabled until ambiguous matches are resolved.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent='Review every planned import, match, invoice, payment, balance and outbound update below. Run Approved Sync stays disabled until every proposed new CRM import is explicitly approved and every ambiguous match is resolved.';
       }catch(err){
         if(twoWaySyncStatus)twoWaySyncStatus.textContent='Preview could not be generated.';
         if(twoWaySyncDetail)twoWaySyncDetail.textContent=err.message||'QuickBooks preview failed.';
@@ -1520,6 +1596,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(connected)loadItems();
     }
 
+    async function downloadPreviewAudit(format){
+      const previewId=String(state?.manualSyncPreview?.previewId||'');
+      if(!previewId)throw new Error('Run Preview Sync before exporting an audit.');
+      const button=format==='pdf'?exportPreviewPdf:exportPreviewCsv;
+      const original=button?.textContent||'Export';
+      if(button){button.disabled=true;button.textContent='Exporting…';}
+      try{
+        const res=await fetch('/api/admin/quickbooks?view=preview-export&format='+encodeURIComponent(format)+'&previewId='+encodeURIComponent(previewId),{cache:'no-store'});
+        if(!res.ok){
+          const data=await res.json().catch(()=>({}));
+          throw new Error(data.error||'Preview audit export failed.');
+        }
+        const blob=await res.blob();
+        const disposition=String(res.headers.get('Content-Disposition')||'');
+        const match=disposition.match(/filename="([^"]+)"/i);
+        const filename=match?.[1]||('quickbooks-crm-preview-audit.'+format);
+        const url=URL.createObjectURL(blob);
+        const link=document.createElement('a');link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }finally{
+        if(button){button.disabled=false;button.textContent=original;}
+      }
+    }
+
     async function load(){
       const user=await getAdminSession();if(!hasAdminAccess(user)){unauthorized.classList.remove('hidden');return;}
       app.classList.remove('hidden');
@@ -1534,6 +1634,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
     previewTwoWay?.addEventListener('click',runPreviewSync);
     previewFilter?.addEventListener('change',renderSyncPreview);
+    previewSearch?.addEventListener('input',renderSyncPreview);
+    exportPreviewCsv?.addEventListener('click',()=>downloadPreviewAudit('csv').catch((err)=>alert(err.message||'Unable to export CSV audit.')));
+    exportPreviewPdf?.addEventListener('click',()=>downloadPreviewAudit('pdf').catch((err)=>alert(err.message||'Unable to export PDF audit.')));
     twoWaySync?.addEventListener('click',async()=>{
       const original=twoWaySync.textContent;
       twoWaySync.disabled=true;

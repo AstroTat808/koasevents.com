@@ -154,15 +154,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       rollbackResults.classList.toggle('hidden',!p);
       applyRollback.disabled=!p||Number(p.safeCount||0)===0||Boolean(p.alreadyRolledBack);
       if(!p){
-        rollbackStatus.textContent=selectedDetail?.rollback?.status==='completed'
-          ? 'CRM rollback completed '+fmt(selectedDetail.rollback.completedAt)+' by '+String(selectedDetail.rollback.actor||'Unknown staff')+'. QuickBooks was not changed.'
+        const saved=selectedDetail?.rollback;
+        rollbackStatus.textContent=saved?.status
+          ? 'CRM rollback status: '+String(saved.status)+' · last recovery '+fmt(saved.completedAt)+' by '+String(saved.actor||'Unknown staff')+'. QuickBooks was not changed.'
           : 'Preview rollback safety before restoring CRM records. QuickBooks is never changed by this recovery action.';
         return;
       }
       rollbackStatus.textContent=p.alreadyRolledBack
-        ? 'This sync has already been rolled back.'
-        : Number(p.safeCount||0)+' CRM record(s) safe to restore · '+Number(p.conflictCount||0)+' conflict(s) blocked because those CRM records changed after the sync.';
-      rollbackResults.innerHTML=(p.rows||[]).map((row)=>'<article class="rounded-xl border '+(row.safe?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50')+' p-3"><div class="flex items-start justify-between gap-3"><div><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.clientName||row.recordId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/55">'+esc(row.action==='delete_created'?'Delete sync-created CRM record':'Restore pre-sync CRM record')+' · '+esc(row.reason||'')+'</p></div><span class="rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+(row.safe?'bg-emerald-700 text-white':'bg-amber-800 text-white')+'">'+(row.safe?'safe':'blocked')+'</span></div></article>').join('');
+        ? 'All '+Number(p.totalCount||0)+' CRM record(s) from this sync have already been rolled back.'
+        : Number(p.safeCount||0)+' safe now · '+Number(p.conflictCount||0)+' blocked by later CRM changes · '+Number(p.restoredCount||0)+' already restored.';
+      rollbackResults.innerHTML=(p.rows||[]).map((row)=>{
+        const restored=Boolean(row.restored)||row.action==='already_restored';
+        const safe=Boolean(row.safe);
+        const stateClass=restored?'border-slate-200 bg-slate-50':safe?'border-emerald-200 bg-emerald-50':'border-amber-200 bg-amber-50';
+        const badgeClass=restored?'bg-slate-700 text-white':safe?'bg-emerald-700 text-white':'bg-amber-800 text-white';
+        const badge=restored?'restored':safe?'safe':'blocked';
+        const actionLabel=row.action==='delete_created'?'Delete sync-created CRM record':row.action==='restore_updated'?'Restore pre-sync CRM record':row.action==='already_restored'?'Already rolled back':'No automatic restore';
+        return '<article class="min-w-0 rounded-xl border '+stateClass+' p-3"><div class="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(row.clientName||row.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-[.62rem] font-semibold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><p class="mt-1 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(actionLabel)+' · '+esc(row.reason||'')+'</p></div><div class="flex shrink-0 flex-wrap items-center gap-2"><span class="rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+badgeClass+'">'+badge+'</span>'+(safe?'<button type="button" data-rollback-one="'+esc(row.recordId)+'" data-rollback-name="'+esc(row.clientName||row.recordId)+'" class="rounded-full border border-emerald-300 bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-emerald-800">Rollback this client only</button>':'')+'</div></div></article>';
+      }).join('');
+      rollbackResults.querySelectorAll('[data-rollback-one]').forEach((button)=>button.addEventListener('click',()=>applyRollbackSelection(button.dataset.rollbackOne,button.dataset.rollbackName)));
     }
 
     async function loadRollbackPreview(){
@@ -221,20 +231,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(selectedId&&history.some((row)=>row.syncId===selectedId))await loadDetail(selectedId);
     }
 
-    previewRollback?.addEventListener('click',loadRollbackPreview);
-    applyRollback?.addEventListener('click',async()=>{
-      if(!rollbackPreview||!selectedId||Number(rollbackPreview.safeCount||0)===0)return;
-      if(!confirm('Restore all CRM records currently marked safe for this sync? This does not change QuickBooks. Records with later CRM edits will remain blocked.'))return;
-      applyRollback.disabled=true;applyRollback.textContent='Restoring…';
+    async function applyRollbackSelection(recordId='',clientName=''){
+      if(!rollbackPreview||!selectedId)return;
+      const single=Boolean(recordId);
+      if(single){
+        const row=(rollbackPreview.rows||[]).find((entry)=>String(entry.recordId||'')===String(recordId));
+        if(!row?.safe)return;
+      }else if(Number(rollbackPreview.safeCount||0)===0){
+        return;
+      }
+      const prompt=single
+        ? 'Rollback CRM changes for '+String(clientName||recordId)+' only? This restores or removes only this CRM record from the selected sync and does not change QuickBooks.'
+        : 'Restore all CRM records currently marked safe for this sync? This does not change QuickBooks. Records with later CRM edits will remain blocked.';
+      if(!confirm(prompt))return;
+
+      const bulkOriginal=applyRollback?.textContent||'Restore Safe CRM Changes';
+      if(single){
+        rollbackResults?.querySelectorAll('[data-rollback-one]').forEach((button)=>{button.disabled=true;});
+      }else if(applyRollback){
+        applyRollback.disabled=true;applyRollback.textContent='Restoring…';
+      }
       try{
-        const data=await post({action:'rollback-sync-crm',syncId:selectedId});
-        alert('CRM rollback complete. '+Number(data.rollback?.restored?.length||0)+' record(s) restored and '+Number(data.rollback?.deleted?.length||0)+' sync-created record(s) removed. '+Number(data.rollback?.conflicts?.length||0)+' conflict(s) left unchanged.');
+        const data=await post({action:'rollback-sync-crm',syncId:selectedId,recordId:single?recordId:''});
+        const restored=Number(data.rollback?.restored?.length||0);
+        const deleted=Number(data.rollback?.deleted?.length||0);
+        const remaining=Number(data.rollback?.remainingCount||0);
+        alert((single?'Client rollback':'CRM rollback')+' complete. '+restored+' record(s) restored and '+deleted+' sync-created record(s) removed. '+remaining+' recovery record(s) remain.');
         await load();
         await loadDetail(selectedId);
         await loadRollbackPreview();
-      }catch(err){alert(err.message||'Unable to restore CRM changes.');}
-      finally{applyRollback.textContent='Restore Safe CRM Changes';}
-    });
+      }catch(err){
+        alert(err.message||'Unable to restore CRM changes.');
+      }finally{
+        if(applyRollback){applyRollback.textContent=bulkOriginal;}
+      }
+    }
+
+    previewRollback?.addEventListener('click',loadRollbackPreview);
+    applyRollback?.addEventListener('click',()=>applyRollbackSelection());
+
     search?.addEventListener('input',renderList);
     filter?.addEventListener('change',renderList);
     $('[data-refresh]')?.addEventListener('click',load);

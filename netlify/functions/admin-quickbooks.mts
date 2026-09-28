@@ -4,6 +4,7 @@ import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
+import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
   buildQuickBooksCrmSyncPreview,
   getLastQuickBooksCrmSyncPreview,
@@ -641,6 +642,35 @@ export default async (req: Request, context: Context) => {
         return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview CRM rollback.' }, { status:409 });
       }
     }
+    if (view === 'preview-export') {
+      const previewId = clean(url.searchParams.get('previewId'), 120);
+      const format = clean(url.searchParams.get('format'), 12).toLowerCase();
+      const preview = await getLastQuickBooksCrmSyncPreview(context);
+      if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
+        return Response.json({ error:'That Preview Sync is no longer the current audit preview. Run Preview Sync again before exporting.' }, { status:409 });
+      }
+      const stamp = clean(preview.generatedAt,40).replace(/[^0-9TZ-]/g,'').replace(/[:.]/g,'').slice(0,24) || 'preview';
+      const baseName = 'quickbooks-crm-preview-audit-' + stamp;
+      if (format === 'csv') {
+        return new Response(buildQuickBooksCrmPreviewCsv(preview), {
+          headers:{
+            'Content-Type':'text/csv; charset=utf-8',
+            'Content-Disposition':'attachment; filename="' + baseName + '.csv"',
+            'Cache-Control':'private, no-store',
+          },
+        });
+      }
+      if (format === 'pdf') {
+        return new Response(buildQuickBooksCrmPreviewPdf(preview), {
+          headers:{
+            'Content-Type':'application/pdf',
+            'Content-Disposition':'attachment; filename="' + baseName + '.pdf"',
+            'Cache-Control':'private, no-store',
+          },
+        });
+      }
+      return Response.json({ error:'Choose CSV or PDF export format.' }, { status:400 });
+    }
 
     const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview] = await Promise.all([
       getQuickBooksConnection(context),
@@ -736,7 +766,7 @@ export default async (req: Request, context: Context) => {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
     const syncId = clean(payload?.syncId, 120);
     try {
-      const rollback = await applyQuickBooksCrmSyncRollback(context, syncId, actor);
+      const rollback = await applyQuickBooksCrmSyncRollback(context, syncId, actor, clean(payload?.recordId,120));
       const records = await readQuickBooksSalesRecords(context);
       const accountingAudit = buildQuickBooksAccountingAudit(records);
       return Response.json({ ok:true, rollback, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });

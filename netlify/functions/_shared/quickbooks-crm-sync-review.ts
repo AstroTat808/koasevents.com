@@ -527,9 +527,9 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
         counter += 1;
       }
     }
-    const action = match.status === 'ambiguous'
+    const action = ['ambiguous','new'].includes(match.status)
       ? 'needs_decision'
-      : ['new','approved_new'].includes(match.status)
+      : match.status === 'approved_new'
         ? 'import_new'
         : 'refresh_match';
     const before = match.record ? previewRecordSnapshot(match.record) : null;
@@ -587,7 +587,9 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     linked: customerPlans.filter((row) => row.decision === 'linked').length,
     matched: customerPlans.filter((row) => ['auto_match','approved_match'].includes(row.decision)).length,
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
-    needsDecision: customerPlans.filter((row) => row.decision === 'ambiguous').length,
+    unapprovedNewImports: customerPlans.filter((row) => row.decision === 'new').length,
+    ambiguousMatches: customerPlans.filter((row) => row.decision === 'ambiguous').length,
+    needsDecision: customerPlans.filter((row) => ['new','ambiguous'].includes(row.decision)).length,
     crmOutboundRecords: outbound.length,
     crmOutboundActions: outbound.reduce((sum, row) => sum + row.actions.length, 0),
   };
@@ -620,7 +622,7 @@ export async function validateQuickBooksCrmSyncPreview(context: Context, preview
     throw new Error('The QuickBooks sync preview is older than 30 minutes. Run Preview Sync again.');
   }
   if (Number(preview?.summary?.needsDecision || 0) > 0) {
-    throw new Error('Resolve all ambiguous customer matches and run Preview Sync again before applying changes.');
+    throw new Error('Resolve every customer decision, including explicitly approving each new CRM import, then run Preview Sync again before applying changes.');
   }
   return preview;
 }
@@ -725,6 +727,35 @@ export async function getQuickBooksCrmSyncHistoryDetail(context: Context, syncId
 }
 
 
+function completedRollbackRecordIds(detail: any) {
+  const ids = new Set<string>();
+  const rollback = detail?.rollback || {};
+  const collect = (rows: any[]) => {
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const id = clean(row?.recordId, 120);
+      if (id) ids.add(id);
+    }
+  };
+  collect(rollback.restored);
+  collect(rollback.deleted);
+  for (const attempt of Array.isArray(rollback.attempts) ? rollback.attempts : []) {
+    collect(attempt?.restored);
+    collect(attempt?.deleted);
+  }
+  return ids;
+}
+
+function mergeRollbackEntries(...groups: any[][]) {
+  const map = new Map<string, any>();
+  for (const group of groups) {
+    for (const row of Array.isArray(group) ? group : []) {
+      const id = clean(row?.recordId, 120);
+      if (id) map.set(id, { recordId:id, clientName:clean(row?.clientName,180) });
+    }
+  }
+  return [...map.values()];
+}
+
 export async function previewQuickBooksCrmSyncRollback(context: Context, syncId: string) {
   const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
   if (!detail) throw new Error('QuickBooks sync history entry not found.');
@@ -733,6 +764,7 @@ export async function previewQuickBooksCrmSyncRollback(context: Context, syncId:
     throw new Error('This sync does not contain CRM recovery snapshots. Only syncs created after rollback protection was enabled can be restored.');
   }
 
+  const completedIds = completedRollbackRecordIds(detail);
   const store = salesStore(context);
   const records = (((await store.get('records/index', { type:'json' })) || []) as any[]).filter(Boolean);
   const currentById = new Map(records.map((record) => [String(record.id), record]));
@@ -743,42 +775,67 @@ export async function previewQuickBooksCrmSyncRollback(context: Context, syncId:
     const after = row?.after ?? null;
     const createdBySync = Boolean(row?.createdBySync || before == null);
 
+    if (completedIds.has(recordId)) {
+      return {
+        recordId,
+        clientName:clean(row?.clientName,180),
+        action:'already_restored',
+        safe:false,
+        restored:true,
+        reason:'This CRM record has already been rolled back from this sync.',
+        before,
+        after,
+        current:jsonClone(current),
+      };
+    }
+
     if (createdBySync) {
       if (!current) {
-        return { recordId, clientName:clean(row?.clientName,180), action:'already_absent', safe:false, reason:'The sync-created CRM record is already absent.', before, after, current:null };
+        return { recordId, clientName:clean(row?.clientName,180), action:'already_absent', safe:false, restored:false, reason:'The sync-created CRM record is already absent and cannot be verified for automatic rollback.', before, after, current:null };
       }
       if (!sameJson(current, after)) {
-        return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:false, reason:'The CRM record changed after the sync and will not be deleted automatically.', before, after, current:jsonClone(current) };
+        return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:false, restored:false, reason:'The CRM record changed after the sync and will not be deleted automatically.', before, after, current:jsonClone(current) };
       }
-      return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:true, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
+      return { recordId, clientName:clean(row?.clientName,180), action:'delete_created', safe:true, restored:false, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
     }
 
     if (!current) {
-      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, reason:'The CRM record no longer exists.', before, after, current:null };
+      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, restored:false, reason:'The CRM record no longer exists.', before, after, current:null };
     }
     if (!sameJson(current, after)) {
-      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, reason:'The CRM record changed after the sync and will not be overwritten automatically.', before, after, current:jsonClone(current) };
+      return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:false, restored:false, reason:'The CRM record changed after the sync and will not be overwritten automatically.', before, after, current:jsonClone(current) };
     }
-    return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:true, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
+    return { recordId, clientName:clean(row?.clientName,180), action:'restore_updated', safe:true, restored:false, reason:'CRM record still matches the post-sync snapshot.', before, after, current:jsonClone(current) };
   });
 
+  const pendingRows = rows.filter((row: any) => !row.restored);
   return {
     syncId: clean(detail.syncId || syncId, 120),
     completedAt: clean(detail.completedAt, 80),
     actor: clean(detail.actor, 180),
     crmOnly: true,
-    alreadyRolledBack: clean(detail?.rollback?.status, 40) === 'completed',
+    alreadyRolledBack: pendingRows.length === 0,
     safeCount: rows.filter((row: any) => row.safe).length,
-    conflictCount: rows.filter((row: any) => !row.safe).length,
+    conflictCount: rows.filter((row: any) => !row.safe && !row.restored).length,
+    restoredCount: rows.filter((row: any) => row.restored).length,
+    totalCount: rows.length,
     rows,
   };
 }
 
-export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: string, actor = '') {
+export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: string, actor = '', recordId = '') {
   const preview = await previewQuickBooksCrmSyncRollback(context, syncId);
-  if (preview.alreadyRolledBack) throw new Error('This sync has already been rolled back.');
+  const requestedRecordId = clean(recordId, 120);
+  if (preview.alreadyRolledBack) throw new Error('This sync has already been fully rolled back.');
 
-  const safeRows = preview.rows.filter((row: any) => row.safe);
+  let safeRows = preview.rows.filter((row: any) => row.safe);
+  if (requestedRecordId) {
+    const target = preview.rows.find((row: any) => clean(row?.recordId,120) === requestedRecordId);
+    if (!target) throw new Error('That CRM record is not part of this QuickBooks sync recovery snapshot.');
+    if (target.restored) throw new Error('That CRM record has already been rolled back from this sync.');
+    if (!target.safe) throw new Error(target.reason || 'That CRM record is not safe to restore automatically.');
+    safeRows = [target];
+  }
   if (!safeRows.length) throw new Error('No CRM records are currently safe to restore.');
 
   const sales = salesStore(context);
@@ -807,18 +864,44 @@ export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: s
 
   const integrations = integrationStore(context);
   const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
+  const previousRollback = detail?.rollback || {};
   const completedAt = new Date().toISOString();
-  const rollback = {
-    status: preview.conflictCount > 0 ? 'partial' : 'completed',
+  const attempt = {
+    id:'QBROLLBACK-' + Date.now().toString(36).toUpperCase(),
     completedAt,
     actor:clean(actor,180),
+    scope:requestedRecordId ? 'single_client' : 'all_safe',
+    recordId:requestedRecordId,
     restored,
     deleted,
-    conflicts:preview.rows.filter((row: any) => !row.safe).map((row: any) => ({
+  };
+  const cumulativeRestored = mergeRollbackEntries(previousRollback?.restored || [], restored);
+  const cumulativeDeleted = mergeRollbackEntries(previousRollback?.deleted || [], deleted);
+  const completedIds = new Set([
+    ...cumulativeRestored.map((row: any) => String(row.recordId)),
+    ...cumulativeDeleted.map((row: any) => String(row.recordId)),
+  ]);
+  const recoveryIds = (Array.isArray(detail?.recovery?.records) ? detail.recovery.records : [])
+    .map((row: any) => clean(row?.recordId,120))
+    .filter(Boolean);
+  const remainingCount = recoveryIds.filter((id: string) => !completedIds.has(id)).length;
+  const conflicts = preview.rows
+    .filter((row: any) => !row.safe && !row.restored)
+    .map((row: any) => ({
       recordId:row.recordId,
       clientName:row.clientName,
       reason:row.reason,
-    })),
+    }));
+
+  const rollback = {
+    status: remainingCount === 0 ? 'completed' : 'partial',
+    completedAt,
+    actor:clean(actor,180),
+    restored:cumulativeRestored,
+    deleted:cumulativeDeleted,
+    conflicts,
+    remainingCount,
+    attempts:[...(Array.isArray(previousRollback?.attempts) ? previousRollback.attempts : []), attempt].slice(-250),
   };
   const nextDetail = { ...detail, rollback };
   await integrations.setJSON('quickbooks/manual-sync-history/' + clean(syncId,120), nextDetail);
@@ -832,5 +915,12 @@ export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: s
     ));
   }
 
-  return { ...rollback, syncId:clean(syncId,120), crmOnly:true };
+  return {
+    ...attempt,
+    status:rollback.status,
+    remainingCount,
+    conflicts,
+    syncId:clean(syncId,120),
+    crmOnly:true,
+  };
 }
