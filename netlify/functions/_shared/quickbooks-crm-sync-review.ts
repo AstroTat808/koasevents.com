@@ -802,9 +802,7 @@ export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: s
     }
   }
 
-  const nextRecords = [...byId.values()]
-    .sort((a: any, b: any) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')))
-    .slice(0, 1500);
+  const nextRecords = [...byId.values()].slice(0, 1500);
   await sales.setJSON('records/index', nextRecords);
 
   const integrations = integrationStore(context);
