@@ -1,3 +1,4 @@
+import { resolveTenant } from './tenant';
 export type EmailBrandKey = 'events' | 'mobile';
 
 type BrandableRecord = {
@@ -39,7 +40,8 @@ export function emailBrandForRecord(record: BrandableRecord = {}): EmailBrandKey
 }
 
 export function emailBrandName(brand: EmailBrandKey) {
-  return brand === 'mobile' ? 'Koa’s Mobile Bar' : 'Koa’s Events';
+  const tenant=resolveTenant();
+  return brand === 'mobile' ? (tenant.brand.mobileName||tenant.displayName) : tenant.displayName;
 }
 
 const EMAIL_LOGO_CONTENT_ID = 'koa-email-logo';
@@ -160,6 +162,12 @@ export type EmailSignaturePerson = {
 };
 
 export function emailSignature(person: EmailSignaturePerson = {}) {
+  const tenant=resolveTenant();
+  const teamName=tenant.displayName+' Team';
+  const contactEmail=tenant.contact.email;
+  const phoneDisplay=tenant.contact.phoneDisplay;
+  const phoneHref=String(tenant.contact.phone||'').replace(/[^+\d]/g,'');
+  const domain=tenant.domains.primary;
   const name = String(person.name || '').trim();
   const title = String(person.title || '').trim();
   const pronouns = String(person.pronouns || '').trim();
@@ -174,8 +182,8 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
       (showPronouns && pronouns ? '<div style="font-size:12px;line-height:18px;color:#66736d;">' + esc(pronouns) + '</div>' : '') +
       (showTitle && title ? '<div style="font-size:13px;line-height:20px;color:#66736d;">' + esc(title) + '</div>' : '') +
       (showRoleDescription && roleDescription ? '<div style="padding-top:2px;font-size:12px;line-height:18px;color:#66736d;">' + esc(roleDescription) + '</div>' : '') +
-      (showTeamTitle ? '<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700;color:#173d30;">Koa’s Events Team</div>' : '')
-    : '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">Koa’s Events Team</div>';
+      (showTeamTitle ? '<div style="padding-top:3px;font-size:13px;line-height:20px;font-weight:700;color:#173d30;">' + esc(teamName) + '</div>' : '')
+    : '<div style="padding-top:2px;font-size:15px;line-height:22px;font-weight:800;">' + esc(teamName) + '</div>';
 
   return (
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;border-top:1px solid #ece7dc;border-collapse:collapse;">' +
@@ -202,6 +210,7 @@ export function emailSignature(person: EmailSignaturePerson = {}) {
 }
 
 export function emailSignatureText(person: EmailSignaturePerson = {}) {
+  const tenant=resolveTenant();
   const name = String(person.name || '').trim();
   const title = String(person.title || '').trim();
   const pronouns = String(person.pronouns || '').trim();
@@ -210,21 +219,22 @@ export function emailSignatureText(person: EmailSignaturePerson = {}) {
   const showTeamTitle = person.showTeamTitle !== false;
   const showPronouns = person.showPronouns === true;
   const showRoleDescription = person.showRoleDescription === true;
+  const teamName=tenant.displayName+' Team';
   const identity = name
     ? [
         name,
         ...(showPronouns && pronouns ? [pronouns] : []),
         ...(showTitle && title ? [title] : []),
         ...(showRoleDescription && roleDescription ? [roleDescription] : []),
-        ...(showTeamTitle ? ['Koa’s Events Team'] : []),
+        ...(showTeamTitle ? [teamName] : []),
       ]
-    : ['Koa’s Events Team'];
+    : [teamName];
   return [
     'Mahalo,',
     '',
     ...identity,
-    '✉ aloha@koasevents.com',
-    '☎ (844) 808-KOAS',
-    '↗ www.koasevents.com',
+    '✉ '+tenant.contact.email,
+    '☎ '+tenant.contact.phoneDisplay,
+    '↗ '+tenant.domains.primary,
   ].join('\n');
 }
