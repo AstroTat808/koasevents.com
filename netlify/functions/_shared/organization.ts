@@ -31,6 +31,16 @@ export type OrganizationTemplate = {
   updatedAt: string;
 };
 
+export type OrganizationIntegration = {
+  provider: 'quickbooks' | 'signwell' | 'resend' | 'microsoft' | 'stripe';
+  enabled: boolean;
+  status: 'not_configured' | 'configured' | 'connected' | 'attention';
+  remoteAccountId: string;
+  remoteAccountName: string;
+  connectedAt: string;
+  lastVerifiedAt: string;
+};
+
 export type OrganizationSubscription = {
   provider: 'stripe';
   status: 'not_configured' | 'trialing' | 'active' | 'past_due' | 'canceled';
@@ -80,6 +90,7 @@ export type OrganizationRecord = {
   venues: OrganizationVenue[];
   domains: OrganizationDomain[];
   featureFlags: Record<string, boolean>;
+  integrations: OrganizationIntegration[];
   templates: OrganizationTemplate[];
   subscription: OrganizationSubscription;
   onboarding: {
@@ -209,6 +220,13 @@ function organizationFromProfile(profile: TenantProfile): OrganizationRecord {
         : []),
     ],
     featureFlags: {},
+    integrations: [
+      { provider:'quickbooks', enabled:true, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'signwell', enabled:true, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'resend', enabled:true, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'microsoft', enabled:true, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'stripe', enabled:true, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+    ],
     templates: [],
     subscription: defaultSubscription(profile),
     onboarding: {
