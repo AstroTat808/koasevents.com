@@ -11,7 +11,9 @@ import {
 import {
   addRecordToQuickBooksMatchIndexes,
   buildQuickBooksCustomerMatchEvidence,
+  buildQuickBooksCrmSyncReconciliation,
   buildQuickBooksMatchIndexes,
+  getLastQuickBooksCrmSyncPreview,
   getQuickBooksMatchOverrides,
   recordQuickBooksCrmSyncHistory,
   resolveQuickBooksCustomerMatch,
@@ -655,6 +657,9 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   let skippedCapacity = 0;
   let skippedAmbiguous = 0;
   let skippedUnapprovedNew = 0;
+  let skippedExcluded = 0;
+  const customerOutcomes: any[] = [];
+  const outboundOutcomes: any[] = [];
 
   for (const customer of customers) {
     const customerId = clean(customer?.Id, 100);
@@ -665,8 +670,25 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     const paymentRows = paymentGroups.get(customerId) || [];
     const matchEvidence = buildQuickBooksCustomerMatchEvidence(estimateRows, invoiceRows, paymentRows);
     const match = resolveQuickBooksCustomerMatch(customer, matchIndexes, matchOverrides, matchEvidence);
+    if (match.status === 'excluded') {
+      skippedExcluded += 1;
+      customerOutcomes.push({
+        customerId,
+        name: clean(customer?.DisplayName, 240),
+        outcome: 'excluded',
+        recordId: '',
+        detail: clean(match?.exclusion?.reason || 'Excluded from CRM synchronization by staff.', 500),
+      });
+      continue;
+    }
     if (match.status === 'ambiguous') {
       skippedAmbiguous += 1;
+      customerOutcomes.push({
+        customerId,
+        name: clean(customer?.DisplayName, 240),
+        outcome: 'blocked_duplicate',
+        recordId: '',
+      });
       conflicts.push({
         type: 'ambiguous-customer-match',
         quickBooksCustomerId: customerId,
@@ -680,6 +702,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     }
     if (match.status === 'new') {
       skippedUnapprovedNew += 1;
+      customerOutcomes.push({
+        customerId,
+        name: clean(customer?.DisplayName, 240),
+        outcome: 'skip_unapproved',
+        recordId: '',
+      });
       conflicts.push({
         type: 'unapproved-new-customer',
         quickBooksCustomerId: customerId,
@@ -697,6 +725,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     if (!record) {
       if (records.length >= CRM_RECORD_LIMIT) {
         skippedCapacity += 1;
+        customerOutcomes.push({
+          customerId,
+          name: clean(customer?.DisplayName, 240),
+          outcome: 'skip_capacity',
+          recordId: '',
+        });
         continue;
       }
       let recordId = sanitizeQboRecordId(customerId);
@@ -749,6 +783,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
       matchedRecordIds.add(String(record.id));
       const existingCustomerId = clean(record?.accounting?.quickbooks?.customerId, 100);
       if (existingCustomerId && existingCustomerId !== customerId) {
+        customerOutcomes.push({
+          customerId,
+          name: clean(customer?.DisplayName, 240),
+          outcome: 'blocked_link_conflict',
+          recordId: String(record.id),
+        });
         conflicts.push({
           type: 'customer-link',
           recordId: String(record.id),
@@ -769,6 +809,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     );
     addRecordToQuickBooksMatchIndexes(matchIndexes, record);
     changedRecordIds.add(String(record.id));
+    customerOutcomes.push({
+      customerId,
+      name: clean(customer?.DisplayName, 240),
+      outcome: beforeRecord ? 'match_refresh' : 'create',
+      recordId: clean(record.id, 120),
+    });
 
     const afterRecord = crmSyncSnapshot(record);
     if (!beforeRecord || JSON.stringify(beforeRecord) !== JSON.stringify(afterRecord)) {
@@ -816,6 +862,12 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
       const customerSync = await syncCustomerOutbound(context, record, customerById);
       if (customerSync.created) pushed.customersCreated += 1;
       if (customerSync.updated) pushed.customersUpdated += 1;
+      outboundOutcomes.push({
+        recordId:clean(record.id,120),
+        name:clean(record?.customer?.name,180),
+        type:'customer',
+        action:customerSync.created ? 'create' : customerSync.updated ? 'update' : 'no_change',
+      });
       changedRecordIds.add(String(record.id));
 
       const afterCustomer = qboCustomerSnapshot(customerSync.customer);
@@ -841,9 +893,22 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
         );
         if (estimateSync.reason === 'service-item-not-configured') {
           pushed.estimatesSkippedNoServiceItem += 1;
+          outboundOutcomes.push({
+            recordId:clean(record.id,120),
+            name:clean(record?.customer?.name,180),
+            type:'estimate',
+            action:'blocked',
+            reason:'service-item-not-configured',
+          });
         } else if (!estimateSync.skipped) {
           if (estimateSync.created) pushed.estimatesCreated += 1;
           else pushed.estimatesUpdated += 1;
+          outboundOutcomes.push({
+            recordId:clean(record.id,120),
+            name:clean(record?.customer?.name,180),
+            type:'estimate',
+            action:estimateSync.created ? 'create' : 'update',
+          });
 
           const afterEstimate = qboEstimateSnapshot(estimateSync.estimate);
           if (JSON.stringify(beforeEstimate) !== JSON.stringify(afterEstimate)) {
@@ -857,12 +922,27 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
               after: afterEstimate,
             });
           }
+        } else {
+          outboundOutcomes.push({
+            recordId:clean(record.id,120),
+            name:clean(record?.customer?.name,180),
+            type:'estimate',
+            action:'no_change',
+            reason:clean(estimateSync.reason,120),
+          });
         }
       }
     } catch (error) {
+      const message = error instanceof Error ? clean(error.message, 600) : 'QuickBooks outbound sync failed.';
+      outboundOutcomes.push({
+        recordId:clean(record?.id,120),
+        name:clean(record?.customer?.name,180),
+        type:'outbound',
+        action:'error',
+        reason:message,
+      });
       warnings.push(
-        clean(record?.customer?.name || record?.id, 180) + ': ' +
-        (error instanceof Error ? clean(error.message, 600) : 'QuickBooks outbound sync failed.'),
+        clean(record?.customer?.name || record?.id, 180) + ': ' + message,
       );
     }
   }
@@ -904,7 +984,10 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
       capacity: skippedCapacity,
       ambiguous: skippedAmbiguous,
       unapprovedNew: skippedUnapprovedNew,
+      excluded: skippedExcluded,
     },
+    customerOutcomes,
+    outboundOutcomes,
     conflicts,
     warnings,
     changes,
@@ -915,6 +998,21 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
       records: recoveryRecords,
     },
   };
+
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (preview?.previewId && clean(preview.previewId,120) === clean(previewId,120)) {
+    (result as any).reconciliation = buildQuickBooksCrmSyncReconciliation(preview, result);
+  } else {
+    (result as any).reconciliation = {
+      previewId:clean(previewId,120),
+      status:'attention',
+      deviationCount:1,
+      countComparisons:[],
+      customerComparisons:[],
+      outboundComparisons:[],
+      deviations:[{ type:'preview-unavailable', detail:'The exact Preview Sync snapshot was unavailable when post-sync reconciliation ran.' }],
+    };
+  }
 
   await writeRecords(context, records, changedRecordIds);
   const integrations = integrationStore(context);
