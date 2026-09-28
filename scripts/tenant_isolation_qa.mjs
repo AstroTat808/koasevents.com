@@ -140,6 +140,7 @@ const scheduledTenantJobs=[
   'netlify/functions/vendor-insurance-reminders.mts',
   'netlify/functions/post-deploy-verification.mts',
   'netlify/functions/review-requests.mts',
+  'netlify/functions/crm-lifecycle.mts',
 ];
 for(const file of scheduledTenantJobs){
   const text=source(file);
