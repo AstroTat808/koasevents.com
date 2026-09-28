@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantRows, tenantStore } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import {
   ADDON_CATALOG_MAPPING,
@@ -107,11 +108,7 @@ type SalesRecord = {
   booking?: Record<string, any>;
 };
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
+function storeFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
 
 function clean(value: unknown, max = 600) {
   return String(value ?? '').trim().slice(0, max);
@@ -584,7 +581,7 @@ function recalcDraftProposal(record:SalesRecord,catalogItemId:string,price:numbe
   const discountAmount = Math.min(subtotal,money(record.proposal.discountAmount));
   const taxableGross = nextLines.filter((line:any)=>line?.getExempt!==true).reduce((sum:number,line:any)=>sum+finite(line?.amount),0);
   const taxableAfterDiscount = subtotal>0 ? Math.max(0,taxableGross-(discountAmount*taxableGross/subtotal)) : 0;
-  const taxRate = 4.712;
+  const taxRate = resolveTenant().tax.customerRate;
   const taxAmount = money(taxableAfterDiscount*taxRate/100);
   const total = money(subtotal-discountAmount+taxAmount);
   const depositPercent = finite(record.proposal.depositPercent,0,100);
