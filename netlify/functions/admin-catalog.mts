@@ -482,7 +482,7 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
       item.category=expected.category;
       item.quickBooksType=expected.category==='rental'?'NonInventory':'Service';
       item.updatedAt=new Date().toISOString();
-      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the website catalog source.'});
+      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the tenant catalog source.'});
     }
     let live=item.quickBooksItemId?qboById.get(item.quickBooksItemId):null;
     if(!live){
@@ -686,14 +686,15 @@ export async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
 export default async (req:Request, context:Context)=>{
   const auth=await requireCapability('sales.view',req);
   if(auth.response)return auth.response;
+  const tenant=resolveTenant(req);
 
   if(req.method==='GET'){
     const [catalog,imports,priceHistory]=await Promise.all([
-      ensureWebsiteCatalog(context),
+      ensureWebsiteCatalog(context,tenant),
       readImportHistory(context),
       getCatalogPriceHistory(context,{limit:150}),
     ]);
-    return Response.json({catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({tenant:clientTenantProfile(tenant),catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
 
@@ -703,15 +704,15 @@ export default async (req:Request, context:Context)=>{
 
   if(action==='item-usage'){
     const id=clean(payload?.id,80);
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const item=catalog.find(entry=>entry.id===id);
     if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
-    return Response.json({ok:true,usage:await itemUsage(context,item)},{headers:{'Cache-Control':'private, no-store'}});
+    return Response.json({ok:true,usage:await itemUsage(context,item,tenant)},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='run-audit'){
-    const catalog=await ensureWebsiteCatalog(context);
-    return Response.json({ok:true,audit:await runCatalogAudit(context,catalog)},{headers:{'Cache-Control':'private, no-store'}});
+    const catalog=await ensureWebsiteCatalog(context,tenant);
+    return Response.json({ok:true,audit:await runCatalogAudit(context,catalog,tenant)},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(!hasCapability(auth.user,'sales.profit_settings')){
@@ -719,18 +720,18 @@ export default async (req:Request, context:Context)=>{
   }
 
   if(action==='reconcile-safe-audit'){
-    const catalog=await ensureWebsiteCatalog(context);
-    const result=await reconcileSafeCatalogIssues(context,catalog,actor);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
+    const result=await reconcileSafeCatalogIssues(context,catalog,actor,tenant);
     return Response.json({ok:true,...result});
   }
 
   if(action==='refresh-website-catalog'){
-    const result=await refreshWebsiteCatalog(context,actor);
+    const result=await refreshWebsiteCatalog(context,tenant,actor);
     return Response.json({ok:true,...result});
   }
 
   if(action==='save-item'){
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const input=payload?.item||{};
     const requestedId=clean(input.id,80);
     const name=clean(input.name,100);
@@ -768,7 +769,7 @@ export default async (req:Request, context:Context)=>{
 
   if(action==='archive-item'){
     const id=clean(payload?.id,80);
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const item=catalog.find((entry)=>entry.id===id);
     if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
     const next=await saveQuickBooksCatalog(
@@ -787,7 +788,7 @@ export default async (req:Request, context:Context)=>{
     if(!mapping.name){
       return Response.json({error:'Map one source column to Name before importing.',headers:file.headers,suggestedMapping:suggestMapping(file.headers)},{status:400});
     }
-    const catalog=await ensureWebsiteCatalog(context);
+    const catalog=await ensureWebsiteCatalog(context,tenant);
     const rows=buildImportRows(file.rows,mapping,defaultGroup,catalog);
     const summary={
       rows:rows.length,
