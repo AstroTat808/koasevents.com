@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export const ADDON_CATALOG_MAPPING: Record<string, string> = {
   'mobile-bar-upgrade': 'mobile-bar-upgrade',
@@ -23,9 +24,7 @@ export type PublishedAddOnPrice = {
 };
 
 function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function finite(value: unknown, min = 0, max = 10_000_000) {
