@@ -101,6 +101,7 @@ export type TenantProfile = {
       security: string;
       systemHealth: string;
       calendarSync: string;
+      userPreferences: string;
       workspaceAlerts: string;
     };
   };
