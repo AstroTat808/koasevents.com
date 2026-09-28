@@ -289,6 +289,50 @@ function checkCatalogFeatureContracts() {
   }
 }
 
+
+function checkAccountingSafetyContracts() {
+  const contracts = [
+    ['netlify/functions/_shared/quickbooks-accounting-invariant.mjs', [
+      ['representative $15,706.80 invariant', 'expectedTotal = 15706.80'],
+      ['milestone NON tax code', "TaxCodeRef: { value: 'NON' }"],
+      ['runtime invariant evaluator', 'export function evaluateAccountingTaxInvariant'],
+      ['live NON tax-code inspector', 'export function inspectQuickBooksNonTaxCode'],
+    ]],
+    ['netlify/functions/admin-quickbooks.mts', [
+      ['paid invoice repair protection', 'Paid and partially paid invoices are protected'],
+      ['invoice stale-state guard', 'changed after approval preview'],
+      ['unpaid milestone invoice updater', 'async function updateUnpaidMilestoneInvoice'],
+      ['repair history persistence', 'qbo.repairHistory = [repairEntry'],
+      ['repair resolved result', 'resolved,'],
+    ]],
+    ['src/pages/admin/clients/index.astro', [
+      ['Accounting Repair History section', 'Accounting Repair History'],
+      ['repair history renderer', 'function renderRepairHistory'],
+      ['paid/partial invoice approval warning', 'refuse any invoice that is paid or partially paid'],
+    ]],
+    ['netlify/functions/_shared/system-health.ts', [
+      ['accounting invariant health component', "id:'quickbooks-tax-invariant'"],
+      ['accounting invariant runtime probe', 'async function quickBooksTaxInvariantHealthCheck'],
+      ['accounting invariant live QBO query', "select * from TaxCode maxresults 100"],
+    ]],
+    ['scripts/test_quickbooks_accounting_regression.mjs', [
+      ['exact $15,706.80 regression assertion', '15706.80'],
+      ['milestone invoice NON regression', 'Milestone invoice line must be explicitly non-taxable.'],
+    ]],
+  ];
+
+  for (const [file, requirements] of contracts) {
+    if (!fs.existsSync(file)) {
+      failures.push(file + ': required accounting safety source is missing');
+      continue;
+    }
+    const text = fs.readFileSync(file, 'utf8');
+    for (const [label, needle] of requirements) {
+      if (!text.includes(needle)) failures.push(file + ': missing ' + label + ' contract: ' + needle);
+    }
+  }
+}
+
 function checkScript(file) {
   const text = fs.readFileSync(file, 'utf8');
   const kind = file.endsWith('.tsx') || file.endsWith('.jsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS;
@@ -359,6 +403,7 @@ for (const file of roots.flatMap(walk)) {
 checkEmailCompatibility();
 checkEmailFeatureContracts();
 checkCatalogFeatureContracts();
+checkAccountingSafetyContracts();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
