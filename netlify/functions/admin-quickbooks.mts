@@ -1112,7 +1112,7 @@ export default async (req: Request, context: Context) => {
 
   const auth = await requireCapability('quickbooks.view', req);
   if (auth.response) return auth.response;
-  const tenant = resolveTenant(req);
+  const tenant = auth.tenant || resolveTenant(req);
   const taxDefaults = tenantTaxDefaults(tenant);
 
   if (req.method === 'GET') {
