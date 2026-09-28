@@ -8,7 +8,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <strong class="text-[var(--koa-forest)]">CRM access required.</strong>
       </div>
 
-      <div data-client-record-id={id} class="hidden"></div>\n      <div data-app class="hidden">
+      <div data-client-record-id={id} class="hidden"></div>
+      <div data-app class="hidden">
         <header class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
           <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
@@ -131,10 +132,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
 
-    const app=document.querySelector('[data-app]');\n    const clientRecordId=new URL(location.href).searchParams.get('id')||'';
+    const app=document.querySelector('[data-app]');
+    const clientRecordId=new URL(location.href).searchParams.get('id')||'';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const message=document.querySelector('[data-message]');
-    let record=null;\n    let crmPayload=null;
+    let record=null;
+    let crmPayload=null;
 
     const money=(v)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(v||0));
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
