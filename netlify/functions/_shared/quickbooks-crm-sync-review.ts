@@ -1,6 +1,7 @@
 // Release marker: QuickBooks exclusion reasons, bulk cleanup, and suggested exclusions.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant, tenantBlobStoreName } from './tenant';
 import {
   configuredServiceItemId,
   getQuickBooksSettings,
@@ -15,17 +16,23 @@ const PREVIEW_MAX_AGE_MS = 30 * 60 * 1000;
 const MATCH_OVERRIDES_KEY = 'quickbooks/customer-match-overrides';
 const PREVIEW_LAST_KEY = 'quickbooks/sync-preview-last';
 const HISTORY_INDEX_KEY = 'quickbooks/manual-sync-history/index';
+const SUGGESTED_EXCLUSION_RULES_KEY = 'quickbooks/suggested-exclusion-rules';
+const SUGGESTED_EXCLUSION_DISMISSALS_KEY = 'quickbooks/suggested-exclusion-dismissals';
 
 function salesStore(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'sales');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function integrationStore(context: Context) {
+  const tenant = resolveTenant();
+  const name = tenantBlobStoreName(tenant, 'integrations');
   return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+    ? getStore({ name, consistency: 'strong' })
+    : getDeployStore({ name });
 }
 
 function clean(value: unknown, max = 1200) {
@@ -35,6 +42,7 @@ function clean(value: unknown, max = 1200) {
 export const QUICKBOOKS_EXCLUSION_REASONS = [
   { code:'quickbooks_test_customer', label:'QuickBooks test customer' },
   { code:'square_system_customer', label:'Square system customer' },
+  { code:'system_customer', label:'System / integration customer' },
   { code:'vendor_non_client', label:'Vendor / non-client' },
   { code:'duplicate', label:'Duplicate' },
   { code:'other', label:'Other' },
@@ -64,60 +72,210 @@ function inferredStoredExclusionReasonCode(override: any): QuickBooksExclusionRe
   ) return 'quickbooks_test_customer';
   const reason = clean(override?.exclusionReason, 500).toLowerCase();
   if (reason.includes('vendor') || reason.includes('non-client') || reason.includes('non client')) return 'vendor_non_client';
+  if (reason.includes('system') || reason.includes('integration')) return 'system_customer';
   if (reason.includes('duplicate')) return 'duplicate';
   return 'other';
 }
 
-function suggestedQuickBooksExclusion(customer: any) {
-  const rawName = baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName, 240);
-  const name = normalizeQuickBooksMatchName(rawName);
-  const notes = clean(customer?.Notes, 4000).toLowerCase();
+export type QuickBooksSuggestedExclusionRule = {
+  id: string;
+  enabled: boolean;
+  field: 'name' | 'notes';
+  operator: 'exact' | 'contains';
+  value: string;
+  reasonCode: QuickBooksExclusionReasonCode;
+};
 
-  if (name === 'square customer') {
+const DEFAULT_QUICKBOOKS_SUGGESTED_EXCLUSION_RULES: QuickBooksSuggestedExclusionRule[] = [
+  { id:'default-square-customer', enabled:true, field:'name', operator:'exact', value:'Square Customer', reasonCode:'square_system_customer' },
+  { id:'default-sample-customer', enabled:true, field:'name', operator:'exact', value:'Sample Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-test-customer', enabled:true, field:'name', operator:'exact', value:'Test Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-quickbooks-test-customer', enabled:true, field:'name', operator:'exact', value:'QuickBooks Test Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-qbo-test-customer', enabled:true, field:'name', operator:'exact', value:'QBO Test Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-quickbooks-sample-customer', enabled:true, field:'name', operator:'exact', value:'QuickBooks Sample Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-test-customer', enabled:true, field:'name', operator:'contains', value:'Test Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-sample-customer', enabled:true, field:'name', operator:'contains', value:'Sample Customer', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-quickbooks-test', enabled:true, field:'name', operator:'contains', value:'QuickBooks Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-qbo-test', enabled:true, field:'name', operator:'contains', value:'QBO Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-sandbox-test', enabled:true, field:'name', operator:'contains', value:'Sandbox Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-name-smoke-test', enabled:true, field:'name', operator:'contains', value:'Smoke Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-notes-quickbooks-test', enabled:true, field:'notes', operator:'contains', value:'QuickBooks Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-notes-qbo-test', enabled:true, field:'notes', operator:'contains', value:'QBO Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-notes-sandbox-test', enabled:true, field:'notes', operator:'contains', value:'Sandbox Test', reasonCode:'quickbooks_test_customer' },
+  { id:'default-notes-smoke-test', enabled:true, field:'notes', operator:'contains', value:'Smoke Test', reasonCode:'quickbooks_test_customer' },
+];
+
+function normalizeSuggestedRuleValue(value: unknown) {
+  return normalizeQuickBooksMatchName(clean(value, 160));
+}
+
+function normalizeSuggestedExclusionRule(input: any, index = 0): QuickBooksSuggestedExclusionRule | null {
+  const field = clean(input?.field, 20) as 'name'|'notes';
+  const operator = clean(input?.operator, 20) as 'exact'|'contains';
+  const value = clean(input?.value, 160);
+  const reasonCode = normalizeQuickBooksExclusionReasonCode(input?.reasonCode);
+  if (!['name','notes'].includes(field) || !['exact','contains'].includes(operator) || !value || !reasonCode) return null;
+  const rawId = clean(input?.id, 100).replace(/[^A-Za-z0-9_.:-]/g,'-').replace(/-+/g,'-');
+  return {
+    id:rawId || ('custom-' + Date.now().toString(36) + '-' + String(index + 1)),
+    enabled:input?.enabled !== false,
+    field,
+    operator,
+    value,
+    reasonCode,
+  };
+}
+
+function suggestedExclusionRuleSignature(rule: QuickBooksSuggestedExclusionRule) {
+  return [
+    clean(rule.id,100),
+    rule.field,
+    rule.operator,
+    normalizeSuggestedRuleValue(rule.value),
+    rule.reasonCode,
+  ].join('|');
+}
+
+function defaultSuggestedExclusionRules() {
+  return DEFAULT_QUICKBOOKS_SUGGESTED_EXCLUSION_RULES.map((rule) => ({ ...rule }));
+}
+
+export async function getQuickBooksSuggestedExclusionRules(context: Context) {
+  const stored = await integrationStore(context).get(SUGGESTED_EXCLUSION_RULES_KEY, { type:'json' }) as any;
+  if (!Array.isArray(stored)) return defaultSuggestedExclusionRules();
+  return stored
+    .slice(0,100)
+    .map((rule: any, index: number) => normalizeSuggestedExclusionRule(rule,index))
+    .filter(Boolean) as QuickBooksSuggestedExclusionRule[];
+}
+
+export async function saveQuickBooksSuggestedExclusionRules(context: Context, input: any[]) {
+  const source = Array.isArray(input) ? input.slice(0,100) : [];
+  const rules = source
+    .map((rule,index) => normalizeSuggestedExclusionRule(rule,index))
+    .filter(Boolean) as QuickBooksSuggestedExclusionRule[];
+  if (rules.length !== source.length) throw new Error('Every suggested-exclusion rule needs a match field, condition, value and exclusion classification.');
+
+  const seenIds = new Set<string>();
+  for (const rule of rules) {
+    if (seenIds.has(rule.id)) throw new Error('Suggested-exclusion rule IDs must be unique.');
+    seenIds.add(rule.id);
+  }
+
+  const store = integrationStore(context);
+  await store.setJSON(SUGGESTED_EXCLUSION_RULES_KEY, rules);
+  // A rule edit changes classification intent. Re-review previously dismissed suggestions against the new rule set.
+  await store.setJSON(SUGGESTED_EXCLUSION_DISMISSALS_KEY, {});
+  return rules;
+}
+
+export async function resetQuickBooksSuggestedExclusionRules(context: Context) {
+  const store = integrationStore(context);
+  await store.delete(SUGGESTED_EXCLUSION_RULES_KEY);
+  await store.setJSON(SUGGESTED_EXCLUSION_DISMISSALS_KEY, {});
+  return defaultSuggestedExclusionRules();
+}
+
+export async function getQuickBooksSuggestedExclusionDismissals(context: Context) {
+  return ((await integrationStore(context).get(SUGGESTED_EXCLUSION_DISMISSALS_KEY, { type:'json' })) || {}) as Record<string, Record<string, any>>;
+}
+
+export async function getQuickBooksSuggestedExclusionDismissalCount(context: Context) {
+  const dismissals = await getQuickBooksSuggestedExclusionDismissals(context);
+  return Object.values(dismissals).reduce((sum, rows) => sum + Object.keys(rows || {}).length, 0);
+}
+
+export async function clearQuickBooksSuggestedExclusionDismissals(context: Context) {
+  await integrationStore(context).setJSON(SUGGESTED_EXCLUSION_DISMISSALS_KEY, {});
+  return { cleared:true };
+}
+
+function ruleMatchesQuickBooksCustomer(customer: any, rule: QuickBooksSuggestedExclusionRule) {
+  if (!rule.enabled) return false;
+  const raw = rule.field === 'name'
+    ? (baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName,240))
+    : clean(customer?.Notes,4000);
+  const source = normalizeSuggestedRuleValue(raw);
+  const target = normalizeSuggestedRuleValue(rule.value);
+  if (!source || !target) return false;
+  if (rule.operator === 'exact') return source === target;
+  return (' ' + source + ' ').includes(' ' + target + ' ');
+}
+
+function suggestedQuickBooksExclusion(
+  customer: any,
+  rules: QuickBooksSuggestedExclusionRule[],
+  dismissals: Record<string, Record<string, any>> = {},
+) {
+  const customerId = clean(customer?.Id,100);
+  for (const rule of Array.isArray(rules) ? rules : []) {
+    if (!ruleMatchesQuickBooksCustomer(customer,rule)) continue;
+    const signature = suggestedExclusionRuleSignature(rule);
+    if (customerId && dismissals?.[customerId]?.[signature]) continue;
+    const fieldLabel = rule.field === 'name' ? 'customer name' : 'QuickBooks notes';
+    const operatorLabel = rule.operator === 'exact' ? 'exactly matched' : 'contained';
     return {
-      code:'square_system_customer' as QuickBooksExclusionReasonCode,
-      label:quickBooksExclusionReasonLabel('square_system_customer'),
+      code:rule.reasonCode,
+      label:quickBooksExclusionReasonLabel(rule.reasonCode),
       confidence:'high',
-      reason:'The QuickBooks display name exactly matches the common Square system customer record.',
-      evidence:['exact_name:square_customer'],
+      reason:'Configured rule "' + clean(rule.value,160) + '" ' + operatorLabel + ' the ' + fieldLabel + '.',
+      evidence:[
+        'configured_rule:' + clean(rule.id,100),
+        rule.field + ':' + rule.operator + ':' + normalizeSuggestedRuleValue(rule.value),
+      ],
+      ruleId:clean(rule.id,100),
+      ruleField:rule.field,
+      ruleOperator:rule.operator,
+      ruleValue:clean(rule.value,160),
+      ruleSignature:signature,
+      configurable:true,
       requiresApproval:true,
       autoApplied:false,
     };
   }
-
-  const exactTestNames = new Set([
-    'sample customer',
-    'test customer',
-    'quickbooks test customer',
-    'qbo test customer',
-    'quickbooks sample customer',
-  ]);
-  const strongNameSignal =
-    exactTestNames.has(name) ||
-    /(?:^|\s)(?:qbo|quickbooks|sandbox|smoke)\s+test(?:\s|$)/.test(name) ||
-    /(?:^|\s)test\s+customer(?:\s|$)/.test(name) ||
-    /(?:^|\s)sample\s+customer(?:\s|$)/.test(name);
-  const notesSignal = /(?:quickbooks|qbo|sandbox|smoke)\s+test/.test(notes);
-
-  if (strongNameSignal || notesSignal) {
-    const evidence = [
-      strongNameSignal ? 'test_name_pattern' : '',
-      notesSignal ? 'test_notes_pattern' : '',
-    ].filter(Boolean);
-    return {
-      code:'quickbooks_test_customer' as QuickBooksExclusionReasonCode,
-      label:quickBooksExclusionReasonLabel('quickbooks_test_customer'),
-      confidence:'high',
-      reason:strongNameSignal
-        ? 'The QuickBooks customer name matches a strong test/sample customer pattern.'
-        : 'QuickBooks notes contain a strong test-record marker.',
-      evidence,
-      requiresApproval:true,
-      autoApplied:false,
-    };
-  }
-
   return null;
+}
+
+export async function dismissQuickBooksSuggestedExclusion(
+  context: Context,
+  input: { previewId:string; customerId:string; ruleSignature?:string },
+  actor = '',
+) {
+  const previewId = clean(input.previewId,120);
+  const customerId = clean(input.customerId,100);
+  if (!previewId || !customerId) throw new Error('Preview Sync and QuickBooks customer are required.');
+
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
+    throw new Error('That Preview Sync is no longer current. Run Preview Sync again.');
+  }
+  const generatedAt = Date.parse(String(preview.generatedAt || ''));
+  if (!generatedAt || Date.now() - generatedAt > PREVIEW_MAX_AGE_MS) {
+    throw new Error('The Preview Sync is older than 30 minutes. Run Preview Sync again.');
+  }
+  const plan = (Array.isArray(preview.customerPlans) ? preview.customerPlans : []).find((row: any) => clean(row?.customerId,100) === customerId);
+  const suggestion = plan?.suggestedExclusion;
+  if (!suggestion?.ruleSignature) throw new Error('That customer no longer has a suggested exclusion.');
+  const requestedSignature = clean(input.ruleSignature,500);
+  if (requestedSignature && requestedSignature !== clean(suggestion.ruleSignature,500)) {
+    throw new Error('The suggested-exclusion rule changed. Run Preview Sync again before reviewing it.');
+  }
+
+  const store = integrationStore(context);
+  const dismissals = await getQuickBooksSuggestedExclusionDismissals(context);
+  dismissals[customerId] ||= {};
+  dismissals[customerId][clean(suggestion.ruleSignature,500)] = {
+    customerId,
+    customerName:clean(plan?.qbo?.name,240),
+    ruleId:clean(suggestion.ruleId,100),
+    ruleSignature:clean(suggestion.ruleSignature,500),
+    ruleValue:clean(suggestion.ruleValue,160),
+    reasonCode:normalizeQuickBooksExclusionReasonCode(suggestion.code) || 'other',
+    dismissedAt:new Date().toISOString(),
+    dismissedBy:clean(actor,180),
+  };
+  await store.setJSON(SUGGESTED_EXCLUSION_DISMISSALS_KEY,dismissals);
+  return { customerId, dismissed:true, dismissal:dismissals[customerId][clean(suggestion.ruleSignature,500)] };
 }
 
 function isoDate(value: unknown) {
@@ -1288,13 +1446,15 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
   const generatedAt = new Date().toISOString();
   const store = salesStore(context);
   const records = (((await store.get('records/index', { type: 'json' })) || []) as any[]).filter(Boolean).slice(0, CRM_RECORD_LIMIT);
-  const [customers, estimates, invoices, payments, overrides, settings] = await Promise.all([
+  const [customers, estimates, invoices, payments, overrides, settings, suggestedExclusionRules, suggestedExclusionDismissals] = await Promise.all([
     qboRows(context, 'Customer'),
     qboRows(context, 'Estimate'),
     qboRows(context, 'Invoice'),
     qboRows(context, 'Payment'),
     getQuickBooksMatchOverrides(context),
     getQuickBooksSettings(context),
+    getQuickBooksSuggestedExclusionRules(context),
+    getQuickBooksSuggestedExclusionDismissals(context),
   ]);
 
   const indexes = buildQuickBooksMatchIndexes(records);
@@ -1314,7 +1474,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     );
     const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides, evidence);
     const suggestedExclusion = ['new','ambiguous'].includes(match.status)
-      ? suggestedQuickBooksExclusion(customer)
+      ? suggestedQuickBooksExclusion(customer, suggestedExclusionRules, suggestedExclusionDismissals)
       : null;
     let predictedRecordId = '';
     if (['new','approved_new'].includes(match.status)) {
@@ -1415,6 +1575,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     activeSyncCustomers: customerPlans.filter((row) => row.decision !== 'excluded').length,
     excludedCustomers: customerPlans.filter((row) => row.decision === 'excluded').length,
     suggestedExclusions: customerPlans.filter((row) => Boolean(row.suggestedExclusion)).length,
+    suggestedExclusionRuleCount: suggestedExclusionRules.filter((rule) => rule.enabled).length,
+    suggestedExclusionDismissalCount: Object.values(suggestedExclusionDismissals).reduce((sum, rows) => sum + Object.keys(rows || {}).length, 0),
     linked: customerPlans.filter((row) => row.decision === 'linked').length,
     matched: customerPlans.filter((row) => ['auto_match','approved_match'].includes(row.decision)).length,
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
@@ -1510,6 +1672,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     executionSummary,
     executionDetails,
     exclusionReasons: QUICKBOOKS_EXCLUSION_REASONS,
+    suggestedExclusionRuleCount: suggestedExclusionRules.length,
+    suggestedExclusionDismissalCount: Object.values(suggestedExclusionDismissals).reduce((sum, rows) => sum + Object.keys(rows || {}).length, 0),
     exclusionReport,
     customerPlans,
     outbound,

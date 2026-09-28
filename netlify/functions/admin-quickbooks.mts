@@ -15,6 +15,12 @@ import {
   saveQuickBooksMatchOverride,
   saveQuickBooksBulkNewOverrides,
   saveQuickBooksBulkExclusionOverrides,
+  getQuickBooksSuggestedExclusionRules,
+  getQuickBooksSuggestedExclusionDismissalCount,
+  saveQuickBooksSuggestedExclusionRules,
+  resetQuickBooksSuggestedExclusionRules,
+  dismissQuickBooksSuggestedExclusion,
+  clearQuickBooksSuggestedExclusionDismissals,
   validateQuickBooksCrmSyncPreview,
 } from './_shared/quickbooks-crm-sync-review';
 import {
@@ -674,7 +680,7 @@ export default async (req: Request, context: Context) => {
       return Response.json({ error:'Choose CSV or PDF export format.' }, { status:400 });
     }
 
-    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview] = await Promise.all([
+    const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview, suggestedExclusionRules, suggestedExclusionDismissalCount] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
@@ -689,6 +695,8 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
       getLastQuickBooksCrmSync(context),
       getLastQuickBooksCrmSyncPreview(context),
+      getQuickBooksSuggestedExclusionRules(context),
+      getQuickBooksSuggestedExclusionDismissalCount(context),
     ]);
     const records = await readQuickBooksSalesRecords(context);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
@@ -733,6 +741,8 @@ export default async (req: Request, context: Context) => {
       productionLinkedTest: productionLinkedTest || null,
       manualSync: manualSync || null,
       manualSyncPreview: manualSyncPreview || null,
+      suggestedExclusionRules,
+      suggestedExclusionDismissalCount,
       accountingAudit,
       smokeWebhookMatch,
     }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -749,6 +759,50 @@ export default async (req: Request, context: Context) => {
     const preview = await buildQuickBooksCrmSyncPreview(context, actor);
     return Response.json({ ok:true, preview }, { headers:{ 'Cache-Control':'private, no-store' } });
   }
+  if (action === 'save-suggested-exclusion-rules') {
+    try {
+      const rules = await saveQuickBooksSuggestedExclusionRules(
+        context,
+        Array.isArray(payload?.rules) ? payload.rules : [],
+      );
+      return Response.json({
+        ok:true,
+        rules,
+        suggestedExclusionDismissalCount:0,
+      }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to save suggested-exclusion rules.' }, { status:400 });
+    }
+  }
+
+  if (action === 'reset-suggested-exclusion-rules') {
+    const rules = await resetQuickBooksSuggestedExclusionRules(context);
+    return Response.json({
+      ok:true,
+      rules,
+      suggestedExclusionDismissalCount:0,
+    }, { headers:{ 'Cache-Control':'private, no-store' } });
+  }
+
+  if (action === 'dismiss-suggested-exclusion') {
+    try {
+      const result = await dismissQuickBooksSuggestedExclusion(context, {
+        previewId: clean(payload?.previewId,120),
+        customerId: clean(payload?.customerId,100),
+        ruleSignature: clean(payload?.ruleSignature,500),
+      }, actor);
+      const suggestedExclusionDismissalCount = await getQuickBooksSuggestedExclusionDismissalCount(context);
+      return Response.json({ ok:true, result, suggestedExclusionDismissalCount }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to keep this customer in normal review.' }, { status:409 });
+    }
+  }
+
+  if (action === 'clear-suggested-exclusion-dismissals') {
+    await clearQuickBooksSuggestedExclusionDismissals(context);
+    return Response.json({ ok:true, suggestedExclusionDismissalCount:0 }, { headers:{ 'Cache-Control':'private, no-store' } });
+  }
+
 
   if (action === 'save-customer-match') {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
