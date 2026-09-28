@@ -28,6 +28,18 @@ export type HealthCheck = {
   detail: string;
   severity?: 'green' | 'yellow' | 'red' | 'info';
   issueType?: HealthIssueType | null;
+  accountingDetails?: {
+    expectedSubtotal: number;
+    expectedTax: number;
+    expectedTotal: number;
+    actualTotal: number;
+    taxablePayload: number;
+    codeInvariantOk: boolean;
+    liveNonTaxStatus: 'available' | 'missing-or-inactive' | 'unverified';
+    liveNonTaxVerified: boolean;
+    liveNonTaxId?: string;
+    liveNonTaxName?: string;
+  };
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
     githubCommit: string;
@@ -1058,6 +1070,14 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
   const started=Date.now();
   const invariant=evaluateAccountingTaxInvariant();
+  const baseDetails={
+    expectedSubtotal:Number(invariant.expectedSubtotal||15000),
+    expectedTax:Number(invariant.expectedTax||706.80),
+    expectedTotal:Number(invariant.expectedTotal||15706.80),
+    actualTotal:Number(invariant?.estimateSummary?.lineTotal||0),
+    taxablePayload:Number(invariant?.estimateSummary?.taxableTotal||0),
+    codeInvariantOk:Boolean(invariant.ok),
+  };
   if(!invariant.ok){
     return {
       id:'quickbooks-tax-invariant',
@@ -1068,6 +1088,11 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       status:503,
       ms:Date.now()-started,
       severity:'red',
+      accountingDetails:{
+        ...baseDetails,
+        liveNonTaxStatus:'unverified',
+        liveNonTaxVerified:false,
+      },
       detail:clean(
         'Accounting configuration problem: the CRM-to-QuickBooks payload invariant failed. '
         +'Expected $15,000.00 + $706.80 tax = $15,706.80 with $0.00 taxable payload. '
@@ -1080,6 +1105,13 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
   try{
     const taxCodeData:any=await qboQuery(context,'select * from TaxCode maxresults 100');
     const live=inspectQuickBooksNonTaxCode(taxCodeData);
+    const accountingDetails:HealthCheck['accountingDetails']={
+      ...baseDetails,
+      liveNonTaxStatus:live.verified?(live.ok?'available':'missing-or-inactive'):'unverified',
+      liveNonTaxVerified:Boolean(live.verified),
+      liveNonTaxId:String(live?.id||''),
+      liveNonTaxName:String(live?.name||''),
+    };
     if(live.verified && !live.ok){
       return {
         id:'quickbooks-tax-invariant',
@@ -1090,6 +1122,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         status:503,
         ms:Date.now()-started,
         severity:'red',
+        accountingDetails,
         detail:clean(
           'Accounting configuration problem: code payload math still passes at exactly $15,706.80 with $0.00 taxable payload, '
           +'but live QuickBooks tax configuration is no longer compatible. '+live.detail,
@@ -1106,6 +1139,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       status:200,
       ms:Date.now()-started,
       severity:live.verified?'green':'yellow',
+      accountingDetails,
       detail:clean(
         'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
         +'milestone invoice line is NON-taxable. '+live.detail,
@@ -1122,6 +1156,11 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       status:200,
       ms:Date.now()-started,
       severity:'yellow',
+      accountingDetails:{
+        ...baseDetails,
+        liveNonTaxStatus:'unverified',
+        liveNonTaxVerified:false,
+      },
       detail:clean(
         'Code invariant passed at exactly $15,706.80 with $0.00 taxable payload. '
         +'Live QuickBooks NON tax-code availability could not be verified during this run: '
