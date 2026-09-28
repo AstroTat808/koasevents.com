@@ -9,7 +9,7 @@ const { id = '' } = Astro.params;
         <strong class="text-[var(--koa-forest)]">CRM access required.</strong>
       </div>
 
-      <div data-app class="hidden">
+      <div data-client-record-id={id} class="hidden"></div>\n      <div data-app class="hidden">
         <header class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-8">
           <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div class="min-w-0">
@@ -129,10 +129,10 @@ const { id = '' } = Astro.params;
     </div>
   </main>
 
-  <script define:vars={{ clientRecordId: id }}>
+  <script>
     import { getAdminSession } from '../../../lib/admin-session';
 
-    const app=document.querySelector('[data-app]');
+    const app=document.querySelector('[data-app]');\n    const clientRecordId=document.querySelector('[data-client-record-id]')?.dataset.clientRecordId||'';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const message=document.querySelector('[data-message]');
     let record=null;
@@ -140,7 +140,7 @@ const { id = '' } = Astro.params;
     const money=(v)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(v||0));
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     const when=(v)=>v?new Date(v).toLocaleString():'—';
-    const hasAccess=(u)=>Boolean(u&&(u.app_metadata?.roles||u.appMetadata?.roles||[]).some(r=>['admin','manager','sales'].includes(String(r).toLowerCase())));
+    const hasAccess=(u)=>Boolean(u&&!u.accessBlocked&&(u.isAdmin||u.capabilities?.includes('sales.view')||u.permissions?.includes('sales.view')));
 
     async function crmPost(body){
       const res=await fetch('/api/admin/quotes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
