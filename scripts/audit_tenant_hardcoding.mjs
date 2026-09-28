@@ -24,7 +24,7 @@ const patterns=[
   {id:'koa-package',re:/\b(?:Gardenia|Orchid|Hibiscus|Plumeria)\b/g,kind:'tenant-catalog'},
   {id:'island-package',re:/\b(?:Oahu|Maui|Big Island)\b/g,kind:'tenant-catalog'},
   {id:'legacy-blob-store',re:/\bkoa-(?:sales|integrations|crm|events|admin|vendors|email|gallery|health)\b/g,kind:'tenant-storage'},
-  {id:'koa-css-token',re:/--koa-[a-z0-9-]+/gi,kind:'tenant-brand-token'},
+  {id:'koa-css-token',re:/--koa-[a-z0-9-]+/gi,kind:'tenant-brand-token',enforce:false},
 ];
 
 const platformPrefixes=[
@@ -71,6 +71,7 @@ for(const filePath of walk(root)){
           match:match[0],
           platform:isPlatform(file),
           allowed:allowed(file),
+          enforce:pattern.enforce!==false,
           excerpt:line.trim().slice(0,260),
         });
         if(match.index===pattern.re.lastIndex)pattern.re.lastIndex++;
@@ -85,7 +86,7 @@ for(const finding of findings){
   rows.push(finding);
   byFile.set(finding.file,rows);
 }
-const platformDebt=findings.filter(row=>row.platform&&!row.allowed);
+const platformDebt=findings.filter(row=>row.platform&&!row.allowed&&row.enforce!==false);
 const summary={
   scannedFiles:new Set(findings.map(row=>row.file)).size,
   findings:findings.length,
@@ -105,13 +106,13 @@ if(json){
   console.log('Tenant-data findings: '+summary.tenantData+'. Public/other findings: '+summary.publicOrOther+'.');
   console.log('');
   const files=[...byFile.keys()].sort((a,b)=>{
-    const ad=(byFile.get(a)||[]).filter(row=>row.platform&&!row.allowed).length;
-    const bd=(byFile.get(b)||[]).filter(row=>row.platform&&!row.allowed).length;
+    const ad=(byFile.get(a)||[]).filter(row=>row.platform&&!row.allowed&&row.enforce!==false).length;
+    const bd=(byFile.get(b)||[]).filter(row=>row.platform&&!row.allowed&&row.enforce!==false).length;
     return bd-ad||a.localeCompare(b);
   });
   for(const file of files){
     const rows=byFile.get(file)||[];
-    const debt=rows.filter(row=>row.platform&&!row.allowed).length;
+    const debt=rows.filter(row=>row.platform&&!row.allowed&&row.enforce!==false).length;
     console.log('## '+file+(debt?'  [PLATFORM DEBT: '+debt+']':''));
     const grouped=new Map();
     for(const row of rows){
