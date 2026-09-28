@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const API='https://www.signwell.com/api/v1';
@@ -29,7 +30,8 @@ export function signWellWebhookId(){
 }
 
 export function signWellWebhookEndpoint(){
-  const origin=clean(Netlify.env.get('URL'),500)||'https://koasevents.com';
+  const tenant=resolveTenant();
+  const origin=clean(Netlify.env.get('URL'),500)||('https://'+tenant.domains.primary);
   return origin.replace(/\/$/,'')+'/api/webhooks/signwell';
 }
 
@@ -41,8 +43,8 @@ export function signWellConfiguration(){
     webhookIdConfigured:Boolean(webhookId),
     webhookId,
     webhookEndpoint:signWellWebhookEndpoint(),
-    koaSignerEmail:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_EMAIL')||'aloha@koasevents.com',240),
-    koaSignerName:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||'Koa’s Events',180),
+    koaSignerEmail:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_EMAIL')||tenant.contact.email,240),
+    koaSignerName:clean(Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
     testMode:String(Netlify.env.get('SIGNWELL_TEST_MODE')||'false').toLowerCase()==='true',
   };
 }
@@ -308,12 +310,12 @@ export async function verifySignWellCredentials(context:Context){
 
 function contractHtml(record:any){
   const sections=record?.booking?.contract?.sections||[];
-  const title=record?.booking?.contract?.title||'Koa’s Events Agreement';
+  const title=record?.booking?.contract?.title||(resolveTenant().displayName+' Agreement');
   return '<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;color:#17231d;line-height:1.55;padding:28px}h1{font-size:26px}h2{font-size:17px;margin-top:24px}.meta{padding:14px;background:#f6f0e7;margin:18px 0}.sig{color:white;font-size:18px}</style></head><body>'+
     '<h1>'+esc(title)+'</h1><div class="meta"><strong>Client:</strong> '+esc(record?.customer?.name)+'<br><strong>Event date:</strong> '+esc(record?.customer?.eventDate)+'<br><strong>Proposal total:</strong> $'+Number(record?.proposal?.total||0).toFixed(2)+'</div>'+
     sections.map((s:any)=>'<h2>'+esc(s.heading)+'</h2><p>'+esc(s.body)+'</p>').join('')+
     '<h2>Electronic signatures</h2><p>Client signature:</p><div class="sig">{{signature:1:y}}</div><p>Date signed:</p><div class="sig">{{date:1:y}}</div>'+
-    '<p>Koa’s Events authorized signature:</p><div class="sig">{{signature:2:y}}</div><p>Date signed:</p><div class="sig">{{date:2:y}}</div>'+
+    '<p>'+resolveTenant().displayName+' authorized signature:</p><div class="sig">{{signature:2:y}}</div><p>Date signed:</p><div class="sig">{{date:2:y}}</div>'+
     '</body></html>';
 }
 
@@ -325,10 +327,10 @@ export async function createSignWellContract(record:any,origin:string){
   const html=contractHtml(record);
   const fileBase64=Buffer.from(html,'utf8').toString('base64');
   const payload={
-    test_mode:cfg.testMode,draft:false,name:(record.booking?.contract?.title||'Koa’s Events Agreement')+' · '+(record.customer?.name||record.id),
-    subject:'Your Koa’s Events agreement is ready to sign',
-    message:'Aloha '+(record.customer?.name||'')+', please review and sign your Koa’s Events agreement.',
-    files:[{name:'Koa-Agreement-'+record.id+'.html',file_base64:fileBase64}],
+    test_mode:cfg.testMode,draft:false,name:(record.booking?.contract?.title||(resolveTenant().displayName+' Agreement'))+' · '+(record.customer?.name||record.id),
+    subject:'Your '+resolveTenant().displayName+' agreement is ready to sign',
+    message:'Aloha '+(record.customer?.name||'')+', please review and sign your '+resolveTenant().displayName+' agreement.',
+    files:[{name:'Agreement-'+record.id+'.html',file_base64:fileBase64}],
     recipients:[
       {id:'1',name:clean(record.customer?.name,180),email:clientEmail},
       {id:'2',name:cfg.koaSignerName,email:cfg.koaSignerEmail}
@@ -337,7 +339,7 @@ export async function createSignWellContract(record:any,origin:string){
     reminders:true,expires_in:14,allow_decline:true,allow_reassign:false,
     redirect_url:origin+'/portal/?token='+encodeURIComponent(record.proposal?.publicToken||''),
     metadata:{record_id:record.id,quote_id:record.quoteId||'',public_token:record.proposal?.publicToken||''},
-    custom_requester_name:'Koa’s Events',custom_requester_email:'aloha@koasevents.com'
+    custom_requester_name:resolveTenant().displayName,custom_requester_email:resolveTenant().contact.email
   };
   const doc=await sw('/documents',{method:'POST',body:JSON.stringify(payload)});
   return {configured:true,documentId:String(doc.id||''),status:String(doc.status||''),recipients:doc.recipients||[],embeddedSigningUrl:String(doc.recipients?.[0]?.embedded_signing_url||doc.embedded_signing_url||''),raw:doc};
