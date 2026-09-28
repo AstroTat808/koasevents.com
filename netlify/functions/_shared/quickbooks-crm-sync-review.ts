@@ -1,4 +1,4 @@
-// Release marker: QuickBooks guarded bulk review and duplicate evidence.
+// Release marker: QuickBooks match evidence drawer and final sync preflight.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
