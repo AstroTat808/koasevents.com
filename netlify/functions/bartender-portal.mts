@@ -1,10 +1,9 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
+function storeFor(context:Context,req:Request){
+  return tenantStoreFor(context,resolveTenant(req),'sales');
 }
 function clean(value:unknown,max=1200){return String(value??'').trim().slice(0,max);}
 function num(value:unknown,min=0,max=100000){const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):0;}
@@ -14,7 +13,10 @@ function isMobile(record:any){
 }
 function eventDate(record:any){return clean(record?.customer?.eventDate,20);}
 function packageLabel(id:string){
-  return ({'mobile-oahu':'Oahu','mobile-maui':'Maui','mobile-big-island':'Big Island','mobile-custom':'Custom'} as Record<string,string>)[id]||id||'Mobile Bar';
+  const tenant=resolveTenant();
+  const item=(tenant.catalog.bootstrapItems||[]).find((row:any)=>row.id===id||row.sourceRef===id);
+  if(item?.name)return String(item.name);
+  return id ? id.replace(/[-_]+/g,' ').replace(/\b\w/g,(ch)=>ch.toUpperCase()) : 'Mobile Bar';
 }
 function activeAssignment(record:any,bartenderId:string){
   return (Array.isArray(record?.booking?.bartenderAssignments)?record.booking.bartenderAssignments:[])
@@ -28,8 +30,9 @@ function performance(record:any,bartenderId:string){
   return (Array.isArray(record?.booking?.bartenderPerformance)?record.booking.bartenderPerformance:[])
     .find((entry:any)=>clean(entry?.bartenderId,80)===bartenderId);
 }
-function hawaiiDateKey(now=new Date()){
-  const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
+function tenantDateKey(now=new Date()){
+  const tenant=resolveTenant();
+  const parts=new Intl.DateTimeFormat('en-US',{timeZone:tenant.timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);
   const map=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
   return map.year+'-'+map.month+'-'+map.day;
 }
@@ -87,9 +90,12 @@ function upsertPerformanceHours(record:any,bartender:any,hours:number,now:string
   record.booking.bartenderPerformance=[...rows.filter((entry:any)=>clean(entry?.bartenderId,80)!==bartender.id),next];
 }
 export default async(req:Request,context:Context)=>{
+  const tenantContext=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenantContext)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenantContext,async()=>{
   const token=clean(context.params.token,120);
   if(!token||token.length<20)return Response.json({error:'Invalid bartender portal link.'},{status:400});
-  const store=storeFor(context);
+  const store=storeFor(context,req);
   let records=((await store.get('records/index',{type:'json'}))||[]) as any[];
   const settings=((await store.get('settings/mobile-bar-profitability',{type:'json'}))||{}) as any;
   const bartenders=Array.isArray(settings?.staffing?.bartenders)?settings.staffing.bartenders:[];
@@ -158,7 +164,7 @@ export default async(req:Request,context:Context)=>{
   if(action==='clock-in'){
     const assignment=activeAssignment(record,bartender.id);
     if(assignment?.responseStatus==='declined')return Response.json({error:'Declined shifts cannot be clocked in.'},{status:409});
-    if(eventDate(record)!==hawaiiDateKey())return Response.json({error:'Clock-in is available on the assigned event date in Hawaiʻi time.'},{status:409});
+    if(eventDate(record)!==tenantDateKey())return Response.json({error:'Clock-in is available on the assigned event date in the organization timezone.'},{status:409});
     const cards=Array.isArray(record.booking.bartenderTimecards)?record.booking.bartenderTimecards:[];
     const existing=cards.find((entry:any)=>clean(entry?.bartenderId,80)===bartender.id);
     if(existing?.clockInAt&&!existing?.clockOutAt)return Response.json({error:'Already clocked in.'},{status:409});
@@ -184,5 +190,6 @@ export default async(req:Request,context:Context)=>{
   }
 
   return Response.json({error:'Unknown bartender portal action.'},{status:400});
+  });
 };
 export const config:Config={path:'/api/bartender/:token'};

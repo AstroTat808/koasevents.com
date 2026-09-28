@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { admin } from '@netlify/identity';
 import { hasCapability, requireOperations } from './_shared/admin';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -44,13 +44,13 @@ function cleanAdminHomeLayout(value:any){
   return {sectionOrder,moduleOrder};
 }
 
-function adminHomeStore(){
-  return getStore({name:'koa-admin-home-layout',consistency:'strong'});
+function adminHomeStore(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'userPreferences');
 }
 
-async function readCompanyAdminHomeLayout(){
+async function readCompanyAdminHomeLayout(context:Context,tenant:any){
   try{
-    const saved:any=await adminHomeStore().get('company-default',{type:'json'});
+    const saved:any=await adminHomeStore(context,tenant).get('company-default',{type:'json'});
     if(!saved?.layout)return null;
     return {
       layout:cleanAdminHomeLayout(saved.layout),
@@ -62,13 +62,13 @@ async function readCompanyAdminHomeLayout(){
   }
 }
 
-async function saveCompanyAdminHomeLayout(layout:any,actor:string){
+async function saveCompanyAdminHomeLayout(context:Context,tenant:any,layout:any,actor:string){
   const record={
     layout:cleanAdminHomeLayout(layout),
     updatedAt:new Date().toISOString(),
     updatedBy:clean(actor,240).toLowerCase(),
   };
-  await adminHomeStore().setJSON('company-default',record);
+  await adminHomeStore(context,tenant).setJSON('company-default',record);
   return record;
 }
 
@@ -94,7 +94,7 @@ export default async(req:Request,context:Context)=>{
   if(req.method==='GET'){
     const meta=userMetadataFor(user);
     const personalAdminHomeLayout=meta?.admin_home_layout?cleanAdminHomeLayout(meta.admin_home_layout):null;
-    const companyDefault=await readCompanyAdminHomeLayout();
+    const companyDefault=await readCompanyAdminHomeLayout(context,auth.tenant);
     const companyAdminHomeLayout=companyDefault?.layout||cleanAdminHomeLayout({});
     const adminHomeLayout=personalAdminHomeLayout||companyAdminHomeLayout;
     const adminHomeLayoutSource=personalAdminHomeLayout?'personal':companyDefault?'company':'built-in';
@@ -135,7 +135,7 @@ export default async(req:Request,context:Context)=>{
       if(!hasCapability(user,'users.manage')){
         return Response.json({error:'User Management permission is required to change the company Admin Home default.'},{status:403});
       }
-      const companyDefault=await saveCompanyAdminHomeLayout(adminHomeLayout,actor);
+      const companyDefault=await saveCompanyAdminHomeLayout(context,auth.tenant,adminHomeLayout,actor);
       await appendStaffAudit(context,{
         actor,
         action:'company_admin_home_layout_updated',

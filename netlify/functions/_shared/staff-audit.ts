@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type StaffAuditEntry = {
   id: string;
@@ -14,9 +15,7 @@ export type StaffAuditEntry = {
 };
 
 function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-staff-audit', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-staff-audit' });
+  return tenantStoreFor(context, resolveTenant(), 'staffAudit');
 }
 
 function clean(value: unknown, max = 1200) {

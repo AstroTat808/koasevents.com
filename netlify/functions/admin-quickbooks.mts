@@ -1,8 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
-import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant, tenantTaxDefaults } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { buildQuickBooksMilestoneInvoiceLine } from './_shared/quickbooks-accounting-invariant.mjs';
@@ -52,19 +51,11 @@ import {
 } from './_shared/quickbooks';
 
 function salesStoreFor(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'sales');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function integrationStoreFor(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function clean(value: unknown, max = 1200) {
@@ -1121,7 +1112,7 @@ export default async (req: Request, context: Context) => {
 
   const auth = await requireCapability('quickbooks.view', req);
   if (auth.response) return auth.response;
-  const tenant = resolveTenant(req);
+  const tenant = auth.tenant || resolveTenant(req);
   const taxDefaults = tenantTaxDefaults(tenant);
 
   if (req.method === 'GET') {

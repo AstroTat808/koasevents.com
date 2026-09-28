@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 function salesStoreFor(context: Context,tenant:any) { return tenantStoreFor(context,tenant,'sales'); }
@@ -36,6 +36,9 @@ async function appendEvent(context:Context,event:Record<string,unknown>){
 }
 
 export default async(req:Request,context:Context)=>{
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
   const token=clean(context.params.token,100);
   const documentId=clean(context.params.documentId,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token)) return Response.json({error:'Invalid planning link.'},{status:400});
@@ -110,8 +113,8 @@ export default async(req:Request,context:Context)=>{
   }
 
   return new Response('Method not allowed',{status:405});
+  });
 };
-
 export const config:Config={
   path:[
     '/api/planning/documents/:token',

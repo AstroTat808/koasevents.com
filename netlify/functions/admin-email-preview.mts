@@ -2,6 +2,7 @@ import type { Config } from '@netlify/functions';
 import { requireCapability, operationsRole, ROLE_LABELS } from './_shared/admin';
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
 import { resolveTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
 
 type PreviewTemplate = {
   id:string;
@@ -98,13 +99,13 @@ export default async(req:Request)=>{
 
   const to=clean(auth.user?.email,240).toLowerCase();
   if(!to.includes('@'))return Response.json({error:'Your signed-in account does not have a valid email address.'},{status:400});
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+  const apiKey=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
   if(!apiKey)return Response.json({error:'Resend is not configured. RESEND_API_KEY is missing.'},{status:503});
 
   const person=personFor(auth.user,tenant);
   const rendered=renderTemplate(template,brand,person,tenant);
-  const from=clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
-  const replyTo=clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||tenant.contact.email;
+  const from=clean(tenantEnv(tenant,'CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
+  const replyTo=clean(tenantEnv(tenant,'CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO'),240)||tenant.contact.email;
   const subject='[TEST] '+template.subject+' · '+(brand==='mobile'?tenant.displayName+' Mobile Bar':tenant.displayName);
 
   try{

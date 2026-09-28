@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { runForEachTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
   persistHealth,
@@ -16,7 +17,7 @@ function clean(value:unknown,max=300){
   return String(value||'').trim().slice(0,max);
 }
 
-export default async (_req:Request,context:Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if(!(await shouldRunScheduledJob(context,'post-deploy-verification'))) return;
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -47,6 +48,10 @@ export default async (_req:Request,context:Context) => {
   };
   await savePostDeployVerification(context,verification);
   await recordProductionRelease(context,{deployId,commit,checkedAt:current.checkedAt,verification});
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config:Config={

@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import {
   configuredServiceItemId,
   getQuickBooksSettings,
@@ -24,15 +25,11 @@ const QUERY_PAGE_SIZE = 1000;
 const QUERY_MAX_PAGES = 10;
 
 function salesStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 
 function integrationStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function clean(value: unknown, max = 1200) {

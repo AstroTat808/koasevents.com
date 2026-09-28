@@ -1,8 +1,8 @@
-import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
-import { resolveTenant, tenantBlobStoreName } from './tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import { buildTenantContext } from './organization';
 
 export const ROLE_IDS = [
@@ -172,8 +172,7 @@ export const DEFAULT_AUTH_SECURITY_POLICY: AuthSecurityPolicy = {
 };
 
 function securityStore() {
-  const tenant = resolveTenant();
-  return getStore({ name:tenantBlobStoreName(tenant,'authSecurity'), consistency:'strong' });
+  return tenantStoreFor(undefined, resolveTenant(), 'authSecurity');
 }
 
 function clean(value: unknown, max = 300) {
@@ -351,7 +350,7 @@ export async function getAccessContext(req?:Request, context?:Context) {
       user:null,
       role:'none' as const,
       capabilities:[] as StaffCapability[],
-      policy:await readAuthSecurityPolicy(),
+      policy:{...DEFAULT_AUTH_SECURITY_POLICY},
       security:null,
       tenant:null,
       tenantContext:null,
@@ -367,30 +366,45 @@ export async function getAccessContext(req?:Request, context?:Context) {
     authoritativeUser = sessionUser;
   }
 
-  const policy = await readAuthSecurityPolicy();
-  const tenant = resolveTenant(req);
-  const role = roleFromUser(authoritativeUser, tenant);
-  const capabilities = capabilitiesFor(authoritativeUser);
-  const security = passwordSecurityFor(authoritativeUser, sessionUser, policy);
-  const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
-  if(managedSession?.revoked) security.sessionRevoked = true;
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, async()=>{
+    const policy = await readAuthSecurityPolicy();
+    const identityRole = roleFromUser(authoritativeUser, tenant);
+    const identityCapabilities = capabilitiesFor(authoritativeUser);
+    const security = passwordSecurityFor(authoritativeUser, sessionUser, policy);
+    const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
+    if(managedSession?.revoked) security.sessionRevoked = true;
 
-  const tenantContext = role === 'none' || role === 'deactivated'
-    ? null
-    : await buildTenantContext(context, tenant, authoritativeUser, role, capabilities);
+    const tenantContext = identityRole === 'none' || identityRole === 'deactivated'
+      ? null
+      : await buildTenantContext(context, tenant, authoritativeUser, identityRole, identityCapabilities);
+    const membershipRole = tenantContext?.membership?.role as EffectiveStaffRole | undefined;
+    const role = tenant.storage.legacyDataBelongsToTenant
+      ? identityRole
+      : (membershipRole || 'none');
+    const capabilities = tenant.storage.legacyDataBelongsToTenant
+      ? identityCapabilities
+      : role === 'custom'
+        ? [...new Set((tenantContext?.membership?.capabilities || []).filter((capability): capability is StaffCapability =>
+            STAFF_CAPABILITIES.includes(capability as StaffCapability)
+          ))]
+        : role !== 'none' && role !== 'deactivated'
+          ? [...(ROLE_CAPABILITIES[role as StaffRole] || [])]
+          : [];
 
-  return {
-    sessionUser,
-    user:authoritativeUser,
-    role,
-    capabilities,
-    policy,
-    security,
-    tenant:tenantContext?.profile || tenant,
-    tenantContext,
-    membership:tenantContext?.membership || null,
-    organization:tenantContext?.organization || null,
-  };
+    return {
+      sessionUser,
+      user:authoritativeUser,
+      role,
+      capabilities,
+      policy,
+      security,
+      tenant:tenantContext?.profile || tenant,
+      tenantContext,
+      membership:tenantContext?.membership || null,
+      organization:tenantContext?.organization || null,
+    };
+  });
 }
 
 function blockedResponse(ctx: Awaited<ReturnType<typeof getAccessContext>>) {

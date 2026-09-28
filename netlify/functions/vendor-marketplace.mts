@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { applyMasterInsuranceToAssignments, masterInsuranceForEvent } from './_shared/vendor-insurance-sync.ts';
@@ -56,6 +56,9 @@ function publicVendor(v:any,reviews:any[],record:any,event:any){
   return {id:v.id,name:v.name,category:v.category,additionalCategories:v.additionalCategories||[],tier:v.tier,headline:v.headline,description:v.description,specialties:v.specialties||[],styles:v.styles||[],serviceAreas:v.serviceAreas||[],contactName:v.contactName,email:v.email,phone:v.phone,website:v.website,instagram:v.instagram,startingPrice:v.startingPrice,priceNotes:v.priceNotes,travelFees:v.travelFees,responseTime:v.responseTime,logoUrl:v.logoUrl,coverImage:v.coverImage,gallery:v.gallery||[],insuranceStatus:v.insurance?.status||'not_requested',eventsWorked:Number(v.internal?.eventsWorked||0),lastEventAt:v.internal?.lastEventAt||'',featured:Boolean(v.featured),recommendationScore:score(v,record,event),rating:{average:Number(avg.toFixed(1)),count:rows.length},reviews:rows.slice(-8).reverse().map(r=>({id:r.id,overall:r.overall,communication:r.communication,professionalism:r.professionalism,quality:r.quality,value:r.value,wouldHireAgain:r.wouldHireAgain,comment:r.comment,clientName:r.clientName,eventDate:r.eventDate}))};
 }
 export default async(req:Request,context:Context)=>{
+  const tenantContext=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenantContext)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenantContext,async()=>{
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid marketplace link.'},{status:400});
   const tenant=resolveTenant(req);
@@ -101,5 +104,6 @@ export default async(req:Request,context:Context)=>{
   }
   if(action==='submit-review'){const eventDate=clean(record.customer?.eventDate,40);if(!eventDate||eventDate>new Date().toISOString().slice(0,10))return Response.json({error:'Reviews open after your event date.'},{status:403});const used=(event.vendors||[]).some((v:any)=>v.marketplaceVendorId===vendorId);if(!used)return Response.json({error:'Only vendors on your event team can be reviewed.'},{status:403});const prior=reviews.find(r=>r.recordId===record.id&&r.vendorId===vendorId);const s=(v:unknown)=>Math.max(1,Math.min(5,Math.round(Number(v)||0)));const row={id:prior?.id||id(),recordId:record.id,vendorId,status:'pending',clientName:clean(record.customer?.name,180),eventDate,overall:s(body?.overall),communication:s(body?.communication),professionalism:s(body?.professionalism),quality:s(body?.quality),value:s(body?.value),wouldHireAgain:Boolean(body?.wouldHireAgain),comment:clean(body?.comment,3000),createdAt:prior?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()};await vs.setJSON('reviews/index',[row,...reviews.filter(r=>r.id!==row.id)].slice(0,10000));return Response.json({ok:true,review:row});}
   return Response.json({error:'Unknown marketplace action.'},{status:400});
+  });
 };
 export const config:Config={path:'/api/vendor-marketplace/:token'};

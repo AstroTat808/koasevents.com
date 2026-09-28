@@ -2,6 +2,16 @@ import type { Context } from '@netlify/functions';
 import { createHash } from 'node:crypto';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import type { TenantProfile } from '../../../src/data/tenants';
+import {
+  cleanTenantKey,
+  normalizeTenantRows,
+  stampTenantId,
+  tenantDataKey,
+  tenantDataPrefix,
+  tenantOwnsRecord,
+} from './tenant-boundary.mjs';
+
+export { normalizeTenantRows, stampTenantId, tenantDataKey, tenantDataPrefix, tenantOwnsRecord } from './tenant-boundary.mjs';
 
 export type TenantStorageDomain =
   | 'sales'
@@ -16,7 +26,16 @@ export type TenantStorageDomain =
   | 'emailRouting'
   | 'authSecurity'
   | 'staffDirectory'
+  | 'staffFiles'
+  | 'staffAudit'
+  | 'staffAvailability'
+  | 'security'
   | 'systemHealth'
+  | 'calendarSync'
+  | 'userPreferences'
+  | 'blog'
+  | 'gallery'
+  | 'localSeo'
   | 'workspaceAlerts';
 
 type GetOptions = { type?: 'text' | 'json' | 'stream' | 'blob' | 'arrayBuffer' };
@@ -24,31 +43,22 @@ type ListOptions = { prefix?: string };
 
 const CANONICAL_STORE = 'venueloom-data';
 
-function canonicalStore(context: Context) {
+function canonicalStore(context?: Context) {
+  if (!context) return getStore({ name: CANONICAL_STORE, consistency: 'strong' });
   return context.deploy.context === 'production'
     ? getStore({ name: CANONICAL_STORE, consistency: 'strong' })
     : getDeployStore({ name: CANONICAL_STORE });
 }
 
-function compatibilityStore(context: Context, tenant: TenantProfile, domain: TenantStorageDomain) {
+function compatibilityStore(context: Context | undefined, tenant: TenantProfile, domain: TenantStorageDomain) {
   const name = tenant.storage.compatibilityBlobStores[domain];
   if (!name) return null;
+  if (!context) return getStore({ name, consistency: 'strong' });
   return context.deploy.context === 'production'
     ? getStore({ name, consistency: 'strong' })
     : getDeployStore({ name });
 }
 
-function cleanKey(value: unknown) {
-  return String(value ?? '').replace(/^\/+/, '').slice(0, 560);
-}
-
-export function tenantDataPrefix(tenant: TenantProfile, domain: TenantStorageDomain) {
-  return 'tenants/' + tenant.id + '/' + domain + '/';
-}
-
-export function tenantDataKey(tenant: TenantProfile, domain: TenantStorageDomain, key: string) {
-  return tenantDataPrefix(tenant, domain) + cleanKey(key);
-}
 
 async function copyFallbackValue(
   canonical: ReturnType<typeof canonicalStore>,
@@ -92,7 +102,7 @@ function scopeJsonValue(tenant: TenantProfile, value: any) {
 }
 
 export function tenantStoreFor(
-  context: Context,
+  context: Context | undefined,
   tenant: TenantProfile,
   domain: TenantStorageDomain,
 ) {
@@ -102,11 +112,11 @@ export function tenantStoreFor(
 
   return {
     canonicalKey(key: string) {
-      return prefix + cleanKey(key);
+      return prefix + cleanTenantKey(key);
     },
 
     async get(key: string, options?: GetOptions) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       const scoped = prefix + logical;
       const current = await canonical.get(scoped, options as any);
       if (current != null) {
@@ -129,7 +139,7 @@ export function tenantStoreFor(
     },
 
     async getWithMetadata(key: string) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       const scoped = prefix + logical;
       const current = await canonical.getWithMetadata(scoped);
       if (current) return current;
@@ -138,7 +148,7 @@ export function tenantStoreFor(
     },
 
     async getMetadata(key: string) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       const scoped = prefix + logical;
       const current = await canonical.getMetadata(scoped);
       if (current) return current;
@@ -147,7 +157,7 @@ export function tenantStoreFor(
     },
 
     async setJSON(key: string, value: unknown) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       const scopedValue = scopeJsonValue(tenant, value);
       await canonical.setJSON(prefix + logical, scopedValue);
       if (legacy && tenant.storage.legacyDataBelongsToTenant) {
@@ -156,7 +166,7 @@ export function tenantStoreFor(
     },
 
     async set(key: string, value: any, options?: any) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       await canonical.set(prefix + logical, value, options);
       if (legacy && tenant.storage.legacyDataBelongsToTenant) {
         await legacy.set(logical, value, options);
@@ -164,7 +174,7 @@ export function tenantStoreFor(
     },
 
     async delete(key: string) {
-      const logical = cleanKey(key);
+      const logical = cleanTenantKey(key);
       await canonical.delete(prefix + logical);
       if (legacy && tenant.storage.legacyDataBelongsToTenant) {
         await legacy.delete(logical);
@@ -172,7 +182,7 @@ export function tenantStoreFor(
     },
 
     async list(options?: ListOptions) {
-      const logicalPrefix = cleanKey(options?.prefix || '');
+      const logicalPrefix = cleanTenantKey(options?.prefix || '');
       const canonicalResult = await canonical.list({ prefix: prefix + logicalPrefix });
       const rows = new Map<string, any>();
 
@@ -194,46 +204,6 @@ export function tenantStoreFor(
       return { blobs: [...rows.values()] };
     },
   };
-}
-
-export function stampTenantId<T extends Record<string, any>>(tenant: TenantProfile, value: T): T & { tenantId: string } {
-  if (value?.tenantId && value.tenantId !== tenant.id) {
-    throw new Error('Cross-tenant record access was blocked.');
-  }
-  return { ...value, tenantId: tenant.id };
-}
-
-export function tenantOwnsRecord(tenant: TenantProfile, value: any) {
-  if (!value || typeof value !== 'object') return false;
-  if (value.tenantId) return String(value.tenantId) === tenant.id;
-  return tenant.storage.legacyDataBelongsToTenant;
-}
-
-export function normalizeTenantRows<T extends Record<string, any>>(
-  tenant: TenantProfile,
-  rows: T[],
-) {
-  let changed = false;
-  let rejected = 0;
-  const normalized: Array<T & { tenantId: string }> = [];
-
-  for (const row of Array.isArray(rows) ? rows : []) {
-    if (!row || typeof row !== 'object') continue;
-    if (row.tenantId && String(row.tenantId) !== tenant.id) {
-      rejected += 1;
-      continue;
-    }
-    if (!row.tenantId) {
-      if (!tenant.storage.legacyDataBelongsToTenant) {
-        rejected += 1;
-        continue;
-      }
-      changed = true;
-    }
-    normalized.push(stampTenantId(tenant, row));
-  }
-
-  return { rows: normalized, changed, rejected };
 }
 
 export async function readTenantIndex<T extends Record<string, any>>(
@@ -275,7 +245,7 @@ export async function tenantMigrationAudit(
   tenant: TenantProfile,
   domains: TenantStorageDomain[] = [
     'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
-    'emailAnalytics','emailRouting','authSecurity','staffDirectory','systemHealth','workspaceAlerts',
+    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','userPreferences','blog','gallery','localSeo','workspaceAlerts',
   ],
 ) {
   const canonical=canonicalStore(context);

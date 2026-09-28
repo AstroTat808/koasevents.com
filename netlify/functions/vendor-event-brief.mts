@@ -1,11 +1,14 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { setupForVendor, vendorBriefRules, sanitizeSetupItems } from './_shared/vendor-event-ops.ts';
 
 function store(c:Context,tenant:any,domain:'sales'|'eventOps'){return tenantStoreFor(c,tenant,domain);}
 function clean(v:unknown,max=3000){return String(v??'').trim().slice(0,max);}
 export default async(req:Request,context:Context)=>{
+  const tenantContext=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenantContext)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenantContext,async()=>{
   const token=clean(context.params.token,120);
   if(!/^veb_[A-Za-z0-9]{24,100}$/.test(token))return Response.json({error:'Invalid Event Brief link.'},{status:400});
   const tenant=resolveTenant(req);
@@ -38,5 +41,6 @@ export default async(req:Request,context:Context)=>{
   vendor.briefAcknowledgements=selected;vendor.briefAcknowledgedName=name;vendor.briefAcknowledgedAt=new Date().toISOString();vendor.briefVendorNote=clean(body?.note,1200);ops.updatedAt=new Date().toISOString();
   await opsStore.setJSON('events/'+record.id,ops);
   return Response.json({ok:true,acknowledgedAt:vendor.briefAcknowledgedAt});
+  });
 };
 export const config:Config={path:'/api/vendor-brief/:token'};

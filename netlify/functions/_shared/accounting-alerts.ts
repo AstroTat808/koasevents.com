@@ -1,4 +1,6 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
+import { resolveTenant } from './tenant';
+import { tenantEnv } from './tenant-env';
 type AccountingTransition = {
   recordId?: string;
   clientName?: string;
@@ -51,18 +53,19 @@ export async function sendAccountingTransitionAlerts(
   ];
 
   const channels:any[] = [];
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
-  const configuredEmails=clean(Netlify.env.get('KOA_ACCOUNTING_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
-    || 'chris@sibel.org';
+  const tenant=resolveTenant();
+  const apiKey=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
+  const configuredEmails=clean(tenantEnv(tenant,'ACCOUNTING_ALERT_EMAILS','KOA_ACCOUNTING_ALERT_EMAILS'),500)
+    || clean(tenantEnv(tenant,'HEALTH_ALERT_EMAILS','KOA_HEALTH_ALERT_EMAILS'),500)
+    || clean(tenantEnv(tenant,'LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO'),500)
+    || tenant.contact.email;
   const recipients=configuredEmails.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
 
   if(apiKey&&recipients.length){
-    const from=clean(Netlify.env.get('KOA_ACCOUNTING_ALERT_FROM'),240)
-      || clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
-      || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
-      || 'Koa’s Events <leads@koasevents.com>';
+    const from=clean(tenantEnv(tenant,'ACCOUNTING_ALERT_FROM','KOA_ACCOUNTING_ALERT_FROM'),240)
+      || clean(tenantEnv(tenant,'HEALTH_ALERT_FROM','KOA_HEALTH_ALERT_FROM'),240)
+      || clean(tenantEnv(tenant,'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)
+      || (tenant.displayName+' <'+tenant.contact.email+'>');
     const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>'+esc(subject)+'</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
       +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
       +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'

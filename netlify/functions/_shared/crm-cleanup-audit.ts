@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type CleanupAuditAction =
   | 'auto_flagged'
@@ -72,9 +73,7 @@ export function cleanupDimensionsFromRecord(record:any):CleanupDimensions{
   };
 }
 function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-crm',consistency:'strong'})
-    : getDeployStore({name:'koa-crm'});
+  return tenantStoreFor(context,resolveTenant(),'crm');
 }
 function id(){return 'AUD-'+crypto.randomUUID().replaceAll('-','').slice(0,16).toUpperCase();}
 

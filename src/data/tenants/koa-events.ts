@@ -1,6 +1,6 @@
-import { businessRules } from '../businessRules';
-import { catalogItems, type CatalogItem } from '../catalog';
-import type { TenantCatalogSeedItem, TenantProfile } from './types';
+import { businessRules } from '../businessRules.ts';
+import { catalogItems, type CatalogItem } from '../catalog.ts';
+import type { TenantCatalogSeedItem, TenantProfile } from './types.ts';
 
 function money(value: unknown) {
   const n = Number(String(value ?? '').replace(/[$,%\s,]/g, ''));
@@ -78,6 +78,10 @@ export const koaEventsTenantProfile: TenantProfile = {
   currency: 'USD',
   timezone: 'Pacific/Honolulu',
   microsoftTimeZone: 'Hawaiian Standard Time',
+  calendar: {
+    recordMarkerPrefix: 'VENUELOOM_RECORD_ID:',
+    legacyRecordMarkerPrefixes: ['KOA_RECORD_ID:'],
+  },
   domains: {
     primary: 'koasevents.com',
     admin: 'koasevents.com',
@@ -212,7 +216,16 @@ export const koaEventsTenantProfile: TenantProfile = {
       emailRouting: 'koa-email-routing',
       authSecurity: 'koa-auth-security',
       staffDirectory: 'koa-staff-directory',
+      staffFiles: 'koa-staff-files',
+      staffAudit: 'koa-staff-audit',
+      staffAvailability: 'koa-staff-availability',
+      security: 'koa-security',
       systemHealth: 'koa-system-health',
+      calendarSync: 'koa-calendar-sync',
+      userPreferences: 'koa-admin-home-layout',
+      blog: 'koa-blog',
+      gallery: 'koa-gallery',
+      localSeo: 'koa-local-seo',
       workspaceAlerts: 'koa-workspace-alerts',
     },
   },

@@ -4,16 +4,16 @@ import { isSyntheticHealthRequest } from './_shared/synthetic-health';
 import { resolveTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
-function salesStoreFor(context: Context, req?: Request) {
-  return tenantStoreFor(context, resolveTenant(req), 'sales');
+function salesStoreFor(context: Context, tenant: any) {
+  return tenantStoreFor(context, tenant, 'sales');
 }
 
-function opsStoreFor(context: Context, req?: Request) {
-  return tenantStoreFor(context, resolveTenant(req), 'eventOps');
+function opsStoreFor(context: Context, tenant: any) {
+  return tenantStoreFor(context, tenant, 'eventOps');
 }
 
-function filesStoreFor(context: Context, req?: Request) {
-  return tenantStoreFor(context, resolveTenant(req), 'eventFiles');
+function filesStoreFor(context: Context, tenant: any) {
+  return tenantStoreFor(context, tenant, 'eventFiles');
 }
 
 function clean(value: unknown, max = 1000) {
@@ -38,9 +38,8 @@ const ALLOWED = new Set([
 const CATEGORY = new Set(['insurance','floor_plan','vendor','questionnaire','other']);
 const MAX_BYTES = 20 * 1024 * 1024;
 
-async function bookedRecord(context: Context, req: Request, recordId: string) {
-  const tenant=resolveTenant(req);
-  const list = (await readTenantIndex<any>(salesStoreFor(context,req),tenant,'records/index')).rows;
+async function bookedRecord(context: Context, tenant: any, recordId: string) {
+  const list = (await readTenantIndex<any>(salesStoreFor(context,tenant),tenant,'records/index')).rows;
   return list.find((entry) => entry?.id === recordId && entry?.stage === 'booked' && entry?.kind === 'proposal') || null;
 }
 
@@ -48,10 +47,11 @@ export default async (req: Request, context: Context) => {
   const syntheticRecordId = clean(context.params.recordId, 100);
   if (req.method === 'HEAD' && syntheticRecordId === '__health__' && isSyntheticHealthRequest(req)) {
     try {
+      const tenant=resolveTenant(req);
       await Promise.all([
-        salesStoreFor(context,req).get('records/index', { type: 'json' }),
-        opsStoreFor(context,req).get('events/__health__', { type: 'json' }),
-        filesStoreFor(context,req).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
+        salesStoreFor(context,tenant).get('records/index', { type: 'json' }),
+        opsStoreFor(context,tenant).get('events/__health__', { type: 'json' }),
+        filesStoreFor(context,tenant).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
       return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
     } catch {
@@ -65,15 +65,16 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: 'Manager permission required to change event documents.' }, { status: 403 });
   }
 
+  const tenant=auth.tenant||resolveTenant(req);
   const recordId = clean(context.params.recordId, 100);
   const documentId = clean(context.params.documentId, 100);
   if (!recordId) return Response.json({ error: 'Booked-event record ID required.' }, { status: 400 });
 
-  const record = await bookedRecord(context, req, recordId);
+  const record = await bookedRecord(context, tenant, recordId);
   if (!record) return Response.json({ error: 'Booked event not found.' }, { status: 404 });
 
-  const opsStore = opsStoreFor(context,req);
-  const filesStore = filesStoreFor(context,req);
+  const opsStore = opsStoreFor(context,tenant);
+  const filesStore = filesStoreFor(context,tenant);
   const ops: any = await opsStore.get('events/' + recordId, { type: 'json' });
   if (!ops) return Response.json({ error: 'Open the event in Event Ops before uploading documents.' }, { status: 409 });
   ops.documents ||= [];

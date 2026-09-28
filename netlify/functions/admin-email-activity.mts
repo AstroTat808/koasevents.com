@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { resolveTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import { readEmailHealthEvents } from './_shared/email-health';
@@ -47,7 +48,7 @@ function recommendation(status:string,bounceType:string,bounceSubType:string,mes
   return 'Review the delivery details and recipient address before taking action.';
 }
 async function resend(path:string){
-  const key=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+  const key=clean(tenantEnv(resolveTenant(),'RESEND_MONITORING_API_KEY'),500);
   if(!key)return {ok:false,status:0,body:{message:'RESEND_MONITORING_API_KEY is not configured.'}};
   try{
     const response=await fetch('https://api.resend.com'+path,{

@@ -1,6 +1,7 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant.ts';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant.ts';
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
+import { tenantEnv } from './_shared/tenant-env.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
@@ -390,6 +391,9 @@ function json(req: Request, body: unknown, status = 200) {
 }
 
 export default async (req: Request, context: Context) => {
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
   const origin = req.headers.get('origin');
   if (origin && !allowedOrigin(req)) {
     return Response.json({ error: 'Cross-site inquiry capture is not allowed.' }, { status: 403 });
@@ -680,7 +684,7 @@ export default async (req: Request, context: Context) => {
     } : null,
   };
 
-  const notificationConfigured = Boolean(String(Netlify.env.get('RESEND_API_KEY') || '').trim());
+  const notificationConfigured = Boolean(tenantEnv(resolveTenant(req),'RESEND_API_KEY'));
 
   if (formName === 'koa-discovery-call-request' && record.inquiry.sourceRecordId) {
     const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
@@ -903,8 +907,8 @@ export default async (req: Request, context: Context) => {
     notificationConfigured,
     ...(turnstileProof ? { turnstileProof } : {}),
   });
+  });
 };
-
 export const config: Config = {
   path: '/api/crm/inquiries',
   rateLimit: {

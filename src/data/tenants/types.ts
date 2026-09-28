@@ -74,6 +74,10 @@ export type TenantProfile = {
   currency: string;
   timezone: string;
   microsoftTimeZone: string;
+  calendar: {
+    recordMarkerPrefix: string;
+    legacyRecordMarkerPrefixes: string[];
+  };
   domains: {
     primary: string;
     admin: string;
@@ -109,7 +113,16 @@ export type TenantProfile = {
       emailRouting: string;
       authSecurity: string;
       staffDirectory: string;
+      staffFiles: string;
+      staffAudit: string;
+      staffAvailability: string;
+      security: string;
       systemHealth: string;
+      calendarSync: string;
+      userPreferences: string;
+      blog: string;
+      gallery: string;
+      localSeo: string;
       workspaceAlerts: string;
     };
   };

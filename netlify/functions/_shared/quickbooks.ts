@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions';
 import { Buffer } from 'node:buffer';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 type StoredConnection = {
   realmId: string;
@@ -27,11 +28,7 @@ function integrationStore(context: Context) {
 }
 
 function env(...names: string[]) {
-  for (const name of names) {
-    const value = String(Netlify.env.get(name) || '').trim();
-    if (value) return value;
-  }
-  return '';
+  return tenantEnv(resolveTenant(), ...names);
 }
 
 function config() {
@@ -857,7 +854,7 @@ export async function createOAuthState(context: Context, requestUrl: string) {
   }
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  const state = Buffer.from(bytes).toString('base64url');
+  const state = resolveTenant().id + '.' + Buffer.from(bytes).toString('base64url');
   const origin = new URL(requestUrl).origin;
   const redirectUri = c.redirectUri || origin + '/.netlify/functions/quickbooks-callback';
 

@@ -1,11 +1,9 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireOperations } from './_shared/admin';
 
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
+function storeFor(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'sales');
 }
 function clean(value:unknown,max=1200){return String(value??'').trim().slice(0,max);}
 function num(value:unknown,min=0,max=100000){const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):0;}
@@ -40,8 +38,8 @@ function normalizeBartenders(value:unknown,current:any[]=[]){
     };
   }).filter((row:any)=>row.name);
 }
-async function readState(context:Context){
-  const store=storeFor(context);
+async function readState(context:Context,tenant:any){
+  const store=storeFor(context,tenant);
   const [recordsRaw,settingsRaw]=await Promise.all([
     store.get('records/index',{type:'json'}),
     store.get('settings/mobile-bar-profitability',{type:'json'}),
@@ -70,7 +68,7 @@ async function saveRecord(store:any,records:any[],record:any){
 }
 export default async(req:Request,context:Context)=>{
   const auth=await requireOperations(req);if(auth.response)return auth.response;
-  const state=await readState(context);
+  const state=await readState(context,auth.tenant);
   if(req.method==='GET'){
     return Response.json({
       staffing:state.settings.staffing,

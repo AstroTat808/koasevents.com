@@ -1,6 +1,8 @@
 import type { Config } from '@netlify/functions';
 import { requireCapability } from './_shared/admin';
 import { emailRoutingSummary, saveEmailRouting } from './_shared/email-routing';
+import { resolveTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function esc(value:unknown){
@@ -11,7 +13,7 @@ async function sendRouteTest(routeId:string,actor:string){
   const summary=await emailRoutingSummary();
   const route=summary.routes.find((row:any)=>row.id===routeId);
   if(!route)throw new Error('Unknown email route.');
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
+  const apiKey=clean(tenantEnv(resolveTenant(),'RESEND_API_KEY'),500);
   if(!apiKey)throw new Error('RESEND_API_KEY is not configured.');
 
   const dynamic=route.mode==='dynamic';

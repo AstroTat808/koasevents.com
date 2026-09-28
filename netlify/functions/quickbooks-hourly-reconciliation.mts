@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import {
   applyQuickBooksReconciliationHistory,
@@ -22,7 +22,7 @@ function isReconciliationCandidate(record: any) {
   );
 }
 
-export default async (_req: Request, context: Context) => {
+async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!(await shouldRunScheduledJob(context,'quickbooks-reconciliation'))) return;
 
@@ -59,7 +59,7 @@ export default async (_req: Request, context: Context) => {
 
   const runAt = new Date().toISOString();
   const alertTransitions = reconciliation.transitions.filter((entry: any) => ['mismatch_detected','resolved'].includes(entry.type));
-  const alerts = await sendAccountingTransitionAlerts(alertTransitions, runAt);
+  const alerts = await sendAccountingTransitionAlerts(alertTransitions, runAt, { tenant:resolveTenant() });
   const store = tenantStoreFor(context,resolveTenant(),'integrations');
   await store.setJSON('quickbooks/accounting-hourly-last', {
     ...audit,
@@ -70,6 +70,10 @@ export default async (_req: Request, context: Context) => {
     transitions: reconciliation.transitions.slice(0, 100),
     alerts,
   });
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
 
 export const config: Config = {

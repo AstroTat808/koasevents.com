@@ -1,7 +1,7 @@
-import { koaEventsTenantProfile } from './koa-events';
-import type { TenantProfile } from './types';
+import { koaEventsTenantProfile } from './koa-events.ts';
+import type { TenantProfile } from './types.ts';
 
-export type { TenantProfile, TenantTaxProfile, TenantCatalogConfig, TenantCatalogSeedItem, TenantCatalogPlacementRule } from './types';
+export type { TenantProfile, TenantTaxProfile, TenantCatalogConfig, TenantCatalogSeedItem, TenantCatalogPlacementRule } from './types.ts';
 
 export const tenantProfiles: TenantProfile[] = [
   koaEventsTenantProfile,

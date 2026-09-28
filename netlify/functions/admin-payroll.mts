@@ -1,11 +1,9 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireOperations } from './_shared/admin';
 
-function storeFor(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-sales',consistency:'strong'})
-    : getDeployStore({name:'koa-sales'});
+function storeFor(context:Context,tenant:any){
+  return tenantStoreFor(context,tenant,'sales');
 }
 function clean(value:unknown,max=1200){return String(value??'').trim().slice(0,max);}
 function num(value:unknown,min=0,max=100000){const n=Number(value);return Number.isFinite(n)?Math.min(max,Math.max(min,n)):0;}
@@ -53,7 +51,7 @@ export default async(req:Request,context:Context)=>{
   const fallback=defaultRange();
   const start=/^\d{4}-\d{2}-\d{2}$/.test(clean(url.searchParams.get('start'),20))?clean(url.searchParams.get('start'),20):fallback.start;
   const end=/^\d{4}-\d{2}-\d{2}$/.test(clean(url.searchParams.get('end'),20))?clean(url.searchParams.get('end'),20):fallback.end;
-  const store=storeFor(context);
+  const store=storeFor(context,auth.tenant);
   const [recordsRaw,settings]=await Promise.all([
     store.get('records/index',{type:'json'}),
     store.get('settings/mobile-bar-profitability',{type:'json'}),

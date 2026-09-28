@@ -1,5 +1,4 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import readXlsxFile from 'read-excel-file/node';
 import { Buffer } from 'node:buffer';
 import { hasCapability, requireCapability } from './_shared/admin';
@@ -12,8 +11,10 @@ import {
   saveQuickBooksCatalog,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
-import { clientTenantProfile, resolveTenant, tenantBlobStoreName } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import type { TenantProfile } from '../../src/data/tenants';
+import { saveOrganization } from './_shared/organization';
 
 type ImportMapping = Partial<Record<
   'id' | 'name' | 'description' | 'group' | 'category' | 'unitLabel' | 'unitPrice' |
@@ -34,17 +35,11 @@ const IMPORT_LIMIT_BYTES = 2 * 1024 * 1024;
 const IMPORT_LIMIT_ROWS = 1000;
 
 function storeFor(context: Context, tenant: TenantProfile) {
-  const name=tenantBlobStoreName(tenant,'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency:'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, tenant, 'integrations');
 }
 
 function salesStoreFor(context: Context, tenant: TenantProfile) {
-  const name=tenantBlobStoreName(tenant,'sales');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency:'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, tenant, 'sales');
 }
 
 function clean(value: unknown, max = 1000) {
@@ -656,6 +651,16 @@ async function readImportHistory(context:Context,tenant:TenantProfile){
   return Array.isArray(raw)?raw.slice(0,20):[];
 }
 
+async function markCatalogOnboarded(context:Context,tenant:TenantProfile){
+  await saveOrganization(context,tenant,(current)=>({
+    ...current,
+    onboarding:{
+      ...current.onboarding,
+      completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'catalog'])],
+    },
+  }));
+}
+
 async function writeImportHistory(context:Context,tenant:TenantProfile,entry:any){
   const store=storeFor(context,tenant);
   const current=await readImportHistory(context,tenant);
@@ -688,7 +693,7 @@ export async function catalogFingerprint(catalog:QuickBooksCatalogItem[]) {
 export default async (req:Request, context:Context)=>{
   const auth=await requireCapability('sales.view',req);
   if(auth.response)return auth.response;
-  const tenant=resolveTenant(req);
+  const tenant=auth.tenant||resolveTenant(req);
 
   if(req.method==='GET'){
     const [catalog,imports,priceHistory]=await Promise.all([
@@ -766,6 +771,7 @@ export default async (req:Request, context:Context)=>{
       [item,...catalog.filter((entry)=>entry.id!==id)].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
       {actor,source:'catalog-manager',sourceRef:id,note:'Catalog Manager item save.'},
     );
+    await markCatalogOnboarded(context,tenant);
     return Response.json({ok:true,item,catalog:next});
   }
 
@@ -848,6 +854,7 @@ export default async (req:Request, context:Context)=>{
       afterFingerprint:await catalogFingerprint(next),rolledBackAt:'',
     };
     const imports=await writeImportHistory(context,tenant,entry);
+    await markCatalogOnboarded(context,tenant);
     return Response.json({ok:true,catalog:next,import:entry,imports,summary});
   }
 

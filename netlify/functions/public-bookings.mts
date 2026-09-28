@@ -1,12 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { createSignWellContract, signWellConfiguration, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
 function clean(value: unknown, max = 1000) {
@@ -167,12 +166,15 @@ function publicBooking(record: any) {
 }
 
 export default async (req: Request, context: Context) => {
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
   const token = clean(context.params.token, 100);
   if (!/^[A-Za-z0-9_-]{24,100}$/.test(token)) {
     return Response.json({ error: 'Invalid booking link.' }, { status: 400 });
   }
 
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, req);
   const list = ((await store.get('records/index', { type: 'json' })) || []) as any[];
   const record = list.find((entry: any) => entry?.kind === 'proposal' && entry?.proposal?.publicToken === token);
   if (!record) return Response.json({ error: 'Booking not found.' }, { status: 404 });
@@ -280,6 +282,6 @@ export default async (req: Request, context: Context) => {
   }
 
   return new Response('Method not allowed', { status: 405 });
+  });
 };
-
 export const config: Config = { path: '/api/bookings/:token' };

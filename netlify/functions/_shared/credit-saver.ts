@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type CreditSaverMode='normal'|'saver'|'paused';
 export type CreditSaverJobId=
@@ -85,9 +86,7 @@ const LEGACY_ACTIONS:CreditSaverActionId[]=[
 ];
 
 function store(context:Context){
-  return context.deploy.context==='production'
-    ? getStore({name:'koa-system-health',consistency:'strong'})
-    : getDeployStore({name:'koa-system-health'});
+  return tenantStoreFor(context,resolveTenant(),'systemHealth');
 }
 
 function clean(value:unknown,max=240){

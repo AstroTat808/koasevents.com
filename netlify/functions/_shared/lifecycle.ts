@@ -1,7 +1,8 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
-function crm(context:Context){return context.deploy.context==='production'?getStore({name:'koa-crm',consistency:'strong'}):getDeployStore({name:'koa-crm'});}
-function ops(context:Context){return context.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
+function crm(context:Context){return tenantStoreFor(context,resolveTenant(),'crm');}
+function ops(context:Context){return tenantStoreFor(context,resolveTenant(),'eventOps');}
 function id(p='TASK'){return p+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 function offset(date:string,days:number){const d=new Date(date+'T12:00:00Z');if(Number.isNaN(d.getTime()))return'';d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
 async function activity(context:Context,recordId:string,type:string,detail:string){const s=crm(context);const cur:any[]=(await s.get('activity/index',{type:'json'}))||[];await s.setJSON('activity/index',[{id:id('ACT'),recordId,type,detail,createdAt:new Date().toISOString()},...cur].slice(0,5000));}

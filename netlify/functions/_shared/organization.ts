@@ -20,6 +20,10 @@ export type OrganizationDomain = {
   kind: 'app' | 'portal' | 'marketing' | 'custom';
   status: 'pending' | 'verified' | 'failed';
   primary: boolean;
+  verificationToken?: string;
+  verifiedAt?: string;
+  lastCheckedAt?: string;
+  verificationError?: string;
 };
 
 export type OrganizationTemplate = {
@@ -39,6 +43,7 @@ export type OrganizationIntegration = {
   remoteAccountName: string;
   connectedAt: string;
   lastVerifiedAt: string;
+  credentialRef?: string;
 };
 
 export type OrganizationSubscription = {
@@ -348,8 +353,8 @@ export async function ensureMembership(
     ? {
         ...existing,
         email,
-        role,
-        capabilities: [...new Set(capabilities)],
+        role: profile.storage.legacyDataBelongsToTenant ? role : existing.role,
+        capabilities: profile.storage.legacyDataBelongsToTenant ? [...new Set(capabilities)] : existing.capabilities,
         status: existing.status === 'removed' ? 'removed' : existing.status === 'suspended' ? 'suspended' : 'active',
         acceptedAt: existing.acceptedAt || now,
         updatedAt: now,
@@ -408,4 +413,182 @@ export async function buildTenantContext(
     membership,
     profile: effectiveProfile,
   };
+}
+
+
+export async function listOrganizations(context?: Context) {
+  const store = controlStore(context);
+  const index = ((await store.get('organizations/index', { type: 'json' })) || []) as Array<{id:string;slug:string;displayName:string;status:string}>;
+  return index;
+}
+
+export async function readOrganizationById(context: Context | undefined, id: string) {
+  const key = clean(id, 120);
+  if (!key) return null;
+  return await controlStore(context).get('organizations/' + key, { type: 'json' }) as OrganizationRecord | null;
+}
+
+export async function readOrganizationByHost(context: Context | undefined, host: string) {
+  const normalized = normalizedHost(host);
+  if (!normalized) return null;
+  const index = await listOrganizations(context);
+  for (const row of index) {
+    const organization = await readOrganizationById(context, row.id);
+    if (!organization) continue;
+    if ((organization.domains || []).some((domain) =>
+      domain.status === 'verified' && normalizedHost(domain.hostname) === normalized
+    )) return organization;
+  }
+  return null;
+}
+
+export function profileFromOrganization(organization: OrganizationRecord): TenantProfile {
+  const primary = organization.domains.find((domain) => domain.primary && domain.status === 'verified')
+    || organization.domains.find((domain) => domain.status === 'verified');
+  const app = organization.domains.find((domain) => domain.kind === 'app' && domain.status === 'verified');
+  return {
+    id: organization.id,
+    slug: organization.slug,
+    displayName: organization.displayName,
+    legalName: organization.legalName,
+    locale: organization.locale || 'en-US',
+    currency: organization.currency || 'USD',
+    timezone: organization.timezone || 'UTC',
+    microsoftTimeZone: 'UTC',
+    calendar: {
+      recordMarkerPrefix: 'VENUELOOM_RECORD_ID:',
+      legacyRecordMarkerPrefixes: [],
+    },
+    domains: {
+      primary: primary?.hostname || '',
+      admin: app?.hostname || primary?.hostname || '',
+    },
+    contact: {
+      email: organization.contact.email || '',
+      phone: organization.contact.phone || '',
+      phoneDisplay: organization.contact.phone || '',
+      venueAddress: organization.contact.venueAddress || '',
+      mailingAddress: organization.contact.mailingAddress || '',
+    },
+    brand: {
+      tagline: organization.branding.tagline || '',
+      logoPath: organization.branding.logoPath || '',
+    },
+    tax: {
+      id: organization.taxProfile.id || 'default-tax',
+      label: organization.taxProfile.label || 'Tax',
+      kind: (organization.taxProfile.kind || 'other') as TenantProfile['tax']['kind'],
+      enabled: organization.taxProfile.enabled === true,
+      statutoryRate: Number(organization.taxProfile.statutoryRate || 0),
+      customerRate: Number(organization.taxProfile.customerRate || 0),
+      maxPassOnRate: Number(organization.taxProfile.maxPassOnRate || 0),
+      defaultTaxable: organization.taxProfile.defaultTaxable !== false,
+      exemptionPolicy: {
+        mode: 'manual-review',
+        itemLevelRulesConfigured: false,
+        reviewMessage: 'Review tenant tax exemptions before synchronization.',
+      },
+    },
+    catalog: { canonicalAliases:{}, quickBooksAliases:{}, bootstrapItems:[], websitePlacements:[] },
+    sales: { packageAliases:{}, catalogItemByPackage:{}, weddingPackageIds:[], mobileBarPackageIds:[], privateEventPackageIds:[] },
+    accounting: {
+      damageDeposit: {
+        enabled: false,
+        defaultRentalType: 'one-day',
+        oneDayAmount: 0,
+        weekendAmount: 0,
+        dueDaysBefore: 30,
+        refundWithinDays: 14,
+      },
+    },
+    bootstrapAdminEmails: [],
+    storage: {
+      legacyDataBelongsToTenant: false,
+      compatibilityBlobStores: {
+        sales:'', quotes:'', integrations:'', crm:'', eventOps:'', vendors:'', eventFiles:'', vendorFiles:'',
+        emailAnalytics:'', emailRouting:'', authSecurity:'', staffDirectory:'', staffFiles:'', staffAudit:'', staffAvailability:'',
+        security:'', systemHealth:'', calendarSync:'', userPreferences:'', blog:'', gallery:'', localSeo:'', workspaceAlerts:'',
+      },
+    },
+    legal: { governingLawLabel:'', disputeVenueLabel:'' },
+  };
+}
+
+function tenantIdFromSlug(value: unknown) {
+  return clean(value, 100).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+}
+
+export async function createOrganization(
+  context: Context | undefined,
+  input: { slug?:string; displayName?:string; legalName?:string; email?:string; locale?:string; currency?:string; timezone?:string; country?:string },
+  creator: { id?:string; email?:string },
+) {
+  const slug = tenantIdFromSlug(input.slug || input.displayName);
+  const displayName = clean(input.displayName, 180);
+  const legalName = clean(input.legalName || displayName, 220);
+  const email = clean(input.email || creator.email, 240).toLowerCase();
+  const userId = clean(creator.id, 160);
+  if (!slug || !displayName || !userId || !email) throw new Error('Organization name, slug, creator ID, and email are required.');
+
+  const store = controlStore(context);
+  const existing = await readOrganizationById(context, slug);
+  if (existing) throw new Error('An organization with this slug already exists.');
+  const index = await listOrganizations(context);
+  if (index.some((row) => row.slug === slug)) throw new Error('An organization with this slug already exists.');
+
+  const now = new Date().toISOString();
+  const organization: OrganizationRecord = {
+    id: slug,
+    slug,
+    displayName,
+    legalName,
+    status: 'trial',
+    locale: clean(input.locale, 60) || 'en-US',
+    currency: (clean(input.currency, 8) || 'USD').toUpperCase(),
+    timezone: clean(input.timezone, 100) || 'UTC',
+    country: clean(input.country, 100),
+    contact: { email, phone:'', venueAddress:'', mailingAddress:'' },
+    branding: { tagline:'', logoPath:'', primaryColor:'', accentColor:'', backgroundColor:'' },
+    taxProfile: { id:'default-tax', label:'Tax', kind:'other', enabled:false, statutoryRate:0, customerRate:0, maxPassOnRate:0, defaultTaxable:true },
+    venues: [],
+    domains: [],
+    featureFlags: {},
+    integrations: [
+      { provider:'quickbooks', enabled:false, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'signwell', enabled:false, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'resend', enabled:false, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'microsoft', enabled:false, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+      { provider:'stripe', enabled:false, status:'not_configured', remoteAccountId:'', remoteAccountName:'', connectedAt:'', lastVerifiedAt:'' },
+    ],
+    templates: [],
+    subscription: {
+      provider:'stripe', status:'not_configured', plan:'', interval:'monthly', seats:1, billingEmail:email,
+      stripeCustomerId:'', stripeSubscriptionId:'', currentPeriodEnd:'', trialEndsAt:'',
+    },
+    onboarding: { completedSteps:['organization','locale'], activatedAt:'' },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  await store.setJSON('organizations/' + organization.id, organization);
+  await store.setJSON('organizations/index', [
+    { id:organization.id, slug:organization.slug, displayName:organization.displayName, status:organization.status },
+    ...index.filter((row) => row.id !== organization.id),
+  ]);
+
+  const membership: MembershipRecord = {
+    id: membershipId(organization.id, userId),
+    tenantId: organization.id,
+    userId,
+    email,
+    role: 'admin',
+    capabilities: [],
+    status: 'active',
+    invitedAt: now,
+    acceptedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await saveMembership(context, membership);
+  return { organization, membership, profile: profileFromOrganization(organization) };
 }

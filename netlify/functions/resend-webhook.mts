@@ -1,5 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { recordEmailHealthEvent } from './_shared/email-health';
 
 type CommunicationState = {
@@ -54,7 +56,7 @@ function timingSafeEqual(left: Uint8Array, right: Uint8Array) {
 }
 
 async function verifyWebhookSignature(req: Request, rawBody: string) {
-  const secret = String(Netlify.env.get('RESEND_WEBHOOK_SECRET') || '').trim();
+  const secret = tenantEnv(resolveTenant(),'RESEND_WEBHOOK_SECRET');
   if (!secret.startsWith('whsec_')) return false;
 
   const messageId = req.headers.get('svix-id') || '';
@@ -105,6 +107,9 @@ async function verifyWebhookSignature(req: Request, rawBody: string) {
 
 export default async (req: Request, context: Context) => {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:401,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
 
   const raw = await req.text();
   if (raw.length > 100_000) return new Response('Payload too large', { status: 413 });
@@ -143,7 +148,7 @@ export default async (req: Request, context: Context) => {
   const status = normalizeStatus(payload?.type);
   if (!status) return new Response(null, { status: 204 });
 
-  const store = getStore({ name: 'koa-sales', consistency: 'strong' });
+  const store = tenantStoreFor(context, resolveTenant(req), 'sales');
   const records: any[] = (await store.get('records/index', { type: 'json' })) || [];
   const matches: Array<{ record: any; key: string }> = [];
 
@@ -203,8 +208,8 @@ export default async (req: Request, context: Context) => {
   return Response.json({ ok: true, updated: changedRecordIds.size }, {
     headers: { 'Cache-Control': 'private, no-store' },
   });
+  });
 };
-
 export const config: Config = {
   path: '/api/webhooks/resend',
   rateLimit: {
