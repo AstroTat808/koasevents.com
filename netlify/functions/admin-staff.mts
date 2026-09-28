@@ -117,6 +117,12 @@ async function normalizeUser(user:any,policy:any){
   };
 }
 
+function userBelongsToTenant(user:any,tenant:any){
+  const configuredTenant=clean(metadataFor(user)?.tenantId,120);
+  if(configuredTenant)return configuredTenant===tenant.id;
+  return tenant?.storage?.legacyDataBelongsToTenant===true;
+}
+
 async function syncTenantMembership(context:Context,tenant:any,user:any,status?:'active'|'suspended'|'removed'){
   const role=effectiveRole(user,tenant);
   const membership=await ensureMembership(context,tenant,user,role,capabilitiesFor(user));
@@ -134,7 +140,13 @@ export default async(req:Request,context:Context)=>{
 
   if(req.method==='GET'){
     const [users,audit]=await Promise.all([allUsers(),readStaffAudit(context,500)]);
-    const normalized=await Promise.all(users.map((user:any)=>normalizeUser(user,policy)));
+    const tenantUsers=users.filter((user:any)=>userBelongsToTenant(user,tenant));
+    await Promise.all(tenantUsers.map(async(user:any)=>{
+      const role=effectiveRole(user,tenant);
+      const status=role==='deactivated'?'suspended':'active';
+      return syncTenantMembership(context,tenant,user,status);
+    }));
+    const normalized=await Promise.all(tenantUsers.map((user:any)=>normalizeUser(user,policy)));
     normalized.sort((a,b)=>{
       const order:Record<string,number>={admin:0,manager:1,event_coordinator:2,vendor_manager:3,content_editor:4,accounting:5,sales:6,custom:7,read_only:8,deactivated:9,none:10};
       return (order[a.role]??99)-(order[b.role]??99)||a.email.localeCompare(b.email);
