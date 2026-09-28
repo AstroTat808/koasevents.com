@@ -1,25 +1,28 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
+import { tenantEnv } from './_shared/tenant-env';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendReviewRequest } from './_shared/review-email.ts';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
 
-const HST_OFFSET_MS = -10 * 60 * 60 * 1000;
-
-function configuredDays(name: string, fallback: number, min: number, max: number) {
-  const value = Number(Netlify.env.get(name) || fallback);
+function configuredDays(name: string, legacyName:string, fallback: number, min: number, max: number) {
+  const value = Number(tenantEnv(resolveTenant(),name,legacyName) || fallback);
   return Number.isFinite(value) ? Math.min(max, Math.max(min, Math.floor(value))) : fallback;
 }
 
-function hstDateString(nowMs = Date.now()) {
-  return new Date(nowMs + HST_OFFSET_MS).toISOString().slice(0, 10);
+function tenantDateString(nowMs = Date.now()) {
+  const tenant=resolveTenant();
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{
+    timeZone:tenant.timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit'
+  }).formatToParts(new Date(nowMs)).map((part)=>[part.type,part.value]));
+  return String(parts.year)+'-'+String(parts.month)+'-'+String(parts.day);
 }
 
 function calendarAgeDays(eventDate: unknown, nowMs = Date.now()) {
   const raw = String(eventDate || '').trim().slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
   const eventMs = Date.parse(raw + 'T00:00:00Z');
-  const todayMs = Date.parse(hstDateString(nowMs) + 'T00:00:00Z');
+  const todayMs = Date.parse(tenantDateString(nowMs) + 'T00:00:00Z');
   if (!Number.isFinite(eventMs) || !Number.isFinite(todayMs)) return null;
   return Math.floor((todayMs - eventMs) / 86_400_000);
 }
@@ -40,15 +43,14 @@ function eventId() {
   return 'EVT-' + crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
 }
 
-export default async (_req: Request, context: Context) => {
-  if (context.deploy.context !== 'production') return;
+async function runTenantReviewRequests(context: Context) {
   if (!(await shouldRunScheduledJob(context,'review-requests'))) return;
 
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = tenantEnv(resolveTenant(),'RESEND_API_KEY');
   if (!apiKey) return;
 
-  const delayDays = configuredDays('KOA_REVIEW_REQUEST_DELAY_DAYS', 1, 1, 14);
-  const lookbackDays = configuredDays('KOA_REVIEW_REQUEST_LOOKBACK_DAYS', 14, delayDays, 60);
+  const delayDays = configuredDays('REVIEW_REQUEST_DELAY_DAYS','KOA_REVIEW_REQUEST_DELAY_DAYS', 1, 1, 14);
+  const lookbackDays = configuredDays('REVIEW_REQUEST_LOOKBACK_DAYS','KOA_REVIEW_REQUEST_LOOKBACK_DAYS', 14, delayDays, 60);
 
   const store = tenantStoreFor(context, resolveTenant(), 'sales');
   const records: any[] = (await store.get('records/index', { type: 'json' })) || [];
@@ -104,6 +106,14 @@ export default async (_req: Request, context: Context) => {
     const currentEvents: any[] = (await store.get('analytics/events/index', { type: 'json' })) || [];
     await store.setJSON('analytics/events/index', [...appended, ...currentEvents].slice(0, 10000));
   }
+};
+
+
+export default async (_req: Request, context: Context) => {
+  if (context.deploy.context !== 'production') return;
+  const results=await runForEachTenant(context,()=>runTenantReviewRequests(context));
+  const failed=results.filter((row)=>!row.ok);
+  if(failed.length)console.error('Review request tenant runs failed',failed);
 };
 
 export const config: Config = {
