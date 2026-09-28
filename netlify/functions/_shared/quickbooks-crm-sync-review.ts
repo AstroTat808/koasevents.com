@@ -1,4 +1,4 @@
-// Release marker: QuickBooks match evidence drawer and final sync preflight.
+// Release marker: QuickBooks sync exclusions, expandable preflight, and post-sync reconciliation.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
