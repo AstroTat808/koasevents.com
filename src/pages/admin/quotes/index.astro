@@ -926,7 +926,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const header=document.createElement('div');
           header.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
           const left=document.createElement('div');
-          const title=document.createElement('strong');title.className='text-sm text-red-900';title.textContent=row.clientName||row.recordId;
+          const title=document.createElement('a');title.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';title.className='text-sm font-bold text-red-900 underline decoration-red-200 underline-offset-4';title.textContent=row.clientName||row.recordId;
           const meta=document.createElement('p');meta.className='mt-1 text-xs text-red-800/60';meta.textContent=[row.recordId,row.eventDate].filter(Boolean).join(' · ');
           left.append(title,meta);
           const link=document.createElement('a');link.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';link.className='text-[.58rem] font-black uppercase tracking-[.08em] text-red-700';link.textContent='Open client →';
