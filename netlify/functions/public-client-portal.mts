@@ -17,13 +17,15 @@ export default async(req:Request,context:Context)=>{
   const tenant=resolveTenant(req);
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid portal link.'},{status:400});
-  const ss=sales(context), cs=crm(context);
-  const records:any[]=await idx<any>(ss,'records/index');
+  const ss=tenantStore(context,'sales',tenant), cs=tenantStore(context,'crm',tenant);
+  const records:any[]=tenantRows(await idx<any>(ss,'records/index'),tenant);
   const record=records.find(r=>r?.kind==='proposal'&&r?.proposal?.publicToken===token);
   if(!record)return Response.json({error:'Client portal not found.'},{status:404});
   if(req.method==='GET'){
-    const [appointments,messages]=await Promise.all([idx<any>(cs,'appointments/index'),idx<any>(cs,'client-messages/index')]);
-    const eventOps:any=record.stage==='booked'?await ops(context).get('events/'+record.id,{type:'json'}):null;
+    const [appointmentsRaw,messagesRaw]=await Promise.all([idx<any>(cs,'appointments/index'),idx<any>(cs,'client-messages/index')]);
+    const appointments=tenantRows(appointmentsRaw,tenant);
+    const messages=tenantRows(messagesRaw,tenant);
+    const eventOps:any=record.stage==='booked'?await tenantStore(context,'eventOps',tenant).get('events/'+record.id,{type:'json'}):null;
     const contract=record.booking?.contract||null;
     return Response.json({project:{
       id:record.id,stage:record.stage,status:record.status,customerName:record.customer?.name||'',eventDate:record.customer?.eventDate||'',packageId:record.packageId||'',
