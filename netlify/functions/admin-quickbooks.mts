@@ -8,6 +8,8 @@ import {
   getLastQuickBooksCrmSyncPreview,
   getQuickBooksCrmSyncHistory,
   getQuickBooksCrmSyncHistoryDetail,
+  previewQuickBooksCrmSyncRollback,
+  applyQuickBooksCrmSyncRollback,
   saveQuickBooksMatchOverride,
   validateQuickBooksCrmSyncPreview,
 } from './_shared/quickbooks-crm-sync-review';
@@ -623,6 +625,15 @@ export default async (req: Request, context: Context) => {
       if (!detail) return Response.json({ error:'QuickBooks sync history entry not found.' }, { status:404 });
       return Response.json({ detail }, { headers:{ 'Cache-Control':'private, no-store' } });
     }
+    if (view === 'rollback-preview') {
+      const syncId = clean(url.searchParams.get('syncId'), 120);
+      try {
+        const rollbackPreview = await previewQuickBooksCrmSyncRollback(context, syncId);
+        return Response.json({ rollbackPreview }, { headers:{ 'Cache-Control':'private, no-store' } });
+      } catch (error) {
+        return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview CRM rollback.' }, { status:409 });
+      }
+    }
 
     const [connection, settings, catalog, getSettings, depositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview] = await Promise.all([
       getQuickBooksConnection(context),
@@ -710,6 +721,19 @@ export default async (req: Request, context: Context) => {
       return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
       return Response.json({ error:error instanceof Error ? error.message : 'Unable to save QuickBooks customer match.' }, { status:409 });
+    }
+  }
+
+  if (action === 'rollback-sync-crm') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    const syncId = clean(payload?.syncId, 120);
+    try {
+      const rollback = await applyQuickBooksCrmSyncRollback(context, syncId, actor);
+      const records = await readQuickBooksSalesRecords(context);
+      const accountingAudit = buildQuickBooksAccountingAudit(records);
+      return Response.json({ ok:true, rollback, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to restore CRM records from this sync.' }, { status:409 });
     }
   }
 

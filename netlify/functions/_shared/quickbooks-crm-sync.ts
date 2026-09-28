@@ -48,6 +48,10 @@ function money(value: unknown) {
   return Number.isFinite(numeric) ? Math.round(numeric * 100) / 100 : 0;
 }
 
+function jsonClone<T = any>(value: T): T {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
 function normalizeEmail(value: unknown) {
   return clean(value, 240).toLowerCase();
 }
@@ -623,6 +627,7 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   const existingRecords = ((await store.get('records/index', { type: 'json' })) || []) as any[];
   const records = existingRecords.filter(Boolean).slice(0, CRM_RECORD_LIMIT);
   const recordsBefore = records.length;
+  const recordsBeforeById = new Map(records.map((record) => [String(record.id), jsonClone(record)]));
 
   // Pull all supported accounting entities first. This gives the sync a stable
   // financial snapshot while CRM-origin writes happen later in the same run.
@@ -844,6 +849,16 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   }
 
   const completedAt = new Date().toISOString();
+  const recoveryRecords = records
+    .filter((record) => changedRecordIds.has(String(record.id)))
+    .map((record) => ({
+      recordId: clean(record?.id, 120),
+      clientName: clean(record?.customer?.name, 180),
+      before: recordsBeforeById.has(String(record.id)) ? recordsBeforeById.get(String(record.id)) : null,
+      after: jsonClone(record),
+      createdBySync: !recordsBeforeById.has(String(record.id)),
+    }));
+
   const syncId = 'QBSYNC-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix();
   const result = {
     syncId,
@@ -873,14 +888,31 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     conflicts,
     warnings,
     changes,
+    recovery: {
+      version: 1,
+      crmOnly: true,
+      capturedAt: completedAt,
+      records: recoveryRecords,
+    },
   };
 
   await writeRecords(context, records, changedRecordIds);
   const integrations = integrationStore(context);
-  await integrations.setJSON('quickbooks/manual-sync-last', result);
-  const history = ((await integrations.get('quickbooks/manual-sync-history', { type: 'json' })) || []) as any[];
-  await integrations.setJSON('quickbooks/manual-sync-history', [result, ...history].slice(0, 100));
+
+  // Full recovery snapshots belong only in the per-sync detail record. Keeping
+  // them out of the lightweight last/history blobs avoids duplicating entire
+  // CRM records in frequently-read integration state.
   await recordQuickBooksCrmSyncHistory(context, result);
-  await appendSyncEvent(context, result);
-  return result;
+  const recoverySummary = {
+    version: result.recovery.version,
+    crmOnly: true,
+    capturedAt: result.recovery.capturedAt,
+    recordCount: result.recovery.records.length,
+  };
+  const lightweightResult = { ...result, recovery: recoverySummary };
+  await integrations.setJSON('quickbooks/manual-sync-last', lightweightResult);
+  const history = ((await integrations.get('quickbooks/manual-sync-history', { type: 'json' })) || []) as any[];
+  await integrations.setJSON('quickbooks/manual-sync-history', [lightweightResult, ...history].slice(0, 100));
+  await appendSyncEvent(context, lightweightResult);
+  return lightweightResult;
 }
