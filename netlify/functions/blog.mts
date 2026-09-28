@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenantAsync } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
@@ -24,22 +25,20 @@ type BlogPost = {
   originalUrl?: string;
 };
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-blog', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-blog' });
+function storeFor(context: Context, tenant:any) {
+  return tenantStoreFor(context, tenant, 'blog');
 }
 
 function legacySeed(): BlogPost[] {
   return wixBlogPosts.map((post) => ({ ...post })) as BlogPost[];
 }
 
-async function readPosts(context: Context): Promise<BlogPost[]> {
-  const store = storeFor(context);
+async function readPosts(context: Context, tenant:any): Promise<BlogPost[]> {
+  const store = storeFor(context, tenant);
   const stored = ((await store.get('posts/index', { type: 'json' })) || []) as BlogPost[];
 
   if (!stored.length) {
-    const seeded = legacySeed();
+    const seeded = tenant?.storage?.legacyDataBelongsToTenant ? legacySeed() : [];
     if (seeded.length) await store.setJSON('posts/index', seeded);
     return seeded;
   }
@@ -48,10 +47,11 @@ async function readPosts(context: Context): Promise<BlogPost[]> {
 }
 
 export default async (req: Request, context: Context) => {
-  const store = storeFor(context);
+  const tenant = await resolveTenantAsync(req, context);
+  const store = storeFor(context, tenant);
 
   if (req.method === 'GET') {
-    const posts = await readPosts(context);
+    const posts = await readPosts(context, tenant);
     const url = new URL(req.url);
     const admin = url.searchParams.get('admin') === '1';
 
@@ -74,7 +74,7 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'POST') {
     const payload = await req.json();
     const action = payload.action || 'save';
-    const posts = await readPosts(context);
+    const posts = await readPosts(context, tenant);
     const canManageBlog = hasCapability(auth.user, 'blog.manage');
     if (!canManageBlog) return Response.json({ error:'Blog management permission required.' }, { status:403 });
 
@@ -93,7 +93,7 @@ export default async (req: Request, context: Context) => {
 
     if (action === 'restore-legacy') {
       const bySlug = new Map(posts.map((post) => [post.slug, post]));
-      for (const post of legacySeed()) {
+      for (const post of (tenant?.storage?.legacyDataBelongsToTenant ? legacySeed() : [])) {
         if (!bySlug.has(post.slug)) bySlug.set(post.slug, post);
       }
       const next = [...bySlug.values()].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
