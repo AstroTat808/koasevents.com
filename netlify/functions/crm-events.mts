@@ -1,12 +1,11 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant.ts';
+import { tenantStoreFor } from './_shared/tenant-storage.ts';
 
 const ALLOWED_TYPES = new Set(['package_view']);
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
 function clean(value: unknown, max = 120) {
@@ -27,7 +26,7 @@ export default async (req: Request, context: Context) => {
     return Response.json({ error: 'Invalid event.' }, { status: 400 });
   }
 
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, req);
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   const duplicate = sessionId && current.some((event: any) =>
     event?.type === type && event?.packageId === packageId && event?.sessionId === sessionId
