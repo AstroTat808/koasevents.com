@@ -11,7 +11,7 @@
     "build:safety": "node scripts/build_safety_check.mjs",
     "audit:tenant": "node scripts/audit_tenant_hardcoding.mjs",
     "audit:tenant:strict": "node scripts/audit_tenant_hardcoding.mjs --strict-platform",
-    "prebuild": "npm run build:safety && npm run audit:tenant:strict && npm run test:tenant-isolation",
+    "prebuild": "npm run build:safety && npm run audit:tenant:strict && npm run test:tenant:isolation && npm run test:tenant-isolation",
     "test:tenant:isolation": "node scripts/test_tenant_isolation.mjs",
     "test:tenant-isolation": "node scripts/tenant_isolation_qa.mjs"
   },
