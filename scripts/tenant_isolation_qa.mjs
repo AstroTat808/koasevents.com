@@ -152,6 +152,15 @@ for(const file of scheduledTenantJobs){
   assert.match(text,/schedule\s*:/,file+' must remain a scheduled function');
 }
 
+const quickBooksWebhook=source('netlify/functions/quickbooks-webhook.mts');
+assert.match(quickBooksWebhook,/resolveQuickBooksWebhookTenant\s*\(/,'QuickBooks webhook must resolve tenant from realm + verifier');
+assert.match(quickBooksWebhook,/runWithTenant\s*\(/,'QuickBooks webhook must bind the resolved tenant');
+
+const resendWebhook=source('netlify/functions/resend-webhook.mts');
+assert.match(resendWebhook,/resolveTenantAsync\s*\(/,'Resend webhook must resolve tenant from its endpoint host');
+assert.match(resendWebhook,/runWithTenant\s*\(/,'Resend webhook must bind tenant before signature verification and CRM writes');
+assert.match(resendWebhook,/tenantEnv\(resolveTenant\(\),'RESEND_WEBHOOK_SECRET'\)/,'Resend webhook must use the tenant signing secret');
+
 const signWellSource=source('netlify/functions/_shared/signwell.ts');
 assert.match(signWellSource,/metadata:\{tenant_id:resolveTenant\(\)\.id,/, 'SignWell documents must carry tenant_id metadata');
 const signWellWebhook=source('netlify/functions/signwell-webhook.mts');
@@ -169,7 +178,10 @@ for(const invariant of [
 ]) {
   assert.match(orgApi,invariant,'Organization onboarding capability is missing: '+String(invariant));
 }
-assert.match(source('netlify/functions/stripe-webhook.mts'),/tenant_id/, 'Stripe events must carry tenant_id metadata');
+const stripeWebhook=source('netlify/functions/stripe-webhook.mts');
+assert.match(stripeWebhook,/tenant_id/, 'Stripe events must carry tenant_id metadata');
+assert.match(stripeWebhook,/readOrganizationById\s*\(/, 'Stripe webhook must resolve the organization from signed tenant metadata');
+assert.match(stripeWebhook,/verifyStripeSignature\s*\(/, 'Stripe webhook must verify the platform billing signature before organization updates');
 assert.match(source('netlify/functions/_shared/tenant-env.ts'),/VENUELOOM_TENANT_/, 'Integration credentials must support tenant-scoped environment keys');
 
 console.log('Tenant isolation QA passed: production boundary primitives, storage imports, scheduled jobs, webhooks, and onboarding contracts are isolated.');
