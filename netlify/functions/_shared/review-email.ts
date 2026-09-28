@@ -1,4 +1,6 @@
 import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
+import { resolveTenant } from './tenant';
+import { tenantEnv } from './tenant-env';
 
 type ReviewRecord = {
   id: string;
@@ -40,7 +42,7 @@ function formatDate(value: unknown) {
 
 function reviewUrl() {
   return String(
-    Netlify.env.get('KOA_GOOGLE_REVIEW_URL') ||
+    tenantEnv(resolveTenant(),'GOOGLE_REVIEW_URL','KOA_GOOGLE_REVIEW_URL') ||
     'https://search.google.com/local/writereview?placeid=ChIJqUJ-794zUnkR59_4DdRzq4g'
   ).trim();
 }
@@ -98,15 +100,15 @@ function text(record: ReviewRecord) {
 }
 
 export async function sendReviewRequest(record: ReviewRecord) {
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   const email = String(record.customer?.email || '').trim();
   if (!apiKey || !email || !email.includes('@')) {
     return { sent: false, configured: Boolean(apiKey), id: '' };
   }
 
   const brandName = emailBrandName(emailBrandForRecord(record));
-  const from = String(Netlify.env.get('KOA_CLIENT_EMAIL_FROM') || 'Koa’s Events <aloha@koasevents.com>').trim();
-  const replyTo = String(Netlify.env.get('KOA_CLIENT_REPLY_TO') || 'aloha@koasevents.com').trim();
+  const from = String(tenantEnv(resolveTenant(),'KOA_CLIENT_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
+  const replyTo = String(tenantEnv(resolveTenant(),'KOA_CLIENT_REPLY_TO') || resolveTenant().contact.email).trim();
 
   try {
     const response = await fetch('https://api.resend.com/emails', {
