@@ -1,14 +1,14 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Koa’s QuickBooks Setup" description="Connect Koa’s Events CRM to QuickBooks Online." canonical="https://www.koasevents.com/admin/quickbooks/">
+<BaseLayout noindex title="QuickBooks Setup | VenueLoom" description="Connect a VenueLoom tenant to QuickBooks Online." canonical="/admin/quickbooks/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell max-w-5xl">
       <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p class="eyebrow text-[var(--koa-clay)]">Admin · Accounting</p>
           <h1 class="display mt-3 text-5xl">QuickBooks Online</h1>
-          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks is Koa’s financial system of record for estimates, invoices and payments. The CRM stores only QuickBooks IDs, document numbers, balances and sync timestamps.</p>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">QuickBooks can be configured as the active tenant’s accounting system of record for estimates, invoices and payments. VenueLoom stores the external IDs, document numbers, balances and synchronization metadata needed for reconciliation.</p>
         </div>
         
       </div>
@@ -134,19 +134,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section data-get-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-          <p class="eyebrow text-[var(--koa-clay)]">Hawaiʻi tax setting</p>
-          <h2 class="display mt-3 text-4xl">General Excise Tax (GET)</h2>
-          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Hawaiʻi County GET is 4.5%. If Koa’s passes GET on to the client, the maximum permitted pass-on rate is 4.712%. This setting controls the CRM proposal calculation; it is not labeled as sales tax.</p>
-          <form data-get-form class="mt-6 grid gap-4 lg:grid-cols-[1fr_1fr_auto] lg:items-end">
-            <label class="grid gap-2 text-sm font-semibold">Client GET rate %
-              <input name="customerRate" type="number" value="4.712" readonly class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-3 text-[var(--koa-forest)]" />
-            </label>
+          <p class="eyebrow text-[var(--koa-clay)]">Tenant tax profile</p>
+          <h2 class="display mt-3 text-4xl">Proposal tax configuration</h2>
+          <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">VenueLoom does not assume a jurisdiction or tax type. The active tenant supplies the tax label and rates used by proposals and QuickBooks reconciliation. Item-level exemptions remain controlled by the tenant catalog and tax policy.</p>
+          <form data-get-form class="mt-6 grid gap-4 lg:grid-cols-2 xl:grid-cols-5 xl:items-end">
             <label class="grid gap-2 text-sm font-semibold">Label
-              <input name="label" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" value="Hawaiʻi GET" />
+              <input name="label" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
             </label>
-            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save GET setting</button>
+            <label class="grid gap-2 text-sm font-semibold">Statutory rate %
+              <input name="statutoryRate" type="number" min="0" max="100" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">Client rate %
+              <input name="customerRate" type="number" min="0" max="100" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <label class="grid gap-2 text-sm font-semibold">Maximum pass-through %
+              <input name="maxPassOnRate" type="number" min="0" max="100" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" />
+            </label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save tax setting</button>
           </form>
-          <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/48">Statutory Hawaiʻi County rate: 4.5% · Maximum pass-through setting allowed here: 4.712%</p>
+          <p data-tax-profile-note class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/48"></p>
           <p data-get-message class="mt-2 text-sm text-[var(--koa-ink)]/52"></p>
         </section>
 
@@ -311,7 +317,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <label class="grid gap-2 text-sm font-semibold">Unit label<input name="unitLabel" value="each" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">Unit price<input name="unitPrice" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
               <label class="grid gap-2 text-sm font-semibold">QuickBooks type<select name="quickBooksType" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="Service">Service</option><option value="NonInventory">Non-Inventory</option></select></label>
-              <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 text-sm font-semibold"><input name="getExempt" type="checkbox" /> Exempt from Hawaiʻi GET</label>
+              <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 text-sm font-semibold"><input name="getExempt" type="checkbox" /> Tax exempt</label>
               <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Description<textarea name="description" rows="4" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
             </div>
             <div class="mt-6 flex flex-wrap gap-3">
@@ -501,7 +507,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
-    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function tenantLocale(){return state?.tenant?.locale||'en-US';}
+    function tenantCurrency(){return state?.tenant?.currency||'USD';}
+    function money(value){return new Intl.NumberFormat(tenantLocale(),{style:'currency',currency:tenantCurrency(),maximumFractionDigits:2}).format(Number(value||0));}
     function auditValue(value){return value==null?'—':money(value);}
     function renderAccountingAudit(){
       const audit=state?.accountingAudit||{};
@@ -890,7 +898,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       row.dataset.autoRule='1';
       row.className='grid gap-2 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3 xl:grid-cols-[auto_1.1fr_.75fr_.62fr_.62fr_.72fr_.72fr_1.1fr_auto] xl:items-end';
       row.dataset.ruleId=rule.id;
-      row.innerHTML='<div class="flex items-center gap-1 self-center"><button data-rule-drag type="button" draggable="true" class="cursor-grab rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-[.65rem] font-black text-[var(--koa-ink)]/45" title="Drag to reorder">↕</button><span data-rule-order class="text-[.6rem] font-black text-[var(--koa-clay)]"></span></div><label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min months<input data-rule-min type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max months<input data-rule-max type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Min contract $<input data-rule-min-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max contract $<input data-rule-max-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Contract value basis<select data-rule-value-basis class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="afterGet">After Hawaiʻi GET</option><option value="beforeGet">Before Hawaiʻi GET</option></select></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><div class="flex flex-wrap gap-1"><button data-rule-up type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↑</button><button data-rule-down type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↓</button><label class="flex items-center gap-1 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-2 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
+      row.innerHTML='<div class="flex items-center gap-1 self-center"><button data-rule-drag type="button" draggable="true" class="cursor-grab rounded-lg border border-[var(--koa-line)] bg-white px-2 py-2 text-[.65rem] font-black text-[var(--koa-ink)]/45" title="Drag to reorder">↕</button><span data-rule-order class="text-[.6rem] font-black text-[var(--koa-clay)]"></span></div><label class="grid gap-1 text-xs font-semibold">Rule name<input data-rule-name class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Event type<select data-rule-category class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="venueWedding">Wedding</option><option value="mobileBar">Mobile Bar</option><option value="privateEvent">Private Event</option><option value="default">Fallback</option></select></label><label class="grid gap-1 text-xs font-semibold">Min months<input data-rule-min type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max months<input data-rule-max type="number" min="0" step="0.1" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Min contract $<input data-rule-min-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Max contract $<input data-rule-max-value type="number" min="0" step="100" class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></label><label class="grid gap-1 text-xs font-semibold">Contract value basis<select data-rule-value-basis class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"><option value="afterGet">After tax</option><option value="beforeGet">Before tax</option></select></label><label class="grid gap-1 text-xs font-semibold">Preset<select data-rule-preset class="rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2"></select></label><div class="flex flex-wrap gap-1"><button data-rule-up type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↑</button><button data-rule-down type="button" class="rounded-full border border-[var(--koa-line)] px-2 py-2 text-[.55rem] font-black text-[var(--koa-forest)]">↓</button><label class="flex items-center gap-1 text-xs font-semibold"><input data-rule-active type="checkbox"> Active</label><button data-remove-rule type="button" class="rounded-full border border-red-200 px-2 py-2 text-[.55rem] font-black uppercase text-red-700">Remove</button></div>';
       row.querySelector('[data-rule-name]').value=rule.name||'Payment rule';
       row.querySelector('[data-rule-category]').value=rule.category||'default';
       row.querySelector('[data-rule-min]').value=rule.minLeadDays==null?'':String(Math.round((Number(rule.minLeadDays)/30.4375)*10)/10);
@@ -1278,8 +1286,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             : 'Waiting for webhook verification for '+linked.recordId+' · invoice '+(linked.invoiceDocNumber||linked.invoiceId||'')+' · payment '+(linked.paymentId||'')+'. Current stage: '+(linked.actualStage||'pending')+' · deposit paid: '+(linked.depositPaid?'Yes':'No')+'.';
       }
       if(getForm&&state?.getSettings){
-        getForm.elements.customerRate.value='4.712';
-        getForm.elements.label.value=state.getSettings.label||'Hawaiʻi GET';
+        getForm.elements.label.value=state.getSettings.label||state?.tenant?.tax?.label||'Tax';
+        getForm.elements.statutoryRate.value=String(state.getSettings.statutoryRate ?? state?.tenant?.tax?.statutoryRate ?? 0);
+        getForm.elements.customerRate.value=String(state.getSettings.customerRate ?? state?.tenant?.tax?.customerRate ?? 0);
+        getForm.elements.maxPassOnRate.value=String(state.getSettings.maxPassOnRate ?? state?.tenant?.tax?.maxPassOnRate ?? 0);
+        const taxNote=document.querySelector('[data-tax-profile-note]');
+        if(taxNote){
+          const policy=state?.tenant?.tax?.exemptionPolicy;
+          taxNote.textContent=(state?.tenant?.displayName||'Tenant')+' · '+String(state.getSettings.label||'Tax')+
+            ' · statutory '+Number(state.getSettings.statutoryRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'%'+
+            ' · client '+Number(state.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'%'+
+            (policy?.reviewMessage?' · '+policy.reviewMessage:'');
+        }
       }
       if(depositForm&&state?.depositSettings){
         depositForm.elements.venueWeddingPercent.value=String(state.depositSettings.venueWeddingPercent ?? 10);
@@ -1381,12 +1399,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     getForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
       const data=new FormData(getForm);
-      if(getMessage)getMessage.textContent='Saving Hawaiʻi GET setting…';
+      if(getMessage)getMessage.textContent='Saving tenant tax setting…';
       try{
-        const result=await api({action:'save-get-settings',enabled:true,label:data.get('label'),customerRate:4.712});
+        const result=await api({
+          action:'save-get-settings',
+          enabled:true,
+          label:data.get('label'),
+          statutoryRate:Number(data.get('statutoryRate')||0),
+          customerRate:Number(data.get('customerRate')||0),
+          maxPassOnRate:Number(data.get('maxPassOnRate')||0),
+        });
         state.getSettings=result.getSettings;
-        if(getMessage)getMessage.textContent='Saved. New CRM proposals can use '+Number(result.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'% '+String(result.getSettings.label||'Hawaiʻi GET')+'.';
-      }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save GET setting.';}
+        if(getMessage)getMessage.textContent='Saved. New CRM proposals can use '+Number(result.getSettings.customerRate||0).toFixed(3).replace(/0+$/,'').replace(/\.$/,'')+'% '+String(result.getSettings.label||'Tax')+'.';
+      }catch(err){if(getMessage)getMessage.textContent=err.message||'Unable to save tenant tax setting.';}
     });
     depositForm?.addEventListener('submit',async(event)=>{
       event.preventDefault();
