@@ -5,7 +5,8 @@ import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
 import { emailHealthSummary } from './email-health';
 import { credentialHealthSummary } from './credential-health';
-import { quickBooksWebhookVerifierToken } from './quickbooks';
+import { qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
+import { evaluateAccountingTaxInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 
 export type HealthIssueType =
@@ -169,6 +170,7 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'quickbooks-tax-invariant',name:'QuickBooks tax-on-tax invariant',path:'$15,000.00 + $706.80 tax = $15,706.80',kind:'api' as const},
     {id:'credential-quickbooks',name:'QuickBooks credential',path:'Credential Health · QuickBooks',kind:'api' as const},
     {id:'credential-microsoft-graph',name:'Microsoft Graph credential',path:'Credential Health · Microsoft Graph',kind:'api' as const},
     {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
@@ -224,6 +226,7 @@ function defaultAlertAfter(id:string):1|2 {
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
     'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
+    'quickbooks-tax-invariant',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
     'synthetic-event-documents','synthetic-vendor-insurance-document','synthetic-quickbooks-webhook','synthetic-signwell-webhook',
   ]);
@@ -271,7 +274,7 @@ export async function readHealthAlertPolicy(context:Context):Promise<HealthAlert
       const saved:any=byId.get(rule.id);
       return {
         id:rule.id,
-        alertAfter:saved?.alertAfter===1?1:2,
+        alertAfter:saved ? (saved?.alertAfter===1?1:2) : rule.alertAfter,
         publicVisible:Boolean(saved?.publicVisible),
         publicName:clean(saved?.publicName,120)||rule.publicName,
       };
@@ -299,7 +302,7 @@ export async function saveHealthAlertPolicy(context:Context,input:any,actor:stri
       const saved:any=byId.get(rule.id);
       return {
         id:rule.id,
-        alertAfter:saved?.alertAfter===1?1:2,
+        alertAfter:saved ? (saved?.alertAfter===1?1:2) : rule.alertAfter,
         publicVisible:Boolean(saved?.publicVisible),
         publicName:clean(saved?.publicName,120)||rule.publicName,
       };
@@ -1052,6 +1055,84 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     ms:Date.now()-started,
   };
 }
+async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
+  const started=Date.now();
+  const invariant=evaluateAccountingTaxInvariant();
+  if(!invariant.ok){
+    return {
+      id:'quickbooks-tax-invariant',
+      name:'QuickBooks tax-on-tax invariant',
+      kind:'api',
+      path:'$15,000.00 + $706.80 tax = $15,706.80',
+      ok:false,
+      status:503,
+      ms:Date.now()-started,
+      severity:'red',
+      detail:clean(
+        'Accounting configuration problem: the CRM-to-QuickBooks payload invariant failed. '
+        +'Expected $15,000.00 + $706.80 tax = $15,706.80 with $0.00 taxable payload. '
+        +'Failures: '+(invariant.failures||[]).join('; '),
+        1200,
+      ),
+    };
+  }
+
+  try{
+    const taxCodeData:any=await qboQuery(context,'select * from TaxCode maxresults 100');
+    const live=inspectQuickBooksNonTaxCode(taxCodeData);
+    if(live.verified && !live.ok){
+      return {
+        id:'quickbooks-tax-invariant',
+        name:'QuickBooks tax-on-tax invariant',
+        kind:'api',
+        path:'$15,000.00 + $706.80 tax = $15,706.80',
+        ok:false,
+        status:503,
+        ms:Date.now()-started,
+        severity:'red',
+        detail:clean(
+          'Accounting configuration problem: code payload math still passes at exactly $15,706.80 with $0.00 taxable payload, '
+          +'but live QuickBooks tax configuration is no longer compatible. '+live.detail,
+          1200,
+        ),
+      };
+    }
+    return {
+      id:'quickbooks-tax-invariant',
+      name:'QuickBooks tax-on-tax invariant',
+      kind:'api',
+      path:'$15,000.00 + $706.80 tax = $15,706.80',
+      ok:true,
+      status:200,
+      ms:Date.now()-started,
+      severity:live.verified?'green':'yellow',
+      detail:clean(
+        'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
+        +'milestone invoice line is NON-taxable. '+live.detail,
+        1200,
+      ),
+    };
+  }catch(error){
+    return {
+      id:'quickbooks-tax-invariant',
+      name:'QuickBooks tax-on-tax invariant',
+      kind:'api',
+      path:'$15,000.00 + $706.80 tax = $15,706.80',
+      ok:true,
+      status:200,
+      ms:Date.now()-started,
+      severity:'yellow',
+      detail:clean(
+        'Code invariant passed at exactly $15,706.80 with $0.00 taxable payload. '
+        +'Live QuickBooks NON tax-code availability could not be verified during this run: '
+        +(error instanceof Error?error.message:'QuickBooks query unavailable')+'. '
+        +'QuickBooks Credential Health reports connection problems separately.',
+        1200,
+      ),
+    };
+  }
+}
+
 export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'post-deploy'='hourly'):Promise<HealthSnapshot> {
   const healthRunStarted=Date.now();
   const origin=baseUrl().replace(/\/$/,'');
@@ -1081,13 +1162,15 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     credentialHealthSummary(context,{force:source==='manual',emailHealth})
   );
   const syntheticChecksPromise=syntheticIntegrationChecks(context,origin,source!=='hourly');
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks]=await Promise.all([
+  const accountingInvariantPromise=quickBooksTaxInvariantHealthCheck(context);
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
     emailHealthPromise,
     credentialHealthPromise,
     syntheticChecksPromise,
+    accountingInvariantPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -1510,7 +1593,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {

@@ -101,6 +101,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <p class="eyebrow text-[var(--koa-clay)]">QuickBooks mirror</p>
             <div data-qbo-docs class="mt-4 grid gap-3 md:grid-cols-2"></div>
           </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Audit trail</p>
+                <h2 class="display mt-2 text-3xl">Accounting Repair History</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Every approved accounting repair retained on this client record, including the approver, QuickBooks documents, before/after values, and final reconciliation result.</p>
+              </div>
+              <span data-repair-history-count class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">0 repairs</span>
+            </div>
+            <div data-repair-history class="mt-5 grid gap-3"></div>
+          </div>
         </section>
 
         <section data-panel="proposal" class="mt-5 hidden">
@@ -289,8 +300,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function repairLines(lines){
       const rows=Array.isArray(lines)?lines:[];
-      if(!rows.length)return '<p class="text-xs text-[var(--koa-ink)]/45">No estimate lines.</p>';
-      return '<div class="mt-2 grid gap-1">'+rows.map((line)=>'<div class="flex flex-wrap justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-xs"><span>'+esc(line.description||'Line item')+(line.taxCode?' · tax '+esc(line.taxCode):'')+'</span><strong>'+money(line.amount||0)+'</strong></div>').join('')+'</div>';
+      if(!rows.length)return '<p class="text-xs text-[var(--koa-ink)]/45">No financial lines.</p>';
+      return '<div class="mt-2 grid gap-1">'+rows.map((line)=>{
+        const description=line.description||line.Description||'Line item';
+        const amount=line.amount??line.Amount??0;
+        const taxCode=line.taxCode||line.SalesItemLineDetail?.TaxCodeRef?.value||'';
+        return '<div class="flex flex-wrap justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-xs"><span>'+esc(description)+(taxCode?' · tax '+esc(taxCode):'')+'</span><strong>'+money(amount)+'</strong></div>';
+      }).join('')+'</div>';
+    }
+
+    function issueNames(issues){
+      const rows=Array.isArray(issues)?issues:[];
+      return rows.length?rows.map((issue)=>esc(issue.label||issue.code||'Accounting issue')).join(' · '):'None';
+    }
+
+    function renderRepairHistory(qbo){
+      const rows=Array.isArray(qbo?.repairHistory)?qbo.repairHistory:[];
+      const target=document.querySelector('[data-repair-history]');
+      const count=document.querySelector('[data-repair-history-count]');
+      if(count)count.textContent=rows.length+' repair'+(rows.length===1?'':'s');
+      if(!target)return;
+      if(!rows.length){
+        target.innerHTML='<div class="rounded-xl bg-[var(--koa-sand)]/55 p-4 text-sm text-[var(--koa-ink)]/55">No approved accounting repairs have been recorded for this client.</div>';
+        return;
+      }
+      target.innerHTML=rows.map((entry)=>{
+        const before=entry.before||{};
+        const after=entry.after||{};
+        const resolved=entry.resolved===true||(entry.resolved==null&&after.reconciled===true);
+        const documents=Array.isArray(entry.documents)&&entry.documents.length
+          ? entry.documents
+          : (entry.estimateDocNumber||entry.estimateId?[{type:'estimate',id:entry.estimateId,docNumber:entry.estimateDocNumber,beforeTotal:before.estimateTotal,afterTotal:after.estimateTotal}]:[]);
+        const docHtml=documents.length?documents.map((doc)=>{
+          const type=String(doc.type||'document').replace(/_/g,' ');
+          const number=doc.docNumber?'#'+doc.docNumber:(doc.id||'No document number');
+          return '<div class="rounded-xl bg-white p-3"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(type)+' '+esc(number)+'</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+money(doc.beforeTotal||0)+' → '+money(doc.afterTotal||0)+'</p>'+(doc.balance!=null?'<p class="mt-1 text-xs text-[var(--koa-ink)]/45">Balance after repair '+money(doc.balance)+'</p>':'')+'</div>';
+        }).join(''):'<div class="rounded-xl bg-white p-3 text-xs text-[var(--koa-ink)]/45">No QuickBooks document reference was stored for this legacy repair entry.</div>';
+        const badgeClass=resolved?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-900';
+        const status=resolved?'Fully reconciled':'Remaining issues';
+        return '<article class="rounded-[1.2rem] border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-5"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div class="flex flex-wrap items-center gap-2"><strong class="text-[var(--koa-forest)]">'+esc(entry.id||entry.previewId||'Accounting repair')+'</strong><span class="rounded-full px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+badgeClass+'">'+status+'</span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/45">Approved '+esc(when(entry.approvedAt))+' by '+esc(entry.approvedBy||'staff')+(entry.previewId?' · Preview '+esc(entry.previewId):'')+'</p></div><span class="text-xs font-semibold text-[var(--koa-ink)]/50">'+(Array.isArray(entry.changes)?entry.changes.length:0)+' approved change'+((Array.isArray(entry.changes)?entry.changes.length:0)===1?'':'s')+'</span></div><div class="mt-4 grid gap-3 sm:grid-cols-3"><div class="rounded-xl bg-white p-3"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Estimate total</p><p class="mt-1 text-sm font-semibold">'+(before.estimateTotal==null?'—':money(before.estimateTotal))+' → '+(after.estimateTotal==null?'—':money(after.estimateTotal))+'</p></div><div class="rounded-xl bg-white p-3"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Payments received</p><p class="mt-1 text-sm font-semibold">'+money(before.paymentsReceived||0)+' → '+money(after.paymentsReceived||0)+'</p></div><div class="rounded-xl bg-white p-3"><p class="text-[.54rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Remaining balance</p><p class="mt-1 text-sm font-semibold">'+money(before.remainingBalance||0)+' → '+money(after.remainingBalance||0)+'</p></div></div><div class="mt-3 grid gap-3 md:grid-cols-2">'+docHtml+'</div><div class="mt-3 grid gap-2 text-xs"><p><strong class="text-[var(--koa-forest)]">Issues before:</strong> '+issueNames(before.issues)+'</p><p><strong class="text-[var(--koa-forest)]">Issues after:</strong> '+issueNames(entry.remainingIssues||after.issues)+'</p></div></article>';
+      }).join('');
     }
 
     function renderRepairPreview(preview){
@@ -310,8 +359,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const changes=Array.isArray(preview.changes)?preview.changes:[];
       const blocked=Array.isArray(preview.blockedIssues)?preview.blockedIssues:[];
       const changeHtml=changes.length?changes.map((change)=>'<article class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-[var(--koa-forest)]">'+esc(change.target||'QuickBooks')+'</strong><span class="rounded-full bg-red-100 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-red-800">'+esc(change.type||'change')+'</span></div><div class="mt-4 grid gap-3 lg:grid-cols-2"><div class="rounded-xl bg-red-50 p-3"><p class="text-[.55rem] font-black uppercase tracking-[.07em] text-red-700">Before</p><p class="mt-1 text-sm font-bold">'+(change.before?.exists===false?'Not created':money(change.before?.total||0))+'</p>'+repairLines(change.before?.lines)+'</div><div class="rounded-xl bg-emerald-50 p-3"><p class="text-[.55rem] font-black uppercase tracking-[.07em] text-emerald-800">After approval</p><p class="mt-1 text-sm font-bold">'+money(change.after?.total||0)+'</p>'+repairLines(change.after?.lines)+(change.after?.taxHandling?'<p class="mt-2 text-xs leading-5 text-emerald-900">'+esc(change.after.taxHandling)+'</p>':'')+'</div></div></article>').join(''):'<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">No safe QuickBooks write is proposed for the current mismatch.</div>';
-      const blockedHtml=blocked.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-4"><p class="text-xs font-black uppercase tracking-[.07em] text-amber-900">Not automatically changed</p><div class="mt-2 grid gap-2">'+blocked.map((issue)=>'<p class="text-sm text-amber-950"><strong>'+esc(issue.label||issue.code||'Issue')+'</strong> · '+(issue.expected!=null?'Expected '+esc(issue.expected)+' · ':'')+(issue.actual!=null?'Current '+esc(issue.actual):'requires review')+'</p>').join('')+'</div></div>':'';
-      const approvalHtml=preview.canApply?'<label class="flex items-start gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/55 p-4 text-sm"><input data-repair-approve type="checkbox" class="mt-1 h-4 w-4"><span><strong class="text-[var(--koa-forest)]">I approve the QuickBooks changes shown above.</strong><span class="mt-1 block text-xs leading-5 text-[var(--koa-ink)]/50">The server will validate that CRM and QuickBooks have not changed since this preview, apply only the approved repair, run Sync & Recheck, and write the before/after result to Client Workspace Activity.</span></span></label><button data-repair-apply type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Apply Approved Repair</button>':'<p class="rounded-xl bg-slate-100 p-4 text-sm text-slate-700">This preview cannot be applied automatically. Resolve the listed configuration or non-safe accounting issue first.</p>';
+      const blockedHtml=blocked.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-4"><p class="text-xs font-black uppercase tracking-[.07em] text-amber-900">Protected / not automatically changed</p><div class="mt-2 grid gap-2">'+blocked.map((issue)=>'<div class="rounded-lg bg-white/60 p-3 text-sm text-amber-950"><p><strong>'+esc(issue.label||issue.code||'Issue')+'</strong> · '+(issue.expected!=null?'Expected '+(typeof issue.expected==='number'?money(issue.expected):esc(issue.expected))+' · ':'')+(issue.actual!=null?'Current '+(typeof issue.actual==='number'?money(issue.actual):esc(issue.actual)):'requires review')+'</p>'+(issue.protection?'<p class="mt-1 text-xs leading-5">'+esc(issue.protection)+'</p>':'')+'</div>').join('')+'</div></div>':'';
+      const approvalHtml=preview.canApply?'<label class="flex items-start gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/55 p-4 text-sm"><input data-repair-approve type="checkbox" class="mt-1 h-4 w-4"><span><strong class="text-[var(--koa-forest)]">I approve the QuickBooks changes shown above.</strong><span class="mt-1 block text-xs leading-5 text-[var(--koa-ink)]/50">The server will validate that CRM and QuickBooks have not changed since this preview, refuse any invoice that is paid or partially paid, apply only the approved safe repairs, run Sync & Recheck, and write the before/after result to Accounting Repair History and Client Workspace Activity.</span></span></label><button data-repair-apply type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Apply Approved Repair</button>':'<p class="rounded-xl bg-slate-100 p-4 text-sm text-slate-700">This preview cannot be applied automatically. Resolve the listed configuration or non-safe accounting issue first.</p>';
       panel.innerHTML='<div class="rounded-[1.25rem] border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-5"><div class="flex flex-wrap items-center justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Approval required</p><h3 class="display mt-1 text-2xl">Accounting repair preview</h3></div><p class="text-xs text-[var(--koa-ink)]/45">Preview '+esc(preview.previewId||'')+' · expires '+esc(when(preview.expiresAt))+'</p></div><div class="mt-4 grid gap-3">'+changeHtml+blockedHtml+approvalHtml+'</div></div>';
 
       panel.querySelector('[data-repair-apply]')?.addEventListener('click',async()=>{
@@ -457,8 +506,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelector('[data-qbo-docs]').innerHTML=
         card('Customer',qbo.customerDisplayName||'Not linked',qbo.customerId?'QBO #'+qbo.customerId:'')+
         card('Estimate',qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'Not linked',money(qbo.estimateTotal||0)+' · CRM-controlled mirror')+
-        invoices.map((invoice)=>card('Invoice '+(invoice.docNumber?'#'+invoice.docNumber:''),money(invoice.total||invoice.amount||0),'QuickBooks source of truth · Balance '+money(invoice.balance||0)+' · '+(invoice.emailStatus||''))).join('')+
+        invoices.map((invoice)=>{
+          const total=Number(invoice.total||invoice.amount||0);
+          const balance=Number(invoice.balance??total);
+          const paid=Math.max(0,total-balance);
+          const paymentState=paid<=0.005?'Unpaid':balance<=0.005?'Paid':'Partially paid';
+          return card('Invoice '+(invoice.docNumber?'#'+invoice.docNumber:''),money(total),'QuickBooks source of truth · '+paymentState+' · Paid '+money(paid)+' · Balance '+money(balance)+' · '+(invoice.emailStatus||''));
+        }).join('')+
         card('Last synced',when(qbo.lastSyncedAt||qbo.estimateLastSyncedAt));
+      renderRepairHistory(qbo);
     }
 
     function lineEditor(line,index){
