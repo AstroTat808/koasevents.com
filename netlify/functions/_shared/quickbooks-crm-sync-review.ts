@@ -809,7 +809,7 @@ export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: s
   const detail = await getQuickBooksCrmSyncHistoryDetail(context, syncId);
   const completedAt = new Date().toISOString();
   const rollback = {
-    status:'completed',
+    status: preview.conflictCount > 0 ? 'partial' : 'completed',
     completedAt,
     actor:clean(actor,180),
     restored,
@@ -827,7 +827,7 @@ export async function applyQuickBooksCrmSyncRollback(context: Context, syncId: s
   if (index.length) {
     await integrations.setJSON(HISTORY_INDEX_KEY, index.map((row: any) =>
       clean(row?.syncId,120) === clean(syncId,120)
-        ? { ...row, rollbackStatus:'completed', rolledBackAt:completedAt }
+        ? { ...row, rollbackStatus:rollback.status, rolledBackAt:completedAt }
         : row
     ));
   }
