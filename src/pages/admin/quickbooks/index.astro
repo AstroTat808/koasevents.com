@@ -1209,13 +1209,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const unresolvedPlans=plans.filter(unresolvedExclusionEligible);
       const visibleSuggested=visibleSuggestedExclusionPlans();
       if(exclusionTools)exclusionTools.classList.toggle('hidden',!preview||(!unresolvedPlans.length&&!Number(summary.excludedCustomers||0)));
+      const selectedExclusionPlans=unresolvedPlans.filter((plan)=>bulkSelectedExclude.has(String(plan.customerId)));
+      const usingSuggestedReasons=String(bulkExclusionReason?.value||'suggested')==='suggested';
+      const suggestedReasonMismatch=usingSuggestedReasons&&selectedExclusionPlans.some((plan)=>!plan?.suggestedExclusion?.code);
       if(bulkExclusionDetail)bulkExclusionDetail.textContent=
         Number(summary.suggestedExclusions||0)+' suggested exclusion'+(Number(summary.suggestedExclusions||0)===1?'':'s')+' · '+
         bulkSelectedExclude.size+' selected for exclusion · '+
-        Number(summary.excludedCustomers||0)+' already excluded. Preview suggestions never apply automatically.';
+        Number(summary.excludedCustomers||0)+' already excluded. Preview suggestions never apply automatically.'+
+        (suggestedReasonMismatch?' Choose a specific reason because at least one selected customer has no suggestion.':'');
       if(bulkExcludeSuggested)bulkExcludeSuggested.disabled=visibleSuggested.length===0;
       if(bulkExclude){
-        bulkExclude.disabled=bulkSelectedExclude.size===0;
+        bulkExclude.disabled=bulkSelectedExclude.size===0||suggestedReasonMismatch;
         bulkExclude.textContent='Exclude selected ('+bulkSelectedExclude.size+')';
       }
       if(exclusionReport){
@@ -2323,7 +2327,46 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     disconnect?.addEventListener('click',async()=>{status.textContent='Disconnecting…';try{await api({action:'disconnect'});await load();}catch(err){status.textContent=err.message||'Unable to disconnect.';}});
     previewTwoWay?.addEventListener('click',runPreviewSync);
     previewFilter?.addEventListener('change',renderSyncPreview);
+    exclusionReasonFilter?.addEventListener('change',()=>{
+      const reason=String(exclusionReasonFilter?.value||'all');
+      const view=String(previewFilter?.value||'all');
+      if(reason!=='all'&&!['excluded','suggested'].includes(view)&&previewFilter)previewFilter.value='excluded';
+      renderSyncPreview();
+    });
     previewSearch?.addEventListener('input',renderSyncPreview);
+    bulkExclusionReason?.addEventListener('change',renderSyncPreview);
+    bulkExcludeSuggested?.addEventListener('click',()=>{
+      visibleSuggestedExclusionPlans().forEach((plan)=>{
+        const id=String(plan.customerId||'');
+        if(id){bulkSelectedExclude.add(id);bulkSelectedNew.delete(id);}
+      });
+      if(bulkExclusionReason)bulkExclusionReason.value='suggested';
+      renderSyncPreview();
+    });
+    bulkExcludeClear?.addEventListener('click',()=>{bulkSelectedExclude.clear();renderSyncPreview();});
+    bulkExclude?.addEventListener('click',()=>excludeBulkSelected().catch((err)=>alert(err.message||'Unable to bulk exclude selected customers.')));
+    exclusionCancel?.addEventListener('click',()=>{pendingExclusionCustomerId='';exclusionDialog?.close();});
+    exclusionForm?.addEventListener('submit',async(event)=>{
+      event.preventDefault();
+      const customerId=String(pendingExclusionCustomerId||'');
+      if(!customerId)return;
+      const reasonCode=String(exclusionReason?.value||'other');
+      const note=String(exclusionNote?.value||'').trim();
+      const original=exclusionSubmit?.textContent||'Exclude from sync';
+      if(exclusionSubmit){exclusionSubmit.disabled=true;exclusionSubmit.textContent='Excluding…';}
+      try{
+        bulkSelectedExclude.delete(customerId);
+        bulkSelectedNew.delete(customerId);
+        await saveMatch(customerId,'exclude','',note,reasonCode);
+        pendingExclusionCustomerId='';
+        exclusionDialog?.close();
+        await runPreviewSync();
+      }catch(err){
+        alert(err.message||'Unable to exclude this QuickBooks customer.');
+      }finally{
+        if(exclusionSubmit){exclusionSubmit.disabled=false;exclusionSubmit.textContent=original;}
+      }
+    });
     bulkSelectVisible?.addEventListener('click',()=>{
       visibleBulkEligiblePlans().forEach((plan)=>bulkSelectedNew.add(String(plan.customerId)));
       renderSyncPreview();
