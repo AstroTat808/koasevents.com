@@ -1,0 +1,394 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Organization Settings | VenueLoom" description="Configure your VenueLoom organization, onboarding, branding, tax, venues, integrations, team, domains, templates and subscription." canonical="/admin/organization/">
+  <main class="min-h-screen bg-stone-100 py-8">
+    <div class="mx-auto grid w-[min(96vw,94rem)] gap-6">
+      <section data-loading class="rounded-3xl bg-white p-7 shadow-sm">
+        <p class="text-xs font-black uppercase tracking-[.16em] text-stone-500">VenueLoom</p>
+        <h1 class="mt-2 text-4xl font-black text-stone-900">Organization Settings</h1>
+        <p class="mt-3 text-sm text-stone-600">Loading organization context…</p>
+      </section>
+
+      <section data-unauthorized class="hidden rounded-3xl bg-white p-7 shadow-sm">
+        <h1 class="text-3xl font-black text-stone-900">Organization access required</h1>
+        <p class="mt-3 text-sm text-stone-600">This workspace requires Organization Settings access.</p>
+      </section>
+
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-3xl bg-stone-900 p-7 text-white shadow-sm">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.16em] text-stone-300">Tenant control plane</p>
+              <h1 data-org-heading class="mt-2 text-4xl font-black">Organization Settings</h1>
+              <p class="mt-3 max-w-4xl text-sm leading-6 text-stone-300">Configure the organization without changing VenueLoom source code. These settings become the tenant runtime profile for CRM, catalog, accounting and client-facing workflows.</p>
+            </div>
+            <nav class="flex flex-wrap gap-2 text-xs font-bold">
+              <a href="/admin/catalog/" class="rounded-full border border-white/25 px-4 py-2.5">Catalog</a>
+              <a href="/admin/staff/" class="rounded-full border border-white/25 px-4 py-2.5">Team</a>
+              <a href="/admin/quickbooks/" class="rounded-full border border-white/25 px-4 py-2.5">QuickBooks</a>
+            </nav>
+          </div>
+        </header>
+
+        <section class="grid gap-4 xl:grid-cols-[.7fr_1.3fr]">
+          <article class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Onboarding</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Launch checklist</h2>
+            <p data-onboarding-summary class="mt-2 text-sm text-stone-600"></p>
+            <div data-onboarding class="mt-5 grid gap-2"></div>
+            <button data-activate type="button" class="mt-5 rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Activate organization</button>
+            <p data-activate-message class="mt-3 text-sm text-stone-600"></p>
+          </article>
+
+          <article class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Organization identity</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Business profile</h2>
+            <form data-identity-form class="mt-5 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Display name<input name="displayName" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Legal name<input name="legalName" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Phone<input name="phone" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Primary venue address<input name="venueAddress" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Mailing address<input name="mailingAddress" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <div class="sm:col-span-2 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save identity</button><span data-identity-message class="text-sm text-stone-600"></span></div>
+            </form>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <form data-locale-form class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Regional settings</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Locale, currency + timezone</h2>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Locale<input name="locale" placeholder="en-US" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Currency<input name="currency" placeholder="USD" maxlength="8" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Timezone<input name="timezone" placeholder="America/New_York" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Country<input name="country" placeholder="United States" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            </div>
+            <div class="mt-5 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save regional settings</button><span data-locale-message class="text-sm text-stone-600"></span></div>
+          </form>
+
+          <form data-brand-form class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Branding</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Tenant appearance</h2>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Tagline<input name="tagline" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Logo path / URL<input name="logoPath" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Primary color<input name="primaryColor" placeholder="#1f3d35" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Accent color<input name="accentColor" placeholder="#b97852" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Background color<input name="backgroundColor" placeholder="#f6f1e8" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            </div>
+            <div class="mt-5 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save branding</button><span data-brand-message class="text-sm text-stone-600"></span></div>
+          </form>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <form data-tax-form class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Tax profile</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Jurisdiction-neutral tax settings</h2>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Label<input name="label" placeholder="Tax" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Kind<select name="kind" class="rounded-xl border border-stone-300 bg-white px-4 py-3"><option value="sales_tax">Sales tax</option><option value="gross_receipts">Gross receipts</option><option value="VAT">VAT</option><option value="GST">GST</option><option value="other">Other</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Statutory rate %<input name="statutoryRate" type="number" min="0" max="100" step=".001" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Customer rate %<input name="customerRate" type="number" min="0" max="100" step=".001" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Maximum pass-on rate %<input name="maxPassOnRate" type="number" min="0" max="100" step=".001" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="flex items-center gap-3 rounded-xl border border-stone-300 px-4 py-3 text-sm font-semibold"><input name="defaultTaxable" type="checkbox"> Items taxable by default</label>
+              <label class="flex items-center gap-3 rounded-xl border border-stone-300 px-4 py-3 text-sm font-semibold sm:col-span-2"><input name="enabled" type="checkbox"> Enable tax profile</label>
+            </div>
+            <div class="mt-5 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save tax profile</button><span data-tax-message class="text-sm text-stone-600"></span></div>
+          </form>
+
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Venues + locations</p><h2 class="mt-2 text-2xl font-black text-stone-900">Operating locations</h2></div>
+              <button data-add-venue type="button" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Add venue</button>
+            </div>
+            <div data-venues class="mt-5 grid gap-3"></div>
+            <div class="mt-5 flex items-center gap-3"><button data-save-venues type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save venues</button><span data-venues-message class="text-sm text-stone-600"></span></div>
+          </section>
+        </section>
+
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Migration safety</p>
+              <h2 class="mt-2 text-2xl font-black text-stone-900">Legacy → tenant-scoped storage audit</h2>
+              <p class="mt-2 max-w-4xl text-sm text-stone-600">Compares legacy compatibility stores against VenueLoom’s canonical tenant namespace. Legacy stores are not retired unless every object is represented and critical JSON fingerprints match.</p>
+            </div>
+            <button data-run-migration-audit type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run migration audit</button>
+          </div>
+          <p data-migration-message class="mt-3 text-sm text-stone-600"></p>
+          <div data-migration-summary class="mt-5 hidden grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
+          <div data-migration-domains class="mt-5 grid gap-2"></div>
+        </section>
+
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Integrations</p>
+          <div class="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div><h2 class="text-2xl font-black text-stone-900">Provider readiness</h2><p class="mt-2 text-sm text-stone-600">Credentials remain server-side. This page exposes configuration readiness without exposing secret values.</p></div>
+            <a href="/admin/health/" class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Open System Health</a>
+          </div>
+          <div data-integrations class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Team onboarding</p><h2 class="mt-2 text-2xl font-black text-stone-900">Invite teammates</h2></div>
+              <a href="/admin/staff/" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Full team manager</a>
+            </div>
+            <form data-invite-form class="mt-5 grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Name<input name="name" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Email<input name="email" type="email" required class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Job title<input name="jobTitle" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Role<select name="role" class="rounded-xl border border-stone-300 bg-white px-4 py-3"><option value="sales">Sales</option><option value="manager">Manager</option><option value="event_coordinator">Event Coordinator</option><option value="vendor_manager">Vendor Manager</option><option value="accounting">Accounting</option><option value="read_only">Read Only</option></select></label>
+              <button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white sm:col-span-2 sm:justify-self-start">Send setup invite</button>
+              <p data-invite-message class="text-sm text-stone-600 sm:col-span-2"></p>
+            </form>
+            <div data-memberships class="mt-5 grid gap-2"></div>
+          </section>
+
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Catalog onboarding</p><h2 class="mt-2 text-2xl font-black text-stone-900">Packages, rentals + services</h2></div>
+              <a href="/admin/catalog/" class="rounded-full bg-stone-900 px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white">Open Catalog Manager</a>
+            </div>
+            <p class="mt-4 text-sm leading-6 text-stone-600">Use Catalog Manager for CSV/XLSX preview, duplicate handling, rollback-protected imports, pricing, costs, tax treatment and accounting mappings.</p>
+            <div class="mt-4 rounded-2xl bg-stone-100 p-4"><strong data-catalog-count class="text-2xl text-stone-900">—</strong><p class="text-xs text-stone-600">Tenant bootstrap catalog items available.</p></div>
+          </section>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Domains</p><h2 class="mt-2 text-2xl font-black text-stone-900">Workspace + custom domains</h2></div>
+              <button data-add-domain type="button" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Add domain</button>
+            </div>
+            <p class="mt-2 text-sm text-stone-600">New custom domains remain pending until domain ownership and routing are verified.</p>
+            <div data-domains class="mt-5 grid gap-3"></div>
+            <div class="mt-5 flex items-center gap-3"><button data-save-domains type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save domains</button><span data-domains-message class="text-sm text-stone-600"></span></div>
+          </section>
+
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Templates</p><h2 class="mt-2 text-2xl font-black text-stone-900">Tenant template registry</h2></div>
+              <button data-add-template type="button" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Add template</button>
+            </div>
+            <div data-templates class="mt-5 grid gap-3"></div>
+            <div class="mt-5 flex items-center gap-3"><button data-save-templates type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save templates</button><span data-templates-message class="text-sm text-stone-600"></span></div>
+          </section>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <section class="rounded-3xl bg-white p-6 shadow-sm">
+            <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Feature flags</p><h2 class="mt-2 text-2xl font-black text-stone-900">Tenant entitlements</h2></div>
+            <div data-feature-flags class="mt-5 grid gap-2 sm:grid-cols-2"></div>
+            <div class="mt-5 flex items-center gap-3"><button data-save-flags type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save feature flags</button><span data-flags-message class="text-sm text-stone-600"></span></div>
+          </section>
+
+          <form id="subscription" data-subscription-form class="rounded-3xl bg-white p-6 shadow-sm">
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">VenueLoom subscription</p>
+            <h2 class="mt-2 text-2xl font-black text-stone-900">Billing profile</h2>
+            <p class="mt-2 text-sm text-stone-600">VenueLoom SaaS billing is separate from the organization’s client invoices, deposits and accounting ledger.</p>
+            <div class="mt-5 grid gap-4 sm:grid-cols-2">
+              <label class="grid gap-2 text-sm font-semibold">Plan key<input name="plan" placeholder="Configure after pricing is approved" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Billing interval<select name="interval" class="rounded-xl border border-stone-300 bg-white px-4 py-3"><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+              <label class="grid gap-2 text-sm font-semibold">Seats<input name="seats" type="number" min="1" step="1" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+              <label class="grid gap-2 text-sm font-semibold">Billing email<input name="billingEmail" type="email" class="rounded-xl border border-stone-300 px-4 py-3"></label>
+            </div>
+            <div data-subscription-status class="mt-4 rounded-2xl bg-stone-100 p-4 text-sm text-stone-700"></div>
+            <div class="mt-5 flex items-center gap-3"><button class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Save billing profile</button><span data-subscription-message class="text-sm text-stone-600"></span></div>
+          </form>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const $=(selector)=>document.querySelector(selector);
+    const loading=$('[data-loading]');
+    const unauthorized=$('[data-unauthorized]');
+    const app=$('[data-app]');
+    let state=null;
+    let canManage=false;
+    let canBill=false;
+
+    const flagDefinitions=[
+      ['crm','Business CRM'],['sales','Sales CRM'],['events','Event Ops'],['vendors','Vendor CRM'],
+      ['quickbooks','QuickBooks'],['signwell','SignWell'],['email','Email'],['calendar','Calendar'],
+      ['profitability','Profitability'],['client_portal','Client Portal'],['vendor_portal','Vendor Portal'],
+    ];
+
+    function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
+    function formObject(form){return Object.fromEntries(new FormData(form).entries());}
+    function setMessage(selector,value){const node=$(selector);if(node)node.textContent=value||'';}
+    function statusPill(ok){return ok?'<span class="rounded-full bg-emerald-100 px-2 py-1 text-[.62rem] font-black uppercase tracking-[.06em] text-emerald-800">Ready</span>':'<span class="rounded-full bg-amber-100 px-2 py-1 text-[.62rem] font-black uppercase tracking-[.06em] text-amber-800">Needs setup</span>';}
+
+    async function post(payload){
+      const response=await fetch('/api/admin/organization',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(data.error||'Organization request failed.'),{data});
+      state={...state,...data};
+      render();
+      return data;
+    }
+
+    function venueRow(row={}){
+      const el=document.createElement('article');
+      el.className='grid gap-3 rounded-2xl border border-stone-200 p-4 sm:grid-cols-2';
+      el.innerHTML='<input data-id type="hidden"><label class="grid gap-1 text-xs font-bold">Name<input data-name class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Timezone<input data-timezone class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold sm:col-span-2">Address<input data-address class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Capacity<input data-capacity type="number" min="0" class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="flex items-center gap-2 text-xs font-bold"><input data-active type="checkbox"> Active</label><button data-remove type="button" class="justify-self-start text-xs font-bold text-red-700">Remove</button>';
+      el.querySelector('[data-id]').value=row.id||'';
+      el.querySelector('[data-name]').value=row.name||'';
+      el.querySelector('[data-timezone]').value=row.timezone||state?.organization?.timezone||'';
+      el.querySelector('[data-address]').value=row.address||'';
+      el.querySelector('[data-capacity]').value=row.capacity??'';
+      el.querySelector('[data-active]').checked=row.active!==false;
+      el.querySelector('[data-remove]').addEventListener('click',()=>el.remove());
+      return el;
+    }
+    function readVenues(){return [...document.querySelectorAll('[data-venues] article')].map((el)=>({id:el.querySelector('[data-id]').value,name:el.querySelector('[data-name]').value,timezone:el.querySelector('[data-timezone]').value,address:el.querySelector('[data-address]').value,capacity:el.querySelector('[data-capacity]').value,active:el.querySelector('[data-active]').checked}));}
+
+    function domainRow(row={}){
+      const el=document.createElement('article');
+      el.className='grid gap-3 rounded-2xl border border-stone-200 p-4 sm:grid-cols-[1fr_140px_auto]';
+      el.innerHTML='<label class="grid gap-1 text-xs font-bold">Hostname<input data-host class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Type<select data-kind class="rounded-lg border border-stone-300 bg-white px-3 py-2"><option value="app">App</option><option value="portal">Portal</option><option value="marketing">Marketing</option><option value="custom">Custom</option></select></label><label class="flex items-center gap-2 self-end pb-2 text-xs font-bold"><input data-primary type="checkbox"> Primary</label><div data-status class="text-xs text-stone-500 sm:col-span-2"></div><button data-remove type="button" class="justify-self-start text-xs font-bold text-red-700">Remove</button>';
+      el.querySelector('[data-host]').value=row.hostname||'';
+      el.querySelector('[data-kind]').value=row.kind||'custom';
+      el.querySelector('[data-primary]').checked=row.primary===true;
+      el.querySelector('[data-status]').textContent='Status: '+(row.status||'new');
+      el.querySelector('[data-remove]').addEventListener('click',()=>el.remove());
+      return el;
+    }
+    function readDomains(){return [...document.querySelectorAll('[data-domains] article')].map((el)=>({hostname:el.querySelector('[data-host]').value,kind:el.querySelector('[data-kind]').value,primary:el.querySelector('[data-primary]').checked}));}
+
+    function templateRow(row={}){
+      const el=document.createElement('article');
+      el.className='grid gap-3 rounded-2xl border border-stone-200 p-4 sm:grid-cols-[1fr_170px_auto]';
+      el.innerHTML='<label class="grid gap-1 text-xs font-bold">Name<input data-name class="rounded-lg border border-stone-300 px-3 py-2"></label><label class="grid gap-1 text-xs font-bold">Type<select data-type class="rounded-lg border border-stone-300 bg-white px-3 py-2"><option value="proposal">Proposal</option><option value="contract">Contract</option><option value="email">Email</option><option value="welcome">Welcome</option><option value="cancellation">Cancellation</option><option value="vendor">Vendor</option><option value="other">Other</option></select></label><label class="flex items-center gap-2 self-end pb-2 text-xs font-bold"><input data-enabled type="checkbox"> Enabled</label><input data-id type="hidden"><button data-remove type="button" class="justify-self-start text-xs font-bold text-red-700">Remove</button>';
+      el.querySelector('[data-id]').value=row.id||'';
+      el.querySelector('[data-name]').value=row.name||'';
+      el.querySelector('[data-type]').value=row.type||'other';
+      el.querySelector('[data-enabled]').checked=row.enabled!==false;
+      el.querySelector('[data-remove]').addEventListener('click',()=>el.remove());
+      return el;
+    }
+    function readTemplates(){return [...document.querySelectorAll('[data-templates] article')].map((el)=>({id:el.querySelector('[data-id]').value,name:el.querySelector('[data-name]').value,type:el.querySelector('[data-type]').value,enabled:el.querySelector('[data-enabled]').checked,source:'tenant'}));}
+
+    function render(){
+      if(!state?.organization)return;
+      const org=state.organization;
+      $('[data-org-heading]').textContent=org.displayName+' settings';
+
+      const identity=$('[data-identity-form]');
+      identity.elements.displayName.value=org.displayName||'';
+      identity.elements.legalName.value=org.legalName||'';
+      identity.elements.email.value=org.contact?.email||'';
+      identity.elements.phone.value=org.contact?.phone||'';
+      identity.elements.venueAddress.value=org.contact?.venueAddress||'';
+      identity.elements.mailingAddress.value=org.contact?.mailingAddress||'';
+
+      const locale=$('[data-locale-form]');
+      locale.elements.locale.value=org.locale||'';
+      locale.elements.currency.value=org.currency||'';
+      locale.elements.timezone.value=org.timezone||'';
+      locale.elements.country.value=org.country||'';
+
+      const brand=$('[data-brand-form]');
+      brand.elements.tagline.value=org.branding?.tagline||'';
+      brand.elements.logoPath.value=org.branding?.logoPath||'';
+      brand.elements.primaryColor.value=org.branding?.primaryColor||'';
+      brand.elements.accentColor.value=org.branding?.accentColor||'';
+      brand.elements.backgroundColor.value=org.branding?.backgroundColor||'';
+
+      const tax=$('[data-tax-form]');
+      tax.elements.label.value=org.taxProfile?.label||'Tax';
+      tax.elements.kind.value=org.taxProfile?.kind||'other';
+      tax.elements.statutoryRate.value=String(org.taxProfile?.statutoryRate??0);
+      tax.elements.customerRate.value=String(org.taxProfile?.customerRate??0);
+      tax.elements.maxPassOnRate.value=String(org.taxProfile?.maxPassOnRate??0);
+      tax.elements.defaultTaxable.checked=org.taxProfile?.defaultTaxable!==false;
+      tax.elements.enabled.checked=org.taxProfile?.enabled!==false;
+
+      const venuesNode=$('[data-venues]');venuesNode.innerHTML='';(org.venues||[]).forEach((row)=>venuesNode.appendChild(venueRow(row)));
+      const domainsNode=$('[data-domains]');domainsNode.innerHTML='';(org.domains||[]).forEach((row)=>domainsNode.appendChild(domainRow(row)));
+      const templatesNode=$('[data-templates]');templatesNode.innerHTML='';(org.templates||[]).forEach((row)=>templatesNode.appendChild(templateRow(row)));
+
+      const onboard=state.onboarding||[];
+      const done=onboard.filter((row)=>row.complete).length;
+      $('[data-onboarding-summary]').textContent=done+' of '+onboard.length+' onboarding checks complete.';
+      $('[data-onboarding]').innerHTML=onboard.map((row)=>'<div class="flex items-center justify-between rounded-xl bg-stone-100 px-4 py-3 text-sm"><span class="font-semibold">'+esc(row.id.replaceAll('-',' '))+'</span>'+statusPill(row.complete)+'</div>').join('');
+
+      const migration=state.migrationAudit;
+      const migrationSummary=$('[data-migration-summary]');
+      const migrationDomains=$('[data-migration-domains]');
+      if(migration?.summary){
+        migrationSummary.classList.remove('hidden');
+        migrationSummary.innerHTML=[
+          ['Legacy objects',migration.summary.legacyObjects],
+          ['Canonical objects',migration.summary.canonicalObjects],
+          ['Missing canonical',migration.summary.missingCanonical],
+          ['Critical mismatches',migration.summary.criticalMismatches],
+          ['Legacy retirement',migration.summary.safeToRetireLegacy?'Safe':'Blocked'],
+        ].map(([label,value])=>'<article class="rounded-2xl bg-stone-100 p-4"><strong class="text-2xl text-stone-900">'+esc(value)+'</strong><p class="mt-1 text-xs text-stone-600">'+esc(label)+'</p></article>').join('');
+        migrationDomains.innerHTML=(migration.domains||[]).map((row)=>'<div class="flex flex-col gap-2 rounded-xl border border-stone-200 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong class="text-stone-900">'+esc(row.domain)+'</strong><span class="ml-2 text-stone-500">'+Number(row.legacyCount||0)+' legacy · '+Number(row.canonicalCount||0)+' canonical</span></div><div class="flex items-center gap-2"><span class="text-stone-500">'+Number(row.missingCanonicalCount||0)+' missing · '+(row.critical||[]).filter((item)=>!item.matches).length+' fingerprint mismatch</span>'+statusPill(row.safeToRetireLegacy)+'</div></div>').join('');
+      }else{
+        migrationSummary.classList.add('hidden');
+        migrationSummary.innerHTML='';
+        migrationDomains.innerHTML='<p class="text-sm text-stone-500">Run the audit before retiring any legacy tenant storage.</p>';
+      }
+
+      const providers=state.integrations||{};
+      $('[data-integrations]').innerHTML=Object.entries(providers).map(([key,row])=>'<article class="rounded-2xl border border-stone-200 p-4"><div class="flex items-center justify-between gap-2"><strong class="capitalize text-stone-900">'+esc(key)+'</strong>'+statusPill(row.configured)+'</div><p class="mt-2 text-xs text-stone-600">Webhook: '+(row.webhookConfigured===undefined?'—':row.webhookConfigured?'configured':'needs setup')+'</p><a class="mt-3 inline-block text-xs font-bold underline" href="'+esc(row.settingsUrl||'#')+'">Open settings</a></article>').join('');
+
+      $('[data-memberships]').innerHTML=(state.memberships||[]).slice(0,12).map((row)=>'<div class="flex items-center justify-between rounded-xl bg-stone-100 px-4 py-3 text-xs"><div><strong class="block text-stone-900">'+esc(row.email)+'</strong><span class="text-stone-500">'+esc(row.role)+'</span></div><span class="font-bold">'+esc(row.status)+'</span></div>').join('')||'<p class="text-sm text-stone-500">No tenant memberships yet.</p>';
+      $('[data-catalog-count]').textContent=String(state.catalog?.bootstrapItemCount??0);
+
+      const flags=$('[data-feature-flags]');
+      flags.innerHTML=flagDefinitions.map(([key,label])=>'<label class="flex items-center gap-3 rounded-xl border border-stone-200 p-3 text-sm font-semibold"><input data-flag="'+esc(key)+'" type="checkbox" '+(org.featureFlags?.[key]!==false?'checked':'')+'> '+esc(label)+'</label>').join('');
+
+      const sub=$('[data-subscription-form]');
+      sub.elements.plan.value=org.subscription?.plan||'';
+      sub.elements.interval.value=org.subscription?.interval||'monthly';
+      sub.elements.seats.value=String(org.subscription?.seats||1);
+      sub.elements.billingEmail.value=org.subscription?.billingEmail||org.contact?.email||'';
+      const stripe=providers.stripe||{};
+      $('[data-subscription-status]').innerHTML='<strong>Billing integration:</strong> '+(stripe.configured?'restricted Stripe key configured':'Stripe restricted key not configured')+' · '+(stripe.webhookConfigured?'webhook configured':'webhook needs setup')+' · '+(stripe.priceMapConfigured?'price map configured':'price map needs setup')+'.';
+      sub.querySelector('button').disabled=!canBill;
+      [...document.querySelectorAll('form input, form select, form textarea, [data-save-venues], [data-add-venue], [data-save-domains], [data-add-domain], [data-save-templates], [data-add-template], [data-save-flags], [data-activate], [data-run-migration-audit]')].forEach((el)=>{if(el.closest('[data-subscription-form]'))return;el.disabled=!canManage;});
+    }
+
+    $('[data-identity-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-identity-message]','Saving…');try{await post({action:'save-identity',...formObject(e.currentTarget)});setMessage('[data-identity-message]','Saved.');}catch(error){setMessage('[data-identity-message]',error.message);}});
+    $('[data-locale-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-locale-message]','Saving…');try{await post({action:'save-locale',...formObject(e.currentTarget)});setMessage('[data-locale-message]','Saved.');}catch(error){setMessage('[data-locale-message]',error.message);}});
+    $('[data-brand-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-brand-message]','Saving…');try{await post({action:'save-branding',...formObject(e.currentTarget)});setMessage('[data-brand-message]','Saved.');}catch(error){setMessage('[data-brand-message]',error.message);}});
+    $('[data-tax-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();const f=e.currentTarget;setMessage('[data-tax-message]','Saving…');try{await post({action:'save-tax-profile',...formObject(f),enabled:f.elements.enabled.checked,defaultTaxable:f.elements.defaultTaxable.checked});setMessage('[data-tax-message]','Saved.');}catch(error){setMessage('[data-tax-message]',error.message);}});
+    $('[data-add-venue]')?.addEventListener('click',()=> $('[data-venues]').appendChild(venueRow({active:true})));
+    $('[data-save-venues]')?.addEventListener('click',async()=>{setMessage('[data-venues-message]','Saving…');try{await post({action:'save-venues',venues:readVenues()});setMessage('[data-venues-message]','Saved.');}catch(error){setMessage('[data-venues-message]',error.message);}});
+    $('[data-add-domain]')?.addEventListener('click',()=> $('[data-domains]').appendChild(domainRow({kind:'custom',status:'new'})));
+    $('[data-save-domains]')?.addEventListener('click',async()=>{setMessage('[data-domains-message]','Saving…');try{await post({action:'save-domains',domains:readDomains()});setMessage('[data-domains-message]','Saved. New domains remain pending verification.');}catch(error){setMessage('[data-domains-message]',error.message);}});
+    $('[data-add-template]')?.addEventListener('click',()=> $('[data-templates]').appendChild(templateRow({type:'other',enabled:true})));
+    $('[data-save-templates]')?.addEventListener('click',async()=>{setMessage('[data-templates-message]','Saving…');try{await post({action:'save-templates',templates:readTemplates()});setMessage('[data-templates-message]','Saved.');}catch(error){setMessage('[data-templates-message]',error.message);}});
+    $('[data-save-flags]')?.addEventListener('click',async()=>{const featureFlags={};document.querySelectorAll('[data-flag]').forEach((el)=>featureFlags[el.dataset.flag]=el.checked);setMessage('[data-flags-message]','Saving…');try{await post({action:'save-feature-flags',featureFlags});setMessage('[data-flags-message]','Saved.');}catch(error){setMessage('[data-flags-message]',error.message);}});
+    $('[data-subscription-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-subscription-message]','Saving…');try{await post({action:'save-subscription',...formObject(e.currentTarget)});setMessage('[data-subscription-message]','Saved.');}catch(error){setMessage('[data-subscription-message]',error.message);}});
+    $('[data-run-migration-audit]')?.addEventListener('click',async()=>{setMessage('[data-migration-message]','Comparing legacy and tenant-scoped storage…');try{const data=await post({action:'run-migration-audit'});state.migrationAudit=data.migrationAudit;render();setMessage('[data-migration-message]',data.migrationAudit?.summary?.safeToRetireLegacy?'All storage domains passed the retirement safety checks.':'Audit complete. Legacy storage remains protected until the missing objects and fingerprint mismatches reach zero.');}catch(error){setMessage('[data-migration-message]',error.message);}});
+        $('[data-activate]')?.addEventListener('click',async()=>{setMessage('[data-activate-message]','Checking onboarding…');try{await post({action:'activate'});setMessage('[data-activate-message]','Organization activated.');}catch(error){const missing=error.data?.incomplete?.join(', ');setMessage('[data-activate-message]',error.message+(missing?' Missing: '+missing+'.':''));}});
+    $('[data-invite-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();const form=e.currentTarget;setMessage('[data-invite-message]','Creating account…');try{const response=await fetch('/api/admin/staff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create-user',setupMode:'email',...formObject(form)})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Unable to invite team member.');setMessage('[data-invite-message]',data.message||'Invitation created.');form.reset();const refreshed=await fetch('/api/admin/organization',{cache:'no-store'});if(refreshed.ok){state=await refreshed.json();render();}}catch(error){setMessage('[data-invite-message]',error.message);}});
+
+    async function load(){
+      const session=await getAdminSession();
+      loading.classList.add('hidden');
+      if(!session||!session.capabilities?.includes('organization.view')){unauthorized.classList.remove('hidden');return;}
+      canManage=session.capabilities.includes('organization.manage');
+      canBill=session.capabilities.includes('billing.manage');
+      const response=await fetch('/api/admin/organization',{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok){unauthorized.classList.remove('hidden');unauthorized.querySelector('p:last-child').textContent=data.error||'Unable to load organization settings.';return;}
+      state=data;
+      app.classList.remove('hidden');
+      render();
+    }
+    load();
+  </script>
+</BaseLayout>
