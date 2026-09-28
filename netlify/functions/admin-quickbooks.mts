@@ -5,6 +5,7 @@ import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
+import { buildQuickBooksMilestoneInvoiceLine } from './_shared/quickbooks-accounting-invariant.mjs';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
@@ -273,16 +274,11 @@ async function createMilestoneInvoice(context: Context, record: any, itemId: str
     BillEmail: record.customer?.email ? { Address: clean(record.customer.email, 240) } : undefined,
     CustomerMemo: { value: clean('Payment milestone: ' + payment.label + ' · Koa’s Events ' + record.id, 1000) },
     PrivateNote: clean('Koa CRM ' + record.id + ' · ' + payment.label + ' · proposal total $' + proposalTotal.toFixed(2), 4000),
-    Line: [{
-      Amount: amount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(financialSnapshot, 4000),
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: amount,
-      },
-    }],
+    Line: [buildQuickBooksMilestoneInvoiceLine({
+      amount,
+      itemId,
+      description: financialSnapshot,
+    })],
   });
   const invoice = created?.Invoice;
   if (!invoice?.Id) throw new Error('QuickBooks invoice could not be created.');
@@ -360,8 +356,27 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
     entry.docNumber = String(invoice.DocNumber || entry.docNumber || '');
     entry.total = Number(invoice.TotalAmt || entry.total || entry.amount || 0);
     entry.balance = Number(invoice.Balance ?? entry.balance ?? entry.total);
+    entry.paidAmount = Math.max(0, roundMoney(Number(entry.total || 0) - Number(entry.balance || 0)));
+    entry.paymentState = entry.paidAmount >= Number(entry.total || 0) - 0.005
+      ? 'paid'
+      : entry.paidAmount > 0.005
+        ? 'partially_paid'
+        : 'unpaid';
+    entry.syncToken = String(invoice.SyncToken || '');
     entry.emailStatus = String(invoice.EmailStatus || '');
     entry.dueDate = isoDate(invoice.DueDate || entry.dueDate);
+    entry.lines = (Array.isArray(invoice.Line) ? invoice.Line : [])
+      .filter((line: any) => line?.DetailType === 'SalesItemLineDetail')
+      .map((line: any, index: number) => ({
+        id: String(line?.Id || 'invoice-line-' + (index + 1)),
+        description: String(line?.Description || line?.SalesItemLineDetail?.ItemRef?.name || 'QuickBooks invoice line ' + (index + 1)),
+        quantity: Number(line?.SalesItemLineDetail?.Qty || 1),
+        unitPrice: Number(line?.SalesItemLineDetail?.UnitPrice || line?.Amount || 0),
+        amount: Number(line?.Amount || 0),
+        itemId: String(line?.SalesItemLineDetail?.ItemRef?.value || ''),
+        itemName: String(line?.SalesItemLineDetail?.ItemRef?.name || ''),
+        taxCode: String(line?.SalesItemLineDetail?.TaxCodeRef?.value || ''),
+      }));
     entry.lastSyncedAt = new Date().toISOString();
   }
 
