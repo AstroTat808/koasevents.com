@@ -1,0 +1,180 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="QuickBooks Sync History" description="Review QuickBooks and CRM synchronization history." canonical="https://www.koasevents.com/admin/quickbooks/history/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+    <div class="container-shell max-w-6xl">
+      <div class="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Admin · Accounting</p>
+          <h1 class="display mt-3 text-5xl">QuickBooks Sync History</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Every retained manual QuickBooks ↔ CRM sync is listed here with the staff member who triggered it, totals, conflicts, warnings, and before/after record changes.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/quickbooks/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-3 text-[.6rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Back to QuickBooks</a>
+          <button data-refresh type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.09em] text-white">Refresh</button>
+        </div>
+      </div>
+
+      <div data-unauthorized class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <strong class="text-[var(--koa-forest)]">QuickBooks access required.</strong>
+        <p class="mt-2 text-sm text-[var(--koa-ink)]/58">Your account does not include QuickBooks history access.</p>
+      </div>
+
+      <div data-app class="hidden grid gap-6">
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="grid gap-4 lg:grid-cols-[1fr_auto_auto] lg:items-end">
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Search history
+              <input data-search type="search" placeholder="Client, actor, sync ID, warning, conflict…" class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal" />
+            </label>
+            <label class="grid gap-2 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Result
+              <select data-filter class="rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-medium normal-case tracking-normal">
+                <option value="all">All syncs</option>
+                <option value="changes">Has changes</option>
+                <option value="conflicts">Has conflicts</option>
+                <option value="warnings">Has warnings</option>
+                <option value="clean">Clean</option>
+              </select>
+            </label>
+            <span data-count class="rounded-full bg-[var(--koa-sand)] px-4 py-3 text-[.6rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">0 syncs</span>
+          </div>
+        </section>
+
+        <section class="grid gap-5 xl:grid-cols-[.82fr_1.18fr]">
+          <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+            <div class="flex items-end justify-between gap-3">
+              <div><p class="eyebrow text-[var(--koa-clay)]">Runs</p><h2 class="display mt-2 text-3xl">Synchronization log</h2></div>
+            </div>
+            <div data-list class="mt-5 grid max-h-[1100px] gap-3 overflow-y-auto pr-1"></div>
+          </div>
+
+          <div>
+            <section data-empty class="rounded-[1.5rem] bg-[var(--koa-ink)] p-8 text-white shadow-[var(--shadow-soft)]">
+              <p class="eyebrow text-[var(--koa-amber-light)]">Run detail</p>
+              <h2 class="display mt-3 text-4xl">Select a synchronization</h2>
+              <p class="mt-3 max-w-xl text-sm leading-6 text-white/60">Open a run to inspect exactly which CRM and QuickBooks records changed, plus any conflicts or warnings.</p>
+            </section>
+
+            <section data-detail class="hidden grid gap-5">
+              <div class="rounded-[1.5rem] bg-[var(--koa-ink)] p-6 text-white shadow-[var(--shadow-soft)]">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div><p data-detail-id class="eyebrow text-[var(--koa-amber-light)]">Sync</p><h2 data-detail-title class="display mt-2 text-4xl">QuickBooks synchronization</h2><p data-detail-meta class="mt-2 text-sm text-white/58"></p></div>
+                  <span data-detail-status class="rounded-full border border-white/15 bg-white/[.08] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em]"></span>
+                </div>
+                <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">CRM created</p><strong data-created class="mt-2 block text-2xl">0</strong></article>
+                  <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">CRM matched</p><strong data-matched class="mt-2 block text-2xl">0</strong></article>
+                  <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Changes</p><strong data-changes-count class="mt-2 block text-2xl">0</strong></article>
+                  <article class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-white/45">Issues</p><strong data-issues-count class="mt-2 block text-2xl">0</strong></article>
+                </div>
+              </div>
+
+              <section data-conflicts-panel class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-amber-900">Conflicts</p><h3 class="display mt-2 text-3xl text-[var(--koa-ink)]">Items needing review</h3>
+                <div data-conflicts class="mt-4 grid gap-2"></div>
+              </section>
+
+              <section data-warnings-panel class="hidden rounded-[1.5rem] border border-red-200 bg-red-50 p-5 shadow-[var(--shadow-soft)]">
+                <p class="eyebrow text-red-800">Warnings</p><h3 class="display mt-2 text-3xl text-[var(--koa-ink)]">Sync warnings</h3>
+                <div data-warnings class="mt-4 grid gap-2"></div>
+              </section>
+
+              <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                  <div><p class="eyebrow text-[var(--koa-clay)]">Audit trail</p><h3 class="display mt-2 text-3xl">Before / after changes</h3></div>
+                  <span data-change-meta class="text-xs font-bold text-[var(--koa-ink)]/45"></span>
+                </div>
+                <div data-changes class="mt-5 grid gap-4"></div>
+              </section>
+            </section>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../../lib/admin-session';
+    const $=(s)=>document.querySelector(s);
+    const app=$('[data-app]'), unauthorized=$('[data-unauthorized]');
+    const list=$('[data-list]'), search=$('[data-search]'), filter=$('[data-filter]'), count=$('[data-count]');
+    const detail=$('[data-detail]'), empty=$('[data-empty]');
+    let history=[], selectedId='', selectedDetail=null;
+
+    function hasAccess(user){return Boolean(user?.capabilities?.includes('quickbooks.view')||user?.permissions?.includes('quickbooks.view'));}
+    function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));}
+    function fmt(value){if(!value)return '—';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();}
+    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function pretty(value){return JSON.stringify(value??null,null,2);}
+    async function get(url){const res=await fetch(url,{cache:'no-store'});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'Request failed.');return data;}
+
+    function matchesFilter(row){
+      const f=filter?.value||'all';
+      if(f==='changes')return Number(row.changeCount||0)>0;
+      if(f==='conflicts')return Number(row.conflictCount||0)>0;
+      if(f==='warnings')return Number(row.warningCount||0)>0;
+      if(f==='clean')return Number(row.conflictCount||0)===0&&Number(row.warningCount||0)===0;
+      return true;
+    }
+
+    function renderList(){
+      const q=String(search?.value||'').trim().toLowerCase();
+      const rows=history.filter((row)=>{
+        if(!matchesFilter(row))return false;
+        const text=[row.syncId,row.actor,row.status,row.completedAt,row.crm?.created,row.crm?.matched,row.conflictCount,row.warningCount].join(' ').toLowerCase();
+        return !q||text.includes(q);
+      });
+      if(count)count.textContent=rows.length+' sync'+(rows.length===1?'':'s');
+      if(!list)return;
+      list.innerHTML=rows.length?rows.map((row)=>{
+        const active=row.syncId===selectedId;
+        const issues=Number(row.conflictCount||0)+Number(row.warningCount||0);
+        return '<button type="button" data-sync-id="'+esc(row.syncId)+'" class="rounded-xl border '+(active?'border-[var(--koa-clay)] bg-[var(--koa-sand)]':'border-[var(--koa-line)] bg-white')+' p-4 text-left transition hover:border-[var(--koa-clay)]"><div class="flex items-start justify-between gap-3"><div><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.syncId||'Sync')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(fmt(row.completedAt))+' · '+esc(row.actor||'Unknown staff')+'</p></div><span class="rounded-full '+(issues?'bg-amber-100 text-amber-900':'bg-emerald-100 text-emerald-800')+' px-2 py-1 text-[.54rem] font-black uppercase tracking-[.06em]">'+(issues?issues+' issue'+(issues===1?'':'s'):'clean')+'</span></div><div class="mt-3 flex flex-wrap gap-2 text-[.6rem] font-bold text-[var(--koa-ink)]/48"><span>'+Number(row.crm?.created||0)+' created</span><span>'+Number(row.crm?.matched||0)+' matched</span><span>'+Number(row.changeCount||0)+' changes</span></div></button>';
+      }).join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50">No sync runs match this view.</p>';
+      list.querySelectorAll('[data-sync-id]').forEach((button)=>button.addEventListener('click',()=>loadDetail(button.dataset.syncId)));
+    }
+
+    function renderDetail(){
+      const row=selectedDetail;if(!row)return;
+      empty?.classList.add('hidden');detail?.classList.remove('hidden');
+      $('[data-detail-id]').textContent=row.syncId||'QuickBooks sync';
+      $('[data-detail-title]').textContent='QuickBooks ↔ CRM sync';
+      $('[data-detail-meta]').textContent=fmt(row.completedAt)+' · triggered by '+String(row.actor||'Unknown staff')+(row.previewId?' · preview '+row.previewId:'');
+      $('[data-detail-status]').textContent=String(row.status||'completed');
+      $('[data-created]').textContent=Number(row.crm?.created||0);
+      $('[data-matched]').textContent=Number(row.crm?.matched||0);
+      $('[data-changes-count]').textContent=Array.isArray(row.changes)?row.changes.length:0;
+      const conflicts=Array.isArray(row.conflicts)?row.conflicts:[];
+      const warnings=Array.isArray(row.warnings)?row.warnings:[];
+      $('[data-issues-count]').textContent=conflicts.length+warnings.length;
+
+      $('[data-conflicts-panel]')?.classList.toggle('hidden',conflicts.length===0);
+      $('[data-warnings-panel]')?.classList.toggle('hidden',warnings.length===0);
+      $('[data-conflicts]').innerHTML=conflicts.map((item)=>'<article class="rounded-xl bg-white p-3"><strong class="text-sm text-amber-950">'+esc(item.detail||item.type||'Conflict')+'</strong><pre class="mt-2 overflow-x-auto whitespace-pre-wrap text-[.68rem] leading-5 text-[var(--koa-ink)]/55">'+esc(pretty(item))+'</pre></article>').join('');
+      $('[data-warnings]').innerHTML=warnings.map((item)=>'<article class="rounded-xl bg-white p-3 text-sm text-red-900">'+esc(typeof item==='string'?item:pretty(item))+'</article>').join('');
+
+      const changes=Array.isArray(row.changes)?row.changes:[];
+      $('[data-change-meta]').textContent=changes.length+' recorded change'+(changes.length===1?'':'s');
+      $('[data-changes]').innerHTML=changes.length?changes.map((change,index)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(change.direction||change.system||'Change')+'</p><strong class="mt-1 block text-sm">'+esc(change.clientName||change.recordId||('Change '+(index+1)))+'</strong><p class="mt-1 text-[.62rem] font-semibold text-[var(--koa-ink)]/45">'+esc(change.action||'updated')+(change.recordId?' · CRM '+esc(change.recordId):'')+'</p></div><span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">'+esc(change.system||'record')+'</span></div><div class="mt-4 grid gap-3 lg:grid-cols-2"><div class="min-w-0 rounded-xl bg-red-50 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-red-800">Before</p><pre class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[.68rem] leading-5 text-[var(--koa-ink)]/65">'+esc(pretty(change.before))+'</pre></div><div class="min-w-0 rounded-xl bg-emerald-50 p-3"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-emerald-800">After</p><pre class="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words text-[.68rem] leading-5 text-[var(--koa-ink)]/65">'+esc(pretty(change.after))+'</pre></div></div></article>').join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50">This sync recorded no changed values.</p>';
+    }
+
+    async function loadDetail(syncId){
+      selectedId=String(syncId||'');selectedDetail=null;renderList();
+      try{const data=await get('/api/admin/quickbooks?view=history-detail&syncId='+encodeURIComponent(selectedId));selectedDetail=data.detail||null;renderDetail();}
+      catch(err){alert(err.message||'Unable to load sync detail.');}
+    }
+
+    async function load(){
+      const user=await getAdminSession();if(!hasAccess(user)){unauthorized?.classList.remove('hidden');return;}
+      app?.classList.remove('hidden');
+      const data=await get('/api/admin/quickbooks?view=history&limit=5000');
+      history=Array.isArray(data.history)?data.history:[];renderList();
+      if(selectedId&&history.some((row)=>row.syncId===selectedId))await loadDetail(selectedId);
+    }
+
+    search?.addEventListener('input',renderList);
+    filter?.addEventListener('change',renderList);
+    $('[data-refresh]')?.addEventListener('click',load);
+    load();
+  </script>
+</BaseLayout>
