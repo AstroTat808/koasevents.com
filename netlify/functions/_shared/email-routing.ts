@@ -1,5 +1,5 @@
-import { getStore } from '@netlify/blobs';
 import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type EmailRouteId =
   | 'lead-notification'
@@ -114,7 +114,7 @@ function replyToFor(id:EmailRouteId){
 }
 
 function store() {
-  return getStore({ name:activeTenant().storage.compatibilityBlobStores.emailRouting, consistency:'strong' });
+  return tenantStoreFor(undefined, activeTenant(), 'emailRouting');
 }
 
 async function readStored(): Promise<StoredRouting> {
