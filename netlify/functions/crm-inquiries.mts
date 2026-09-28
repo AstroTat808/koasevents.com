@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant.ts';
+import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
@@ -13,10 +14,8 @@ import {
   securityIdentity,
 } from './_shared/security.ts';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 
 function cleanText(value: unknown, max = 1200) {
@@ -557,7 +556,7 @@ export default async (req: Request, context: Context) => {
   const id = 'KEI-' + now.getUTCFullYear() + '-' + idSuffix();
   const quoteId = cleanText(payload.quoteId, 24).toUpperCase();
   const packageId = cleanText(payload.packageId, 80);
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, req);
   const businessLine = formName.startsWith('wild-ones-')
     ? 'wild-ones'
     : formName === 'koa-mobile-bar-inquiry'
