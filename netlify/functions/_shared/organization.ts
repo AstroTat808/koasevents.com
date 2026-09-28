@@ -493,7 +493,7 @@ export function profileFromOrganization(organization: OrganizationRecord): Tenan
       compatibilityBlobStores: {
         sales:'', quotes:'', integrations:'', crm:'', eventOps:'', vendors:'', eventFiles:'', vendorFiles:'',
         emailAnalytics:'', emailRouting:'', authSecurity:'', staffDirectory:'', staffFiles:'', staffAudit:'', staffAvailability:'',
-        security:'', systemHealth:'', calendarSync:'', workspaceAlerts:'',
+        security:'', systemHealth:'', calendarSync:'', userPreferences:'', workspaceAlerts:'',
       },
     },
     legal: { governingLawLabel:'', disputeVenueLabel:'' },
