@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { sendClientFollowUp, sendResponseReminder } from './_shared/lead-email.ts';
 
 const RESPONSE_TYPES = new Set([
@@ -145,7 +146,7 @@ async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!isBusinessOpen()) return;
 
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return;
 
   const store = tenantStoreFor(context, resolveTenant(), 'sales');
