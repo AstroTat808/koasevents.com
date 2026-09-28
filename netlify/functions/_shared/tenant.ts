@@ -72,7 +72,9 @@ export async function resolveTenantAsync(req?: Request, context?: Context): Prom
     throw new Error('Configured VenueLoom tenant was not found: ' + configuredId);
   }
 
-  const requestedId = clean(req?.headers.get('x-venueloom-tenant'), 120);
+  let queryTenant = '';
+  try { queryTenant = clean(req ? new URL(req.url).searchParams.get('tenant') : '', 120); } catch {}
+  const requestedId = clean(req?.headers.get('x-venueloom-tenant') || queryTenant, 120);
   if (requestedId) {
     const staticTenant = tenantById(requestedId);
     if (staticTenant) return staticTenant;
