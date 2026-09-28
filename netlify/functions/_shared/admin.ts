@@ -1,8 +1,8 @@
-import { getStore } from '@netlify/blobs';
 import type { Context } from '@netlify/functions';
 import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
-import { resolveTenant, resolveTenantAsync, tenantBlobStoreName } from './tenant';
+import { resolveTenant, resolveTenantAsync } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 import { buildTenantContext } from './organization';
 
 export const ROLE_IDS = [
@@ -172,8 +172,7 @@ export const DEFAULT_AUTH_SECURITY_POLICY: AuthSecurityPolicy = {
 };
 
 function securityStore() {
-  const tenant = resolveTenant();
-  return getStore({ name:tenantBlobStoreName(tenant,'authSecurity'), consistency:'strong' });
+  return tenantStoreFor(undefined, resolveTenant(), 'authSecurity');
 }
 
 function clean(value: unknown, max = 300) {
