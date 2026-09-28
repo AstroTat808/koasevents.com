@@ -140,12 +140,13 @@ function mapUnique<T>(items: T[], key: (item: T) => string) {
 
 export type QuickBooksMatchOverride = {
   customerId: string;
-  decision: 'match' | 'new';
+  decision: 'match' | 'new' | 'exclude';
   recordId: string;
   approvedAt: string;
   approvedBy: string;
   customerName?: string;
   approvalMode?: 'single' | 'bulk';
+  exclusionReason?: string;
 };
 
 export type QuickBooksCustomerMatchEvidence = {
@@ -425,6 +426,21 @@ export function resolveQuickBooksCustomerMatch(
   }
 
   const override = overrides[customerId];
+  if (override?.decision === 'exclude') {
+    return {
+      status: 'excluded',
+      reason: 'staff-excluded',
+      record: null,
+      candidates: [],
+      duplicateRisk: { level:'none', score:0, candidateCount:0, signals:['staff_excluded'] },
+      bulkEligible:false,
+      exclusion: {
+        excludedAt: clean(override.approvedAt, 80),
+        excludedBy: clean(override.approvedBy, 180),
+        reason: clean(override.exclusionReason || 'Excluded from CRM synchronization by staff.', 500),
+      },
+    };
+  }
   if (override?.decision === 'new') {
     return {
       status: 'approved_new',
@@ -609,13 +625,13 @@ export async function getQuickBooksMatchOverrides(context: Context) {
 
 export async function saveQuickBooksMatchOverride(
   context: Context,
-  input: { customerId: string; decision: 'match'|'new'|'clear'; recordId?: string },
+  input: { customerId: string; decision: 'match'|'new'|'exclude'|'clear'; recordId?: string; reason?: string },
   actor = '',
 ) {
   const customerId = clean(input.customerId, 100);
-  const decision = clean(input.decision, 20) as 'match'|'new'|'clear';
+  const decision = clean(input.decision, 20) as 'match'|'new'|'exclude'|'clear';
   if (!customerId) throw new Error('QuickBooks customer ID is required.');
-  if (!['match','new','clear'].includes(decision)) throw new Error('Invalid matching decision.');
+  if (!['match','new','exclude','clear'].includes(decision)) throw new Error('Invalid matching decision.');
 
   const integrations = integrationStore(context);
   const overrides = await getQuickBooksMatchOverrides(context);
@@ -660,6 +676,9 @@ export async function saveQuickBooksMatchOverride(
     approvedBy: clean(actor, 180),
     customerName: clean(qboCustomer.DisplayName, 240),
     approvalMode: 'single',
+    exclusionReason: decision === 'exclude'
+      ? clean(input.reason || 'Excluded from CRM synchronization by staff.', 500)
+      : undefined,
   };
   overrides[customerId] = override;
   await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
@@ -869,6 +888,196 @@ function outboundEstimatePlan(record: any, estimate: any, serviceItemId: string)
   return { action: changed ? 'update' : 'no_change', reason: changed ? 'CRM proposal differs from QuickBooks estimate.' : 'Estimate already matches core CRM fields.', before, after };
 }
 
+
+function snapshotFieldChanges(before: any, after: any) {
+  const paths = [
+    ['recordId','CRM record ID'],
+    ['stage','Stage'],
+    ['status','Status'],
+    ['customer.name','Customer name'],
+    ['customer.email','Customer email'],
+    ['customer.phone','Customer phone'],
+    ['customer.eventDate','Event date'],
+    ['proposal.status','Proposal status'],
+    ['proposal.total','Proposal total'],
+    ['quickbooks.customerId','QuickBooks customer ID'],
+    ['quickbooks.estimateId','QuickBooks estimate ID'],
+    ['quickbooks.invoiceCount','Invoice count'],
+    ['quickbooks.paymentCount','Payment count'],
+    ['quickbooks.totalInvoiced','Total invoiced'],
+    ['quickbooks.totalPaid','Total paid'],
+    ['quickbooks.balanceDue','Balance due'],
+  ] as const;
+  const get = (value: any, path: string) =>
+    path.split('.').reduce((current: any, key) => current == null ? undefined : current[key], value);
+  const changes: any[] = [];
+  for (const [path, label] of paths) {
+    const oldValue = get(before, path);
+    const newValue = get(after, path);
+    if (before == null) {
+      if (newValue === undefined || newValue === null || newValue === '') continue;
+      changes.push({ field:path, label, before:null, after:newValue, action:'create' });
+      continue;
+    }
+    if (!sameJson(oldValue, newValue)) {
+      changes.push({ field:path, label, before:oldValue ?? null, after:newValue ?? null, action:'update' });
+    }
+  }
+  return changes;
+}
+
+function executionCustomerDetail(plan: any) {
+  return {
+    customerId: clean(plan?.customerId, 100),
+    name: clean(plan?.qbo?.name, 240),
+    recordId: clean(plan?.matchedRecordId || plan?.predictedRecordId, 120),
+    decision: clean(plan?.decision, 40),
+    disposition: clean(plan?.executionDisposition, 40),
+    reason: clean(plan?.reason, 500),
+    exclusion: plan?.exclusion || null,
+    changes: snapshotFieldChanges(plan?.before || null, plan?.after || null),
+  };
+}
+
+export function buildQuickBooksCrmSyncReconciliation(preview: any, result: any) {
+  const predicted = preview?.executionSummary || {};
+  const actualSkipped = Number(result?.skipped?.capacity || 0) +
+    Number(result?.skipped?.unapprovedNew || 0) +
+    Number(result?.skipped?.excluded || 0);
+  const actualQboActions = Number(result?.pushed?.customersCreated || 0) +
+    Number(result?.pushed?.customersUpdated || 0) +
+    Number(result?.pushed?.estimatesCreated || 0) +
+    Number(result?.pushed?.estimatesUpdated || 0);
+  const actualQboRecords = new Set(
+    (Array.isArray(result?.outboundOutcomes) ? result.outboundOutcomes : [])
+      .filter((row: any) => ['create','update'].includes(clean(row?.action, 30)))
+      .map((row: any) => clean(row?.recordId, 120))
+      .filter(Boolean),
+  ).size;
+
+  const countComparisons = [
+    { key:'crm_created', label:'CRM customers created', predicted:Number(predicted.crmCustomersCreated || 0), actual:Number(result?.crm?.created || 0) },
+    { key:'crm_matched', label:'CRM customers matched/refreshed', predicted:Number(predicted.crmCustomersMatched || 0), actual:Number(result?.crm?.matched || 0) },
+    { key:'crm_skipped', label:'Customers skipped/excluded', predicted:Number(predicted.crmCustomersSkipped || 0), actual:actualSkipped },
+    { key:'duplicates', label:'Duplicate matches blocked', predicted:Number(predicted.crmCustomersBlockedDuplicates || 0), actual:Number(result?.skipped?.ambiguous || 0) },
+    { key:'qbo_records', label:'CRM records written back to QuickBooks', predicted:Number(predicted.quickBooksRecordsWritten || 0), actual:actualQboRecords },
+    { key:'qbo_actions', label:'QuickBooks write actions', predicted:Number(predicted.quickBooksActionsWritten || 0), actual:actualQboActions },
+    { key:'qbo_customer_create', label:'QuickBooks customer creates', predicted:Number(predicted.quickBooksCustomerCreates || 0), actual:Number(result?.pushed?.customersCreated || 0) },
+    { key:'qbo_customer_update', label:'QuickBooks customer updates', predicted:Number(predicted.quickBooksCustomerUpdates || 0), actual:Number(result?.pushed?.customersUpdated || 0) },
+    { key:'qbo_estimate_create', label:'QuickBooks estimate creates', predicted:Number(predicted.quickBooksEstimateCreates || 0), actual:Number(result?.pushed?.estimatesCreated || 0) },
+    { key:'qbo_estimate_update', label:'QuickBooks estimate updates', predicted:Number(predicted.quickBooksEstimateUpdates || 0), actual:Number(result?.pushed?.estimatesUpdated || 0) },
+  ].map((row) => ({ ...row, matched: row.predicted === row.actual }));
+
+  const predictedCustomerMap = new Map(
+    (Array.isArray(preview?.customerPlans) ? preview.customerPlans : [])
+      .map((plan: any) => [clean(plan?.customerId,100), {
+        customerId:clean(plan?.customerId,100),
+        name:clean(plan?.qbo?.name,240),
+        expected:clean(plan?.executionDisposition,40),
+      }])
+      .filter(([id]: any) => Boolean(id)),
+  );
+  const actualCustomerMap = new Map(
+    (Array.isArray(result?.customerOutcomes) ? result.customerOutcomes : [])
+      .map((row: any) => [clean(row?.customerId,100), row])
+      .filter(([id]: any) => Boolean(id)),
+  );
+  const customerComparisons: any[] = [];
+  const deviations: any[] = [];
+
+  for (const [customerId, expectedRow] of predictedCustomerMap.entries()) {
+    const actualRow: any = actualCustomerMap.get(customerId);
+    const actualOutcome = clean(actualRow?.outcome, 40);
+    const matched = Boolean(actualRow) && actualOutcome === clean((expectedRow as any).expected,40);
+    const comparison = {
+      customerId,
+      name: clean((expectedRow as any).name,240),
+      predicted: clean((expectedRow as any).expected,40),
+      actual: actualOutcome || 'not_observed',
+      recordId: clean(actualRow?.recordId,120),
+      matched,
+    };
+    customerComparisons.push(comparison);
+    if (!matched) deviations.push({ type:'customer-outcome', ...comparison });
+  }
+  for (const [customerId, actualRow] of actualCustomerMap.entries()) {
+    if (predictedCustomerMap.has(customerId)) continue;
+    deviations.push({
+      type:'unexpected-customer-outcome',
+      customerId,
+      name:clean((actualRow as any)?.name,240),
+      predicted:'not_in_preview',
+      actual:clean((actualRow as any)?.outcome,40),
+      recordId:clean((actualRow as any)?.recordId,120),
+    });
+  }
+
+  const expectedOutbound = new Map<string, any>();
+  for (const row of Array.isArray(preview?.outbound) ? preview.outbound : []) {
+    for (const action of Array.isArray(row?.actions) ? row.actions : []) {
+      if (!['create','update'].includes(clean(action?.action,30))) continue;
+      const key = [clean(row?.recordId,120),clean(action?.type,30),clean(action?.action,30)].join(':');
+      if (!expectedOutbound.has(key)) expectedOutbound.set(key, {
+        recordId:clean(row?.recordId,120),
+        name:clean(row?.name,180),
+        type:clean(action?.type,30),
+        action:clean(action?.action,30),
+      });
+    }
+  }
+  const actualOutbound = new Map<string, any>();
+  for (const row of Array.isArray(result?.outboundOutcomes) ? result.outboundOutcomes : []) {
+    if (!['create','update'].includes(clean(row?.action,30))) continue;
+    const key = [clean(row?.recordId,120),clean(row?.type,30),clean(row?.action,30)].join(':');
+    actualOutbound.set(key,row);
+  }
+  const outboundComparisons: any[] = [];
+  for (const [key, expectedRow] of expectedOutbound.entries()) {
+    const actualRow = actualOutbound.get(key);
+    const comparison = { ...expectedRow, matched:Boolean(actualRow), actual:actualRow ? clean(actualRow.action,30) : 'not_observed' };
+    outboundComparisons.push(comparison);
+    if (!actualRow) deviations.push({ type:'quickbooks-write-missing', ...comparison });
+  }
+  for (const [key, actualRow] of actualOutbound.entries()) {
+    if (expectedOutbound.has(key)) continue;
+    deviations.push({
+      type:'quickbooks-write-unexpected',
+      recordId:clean(actualRow?.recordId,120),
+      name:clean(actualRow?.name,180),
+      action:clean(actualRow?.action,30),
+      entityType:clean(actualRow?.type,30),
+    });
+  }
+
+  for (const row of countComparisons) {
+    if (!row.matched) deviations.push({
+      type:'count-mismatch',
+      key:row.key,
+      label:row.label,
+      predicted:row.predicted,
+      actual:row.actual,
+    });
+  }
+  for (const warning of Array.isArray(result?.warnings) ? result.warnings : []) {
+    deviations.push({ type:'sync-warning', detail:clean(warning,700) });
+  }
+  for (const conflict of Array.isArray(result?.conflicts) ? result.conflicts : []) {
+    deviations.push({ type:'sync-conflict', detail:clean(conflict?.detail || conflict?.type,700), recordId:clean(conflict?.recordId,120) });
+  }
+
+  return {
+    previewId: clean(preview?.previewId,120),
+    predictedAt: clean(preview?.generatedAt,80),
+    completedAt: clean(result?.completedAt,80),
+    status: deviations.length ? 'attention' : 'matched',
+    deviationCount: deviations.length,
+    countComparisons,
+    customerComparisons,
+    outboundComparisons,
+    deviations,
+  };
+}
+
 export async function buildQuickBooksCrmSyncPreview(context: Context, actor = '') {
   const generatedAt = new Date().toISOString();
   const store = salesStore(context);
@@ -909,13 +1118,17 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
         counter += 1;
       }
     }
-    const action = ['ambiguous','new'].includes(match.status)
-      ? 'needs_decision'
-      : match.status === 'approved_new'
-        ? 'import_new'
-        : 'refresh_match';
+    const action = match.status === 'excluded'
+      ? 'excluded'
+      : ['ambiguous','new'].includes(match.status)
+        ? 'needs_decision'
+        : match.status === 'approved_new'
+          ? 'import_new'
+          : 'refresh_match';
     const before = match.record ? previewRecordSnapshot(match.record) : null;
-    const after = match.status === 'ambiguous' ? null : projectedRecordSnapshot(match.record, customer, financial, predictedRecordId);
+    const after = ['ambiguous','excluded'].includes(match.status)
+      ? null
+      : projectedRecordSnapshot(match.record, customer, financial, predictedRecordId);
     return {
       customerId,
       qbo: {
@@ -931,6 +1144,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       candidates: match.candidates,
       duplicateRisk: match.duplicateRisk,
       bulkEligible: Boolean(match.bulkEligible),
+      exclusion: match.exclusion || null,
       financial,
       before,
       after,
@@ -951,6 +1165,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       plan.executionDisposition = 'skip_unapproved';
     } else if (plan.decision === 'ambiguous') {
       plan.executionDisposition = 'blocked_duplicate';
+    } else if (plan.decision === 'excluded') {
+      plan.executionDisposition = 'excluded';
     } else {
       plan.executionDisposition = 'match_refresh';
     }
@@ -986,6 +1202,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     qboEstimates: estimates.length,
     qboInvoices: invoices.length,
     qboPayments: payments.length,
+    activeSyncCustomers: customerPlans.filter((row) => row.decision !== 'excluded').length,
+    excludedCustomers: customerPlans.filter((row) => row.decision === 'excluded').length,
     linked: customerPlans.filter((row) => row.decision === 'linked').length,
     matched: customerPlans.filter((row) => ['auto_match','approved_match'].includes(row.decision)).length,
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
@@ -1005,9 +1223,10 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
   const executionSummary = {
     crmCustomersCreated: customerPlans.filter((row) => row.executionDisposition === 'create').length,
     crmCustomersMatched: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
-    crmCustomersSkipped: customerPlans.filter((row) => ['skip_unapproved','skip_capacity'].includes(String(row.executionDisposition || ''))).length,
+    crmCustomersSkipped: customerPlans.filter((row) => ['skip_unapproved','skip_capacity','excluded'].includes(String(row.executionDisposition || ''))).length,
     crmCustomersSkippedUnapproved: customerPlans.filter((row) => row.executionDisposition === 'skip_unapproved').length,
     crmCustomersSkippedCapacity: customerPlans.filter((row) => row.executionDisposition === 'skip_capacity').length,
+    crmCustomersExcluded: customerPlans.filter((row) => row.executionDisposition === 'excluded').length,
     crmCustomersBlockedDuplicates: customerPlans.filter((row) => row.executionDisposition === 'blocked_duplicate').length,
     crmCustomersRefreshed: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').length,
     quickBooksRecordsWritten: new Set(quickBooksWritableActions.filter((action: any) => ['create','update'].includes(String(action?.action || ''))).map((action: any) => String(action.recordId || ''))).size,
@@ -1020,6 +1239,27 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     ready: Number(summary.needsDecision || 0) === 0,
   };
 
+  const executionDetails = {
+    create: customerPlans.filter((row) => row.executionDisposition === 'create').map(executionCustomerDetail),
+    matchRefresh: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').map(executionCustomerDetail),
+    skip: customerPlans.filter((row) => ['skip_unapproved','skip_capacity','excluded'].includes(String(row.executionDisposition || ''))).map(executionCustomerDetail),
+    blockedDuplicates: customerPlans.filter((row) => row.executionDisposition === 'blocked_duplicate').map(executionCustomerDetail),
+    quickBooksWrites: outbound.map((row) => ({
+      recordId:clean(row.recordId,120),
+      name:clean(row.name,180),
+      customerId:clean(row.customerId,100),
+      estimateId:clean(row.estimateId,100),
+      actions:(Array.isArray(row.actions) ? row.actions : []).map((action: any) => ({
+        type:clean(action?.type,30),
+        field:clean(action?.field,120),
+        action:clean(action?.action,30),
+        reason:clean(action?.reason,500),
+        before:action?.before ?? null,
+        after:action?.after ?? null,
+      })),
+    })),
+  };
+
   const previewId = 'QBPREVIEW-' + Date.now().toString(36).toUpperCase() + '-' + Math.random().toString(36).slice(2, 8).toUpperCase();
   const preview = {
     previewId,
@@ -1028,6 +1268,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     expiresAt: new Date(Date.now() + PREVIEW_MAX_AGE_MS).toISOString(),
     summary,
     executionSummary,
+    executionDetails,
     customerPlans,
     outbound,
   };
@@ -1093,6 +1334,8 @@ export async function recordQuickBooksCrmSyncHistory(context: Context, result: a
     conflictCount: Array.isArray(detail.conflicts) ? detail.conflicts.length : 0,
     warningCount: Array.isArray(detail.warnings) ? detail.warnings.length : 0,
     changeCount: Array.isArray(detail.changes) ? detail.changes.length : 0,
+    reconciliationStatus: clean(detail?.reconciliation?.status, 40),
+    reconciliationDeviationCount: Number(detail?.reconciliation?.deviationCount || 0),
     rollbackStatus: clean(detail?.rollback?.status, 40),
     rolledBackAt: clean(detail?.rollback?.completedAt, 80),
     clients: [...new Set((Array.isArray(detail.changes) ? detail.changes : []).map((change: any) => clean(change?.clientName, 180)).filter(Boolean))].slice(0, 250),
