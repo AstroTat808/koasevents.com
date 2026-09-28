@@ -3,6 +3,7 @@ import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 export type AuthEventType = 'login_success'|'login_failed'|'suspicious_login'|'session_revoked'|'sessions_revoked';
 export type AuthEvent = {
@@ -127,10 +128,11 @@ export async function evaluateLoginRisk(email:string,ip:string,ua:string){
   return{suspicious:reasons.length>0,reasons,device};
 }
 export async function sendSuspiciousLoginAlert(input:{email:string;device:string;reasons:string[];createdAt:string;}){
-  const key=clean(Netlify.env.get('RESEND_API_KEY'),500);if(!key)return{sent:false,error:'RESEND_API_KEY missing'};
-  const recipients=clean(Netlify.env.get('KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
-  if(!recipients.length)recipients.push('chris@sibel.org','koasadmin@koasevents.com');
-  const from=clean(Netlify.env.get('KOA_FROM_EMAIL'),240)||"Koa's Events <aloha@koasevents.com>";
+  const tenant=resolveTenant();
+  const key=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);if(!key)return{sent:false,error:'RESEND_API_KEY missing'};
+  const recipients=clean(tenantEnv(tenant,'SECURITY_ALERT_EMAIL','KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
+  if(!recipients.length&&tenant.contact.email)recipients.push(tenant.contact.email);
+  const from=clean(tenantEnv(tenant,'FROM_EMAIL','KOA_FROM_EMAIL'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
   const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Suspicious Koa’s sign-in</title></head><body style="margin:0;padding:0;background:#f5f0e7">'
     +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
