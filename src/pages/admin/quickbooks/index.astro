@@ -101,6 +101,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                     <option value="all">All exclusion reasons</option>
                     <option value="quickbooks_test_customer">QuickBooks test customer</option>
                     <option value="square_system_customer">Square system customer</option>
+                    <option value="system_customer">System / integration customer</option>
                     <option value="vendor_non_client">Vendor / non-client</option>
                     <option value="duplicate">Duplicate</option>
                     <option value="other">Other</option>
@@ -126,6 +127,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                         <option value="suggested">Use each suggested reason</option>
                         <option value="quickbooks_test_customer">QuickBooks test customer</option>
                         <option value="square_system_customer">Square system customer</option>
+                        <option value="system_customer">System / integration customer</option>
                         <option value="vendor_non_client">Vendor / non-client</option>
                         <option value="duplicate">Duplicate</option>
                         <option value="other">Other</option>
@@ -1038,7 +1040,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         currentSuggestedReviewCustomerId=String(plans[0].customerId||'');
       }
       renderSuggestedReview();
-      suggestedReviewDialog?.showModal();
+      if(suggestedReviewDialog&&!suggestedReviewDialog.open)suggestedReviewDialog.showModal();
     }
 
     async function keepCurrentSuggestedExclusionInReview(){
