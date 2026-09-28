@@ -754,8 +754,9 @@ export default async (req: Request, context: Context) => {
     try {
       const result = await saveQuickBooksMatchOverride(context, {
         customerId: clean(payload?.customerId, 100),
-        decision: clean(payload?.decision, 20) as 'match'|'new'|'clear',
+        decision: clean(payload?.decision, 20) as 'match'|'new'|'exclude'|'clear',
         recordId: clean(payload?.recordId, 120),
+        reason: clean(payload?.reason, 500),
       }, actor);
       return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
