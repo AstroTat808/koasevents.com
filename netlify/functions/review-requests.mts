@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { sendReviewRequest } from './_shared/review-email.ts';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
 
@@ -44,7 +45,7 @@ async function runTenantJob(_req:Request,context:Context){
   if (context.deploy.context !== 'production') return;
   if (!(await shouldRunScheduledJob(context,'review-requests'))) return;
 
-  const apiKey = String(Netlify.env.get('RESEND_API_KEY') || '').trim();
+  const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return;
 
   const delayDays = configuredDays('KOA_REVIEW_REQUEST_DELAY_DAYS', 1, 1, 14);
