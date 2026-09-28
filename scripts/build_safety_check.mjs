@@ -319,6 +319,38 @@ function checkAccountingSafetyContracts() {
       ['exact $15,706.80 regression assertion', '15706.80'],
       ['milestone invoice NON regression', 'Milestone invoice line must be explicitly non-taxable.'],
     ]],
+    ['netlify/functions/_shared/quickbooks-accounting-repair-safety.mjs', [
+      ['shared invoice payment protection', 'export function invoicePaymentProtection'],
+      ['shared invoice repair candidate classifier', 'export function evaluateInvoiceRepairCandidate'],
+      ['paid invoice code', "invoice_paid_protected"],
+      ['partially paid invoice code', "invoice_partially_paid_protected"],
+      ['orphan invoice code', "invoice_orphan"],
+      ['multi-line invoice code', "invoice_structure_protected"],
+    ]],
+    ['scripts/test_quickbooks_invoice_repair_safety.mjs', [
+      ['unpaid invoice repair test', "assert.equal(unpaid.eligible,true"],
+      ['partial invoice protection test', "invoice_partially_paid_protected"],
+      ['paid invoice protection test', "invoice_paid_protected"],
+      ['orphan invoice protection test', "invoice_orphan"],
+      ['multi-line invoice protection test', "invoice_structure_protected"],
+    ]],
+    ['netlify/functions/_shared/quickbooks.ts', [
+      ['tenant damage deposit settings getter', 'export async function getQuickBooksDamageDepositSettings'],
+      ['tenant damage deposit settings saver', 'export async function saveQuickBooksDamageDepositSettings'],
+    ]],
+    ['src/pages/admin/quickbooks/index.astro', [
+      ['refundable deposit setup UI', 'Refundable Damage Deposit Setup'],
+      ['damage deposit account refresh', 'data-refresh-damage-deposit-accounts'],
+    ]],
+    ['src/pages/admin/clients/index.astro', [
+      ['client refundable deposit workflow', 'Refundable Damage Deposit'],
+      ['explicit refund approval', 'I approve posting the refund/deduction to QuickBooks.'],
+    ]],
+    ['src/pages/admin/health/index.astro', [
+      ['accounting protection card', 'data-accounting-health-card'],
+      ['accounting alert history', 'data-accounting-alert-history'],
+      ['live NON status', 'data-accounting-non-status'],
+    ]],
   ];
 
   for (const [file, requirements] of contracts) {
