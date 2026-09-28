@@ -592,6 +592,49 @@ function daysUntil(value?: string) {
   return Math.ceil((due - Date.now()) / 86400000);
 }
 
+function dateOffset(value:string|undefined,days:number) {
+  if(!value)return '';
+  const parsed=new Date(String(value).slice(0,10)+'T12:00:00Z');
+  if(Number.isNaN(parsed.getTime()))return '';
+  parsed.setUTCDate(parsed.getUTCDate()+days);
+  return parsed.toISOString().slice(0,10);
+}
+
+function ensureTenantDamageDeposit(record:SalesRecord,tenant:TenantProfile) {
+  if(!tenant.accounting.damageDeposit.enabled)return null;
+  const normalizedPackage=normalizePackage(record.packageId||'',tenant);
+  if(isMobileBarPackage(normalizedPackage,tenant))return null;
+  (record as any).accounting ||= {};
+  const current=(record as any).accounting.damageDeposit||{};
+  if(current.amount!=null){
+    (record as any).accounting.damageDeposit=current;
+    return current;
+  }
+  const cfg=tenant.accounting.damageDeposit;
+  const rentalType=cfg.defaultRentalType==='weekend'?'weekend':'one-day';
+  const amount=rentalType==='weekend'?Number(cfg.weekendAmount||0):Number(cfg.oneDayAmount||0);
+  const eventDate=String(record.customer?.eventDate||'');
+  (record as any).accounting.damageDeposit={
+    rentalType,
+    amount,
+    dueDate:dateOffset(eventDate,-Number(cfg.dueDaysBefore||30)),
+    refundDueDate:dateOffset(eventDate,Number(cfg.refundWithinDays||14)),
+    status:'not_invoiced',
+    invoiceId:'',
+    invoiceDocNumber:'',
+    invoiceBalance:amount,
+    paidAt:'',
+    deductionAmount:0,
+    deductionReason:'',
+    deductionJournalEntryId:'',
+    refundAmount:amount,
+    refundTransactionId:'',
+    refundedAt:'',
+    lastSyncedAt:'',
+  };
+  return (record as any).accounting.damageDeposit;
+}
+
 function quickBooksInvoiceMap(record: SalesRecord) {
   const rows = (record as any)?.accounting?.quickbooks?.invoices;
   return Array.isArray(rows) ? rows : [];
@@ -2322,6 +2365,8 @@ export default async (req: Request, context: Context) => {
       detail: 'Agreement countersigned for ' + tenant.displayName + ' by ' + name,
     });
     if (record.stage === 'booked') {
+      ensureTenantDamageDeposit(record,tenant);
+      records = await saveRecord(context, record, records);
       await appendEvent(context, {
         type: 'booked',
         recordId: record.id,
@@ -2341,6 +2386,7 @@ export default async (req: Request, context: Context) => {
     record.status = 'booked';
     record.updatedAt = new Date().toISOString();
     if (record.proposal) record.proposal.status = 'booked';
+    ensureTenantDamageDeposit(record,tenant);
     records = await saveRecord(context, record, records);
     await appendEvent(context, { type: 'booked', packageId: record.packageId || record.quote?.state?.startingPoint, recordId: record.id, quoteId: record.quoteId || '' });
     return Response.json({ ok: true, record });
@@ -2354,6 +2400,7 @@ export default async (req: Request, context: Context) => {
     record.stage = stage as any;
     record.status = stage;
     record.updatedAt = new Date().toISOString();
+    if (stage === 'booked') ensureTenantDamageDeposit(record,tenant);
     records = await saveRecord(context, record, records);
     if (stage === 'booked') await appendEvent(context, { type: 'booked', packageId: record.packageId || record.quote?.state?.startingPoint, recordId: record.id, quoteId: record.quoteId || '' });
     return Response.json({ ok: true, record });
