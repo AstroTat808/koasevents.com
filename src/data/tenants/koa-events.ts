@@ -92,6 +92,7 @@ export const koaEventsTenantProfile: TenantProfile = {
   brand: {
     tagline: businessRules.brand.tagline,
     logoPath: '/brand/koa-mark.png',
+    mobileName: 'Koa’s Mobile Bar',
   },
   tax: {
     id: 'hawaii-get',
