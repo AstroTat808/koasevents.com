@@ -1,13 +1,14 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
-function storeFor(c:Context){return c.deploy.context==='production'?getStore({name:'koa-vendors',consistency:'strong'}):getDeployStore({name:'koa-vendors'});}
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
+function storeFor(c:Context,req?:Request){return tenantStoreFor(c,resolveTenant(req),'vendors');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 async function list(store:any,key:string){return ((await store.get(key,{type:'json'}))||[]) as any[];}
 function arr(v:unknown,max=40){return Array.isArray(v)?v.map(x=>clean(x,300)).filter(Boolean).slice(0,max):[];}
 export default async(req:Request,context:Context)=>{
   const token=clean(context.params.token,120);
   if(!/^vnd_[A-Za-z0-9]{24,100}$/.test(token))return Response.json({error:'Invalid vendor portal link.'},{status:400});
-  const store=storeFor(context);const vendors=await list(store,'vendors/index');const vendor=vendors.find(v=>v.portalToken===token);
+  const store=storeFor(context,req);const vendors=await list(store,'vendors/index');const vendor=vendors.find(v=>v.portalToken===token);
   if(!vendor)return Response.json({error:'Vendor portal not found.'},{status:404});
   const requests=await list(store,'requests/index');
   if(req.method==='GET'){
