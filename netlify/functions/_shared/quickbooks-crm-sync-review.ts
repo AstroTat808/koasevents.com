@@ -65,6 +65,33 @@ export function normalizeQuickBooksMatchName(value: unknown) {
     .replace(/\s+/g, ' ');
 }
 
+export function normalizeQuickBooksMatchPhone(value: unknown) {
+  const digits = clean(value, 100).replace(/\D/g, '');
+  if (digits.length < 7) return '';
+  return digits.length > 10 ? digits.slice(-10) : digits;
+}
+
+function normalizedNameTokens(value: unknown) {
+  const stop = new Set(['and','the','event','events','wedding','weddings']);
+  return normalizeQuickBooksMatchName(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !stop.has(token));
+}
+
+function normalizedNameSignature(value: unknown) {
+  return [...new Set(normalizedNameTokens(value))].sort().join(' ');
+}
+
+function normalizedNameSimilarity(a: unknown, b: unknown) {
+  const left = new Set(normalizedNameTokens(a));
+  const right = new Set(normalizedNameTokens(b));
+  if (!left.size || !right.size) return 0;
+  let intersection = 0;
+  for (const token of left) if (right.has(token)) intersection += 1;
+  return intersection / (left.size + right.size - intersection);
+}
+
 function normalizeDisplayName(value: unknown) {
   return clean(value, 240).toLowerCase().replace(/\s+/g, ' ');
 }
@@ -117,35 +144,99 @@ export type QuickBooksMatchOverride = {
   approvedAt: string;
   approvedBy: string;
   customerName?: string;
+  approvalMode?: 'single' | 'bulk';
+};
+
+export type QuickBooksCustomerMatchEvidence = {
+  estimateIds: string[];
+  invoiceIds: string[];
+  paymentIds: string[];
+  transactionTotals: number[];
 };
 
 export type QuickBooksMatchIndexes = {
+  records: any[];
   recordsById: Map<string, any>;
   byQboCustomerId: Map<string, any>;
   exactDisplay: Map<string, any[]>;
   emailMap: Map<string, any[]>;
+  phoneMap: Map<string, any[]>;
+  eventDateMap: Map<string, any[]>;
   normalizedNameMap: Map<string, any[]>;
+  normalizedNameSignatureMap: Map<string, any[]>;
+  transactionMap: Map<string, any[]>;
 };
+
+function quickBooksTransactionKeysFromRecord(record: any) {
+  const qbo = record?.accounting?.quickbooks || {};
+  const keys: string[] = [];
+  const add = (kind: string, value: unknown) => {
+    const id = clean(value, 120);
+    if (id) keys.push(kind + ':' + id);
+  };
+  add('estimate', qbo.estimateId);
+  for (const row of Array.isArray(qbo.estimates) ? qbo.estimates : []) {
+    add('estimate', row?.estimateId || row?.id);
+    add('estimate-doc', row?.docNumber);
+  }
+  for (const row of Array.isArray(qbo.invoices) ? qbo.invoices : []) {
+    add('invoice', row?.invoiceId || row?.id);
+    add('invoice-doc', row?.docNumber);
+  }
+  for (const row of Array.isArray(qbo.payments) ? qbo.payments : []) add('payment', row?.paymentId || row?.id);
+  return [...new Set(keys)];
+}
+
+export function buildQuickBooksCustomerMatchEvidence(
+  estimates: any[] = [],
+  invoices: any[] = [],
+  payments: any[] = [],
+): QuickBooksCustomerMatchEvidence {
+  const ids = (rows: any[], key: string) => [...new Set(rows.map((row) => clean(row?.[key] ?? row?.id ?? row?.Id, 120)).filter(Boolean))];
+  const totals = [
+    ...estimates.map((row) => money(row?.total ?? row?.TotalAmt)),
+    ...invoices.map((row) => money(row?.total ?? row?.TotalAmt)),
+    ...payments.map((row) => money(row?.total ?? row?.TotalAmt)),
+  ].filter((value) => value > 0);
+  return {
+    estimateIds: ids(estimates, 'estimateId'),
+    invoiceIds: ids(invoices, 'invoiceId'),
+    paymentIds: ids(payments, 'paymentId'),
+    transactionTotals: [...new Set(totals)],
+  };
+}
 
 export function buildQuickBooksMatchIndexes(records: any[]): QuickBooksMatchIndexes {
   const recordsById = new Map(records.map((record) => [String(record.id), record]));
   const byQboCustomerId = new Map<string, any>();
+  const transactionMap = new Map<string, any[]>();
   for (const record of records) {
     const customerId = clean(record?.accounting?.quickbooks?.customerId, 100);
     if (customerId && !byQboCustomerId.has(customerId)) byQboCustomerId.set(customerId, record);
+    for (const key of quickBooksTransactionKeysFromRecord(record)) {
+      const rows = transactionMap.get(key) || [];
+      if (!rows.some((entry) => String(entry?.id) === String(record?.id))) rows.push(record);
+      transactionMap.set(key, rows);
+    }
   }
   return {
+    records,
     recordsById,
     byQboCustomerId,
     exactDisplay: mapUnique(records, (record) => normalizeDisplayName(expectedDisplayName(record))),
     emailMap: mapUnique(records, (record) => normalizeQuickBooksMatchEmail(record?.customer?.email)),
+    phoneMap: mapUnique(records, (record) => normalizeQuickBooksMatchPhone(record?.customer?.phone)),
+    eventDateMap: mapUnique(records, (record) => isoDate(record?.customer?.eventDate)),
     normalizedNameMap: mapUnique(records, (record) => normalizeQuickBooksMatchName(record?.customer?.name)),
+    normalizedNameSignatureMap: mapUnique(records, (record) => normalizedNameSignature(record?.customer?.name)),
+    transactionMap,
   };
 }
 
 export function addRecordToQuickBooksMatchIndexes(indexes: QuickBooksMatchIndexes, record: any) {
   const recordId = clean(record?.id, 120);
   if (recordId) indexes.recordsById.set(recordId, record);
+  if (recordId && !indexes.records.some((entry) => String(entry?.id) === recordId)) indexes.records.push(record);
   const customerId = clean(record?.accounting?.quickbooks?.customerId, 100);
   if (customerId && !indexes.byQboCustomerId.has(customerId)) indexes.byQboCustomerId.set(customerId, record);
 
@@ -157,10 +248,14 @@ export function addRecordToQuickBooksMatchIndexes(indexes: QuickBooksMatchIndexe
   };
   add(indexes.exactDisplay, normalizeDisplayName(expectedDisplayName(record)));
   add(indexes.emailMap, normalizeQuickBooksMatchEmail(record?.customer?.email));
+  add(indexes.phoneMap, normalizeQuickBooksMatchPhone(record?.customer?.phone));
+  add(indexes.eventDateMap, isoDate(record?.customer?.eventDate));
   add(indexes.normalizedNameMap, normalizeQuickBooksMatchName(record?.customer?.name));
+  add(indexes.normalizedNameSignatureMap, normalizedNameSignature(record?.customer?.name));
+  for (const key of quickBooksTransactionKeysFromRecord(record)) add(indexes.transactionMap, key);
 }
 
-function candidateView(record: any, reason = '') {
+function candidateView(record: any, reason = '', score = 0, signals: string[] = []) {
   return {
     recordId: clean(record?.id, 120),
     name: clean(record?.customer?.name, 180),
@@ -170,6 +265,9 @@ function candidateView(record: any, reason = '') {
     stage: clean(record?.stage || record?.kind, 80),
     currentQuickBooksCustomerId: clean(record?.accounting?.quickbooks?.customerId, 100),
     reason,
+    score,
+    signals,
+    riskLevel: score >= 90 ? 'high' : score >= 55 ? 'medium' : score >= 20 ? 'review' : 'low',
   };
 }
 
@@ -177,6 +275,7 @@ export function resolveQuickBooksCustomerMatch(
   customer: any,
   indexes: QuickBooksMatchIndexes,
   overrides: Record<string, QuickBooksMatchOverride> = {},
+  evidence: QuickBooksCustomerMatchEvidence = { estimateIds:[], invoiceIds:[], paymentIds:[], transactionTotals:[] },
 ) {
   const customerId = clean(customer?.Id, 100);
   const linked = indexes.byQboCustomerId.get(customerId);
@@ -185,13 +284,22 @@ export function resolveQuickBooksCustomerMatch(
       status: 'linked',
       reason: 'existing-qbo-link',
       record: linked,
-      candidates: [candidateView(linked, 'Already linked to this QuickBooks customer')],
+      candidates: [candidateView(linked, 'Already linked to this QuickBooks customer', 100, ['existing_qbo_link'])],
+      duplicateRisk: { level:'none', score:0, candidateCount:0, signals:[] },
+      bulkEligible:false,
     };
   }
 
   const override = overrides[customerId];
   if (override?.decision === 'new') {
-    return { status: 'approved_new', reason: 'staff-approved-new', record: null, candidates: [] };
+    return {
+      status: 'approved_new',
+      reason: override.approvalMode === 'bulk' ? 'staff-bulk-approved-new' : 'staff-approved-new',
+      record: null,
+      candidates: [],
+      duplicateRisk: { level:'approved', score:0, candidateCount:0, signals:[] },
+      bulkEligible:false,
+    };
   }
   if (override?.decision === 'match') {
     const approved = indexes.recordsById.get(clean(override.recordId, 120));
@@ -200,7 +308,9 @@ export function resolveQuickBooksCustomerMatch(
         status: 'approved_match',
         reason: 'staff-approved-match',
         record: approved,
-        candidates: [candidateView(approved, 'Staff-approved match')],
+        candidates: [candidateView(approved, 'Staff-approved match', 100, ['staff_approved_match'])],
+        duplicateRisk: { level:'approved', score:100, candidateCount:1, signals:['staff_approved_match'] },
+        bulkEligible:false,
       };
     }
   }
@@ -214,47 +324,125 @@ export function resolveQuickBooksCustomerMatch(
         status: 'ambiguous',
         reason: 'hinted-record-linked-elsewhere',
         record: null,
-        candidates: [candidateView(hinted, 'QuickBooks notes point to this CRM record, but it is linked to another QuickBooks customer')],
+        candidates: [candidateView(hinted, 'QuickBooks notes point to this CRM record, but it is linked to another QuickBooks customer', 100, ['crm_id_hint','linked_elsewhere'])],
+        duplicateRisk: { level:'high', score:100, candidateCount:1, signals:['crm_id_hint','linked_elsewhere'] },
+        bulkEligible:false,
       };
     }
     return {
       status: 'linked',
       reason: 'qbo-crm-id-hint',
       record: hinted,
-      candidates: [candidateView(hinted, 'QuickBooks notes contain this CRM record ID')],
+      candidates: [candidateView(hinted, 'QuickBooks notes contain this CRM record ID', 100, ['crm_id_hint'])],
+      duplicateRisk: { level:'none', score:0, candidateCount:0, signals:[] },
+      bulkEligible:false,
     };
   }
 
-  const candidateMap = new Map<string, { record: any; reasons: string[] }>();
-  const addCandidates = (rows: any[], reason: string) => {
+  const candidateMap = new Map<string, { record: any; reasons: string[]; signals: string[]; score: number }>();
+  const addCandidates = (rows: any[], reason: string, score: number, signal: string) => {
     for (const record of rows) {
       const id = clean(record?.id, 120);
       if (!id) continue;
-      const existing = candidateMap.get(id) || { record, reasons: [] };
+      const existing = candidateMap.get(id) || { record, reasons: [], signals: [], score:0 };
       if (!existing.reasons.includes(reason)) existing.reasons.push(reason);
+      if (!existing.signals.includes(signal)) {
+        existing.signals.push(signal);
+        existing.score += score;
+      }
       candidateMap.set(id, existing);
     }
   };
 
-  addCandidates(indexes.exactDisplay.get(normalizeDisplayName(customer?.DisplayName)) || [], 'Exact display name + event date');
+  addCandidates(indexes.exactDisplay.get(normalizeDisplayName(customer?.DisplayName)) || [], 'Exact display name and event date', 90, 'exact_display');
   const email = normalizeQuickBooksMatchEmail(qboCustomerEmail(customer));
-  if (email) addCandidates(indexes.emailMap.get(email) || [], 'Same email address');
+  if (email) addCandidates(indexes.emailMap.get(email) || [], 'Same email address', 70, 'email');
+  const phone = normalizeQuickBooksMatchPhone(qboCustomerPhone(customer));
+  if (phone) addCandidates(indexes.phoneMap.get(phone) || [], 'Same phone number', 60, 'phone');
+  const eventDate = eventDateFromDisplayName(customer?.DisplayName);
+  if (eventDate) addCandidates(indexes.eventDateMap.get(eventDate) || [], 'Same event date', 30, 'event_date');
   const normalizedName = normalizeQuickBooksMatchName(customer?.DisplayName);
-  if (normalizedName) addCandidates(indexes.normalizedNameMap.get(normalizedName) || [], 'Same normalized customer name');
+  if (normalizedName) addCandidates(indexes.normalizedNameMap.get(normalizedName) || [], 'Same normalized customer name', 35, 'normalized_name');
+  const nameSignature = normalizedNameSignature(customer?.DisplayName);
+  if (nameSignature) addCandidates(indexes.normalizedNameSignatureMap.get(nameSignature) || [], 'Same name tokens in a different order or format', 30, 'name_tokens');
 
-  const candidates = [...candidateMap.values()].map(({ record, reasons }) => candidateView(record, reasons.join(' · ')));
+  for (const id of evidence.estimateIds || []) addCandidates(indexes.transactionMap.get('estimate:' + clean(id,120)) || [], 'QuickBooks estimate already appears in this CRM client history', 100, 'estimate_history');
+  for (const id of evidence.invoiceIds || []) addCandidates(indexes.transactionMap.get('invoice:' + clean(id,120)) || [], 'QuickBooks invoice already appears in this CRM client history', 100, 'invoice_history');
+  for (const id of evidence.paymentIds || []) addCandidates(indexes.transactionMap.get('payment:' + clean(id,120)) || [], 'QuickBooks payment already appears in this CRM client history', 100, 'payment_history');
+
+  // Fuzzy normalized-name evidence is intentionally review-only. It can flag
+  // a possible duplicate but never auto-link a customer by itself.
+  for (const record of indexes.records) {
+    const similarity = normalizedNameSimilarity(customer?.DisplayName, record?.customer?.name);
+    if (similarity < 0.66) continue;
+    const id = clean(record?.id,120);
+    const existing = candidateMap.get(id);
+    if (existing?.signals.includes('normalized_name') || existing?.signals.includes('name_tokens')) continue;
+    const pct = Math.round(similarity * 100);
+    addCandidates([record], 'Similar normalized customer name (' + pct + '% token overlap)', Math.min(28, 14 + Math.round(similarity * 18)), 'similar_name');
+  }
+
+  // A matching proposal total is supporting evidence only; it can strengthen
+  // an already-plausible candidate but never creates a candidate on its own.
+  for (const candidate of candidateMap.values()) {
+    const proposalTotal = money(candidate.record?.proposal?.total);
+    if (!proposalTotal || !(evidence.transactionTotals || []).some((value) => Math.abs(money(value) - proposalTotal) < 0.01)) continue;
+    if (!candidate.signals.includes('transaction_amount')) {
+      candidate.signals.push('transaction_amount');
+      candidate.reasons.push('QuickBooks transaction total matches this CRM proposal total');
+      candidate.score += 12;
+    }
+  }
+
+  const candidates = [...candidateMap.values()]
+    .filter((entry) => entry.score >= 20)
+    .sort((a,b) => b.score - a.score)
+    .map(({ record, reasons, score, signals }) => candidateView(record, reasons.join(' · '), score, signals));
+
+  const topScore = Number(candidates[0]?.score || 0);
+  const uniqueSignals = [...new Set(candidates.flatMap((candidate: any) => candidate.signals || []))];
+  const duplicateRisk = {
+    level: topScore >= 90 ? 'high' : topScore >= 55 ? 'medium' : topScore >= 20 ? 'review' : 'low',
+    score: topScore,
+    candidateCount: candidates.length,
+    signals: uniqueSignals,
+  };
+
   if (candidates.length === 1) {
     const candidate = candidates[0];
     if (candidate.currentQuickBooksCustomerId && candidate.currentQuickBooksCustomerId !== customerId) {
-      return { status:'ambiguous', reason:'candidate-linked-elsewhere', record:null, candidates };
+      return { status:'ambiguous', reason:'candidate-linked-elsewhere', record:null, candidates, duplicateRisk:{...duplicateRisk,level:'high'}, bulkEligible:false };
     }
-    const record = indexes.recordsById.get(candidate.recordId);
-    return { status: 'auto_match', reason: candidate.reason, record, candidates };
+    const autoMatchSignals = new Set(candidate.signals || []);
+    const hasStrongTransaction = ['estimate_history','invoice_history','payment_history'].some((signal) => autoMatchSignals.has(signal));
+    const hasContactPlusIdentity =
+      (autoMatchSignals.has('email') || autoMatchSignals.has('phone')) &&
+      (autoMatchSignals.has('normalized_name') || autoMatchSignals.has('name_tokens') || autoMatchSignals.has('event_date'));
+    const exactDisplay = autoMatchSignals.has('exact_display');
+    if (hasStrongTransaction || hasContactPlusIdentity || exactDisplay || Number(candidate.score || 0) >= 90) {
+      const record = indexes.recordsById.get(candidate.recordId);
+      return { status:'auto_match', reason:candidate.reason, record, candidates, duplicateRisk, bulkEligible:false };
+    }
+    return { status:'ambiguous', reason:'possible-crm-duplicate', record:null, candidates, duplicateRisk, bulkEligible:false };
   }
   if (candidates.length > 1) {
-    return { status: 'ambiguous', reason: 'multiple-crm-candidates', record: null, candidates };
+    return { status:'ambiguous', reason:'multiple-crm-candidates', record:null, candidates, duplicateRisk, bulkEligible:false };
   }
-  return { status: 'new', reason: 'no-crm-candidate', record: null, candidates: [] };
+
+  const reliableIdentity = Boolean(email || phone);
+  return {
+    status:'new',
+    reason: reliableIdentity ? 'no-crm-candidate' : 'no-crm-candidate-missing-contact',
+    record:null,
+    candidates:[],
+    duplicateRisk: {
+      level: reliableIdentity ? 'low' : 'review',
+      score:0,
+      candidateCount:0,
+      signals: reliableIdentity ? [] : ['missing_reliable_contact'],
+    },
+    bulkEligible: reliableIdentity,
+  };
 }
 
 async function qboRows(context: Context, entity: 'Customer'|'Estimate'|'Invoice'|'Payment') {
@@ -337,10 +525,65 @@ export async function saveQuickBooksMatchOverride(
     approvedAt: new Date().toISOString(),
     approvedBy: clean(actor, 180),
     customerName: clean(qboCustomer.DisplayName, 240),
+    approvalMode: 'single',
   };
   overrides[customerId] = override;
   await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
   return { customerId, cleared: false, override };
+}
+
+export async function saveQuickBooksBulkNewOverrides(
+  context: Context,
+  input: { previewId: string; customerIds: string[] },
+  actor = '',
+) {
+  const previewId = clean(input.previewId, 120);
+  const ids = [...new Set((Array.isArray(input.customerIds) ? input.customerIds : []).map((id) => clean(id,100)).filter(Boolean))].slice(0, 200);
+  if (!previewId) throw new Error('Preview Sync ID is required.');
+  if (!ids.length) throw new Error('Select at least one low-risk new QuickBooks customer.');
+
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
+    throw new Error('That Preview Sync is no longer current. Run Preview Sync again before bulk approval.');
+  }
+  const generatedAt = Date.parse(String(preview.generatedAt || ''));
+  if (!generatedAt || Date.now() - generatedAt > PREVIEW_MAX_AGE_MS) {
+    throw new Error('The Preview Sync is older than 30 minutes. Run Preview Sync again before bulk approval.');
+  }
+
+  const plans = new Map((Array.isArray(preview.customerPlans) ? preview.customerPlans : []).map((plan: any) => [clean(plan?.customerId,100), plan]));
+  const invalid = ids
+    .map((id) => ({ id, plan:plans.get(id) }))
+    .filter(({ plan }: any) => !plan || clean(plan?.decision,40) !== 'new' || !Boolean(plan?.bulkEligible));
+
+  if (invalid.length) {
+    const names = invalid.slice(0,5).map(({ id, plan }: any) => clean(plan?.qbo?.name || id,180)).join(', ');
+    throw new Error('Bulk approval is limited to low-risk new customers with no duplicate evidence. Review individually: ' + names + (invalid.length > 5 ? ' and ' + (invalid.length - 5) + ' more' : '') + '.');
+  }
+
+  const integrations = integrationStore(context);
+  const overrides = await getQuickBooksMatchOverrides(context);
+  const approvedAt = new Date().toISOString();
+  const approvedBy = clean(actor,180);
+  const approved: any[] = [];
+
+  for (const id of ids) {
+    const plan: any = plans.get(id);
+    const override: QuickBooksMatchOverride = {
+      customerId:id,
+      decision:'new',
+      recordId:'',
+      approvedAt,
+      approvedBy,
+      customerName:clean(plan?.qbo?.name,240),
+      approvalMode:'bulk',
+    };
+    overrides[id] = override;
+    approved.push({ customerId:id, customerName:override.customerName });
+  }
+
+  await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
+  return { previewId, approvedAt, approvedBy, approved };
 }
 
 function customerFinancialSummary(customerId: string, estimateGroups: Map<string, any[]>, invoiceGroups: Map<string, any[]>, paymentGroups: Map<string, any[]>) {
@@ -514,8 +757,13 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
 
   const customerPlans = customers.map((customer) => {
     const customerId = clean(customer?.Id, 100);
-    const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides);
     const financial = customerFinancialSummary(customerId, estimateGroups, invoiceGroups, paymentGroups);
+    const evidence = buildQuickBooksCustomerMatchEvidence(
+      financial.estimateDocs || [],
+      financial.invoiceDocs || [],
+      financial.paymentDocs || [],
+    );
+    const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides, evidence);
     let predictedRecordId = '';
     if (['new','approved_new'].includes(match.status)) {
       const safe = clean(customerId, 100).replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-') || 'UNKNOWN';
@@ -547,6 +795,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       matchedRecordId: clean(match.record?.id, 120),
       predictedRecordId,
       candidates: match.candidates,
+      duplicateRisk: match.duplicateRisk,
+      bulkEligible: Boolean(match.bulkEligible),
       financial,
       before,
       after,
@@ -589,6 +839,9 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
     unapprovedNewImports: customerPlans.filter((row) => row.decision === 'new').length,
     ambiguousMatches: customerPlans.filter((row) => row.decision === 'ambiguous').length,
+    duplicateFlags: customerPlans.filter((row) => row.decision === 'ambiguous' || ['high','medium','review'].includes(String(row?.duplicateRisk?.level || ''))).length,
+    bulkEligibleNewImports: customerPlans.filter((row) => row.decision === 'new' && row.bulkEligible).length,
+    needsIndividualReview: customerPlans.filter((row) => row.decision === 'ambiguous' || (row.decision === 'new' && !row.bulkEligible)).length,
     needsDecision: customerPlans.filter((row) => ['new','ambiguous'].includes(row.decision)).length,
     crmOutboundRecords: outbound.length,
     crmOutboundActions: outbound.reduce((sum, row) => sum + row.actions.length, 0),

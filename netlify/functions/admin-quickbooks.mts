@@ -13,6 +13,7 @@ import {
   previewQuickBooksCrmSyncRollback,
   applyQuickBooksCrmSyncRollback,
   saveQuickBooksMatchOverride,
+  saveQuickBooksBulkNewOverrides,
   validateQuickBooksCrmSyncPreview,
 } from './_shared/quickbooks-crm-sync-review';
 import {
@@ -759,6 +760,19 @@ export default async (req: Request, context: Context) => {
       return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
       return Response.json({ error:error instanceof Error ? error.message : 'Unable to save QuickBooks customer match.' }, { status:409 });
+    }
+  }
+
+  if (action === 'bulk-approve-new-customers') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    try {
+      const result = await saveQuickBooksBulkNewOverrides(context, {
+        previewId: clean(payload?.previewId, 120),
+        customerIds: Array.isArray(payload?.customerIds) ? payload.customerIds : [],
+      }, actor);
+      return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to bulk approve QuickBooks customer imports.' }, { status:409 });
     }
   }
 

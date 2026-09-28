@@ -70,6 +70,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                     <option value="payments">Has Payments</option>
                     <option value="balance">Has Open Balance</option>
                     <option value="decision">Needs Decision</option>
+                    <option value="duplicates">Likely Duplicates / Review</option>
                   </select>
                 </label>
                 <label class="grid min-w-0 gap-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Search preview
@@ -89,7 +90,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div class="mt-5 grid min-w-0 gap-4 xl:grid-cols-2">
                 <section class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white p-4">
                   <p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">1 · Proposed CRM imports</p>
-                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">QuickBooks customers that do not yet have a confirmed CRM record. Unapproved imports cannot be synchronized.</p>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">QuickBooks customers that do not yet have a confirmed CRM record. Only low-risk rows with no duplicate evidence can be bulk-approved; questionable rows stay individual-review only.</p>
+                  <div data-bulk-review class="mt-3 hidden rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+                    <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div class="min-w-0">
+                        <strong class="text-sm text-emerald-950">Bulk review · low-risk only</strong>
+                        <p data-bulk-review-detail class="mt-1 text-xs leading-5 text-emerald-950/65"></p>
+                      </div>
+                      <div class="flex flex-wrap gap-2">
+                        <button data-bulk-select-visible type="button" class="rounded-full border border-emerald-300 bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-emerald-900">Select low-risk shown</button>
+                        <button data-bulk-clear type="button" class="rounded-full border border-emerald-300 bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-emerald-900">Clear</button>
+                        <button data-bulk-approve type="button" disabled class="rounded-full bg-emerald-800 px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-white disabled:cursor-not-allowed disabled:opacity-40">Approve selected (0)</button>
+                      </div>
+                    </div>
+                  </div>
                   <div data-preview-imports class="mt-3 grid max-h-[70vh] min-w-0 gap-2 overflow-y-auto pr-1"></div>
                 </section>
                 <section class="min-w-0 rounded-xl border border-[var(--koa-line)] bg-white p-4">
@@ -493,6 +507,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const matchReview=document.querySelector('[data-match-review]');
     const matchReviewCount=document.querySelector('[data-match-review-count]');
     const matchReviewList=document.querySelector('[data-match-review-list]');
+    const bulkReview=document.querySelector('[data-bulk-review]');
+    const bulkReviewDetail=document.querySelector('[data-bulk-review-detail]');
+    const bulkSelectVisible=document.querySelector('[data-bulk-select-visible]');
+    const bulkClear=document.querySelector('[data-bulk-clear]');
+    const bulkApprove=document.querySelector('[data-bulk-approve]');
     const company=document.querySelector('[data-company]');
     const status=document.querySelector('[data-status]');
     const warning=document.querySelector('[data-config-warning]');
@@ -555,6 +574,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const refreshAudit=document.querySelector('[data-refresh-audit]');
     let state=null;
     let items=[];
+    const bulkSelectedNew=new Set();
 
     function tenantLocale(){return state?.tenant?.locale||'en-US';}
     function tenantCurrency(){return state?.tenant?.currency||'USD';}
@@ -620,6 +640,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function auditValue(value){return value==null?'—':money(value);}
     function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));}
 
+    function duplicateSignalLabel(signal){
+      return ({
+        email:'same email',
+        phone:'same phone',
+        event_date:'same event date',
+        normalized_name:'same normalized name',
+        name_tokens:'same name tokens',
+        similar_name:'similar name',
+        exact_display:'exact display + date',
+        estimate_history:'estimate history',
+        invoice_history:'invoice history',
+        payment_history:'payment history',
+        transaction_amount:'matching transaction total',
+        linked_elsewhere:'linked elsewhere',
+        missing_reliable_contact:'missing email/phone',
+      })[String(signal||'')]||String(signal||'').replaceAll('_',' ');
+    }
+
+    function duplicateRiskText(plan){
+      const risk=plan?.duplicateRisk||{};
+      const level=String(risk.level||'low');
+      if(level==='approved'||level==='none')return '';
+      const signals=Array.isArray(risk.signals)?risk.signals.map(duplicateSignalLabel).filter(Boolean):[];
+      if(level==='low')return 'Low duplicate risk · no CRM duplicate evidence found';
+      return (level==='high'?'High duplicate risk':level==='medium'?'Medium duplicate risk':'Individual review')+(Number(risk.score||0)?' · score '+Number(risk.score||0):'')+(signals.length?' · '+signals.join(', '):'');
+    }
+
     function compactPlanRow(plan){
       const f=plan.financial||{};
       const decision=String(plan.decision||'');
@@ -631,16 +678,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ...invoiceDocs.map((row)=>'Invoice #'+String(row.docNumber||row.id||'')+' · '+money(row.total||0)+' · '+money(row.balance||0)+' open · due '+String(row.dueDate||'—')),
         ...paymentDocs.map((row)=>'Payment #'+String(row.id||'')+' · '+money(row.total||0)+' · '+String(row.txnDate||'—')),
       ];
-      const statusLabel=decision==='new'?'Needs approval':decision==='approved_new'?'Approved new import':decision==='auto_match'?'Auto-matched':decision==='approved_match'?'Staff-approved match':decision==='linked'?'Already linked':decision==='ambiguous'?'Needs match decision':decision||'Review';
-      const statusClass=['new','ambiguous'].includes(decision)?'bg-amber-100 text-amber-900':['approved_new','approved_match'].includes(decision)?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700';
+      const statusLabel=decision==='new'?(plan.bulkEligible?'Low-risk · needs approval':'Individual review'):decision==='approved_new'?'Approved new import':decision==='auto_match'?'Auto-matched':decision==='approved_match'?'Staff-approved match':decision==='linked'?'Already linked':decision==='ambiguous'?'Possible duplicate':decision||'Review';
+      const statusClass=decision==='ambiguous'||(decision==='new'&&!plan.bulkEligible)?'bg-amber-100 text-amber-900':decision==='new'?'bg-emerald-100 text-emerald-900':['approved_new','approved_match'].includes(decision)?'bg-emerald-100 text-emerald-800':'bg-slate-100 text-slate-700';
+      const riskText=duplicateRiskText(plan);
       const exact='<details class="mt-3 min-w-0 rounded-lg border border-[var(--koa-line)] bg-white p-3"><summary class="cursor-pointer text-[.58rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Review exact values</summary>'+(docs.length?'<div class="mt-3 grid min-w-0 gap-1">'+docs.map((row)=>'<p class="min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(row)+'</p>').join('')+'</div>':'<p class="mt-3 text-xs text-[var(--koa-ink)]/45">No QuickBooks financial documents for this customer.</p>')+'<div class="mt-3 grid min-w-0 gap-2 lg:grid-cols-2"><div class="min-w-0 rounded-lg bg-red-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-red-800">CRM before</p><pre class="mt-1 max-h-72 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.before??null,null,2))+'</pre></div><div class="min-w-0 rounded-lg bg-emerald-50 p-2"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-emerald-800">Projected after</p><pre class="mt-1 max-h-72 min-w-0 overflow-auto whitespace-pre-wrap break-all text-[.64rem] leading-5 text-[var(--koa-ink)]/60">'+esc(JSON.stringify(plan.after??null,null,2))+'</pre></div></div></details>';
       let controls='';
       if(['approved_match','approved_new'].includes(decision)){
         controls='<button type="button" data-match-reset="'+esc(plan.customerId)+'" class="rounded-full border border-[var(--koa-line)] bg-white px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Reset decision</button>';
       }else if(decision==='new'){
-        controls='<button type="button" data-match-new="'+esc(plan.customerId)+'" class="rounded-full bg-amber-900 px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-white">Approve new import</button>';
+        controls=(plan.bulkEligible?'<label class="flex items-center gap-2 rounded-full border border-emerald-300 bg-white px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em] text-emerald-900"><input data-bulk-select="'+esc(plan.customerId)+'" type="checkbox" '+(bulkSelectedNew.has(String(plan.customerId))?'checked':'')+' class="h-3.5 w-3.5" /> Select for bulk</label>':'')+'<button type="button" data-match-new="'+esc(plan.customerId)+'" class="rounded-full '+(plan.bulkEligible?'border border-[var(--koa-line)] bg-white text-[var(--koa-forest)]':'bg-amber-900 text-white')+' px-2.5 py-1.5 text-[.52rem] font-black uppercase tracking-[.06em]">Approve individually</button>';
       }
-      return '<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(plan.qbo?.name||plan.name||'Unnamed customer')+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/50">'+esc(plan.qbo?.email||plan.email||'No email')+'</p></div><span class="shrink-0 self-start rounded-full px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+esc(statusLabel)+'</span></div>'+(plan.matchedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(plan.matchedRecordId)+'</p>':plan.predictedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">Proposed CRM '+esc(plan.predictedRecordId)+'</p>':'')+(plan.reason?'<p class="mt-1 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+esc(plan.reason)+'</p>':'')+(plan.financial?'<p class="mt-2 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+Number(f.estimates||0)+' estimate(s) · '+Number(f.invoices||0)+' invoice(s) · '+Number(f.payments||0)+' payment(s) · '+money(f.openBalance||0)+' open</p>':'')+(controls?'<div class="mt-3 flex flex-wrap gap-2">'+controls+'</div>':'')+exact+'</article>';
+      return '<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(plan.qbo?.name||plan.name||'Unnamed customer')+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/50">'+esc(plan.qbo?.email||plan.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/45">'+esc(plan.qbo?.phone||'No phone')+(plan.qbo?.eventDate?' · event '+esc(plan.qbo.eventDate):'')+'</p></div><span class="shrink-0 self-start rounded-full px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+statusClass+'">'+esc(statusLabel)+'</span></div>'+(riskText?'<p class="mt-2 min-w-0 break-words rounded-lg '+(plan.bulkEligible?'bg-emerald-50 text-emerald-900':'bg-amber-50 text-amber-900')+' px-2 py-1.5 text-[.62rem] font-semibold leading-5">'+esc(riskText)+'</p>':'')+(plan.matchedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(plan.matchedRecordId)+'</p>':plan.predictedRecordId?'<p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">Proposed CRM '+esc(plan.predictedRecordId)+'</p>':'')+(plan.reason?'<p class="mt-1 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+esc(plan.reason)+'</p>':'')+(plan.financial?'<p class="mt-2 min-w-0 break-words text-[.62rem] leading-5 text-[var(--koa-ink)]/48">'+Number(f.estimates||0)+' estimate(s) · '+Number(f.invoices||0)+' invoice(s) · '+Number(f.payments||0)+' payment(s) · '+money(f.openBalance||0)+' open</p>':'')+(controls?'<div class="mt-3 flex flex-wrap gap-2">'+controls+'</div>':'')+exact+'</article>';
     }
 
     async function saveMatch(customerId,decision,recordId=''){
@@ -659,12 +707,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       else if(value==='payments')matches=Number(plan?.financial?.payments||0)>0;
       else if(value==='balance')matches=Number(plan?.financial?.openBalance||0)>0.009;
       else if(value==='decision')matches=['new','ambiguous'].includes(decision);
+      else if(value==='duplicates')matches=decision==='ambiguous'||(decision==='new'&&!plan?.bulkEligible)||['high','medium','review'].includes(String(plan?.duplicateRisk?.level||''));
       if(!matches)return false;
       const query=String(previewSearch?.value||'').trim().toLowerCase();
       if(!query)return true;
       const haystack=[
         plan?.customerId,plan?.qbo?.name,plan?.qbo?.email,plan?.qbo?.phone,plan?.qbo?.eventDate,
-        plan?.matchedRecordId,plan?.predictedRecordId,plan?.decision,plan?.reason,
+        plan?.matchedRecordId,plan?.predictedRecordId,plan?.decision,plan?.reason,plan?.duplicateRisk?.level,
+        ...(Array.isArray(plan?.duplicateRisk?.signals)?plan.duplicateRisk.signals:[]),
+        ...(Array.isArray(plan?.candidates)?plan.candidates.flatMap((row)=>[row?.recordId,row?.name,row?.email,row?.phone,row?.reason]):[]),
         ...(Array.isArray(plan?.financial?.estimateDocs)?plan.financial.estimateDocs.map((row)=>row?.docNumber||row?.id):[]),
         ...(Array.isArray(plan?.financial?.invoiceDocs)?plan.financial.invoiceDocs.map((row)=>row?.docNumber||row?.id):[]),
       ].join(' ').toLowerCase();
@@ -679,11 +730,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         catch(err){alert(err.message||'Unable to reset matching decision.');button.disabled=false;button.textContent='Reset decision';}
       }));
       container.querySelectorAll('[data-match-new]').forEach((button)=>button.addEventListener('click',async()=>{
-        if(!confirm('Approve importing this QuickBooks customer as a new CRM client? Review the customer, invoices, payments and exact before/after values first.'))return;
+        if(!confirm('Approve importing this QuickBooks customer as a new CRM client? Review the duplicate-risk evidence, invoices, payments and exact before/after values first.'))return;
         button.disabled=true;button.textContent='Approving…';
-        try{await saveMatch(button.dataset.matchNew,'new','');await runPreviewSync();}
-        catch(err){alert(err.message||'Unable to approve new CRM import.');button.disabled=false;button.textContent='Approve new import';}
+        try{
+          bulkSelectedNew.delete(String(button.dataset.matchNew||''));
+          await saveMatch(button.dataset.matchNew,'new','');
+          await runPreviewSync();
+        }catch(err){alert(err.message||'Unable to approve new CRM import.');button.disabled=false;button.textContent='Approve individually';}
       }));
+      container.querySelectorAll('[data-bulk-select]').forEach((input)=>input.addEventListener('change',()=>{
+        const id=String(input.dataset.bulkSelect||'');
+        if(input.checked)bulkSelectedNew.add(id);else bulkSelectedNew.delete(id);
+        renderSyncPreview();
+      }));
+    }
+
+    function visibleBulkEligiblePlans(){
+      const plans=Array.isArray(state?.manualSyncPreview?.customerPlans)?state.manualSyncPreview.customerPlans:[];
+      return plans.filter(previewPlanMatchesFilter).filter((plan)=>String(plan?.decision||'')==='new'&&Boolean(plan?.bulkEligible));
+    }
+
+    async function approveBulkSelected(){
+      const preview=state?.manualSyncPreview;
+      const customerIds=[...bulkSelectedNew];
+      if(!preview?.previewId)throw new Error('Run Preview Sync first.');
+      if(!customerIds.length)throw new Error('Select at least one low-risk new customer.');
+      const names=(Array.isArray(preview.customerPlans)?preview.customerPlans:[]).filter((plan)=>customerIds.includes(String(plan.customerId))).map((plan)=>plan?.qbo?.name||plan.customerId);
+      if(!confirm('Approve '+customerIds.length+' low-risk QuickBooks customer'+(customerIds.length===1?'':'s')+' as new CRM clients?\n\n'+names.slice(0,8).join('\n')+(names.length>8?'\n…and '+(names.length-8)+' more':'')+'\n\nRows with duplicate evidence or missing reliable contact data cannot be bulk-approved.'))return;
+      const original=bulkApprove?.textContent||'Approve selected';
+      if(bulkApprove){bulkApprove.disabled=true;bulkApprove.textContent='Approving…';}
+      try{
+        await api({action:'bulk-approve-new-customers',previewId:preview.previewId,customerIds});
+        bulkSelectedNew.clear();
+        await runPreviewSync();
+      }finally{
+        if(bulkApprove)bulkApprove.textContent=original;
+      }
     }
 
     function outboundActionHtml(action){
@@ -706,41 +788,69 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
       if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
       if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
-      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' customers · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned.':'';
+      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' customers · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned · '+Number(summary.duplicateFlags||0)+' duplicate/review flag'+(Number(summary.duplicateFlags||0)===1?'':'s')+'.':'';
 
       const needsDecision=Number(summary.needsDecision||0);
       const unapprovedNew=Number(summary.unapprovedNewImports||0);
       const ambiguousCount=Number(summary.ambiguousMatches||0);
+      const bulkEligibleCount=Number(summary.bulkEligibleNewImports||0);
+      const individualCount=Number(summary.needsIndividualReview||0);
       if(previewReviewWarning)previewReviewWarning.classList.toggle('hidden',!preview||needsDecision===0);
       if(previewReviewWarningTitle)previewReviewWarningTitle.textContent=needsDecision===1?'1 customer decision must be reviewed before sync.':needsDecision+' customer decisions must be reviewed before sync.';
       if(previewReviewWarningDetail)previewReviewWarningDetail.textContent=[
-        unapprovedNew?unapprovedNew+' proposed new CRM import'+(unapprovedNew===1?' requires':'s require')+' explicit approval.':'',
-        ambiguousCount?ambiguousCount+' ambiguous match'+(ambiguousCount===1?' requires':'es require')+' a CRM match decision.':'',
-        'Nothing in these unresolved rows will be imported by Run Approved Sync.'
+        unapprovedNew?unapprovedNew+' proposed new CRM import'+(unapprovedNew===1?' requires':'s require')+' approval.':'',
+        bulkEligibleCount?bulkEligibleCount+' low-risk import'+(bulkEligibleCount===1?' is':'s are')+' eligible for guarded bulk review.':'',
+        individualCount?individualCount+' row'+(individualCount===1?' requires':'s require')+' individual review because of duplicate evidence or missing reliable contact data.':'',
+        ambiguousCount?ambiguousCount+' possible duplicate match'+(ambiguousCount===1?' is':'es are')+' blocked until resolved.':'',
+        'Nothing unresolved can be imported by Run Approved Sync.'
       ].filter(Boolean).join(' ');
 
       const plans=Array.isArray(preview?.customerPlans)?preview.customerPlans:[];
+      const allBulkEligible=plans.filter((plan)=>String(plan?.decision||'')==='new'&&Boolean(plan?.bulkEligible));
+      const allBulkEligibleIds=new Set(allBulkEligible.map((plan)=>String(plan.customerId)));
+      [...bulkSelectedNew].forEach((id)=>{if(!allBulkEligibleIds.has(String(id)))bulkSelectedNew.delete(String(id));});
+
       const visiblePlans=plans.filter(previewPlanMatchesFilter);
       const imports=visiblePlans.filter((row)=>['new','approved_new'].includes(row.decision));
       const matches=visiblePlans.filter((row)=>['linked','auto_match','approved_match'].includes(row.decision));
-      const reviewPlans=visiblePlans.filter((row)=>['new','ambiguous'].includes(row.decision));
+      const reviewPlans=visiblePlans.filter((row)=>row.decision==='ambiguous'||(row.decision==='new'&&!row.bulkEligible));
+      const visibleBulk=imports.filter((row)=>row.decision==='new'&&row.bulkEligible);
+
       if(previewFilterCount)previewFilterCount.textContent=visiblePlans.length+' of '+plans.length+' customer'+(plans.length===1?'':'s')+' shown';
       if(previewImports)previewImports.innerHTML=imports.length?imports.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No proposed CRM imports match this view.</p>';
       if(previewMatches)previewMatches.innerHTML=matches.length?matches.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No existing CRM matches match this view.</p>';
       wirePreviewDecisionButtons(previewImports);
       wirePreviewDecisionButtons(previewMatches);
 
+      if(bulkReview)bulkReview.classList.toggle('hidden',allBulkEligible.length===0);
+      if(bulkReviewDetail)bulkReviewDetail.textContent=allBulkEligible.length
+        ? allBulkEligible.length+' low-risk new customer'+(allBulkEligible.length===1?' has':'s have')+' no CRM duplicate evidence and a reliable email or phone. '+visibleBulk.length+' are visible in the current filter; '+bulkSelectedNew.size+' selected.'
+        : 'No customers currently qualify for bulk approval.';
+      if(bulkApprove){
+        bulkApprove.disabled=bulkSelectedNew.size===0;
+        bulkApprove.textContent='Approve selected ('+bulkSelectedNew.size+')';
+      }
+      if(bulkSelectVisible)bulkSelectVisible.disabled=visibleBulk.length===0;
+
       const outbound=Array.isArray(preview?.outbound)?preview.outbound:[];
       if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.map((row)=>'<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid min-w-0 gap-2">'+(row.actions||[]).map(outboundActionHtml).join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
 
       if(matchReview)matchReview.classList.toggle('hidden',reviewPlans.length===0);
-      if(matchReviewCount)matchReviewCount.textContent=reviewPlans.length+' decision'+(reviewPlans.length===1?'':'s');
+      if(matchReviewCount)matchReviewCount.textContent=reviewPlans.length+' individual review'+(reviewPlans.length===1?'':'s');
       if(matchReviewList){
         matchReviewList.innerHTML=reviewPlans.map((plan)=>{
           const q=plan.qbo||{};
           const candidates=Array.isArray(plan.candidates)?plan.candidates:[];
           const noCandidate=String(plan.decision||'')==='new';
-          return '<article class="min-w-0 rounded-xl border border-amber-200 bg-white p-4"><div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><div class="min-w-0 rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block min-w-0 break-words text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/55">'+esc(q.phone||'No phone')+'</p><p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full bg-amber-900 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Approve as new CRM client</button></div><div class="min-w-0"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+(noCandidate?'Why this needs approval':'Possible CRM matches')+'</p>'+(noCandidate?'<div class="mt-2 rounded-xl border border-[var(--koa-line)] p-3"><strong class="text-sm">No CRM candidate was found automatically.</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52">Review the customer name, email, invoices, payments and exact projected CRM record. Approve the new import only when you are satisfied this is not an existing CRM client.</p></div>':'<div class="mt-2 grid min-w-0 gap-2">'+candidates.map((candidate)=>'<div class="min-w-0 rounded-xl border border-[var(--koa-line)] p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] font-semibold text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p></div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked elsewhere</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>').join('')+'</div>')+'</div></div></article>';
+          const risk=plan?.duplicateRisk||{};
+          const riskSignals=Array.isArray(risk.signals)?risk.signals.map(duplicateSignalLabel).filter(Boolean):[];
+          const riskLine=(String(risk.level||'review')==='high'?'High duplicate risk':String(risk.level||'')==='medium'?'Medium duplicate risk':'Individual review')+(Number(risk.score||0)?' · score '+Number(risk.score||0):'')+(riskSignals.length?' · '+riskSignals.join(', '):'');
+          const candidateHtml=candidates.map((candidate)=>{
+            const signals=Array.isArray(candidate.signals)?candidate.signals.map(duplicateSignalLabel).filter(Boolean):[];
+            const riskClass=String(candidate.riskLevel||'')==='high'?'bg-red-100 text-red-800':String(candidate.riskLevel||'')==='medium'?'bg-amber-100 text-amber-900':'bg-slate-100 text-slate-700';
+            return '<div class="min-w-0 rounded-xl border border-[var(--koa-line)] p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="block min-w-0 break-words text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><span class="rounded-full px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+riskClass+'">'+esc(String(candidate.riskLevel||'review'))+' · '+Number(candidate.score||0)+'</span></div><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/52">'+esc(candidate.phone||'No phone')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-2 min-w-0 break-words text-[.62rem] font-semibold leading-5 text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p>'+(signals.length?'<p class="mt-1 min-w-0 break-words text-[.6rem] leading-5 text-[var(--koa-ink)]/45">Evidence: '+esc(signals.join(' · '))+'</p>':'')+'</div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked elsewhere</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>';
+          }).join('');
+          return '<article class="min-w-0 rounded-xl border border-amber-200 bg-white p-4"><div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><div class="min-w-0 rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block min-w-0 break-words text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/55">'+esc(q.phone||'No phone')+(q.eventDate?' · event '+esc(q.eventDate):'')+'</p><p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 rounded-lg bg-white/70 px-2 py-1.5 text-[.62rem] font-semibold leading-5 text-amber-950">'+esc(riskLine)+'</p><p class="mt-2 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full bg-amber-900 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Approve as new CRM client</button></div><div class="min-w-0"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+(noCandidate?'Why this needs individual review':'Possible CRM matches')+'</p>'+(noCandidate?'<div class="mt-2 rounded-xl border border-[var(--koa-line)] p-3"><strong class="text-sm">Bulk approval is intentionally unavailable.</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52">No reliable email or phone is available for this QuickBooks customer. Review the name, transaction history, invoices, payments and projected CRM record individually before approving a new import.</p></div>':'<div class="mt-2 grid min-w-0 gap-2">'+candidateHtml+'</div>')+'</div></div></article>';
         }).join('');
 
         matchReviewList.querySelectorAll('[data-match-qbo]').forEach((button)=>button.addEventListener('click',async()=>{
@@ -1635,6 +1745,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     previewTwoWay?.addEventListener('click',runPreviewSync);
     previewFilter?.addEventListener('change',renderSyncPreview);
     previewSearch?.addEventListener('input',renderSyncPreview);
+    bulkSelectVisible?.addEventListener('click',()=>{
+      visibleBulkEligiblePlans().forEach((plan)=>bulkSelectedNew.add(String(plan.customerId)));
+      renderSyncPreview();
+    });
+    bulkClear?.addEventListener('click',()=>{bulkSelectedNew.clear();renderSyncPreview();});
+    bulkApprove?.addEventListener('click',()=>approveBulkSelected().catch((err)=>alert(err.message||'Unable to bulk approve selected customers.')));
     exportPreviewCsv?.addEventListener('click',()=>downloadPreviewAudit('csv').catch((err)=>alert(err.message||'Unable to export CSV audit.')));
     exportPreviewPdf?.addEventListener('click',()=>downloadPreviewAudit('pdf').catch((err)=>alert(err.message||'Unable to export PDF audit.')));
     twoWaySync?.addEventListener('click',async()=>{

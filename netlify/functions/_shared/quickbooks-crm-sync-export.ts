@@ -29,6 +29,9 @@ function auditRows(preview: any) {
     matched: Number(summary.matched || 0),
     linked: Number(summary.linked || 0),
     needsDecision: Number(summary.needsDecision || 0),
+    duplicateFlags: Number(summary.duplicateFlags || 0),
+    bulkEligibleNewImports: Number(summary.bulkEligibleNewImports || 0),
+    needsIndividualReview: Number(summary.needsIndividualReview || 0),
     crmOutboundActions: Number(summary.crmOutboundActions || 0),
   });
 
@@ -45,6 +48,10 @@ function auditRows(preview: any) {
       decision: clean(plan?.decision, 60),
       action: clean(plan?.action, 60),
       reason: clean(plan?.reason, 500),
+      duplicateRiskLevel: clean(plan?.duplicateRisk?.level, 40),
+      duplicateRiskScore: Number(plan?.duplicateRisk?.score || 0),
+      duplicateRiskSignals: (Array.isArray(plan?.duplicateRisk?.signals) ? plan.duplicateRisk.signals : []).map((value: any) => clean(value,80)).join(' | '),
+      bulkEligible: Boolean(plan?.bulkEligible),
       crmRecordId: clean(plan?.matchedRecordId, 120),
       predictedRecordId: clean(plan?.predictedRecordId, 120),
       candidateRecordIds: (Array.isArray(plan?.candidates) ? plan.candidates : []).map((row: any) => clean(row?.recordId, 120)).filter(Boolean).join(' | '),
@@ -73,6 +80,9 @@ function auditRows(preview: any) {
         candidateEventDate: clean(candidate?.eventDate, 40),
         candidateStage: clean(candidate?.stage, 80),
         currentQuickBooksCustomerId: clean(candidate?.currentQuickBooksCustomerId, 120),
+        candidateRiskLevel: clean(candidate?.riskLevel, 40),
+        candidateScore: Number(candidate?.score || 0),
+        candidateSignals: (Array.isArray(candidate?.signals) ? candidate.signals : []).map((value: any) => clean(value,80)).join(' | '),
         reason: clean(candidate?.reason, 500),
       });
     }
@@ -145,12 +155,12 @@ export function buildQuickBooksCrmPreviewCsv(preview: any) {
   const headers = [
     'section','rowType','previewId','generatedAt','actor',
     'customerId','customerName','email','phone','eventDate',
-    'decision','action','reason','crmRecordId','predictedRecordId','candidateRecordIds',
-    'candidateName','candidateEmail','candidatePhone','candidateEventDate','candidateStage','currentQuickBooksCustomerId',
+    'decision','action','reason','duplicateRiskLevel','duplicateRiskScore','duplicateRiskSignals','bulkEligible','crmRecordId','predictedRecordId','candidateRecordIds',
+    'candidateName','candidateEmail','candidatePhone','candidateEventDate','candidateStage','currentQuickBooksCustomerId','candidateRiskLevel','candidateScore','candidateSignals',
     'estimateCount','estimateTotal','invoiceCount','invoiceTotal','openBalance','paymentCount','paymentTotal',
     'documentId','documentNumber','txnDate','dueDate','total','balance','emailStatus',
     'estimateId','actionType','field','before','after','crmBefore','projectedAfter',
-    'qboCustomers','qboEstimates','qboInvoices','qboPayments','newImports','matched','linked','needsDecision','crmOutboundActions',
+    'qboCustomers','qboEstimates','qboInvoices','qboPayments','newImports','matched','linked','needsDecision','duplicateFlags','bulkEligibleNewImports','needsIndividualReview','crmOutboundActions',
   ];
   const lines = [
     headers.map(csvCell).join(','),
@@ -227,6 +237,9 @@ function previewPdfLines(preview: any) {
   detail('Matched', summary.matched);
   detail('Already linked', summary.linked);
   detail('Needs decision', summary.needsDecision);
+  detail('Duplicate / review flags', summary.duplicateFlags);
+  detail('Bulk-eligible new imports', summary.bulkEligibleNewImports);
+  detail('Individual-review rows', summary.needsIndividualReview);
   detail('CRM -> QuickBooks actions', summary.crmOutboundActions);
 
   section('Customer review');
@@ -238,6 +251,8 @@ function previewPdfLines(preview: any) {
     detail('Decision', plan?.decision, 12);
     detail('Planned action', plan?.action, 12);
     detail('Reason', plan?.reason, 12);
+    detail('Duplicate risk', [plan?.duplicateRisk?.level, plan?.duplicateRisk?.score ? 'score ' + plan.duplicateRisk.score : '', ...(Array.isArray(plan?.duplicateRisk?.signals) ? plan.duplicateRisk.signals : [])].filter(Boolean).join(' | '), 12);
+    detail('Bulk eligible', plan?.bulkEligible ? 'Yes - low-risk only' : 'No', 12);
     detail('Matched CRM record', plan?.matchedRecordId, 12);
     detail('Predicted CRM record', plan?.predictedRecordId, 12);
 
@@ -247,7 +262,7 @@ function previewPdfLines(preview: any) {
       for (const candidate of candidates) {
         detail(
           clean(candidate?.recordId,120) + ' / ' + clean(candidate?.name,180),
-          [candidate?.email, candidate?.eventDate, candidate?.stage, candidate?.reason].filter(Boolean).join(' | '),
+          [candidate?.email, candidate?.phone, candidate?.eventDate, candidate?.stage, candidate?.riskLevel, candidate?.score ? 'score ' + candidate.score : '', ...(Array.isArray(candidate?.signals) ? candidate.signals : []), candidate?.reason].filter(Boolean).join(' | '),
           22,
         );
       }
