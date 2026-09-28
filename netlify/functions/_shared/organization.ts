@@ -455,6 +455,10 @@ export function profileFromOrganization(organization: OrganizationRecord): Tenan
     currency: organization.currency || 'USD',
     timezone: organization.timezone || 'UTC',
     microsoftTimeZone: 'UTC',
+    calendar: {
+      recordMarkerPrefix: 'VENUELOOM_RECORD_ID:',
+      legacyRecordMarkerPrefixes: [],
+    },
     domains: {
       primary: primary?.hostname || '',
       admin: app?.hostname || primary?.hostname || '',
