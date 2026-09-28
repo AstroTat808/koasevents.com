@@ -190,6 +190,16 @@ export const koaEventsTenantProfile: TenantProfile = {
     mobileBarPackageIds: ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'],
     privateEventPackageIds: [],
   },
+  accounting: {
+    damageDeposit: {
+      enabled: true,
+      defaultRentalType: 'one-day',
+      oneDayAmount: 500,
+      weekendAmount: 1000,
+      dueDaysBefore: 30,
+      refundWithinDays: 14,
+    },
+  },
   bootstrapAdminEmails: ['chris@sibel.org', 'koasadmin@koasevents.com'],
   storage: {
     legacyDataBelongsToTenant: true,
