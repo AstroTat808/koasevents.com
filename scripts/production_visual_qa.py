@@ -730,7 +730,7 @@ def admin_mode(browser_name):
      detail="Sales CRM central catalog picker did not render."
     else:
      picker.select_option("qa-rental")
-     page.wait_for_function("() => document.body.innerText.includes('QA catalog regression item')",timeout=5000)
+     page.wait_for_selector('[data-line-items] [data-catalog-item-id="qa-rental"]',state="attached",timeout=5000)
      added=page.locator('[data-line-items] [data-catalog-item-id="qa-rental"]')
      if added.count()!=1:
       detail="Sales CRM Add from catalog did not create exactly one catalog-backed proposal line."
