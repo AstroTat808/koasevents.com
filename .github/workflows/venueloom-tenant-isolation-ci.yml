@@ -1,0 +1,42 @@
+name: VenueLoom tenant isolation CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - codex/p0-tenant-hardening
+
+permissions:
+  contents: read
+
+jobs:
+  tenant-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Audit tenant storage boundary
+        run: node scripts/audit_tenant_storage_access.mjs
+
+      - name: Run cross-tenant regression tests
+        run: |
+          node scripts/test_tenant_isolation.mjs
+          node scripts/tenant_isolation_qa.mjs
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Type-check Astro
+        run: npm run check
+
+      - name: Build with all P0 and accounting gates
+        run: npm run build
