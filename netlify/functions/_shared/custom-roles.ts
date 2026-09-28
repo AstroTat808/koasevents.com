@@ -1,5 +1,6 @@
-import { getStore } from '@netlify/blobs';
 import { STAFF_CAPABILITIES, type StaffCapability } from './admin';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 export type CustomRole = {
   id:string;
@@ -12,7 +13,7 @@ export type CustomRole = {
   updatedBy:string;
 };
 
-function store(){return getStore({name:'koa-auth-security',consistency:'strong'});}
+function store(){return tenantStoreFor(undefined,resolveTenant(),'authSecurity');}
 function clean(v:unknown,max=300){return String(v||'').trim().slice(0,max);}
 function normalizeCaps(v:unknown){
   const rows=Array.isArray(v)?v:[];
