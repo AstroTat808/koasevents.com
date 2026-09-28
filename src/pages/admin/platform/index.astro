@@ -9,7 +9,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div>
             <p class="text-xs font-black uppercase tracking-[.16em] text-stone-400">VenueLoom platform</p>
             <h1 class="mt-2 text-4xl font-black">Super Admin</h1>
-            <p class="mt-3 max-w-4xl text-sm leading-6 text-stone-300">Organization, subscription, health, domain, integration and migration oversight. Support sessions are read-only, reason-required, time-limited and auditable.</p>
+            <p class="mt-3 max-w-4xl text-sm leading-6 text-stone-300">Organization, subscription, health, domain, integration, entitlement, migration and usage oversight. Support sessions are read-only, reason-required, time-limited and auditable.</p>
           </div>
           <div class="flex flex-wrap gap-2 text-xs font-black">
             <a href="/admin/" class="rounded-full border border-white/20 px-4 py-2.5">Admin home</a>
@@ -29,15 +29,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
-        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></section>
+        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"></section>
 
         <section class="rounded-3xl bg-white p-6 shadow-sm">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Organizations</p><h2 class="mt-2 text-2xl font-black">Tenant fleet</h2></div>
-            <div class="flex flex-wrap gap-2"><input data-search placeholder="Search organization…" class="min-w-64 rounded-full border border-stone-300 px-4 py-2.5 text-sm"><button data-refresh class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Refresh</button><button data-create-sandbox class="rounded-full bg-stone-900 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Create safe sandbox tenant</button></div>
+            <div class="flex flex-wrap gap-2">
+              <input data-search placeholder="Search organization…" class="min-w-64 rounded-full border border-stone-300 px-4 py-2.5 text-sm">
+              <button data-refresh class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Refresh</button>
+              <button data-usage-button class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Usage metrics</button>
+              <a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Export audit CSV</a>
+              <button data-create-sandbox class="rounded-full bg-stone-900 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Create + prove sandbox isolation</button>
+            </div>
           </div>
           <p data-message class="mt-3 text-sm text-stone-600"></p>
           <div data-organizations class="mt-5 grid gap-3"></div>
+        </section>
+
+        <section data-usage class="hidden rounded-3xl bg-white p-6 shadow-sm">
+          <div class="flex items-end justify-between gap-3">
+            <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Platform usage</p><h2 class="mt-2 text-2xl font-black">Tenant footprint</h2></div>
+            <button data-close-usage class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Close</button>
+          </div>
+          <div data-usage-summary class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6"></div>
+          <div data-usage-rows class="mt-5 grid gap-2"></div>
         </section>
 
         <section data-detail class="hidden rounded-3xl bg-white p-6 shadow-sm">
@@ -45,12 +60,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Tenant detail</p><h2 data-detail-title class="mt-2 text-2xl font-black"></h2></div>
             <button data-close-detail class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Close</button>
           </div>
+          <p data-detail-message class="mt-3 text-sm text-stone-600"></p>
           <div data-detail-grid class="mt-5 grid gap-4 xl:grid-cols-2"></div>
         </section>
 
         <section class="rounded-3xl bg-white p-6 shadow-sm">
-          <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Support audit</p>
-          <h2 class="mt-2 text-2xl font-black">Recent read-only support sessions</h2>
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Support audit</p><h2 class="mt-2 text-2xl font-black">Recent read-only support sessions</h2></div>
+            <a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Download full audit</a>
+          </div>
           <div data-support-history class="mt-5 grid gap-2"></div>
         </section>
       </div>
@@ -63,15 +81,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const $=(s)=>document.querySelector(s);
     let state=null;
     let activeSupportToken='';
+    let currentDetail=null;
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const fmt=(v)=>v?new Date(v).toLocaleString():'—';
     const pill=(label,good=true)=>'<span class="rounded-full px-2 py-1 text-[.62rem] font-black uppercase tracking-[.05em] '+(good?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800')+'">'+esc(label)+'</span>';
 
     async function api(path='',options={}){
       const response=await fetch('/api/admin/platform'+path,{cache:'no-store',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok)throw Object.assign(new Error(data.error||'Platform request failed.'),{data,status:response.status});
+      const contentType=response.headers.get('content-type')||'';
+      const data=contentType.includes('application/json')?await response.json().catch(()=>({})):await response.text();
+      if(!response.ok)throw Object.assign(new Error(data?.error||'Platform request failed.'),{data,status:response.status});
       return data;
+    }
+
+    async function post(payload){
+      return api('',{method:'POST',body:JSON.stringify(payload)});
     }
 
     function summaryCard(value,label){
@@ -85,6 +109,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         [s.organizations||0,'Organizations'],
         [s.active||0,'Active'],
         [s.trial||0,'Trial'],
+        [s.suspended||0,'Suspended'],
         [s.attention||0,'Needs attention'],
         [s.subscriptionsActive||0,'Active subscriptions'],
       ].map(([v,l])=>summaryCard(v,l)).join('');
@@ -96,8 +121,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const subscription=row.subscription?.status||'not_configured';
         const domains=(row.domainSummary?.verified||0)+'/'+(row.domainSummary?.total||0)+' verified';
         const integrationReady=(row.integrations||[]).filter((i)=>i.configured).length;
+        const sandbox=row.isSandbox?pill('sandbox',true):'';
         return '<article class="grid gap-4 rounded-2xl border border-stone-200 p-5 xl:grid-cols-[1.4fr_.8fr_.8fr_.8fr_auto] xl:items-center">'
-          +'<div><div class="flex flex-wrap items-center gap-2"><strong class="text-lg text-stone-900">'+esc(row.displayName)+'</strong>'+pill(row.status,!['past_due','suspended','canceled'].includes(row.status))+health+'</div><p class="mt-1 text-xs text-stone-500">'+esc(row.slug)+' · '+(row.legacyCompatibility?'Koa compatibility storage':'tenant-native storage')+'</p></div>'
+          +'<div><div class="flex flex-wrap items-center gap-2"><strong class="text-lg text-stone-900">'+esc(row.displayName)+'</strong>'+pill(row.status,!['past_due','suspended','canceled'].includes(row.status))+health+sandbox+'</div><p class="mt-1 text-xs text-stone-500">'+esc(row.slug)+' · '+(row.legacyCompatibility?'Koa compatibility storage':'tenant-native storage')+'</p></div>'
           +'<div><p class="text-[.65rem] font-black uppercase text-stone-400">Subscription</p><p class="mt-1 text-sm font-semibold">'+esc(subscription)+'</p></div>'
           +'<div><p class="text-[.65rem] font-black uppercase text-stone-400">Domains</p><p class="mt-1 text-sm font-semibold">'+esc(domains)+'</p></div>'
           +'<div><p class="text-[.65rem] font-black uppercase text-stone-400">Integrations</p><p class="mt-1 text-sm font-semibold">'+integrationReady+'/'+((row.integrations||[]).length)+' configured</p></div>'
@@ -111,23 +137,164 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       document.querySelectorAll('[data-support-id]').forEach((button)=>button.addEventListener('click',()=>startSupport(button.dataset.supportId)));
     }
 
+    function entitlementHtml(row,readOnly){
+      const defs=state?.entitlements||[];
+      return defs.map((key)=>{
+        const checked=row.featureFlags?.[key]===true?'checked':'';
+        const disabled=readOnly?'disabled':'';
+        return '<label class="flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-2 text-xs font-semibold"><input data-entitlement="'+esc(key)+'" type="checkbox" '+checked+' '+disabled+'> '+esc(key.replaceAll('_',' '))+'</label>';
+      }).join('');
+    }
+
+    function deletionHtml(row,data,readOnly){
+      const request=row.deletionRequest;
+      const blockers=data.deletionBlockers||[];
+      if(readOnly)return '<p class="text-sm text-stone-500">Deletion controls are unavailable in read-only support mode.</p>';
+      let body='';
+      if(blockers.length)body+='<div class="rounded-xl bg-amber-50 p-3 text-xs text-amber-900"><strong>Deletion blocked:</strong><ul class="mt-1 list-disc pl-5">'+blockers.map((b)=>'<li>'+esc(b)+'</li>').join('')+'</ul></div>';
+      if(request&&!request.canceledAt&&!request.completedAt){
+        body+='<div class="mt-3 rounded-xl bg-stone-100 p-3 text-xs"><strong>Deletion requested</strong><p class="mt-1">Eligible: '+fmt(request.eligibleAt)+'</p><p class="mt-1">'+esc(request.reason)+'</p></div>'
+          +'<div class="mt-3 flex flex-wrap gap-2"><button data-cancel-deletion class="rounded-full border border-stone-300 px-3 py-2 text-xs font-black">Cancel deletion</button><button data-finalize-deletion class="rounded-full bg-red-700 px-3 py-2 text-xs font-black text-white">Finalize after hold</button></div>';
+      }else{
+        body+='<button data-request-deletion class="mt-3 rounded-full border border-red-300 px-3 py-2 text-xs font-black text-red-800">Request deletion</button>';
+      }
+      return body;
+    }
+
+    function attachDetailActions(row,data,readOnly){
+      if(readOnly)return;
+      $('[data-save-entitlements]')?.addEventListener('click',()=>saveEntitlements(row.id));
+      $('[data-status-toggle]')?.addEventListener('click',()=>toggleStatus(row));
+      $('[data-plan-change]')?.addEventListener('click',()=>changePlan(row));
+      $('[data-run-isolation]')?.addEventListener('click',()=>runIsolation(row.id));
+      $('[data-request-deletion]')?.addEventListener('click',()=>requestDeletion(row));
+      $('[data-cancel-deletion]')?.addEventListener('click',()=>cancelDeletion(row));
+      $('[data-finalize-deletion]')?.addEventListener('click',()=>finalizeDeletion(row));
+    }
+
     async function loadDetail(id,supportToken=''){
       $('[data-message]').textContent='Loading tenant detail…';
       try{
         const data=await api(supportToken?'?support='+encodeURIComponent(supportToken):'?tenant='+encodeURIComponent(id));
         const row=data.organization;
+        const readOnly=Boolean(supportToken);
+        currentDetail={id,supportToken,row,data};
         $('[data-detail]').classList.remove('hidden');
         $('[data-detail-title]').textContent=row.displayName;
         const migration=data.migrationAudit?.summary||{};
         const integrations=(row.integrations||[]).map((i)=>'<div class="flex items-center justify-between rounded-xl bg-stone-100 px-3 py-2 text-xs"><span class="capitalize">'+esc(i.provider)+'</span>'+pill(i.configured?'configured':i.status,i.configured)+'</div>').join('');
         const domains=(row.domains||[]).map((d)=>'<div class="rounded-xl bg-stone-100 px-3 py-2 text-xs"><strong>'+esc(d.hostname)+'</strong><span class="ml-2 text-stone-500">'+esc(d.kind)+' · '+esc(d.status)+'</span></div>').join('');
+        const statusButton=row.id==='koa-events'||readOnly?'':('<button data-status-toggle class="rounded-full border border-stone-300 px-3 py-2 text-xs font-black">'+(row.status==='suspended'?'Reactivate tenant':'Suspend tenant')+'</button>');
+        const isolationButton=row.isSandbox&&!readOnly?'<button data-run-isolation class="rounded-full bg-emerald-800 px-3 py-2 text-xs font-black text-white">Run Koa isolation proof</button>':'';
         $('[data-detail-grid]').innerHTML=
-          '<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Platform status</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Status:</strong> '+esc(row.status)+'</p><p><strong>Health:</strong> '+(row.health?.healthy===true?'Healthy':row.health?.healthy===false?(row.health.failed+' checks failed'):'No sample')+'</p><p><strong>Last health check:</strong> '+fmt(row.health?.checkedAt)+'</p><p><strong>Subscription:</strong> '+esc(row.subscription?.status||'not configured')+'</p><p><strong>Migration:</strong> '+esc(row.migrationStatus)+'</p><p><strong>Legacy retirement:</strong> '+(migration.safeToRetireLegacy===true?'Safe':row.legacyCompatibility?'Blocked / not yet proven':'Not applicable')+'</p></div></article>'
+          '<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Platform status</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Status:</strong> '+esc(row.status)+'</p><p><strong>Health:</strong> '+(row.health?.healthy===true?'Healthy':row.health?.healthy===false?(row.health.failed+' checks failed'):'No sample')+'</p><p><strong>Last health check:</strong> '+fmt(row.health?.checkedAt)+'</p><p><strong>Subscription:</strong> '+esc(row.subscription?.status||'not configured')+'</p><p><strong>Plan:</strong> '+esc(row.subscription?.plan||'—')+' / '+esc(row.subscription?.interval||'monthly')+' / '+esc(row.subscription?.seats||1)+' seat(s)</p><p><strong>Migration:</strong> '+esc(row.migrationStatus)+'</p><p><strong>Legacy retirement:</strong> '+(migration.safeToRetireLegacy===true?'Safe':row.legacyCompatibility?'Blocked / not yet proven':'Not applicable')+'</p></div><div class="mt-4 flex flex-wrap gap-2">'+statusButton+(readOnly?'':'<button data-plan-change class="rounded-full border border-stone-300 px-3 py-2 text-xs font-black">Change plan</button>')+isolationButton+'</div><div data-isolation-result class="mt-3"></div></article>'
           +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Storage migration</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Legacy objects:</strong> '+esc(migration.legacyObjects??'—')+'</p><p><strong>Canonical objects:</strong> '+esc(migration.canonicalObjects??'—')+'</p><p><strong>Missing canonical:</strong> '+esc(migration.missingCanonical??'—')+'</p><p><strong>Critical mismatches:</strong> '+esc(migration.criticalMismatches??'—')+'</p></div></article>'
           +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Domains</h3><div class="mt-3 grid gap-2">'+(domains||'<p class="text-sm text-stone-500">No domains configured.</p>')+'</div></article>'
-          +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Integrations</h3><div class="mt-3 grid gap-2">'+integrations+'</div></article>';
+          +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Integrations</h3><div class="mt-3 grid gap-2">'+integrations+'</div></article>'
+          +'<article class="rounded-2xl border border-stone-200 p-5 xl:col-span-2"><div class="flex items-end justify-between gap-3"><div><h3 class="font-black">Feature entitlements</h3><p class="mt-1 text-xs text-stone-500">Controls which VenueLoom modules this organization may use.</p></div>'+(readOnly?'':'<button data-save-entitlements class="rounded-full bg-stone-900 px-3 py-2 text-xs font-black text-white">Save entitlements</button>')+'</div><div class="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">'+entitlementHtml(row,readOnly)+'</div></article>'
+          +'<article class="rounded-2xl border border-red-200 p-5 xl:col-span-2"><h3 class="font-black text-red-900">Organization deletion safeguards</h3><p class="mt-1 text-xs text-stone-500">Minimum 24-hour cooling-off period. Koa Tenant #1 is permanently excluded. Active billing, verified domains, and connected integrations block deletion.</p><div class="mt-3">'+deletionHtml(row,data,readOnly)+'</div></article>';
+        $('[data-detail-message]').textContent=readOnly?'Read-only support session: tenant changes are disabled.':'';
         $('[data-message]').textContent='';
+        attachDetailActions(row,data,readOnly);
       }catch(error){$('[data-message]').textContent=error.message;}
+    }
+
+    async function saveEntitlements(tenantId){
+      const featureFlags={};
+      document.querySelectorAll('[data-entitlement]').forEach((input)=>featureFlags[input.dataset.entitlement]=input.checked===true);
+      $('[data-detail-message]').textContent='Saving entitlements…';
+      try{
+        await post({action:'save-entitlements',tenantId,featureFlags});
+        $('[data-detail-message]').textContent='Feature entitlements saved.';
+        await load();
+        await loadDetail(tenantId);
+      }catch(error){$('[data-detail-message]').textContent=error.message;}
+    }
+
+    async function toggleStatus(row){
+      const next=row.status==='suspended'?'active':'suspended';
+      const reason=prompt((next==='suspended'?'Reason for suspending ':'Reason for reactivating ')+row.displayName+':');
+      if(!reason)return;
+      const confirmSlug=prompt('Type the organization slug to confirm: '+row.slug);
+      if(confirmSlug!==row.slug){$('[data-detail-message]').textContent='Slug confirmation did not match.';return;}
+      try{
+        await post({action:'set-tenant-status',tenantId:row.id,status:next,reason,confirmSlug});
+        await load();
+        await loadDetail(row.id);
+      }catch(error){$('[data-detail-message]').textContent=error.message;}
+    }
+
+    async function changePlan(row){
+      const plan=prompt('Plan key:',row.subscription?.plan||'');
+      if(!plan)return;
+      const interval=prompt('Billing interval: monthly or annual',row.subscription?.interval||'monthly');
+      if(!['monthly','annual'].includes(interval)){return;}
+      const seats=Number(prompt('Seats:',String(row.subscription?.seats||1)));
+      if(!Number.isFinite(seats)||seats<1)return;
+      const confirmSlug=prompt('Type the organization slug to confirm the billing change: '+row.slug);
+      if(confirmSlug!==row.slug){$('[data-detail-message]').textContent='Slug confirmation did not match.';return;}
+      try{
+        $('[data-detail-message]').textContent='Updating plan…';
+        const data=await post({action:'update-plan',tenantId:row.id,plan,interval,seats,confirmSlug});
+        $('[data-detail-message]').textContent=data.stripe?.stripeUpdated?'Stripe subscription and VenueLoom plan updated.':'VenueLoom plan updated; no Stripe subscription was attached.';
+        await load();
+        await loadDetail(row.id);
+      }catch(error){$('[data-detail-message]').textContent=error.message;}
+    }
+
+    async function runIsolation(tenantId){
+      const node=$('[data-isolation-result]');
+      if(node)node.innerHTML='<p class="text-sm text-stone-500">Running live sandbox → Koa isolation probes…</p>';
+      try{
+        const data=await post({action:'run-isolation-proof',tenantId});
+        const proof=data.proof;
+        if(node)node.innerHTML='<div class="rounded-xl '+(proof.passed?'bg-emerald-50 text-emerald-900':'bg-red-50 text-red-900')+' p-3 text-xs"><strong>'+(proof.passed?'PASS':'FAIL')+': '+proof.passedCount+'/'+proof.total+' storage domains isolated</strong><p class="mt-1">Koa writes: none · Sandbox probes cleaned up: '+(proof.sandboxProbesCleanedUp?'yes':'no')+' · '+fmt(proof.checkedAt)+'</p><div class="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-3">'+proof.modules.map((m)=>'<span>'+esc(m.domain)+' '+(m.passed?'✓':'✕')+'</span>').join('')+'</div></div>';
+        return proof;
+      }catch(error){
+        if(node)node.innerHTML='<div class="rounded-xl bg-red-50 p-3 text-xs text-red-900">'+esc(error.message)+'</div>';
+        throw error;
+      }
+    }
+
+    async function requestDeletion(row){
+      const reason=prompt('Reason for requesting deletion of '+row.displayName+':');
+      if(!reason)return;
+      const confirmSlug=prompt('Type the organization slug exactly: '+row.slug);
+      if(confirmSlug!==row.slug)return;
+      try{
+        const data=await post({action:'request-deletion',tenantId:row.id,reason,confirmSlug});
+        $('[data-detail-message]').textContent='Deletion requested. Earliest final deletion: '+fmt(data.request.eligibleAt);
+        await load();
+        await loadDetail(row.id);
+      }catch(error){
+        const blockers=error.data?.blockers;
+        $('[data-detail-message]').textContent=blockers?.length?blockers.join(' '):error.message;
+      }
+    }
+
+    async function cancelDeletion(row){
+      if(!confirm('Cancel the deletion request for '+row.displayName+'?'))return;
+      try{
+        await post({action:'cancel-deletion',tenantId:row.id});
+        await load();
+        await loadDetail(row.id);
+      }catch(error){$('[data-detail-message]').textContent=error.message;}
+    }
+
+    async function finalizeDeletion(row){
+      const confirmSlug=prompt('Type the organization slug: '+row.slug);
+      if(confirmSlug!==row.slug)return;
+      const confirmText=prompt('Final destructive confirmation. Type exactly: DELETE '+row.slug);
+      if(confirmText!=='DELETE '+row.slug)return;
+      if(!confirm('This permanently deletes tenant-native VenueLoom data for '+row.displayName+'. Continue?'))return;
+      try{
+        await post({action:'finalize-deletion',tenantId:row.id,confirmSlug,confirmText});
+        $('[data-detail]').classList.add('hidden');
+        $('[data-message]').textContent='Organization deleted after all safeguards passed.';
+        await load();
+      }catch(error){
+        $('[data-detail-message]').textContent=error.data?.eligibleAt?'Cooling-off period ends '+fmt(error.data.eligibleAt):error.message;
+      }
     }
 
     async function startSupport(tenantId){
@@ -135,7 +302,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!reason)return;
       $('[data-message]').textContent='Starting audited support session…';
       try{
-        const data=await api('',{method:'POST',body:JSON.stringify({action:'create-support-session',tenantId,reason,ttlMinutes:15})});
+        const data=await post({action:'create-support-session',tenantId,reason,ttlMinutes:15});
         activeSupportToken=data.supportToken;
         $('[data-support-banner]').classList.remove('hidden');
         $('[data-support-title]').textContent='Supporting '+tenantId;
@@ -147,7 +314,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function exitSupport(){
       if(!activeSupportToken)return;
-      try{await api('',{method:'POST',body:JSON.stringify({action:'end-support-session',supportToken:activeSupportToken})});}catch{}
+      try{await post({action:'end-support-session',supportToken:activeSupportToken});}catch{}
       activeSupportToken='';
       $('[data-support-banner]').classList.add('hidden');
       $('[data-detail]').classList.add('hidden');
@@ -155,14 +322,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     async function createSandbox(){
-      if(!confirm('Create a production sandbox tenant with tenant-native storage, no connected integrations, no verified domain, and no Stripe checkout?'))return;
+      if(!confirm('Create a production sandbox tenant, then run live isolation probes against Koa across every tenant storage domain? The probe writes only inside the sandbox and performs read-only checks against Koa.'))return;
       $('[data-message]').textContent='Creating isolated sandbox tenant…';
       try{
-        const data=await api('',{method:'POST',body:JSON.stringify({action:'create-sandbox-tenant'})});
-        $('[data-message]').textContent='Created '+data.organization.displayName+' ('+data.organization.slug+'). No Koa storage or integrations were touched.';
+        const data=await post({action:'create-sandbox-tenant'});
         await load();
         await loadDetail(data.organization.id);
+        const proof=await runIsolation(data.organization.id);
+        $('[data-message]').textContent='Created '+data.organization.displayName+' ('+data.organization.slug+'). Isolation proof: '+proof.passedCount+'/'+proof.total+' passed. Koa data writes: none.';
       }catch(error){$('[data-message]').textContent=error.message;}
+    }
+
+    async function loadUsage(){
+      $('[data-usage]').classList.remove('hidden');
+      $('[data-usage-rows]').innerHTML='<p class="text-sm text-stone-500">Calculating tenant storage footprint…</p>';
+      try{
+        const usage=await api('?view=usage');
+        const t=usage.totals||{};
+        $('[data-usage-summary]').innerHTML=[
+          [t.canonicalObjects||0,'Canonical objects'],
+          [t.memberships||0,'Memberships'],
+          [t.seats||0,'Configured seats'],
+          [t.verifiedDomains||0,'Verified domains'],
+          [t.connectedIntegrations||0,'Connected integrations'],
+          [t.supportSessions||0,'Support sessions'],
+        ].map(([v,l])=>summaryCard(v,l)).join('');
+        $('[data-usage-rows]').innerHTML=(usage.organizations||[]).map((row)=>'<div class="grid gap-2 rounded-xl bg-stone-100 px-4 py-3 text-xs sm:grid-cols-[1.5fr_repeat(5,.7fr)]"><strong>'+esc(row.displayName)+'</strong><span>'+esc(row.canonicalObjects)+' objects</span><span>'+esc(row.memberships)+' users</span><span>'+esc(row.seats)+' seats</span><span>'+esc(row.verifiedDomains)+' domains</span><span>'+esc(row.connectedIntegrations)+' integrations</span></div>').join('');
+      }catch(error){$('[data-usage-rows]').innerHTML='<p class="text-sm text-red-700">'+esc(error.message)+'</p>';}
     }
 
     async function load(){
@@ -183,6 +369,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     $('[data-search]')?.addEventListener('input',render);
     $('[data-refresh]')?.addEventListener('click',load);
+    $('[data-usage-button]')?.addEventListener('click',loadUsage);
+    $('[data-close-usage]')?.addEventListener('click',()=> $('[data-usage]').classList.add('hidden'));
     $('[data-create-sandbox]')?.addEventListener('click',createSandbox);
     $('[data-close-detail]')?.addEventListener('click',()=> $('[data-detail]').classList.add('hidden'));
     $('[data-exit-support]')?.addEventListener('click',exitSupport);
