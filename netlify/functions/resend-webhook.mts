@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { recordEmailHealthEvent } from './_shared/email-health';
 
 type CommunicationState = {
@@ -55,7 +56,7 @@ function timingSafeEqual(left: Uint8Array, right: Uint8Array) {
 }
 
 async function verifyWebhookSignature(req: Request, rawBody: string) {
-  const secret = String(Netlify.env.get('RESEND_WEBHOOK_SECRET') || '').trim();
+  const secret = String(tenantEnv(resolveTenant(),'RESEND_WEBHOOK_SECRET') || '').trim();
   if (!secret.startsWith('whsec_')) return false;
 
   const messageId = req.headers.get('svix-id') || '';
@@ -104,7 +105,7 @@ async function verifyWebhookSignature(req: Request, rawBody: string) {
   });
 }
 
-export default async (req: Request, context: Context) => {
+async function handleTenantWebhook(req: Request, context: Context) {
   if (req.method !== 'POST') return new Response('Method not allowed', { status: 405 });
 
   const raw = await req.text();
@@ -204,6 +205,10 @@ export default async (req: Request, context: Context) => {
   return Response.json({ ok: true, updated: changedRecordIds.size }, {
     headers: { 'Cache-Control': 'private, no-store' },
   });
+}
+export default async (req:Request, context:Context) => {
+  const tenant=await resolveTenantAsync(req,context);
+  return runWithTenant(tenant,()=>handleTenantWebhook(req,context));
 };
 
 export const config: Config = {
