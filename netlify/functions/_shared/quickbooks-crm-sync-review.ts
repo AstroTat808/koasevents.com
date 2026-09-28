@@ -525,10 +525,65 @@ export async function saveQuickBooksMatchOverride(
     approvedAt: new Date().toISOString(),
     approvedBy: clean(actor, 180),
     customerName: clean(qboCustomer.DisplayName, 240),
+    approvalMode: 'single',
   };
   overrides[customerId] = override;
   await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
   return { customerId, cleared: false, override };
+}
+
+export async function saveQuickBooksBulkNewOverrides(
+  context: Context,
+  input: { previewId: string; customerIds: string[] },
+  actor = '',
+) {
+  const previewId = clean(input.previewId, 120);
+  const ids = [...new Set((Array.isArray(input.customerIds) ? input.customerIds : []).map((id) => clean(id,100)).filter(Boolean))].slice(0, 200);
+  if (!previewId) throw new Error('Preview Sync ID is required.');
+  if (!ids.length) throw new Error('Select at least one low-risk new QuickBooks customer.');
+
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
+    throw new Error('That Preview Sync is no longer current. Run Preview Sync again before bulk approval.');
+  }
+  const generatedAt = Date.parse(String(preview.generatedAt || ''));
+  if (!generatedAt || Date.now() - generatedAt > PREVIEW_MAX_AGE_MS) {
+    throw new Error('The Preview Sync is older than 30 minutes. Run Preview Sync again before bulk approval.');
+  }
+
+  const plans = new Map((Array.isArray(preview.customerPlans) ? preview.customerPlans : []).map((plan: any) => [clean(plan?.customerId,100), plan]));
+  const invalid = ids
+    .map((id) => ({ id, plan:plans.get(id) }))
+    .filter(({ plan }: any) => !plan || clean(plan?.decision,40) !== 'new' || !Boolean(plan?.bulkEligible));
+
+  if (invalid.length) {
+    const names = invalid.slice(0,5).map(({ id, plan }: any) => clean(plan?.qbo?.name || id,180)).join(', ');
+    throw new Error('Bulk approval is limited to low-risk new customers with no duplicate evidence. Review individually: ' + names + (invalid.length > 5 ? ' and ' + (invalid.length - 5) + ' more' : '') + '.');
+  }
+
+  const integrations = integrationStore(context);
+  const overrides = await getQuickBooksMatchOverrides(context);
+  const approvedAt = new Date().toISOString();
+  const approvedBy = clean(actor,180);
+  const approved: any[] = [];
+
+  for (const id of ids) {
+    const plan: any = plans.get(id);
+    const override: QuickBooksMatchOverride = {
+      customerId:id,
+      decision:'new',
+      recordId:'',
+      approvedAt,
+      approvedBy,
+      customerName:clean(plan?.qbo?.name,240),
+      approvalMode:'bulk',
+    };
+    overrides[id] = override;
+    approved.push({ customerId:id, customerName:override.customerName });
+  }
+
+  await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
+  return { previewId, approvedAt, approvedBy, approved };
 }
 
 function customerFinancialSummary(customerId: string, estimateGroups: Map<string, any[]>, invoiceGroups: Map<string, any[]>, paymentGroups: Map<string, any[]>) {
@@ -702,8 +757,13 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
 
   const customerPlans = customers.map((customer) => {
     const customerId = clean(customer?.Id, 100);
-    const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides);
     const financial = customerFinancialSummary(customerId, estimateGroups, invoiceGroups, paymentGroups);
+    const evidence = buildQuickBooksCustomerMatchEvidence(
+      financial.estimateDocs || [],
+      financial.invoiceDocs || [],
+      financial.paymentDocs || [],
+    );
+    const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides, evidence);
     let predictedRecordId = '';
     if (['new','approved_new'].includes(match.status)) {
       const safe = clean(customerId, 100).replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-') || 'UNKNOWN';
@@ -735,6 +795,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       matchedRecordId: clean(match.record?.id, 120),
       predictedRecordId,
       candidates: match.candidates,
+      duplicateRisk: match.duplicateRisk,
+      bulkEligible: Boolean(match.bulkEligible),
       financial,
       before,
       after,
@@ -777,6 +839,9 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
     unapprovedNewImports: customerPlans.filter((row) => row.decision === 'new').length,
     ambiguousMatches: customerPlans.filter((row) => row.decision === 'ambiguous').length,
+    duplicateFlags: customerPlans.filter((row) => row.decision === 'ambiguous' || ['high','medium','review'].includes(String(row?.duplicateRisk?.level || ''))).length,
+    bulkEligibleNewImports: customerPlans.filter((row) => row.decision === 'new' && row.bulkEligible).length,
+    needsIndividualReview: customerPlans.filter((row) => row.decision === 'ambiguous' || (row.decision === 'new' && !row.bulkEligible)).length,
     needsDecision: customerPlans.filter((row) => ['new','ambiguous'].includes(row.decision)).length,
     crmOutboundRecords: outbound.length,
     crmOutboundActions: outbound.reduce((sum, row) => sum + row.actions.length, 0),
