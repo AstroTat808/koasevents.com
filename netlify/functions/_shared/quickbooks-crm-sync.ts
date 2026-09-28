@@ -10,6 +10,7 @@ import {
 } from './quickbooks';
 import {
   addRecordToQuickBooksMatchIndexes,
+  buildQuickBooksCustomerMatchEvidence,
   buildQuickBooksMatchIndexes,
   getQuickBooksMatchOverrides,
   recordQuickBooksCrmSyncHistory,
@@ -653,12 +654,17 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
   const changes: any[] = [];
   let skippedCapacity = 0;
   let skippedAmbiguous = 0;
+  let skippedUnapprovedNew = 0;
 
   for (const customer of customers) {
     const customerId = clean(customer?.Id, 100);
     if (!customerId) continue;
 
-    const match = resolveQuickBooksCustomerMatch(customer, matchIndexes, matchOverrides);
+    const estimateRows = estimateGroups.get(customerId) || [];
+    const invoiceRows = invoiceGroups.get(customerId) || [];
+    const paymentRows = paymentGroups.get(customerId) || [];
+    const matchEvidence = buildQuickBooksCustomerMatchEvidence(estimateRows, invoiceRows, paymentRows);
+    const match = resolveQuickBooksCustomerMatch(customer, matchIndexes, matchOverrides, matchEvidence);
     if (match.status === 'ambiguous') {
       skippedAmbiguous += 1;
       conflicts.push({
@@ -666,8 +672,21 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
         quickBooksCustomerId: customerId,
         quickBooksCustomerName: clean(customer?.DisplayName, 240),
         quickBooksEmail: qboCustomerEmail(customer),
+        duplicateRisk: match.duplicateRisk,
         candidates: match.candidates,
-        detail: 'Multiple CRM clients could match this QuickBooks customer. Staff approval is required before this customer is imported or linked.',
+        detail: 'CRM duplicate evidence requires staff review before this QuickBooks customer can be imported or linked.',
+      });
+      continue;
+    }
+    if (match.status === 'new') {
+      skippedUnapprovedNew += 1;
+      conflicts.push({
+        type: 'unapproved-new-customer',
+        quickBooksCustomerId: customerId,
+        quickBooksCustomerName: clean(customer?.DisplayName, 240),
+        quickBooksEmail: qboCustomerEmail(customer),
+        duplicateRisk: match.duplicateRisk,
+        detail: 'This QuickBooks customer was not explicitly approved as a new CRM import. It was not imported.',
       });
       continue;
     }
@@ -744,9 +763,9 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     applyFinancialMirror(
       record,
       customer,
-      estimateGroups.get(customerId) || [],
-      invoiceGroups.get(customerId) || [],
-      paymentGroups.get(customerId) || [],
+      estimateRows,
+      invoiceRows,
+      paymentRows,
     );
     addRecordToQuickBooksMatchIndexes(matchIndexes, record);
     changedRecordIds.add(String(record.id));
@@ -884,6 +903,7 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     skipped: {
       capacity: skippedCapacity,
       ambiguous: skippedAmbiguous,
+      unapprovedNew: skippedUnapprovedNew,
     },
     conflicts,
     warnings,
