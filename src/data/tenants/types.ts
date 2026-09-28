@@ -73,8 +73,16 @@ export type TenantProfile = {
   bootstrapAdminEmails: string[];
   storage: {
     compatibilityBlobStores: {
-      sales: string;
-      integrations: string;
+      sales?: string;
+      crm?: string;
+      eventOps?: string;
+      eventFiles?: string;
+      vendors?: string;
+      integrations?: string;
+      email?: string;
+      health?: string;
+      calendar?: string;
+      authSecurity?: string;
     };
   };
   legal: {
