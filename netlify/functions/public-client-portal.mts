@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 function sales(context:Context,tenant:any){return tenantStoreFor(context,tenant,'sales');}
@@ -13,7 +13,7 @@ function paymentSummary(record:any){
   const invoices=record?.accounting?.quickbooks?.invoices||[];
   return schedule.map((p:any,i:number)=>{const pid=p.id||'pay-'+(i+1);const inv=invoices.find((x:any)=>x.paymentId===pid);return{id:pid,label:p.label,dueDate:p.dueDate,amount:Number(p.amount||0),status:inv?.invoiceId?(Number(inv.balance||0)<=0?'paid':'open'):'not_invoiced',balance:inv?.invoiceId?Number(inv.balance||0):Number(p.amount||0),docNumber:inv?.docNumber||''};});
 }
-export default async(req:Request,context:Context)=>{
+async function handleTenantRequest(req:Request,context:Context){
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid portal link.'},{status:400});
   const tenant=resolveTenant(req);
@@ -50,5 +50,10 @@ export default async(req:Request,context:Context)=>{
     await cs.setJSON('appointments/index',[row,...current].slice(0,3000));return Response.json({ok:true,appointment:row});
   }
   return Response.json({error:'Unknown portal action.'},{status:400});
+}
+export default async (req:Request, context:Context) => {
+  const tenant = await resolveTenantAsync(req, context);
+  return runWithTenant(tenant, () => handleTenantRequest(req, context));
 };
+
 export const config:Config={path:'/api/client-portal/:token'};
