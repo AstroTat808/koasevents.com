@@ -1,9 +1,8 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
-const HAWAII_TZ = 'Hawaiian Standard Time';
-const MARKER_PREFIX = 'KOA_RECORD_ID:';
 
 function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}
 function isoDate(value:unknown){const raw=clean(value,40);return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';}
@@ -79,13 +78,15 @@ type SyncAuditRun={
 };
 
 function env(){
+  const tenant=resolveTenant();
   return {
-    tenantId:clean(Netlify.env.get('MICROSOFT_GRAPH_TENANT_ID'),200),
-    clientId:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_ID'),200),
-    clientSecret:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_SECRET'),500),
-    calendarOwner:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_OWNER')||'chris@koas.us',240),
-    calendarId:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_ID'),500),
-    calendarName:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_NAME')||"Koa's Events",180),
+    tenantId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_TENANT_ID'),200),
+    clientId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CLIENT_ID'),200),
+    clientSecret:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CLIENT_SECRET'),500),
+    calendarOwner:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_OWNER')||tenant.contact.email,240),
+    calendarId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_ID'),500),
+    calendarName:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_NAME')||tenant.displayName,180),
+    microsoftTimeZone:clean(tenant.microsoftTimeZone||'UTC',120),
   };
 }
 export function office365CalendarConfig(){
@@ -114,7 +115,7 @@ async function graph(path:string,accessToken:string,init:RequestInit={}){
   const headers=new Headers(init.headers||{});
   headers.set('Authorization','Bearer '+accessToken);
   headers.set('Accept','application/json');
-  headers.set('Prefer','outlook.timezone="'+HAWAII_TZ+'"');
+  headers.set('Prefer','outlook.timezone="'+env().microsoftTimeZone+'"');
   if(init.body&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');
   const res=await fetch('https://graph.microsoft.com/v1.0'+path,{...init,headers});
   if(res.status===204)return null;
@@ -186,11 +187,22 @@ async function listEvents(accessToken:string,start:string,end:string){
   }
   return rows;
 }
-function marker(recordId:string){return MARKER_PREFIX+recordId;}
+function marker(recordId:string){return resolveTenant().calendar.recordMarkerPrefix+recordId;}
+function recordIdFromEvent(event:GraphEvent){
+  const haystack=clean(event.body?.content||event.bodyPreview,10000);
+  const tenant=resolveTenant();
+  const prefixes=[tenant.calendar.recordMarkerPrefix,...tenant.calendar.legacyRecordMarkerPrefixes];
+  for(const prefix of prefixes){
+    const escaped=prefix.replace(/[.*+?^$()|[\\]\\\\]/g,'\\\\function marker(recordId:string){return MARKER_PREFIX+recordId;}
 function recordIdFromEvent(event:GraphEvent){
   const haystack=clean(event.body?.content||event.bodyPreview,10000);
   const match=haystack.match(/KOA_RECORD_ID:([A-Za-z0-9._:-]+)/);
   return clean(match?.[1],200);
+}');
+    const match=haystack.match(new RegExp(escaped+'([A-Za-z0-9._:-]+)'));
+    if(match?.[1])return clean(match[1],200);
+  }
+  return '';
 }
 function eventHasRecordMarker(event:GraphEvent,recordId:string){
   return recordIdFromEvent(event)===clean(recordId,200);
@@ -202,7 +214,7 @@ function eventBodyWithMarker(event:GraphEvent,recordId:string){
   if(String(event.body?.contentType||'').toLowerCase()==='text'){
     return {contentType:'Text',content:[existing,markerText].filter(Boolean).join('\n')};
   }
-  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with Koa’s Master Calendar.</p>')+'<p>'+markerText+'</p>'};
+  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with '+resolveTenant().displayName+' calendar.</p>')+'<p>'+markerText+'</p>'};
 }
 function localParts(event:GraphEvent){
   const start=clean(event.start?.dateTime,40);
