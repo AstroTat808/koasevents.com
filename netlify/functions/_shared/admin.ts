@@ -347,6 +347,10 @@ export async function getAccessContext(req?:Request, context?:Context) {
       capabilities:[] as StaffCapability[],
       policy:await readAuthSecurityPolicy(),
       security:null,
+      tenant:null,
+      tenantContext:null,
+      membership:null,
+      organization:null,
     };
   }
 
