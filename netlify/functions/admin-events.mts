@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
@@ -70,6 +71,7 @@ type EventDocument = {
 };
 
 type EventOps = {
+  tenant_id: string;
   recordId: string;
   createdAt: string;
   updatedAt: string;
@@ -93,22 +95,9 @@ type EventOps = {
   setupItems: any[];
 };
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
-
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
-}
-function vendorStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendors' });
-}
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
+function opsStoreFor(context: Context) { return tenantStore(context,'eventOps',resolveTenant()); }
+function vendorStoreFor(context: Context) { return tenantStore(context,'vendors',resolveTenant()); }
 
 function clean(value: unknown, max = 1200) {
   return String(value || '').trim().slice(0, max);
@@ -141,7 +130,7 @@ function seedQuestionnaire(): QuestionAnswer[] {
     ['event', 'Confirm the final guest count.'],
     ['event', 'What time should guests begin arriving?'],
     ['event', 'Are there accessibility, mobility, or special accommodation needs?'],
-    ['ceremony', 'Will the ceremony be held at Koa’s? If yes, where and what setup do you want?'],
+    ['ceremony', 'Will the ceremony be held at this venue? If yes, where and what setup do you want?'],
     ['ceremony', 'How many ceremony chairs are needed, and are there aisle, arch, microphone, or processional requirements?'],
     ['reception', 'Where will the reception be held, and will it use the same space as the ceremony?'],
     ['reception', 'What meal style are you planning: plated, buffet, family-style, food stations, food truck, or something else?'],
@@ -150,8 +139,8 @@ function seedQuestionnaire(): QuestionAnswer[] {
     ['layout', 'What is the rain/weather backup layout, and will any furniture need to move or flip between ceremony and reception?'],
     ['vendors', 'Are all vendors finalized? List any vendors still pending.'],
     ['vendors', 'Are there vendor power, water, staging, loading, or parking requirements?'],
-    ['rentals', 'Which Koa’s rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
-    ['bar', 'Will alcohol be served? If yes, are you using Koa’s Mobile Bar, another approved bartender, beer/wine only, cocktails, or a full bar?'],
+    ['rentals', 'Which venue rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
+    ['bar', 'Will alcohol be served? If yes, are you using the venue’s bar service, another approved bartender, beer/wine only, cocktails, or a full bar?'],
     ['bar', 'Where will bar service be located, and do you need cocktail-hour service, a satellite/second bar, or special beverage stations?'],
     ['decor', 'What decor, floral, signage, cake, or specialty installation details need coordination?'],
     ['timeline', 'List special entrances, announcements, dances, speeches, ceremonies, performances, or surprise moments.'],
@@ -339,22 +328,24 @@ function sanitizeTasks(input: unknown): EventTask[] {
 }
 
 async function appendEvent(context: Context, event: Record<string, unknown>) {
-  const store = salesStoreFor(context);
+  const tenant=resolveTenant();
+  const store = tenantStore(context,'sales',tenant);
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [{
     id: id('EVT'),
     createdAt: new Date().toISOString(),
-    ...event,
+    ...stampTenant(event as any,tenant),
   }, ...current].slice(0, 10000));
 }
 
 export default async (req: Request, context: Context) => {
   const auth = await requireCapability('events.view', req);
   if (auth.response) return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
 
-  const salesStore = salesStoreFor(context);
-  const opsStore = opsStoreFor(context);
-  const records = ((await salesStore.get('records/index', { type: 'json' })) || []) as any[];
+  const salesStore = tenantStore(context,'sales',tenant);
+  const opsStore = tenantStore(context,'eventOps',tenant);
+  const records = tenantRows(((await salesStore.get('records/index', { type: 'json' })) || []) as any[],tenant);
 
   if (req.method === 'GET') {
     const url = new URL(req.url);
@@ -375,12 +366,12 @@ export default async (req: Request, context: Context) => {
     const events = await Promise.all(booked.slice(0, 300).map(async (record) => {
       let ops = await opsStore.get('events/' + record.id, { type: 'json' }) as EventOps | null;
       if (!ops) {
-        ops = defaultOps(record);
+        ops = stampTenant(defaultOps(record) as any,tenant) as any;
         await opsStore.setJSON('events/' + record.id, ops);
       }
       const mergedQuestionnaire=ensureQuestionnaire((ops.questionnaire||[]) as QuestionAnswer[]);
       if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
-      const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+      const masterVendorsForEvent:any[]=tenantRows(((await tenantStore(context,'vendors',tenant).get('vendors/index',{type:'json'}))||[]) as any[],tenant);
       const beforeVendorState=JSON.stringify(ops.vendors||[]);
       ops.vendors=ensureVendorBriefState(ops.vendors||[]) as any;
       if(!Array.isArray((ops as any).setupItems))(ops as any).setupItems=[];
@@ -432,7 +423,7 @@ export default async (req: Request, context: Context) => {
   if (!record) return Response.json({ error: 'Booked event not found.' }, { status: 404 });
 
   let ops = await opsStore.get('events/' + recordId, { type: 'json' }) as EventOps | null;
-  if (!ops) ops = defaultOps(record);
+  if (!ops) ops = stampTenant(defaultOps(record) as any,tenant) as any;
 
   if (action === 'save-overview') {
     const statusValues = new Set(['planning','ready','event_day','complete']);
@@ -494,6 +485,7 @@ export default async (req: Request, context: Context) => {
   }
 
   ops.updatedAt = new Date().toISOString();
+  ops=stampTenant(ops as any,tenant) as any;
   await opsStore.setJSON('events/' + recordId, ops);
   await appendEvent(context, {
     type: 'event_ops_updated',
