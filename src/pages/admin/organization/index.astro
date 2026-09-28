@@ -110,6 +110,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         </section>
 
         <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Migration safety</p>
+              <h2 class="mt-2 text-2xl font-black text-stone-900">Legacy → tenant-scoped storage audit</h2>
+              <p class="mt-2 max-w-4xl text-sm text-stone-600">Compares legacy compatibility stores against VenueLoom’s canonical tenant namespace. Legacy stores are not retired unless every object is represented and critical JSON fingerprints match.</p>
+            </div>
+            <button data-run-migration-audit type="button" class="rounded-full bg-stone-900 px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run migration audit</button>
+          </div>
+          <p data-migration-message class="mt-3 text-sm text-stone-600"></p>
+          <div data-migration-summary class="mt-5 hidden grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
+          <div data-migration-domains class="mt-5 grid gap-2"></div>
+        </section>
+
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
           <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Integrations</p>
           <div class="mt-2 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><h2 class="text-2xl font-black text-stone-900">Provider readiness</h2><p class="mt-2 text-sm text-stone-600">Credentials remain server-side. This page exposes configuration readiness without exposing secret values.</p></div>
@@ -307,6 +321,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       $('[data-onboarding-summary]').textContent=done+' of '+onboard.length+' onboarding checks complete.';
       $('[data-onboarding]').innerHTML=onboard.map((row)=>'<div class="flex items-center justify-between rounded-xl bg-stone-100 px-4 py-3 text-sm"><span class="font-semibold">'+esc(row.id.replaceAll('-',' '))+'</span>'+statusPill(row.complete)+'</div>').join('');
 
+      const migration=state.migrationAudit;
+      const migrationSummary=$('[data-migration-summary]');
+      const migrationDomains=$('[data-migration-domains]');
+      if(migration?.summary){
+        migrationSummary.classList.remove('hidden');
+        migrationSummary.innerHTML=[
+          ['Legacy objects',migration.summary.legacyObjects],
+          ['Canonical objects',migration.summary.canonicalObjects],
+          ['Missing canonical',migration.summary.missingCanonical],
+          ['Critical mismatches',migration.summary.criticalMismatches],
+          ['Legacy retirement',migration.summary.safeToRetireLegacy?'Safe':'Blocked'],
+        ].map(([label,value])=>'<article class="rounded-2xl bg-stone-100 p-4"><strong class="text-2xl text-stone-900">'+esc(value)+'</strong><p class="mt-1 text-xs text-stone-600">'+esc(label)+'</p></article>').join('');
+        migrationDomains.innerHTML=(migration.domains||[]).map((row)=>'<div class="flex flex-col gap-2 rounded-xl border border-stone-200 px-4 py-3 text-xs sm:flex-row sm:items-center sm:justify-between"><div><strong class="text-stone-900">'+esc(row.domain)+'</strong><span class="ml-2 text-stone-500">'+Number(row.legacyCount||0)+' legacy · '+Number(row.canonicalCount||0)+' canonical</span></div><div class="flex items-center gap-2"><span class="text-stone-500">'+Number(row.missingCanonicalCount||0)+' missing · '+(row.critical||[]).filter((item)=>!item.matches).length+' fingerprint mismatch</span>'+statusPill(row.safeToRetireLegacy)+'</div></div>').join('');
+      }else{
+        migrationSummary.classList.add('hidden');
+        migrationSummary.innerHTML='';
+        migrationDomains.innerHTML='<p class="text-sm text-stone-500">Run the audit before retiring any legacy tenant storage.</p>';
+      }
+
       const providers=state.integrations||{};
       $('[data-integrations]').innerHTML=Object.entries(providers).map(([key,row])=>'<article class="rounded-2xl border border-stone-200 p-4"><div class="flex items-center justify-between gap-2"><strong class="capitalize text-stone-900">'+esc(key)+'</strong>'+statusPill(row.configured)+'</div><p class="mt-2 text-xs text-stone-600">Webhook: '+(row.webhookConfigured===undefined?'—':row.webhookConfigured?'configured':'needs setup')+'</p><a class="mt-3 inline-block text-xs font-bold underline" href="'+esc(row.settingsUrl||'#')+'">Open settings</a></article>').join('');
 
@@ -324,7 +357,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const stripe=providers.stripe||{};
       $('[data-subscription-status]').innerHTML='<strong>Billing integration:</strong> '+(stripe.configured?'restricted Stripe key configured':'Stripe restricted key not configured')+' · '+(stripe.webhookConfigured?'webhook configured':'webhook needs setup')+' · '+(stripe.priceMapConfigured?'price map configured':'price map needs setup')+'.';
       sub.querySelector('button').disabled=!canBill;
-      [...document.querySelectorAll('form input, form select, form textarea, [data-save-venues], [data-add-venue], [data-save-domains], [data-add-domain], [data-save-templates], [data-add-template], [data-save-flags], [data-activate]')].forEach((el)=>{if(el.closest('[data-subscription-form]'))return;el.disabled=!canManage;});
+      [...document.querySelectorAll('form input, form select, form textarea, [data-save-venues], [data-add-venue], [data-save-domains], [data-add-domain], [data-save-templates], [data-add-template], [data-save-flags], [data-activate], [data-run-migration-audit]')].forEach((el)=>{if(el.closest('[data-subscription-form]'))return;el.disabled=!canManage;});
     }
 
     $('[data-identity-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-identity-message]','Saving…');try{await post({action:'save-identity',...formObject(e.currentTarget)});setMessage('[data-identity-message]','Saved.');}catch(error){setMessage('[data-identity-message]',error.message);}});
@@ -339,7 +372,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-save-templates]')?.addEventListener('click',async()=>{setMessage('[data-templates-message]','Saving…');try{await post({action:'save-templates',templates:readTemplates()});setMessage('[data-templates-message]','Saved.');}catch(error){setMessage('[data-templates-message]',error.message);}});
     $('[data-save-flags]')?.addEventListener('click',async()=>{const featureFlags={};document.querySelectorAll('[data-flag]').forEach((el)=>featureFlags[el.dataset.flag]=el.checked);setMessage('[data-flags-message]','Saving…');try{await post({action:'save-feature-flags',featureFlags});setMessage('[data-flags-message]','Saved.');}catch(error){setMessage('[data-flags-message]',error.message);}});
     $('[data-subscription-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-subscription-message]','Saving…');try{await post({action:'save-subscription',...formObject(e.currentTarget)});setMessage('[data-subscription-message]','Saved.');}catch(error){setMessage('[data-subscription-message]',error.message);}});
-    $('[data-activate]')?.addEventListener('click',async()=>{setMessage('[data-activate-message]','Checking onboarding…');try{await post({action:'activate'});setMessage('[data-activate-message]','Organization activated.');}catch(error){const missing=error.data?.incomplete?.join(', ');setMessage('[data-activate-message]',error.message+(missing?' Missing: '+missing+'.':''));}});
+    $('[data-run-migration-audit]')?.addEventListener('click',async()=>{setMessage('[data-migration-message]','Comparing legacy and tenant-scoped storage…');try{const data=await post({action:'run-migration-audit'});state.migrationAudit=data.migrationAudit;render();setMessage('[data-migration-message]',data.migrationAudit?.summary?.safeToRetireLegacy?'All storage domains passed the retirement safety checks.':'Audit complete. Legacy storage remains protected until the missing objects and fingerprint mismatches reach zero.');}catch(error){setMessage('[data-migration-message]',error.message);}});
+        $('[data-activate]')?.addEventListener('click',async()=>{setMessage('[data-activate-message]','Checking onboarding…');try{await post({action:'activate'});setMessage('[data-activate-message]','Organization activated.');}catch(error){const missing=error.data?.incomplete?.join(', ');setMessage('[data-activate-message]',error.message+(missing?' Missing: '+missing+'.':''));}});
     $('[data-invite-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();const form=e.currentTarget;setMessage('[data-invite-message]','Creating account…');try{const response=await fetch('/api/admin/staff',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'create-user',setupMode:'email',...formObject(form)})});const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.error||'Unable to invite team member.');setMessage('[data-invite-message]',data.message||'Invitation created.');form.reset();const refreshed=await fetch('/api/admin/organization',{cache:'no-store'});if(refreshed.ok){state=await refreshed.json();render();}}catch(error){setMessage('[data-invite-message]',error.message);}});
 
     async function load(){
