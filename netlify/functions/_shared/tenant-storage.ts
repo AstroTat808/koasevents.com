@@ -111,7 +111,9 @@ export function tenantStoreFor(
 
       const fallback = await legacy.get(logical, options as any);
       if (fallback != null) {
-        await copyFallbackValue(canonical, scoped, fallback, options);
+        const migrated = options?.type === 'json' ? scopeJsonValue(tenant, fallback) : fallback;
+        await copyFallbackValue(canonical, scoped, migrated, options);
+        return migrated;
       }
       return fallback;
     },
