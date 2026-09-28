@@ -44,6 +44,14 @@ export type TenantCatalogConfig = {
   websitePlacements: TenantCatalogPlacementRule[];
 };
 
+export type TenantSalesConfig = {
+  packageAliases: Record<string, string>;
+  catalogItemByPackage: Record<string, string>;
+  weddingPackageIds: string[];
+  mobileBarPackageIds: string[];
+  privateEventPackageIds: string[];
+};
+
 export type TenantProfile = {
   id: string;
   slug: string;
@@ -70,6 +78,7 @@ export type TenantProfile = {
   };
   tax: TenantTaxProfile;
   catalog: TenantCatalogConfig;
+  sales: TenantSalesConfig;
   bootstrapAdminEmails: string[];
   storage: {
     legacyDataBelongsToTenant: boolean;
