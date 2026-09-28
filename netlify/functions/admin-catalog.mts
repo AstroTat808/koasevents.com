@@ -4,11 +4,16 @@ import readXlsxFile from 'read-excel-file/node';
 import { Buffer } from 'node:buffer';
 import { hasCapability, requireCapability } from './_shared/admin';
 import {
+  getCatalogPriceHistory,
   getQuickBooksCatalog,
+  getQuickBooksConnection,
+  qboQuery,
+  qboUpdate,
   saveQuickBooksCatalog,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
 import { catalogItems as websiteCatalogItems, type CatalogItem as WebsiteCatalogItem } from '../../src/data/catalog';
+import { businessRules } from '../../src/data/businessRules';
 
 type ImportMapping = Partial<Record<
   'id' | 'name' | 'description' | 'group' | 'category' | 'unitLabel' | 'unitPrice' |
@@ -32,6 +37,12 @@ function storeFor(context: Context) {
   return context.deploy.context === 'production'
     ? getStore({ name:'koa-integrations', consistency:'strong' })
     : getDeployStore({ name:'koa-integrations' });
+}
+
+function salesStoreFor(context: Context) {
+  return context.deploy.context === 'production'
+    ? getStore({ name:'koa-sales', consistency:'strong' })
+    : getDeployStore({ name:'koa-sales' });
 }
 
 function clean(value: unknown, max = 1000) {
@@ -147,10 +158,14 @@ async function ensureWebsiteCatalog(context: Context) {
     changed=true;
   }
   if(!changed)return existing;
-  return saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+  return saveQuickBooksCatalog(
+    context,
+    [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+    {actor:'system',source:'website-seed',note:'Seeded missing items from the public website catalog.'},
+  );
 }
 
-async function refreshWebsiteCatalog(context: Context) {
+async function refreshWebsiteCatalog(context: Context, actor = 'system') {
   const existing=await getQuickBooksCatalog(context);
   const byId=new Map(existing.map((item)=>[item.id,item]));
   let added=0, refreshed=0;
@@ -175,8 +190,399 @@ async function refreshWebsiteCatalog(context: Context) {
     });
     refreshed+=1;
   }
-  const catalog=await saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+  const catalog=await saveQuickBooksCatalog(
+    context,
+    [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+    {actor,source:'website-sync',note:'Synchronized website-owned catalog items from the public catalog source.'},
+  );
   return {catalog,added,refreshed};
+}
+
+
+function normalizePackageCatalogId(value: unknown) {
+  const raw=clean(value,100).toLowerCase().replaceAll('_','-').replace(/\s+/g,'-');
+  if(!raw)return '';
+  if(raw==='plumeria'||raw==='signature'||raw==='signature-wedding-experience'||raw.includes('signature'))return 'signature-wedding';
+  if(raw.includes('gardenia'))return 'gardenia';
+  if(raw.includes('orchid'))return 'orchid';
+  if(raw.includes('hibiscus'))return 'hibiscus';
+  if(raw==='mobile-oahu'||raw==='oahu'||raw==='oahu-mobile-bar-package')return 'oahu-bar';
+  if(raw==='mobile-maui'||raw==='maui'||raw==='maui-mobile-bar-package')return 'maui-bar';
+  if(raw==='mobile-big-island'||raw==='big-island'||raw==='big-island-mobile-bar-package')return 'big-island-bar';
+  return raw;
+}
+
+function websitePlacementsForItem(item:QuickBooksCatalogItem) {
+  const placements:Array<{path:string;label:string}>=[
+    {path:'/catalog/',label:'Rental + enhancement catalog'},
+  ];
+  if(item.group==='packages'){
+    placements.push({path:'/venue/packages/',label:'Wedding packages'});
+    placements.push({path:'/weddings/',label:'Weddings overview'});
+    if(item.id==='signature-wedding')placements.push({path:'/signature-wedding/',label:'Signature Wedding Experience'});
+  }
+  if(item.group==='mobile-bar'){
+    placements.push({path:'/mobile-bar/',label:'Mobile Bar'});
+  }
+  return placements.filter((row,index,all)=>all.findIndex(other=>other.path===row.path)===index);
+}
+
+async function readSalesRecords(context:Context) {
+  const raw=await salesStoreFor(context).get('records/index',{type:'json'}) as any;
+  return Array.isArray(raw)?raw:[];
+}
+
+function proposalUsesCatalogItem(record:any,item:QuickBooksCatalogItem) {
+  if(record?.kind!=='proposal'||!record?.proposal)return false;
+  const lines=Array.isArray(record.proposal.lineItems)?record.proposal.lineItems:[];
+  if(lines.some((line:any)=>clean(line?.catalogItemId||line?.id,80)===item.id))return true;
+  if(item.group==='packages'){
+    const packageId=normalizePackageCatalogId(record?.packageId||record?.quote?.state?.startingPoint||record?.inquiry?.venuePackage||record?.inquiry?.packageInterest||'');
+    if(packageId===item.id && lines.some((line:any)=>clean(line?.id,80)==='collection'))return true;
+  }
+  return false;
+}
+
+function proposalUsage(records:any[],item:QuickBooksCatalogItem) {
+  const used=records.filter(record=>proposalUsesCatalogItem(record,item));
+  const statuses:Record<string,number>={};
+  used.forEach((record:any)=>{
+    const status=clean(record?.proposal?.status||record?.stage||record?.status||'unknown',40)||'unknown';
+    statuses[status]=(statuses[status]||0)+1;
+  });
+  return {
+    count:used.length,
+    statuses,
+    samples:used.slice(0,12).map((record:any)=>({
+      id:clean(record?.id,100),
+      client:clean(record?.customer?.name,180),
+      eventDate:clean(record?.customer?.eventDate,40),
+      status:clean(record?.proposal?.status||record?.stage||record?.status,40),
+      total:money(record?.proposal?.total),
+    })),
+  };
+}
+
+function qboLineItemIds(transaction:any) {
+  const lines=Array.isArray(transaction?.Line)?transaction.Line:[];
+  return lines
+    .map((line:any)=>clean(line?.SalesItemLineDetail?.ItemRef?.value,80))
+    .filter(Boolean);
+}
+
+async function loadQuickBooksTransactions(context:Context) {
+  const connection=await getQuickBooksConnection(context);
+  if(!connection?.realmId)return {connected:false,transactions:[] as any[],error:''};
+  const transactions:any[]=[];
+  try{
+    for(const entity of ['Estimate','Invoice','SalesReceipt']){
+      const data:any=await qboQuery(context,'select * from '+entity+' maxresults 1000');
+      const rows=Array.isArray(data?.QueryResponse?.[entity])?data.QueryResponse[entity]:[];
+      rows.forEach((row:any)=>transactions.push({
+        entity,
+        id:clean(row?.Id,80),
+        docNumber:clean(row?.DocNumber,80),
+        txnDate:clean(row?.TxnDate,40),
+        total:money(row?.TotalAmt),
+        itemIds:qboLineItemIds(row),
+      }));
+    }
+    return {connected:true,transactions,error:''};
+  }catch(error){
+    return {connected:true,transactions:[] as any[],error:error instanceof Error?clean(error.message,500):'QuickBooks transaction lookup failed.'};
+  }
+}
+
+function transactionUsage(transactions:any[],item:QuickBooksCatalogItem) {
+  const qboId=clean(item.quickBooksItemId,80);
+  if(!qboId)return {mapped:false,count:null,samples:[] as any[]};
+  const used=transactions.filter((row:any)=>Array.isArray(row.itemIds)&&row.itemIds.includes(qboId));
+  return {
+    mapped:true,
+    count:used.length,
+    samples:used.slice(0,12).map((row:any)=>({
+      entity:row.entity,id:row.id,docNumber:row.docNumber,txnDate:row.txnDate,total:row.total,
+    })),
+  };
+}
+
+async function itemUsage(context:Context,item:QuickBooksCatalogItem) {
+  const [records,qbo,history]=await Promise.all([
+    readSalesRecords(context),
+    loadQuickBooksTransactions(context),
+    getCatalogPriceHistory(context,{catalogItemId:item.id,limit:20}),
+  ]);
+  return {
+    catalogItemId:item.id,
+    proposals:proposalUsage(records,item),
+    website:{count:websitePlacementsForItem(item).length,placements:websitePlacementsForItem(item)},
+    quickBooks:{
+      connected:qbo.connected,
+      error:qbo.error,
+      ...transactionUsage(qbo.transactions,item),
+    },
+    priceHistory:history,
+  };
+}
+
+const QBO_CATALOG_ALIASES:Record<string,string[]>={
+  gardenia:['Wedding Packages:Wedding Package-Gardenia'],
+  orchid:['Wedding Packages:Wedding Package-Orchid'],
+  hibiscus:['Wedding Packages:Wedding Package-Hibiscus'],
+  'signature-wedding':['Wedding Packages:Wedding Package-Plumeria'],
+  'oahu-bar':['Bar:Bar Package-Oahu'],
+  'maui-bar':['Bar:Bar Package-Maui'],
+  'big-island-bar':['Bar:Bar Package-Big Island'],
+  'bar-additional-hour':['Bar:Mobile Bar - Additional Hour'],
+  'ceremony-chair':['Tables & Chairs:Chairs-White/Resin'],
+  'reception-chair':['Tables & Chairs:Chairs-White/Resin'],
+  'round-table':['Tables & Chairs:Table-60-inch/Round'],
+  'rectangle-table':['Tables & Chairs:Table-6-Ft/Rectangle'],
+  glassware:['Bar:Glassware - Cocktail Glass','Bar:Glassware - Champange Flutes','Bar:Glassware - Wine Glasses'],
+};
+
+async function loadQuickBooksItems(context:Context) {
+  const connection=await getQuickBooksConnection(context);
+  if(!connection?.realmId)return {connected:false,items:[] as any[],error:''};
+  try{
+    const data:any=await qboQuery(context,'select * from Item maxresults 1000');
+    const items=(Array.isArray(data?.QueryResponse?.Item)?data.QueryResponse.Item:[])
+      .filter((item:any)=>['Service','NonInventory'].includes(String(item?.Type||'')))
+      .map((item:any)=>({
+        id:clean(item?.Id,80),
+        syncToken:clean(item?.SyncToken,40),
+        name:clean(item?.Name,160),
+        fullyQualifiedName:clean(item?.FullyQualifiedName||item?.Name,220),
+        type:clean(item?.Type,40),
+        active:item?.Active!==false,
+        taxable:item?.Taxable!==false,
+        unitPrice:money(item?.UnitPrice),
+        incomeAccountId:clean(item?.IncomeAccountRef?.value,80),
+        incomeAccountName:clean(item?.IncomeAccountRef?.name,160),
+      }));
+    return {connected:true,items,error:''};
+  }catch(error){
+    return {connected:true,items:[] as any[],error:error instanceof Error?clean(error.message,500):'QuickBooks item lookup failed.'};
+  }
+}
+
+function qboNameIndex(items:any[]) {
+  const index=new Map<string,any[]>();
+  (Array.isArray(items)?items:[]).forEach((item:any)=>{
+    [item?.name,item?.fullyQualifiedName].map(value=>clean(value,220).toLowerCase()).filter(Boolean).forEach((key)=>{
+      const rows=index.get(key)||[];
+      if(!rows.some(row=>row.id===item.id))rows.push(item);
+      index.set(key,rows);
+    });
+  });
+  return index;
+}
+
+function qboCandidatesForItem(item:QuickBooksCatalogItem,index:Map<string,any[]>) {
+  const names=[
+    ...(QBO_CATALOG_ALIASES[item.id]||[]),
+    clean(item.quickBooksItemName,160),
+    clean(item.name,160),
+  ].filter(Boolean);
+  const byId=new Map<string,any>();
+  names.forEach(name=>{
+    (index.get(String(name).toLowerCase())||[]).forEach((row:any)=>byId.set(row.id,row));
+  });
+  return [...byId.values()];
+}
+
+function expectedWebsitePrice(itemId:string,seedById:Map<string,QuickBooksCatalogItem>) {
+  const seed=seedById.get(itemId);
+  if(!seed)return 0;
+  const packageById:Record<string,number>=Object.fromEntries(
+    businessRules.venueWeddingPackages.map((pkg:any)=>[
+      pkg.name==='Plumeria'?'signature-wedding':String(pkg.name||'').toLowerCase(),
+      Number(pkg.price||0),
+    ]),
+  );
+  const mobileById:Record<string,number>=Object.fromEntries(
+    businessRules.mobileBar.packages.map((pkg:any)=>[
+      String(pkg.name||'').toLowerCase()==='big island'?'big-island-bar':String(pkg.name||'').toLowerCase()+'-bar',
+      Number(pkg.price||0),
+    ]),
+  );
+  return money(packageById[itemId]||mobileById[itemId]||seed.unitPrice||0);
+}
+
+async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) {
+  const seedById=new Map(websiteSeed().map(item=>[item.id,item]));
+  const qbo=await loadQuickBooksItems(context);
+  const qboById=new Map(qbo.items.map((item:any)=>[item.id,item]));
+  const catalogByQboId=new Map<string,QuickBooksCatalogItem[]>();
+  catalog.forEach((item)=>{
+    const id=clean(item.quickBooksItemId,80);
+    if(id)catalogByQboId.set(id,[...(catalogByQboId.get(id)||[]),item]);
+  });
+  const qboByName=qboNameIndex(qbo.items);
+
+  const rows=catalog.map((item)=>{
+    const issues:Array<{code:string;severity:'warning'|'error';detail:string}>=[];
+    const expected=seedById.get(item.id);
+    const publicPrice=expectedWebsitePrice(item.id,seedById);
+    if(expected){
+      if(item.group!==expected.group)issues.push({code:'group_mismatch',severity:'error',detail:'Catalog group is '+item.group+'; website source expects '+expected.group+'.'});
+      if(item.category!==expected.category)issues.push({code:'category_mismatch',severity:'error',detail:'Accounting category is '+item.category+'; website source expects '+expected.category+'.'});
+      if(publicPrice>0 && Math.abs(Number(item.unitPrice||0)-publicPrice)>0.005){
+        issues.push({code:'price_mismatch',severity:'warning',detail:'Catalog price '+money(item.unitPrice).toFixed(2)+' differs from published/source price '+publicPrice.toFixed(2)+'.'});
+      }
+    }
+    if(item.getExempt){
+      issues.push({code:'get_exemption_unverified',severity:'warning',detail:'GET exempt is enabled, but no item-level exemption rule is documented in the current website/business-rule source.'});
+    }
+
+    let qboMatch:any=null;
+    let qboSuggestion:any=null;
+    let qboCandidates:any[]=[];
+    if(qbo.connected&&!qbo.error){
+      if(item.quickBooksItemId){
+        qboMatch=qboById.get(item.quickBooksItemId)||null;
+        if(!qboMatch){
+          issues.push({code:'qbo_mapping_missing',severity:'error',detail:'Mapped QuickBooks item #'+item.quickBooksItemId+' was not found.'});
+        }
+      }
+      if(!qboMatch){
+        qboCandidates=qboCandidatesForItem(item,qboByName);
+        if(qboCandidates.length===1)qboSuggestion=qboCandidates[0];
+        if(!item.quickBooksItemId){
+          issues.push({
+            code:'qbo_unmapped',
+            severity:'warning',
+            detail:qboCandidates.length===1
+              ? 'No QuickBooks item is mapped; one known-name match is available.'
+              : qboCandidates.length>1
+                ? 'No QuickBooks item is mapped; multiple QuickBooks candidates need an explicit choice.'
+                : 'No QuickBooks item is mapped.',
+          });
+        }
+      }
+
+      const live=qboMatch||qboSuggestion;
+      if(live){
+        if(live.active===false)issues.push({code:'qbo_item_inactive',severity:'warning',detail:'Matched QuickBooks item is inactive.'});
+        if(item.quickBooksType!==live.type)issues.push({code:'qbo_type_mismatch',severity:'warning',detail:'Catalog expects '+item.quickBooksType+' but QuickBooks item is '+live.type+'.'});
+        if(qboMatch && clean(item.quickBooksItemName,160) && clean(item.quickBooksItemName,160).toLowerCase()!==clean(live.fullyQualifiedName||live.name,160).toLowerCase()){
+          issues.push({code:'qbo_name_mismatch',severity:'warning',detail:'Stored QuickBooks item name differs from the live Product/Service name.'});
+        }
+        if(!item.incomeAccountId&&live.incomeAccountId){
+          issues.push({code:'qbo_income_account_metadata_missing',severity:'warning',detail:'QuickBooks has an income account, but the catalog mapping is missing the account ID.'});
+        }else if(item.incomeAccountId&&live.incomeAccountId&&item.incomeAccountId!==live.incomeAccountId){
+          issues.push({code:'qbo_income_account_mismatch',severity:'warning',detail:'Stored income-account mapping differs from the live QuickBooks item.'});
+        }
+        if(Number(item.unitPrice||0)>0 && Math.abs(Number(live.unitPrice||0)-Number(item.unitPrice||0))>0.005){
+          issues.push({code:'qbo_price_mismatch',severity:'warning',detail:'QuickBooks default rate '+money(live.unitPrice).toFixed(2)+' differs from Catalog Manager '+money(item.unitPrice).toFixed(2)+'.'});
+        }
+        if(qboMatch){
+          const shared=catalogByQboId.get(item.quickBooksItemId)||[];
+          if(shared.length>1){
+            issues.push({code:'qbo_mapping_shared',severity:'warning',detail:'QuickBooks Product/Service #'+item.quickBooksItemId+' is mapped to '+shared.length+' catalog items; transaction usage is not unique.'});
+          }
+        }
+        const expectedTaxable=item.getExempt!==true;
+        if(Boolean(live.taxable)!==expectedTaxable){
+          issues.push({code:'qbo_tax_mismatch',severity:'warning',detail:'QuickBooks taxable flag does not match the Catalog Manager GET setting. This is review-only because the repository has no item-level GET exemption policy.'});
+        }
+      }
+    }
+
+    return {
+      id:item.id,name:item.name,group:item.group,category:item.category,unitPrice:item.unitPrice,
+      getExempt:item.getExempt,quickBooksItemId:item.quickBooksItemId,quickBooksItemName:item.quickBooksItemName,
+      publicPrice:publicPrice||null,sourceExpected:Boolean(expected),
+      qboMatch,qboSuggestion,qboCandidateCount:qboCandidates.length,issues,
+      status:issues.some(issue=>issue.severity==='error')?'error':issues.length?'warning':'ok',
+    };
+  });
+
+  return {
+    checkedAt:new Date().toISOString(),
+    qbo:{connected:qbo.connected,error:qbo.error},
+    getPolicy:{
+      status:'source-not-itemized',
+      detail:'The current repository does not define item-level Hawaiʻi GET exemptions. Catalog items default to GET taxable; any explicit exemption is flagged for review. Live QuickBooks Taxable flags are compared to the Catalog Manager setting.',
+    },
+    summary:{
+      total:rows.length,
+      ok:rows.filter(row=>row.status==='ok').length,
+      warnings:rows.filter(row=>row.status==='warning').length,
+      errors:rows.filter(row=>row.status==='error').length,
+      publishedPriceMismatches:rows.filter(row=>row.issues.some(issue=>issue.code==='price_mismatch')).length,
+      quickBooksPriceMismatches:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_price_mismatch')).length,
+      qboSharedMappings:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_mapping_shared')).length,
+      categoryMismatches:rows.filter(row=>row.issues.some(issue=>['group_mismatch','category_mismatch'].includes(issue.code))).length,
+      getExemptReview:rows.filter(row=>row.issues.some(issue=>issue.code==='get_exemption_unverified'||issue.code==='qbo_tax_mismatch')).length,
+      qboMapped:rows.filter(row=>Boolean(row.qboMatch)).length,
+      qboUnmapped:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_unmapped')).length,
+    },
+    rows,
+  };
+}
+
+async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCatalogItem[],actor:string) {
+  const seedById=new Map(websiteSeed().map(item=>[item.id,item]));
+  const qbo=await loadQuickBooksItems(context);
+  if(!qbo.connected)throw new Error('QuickBooks is not connected.');
+  if(qbo.error)throw new Error(qbo.error);
+  const qboById=new Map(qbo.items.map((item:any)=>[item.id,item]));
+  const qboByName=qboNameIndex(qbo.items);
+  const next=catalog.map(item=>({...item}));
+  const actions:Array<{catalogItemId:string;action:string;detail:string}>=[];
+
+  for(const item of next){
+    const expected=seedById.get(item.id);
+    const publicPrice=expectedWebsitePrice(item.id,seedById);
+    if(expected && (item.group!==expected.group || item.category!==expected.category)){
+      const before=item.group+'/'+item.category;
+      item.group=expected.group;
+      item.category=expected.category;
+      item.quickBooksType=expected.category==='rental'?'NonInventory':'Service';
+      item.updatedAt=new Date().toISOString();
+      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the website catalog source.'});
+    }
+    let live=item.quickBooksItemId?qboById.get(item.quickBooksItemId):null;
+    if(!live){
+      const candidates=qboCandidatesForItem(item,qboByName);
+      if(candidates.length===1)live=candidates[0];
+    }
+    if(!live)continue;
+
+    if(item.quickBooksItemId!==live.id || item.quickBooksItemName!==live.fullyQualifiedName){
+      item.quickBooksItemId=live.id;
+      item.quickBooksItemName=live.fullyQualifiedName||live.name;
+      item.quickBooksType=live.type==='NonInventory'?'NonInventory':'Service';
+      item.incomeAccountId=live.incomeAccountId||item.incomeAccountId;
+      item.incomeAccountName=live.incomeAccountName||item.incomeAccountName;
+      item.updatedAt=new Date().toISOString();
+      actions.push({catalogItemId:item.id,action:'mapped',detail:'Linked Catalog Manager to QuickBooks '+(live.fullyQualifiedName||live.name)+' #'+live.id+'.'});
+    }
+
+    const patch:any={Id:live.id,SyncToken:live.syncToken};
+    let shouldUpdate=false;
+    const centralMatchesPublished=publicPrice>0 && Math.abs(Number(item.unitPrice||0)-publicPrice)<0.005;
+    if(centralMatchesPublished && Math.abs(Number(live.unitPrice||0)-publicPrice)>0.005){
+      patch.UnitPrice=publicPrice;
+      shouldUpdate=true;
+      actions.push({catalogItemId:item.id,action:'qbo-price',detail:'Updated QuickBooks price from '+money(live.unitPrice).toFixed(2)+' to '+publicPrice.toFixed(2)+'.'});
+    }
+    // GET/taxability mismatches are intentionally audit-only. The repository does
+    // not define item-level Hawaiʻi GET exemptions, so this workflow must not make
+    // an accounting taxability decision on the owner's behalf.
+    if(shouldUpdate){
+      if(!live.syncToken)throw new Error('QuickBooks item '+live.id+' is missing SyncToken; safe reconciliation stopped.');
+      await qboUpdate(context,'item',patch);
+    }
+  }
+
+  const saved=await saveQuickBooksCatalog(
+    context,
+    next.sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+    {actor,source:'catalog-audit-reconcile',note:'Applied safe website classification, Catalog Manager ↔ QuickBooks mapping, and conflict-free QuickBooks price reconciliation. GET/taxability differences remain review-only.'},
+  );
+  return {catalog:saved,actions,audit:await runCatalogAudit(context,saved)};
 }
 
 function headerKey(value: unknown) {
@@ -341,20 +747,44 @@ export default async (req:Request, context:Context)=>{
   if(auth.response)return auth.response;
 
   if(req.method==='GET'){
-    const catalog=await ensureWebsiteCatalog(context);
-    const imports=await readImportHistory(context);
-    return Response.json({catalog,imports},{headers:{'Cache-Control':'private, no-store'}});
+    const [catalog,imports,priceHistory]=await Promise.all([
+      ensureWebsiteCatalog(context),
+      readImportHistory(context),
+      getCatalogPriceHistory(context,{limit:150}),
+    ]);
+    return Response.json({catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
+
+  const payload:any=await req.json().catch(()=>null);
+  const action=clean(payload?.action,80);
+  const actor=clean((auth.user as any)?.email || (auth.user as any)?.user_metadata?.email || 'staff',240) || 'staff';
+
+  if(action==='item-usage'){
+    const id=clean(payload?.id,80);
+    const catalog=await ensureWebsiteCatalog(context);
+    const item=catalog.find(entry=>entry.id===id);
+    if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
+    return Response.json({ok:true,usage:await itemUsage(context,item)},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='run-audit'){
+    const catalog=await ensureWebsiteCatalog(context);
+    return Response.json({ok:true,audit:await runCatalogAudit(context,catalog)},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
   if(!hasCapability(auth.user,'sales.profit_settings')){
     return Response.json({error:'Sales Profit Settings permission required to manage the catalog.'},{status:403});
   }
 
-  const payload:any=await req.json().catch(()=>null);
-  const action=clean(payload?.action,80);
+  if(action==='reconcile-safe-audit'){
+    const catalog=await ensureWebsiteCatalog(context);
+    const result=await reconcileSafeCatalogIssues(context,catalog,actor);
+    return Response.json({ok:true,...result});
+  }
 
   if(action==='refresh-website-catalog'){
-    const result=await refreshWebsiteCatalog(context);
+    const result=await refreshWebsiteCatalog(context,actor);
     return Response.json({ok:true,...result});
   }
 
@@ -387,7 +817,11 @@ export default async (req:Request, context:Context)=>{
       incomeAccountName:clean(prior?.incomeAccountName||'',160),
       updatedAt:new Date().toISOString(),
     };
-    const next=await saveQuickBooksCatalog(context,[item,...catalog.filter((entry)=>entry.id!==id)].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+    const next=await saveQuickBooksCatalog(
+      context,
+      [item,...catalog.filter((entry)=>entry.id!==id)].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+      {actor,source:'catalog-manager',sourceRef:id,note:'Catalog Manager item save.'},
+    );
     return Response.json({ok:true,item,catalog:next});
   }
 
@@ -396,7 +830,11 @@ export default async (req:Request, context:Context)=>{
     const catalog=await ensureWebsiteCatalog(context);
     const item=catalog.find((entry)=>entry.id===id);
     if(!item)return Response.json({error:'Catalog item not found.'},{status:404});
-    const next=await saveQuickBooksCatalog(context,catalog.map((entry)=>entry.id===id?{...entry,active:false,updatedAt:new Date().toISOString()}:entry));
+    const next=await saveQuickBooksCatalog(
+      context,
+      catalog.map((entry)=>entry.id===id?{...entry,active:false,updatedAt:new Date().toISOString()}:entry),
+      {actor,source:'catalog-manager-archive',sourceRef:id,note:'Catalog Manager item archived.'},
+    );
     return Response.json({ok:true,catalog:next});
   }
 
@@ -454,7 +892,11 @@ export default async (req:Request, context:Context)=>{
       if(existing)byName.delete(existing.name.toLowerCase());
       byName.set(nextItem.name.toLowerCase(),nextItem);
     }
-    const next=await saveQuickBooksCatalog(context,[...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)));
+    const next=await saveQuickBooksCatalog(
+      context,
+      [...byId.values()].sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
+      {actor,source:'catalog-import',sourceRef:id,note:'Catalog import: '+filename},
+    );
     const entry={
       id,filename,createdAt:new Date().toISOString(),createdBy:clean(auth.user?.email,240),
       imported:usable.length,newCount:usable.filter((row)=>row.status==='new').length,
@@ -479,7 +921,11 @@ export default async (req:Request, context:Context)=>{
     if(latestActive.afterFingerprint && await catalogFingerprint(currentCatalog)!==latestActive.afterFingerprint){
       return Response.json({error:'The catalog changed after this import. Automatic rollback is blocked so later manual, profitability, or QuickBooks changes are not lost.'},{status:409});
     }
-    const catalog=await saveQuickBooksCatalog(context,snapshot.catalog);
+    const catalog=await saveQuickBooksCatalog(
+      context,
+      snapshot.catalog,
+      {actor,source:'catalog-import-rollback',sourceRef:id,note:'Rolled back catalog import '+id+'.'},
+    );
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
     const imports=await writeImportHistory(context,entry);
