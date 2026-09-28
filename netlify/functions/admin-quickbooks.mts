@@ -14,6 +14,7 @@ import {
   applyQuickBooksCrmSyncRollback,
   saveQuickBooksMatchOverride,
   saveQuickBooksBulkNewOverrides,
+  saveQuickBooksBulkExclusionOverrides,
   validateQuickBooksCrmSyncPreview,
 } from './_shared/quickbooks-crm-sync-review';
 import {
@@ -756,6 +757,7 @@ export default async (req: Request, context: Context) => {
         customerId: clean(payload?.customerId, 100),
         decision: clean(payload?.decision, 20) as 'match'|'new'|'exclude'|'clear',
         recordId: clean(payload?.recordId, 120),
+        reasonCode: clean(payload?.reasonCode, 60),
         reason: clean(payload?.reason, 500),
       }, actor);
       return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
@@ -774,6 +776,21 @@ export default async (req: Request, context: Context) => {
       return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
       return Response.json({ error:error instanceof Error ? error.message : 'Unable to bulk approve QuickBooks customer imports.' }, { status:409 });
+    }
+  }
+
+  if (action === 'bulk-exclude-customers') {
+    const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
+    try {
+      const result = await saveQuickBooksBulkExclusionOverrides(context, {
+        previewId: clean(payload?.previewId, 120),
+        customerIds: Array.isArray(payload?.customerIds) ? payload.customerIds : [],
+        reasonCode: clean(payload?.reasonCode, 60),
+        reason: clean(payload?.reason, 500),
+      }, actor);
+      return Response.json({ ok:true, result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to bulk exclude QuickBooks customers.' }, { status:409 });
     }
   }
 
