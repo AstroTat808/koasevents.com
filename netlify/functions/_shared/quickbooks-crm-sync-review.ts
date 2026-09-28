@@ -1,4 +1,4 @@
-// Release marker: QuickBooks sync exclusions, expandable preflight, and post-sync reconciliation.
+// Release marker: QuickBooks exclusion reasons, bulk cleanup, and suggested exclusions.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
