@@ -22,6 +22,7 @@ export type TenantStorageDomain =
   | 'security'
   | 'systemHealth'
   | 'calendarSync'
+  | 'userPreferences'
   | 'workspaceAlerts';
 
 type GetOptions = { type?: 'text' | 'json' | 'stream' | 'blob' | 'arrayBuffer' };
@@ -282,7 +283,7 @@ export async function tenantMigrationAudit(
   tenant: TenantProfile,
   domains: TenantStorageDomain[] = [
     'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
-    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','workspaceAlerts',
+    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','userPreferences','workspaceAlerts',
   ],
 ) {
   const canonical=canonicalStore(context);
