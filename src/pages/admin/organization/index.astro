@@ -1,0 +1,172 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Organization Settings | VenueLoom" description="Configure VenueLoom organization settings and onboarding." canonical="/admin/organization/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-8">
+    <div class="container-shell max-w-[96rem]">
+      <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">VenueLoom</p>
+        <h1 class="display mt-3 text-5xl">Organization Settings</h1>
+        <p class="mt-3 text-sm text-[var(--koa-ink)]/55">Loading tenant configuration…</p>
+      </section>
+
+      <section data-unauthorized class="hidden rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+        <h1 class="display text-4xl text-[var(--koa-forest)]">Organization access required</h1>
+      </section>
+
+      <div data-app class="hidden grid gap-6">
+        <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-amber-light)]">VenueLoom tenant workspace</p>
+          <h1 class="display mt-3 text-5xl">Organization Settings</h1>
+          <p data-org-subtitle class="mt-3 max-w-4xl text-sm leading-6 text-white/70"></p>
+        </header>
+
+        <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4" data-onboarding></section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Identity + locale</p>
+          <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Organization</h2>
+          <form data-org-form class="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label class="grid gap-2 text-sm font-semibold">Display name<input name="displayName" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <label class="grid gap-2 text-sm font-semibold">Legal name<input name="legalName" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <label class="grid gap-2 text-sm font-semibold">Timezone<input name="timezone" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <label class="grid gap-2 text-sm font-semibold">Locale<input name="locale" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <label class="grid gap-2 text-sm font-semibold">Currency<input name="currency" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <label class="grid gap-2 text-sm font-semibold">Country<input name="defaultCountry" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+            <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white md:col-span-2 xl:col-span-3 xl:justify-self-start">Save organization</button>
+          </form>
+          <p data-org-message class="mt-3 text-sm text-[var(--koa-ink)]/55"></p>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Branding</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Brand profile</h2>
+            <form data-brand-form class="mt-5 grid gap-4">
+              <label class="grid gap-2 text-sm font-semibold">Tagline<input name="tagline" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              <label class="grid gap-2 text-sm font-semibold">Logo path<input name="logoPath" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              <label class="grid gap-2 text-sm font-semibold">Primary color<input name="primaryColor" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              <label class="grid gap-2 text-sm font-semibold">Accent color<input name="accentColor" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              <button class="rounded-full border border-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Save branding</button>
+            </form>
+          </article>
+
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Tax</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Primary tax profile</h2>
+            <form data-tax-form class="mt-5 grid gap-4">
+              <label class="grid gap-2 text-sm font-semibold">Label<input name="label" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              <div class="grid gap-4 sm:grid-cols-3">
+                <label class="grid gap-2 text-sm font-semibold">Statutory %<input name="statutoryRate" type="number" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+                <label class="grid gap-2 text-sm font-semibold">Customer %<input name="customerRate" type="number" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+                <label class="grid gap-2 text-sm font-semibold">Max pass-on %<input name="maxPassOnRate" type="number" step="0.001" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/></label>
+              </div>
+              <button class="rounded-full border border-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">Save tax profile</button>
+            </form>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Venues</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Locations</h2>
+            <div data-venues class="mt-5 grid gap-3"></div>
+          </article>
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Domains</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Workspace + public domains</h2>
+            <div data-domains class="mt-5 grid gap-3"></div>
+          </article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-2">
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">Team</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Memberships</h2>
+            <div data-members class="mt-5 grid gap-3"></div>
+            <form data-member-form class="mt-5 grid gap-3 sm:grid-cols-[1fr_180px_auto]">
+              <input name="email" type="email" placeholder="staff@example.com" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"/>
+              <select name="role" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"><option value="admin">Admin</option><option value="manager">Manager</option><option value="sales">Sales</option><option value="event_coordinator">Event Coordinator</option><option value="vendor_manager">Vendor Manager</option><option value="accounting">Accounting</option><option value="read_only">Read Only</option></select>
+              <button class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Add / update</button>
+            </form>
+          </article>
+
+          <article class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+            <p class="eyebrow text-[var(--koa-clay)]">SaaS controls</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Features + subscription</h2>
+            <div data-saas class="mt-5 grid gap-3"></div>
+          </article>
+        </section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <p class="eyebrow text-[var(--koa-clay)]">Connections + templates</p>
+          <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Onboarding status</h2>
+          <div data-integrations class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4"></div>
+          <p class="mt-5 text-sm text-[var(--koa-ink)]/55">Catalog import, document templates, integration OAuth, domain verification, billing and activation use this organization record as their tenant-owned configuration root.</p>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+    const loading=document.querySelector('[data-loading]');
+    const app=document.querySelector('[data-app]');
+    const unauthorized=document.querySelector('[data-unauthorized]');
+    let state:any=null;
+    const $=(s:string)=>document.querySelector(s) as HTMLElement|null;
+    const esc=(v:any)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'} as any)[ch]);
+
+    async function post(body:any){
+      const res=await fetch('/api/admin/organization',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||'Organization request failed.');
+      return data;
+    }
+    function card(title:string,value:string,detail=''){
+      return '<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-clay)]">'+esc(title)+'</p><strong class="mt-2 block text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong>'+(detail?'<p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(detail)+'</p>':'')+'</article>';
+    }
+    function render(){
+      const o=state.organization;
+      $('[data-org-subtitle]')!.textContent=o.displayName+' · '+o.id+' · '+o.status;
+      const completed=new Set(o.onboarding?.completedSteps||[]);
+      const steps=['organization','venue','branding','tax','catalog','integrations','team','templates','domains','billing','test','activation'];
+      $('[data-onboarding]')!.innerHTML=steps.map((step)=>card(step.replaceAll('-',' '),completed.has(step)?'Complete':'Pending')).join('');
+      const f=document.querySelector('[data-org-form]') as HTMLFormElement;
+      for(const k of ['displayName','legalName','timezone','locale','currency','defaultCountry'])if(f.elements.namedItem(k))(f.elements.namedItem(k) as HTMLInputElement).value=String(o[k]||'');
+      const bf=document.querySelector('[data-brand-form]') as HTMLFormElement;
+      for(const k of ['tagline','logoPath','primaryColor','accentColor'])if(bf.elements.namedItem(k))(bf.elements.namedItem(k) as HTMLInputElement).value=String(o.branding?.[k]||'');
+      const tf=document.querySelector('[data-tax-form]') as HTMLFormElement;
+      const tax=o.taxProfiles?.[0]||{};
+      for(const k of ['label','statutoryRate','customerRate','maxPassOnRate'])if(tf.elements.namedItem(k))(tf.elements.namedItem(k) as HTMLInputElement).value=String(tax[k]??'');
+      $('[data-venues]')!.innerHTML=(o.venues||[]).map((v:any)=>card(v.name||'Venue',v.address||'No address',v.timezone||'')).join('')||card('Venues','None configured');
+      $('[data-domains]')!.innerHTML=(o.domains||[]).map((d:any)=>card(d.hostname||'Domain',d.verificationStatus||'pending',d.kind||'')).join('');
+      $('[data-members]')!.innerHTML=(state.memberships||[]).map((m:any)=>card(m.email,m.role,m.status)).join('');
+      $('[data-saas]')!.innerHTML=card('Plan',o.subscription?.plan||'Not configured',o.subscription?.status||'')+card('Seats',String(o.subscription?.seatQuantity||0))+card('Feature flags',String(Object.keys(o.featureFlags||{}).length));
+      $('[data-integrations]')!.innerHTML=Object.entries(o.integrations||{}).map(([key,val]:any)=>card(key,val?.enabled?'Enabled':'Disabled',val?.connected?'Connected':'')).join('');
+    }
+    async function load(){
+      const user=await getAdminSession();
+      if(!user?.capabilities?.includes('organization.view')){loading?.classList.add('hidden');unauthorized?.classList.remove('hidden');return;}
+      const res=await fetch('/api/admin/organization',{cache:'no-store'});
+      if(!res.ok){loading!.textContent='Unable to load organization settings.';return;}
+      state=await res.json();loading?.classList.add('hidden');app?.classList.remove('hidden');render();
+    }
+    document.querySelector('[data-org-form]')?.addEventListener('submit',async(e)=>{
+      e.preventDefault();const fd=new FormData(e.currentTarget as HTMLFormElement);const patch=Object.fromEntries(fd.entries());
+      const out=await post({action:'save-organization',organization:patch});state.organization=out.organization;render();$('[data-org-message]')!.textContent='Organization saved.';
+    });
+    document.querySelector('[data-brand-form]')?.addEventListener('submit',async(e)=>{
+      e.preventDefault();const patch=Object.fromEntries(new FormData(e.currentTarget as HTMLFormElement).entries());
+      const out=await post({action:'save-organization',organization:{branding:patch}});state.organization=out.organization;render();
+    });
+    document.querySelector('[data-tax-form]')?.addEventListener('submit',async(e)=>{
+      e.preventDefault();const fd=new FormData(e.currentTarget as HTMLFormElement);const current=state.organization.taxProfiles?.[0]||{};const tax={...current,label:fd.get('label'),statutoryRate:Number(fd.get('statutoryRate')||0),customerRate:Number(fd.get('customerRate')||0),maxPassOnRate:Number(fd.get('maxPassOnRate')||0)};
+      const out=await post({action:'save-organization',organization:{taxProfiles:[tax]}});state.organization=out.organization;render();
+    });
+    document.querySelector('[data-member-form]')?.addEventListener('submit',async(e)=>{
+      e.preventDefault();const fd=new FormData(e.currentTarget as HTMLFormElement);const out=await post({action:'save-membership',membership:{email:fd.get('email'),role:fd.get('role'),status:'invited'}});state.memberships=out.memberships;render();(e.currentTarget as HTMLFormElement).reset();
+    });
+    load();
+  </script>
+</BaseLayout>
