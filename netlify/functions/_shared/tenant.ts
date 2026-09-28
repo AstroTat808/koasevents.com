@@ -1,7 +1,7 @@
-import { tenantByHost, tenantById, tenantProfiles, type TenantProfile } from '../../../src/data/tenants';
+import { tenantByHost, tenantById, tenantProfiles, type TenantProfile } from '../../../src/data/tenants/index.ts';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Context } from '@netlify/functions';
-import { listOrganizations, profileFromOrganization, readOrganizationByHost, readOrganizationById } from './organization';
+import { listOrganizations, profileFromOrganization, readOrganizationByHost, readOrganizationById } from './organization.ts';
 
 const tenantScope = new AsyncLocalStorage<TenantProfile>();
 
