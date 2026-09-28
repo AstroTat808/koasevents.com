@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { admin } from '@netlify/identity';
 import { hasCapability, passwordSecurityFor, readAuthSecurityPolicy, requireOperations } from './_shared/admin';
 import { buildQuickBooksAccountingAudit } from './admin-quickbooks.mts';
@@ -57,12 +57,10 @@ const CATEGORY_CAPABILITY:Record<AlertCategory,any>={
   securityWarnings:'users.manage',
 };
 
-function store(context:Context,name:string){
-  return context.deploy.context==='production'
-    ? getStore({name,consistency:'strong'})
-    : getDeployStore({name});
+function store(context:Context,tenant:any,domain:'crm'|'sales'|'vendors'|'eventOps'|'workspaceAlerts'){
+  return tenantStoreFor(context,tenant,domain);
 }
-function alertStore(context:Context){return store(context,'koa-workspace-alerts');}
+function alertStore(context:Context,tenant:any){return store(context,tenant,'workspaceAlerts');}
 
 function dateKey(value:unknown){
   const raw=String(value||'').trim().slice(0,10);
@@ -210,16 +208,16 @@ function cleanUserState(value:any):UserAlertState{
   return {seen,snoozes,dismissed,updatedAt:clip(value?.updatedAt,80)};
 }
 
-async function readUserState(context:Context,user:any){
-  const value=await alertStore(context).get('users/'+userKey(user),{type:'json'});
+async function readUserState(context:Context,tenant:any,user:any){
+  const value=await alertStore(context,tenant).get('users/'+userKey(user),{type:'json'});
   return cleanUserState(value);
 }
-async function saveUserState(context:Context,user:any,state:UserAlertState){
+async function saveUserState(context:Context,tenant:any,user:any,state:UserAlertState){
   state.updatedAt=new Date().toISOString();
-  await alertStore(context).setJSON('users/'+userKey(user),state);
+  await alertStore(context,tenant).setJSON('users/'+userKey(user),state);
 }
 
-async function computeAlerts(context:Context,user:any){
+async function computeAlerts(context:Context,tenant:any,user:any){
   const canCrm=hasCapability(user,'crm.view');
   const canSales=hasCapability(user,'sales.view');
   const canInsurance=hasCapability(user,'insurance.view');
@@ -228,10 +226,10 @@ async function computeAlerts(context:Context,user:any){
   const canStaffSecurity=hasCapability(user,'users.manage');
   const today=todayHst();
 
-  const crm=store(context,'koa-crm');
-  const sales=store(context,'koa-sales');
-  const vendorsStore=store(context,'koa-vendors');
-  const ops=store(context,'koa-event-ops');
+  const crm=store(context,tenant,'crm');
+  const sales=store(context,tenant,'sales');
+  const vendorsStore=store(context,tenant,'vendors');
+  const ops=store(context,tenant,'eventOps');
 
   const [tasksRaw,recordsRaw,salesEventsRaw,vendorsRaw,latestHealth,deploymentSync,credentialHealth,staffUsers,staffPolicy]=await Promise.all([
     canCrm?crm.get('tasks/index',{type:'json'}):Promise.resolve([]),
@@ -480,8 +478,8 @@ async function computeAlerts(context:Context,user:any){
   } as Record<AlertCategory,AlertDetail[]>;
 }
 
-async function reconcileLifecycle(context:Context,user:any,currentByCategory:Record<AlertCategory,AlertDetail[]>){
-  const alerts=alertStore(context);
+async function reconcileLifecycle(context:Context,tenant:any,user:any,currentByCategory:Record<AlertCategory,AlertDetail[]>){
+  const alerts=alertStore(context,tenant);
   const now=new Date().toISOString();
   const saved:any=(await alerts.get('lifecycle/state',{type:'json'}))||{active:{}};
   const active:Record<string,LifecycleRecord>=saved?.active&&typeof saved.active==='object'?saved.active:{};
@@ -581,8 +579,8 @@ export default async(req:Request,context:Context)=>{
   if(req.method==='POST'){
     const body:any=await req.json().catch(()=>({}));
     const action=clip(body?.action,40);
-    const state=await readUserState(context,user);
-    const lifecycle:any=(await alertStore(context).get('lifecycle/state',{type:'json'}))||{active:{}};
+    const state=await readUserState(context,auth.tenant,user);
+    const lifecycle:any=(await alertStore(context,auth.tenant).get('lifecycle/state',{type:'json'}))||{active:{}};
     const active:Record<string,LifecycleRecord>=lifecycle?.active&&typeof lifecycle.active==='object'?lifecycle.active:{};
     const activeByOccurrence=new Map(Object.values(active).map((record:any)=>[record.occurrenceId,record]));
 
@@ -593,7 +591,7 @@ export default async(req:Request,context:Context)=>{
         const record=activeByOccurrence.get(id);
         if(record&&canViewCategory(user,record.category))state.seen[id]=state.seen[id]||now;
       }
-      await saveUserState(context,user,state);
+      await saveUserState(context,auth.tenant,user,state);
       return Response.json({ok:true,seen:ids.length},{headers:{'Cache-Control':'private, no-store'}});
     }
 
@@ -607,14 +605,14 @@ export default async(req:Request,context:Context)=>{
       if(untilMs>Date.now()+366*86400000)return Response.json({error:'Snooze date must be within one year.'},{status:400});
       state.snoozes[id]={until:new Date(untilMs).toISOString(),createdAt:new Date().toISOString()};
       state.seen[id]=state.seen[id]||new Date().toISOString();
-      await saveUserState(context,user,state);
+      await saveUserState(context,auth.tenant,user,state);
       return Response.json({ok:true,occurrenceId:id,until:state.snoozes[id].until},{headers:{'Cache-Control':'private, no-store'}});
     }
 
     if(action==='unsnooze'){
       const id=clip(body?.occurrenceId,80);
       delete state.snoozes[id];
-      await saveUserState(context,user,state);
+      await saveUserState(context,auth.tenant,user,state);
       return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
     }
 
@@ -626,14 +624,14 @@ export default async(req:Request,context:Context)=>{
       state.dismissed[id]={dismissedAt:now};
       state.seen[id]=state.seen[id]||now;
       delete state.snoozes[id];
-      await saveUserState(context,user,state);
+      await saveUserState(context,auth.tenant,user,state);
       return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
     }
 
     if(action==='restore-dismissed'){
       const id=clip(body?.occurrenceId,80);
       delete state.dismissed[id];
-      await saveUserState(context,user,state);
+      await saveUserState(context,auth.tenant,user,state);
       return Response.json({ok:true,occurrenceId:id},{headers:{'Cache-Control':'private, no-store'}});
     }
 
@@ -642,9 +640,9 @@ export default async(req:Request,context:Context)=>{
 
   if(req.method!=='GET')return new Response('Method not allowed',{status:405});
 
-  const currentByCategory=await computeAlerts(context,user);
-  const lifecycle=await reconcileLifecycle(context,user,currentByCategory);
-  const state=await readUserState(context,user);
+  const currentByCategory=await computeAlerts(context,auth.tenant,user);
+  const lifecycle=await reconcileLifecycle(context,auth.tenant,user,currentByCategory);
+  const state=await readUserState(context,auth.tenant,user);
   const dashboardStaff=hasCapability(user,'users.manage')
     ? await admin.listUsers({page:1,perPage:200}).catch(()=>[])
     : [];
@@ -697,7 +695,7 @@ export default async(req:Request,context:Context)=>{
   const teamDashboard=teamDashboardRows(user,visibleAlerts,lifecycle.history,Array.isArray(dashboardStaff)?dashboardStaff:[]);
   const unassignedCount=visibleAlerts.filter((alert:any)=>!clip(alert?.assigneeEmail,240)).length;
 
-  await saveUserState(context,user,state);
+  await saveUserState(context,auth.tenant,user,state);
 
   return Response.json({
     generatedAt:new Date().toISOString(),
