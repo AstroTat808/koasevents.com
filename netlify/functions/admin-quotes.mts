@@ -299,7 +299,8 @@ async function saveRecord(context: Context, record: SalesRecord, records: SalesR
 }
 
 async function readTrashIndex(context: Context): Promise<TrashEntry[]> {
-  return ((await salesStoreFor(context).get('trash/index', { type: 'json' })) || []) as TrashEntry[];
+  const tenant=resolveTenant();
+  return tenantRows(((await tenantStore(context,'sales',tenant).get('trash/index', { type: 'json' })) || []) as any[],tenant) as TrashEntry[];
 }
 
 async function writeTrashIndex(context: Context, entries: TrashEntry[]) {
@@ -461,7 +462,8 @@ async function getQuote(context: Context, quoteId: string) {
 }
 
 async function readEvents(context: Context): Promise<any[]> {
-  return (await salesStoreFor(context).get('analytics/events/index', { type: 'json' })) || [];
+  const tenant=resolveTenant();
+  return tenantRows(((await tenantStore(context,'sales',tenant).get('analytics/events/index', { type: 'json' })) || []) as any[],tenant);
 }
 
 async function appendEvent(context: Context, event: Record<string, unknown>) {
@@ -493,7 +495,7 @@ function ensureBooking(record: SalesRecord) {
       updatedAt: new Date().toISOString(),
       contract: {
         version: 1,
-        title: normalizePackage(record.packageId).startsWith('mobile-') ? 'Koa’s Mobile Bar Services Agreement' : 'Koa’s Events Venue & Services Agreement',
+        title: proposalCategory(record.packageId,record.inquiry)==='mobile-bar' ? (resolveTenant().displayName+' Mobile Service Agreement') : (resolveTenant().displayName+' Venue & Services Agreement'),
         generatedAt: new Date().toISOString(),
         status: 'pending',
         sections: contractSections(record),
@@ -599,7 +601,7 @@ function remindersForRecord(record: SalesRecord) {
     if (!booking?.contract || booking.contract.status !== 'signed') {
       reminders.push({ id:record.id+'-contract', priority:1, type:'contract', title:'Client signature pending', detail:'Proposal is accepted; send or follow up on the booking agreement.', due:'now' });
     } else if (!booking.contract.koaSignature) {
-      reminders.push({ id:record.id+'-countersign', priority:1, type:'contract', title:'Koa countersignature pending', detail:'Client signed the agreement. Koa’s must countersign before the agreement is fully executed.', due:'now' });
+      reminders.push({ id:record.id+'-countersign', priority:1, type:'contract', title:'Koa countersignature pending', detail:'Client signed the agreement. An authorized venue signer must countersign before the agreement is fully executed.', due:'now' });
     }
   }
 
@@ -694,7 +696,7 @@ function bookingSummary(record: SalesRecord) {
     koaSigner: booking?.contract?.koaSignature?.name || '',
     subtotal: Number(record.proposal.subtotal || 0),
     discountAmount: Number(record.proposal.discountAmount || 0),
-    taxRate: 4.712,
+    taxRate: resolveTenant().tax.customerRate,
     taxAmount: Number(record.proposal.taxAmount || 0),
     total: Number(record.proposal.total || 0),
     depositAmount: Number(record.proposal.depositAmount || 0),
@@ -713,11 +715,14 @@ function bookingSummary(record: SalesRecord) {
 }
 
 function proposalCategory(packageId = '', inquiry?: Record<string, unknown>) {
+  const tenant=resolveTenant();
   const normalizedPackage = normalizePackage(packageId);
+  const catalogId=PACKAGE_CATALOG_IDS[normalizedPackage]||tenantCatalogCanonicalId(tenant,normalizedPackage);
+  const item=tenant.catalog.bootstrapItems.find((row)=>row.id===catalogId);
   const eventType = cleanText((inquiry as any)?.eventType, 120).toLowerCase();
   const service = cleanText((inquiry as any)?.service, 80).toLowerCase();
-  if (normalizedPackage.startsWith('mobile-') || service.includes('mobile bar')) return 'mobile-bar';
-  if (['gardenia','orchid','hibiscus','signature-wedding'].includes(normalizedPackage) || eventType.includes('wedding')) return 'venue-wedding';
+  if (item?.group==='mobile-bar' || service.includes('mobile bar')) return 'mobile-bar';
+  if (item?.group==='packages' || eventType.includes('wedding')) return 'venue-wedding';
   if (eventType || service) return 'private-event';
   return 'default';
 }
@@ -808,7 +813,7 @@ function selectedPaymentPreset(
         leadDays == null
           ? 'No usable lead-time dates were available; this rule does not require a lead-time range.'
           : 'Lead time was ' + leadDays + ' days and was inside this rule’s range.',
-        'Contract-value basis was ' + (contractValueBasis === 'beforeGet' ? 'before Hawaiʻi GET' : 'after Hawaiʻi GET') + ' at $' + contractValue.toFixed(2) + ' and was inside this rule’s range.',
+        'Contract-value basis was ' + (contractValueBasis === 'beforeGet' ? 'before '+resolveTenant().tax.label : 'after '+resolveTenant().tax.label) + ' at $' + contractValue.toFixed(2) + ' and was inside this rule’s range.',
         matches.length > 1
           ? matches.length + ' active rules matched; “' + match.name + '” won because it had the highest priority.'
           : 'This was the only active rule that matched.',
@@ -948,7 +953,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   if (!quote && !lines.length && mobileEstimate > 0) {
     lines.push({
       id: 'mobile-estimate',
-      description: PACKAGE_NAMES[normalizedPackage] || 'Koa’s Mobile Bar estimated service',
+      description: PACKAGE_NAMES[normalizedPackage] || (resolveTenant().displayName+' estimated service'),
       quantity: 1,
       unitPrice: mobileEstimate,
       amount: mobileEstimate,
@@ -962,7 +967,7 @@ function proposalFromQuote(quote: SavedQuote | null, eventDate = '', packageId =
   const taxableAfterDiscount = subtotal > 0
     ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
     : 0;
-  const taxRate = 4.712;
+  const taxRate = resolveTenant().tax.customerRate;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const beforeGetValue = Math.max(0, Math.round((subtotal - discountAmount) * 100) / 100);
   const total = Math.max(0, Math.round((beforeGetValue + taxAmount) * 100) / 100);
@@ -1159,7 +1164,7 @@ function updateProposal(record: SalesRecord, payload: any) {
   const taxableAfterDiscount = subtotal > 0
     ? Math.max(0, taxableGross - (discountAmount * taxableGross / subtotal))
     : 0;
-  const taxRate = 4.712;
+  const taxRate = resolveTenant().tax.customerRate;
   const taxAmount = Math.round(taxableAfterDiscount * taxRate) / 100;
   const total = Math.round((subtotal - discountAmount + taxAmount) * 100) / 100;
   const depositPercent = Math.min(100, Math.max(0, finite(payload.depositPercent ?? effectiveDepositPercent(current), 0, 100)));
@@ -2094,7 +2099,7 @@ export default async (req: Request, context: Context) => {
     const preserved = (current.lineItems || []).filter((line) => line.id !== 'margin-target-adjustment');
     const baseSubtotal = preserved.reduce((sum, line) => sum + finite(line.amount), 0);
     const discount = Math.min(baseSubtotal, finite(current.discountAmount));
-    const taxRate = 4.712;
+    const taxRate = resolveTenant().tax.customerRate;
     const taxMultiplier = 1 + taxRate / 100;
     const requiredTaxable = taxMultiplier > 0 ? targetTotal / taxMultiplier : targetTotal;
     const requiredSubtotal = Math.max(0, requiredTaxable + discount);
@@ -2191,11 +2196,11 @@ export default async (req: Request, context: Context) => {
 
     const booking = ensureBooking(record);
     if (!booking || booking.contract.status !== 'signed') {
-      return Response.json({ error: 'Client signature must be recorded before Koa’s countersigns.' }, { status: 400 });
+      return Response.json({ error: 'Client signature must be recorded before the organization countersigns.' }, { status: 400 });
     }
 
     const name = cleanText(payload.name, 180);
-    if (name.length < 2) return Response.json({ error: 'Enter the Koa’s signer name.' }, { status: 400 });
+    if (name.length < 2) return Response.json({ error: 'Enter the authorized signer name.' }, { status: 400 });
 
     const now = new Date().toISOString();
     booking.contract.koaSignature = { name, signedAt: now };
@@ -2216,7 +2221,7 @@ export default async (req: Request, context: Context) => {
       recordId: record.id,
       quoteId: record.quoteId || '',
       packageId: record.packageId || '',
-      detail: 'Agreement countersigned for Koa’s Events by ' + name,
+      detail: 'Agreement countersigned for ' + resolveTenant().displayName + ' by ' + name,
     });
     if (record.stage === 'booked') {
       await appendEvent(context, {
