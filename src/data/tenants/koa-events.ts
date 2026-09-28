@@ -157,6 +157,12 @@ export const koaEventsTenantProfile: TenantProfile = {
     ],
   },
   bootstrapAdminEmails: ['chris@sibel.org', 'koasadmin@koasevents.com'],
+  storage: {
+    compatibilityBlobStores: {
+      sales: 'koa-sales',
+      integrations: 'koa-integrations',
+    },
+  },
   legal: {
     governingLawLabel: 'Hawaii state law',
     disputeVenueLabel: 'Hilo, Hawaii',
