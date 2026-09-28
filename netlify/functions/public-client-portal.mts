@@ -1,9 +1,10 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 
-function sales(context:Context){return context.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
-function crm(context:Context){return context.deploy.context==='production'?getStore({name:'koa-crm',consistency:'strong'}):getDeployStore({name:'koa-crm'});}
-function ops(context:Context){return context.deploy.context==='production'?getStore({name:'koa-event-ops',consistency:'strong'}):getDeployStore({name:'koa-event-ops'});}
+function sales(context:Context){return tenantStore(context,'sales',resolveTenant());}
+function crm(context:Context){return tenantStore(context,'crm',resolveTenant());}
+function ops(context:Context){return tenantStore(context,'eventOps',resolveTenant());}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
 function id(p='MSG'){return p+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function idx<T>(store:any,key:string):Promise<T[]>{return ((await store.get(key,{type:'json'}))||[]) as T[];}
@@ -13,6 +14,7 @@ function paymentSummary(record:any){
   return schedule.map((p:any,i:number)=>{const pid=p.id||'pay-'+(i+1);const inv=invoices.find((x:any)=>x.paymentId===pid);return{id:pid,label:p.label,dueDate:p.dueDate,amount:Number(p.amount||0),status:inv?.invoiceId?(Number(inv.balance||0)<=0?'paid':'open'):'not_invoiced',balance:inv?.invoiceId?Number(inv.balance||0):Number(p.amount||0),docNumber:inv?.docNumber||''};});
 }
 export default async(req:Request,context:Context)=>{
+  const tenant=resolveTenant(req);
   const token=clean(context.params.token,100);
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token))return Response.json({error:'Invalid portal link.'},{status:400});
   const ss=sales(context), cs=crm(context);
