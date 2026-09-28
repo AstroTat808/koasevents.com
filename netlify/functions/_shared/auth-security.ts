@@ -3,6 +3,7 @@ import type { Context } from '@netlify/functions';
 import { ipFingerprint } from './security.ts';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 export type AuthEventType = 'login_success'|'login_failed'|'suspicious_login'|'session_revoked'|'sessions_revoked';
 export type AuthEvent = {
@@ -105,14 +106,14 @@ export async function revokeManagedSession(userId:string,sessionId:string,actor:
   if(!found)throw new Error('Session not found.');
   await s.setJSON(key,next);
   const row=next.find(x=>x.id===sessionId)!;
-  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,detail:'Revoked one active Koa’s session.',suspicious:false,reasons:[]});
+  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,detail:'Revoked one active tenant session.',suspicious:false,reasons:[]});
   return row;
 }
 export async function revokeAllManagedSessions(userId:string,actor:string,context:Context,email=''){
   const s=store();const key='sessions/'+clean(userId,160);const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];const now=new Date().toISOString();
   const next=rows.map(row=>row.revokedAt?row:{...row,revokedAt:now,revokedBy:clean(actor,240)});
   await s.setJSON(key,next);
-  await appendAuthEvent(context,{type:'sessions_revoked',email:clean(email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:'',userAgent:'',device:'',detail:'Revoked all tracked Koa’s sessions.',suspicious:false,reasons:[]});
+  await appendAuthEvent(context,{type:'sessions_revoked',email:clean(email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:'',userAgent:'',device:'',detail:'Revoked all tracked tenant sessions.',suspicious:false,reasons:[]});
   return next;
 }
 export async function evaluateLoginRisk(email:string,ip:string,ua:string){
@@ -127,14 +128,16 @@ export async function evaluateLoginRisk(email:string,ip:string,ua:string){
   return{suspicious:reasons.length>0,reasons,device};
 }
 export async function sendSuspiciousLoginAlert(input:{email:string;device:string;reasons:string[];createdAt:string;}){
-  const key=clean(Netlify.env.get('RESEND_API_KEY'),500);if(!key)return{sent:false,error:'RESEND_API_KEY missing'};
-  const recipients=clean(Netlify.env.get('KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
-  if(!recipients.length)recipients.push('chris@sibel.org','koasadmin@koasevents.com');
-  const from=clean(Netlify.env.get('KOA_FROM_EMAIL'),240)||"Koa's Events <aloha@koasevents.com>";
-  const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Suspicious Koa’s sign-in</title></head><body style="margin:0;padding:0;background:#f5f0e7">'
+  const tenant=resolveTenant();
+  const brand=tenant.displayName || 'VenueLoom tenant';
+  const key=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);if(!key)return{sent:false,error:'RESEND_API_KEY missing'};
+  const recipients=clean(tenantEnv(tenant,'SECURITY_ALERT_EMAIL','KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
+  if(!recipients.length&&tenant.contact.email)recipients.push(tenant.contact.email);
+  const from=clean(tenantEnv(tenant,'FROM_EMAIL','KOA_FROM_EMAIL'),240)||(brand+' <'+tenant.contact.email+'>');
+  const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Suspicious '+brand+' sign-in</title></head><body style="margin:0;padding:0;background:#f5f0e7">'
     +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:650px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
-    +emailHeader({brand:'events',eyebrow:'Security',title:'Suspicious Koa’s sign-in'})
+    +emailHeader({brand:'events',eyebrow:'Security',title:'Suspicious '+brand+' sign-in'})
     +'<tr><td style="padding-top:24px;padding-right:22px;padding-bottom:24px;padding-left:22px">'
     +emailGreeting('Team')
     +'<p style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:24px;color:#46564f"><strong>Account:</strong> '+input.email+'</p>'
@@ -146,7 +149,7 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
     +'</td></tr></table></td></tr></table></body></html>';
   const text=[
     emailGreetingText('Team'),'',
-    'Suspicious Koa’s sign-in',
+    'Suspicious '+brand+' sign-in',
     'Account: '+input.email,
     'Device: '+input.device,
     'Time: '+input.createdAt,
@@ -155,7 +158,7 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
     emailSignatureText(),
   ].join('\n');
   const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({
-    from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',html,text,attachments:[emailLogoAttachment()]
+    from,to:recipients,subject:''+brand+' security alert: suspicious sign-in',html,text,attachments:[emailLogoAttachment()]
   })});
   return r.ok?{sent:true}:{sent:false,error:'Alert delivery failed'};
 }
