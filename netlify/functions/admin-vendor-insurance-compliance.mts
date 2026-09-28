@@ -1,19 +1,19 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
 import { masterInsuranceForEvent, todayHst } from './_shared/vendor-insurance-sync.ts';
 
-function store(c:Context,name:string){return c.deploy.context==='production'?getStore({name,consistency:'strong'}):getDeployStore({name});}
+function store(c:Context,tenant:any,domain:'vendors'|'sales'|'eventOps'){return tenantStoreFor(c,tenant,domain);}):getDeployStore({name});}
 function daysUntil(date:unknown){const raw=String(date||'').slice(0,10);if(!/^\d{4}-\d{2}-\d{2}$/.test(raw))return null;const target=Date.parse(raw+'T00:00:00Z');const today=Date.parse(todayHst()+'T00:00:00Z');return Math.ceil((target-today)/86400000);}
 export default async(_req:Request,context:Context)=>{
   const auth=await requireCapability('insurance.view', _req);if(auth.response)return auth.response;
   const [vendors,records]=await Promise.all([
-    store(context,'koa-vendors').get('vendors/index',{type:'json'}),
-    store(context,'koa-sales').get('records/index',{type:'json'}),
+    store(context,auth.tenant,'vendors').get('vendors/index',{type:'json'}),
+    store(context,auth.tenant,'sales').get('records/index',{type:'json'}),
   ]);
   const vendorRows:Array<any>=Array.isArray(vendors)?vendors:[];
   const booked:Array<any>=(Array.isArray(records)?records:[]).filter((r:any)=>r?.stage==='booked'&&r?.kind==='proposal'&&String(r?.customer?.eventDate||'')>=todayHst());
-  const opsStore=store(context,'koa-event-ops');
+  const opsStore=store(context,auth.tenant,'eventOps');
   const eventRows=await Promise.all(booked.map(async(record:any)=>({record,ops:(await opsStore.get('events/'+record.id,{type:'json'}))||{vendors:[]}})));
 
   const rows=vendorRows.map((vendor:any)=>{
