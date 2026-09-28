@@ -237,6 +237,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));
     const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
     const when=(value)=>value?new Date(value).toLocaleString():'—';
+    const localDateTimeInput=(value)=>{const date=new Date(value||'');if(Number.isNaN(date.getTime()))return String(value||'').slice(0,16);const local=new Date(date.getTime()-date.getTimezoneOffset()*60000);return local.toISOString().slice(0,16);};
     const hasAccess=(user)=>Boolean(user&&!user.accessBlocked&&(user.isAdmin||user.capabilities?.includes('sales.view')||user.capabilities?.includes('crm.view')||user.permissions?.includes('sales.view')||user.permissions?.includes('crm.view')));
 
     async function salesPost(body){
@@ -444,36 +445,48 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       bindCustomRows();
 
       const notes=linkedRows('notes').sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')));
-      document.querySelector('[data-notes]').innerHTML=notes.length?notes.map((note)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><p class="whitespace-pre-wrap text-sm leading-6">'+esc(note.body||'')+'</p><p class="mt-2 text-xs text-[var(--koa-ink)]/45">'+esc(note.createdBy||'')+' · '+esc(when(note.createdAt))+'</p></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No Business CRM notes yet.</p>';
+      document.querySelector('[data-notes]').innerHTML=notes.length?notes.map((note)=>'<form data-edit-note-form data-note-id="'+esc(note.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4"><textarea name="body" rows="4" class="w-full rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm leading-6">'+esc(note.body||'')+'</textarea><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><p class="text-xs text-[var(--koa-ink)]/45">'+esc(note.createdBy||'')+' · '+esc(when(note.updatedAt||note.createdAt))+(note.updatedAt?' · edited':'')+'</p><button class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Save note</button></div></form>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No Business CRM notes yet.</p>';
+      document.querySelectorAll('[data-edit-note-form]').forEach((noteForm)=>{
+        noteForm.addEventListener('submit',async(event)=>{
+          event.preventDefault();
+          const body=String(noteForm.elements.body.value||'').trim();
+          if(!body)return;
+          try{
+            await businessPost({action:'update-note',noteId:noteForm.dataset.noteId,body});
+            message.textContent='Note updated.';
+            await load('operations');
+          }catch(error){
+            message.textContent=error.message||'Unable to update note.';
+          }
+        });
+      });
 
       const tasks=linkedRows('tasks').sort((a,b)=>String(a.status).localeCompare(String(b.status))||String(a.dueDate||'').localeCompare(String(b.dueDate||'')));
-      document.querySelector('[data-tasks]').innerHTML=tasks.length?tasks.map((task)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-start justify-between gap-3"><div><strong class="'+(task.status==='done'?'line-through opacity-60':'')+'">'+esc(task.title||'Task')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(task.dueDate||'No due date')+' · '+esc(task.priority||'normal')+(task.assignee?' · '+esc(task.assignee):'')+'</p></div><button type="button" data-toggle-task="'+esc(task.id)+'" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">'+(task.status==='done'?'Reopen':'Complete')+'</button></div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No tasks yet.</p>';
-      document.querySelectorAll('[data-toggle-task]').forEach((button)=>{
-        button.addEventListener('click',async()=>{
-          button.disabled=true;
+      document.querySelector('[data-tasks]').innerHTML=tasks.length?tasks.map((task)=>'<form data-edit-task-form data-task-id="'+esc(task.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4"><div class="grid gap-3 sm:grid-cols-2"><label class="grid gap-1 text-xs font-bold">Task<input name="title" value="'+esc(task.title||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Due date<input name="dueDate" type="date" value="'+esc(task.dueDate||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Assignee<input name="assignee" value="'+esc(task.assignee||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Priority<select name="priority" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><option value="low" '+(task.priority==='low'?'selected':'')+'>Low</option><option value="normal" '+(task.priority==='normal'?'selected':'')+'>Normal</option><option value="high" '+(task.priority==='high'?'selected':'')+'>High</option></select></label><label class="grid gap-1 text-xs font-bold">Status<select name="status" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><option value="open" '+(task.status==='open'?'selected':'')+'>Open</option><option value="done" '+(task.status==='done'?'selected':'')+'>Done</option></select></label></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><p class="text-xs text-[var(--koa-ink)]/45">Created '+esc(when(task.createdAt))+(task.updatedAt?' · edited '+esc(when(task.updatedAt)):'')+'</p><button class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Save task</button></div></form>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No tasks yet.</p>';
+      document.querySelectorAll('[data-edit-task-form]').forEach((taskForm)=>{
+        taskForm.addEventListener('submit',async(event)=>{
+          event.preventDefault();
           try{
-            await businessPost({action:'toggle-task',taskId:button.dataset.toggleTask});
+            await businessPost({action:'update-task',taskId:taskForm.dataset.taskId,title:taskForm.elements.title.value,dueDate:taskForm.elements.dueDate.value,assignee:taskForm.elements.assignee.value,priority:taskForm.elements.priority.value,status:taskForm.elements.status.value});
             message.textContent='Task updated.';
             await load('operations');
           }catch(error){
             message.textContent=error.message||'Unable to update task.';
-            button.disabled=false;
           }
         });
       });
 
       const appointments=linkedRows('appointments').sort((a,b)=>String(a.startsAt||'').localeCompare(String(b.startsAt||'')));
-      document.querySelector('[data-appointments]').innerHTML=appointments.length?appointments.map((appointment)=>'<article class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong>'+esc(appointment.title||'Appointment')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(when(appointment.startsAt))+' · '+esc(appointment.durationMinutes||60)+' min'+(appointment.location?' · '+esc(appointment.location):'')+'</p><p class="mt-2 text-sm text-[var(--koa-ink)]/58">'+esc(appointment.notes||'')+'</p></div><div class="flex flex-wrap gap-2"><span class="rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em]">'+esc(appointment.status||'scheduled')+'</span>'+(appointment.status==='scheduled'?'<button type="button" data-appointment-status="'+esc(appointment.id)+'" data-status="completed" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Complete</button><button type="button" data-appointment-status="'+esc(appointment.id)+'" data-status="cancelled" class="rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700">Cancel</button>':'')+'</div></div></article>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No appointments yet.</p>';
-      document.querySelectorAll('[data-appointment-status]').forEach((button)=>{
-        button.addEventListener('click',async()=>{
-          button.disabled=true;
+      document.querySelector('[data-appointments]').innerHTML=appointments.length?appointments.map((appointment)=>'<form data-edit-appointment-form data-appointment-id="'+esc(appointment.id)+'" class="rounded-xl border border-[var(--koa-line)] p-4"><div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4"><label class="grid gap-1 text-xs font-bold md:col-span-2">Title<input name="title" value="'+esc(appointment.title||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Starts<input name="startsAt" type="datetime-local" value="'+esc(localDateTimeInput(appointment.startsAt))+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Duration<input name="durationMinutes" type="number" min="15" max="480" value="'+esc(appointment.durationMinutes||60)+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold md:col-span-2">Location<input name="location" value="'+esc(appointment.location||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold md:col-span-2">Notes<input name="notes" value="'+esc(appointment.notes||'')+'" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"></label><label class="grid gap-1 text-xs font-bold">Status<select name="status" class="rounded-lg border border-[var(--koa-line)] px-3 py-2 text-sm"><option value="scheduled" '+(appointment.status==='scheduled'?'selected':'')+'>Scheduled</option><option value="completed" '+(appointment.status==='completed'?'selected':'')+'>Completed</option><option value="cancelled" '+(appointment.status==='cancelled'?'selected':'')+'>Cancelled</option></select></label></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><p class="text-xs text-[var(--koa-ink)]/45">Created '+esc(when(appointment.createdAt))+(appointment.updatedAt?' · edited '+esc(when(appointment.updatedAt)):'')+'</p><button class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]">Save appointment</button></div></form>').join(''):'<p class="text-sm text-[var(--koa-ink)]/45">No appointments yet.</p>';
+      document.querySelectorAll('[data-edit-appointment-form]').forEach((appointmentForm)=>{
+        appointmentForm.addEventListener('submit',async(event)=>{
+          event.preventDefault();
           try{
-            await businessPost({action:'update-appointment',appointmentId:button.dataset.appointmentStatus,status:button.dataset.status});
+            await businessPost({action:'update-appointment',appointmentId:appointmentForm.dataset.appointmentId,title:appointmentForm.elements.title.value,startsAt:appointmentForm.elements.startsAt.value,durationMinutes:Number(appointmentForm.elements.durationMinutes.value||60),location:appointmentForm.elements.location.value,notes:appointmentForm.elements.notes.value,status:appointmentForm.elements.status.value});
             message.textContent='Appointment updated.';
             await load('operations');
           }catch(error){
             message.textContent=error.message||'Unable to update appointment.';
-            button.disabled=false;
           }
         });
       });
