@@ -187,7 +187,9 @@ async function syncDamageDepositInvoice(context: Context, record: any, settings:
     else if (state.invoiceBalance <= 0.005) {
       state.status = state.deductionAmount > 0 ? 'paid_with_pending_resolution' : 'paid';
       state.paidAt ||= new Date().toISOString();
-    } else state.status = 'invoiced';
+    } else {
+      state.status = 'invoiced';
+    }
   }
   return state;
 }
@@ -1457,7 +1459,8 @@ export default async (req: Request, context: Context) => {
       qboQuery(context, 'select * from Item where Active = true maxresults 1000'),
     ]);
     const rows = Array.isArray(accountData?.QueryResponse?.Account) ? accountData.QueryResponse.Account : [];
-    const map = (types: string[]) => rows.filter((account: any) => types.includes(String(account.AccountType || '')))
+    const map = (types: string[]) => rows
+      .filter((account: any) => types.includes(String(account.AccountType || '')))
       .map((account: any) => ({
         id:String(account.Id),
         name:String(account.Name || ''),
@@ -1476,29 +1479,30 @@ export default async (req: Request, context: Context) => {
       }))
       .sort((a:any,b:any)=>a.name.localeCompare(b.name));
     return Response.json({
-      liabilityAccounts: map(['Other Current Liability','Long Term Liability']),
-      bankAccounts: map(['Bank']),
-      incomeAccounts: map(['Income','Other Income']),
+      liabilityAccounts:map(['Other Current Liability','Long Term Liability']),
+      bankAccounts:map(['Bank']),
+      incomeAccounts:map(['Income','Other Income']),
       items,
-    }, { headers: { 'Cache-Control':'private, no-store' } });
+    }, { headers:{'Cache-Control':'private, no-store'} });
   }
 
   if (action === 'save-damage-deposit-settings') {
     let damageDepositSettings = await saveQuickBooksDamageDepositSettings(context, {
-      enabled: payload?.enabled !== false,
-      oneDayAmount: payload?.oneDayAmount,
-      weekendAmount: payload?.weekendAmount,
-      dueDaysBefore: payload?.dueDaysBefore,
-      refundWithinDays: payload?.refundWithinDays,
-      liabilityAccountId: clean(payload?.liabilityAccountId,80),
-      liabilityAccountName: clean(payload?.liabilityAccountName,160),
-      itemId: clean(payload?.itemId,80),
-      itemName: clean(payload?.itemName || 'Refundable Damage Deposit',160),
-      refundBankAccountId: clean(payload?.refundBankAccountId,80),
-      refundBankAccountName: clean(payload?.refundBankAccountName,160),
-      deductionIncomeAccountId: clean(payload?.deductionIncomeAccountId,80),
-      deductionIncomeAccountName: clean(payload?.deductionIncomeAccountName,160),
+      enabled:payload?.enabled !== false,
+      oneDayAmount:payload?.oneDayAmount,
+      weekendAmount:payload?.weekendAmount,
+      dueDaysBefore:payload?.dueDaysBefore,
+      refundWithinDays:payload?.refundWithinDays,
+      liabilityAccountId:clean(payload?.liabilityAccountId,80),
+      liabilityAccountName:clean(payload?.liabilityAccountName,160),
+      itemId:clean(payload?.itemId,80),
+      itemName:clean(payload?.itemName || 'Refundable Damage Deposit',160),
+      refundBankAccountId:clean(payload?.refundBankAccountId,80),
+      refundBankAccountName:clean(payload?.refundBankAccountName,160),
+      deductionIncomeAccountId:clean(payload?.deductionIncomeAccountId,80),
+      deductionIncomeAccountName:clean(payload?.deductionIncomeAccountName,160),
     });
+
     if (damageDepositSettings.itemId && damageDepositSettings.liabilityAccountId) {
       try {
         const mappedData:any=await qboGet(context,'item',damageDepositSettings.itemId);
@@ -1525,35 +1529,37 @@ export default async (req: Request, context: Context) => {
         },{status:409});
       }
     }
+
     if (!damageDepositSettings.itemId && damageDepositSettings.liabilityAccountId) {
       try {
-        const created: any = await qboCreate(context, 'item', {
-          Name: damageDepositSettings.itemName || 'Refundable Damage Deposit',
-          Description: 'Refundable security / damage deposit held as a customer liability.',
-          Active: true,
-          Type: 'Service',
-          UnitPrice: damageDepositSettings.oneDayAmount,
-          IncomeAccountRef: {
-            value: damageDepositSettings.liabilityAccountId,
-            name: damageDepositSettings.liabilityAccountName || undefined,
+        const created:any=await qboCreate(context,'item',{
+          Name:damageDepositSettings.itemName || 'Refundable Damage Deposit',
+          Description:'Refundable security / damage deposit held as a customer liability.',
+          Active:true,
+          Type:'Service',
+          UnitPrice:damageDepositSettings.oneDayAmount,
+          IncomeAccountRef:{
+            value:damageDepositSettings.liabilityAccountId,
+            name:damageDepositSettings.liabilityAccountName || undefined,
           },
         });
-        const item = created?.Item;
-        if (item?.Id) {
-          damageDepositSettings = await saveQuickBooksDamageDepositSettings(context, {
+        const item=created?.Item;
+        if(item?.Id) {
+          damageDepositSettings=await saveQuickBooksDamageDepositSettings(context,{
             ...damageDepositSettings,
-            itemId: String(item.Id),
-            itemName: String(item.Name || damageDepositSettings.itemName),
+            itemId:String(item.Id),
+            itemName:String(item.Name||damageDepositSettings.itemName),
           });
         }
       } catch (error) {
         return Response.json({
           error:'QuickBooks could not create the dedicated refundable-deposit item against the selected liability account. '+(error instanceof Error?error.message:'Choose a compatible liability account or create the item in QuickBooks and save its mapping.'),
           damageDepositSettings,
-        }, { status:409 });
+        },{status:409});
       }
     }
-    return Response.json({ ok:true, damageDepositSettings }, { headers:{'Cache-Control':'private, no-store'} });
+
+    return Response.json({ok:true,damageDepositSettings},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (action === 'connect') {
@@ -2282,10 +2288,14 @@ export default async (req: Request, context: Context) => {
     const requestedType = clean(payload?.rentalType,20);
     if (requestedType === 'one-day' || requestedType === 'weekend') {
       if (state.invoiceId && requestedType !== state.rentalType) {
-        return Response.json({error:'Rental type cannot be changed after the refundable damage-deposit invoice has been created. Void/recreate the deposit invoice in QuickBooks first.'},{status:409});
+        return Response.json({
+          error:'Rental type cannot be changed after the refundable damage-deposit invoice has been created. Void or recreate the deposit invoice in QuickBooks first.',
+        },{status:409});
       }
       state.rentalType = requestedType;
-      if (!state.invoiceId) state.amount = roundMoney(requestedType === 'weekend' ? damageSettings.weekendAmount : damageSettings.oneDayAmount);
+      if (!state.invoiceId) {
+        state.amount = roundMoney(requestedType === 'weekend' ? damageSettings.weekendAmount : damageSettings.oneDayAmount);
+      }
     }
     if (!state.invoiceId) {
       state.dueDate = offsetDate(record?.customer?.eventDate, -Math.max(0, Number(damageSettings.dueDaysBefore || 30)));
@@ -2295,28 +2305,30 @@ export default async (req: Request, context: Context) => {
     state.deductionReason = clean(payload?.deductionReason ?? state.deductionReason,1000);
     state.refundAmount = Math.max(0, roundMoney(state.amount - state.deductionAmount));
     records = await saveQuickBooksSalesRecord(context, record, records);
-    return Response.json({ ok:true, record, damageDeposit:state }, { headers:{'Cache-Control':'private, no-store'} });
+    return Response.json({ok:true,record,damageDeposit:state},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (action === 'create-damage-deposit-invoice') {
     const damageSettings = await getQuickBooksDamageDepositSettings(context);
-    if (!damageSettings.enabled) return Response.json({ error:'Refundable damage deposits are disabled for this organization.' },{status:409});
+    if (!damageSettings.enabled) {
+      return Response.json({error:'Refundable damage deposits are disabled for this organization.'},{status:409});
+    }
     if (!damageSettings.itemId || !damageSettings.liabilityAccountId) {
-      return Response.json({ error:'Configure the refundable damage-deposit liability account and QuickBooks item first.' },{status:409});
+      return Response.json({error:'Configure the refundable damage-deposit liability account and QuickBooks item first.'},{status:409});
     }
     const state = ensureDamageDepositState(record, damageSettings, tenant);
     if (state.invoiceId) {
       await syncDamageDepositInvoice(context, record, damageSettings, tenant);
       records = await saveQuickBooksSalesRecord(context, record, records);
-      return Response.json({ ok:true, record, damageDeposit:state, reused:true });
+      return Response.json({ok:true,record,damageDeposit:state,reused:true},{headers:{'Cache-Control':'private, no-store'}});
     }
     const customer = await ensureCustomer(context, record);
-    const created: any = await qboCreate(context, 'invoice', {
-      CustomerRef:{ value:String(customer.Id) },
+    const created:any = await qboCreate(context,'invoice',{
+      CustomerRef:{value:String(customer.Id)},
       TxnDate:today(),
       DueDate:state.dueDate || undefined,
-      BillEmail:record.customer?.email ? { Address:clean(record.customer.email,240) } : undefined,
-      CustomerMemo:{ value:'Refundable security / damage deposit · '+tenant.displayName+' · '+record.id },
+      BillEmail:record.customer?.email ? {Address:clean(record.customer.email,240)} : undefined,
+      CustomerMemo:{value:'Refundable security / damage deposit · '+tenant.displayName+' · '+record.id},
       PrivateNote:'VenueLoom '+tenant.id+' · '+record.id+' · refundable damage deposit · held as liability',
       Line:[buildQuickBooksMilestoneInvoiceLine({
         amount:state.amount,
@@ -2333,123 +2345,20 @@ export default async (req: Request, context: Context) => {
     state.paidAt=state.invoiceBalance<=0.005?new Date().toISOString():'';
     state.lastSyncedAt=new Date().toISOString();
     records=await saveQuickBooksSalesRecord(context,record,records);
-    await appendClientAccountingActivity(context,tenant,record.id,'damage_deposit_invoice_created','Refundable damage-deposit invoice '+(state.invoiceDocNumber?'#'+state.invoiceDocNumber:state.invoiceId)+' created in QuickBooks for 
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate ' + (estimate?.DocNumber || estimate?.Id || '') + ' synchronized.',
+    await appendClientAccountingActivity(
+      context,
+      tenant,
+      record.id,
+      'damage_deposit_invoice_created',
+      'Refundable damage-deposit invoice '+(state.invoiceDocNumber?'#'+state.invoiceDocNumber:state.invoiceId)+' created in QuickBooks for $'+state.amount.toFixed(2)+'. This liability remains separate from event revenue.',
+    );
+    await appendEvent(context,{
+      type:'damage_deposit_invoice_created',
+      recordId:record.id,
+      quoteId:record.quoteId||'',
+      amount:state.amount,
+      detail:'QuickBooks refundable damage-deposit invoice '+(state.invoiceDocNumber||state.invoiceId)+' created.',
     });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-estimate') {
-    const state = quickBooksState(record);
-    if (!state.estimateId) return Response.json({ error: 'Create the QuickBooks estimate first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'estimate', state.estimateId, clean(record.customer.email, 240));
-    const estimate = sent?.Estimate;
-    if (estimate) {
-      state.estimateEmailStatus = String(estimate.EmailStatus || 'EmailSent');
-      state.estimateLastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'create-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const invoice = await createMilestoneInvoice(context, record, itemId, paymentId);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_created',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice ' + (invoice?.DocNumber || invoice?.Id || '') + ' created.',
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const state = quickBooksState(record);
-    const entry = state.invoices.find((row: any) => row.paymentId === paymentId);
-    if (!entry?.invoiceId) return Response.json({ error: 'Create the QuickBooks invoice first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'invoice', entry.invoiceId, clean(record.customer.email, 240));
-    const invoice = sent?.Invoice;
-    if (invoice) {
-      entry.emailStatus = String(invoice.EmailStatus || 'EmailSent');
-      entry.balance = Number(invoice.Balance ?? entry.balance ?? entry.amount ?? 0);
-      entry.lastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'sync-and-recheck') {
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    await refreshQuickBooksPaymentSnapshot(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    const accountingAudit = buildQuickBooksAccountingAudit(records);
-    const reconciliation = applyQuickBooksReconciliationHistory(records, accountingAudit, 'manual', [record.id]);
-    if (reconciliation.changedRecordIds.includes(record.id)) {
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
-    await appendEvent(context, {
-      type: 'quickbooks_accounting_recheck',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
-    });
-    return Response.json({ ok: true, record, quickbooks: state, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
-  }
-
-  if (action === 'sync-status') {
-    const beforeStage = record.stage;
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_status_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks balances and statuses synchronized.',
-    });
-    if (beforeStage !== 'booked' && record.stage === 'booked') {
-      await appendEvent(context, {
-        type: 'booked',
-        recordId: record.id,
-        quoteId: record.quoteId || '',
-        detail: 'Event booked after QuickBooks reservation-deposit invoice reached zero balance and both contract signatures were complete.',
-      });
-    }
-    return Response.json({ ok: true, record, quickbooks: state });
-  }
-
-  return Response.json({ error: 'Unknown QuickBooks action.' }, { status: 400 });
-};
-
-export const config: Config = {
-  path: [
-    '/api/admin/quickbooks',
-    '/api/admin/quickbooks/callback',
-  ],
-};
-+state.amount.toFixed(2)+'. This liability remains separate from event revenue.');
-    await appendEvent(context,{type:'damage_deposit_invoice_created',recordId:record.id,quoteId:record.quoteId||'',amount:state.amount,detail:'QuickBooks refundable damage-deposit invoice '+(state.invoiceDocNumber||state.invoiceId)+' created.'});
     return Response.json({ok:true,record,damageDeposit:state},{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -2464,12 +2373,17 @@ export const config: Config = {
     const damageSettings = await getQuickBooksDamageDepositSettings(context);
     const state = await syncDamageDepositInvoice(context, record, damageSettings, tenant);
     if (!state.invoiceId || state.invoiceBalance > 0.005) {
-      return Response.json({error:'The refundable damage deposit must be fully paid in QuickBooks before a refund or deduction can be posted.'},{status:409});
+      return Response.json({
+        error:'The refundable damage deposit must be fully paid in QuickBooks before a refund or deduction can be posted.',
+      },{status:409});
     }
-    if (state.refundTransactionId) return Response.json({ok:true,record,damageDeposit:state,reused:true});
+    if (state.refundTransactionId) {
+      return Response.json({ok:true,record,damageDeposit:state,reused:true},{headers:{'Cache-Control':'private, no-store'}});
+    }
     if (!damageSettings.liabilityAccountId || !damageSettings.refundBankAccountId) {
       return Response.json({error:'Configure the damage-deposit liability account and refund bank account first.'},{status:409});
     }
+
     state.deductionAmount=Math.min(state.amount,Math.max(0,roundMoney(payload?.deductionAmount ?? state.deductionAmount ?? 0)));
     state.deductionReason=clean(payload?.deductionReason ?? state.deductionReason,1000);
     if (state.deductionAmount > 0 && !state.deductionReason) {
@@ -2485,8 +2399,24 @@ export const config: Config = {
         TxnDate:today(),
         PrivateNote:'VenueLoom '+tenant.id+' · '+record.id+' · damage-deposit deduction · '+state.deductionReason,
         Line:[
-          { Amount:state.deductionAmount, DetailType:'JournalEntryLineDetail', Description:'Release refundable deposit liability for documented deduction', JournalEntryLineDetail:{PostingType:'Debit',AccountRef:{value:damageSettings.liabilityAccountId}} },
-          { Amount:state.deductionAmount, DetailType:'JournalEntryLineDetail', Description:state.deductionReason||'Damage deposit deduction', JournalEntryLineDetail:{PostingType:'Credit',AccountRef:{value:damageSettings.deductionIncomeAccountId}} },
+          {
+            Amount:state.deductionAmount,
+            DetailType:'JournalEntryLineDetail',
+            Description:'Release refundable deposit liability for documented deduction',
+            JournalEntryLineDetail:{
+              PostingType:'Debit',
+              AccountRef:{value:damageSettings.liabilityAccountId},
+            },
+          },
+          {
+            Amount:state.deductionAmount,
+            DetailType:'JournalEntryLineDetail',
+            Description:state.deductionReason||'Damage deposit deduction',
+            JournalEntryLineDetail:{
+              PostingType:'Credit',
+              AccountRef:{value:damageSettings.deductionIncomeAccountId},
+            },
+          },
         ],
       });
       state.deductionJournalEntryId=String(journalCreated?.JournalEntry?.Id||'');
@@ -2505,7 +2435,11 @@ export const config: Config = {
           Amount:state.refundAmount,
           DetailType:'AccountBasedExpenseLineDetail',
           Description:'Refundable security / damage deposit returned to client'+(state.deductionAmount>0?' after documented deductions':''),
-          AccountBasedExpenseLineDetail:{AccountRef:{value:damageSettings.liabilityAccountId},CustomerRef:{value:String(customer.Id)},BillableStatus:'NotBillable'},
+          AccountBasedExpenseLineDetail:{
+            AccountRef:{value:damageSettings.liabilityAccountId},
+            CustomerRef:{value:String(customer.Id)},
+            BillableStatus:'NotBillable',
+          },
         }],
       });
       state.refundTransactionId=String(purchaseCreated?.Purchase?.Id||'');
@@ -2513,242 +2447,32 @@ export const config: Config = {
     } else {
       state.refundTransactionId='DEDUCTION-FULL';
     }
+
     state.refundedAt=new Date().toISOString();
     state.status=state.deductionAmount>0?'refunded_with_deduction':'refunded';
     state.lastSyncedAt=state.refundedAt;
     records=await saveQuickBooksSalesRecord(context,record,records);
-    await appendClientAccountingActivity(context,tenant,record.id,'damage_deposit_refunded','Refundable damage deposit resolved. Returned 
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate ' + (estimate?.DocNumber || estimate?.Id || '') + ' synchronized.',
+    await appendClientAccountingActivity(
+      context,
+      tenant,
+      record.id,
+      'damage_deposit_refunded',
+      'Refundable damage deposit resolved. Returned $'+state.refundAmount.toFixed(2)
+        +(state.deductionAmount>0
+          ? ' and retained $'+state.deductionAmount.toFixed(2)+' for documented deductions: '+state.deductionReason+'.'
+          : '.')
+        +' QuickBooks refund transaction '+state.refundTransactionId+'.',
+    );
+    await appendEvent(context,{
+      type:'damage_deposit_refunded',
+      recordId:record.id,
+      quoteId:record.quoteId||'',
+      amount:state.refundAmount,
+      detail:'Refunded $'+state.refundAmount.toFixed(2)+' from the refundable damage deposit'
+        +(state.deductionAmount>0
+          ? ' with $'+state.deductionAmount.toFixed(2)+' retained for documented deductions.'
+          : '.'),
     });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-estimate') {
-    const state = quickBooksState(record);
-    if (!state.estimateId) return Response.json({ error: 'Create the QuickBooks estimate first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'estimate', state.estimateId, clean(record.customer.email, 240));
-    const estimate = sent?.Estimate;
-    if (estimate) {
-      state.estimateEmailStatus = String(estimate.EmailStatus || 'EmailSent');
-      state.estimateLastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'create-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const invoice = await createMilestoneInvoice(context, record, itemId, paymentId);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_created',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice ' + (invoice?.DocNumber || invoice?.Id || '') + ' created.',
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const state = quickBooksState(record);
-    const entry = state.invoices.find((row: any) => row.paymentId === paymentId);
-    if (!entry?.invoiceId) return Response.json({ error: 'Create the QuickBooks invoice first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'invoice', entry.invoiceId, clean(record.customer.email, 240));
-    const invoice = sent?.Invoice;
-    if (invoice) {
-      entry.emailStatus = String(invoice.EmailStatus || 'EmailSent');
-      entry.balance = Number(invoice.Balance ?? entry.balance ?? entry.amount ?? 0);
-      entry.lastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'sync-and-recheck') {
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    await refreshQuickBooksPaymentSnapshot(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    const accountingAudit = buildQuickBooksAccountingAudit(records);
-    const reconciliation = applyQuickBooksReconciliationHistory(records, accountingAudit, 'manual', [record.id]);
-    if (reconciliation.changedRecordIds.includes(record.id)) {
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
-    await appendEvent(context, {
-      type: 'quickbooks_accounting_recheck',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
-    });
-    return Response.json({ ok: true, record, quickbooks: state, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
-  }
-
-  if (action === 'sync-status') {
-    const beforeStage = record.stage;
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_status_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks balances and statuses synchronized.',
-    });
-    if (beforeStage !== 'booked' && record.stage === 'booked') {
-      await appendEvent(context, {
-        type: 'booked',
-        recordId: record.id,
-        quoteId: record.quoteId || '',
-        detail: 'Event booked after QuickBooks reservation-deposit invoice reached zero balance and both contract signatures were complete.',
-      });
-    }
-    return Response.json({ ok: true, record, quickbooks: state });
-  }
-
-  return Response.json({ error: 'Unknown QuickBooks action.' }, { status: 400 });
-};
-
-export const config: Config = {
-  path: [
-    '/api/admin/quickbooks',
-    '/api/admin/quickbooks/callback',
-  ],
-};
-+state.refundAmount.toFixed(2)+(state.deductionAmount>0?' and retained 
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate ' + (estimate?.DocNumber || estimate?.Id || '') + ' synchronized.',
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-estimate') {
-    const state = quickBooksState(record);
-    if (!state.estimateId) return Response.json({ error: 'Create the QuickBooks estimate first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'estimate', state.estimateId, clean(record.customer.email, 240));
-    const estimate = sent?.Estimate;
-    if (estimate) {
-      state.estimateEmailStatus = String(estimate.EmailStatus || 'EmailSent');
-      state.estimateLastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_estimate_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'create-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const invoice = await createMilestoneInvoice(context, record, itemId, paymentId);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_created',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice ' + (invoice?.DocNumber || invoice?.Id || '') + ' created.',
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'send-invoice') {
-    const paymentId = clean(payload?.paymentId, 80);
-    const state = quickBooksState(record);
-    const entry = state.invoices.find((row: any) => row.paymentId === paymentId);
-    if (!entry?.invoiceId) return Response.json({ error: 'Create the QuickBooks invoice first.' }, { status: 409 });
-    if (!record.customer?.email) return Response.json({ error: 'Client email is missing.' }, { status: 409 });
-    const sent: any = await qboSend(context, 'invoice', entry.invoiceId, clean(record.customer.email, 240));
-    const invoice = sent?.Invoice;
-    if (invoice) {
-      entry.emailStatus = String(invoice.EmailStatus || 'EmailSent');
-      entry.balance = Number(invoice.Balance ?? entry.balance ?? entry.amount ?? 0);
-      entry.lastSyncedAt = new Date().toISOString();
-    }
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_invoice_sent',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks invoice emailed to ' + record.customer.email,
-    });
-    return Response.json({ ok: true, record });
-  }
-
-  if (action === 'sync-and-recheck') {
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    await refreshQuickBooksPaymentSnapshot(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    const accountingAudit = buildQuickBooksAccountingAudit(records);
-    const reconciliation = applyQuickBooksReconciliationHistory(records, accountingAudit, 'manual', [record.id]);
-    if (reconciliation.changedRecordIds.includes(record.id)) {
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
-    await appendEvent(context, {
-      type: 'quickbooks_accounting_recheck',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
-    });
-    return Response.json({ ok: true, record, quickbooks: state, accountingAudit }, { headers: { 'Cache-Control': 'private, no-store' } });
-  }
-
-  if (action === 'sync-status') {
-    const beforeStage = record.stage;
-    const state = await syncQuickBooksAccountingStatus(context, record);
-    records = await saveQuickBooksSalesRecord(context, record, records);
-    await appendEvent(context, {
-      type: 'quickbooks_status_synced',
-      recordId: record.id,
-      quoteId: record.quoteId || '',
-      detail: 'QuickBooks balances and statuses synchronized.',
-    });
-    if (beforeStage !== 'booked' && record.stage === 'booked') {
-      await appendEvent(context, {
-        type: 'booked',
-        recordId: record.id,
-        quoteId: record.quoteId || '',
-        detail: 'Event booked after QuickBooks reservation-deposit invoice reached zero balance and both contract signatures were complete.',
-      });
-    }
-    return Response.json({ ok: true, record, quickbooks: state });
-  }
-
-  return Response.json({ error: 'Unknown QuickBooks action.' }, { status: 400 });
-};
-
-export const config: Config = {
-  path: [
-    '/api/admin/quickbooks',
-    '/api/admin/quickbooks/callback',
-  ],
-};
-+state.deductionAmount.toFixed(2)+' for documented deductions: '+state.deductionReason:'.')+' QuickBooks refund transaction '+state.refundTransactionId+'.');
-    await appendEvent(context,{type:'damage_deposit_refunded',recordId:record.id,quoteId:record.quoteId||'',amount:state.refundAmount,detail:'Refunded '+state.refundAmount.toFixed(2)+' from the refundable damage deposit'+(state.deductionAmount>0?' with '+state.deductionAmount.toFixed(2)+' retained for documented deductions.':'.')});
     return Response.json({ok:true,record,damageDeposit:state},{headers:{'Cache-Control':'private, no-store'}});
   }
 
