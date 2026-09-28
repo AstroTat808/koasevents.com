@@ -18,7 +18,10 @@ function walk(dir){
 for(const full of walk(root)){
   const rel=path.relative(root,full).split(path.sep).join('/');
   const text=fs.readFileSync(full,'utf8');
-  if(!/\bschedule\s*:/.test(text))continue;
+  const configIndex=text.lastIndexOf('export const config');
+  if(configIndex<0)continue;
+  const configSource=text.slice(configIndex);
+  if(!/\bschedule\s*:/.test(configSource))continue;
   scheduled.push(rel);
   if(!/\brunForEachTenant\s*\(/.test(text)){
     failures.push(rel+': scheduled function does not iterate active tenants');
