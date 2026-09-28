@@ -1,22 +1,19 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, signWellConfigured } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
 
 function clean(value: unknown, max = 500) {
   return String(value || '').trim().slice(0, max);
 }
 
-async function records(context: Context) {
-  const store = salesStoreFor(context);
-  return { store, list: ((await store.get('records/index', { type: 'json' })) || []) as any[] };
+async function records(context: Context,tenant:any) {
+  const store = tenantStore(context,'sales',tenant);
+  return { store, list: tenantRows(((await store.get('records/index', { type: 'json' })) || []) as any[],tenant) };
 }
 
 async function appendEvent(store: any, event: Record<string, unknown>) {
@@ -82,7 +79,7 @@ function publicRecord(record: any) {
     lineItems: proposal.lineItems || [],
     subtotal: Number(proposal.subtotal || 0),
     discountAmount: Number(proposal.discountAmount || 0),
-    taxRate: proposal.taxRate == null ? 4.712 : Number(proposal.taxRate),
+    taxRate: Number(proposal.taxRate || 0),
     taxAmount: Number(proposal.taxAmount || 0),
     total: Number(proposal.total || 0),
     depositAmount: Number(proposal.depositAmount || 0),
@@ -107,10 +104,11 @@ function publicRecord(record: any) {
 }
 
 export default async (req: Request, context: Context) => {
+  const tenant=resolveTenant(req);
   const token = clean(context.params.token, 80);
   if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) return Response.json({ error: 'Invalid proposal link.' }, { status: 400 });
 
-  const { store, list } = await records(context);
+  const { store, list } = await records(context,tenant);
   const record = list.find((entry: any) => entry?.kind === 'proposal' && entry?.proposal?.publicToken === token);
   if (!record) return Response.json({ error: 'Proposal not found.' }, { status: 404 });
 
@@ -120,6 +118,7 @@ export default async (req: Request, context: Context) => {
     proposal.status = 'expired';
     record.status = 'expired';
     record.updatedAt = new Date().toISOString();
+    Object.assign(record,stampTenant(record,tenant));
     await store.setJSON('records/' + record.id, record);
     await store.setJSON('records/index', list);
   }
