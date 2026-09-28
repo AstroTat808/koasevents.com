@@ -113,7 +113,8 @@ export type TenantContext = {
 
 const CONTROL_STORE = 'venueloom-control';
 
-function controlStore(context: Context) {
+function controlStore(context?: Context) {
+  if (!context) return getStore({ name: CONTROL_STORE, consistency: 'strong' });
   return context.deploy.context === 'production'
     ? getStore({ name: CONTROL_STORE, consistency: 'strong' })
     : getDeployStore({ name: CONTROL_STORE });
@@ -219,7 +220,7 @@ function organizationFromProfile(profile: TenantProfile): OrganizationRecord {
   };
 }
 
-export async function readOrganization(context: Context, profile: TenantProfile) {
+export async function readOrganization(context: Context | undefined, profile: TenantProfile) {
   const store = controlStore(context);
   const key = 'organizations/' + profile.id;
   const existing = await store.get(key, { type: 'json' }) as OrganizationRecord | null;
@@ -237,7 +238,7 @@ export async function readOrganization(context: Context, profile: TenantProfile)
 }
 
 export async function saveOrganization(
-  context: Context,
+  context: Context | undefined,
   profile: TenantProfile,
   updater: (current: OrganizationRecord) => OrganizationRecord,
 ) {
@@ -254,13 +255,13 @@ export async function saveOrganization(
   return next;
 }
 
-export async function readMembership(context: Context, tenantId: string, userId: string) {
+export async function readMembership(context: Context | undefined, tenantId: string, userId: string) {
   if (!tenantId || !userId) return null;
   return await controlStore(context).get('memberships/' + tenantId + '/' + userId, { type: 'json' }) as MembershipRecord | null;
 }
 
 export async function ensureMembership(
-  context: Context,
+  context: Context | undefined,
   profile: TenantProfile,
   user: any,
   role: string,
@@ -308,7 +309,7 @@ export async function ensureMembership(
   return membership;
 }
 
-export async function saveMembership(context: Context, membership: MembershipRecord) {
+export async function saveMembership(context: Context | undefined, membership: MembershipRecord) {
   const store = controlStore(context);
   const now = new Date().toISOString();
   const next = { ...membership, updatedAt: now };
@@ -319,13 +320,13 @@ export async function saveMembership(context: Context, membership: MembershipRec
   return next;
 }
 
-export async function listMemberships(context: Context, tenantId: string) {
+export async function listMemberships(context: Context | undefined, tenantId: string) {
   const rows = ((await controlStore(context).get('memberships/' + tenantId + '/index', { type: 'json' })) || []) as MembershipRecord[];
   return rows.filter((row) => row.tenantId === tenantId && row.status !== 'removed');
 }
 
 export async function buildTenantContext(
-  context: Context,
+  context: Context | undefined,
   profile: TenantProfile,
   user: any,
   role: string,
