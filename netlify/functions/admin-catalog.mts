@@ -533,7 +533,16 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
   const actions:Array<{catalogItemId:string;action:string;detail:string}>=[];
 
   for(const item of next){
+    const expected=seedById.get(item.id);
     const publicPrice=expectedWebsitePrice(item.id,seedById);
+    if(expected && (item.group!==expected.group || item.category!==expected.category)){
+      const before=item.group+'/'+item.category;
+      item.group=expected.group;
+      item.category=expected.category;
+      item.quickBooksType=expected.category==='rental'?'NonInventory':'Service';
+      item.updatedAt=new Date().toISOString();
+      actions.push({catalogItemId:item.id,action:'category',detail:'Aligned catalog classification from '+before+' to '+item.group+'/'+item.category+' using the website catalog source.'});
+    }
     let live=item.quickBooksItemId?qboById.get(item.quickBooksItemId):null;
     if(!live){
       const candidates=qboCandidatesForItem(item,qboByName);
@@ -571,7 +580,7 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
   const saved=await saveQuickBooksCatalog(
     context,
     next.sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
-    {actor,source:'catalog-audit-reconcile',note:'Applied safe Catalog Manager ↔ QuickBooks mapping and published-price reconciliation. GET/taxability differences remain review-only.'},
+    {actor,source:'catalog-audit-reconcile',note:'Applied safe website classification, Catalog Manager ↔ QuickBooks mapping, and conflict-free QuickBooks price reconciliation. GET/taxability differences remain review-only.'},
   );
   return {catalog:saved,actions,audit:await runCatalogAudit(context,saved)};
 }
