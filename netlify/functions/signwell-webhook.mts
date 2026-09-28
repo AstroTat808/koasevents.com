@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore,getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import {
   getCompletedPdf,
   eventStoreFor,
@@ -11,7 +12,7 @@ import {
 } from './_shared/signwell';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function sales(context:Context){return context.deploy.context==='production'?getStore({name:'koa-sales',consistency:'strong'}):getDeployStore({name:'koa-sales'});}
+function sales(context:Context){return tenantStore(context,'sales',resolveTenant());}
 function clean(v:unknown,max=1000){return String(v??'').trim().slice(0,max);}
 function id(){return 'EVT-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function appendEvent(context:Context,event:any){const s=sales(context);const current:any[]=(await s.get('analytics/events/index',{type:'json'}))||[];await s.setJSON('analytics/events/index',[{id:id(),createdAt:new Date().toISOString(),...event},...current].slice(0,10000));}
@@ -22,6 +23,7 @@ function recipients(payload:any){return payload?.data?.object?.recipients||paylo
 export default async(req:Request,context:Context)=>{
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
 
+  const tenant=resolveTenant(req);
   const payload:any=await req.json().catch(()=>null);
   if(!payload)return new Response('Invalid JSON',{status:400});
 
@@ -31,7 +33,7 @@ export default async(req:Request,context:Context)=>{
   }
 
   if(await signWellWebhookReplaySeen(context,verification)){
-    return new Response(null,{status:200,headers:{'Cache-Control':'no-store','X-Koa-SignWell-Replay':'duplicate'}});
+    return new Response(null,{status:200,headers:{'Cache-Control':'no-store','X-VenueLoom-SignWell-Replay':'duplicate'}});
   }
 
   const name=eventName(payload);
@@ -45,7 +47,7 @@ export default async(req:Request,context:Context)=>{
     ]);
     return new Response(null,{
       status:204,
-      headers:{'Cache-Control':'no-store','X-Koa-Synthetic-Check':'signwell-webhook'},
+      headers:{'Cache-Control':'no-store','X-VenueLoom-Synthetic-Check':'signwell-webhook'},
     });
   }
 
@@ -61,8 +63,8 @@ export default async(req:Request,context:Context)=>{
     return new Response(null,{status:200,headers:{'Cache-Control':'no-store'}});
   }
 
-  const store=sales(context);
-  const records:any[]=(await store.get('records/index',{type:'json'}))||[];
+  const store=tenantStore(context,'sales',tenant);
+  const records:any[]=tenantRows(((await store.get('records/index',{type:'json'}))||[]) as any[],tenant);
   const record=records.find(r=>String(r?.booking?.contract?.signwell?.documentId||'')===documentId);
   if(!record){
     await recordSignWellWebhookReplay(context,verification);
@@ -88,7 +90,7 @@ export default async(req:Request,context:Context)=>{
     sw.status='completed';
     sw.completedAt=now;
     const rs=Array.isArray(recipients(payload))?recipients(payload):[];
-    const client=rs[0]||{}, koa=rs[1]||{};
+    const client=rs[0]||{}, venueSigner=rs[1]||{};
     record.booking.contract.status='signed';
     record.booking.contract.signature={
       name:clean(client.name||record.customer?.name,180),
@@ -96,8 +98,8 @@ export default async(req:Request,context:Context)=>{
       acknowledgement:'Signed through SignWell.',
     };
     record.booking.contract.koaSignature={
-      name:clean(koa.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||'Koa’s Events',180),
-      signedAt:clean(koa.signed_at||koa.completed_at||now,80),
+      name:clean(venueSigner.name||Netlify.env.get('SIGNWELL_KOA_SIGNER_NAME')||tenant.displayName,180),
+      signedAt:clean(venueSigner.signed_at||venueSigner.completed_at||now,80),
     };
     record.booking.status=record?.accounting?.quickbooks?.depositPaid?'booked':'deposit_pending';
     if(record?.accounting?.quickbooks?.depositPaid){
@@ -129,6 +131,7 @@ export default async(req:Request,context:Context)=>{
   }
 
   record.updatedAt=now;
+  Object.assign(record,stampTenant(record,tenant));
   const next=records.map(r=>r.id===record.id?record:r);
   await store.setJSON('records/'+record.id,record);
   await store.setJSON('records/index',next.slice(0,1500));
