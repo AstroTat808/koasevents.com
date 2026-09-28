@@ -73,6 +73,12 @@ export async function resolveTenantAsync(req?: Request, context?: Context): Prom
     if (dynamic) return profileFromOrganization(dynamic);
   }
 
+  const host = requestHost(req);
+  const staticByHost = tenantByHost(host);
+  if (staticByHost) return staticByHost;
+  const dynamicByHost = await readOrganizationByHost(context, host);
+  if (dynamicByHost) return profileFromOrganization(dynamicByHost);
+
   const configuredId = clean(Netlify.env.get('VENUELOOM_DEFAULT_TENANT_ID'), 120);
   if (configuredId) {
     const configured = tenantById(configuredId);
@@ -81,12 +87,6 @@ export async function resolveTenantAsync(req?: Request, context?: Context): Prom
     if (dynamic) return profileFromOrganization(dynamic);
     throw new Error('Configured VenueLoom tenant was not found: ' + configuredId);
   }
-
-  const host = requestHost(req);
-  const staticByHost = tenantByHost(host);
-  if (staticByHost) return staticByHost;
-  const dynamicByHost = await readOrganizationByHost(context, host);
-  if (dynamicByHost) return profileFromOrganization(dynamicByHost);
 
   if (tenantProfiles.length === 1) return tenantProfiles[0];
   throw new Error('Unable to resolve VenueLoom tenant for this request.');
