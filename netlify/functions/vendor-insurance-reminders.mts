@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, runForEachTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { sendVendorEmail } from './_shared/vendor-email.ts';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
@@ -11,7 +11,7 @@ function daysUntil(date:unknown){
   const target=Date.parse(raw+'T00:00:00Z');const today=Date.parse(new Date(Date.now()-10*60*60*1000).toISOString().slice(0,10)+'T00:00:00Z');
   return Math.ceil((target-today)/DAY);
 }
-export default async(_req:Request,context:Context)=>{
+async function runTenantJob(_req:Request,context:Context){
   if(context.deploy.context!=='production')return;
   if(!(await shouldRunScheduledJob(context,'vendor-insurance-reminders')))return;
   const store=tenantStoreFor(context,resolveTenant(),'vendors');
@@ -37,5 +37,10 @@ export default async(_req:Request,context:Context)=>{
     insurance.reminders={...sent,[key]:{sentAt:now,messageId:result.id||'',sent:result.sent}};changed=true;
   }
   if(changed)await store.setJSON('vendors/index',vendors.slice(0,2000));
+}
+export default async (req:Request, context:Context) => {
+  if (context.deploy.context !== 'production') return;
+  return runForEachTenant(context, () => runTenantJob(req, context));
 };
+
 export const config:Config={schedule:'0 18 * * *'};
