@@ -1,7 +1,7 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { Buffer } from 'node:buffer';
-import { resolveTenant, tenantBlobStoreName } from './tenant';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
 type StoredConnection = {
   realmId: string;
@@ -23,11 +23,7 @@ type TokenSet = {
 };
 
 function integrationStore(context: Context) {
-  const tenant = resolveTenant();
-  const name = tenantBlobStoreName(tenant, 'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency: 'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, resolveTenant(), 'integrations');
 }
 
 function env(...names: string[]) {
