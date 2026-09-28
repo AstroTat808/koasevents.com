@@ -76,6 +76,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section data-panel="accounting" class="mt-5 hidden grid gap-5">
           <div data-accounting-hero class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7"></div>
           <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Accounting authority map</p>
+                <h2 class="display mt-2 text-3xl">Source of Truth</h2>
+                <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">These badges show which system controls each financial value. QuickBooks mirrors CRM proposal pricing, while issued invoices and payment activity remain authoritative in QuickBooks.</p>
+              </div>
+              <button data-repair-preview type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Preview Accounting Repair</button>
+            </div>
+            <div data-source-truth class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5"></div>
+            <div data-repair-panel class="mt-5 hidden"></div>
+          </div>
+          <div class="rounded-[1.5rem] bg-white p-6 shadow-[var(--shadow-soft)] sm:p-7">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p class="eyebrow text-[var(--koa-clay)]">Line-by-line reconciliation</p>
@@ -233,6 +245,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     let record=null;
     let crmPayload=null;
     let session=null;
+    let repairPreview=null;
 
     const money=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));
     const esc=(value)=>String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
@@ -263,6 +276,63 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function card(label,value,detail=''){
       return '<div class="rounded-xl bg-[var(--koa-sand)]/55 p-4"><p class="text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="mt-1 block break-words text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong>'+(detail?'<p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">'+esc(detail)+'</p>':'')+'</div>';
+    }
+
+    function sourceTruthCard(label,value,source,detail=''){
+      const badgeClass=source==='QuickBooks'
+        ? 'bg-sky-100 text-sky-800'
+        : source==='CRM'
+          ? 'bg-emerald-100 text-emerald-800'
+          : 'bg-amber-100 text-amber-900';
+      return '<div class="rounded-xl border border-[var(--koa-line)] p-4"><div class="flex flex-wrap items-center justify-between gap-2"><p class="text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><span class="rounded-full px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+badgeClass+'">Source of truth · '+esc(source)+'</span></div><strong class="mt-3 block break-words text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong>'+(detail?'<p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">'+esc(detail)+'</p>':'')+'</div>';
+    }
+
+    function repairLines(lines){
+      const rows=Array.isArray(lines)?lines:[];
+      if(!rows.length)return '<p class="text-xs text-[var(--koa-ink)]/45">No estimate lines.</p>';
+      return '<div class="mt-2 grid gap-1">'+rows.map((line)=>'<div class="flex flex-wrap justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-xs"><span>'+esc(line.description||'Line item')+(line.taxCode?' · tax '+esc(line.taxCode):'')+'</span><strong>'+money(line.amount||0)+'</strong></div>').join('')+'</div>';
+    }
+
+    function renderRepairPreview(preview){
+      repairPreview=preview||null;
+      const panel=document.querySelector('[data-repair-panel]');
+      if(!panel)return;
+      panel.classList.remove('hidden');
+      if(!preview){
+        panel.innerHTML='<div class="rounded-xl bg-red-50 p-4 text-sm text-red-800">Repair preview could not be loaded.</div>';
+        return;
+      }
+      if(preview.noChangesNeeded){
+        panel.innerHTML='<div class="rounded-xl bg-emerald-50 p-4 text-sm font-semibold text-emerald-900">No repair is needed. The current CRM and QuickBooks accounting state is already reconciled.</div>';
+        return;
+      }
+
+      const changes=Array.isArray(preview.changes)?preview.changes:[];
+      const blocked=Array.isArray(preview.blockedIssues)?preview.blockedIssues:[];
+      const changeHtml=changes.length?changes.map((change)=>'<article class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-[var(--koa-forest)]">'+esc(change.target||'QuickBooks')+'</strong><span class="rounded-full bg-red-100 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.06em] text-red-800">'+esc(change.type||'change')+'</span></div><div class="mt-4 grid gap-3 lg:grid-cols-2"><div class="rounded-xl bg-red-50 p-3"><p class="text-[.55rem] font-black uppercase tracking-[.07em] text-red-700">Before</p><p class="mt-1 text-sm font-bold">'+(change.before?.exists===false?'Not created':money(change.before?.total||0))+'</p>'+repairLines(change.before?.lines)+'</div><div class="rounded-xl bg-emerald-50 p-3"><p class="text-[.55rem] font-black uppercase tracking-[.07em] text-emerald-800">After approval</p><p class="mt-1 text-sm font-bold">'+money(change.after?.total||0)+'</p>'+repairLines(change.after?.lines)+(change.after?.taxHandling?'<p class="mt-2 text-xs leading-5 text-emerald-900">'+esc(change.after.taxHandling)+'</p>':'')+'</div></div></article>').join(''):'<div class="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">No safe QuickBooks write is proposed for the current mismatch.</div>';
+      const blockedHtml=blocked.length?'<div class="rounded-xl border border-amber-200 bg-amber-50 p-4"><p class="text-xs font-black uppercase tracking-[.07em] text-amber-900">Not automatically changed</p><div class="mt-2 grid gap-2">'+blocked.map((issue)=>'<p class="text-sm text-amber-950"><strong>'+esc(issue.label||issue.code||'Issue')+'</strong> · '+(issue.expected!=null?'Expected '+esc(issue.expected)+' · ':'')+(issue.actual!=null?'Current '+esc(issue.actual):'requires review')+'</p>').join('')+'</div></div>':'';
+      const approvalHtml=preview.canApply?'<label class="flex items-start gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/55 p-4 text-sm"><input data-repair-approve type="checkbox" class="mt-1 h-4 w-4"><span><strong class="text-[var(--koa-forest)]">I approve the QuickBooks changes shown above.</strong><span class="mt-1 block text-xs leading-5 text-[var(--koa-ink)]/50">The server will validate that CRM and QuickBooks have not changed since this preview, apply only the approved repair, run Sync & Recheck, and write the before/after result to Client Workspace Activity.</span></span></label><button data-repair-apply type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.08em] text-white">Apply Approved Repair</button>':'<p class="rounded-xl bg-slate-100 p-4 text-sm text-slate-700">This preview cannot be applied automatically. Resolve the listed configuration or non-safe accounting issue first.</p>';
+      panel.innerHTML='<div class="rounded-[1.25rem] border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-5"><div class="flex flex-wrap items-center justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Approval required</p><h3 class="display mt-1 text-2xl">Accounting repair preview</h3></div><p class="text-xs text-[var(--koa-ink)]/45">Preview '+esc(preview.previewId||'')+' · expires '+esc(when(preview.expiresAt))+'</p></div><div class="mt-4 grid gap-3">'+changeHtml+blockedHtml+approvalHtml+'</div></div>';
+
+      panel.querySelector('[data-repair-apply]')?.addEventListener('click',async()=>{
+        const approved=Boolean(panel.querySelector('[data-repair-approve]')?.checked);
+        if(!approved){
+          message.textContent='Check the approval box before applying the accounting repair.';
+          return;
+        }
+        const button=panel.querySelector('[data-repair-apply]');
+        button.disabled=true;
+        message.textContent='Applying approved QuickBooks repair and running Sync & Recheck…';
+        try{
+          const result=await qboPost({action:'apply-accounting-repair',previewId:preview.previewId,approved:true});
+          message.textContent=result.resolved?'Accounting repair completed. CRM and QuickBooks are reconciled.':'Accounting repair completed. Remaining issues still need review.';
+          repairPreview=null;
+          await load('accounting');
+        }catch(error){
+          button.disabled=false;
+          message.textContent=error.message||'Unable to apply the accounting repair.';
+        }
+      });
     }
 
     function activeTab(){
@@ -332,10 +402,31 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderAccounting(){
       const proposal=record.proposal||{};
       const qbo=record.accounting?.quickbooks||{};
+      const invoices=Array.isArray(qbo.invoices)?qbo.invoices:[];
       const difference=Number(qbo.estimateTotal||0)-Number(proposal.total||0);
       const reconciled=Math.abs(difference)<0.01;
+      const issuedTotal=invoices.reduce((sum,invoice)=>sum+Number(invoice.total||invoice.amount||0),0);
+      const paymentsReceived=invoices.reduce((sum,invoice)=>{
+        const total=Number(invoice.total||invoice.amount||0);
+        const balance=Number(invoice.balance??total);
+        return sum+Math.max(0,total-balance);
+      },0);
+      const remainingBalance=Math.max(0,Number(proposal.total||0)-paymentsReceived);
 
-      document.querySelector('[data-accounting-hero]').innerHTML='<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p class="eyebrow '+(reconciled?'text-[var(--koa-forest)]':'text-red-700')+'">'+(reconciled?'Reconciled':'Accounting reconciliation warning')+'</p><h2 class="display mt-2 text-4xl">'+money(proposal.total||0)+' CRM · '+money(qbo.estimateTotal||0)+' QuickBooks</h2><p class="mt-2 text-sm '+(reconciled?'text-[var(--koa-ink)]/55':'text-red-700')+'">Difference '+money(difference)+' · Estimate '+esc(qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'not linked')+'</p></div><div class="grid grid-cols-2 gap-2 text-sm">'+card('CRM subtotal',money(proposal.subtotal||0))+card('CRM tax',money(proposal.taxAmount||0))+card('Discount',money(proposal.discountAmount||0))+card('QBO total',money(qbo.estimateTotal||0))+'</div></div>';
+      document.querySelector('[data-accounting-hero]').innerHTML='<div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between"><div><p class="eyebrow '+(reconciled?'text-[var(--koa-forest)]':'text-red-700')+'">'+(reconciled?'Reconciled':'Accounting reconciliation warning')+'</p><h2 class="display mt-2 text-4xl">'+money(proposal.total||0)+' CRM · '+money(qbo.estimateTotal||0)+' QuickBooks</h2><p class="mt-2 text-sm '+(reconciled?'text-[var(--koa-ink)]/55':'text-red-700')+'">Difference '+money(difference)+' · Estimate '+esc(qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'not linked')+'</p></div><div class="grid grid-cols-2 gap-2 text-sm">'+card('CRM subtotal',money(proposal.subtotal||0))+card('CRM tax',money(proposal.taxAmount||0),'CRM-calculated tax')+card('Discount',money(proposal.discountAmount||0))+card('QBO total',money(qbo.estimateTotal||0),'Controlled mirror of CRM proposal')+'</div></div>';
+
+      document.querySelector('[data-source-truth]').innerHTML=
+        sourceTruthCard('CRM tax',money(proposal.taxAmount||0),'CRM','CRM calculates proposal tax and sends it to QuickBooks as an explicit non-taxable line.')+
+        sourceTruthCard('QuickBooks estimate',qbo.estimateId?money(qbo.estimateTotal||0):'Not linked','CRM','CRM proposal pricing controls the estimate; QuickBooks is the accounting mirror.')+
+        sourceTruthCard('Invoices',invoices.length+' issued','QuickBooks','Issued invoice totals, document status and open invoice balances are controlled in QuickBooks. Issued total '+money(issuedTotal)+'.')+
+        sourceTruthCard('Payments',money(paymentsReceived),'QuickBooks','Actual payment activity and paid invoice amounts come from QuickBooks.')+
+        sourceTruthCard('Client balance',money(remainingBalance),'CRM + QuickBooks','CRM supplies the contract total; QuickBooks supplies payments. The workspace reconciles both.');
+
+      const repairButton=document.querySelector('[data-repair-preview]');
+      if(repairButton){
+        repairButton.disabled=!record.proposal;
+        repairButton.textContent=reconciled?'Preview Accounting Repair':'Repair Accounting Mismatch';
+      }
 
       const crmLines=(proposal.lineItems||[]).map((line,index)=>({
         id:line.id||'crm-'+index,
@@ -363,11 +454,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         document.querySelector('[data-line-diff]').innerHTML='<table class="min-w-[880px] w-full text-sm"><thead><tr class="border-b border-[var(--koa-line)] text-left text-[.58rem] uppercase tracking-[.08em] text-[var(--koa-ink)]/45"><th class="pb-3">Line</th><th class="pb-3">CRM qty × unit</th><th class="pb-3 text-right">CRM</th><th class="pb-3">QuickBooks qty × unit</th><th class="pb-3 text-right">QBO</th><th class="pb-3 text-right">Difference</th></tr></thead><tbody>'+rows.map((row)=>'<tr class="border-b border-[var(--koa-line)]/70"><td class="py-3 pr-4 font-semibold">'+esc(row.crm?.description||row.qbo?.description||'Unmatched line')+'</td><td class="py-3 pr-4">'+(row.crm?esc(row.crm.quantity)+' × '+money(row.crm.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(row.crm?money(row.crm.amount):'—')+'</td><td class="py-3 pr-4">'+(row.qbo?esc(row.qbo.quantity||1)+' × '+money(row.qbo.unitPrice):'—')+'</td><td class="py-3 pr-4 text-right">'+(row.qbo?money(row.qbo.amount):'—')+'</td><td class="py-3 text-right font-bold '+(Math.abs(row.delta)>=0.01?'text-red-700':'text-[var(--koa-forest)]')+'">'+money(row.delta)+'</td></tr>').join('')+'</tbody></table>';
       }
 
-      const invoices=Array.isArray(qbo.invoices)?qbo.invoices:[];
       document.querySelector('[data-qbo-docs]').innerHTML=
         card('Customer',qbo.customerDisplayName||'Not linked',qbo.customerId?'QBO #'+qbo.customerId:'')+
-        card('Estimate',qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'Not linked',money(qbo.estimateTotal||0))+
-        invoices.map((invoice)=>card('Invoice '+(invoice.docNumber?'#'+invoice.docNumber:''),money(invoice.total||invoice.amount||0),'Balance '+money(invoice.balance||0)+' · '+(invoice.emailStatus||''))).join('')+
+        card('Estimate',qbo.estimateDocNumber?'#'+qbo.estimateDocNumber:'Not linked',money(qbo.estimateTotal||0)+' · CRM-controlled mirror')+
+        invoices.map((invoice)=>card('Invoice '+(invoice.docNumber?'#'+invoice.docNumber:''),money(invoice.total||invoice.amount||0),'QuickBooks source of truth · Balance '+money(invoice.balance||0)+' · '+(invoice.emailStatus||''))).join('')+
         card('Last synced',when(qbo.lastSyncedAt||qbo.estimateLastSyncedAt));
     }
 
@@ -838,8 +928,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    async function previewRepair(){
+      if(!record?.proposal)return;
+      const button=document.querySelector('[data-repair-preview]');
+      if(button)button.disabled=true;
+      message.textContent='Building a live, read-only accounting repair preview…';
+      try{
+        const result=await qboPost({action:'preview-accounting-repair',recordId:record.id});
+        renderRepairPreview(result.preview);
+        message.textContent=result.preview?.noChangesNeeded?'No accounting repair is needed.':'Review the proposed QuickBooks changes below, then approve them if they are correct.';
+      }catch(error){
+        message.textContent=error.message||'Unable to preview the accounting repair.';
+      }finally{
+        if(button)button.disabled=false;
+      }
+    }
+
     document.querySelector('[data-sync]')?.addEventListener('click',sync);
     document.querySelector('[data-sync-2]')?.addEventListener('click',sync);
+    document.querySelector('[data-repair-preview]')?.addEventListener('click',previewRepair);
 
     load();
   </script>

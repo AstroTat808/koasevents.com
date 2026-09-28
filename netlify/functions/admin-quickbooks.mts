@@ -3,6 +3,8 @@ import { getDeployStore, getStore } from '@netlify/blobs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { sendAccountingTransitionAlerts } from './_shared/accounting-alerts';
 import { clientTenantProfile, resolveTenant, tenantBlobStoreName, tenantTaxDefaults } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
+import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
@@ -126,50 +128,7 @@ function quickBooksState(record: any) {
 }
 
 function proposalLines(record: any, itemId: string) {
-  const proposal = record.proposal || {};
-  const raw = Array.isArray(proposal.lineItems) ? proposal.lineItems : [];
-  const lines = raw.length ? raw.map((line: any) => {
-    const qty = Math.max(1, Number(line.quantity || 1));
-    const amount = Number(line.amount || (qty * Number(line.unitPrice || 0)) || 0);
-    const mappedItemId = clean(line.quickBooksItemId, 80) || itemId;
-    return {
-      Amount: amount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(line.description, 400),
-      SalesItemLineDetail: {
-        ItemRef: { value: mappedItemId },
-        Qty: qty,
-        UnitPrice: qty ? Math.round((amount / qty) * 100) / 100 : amount,
-        TaxCodeRef: { value: 'NON' },
-      },
-    };
-  }) : [{
-    Amount: Number(proposal.subtotal || proposal.total || 0),
-    DetailType: 'SalesItemLineDetail',
-    Description: 'CRM proposal ' + record.id,
-    SalesItemLineDetail: {
-      ItemRef: { value: itemId },
-      Qty: 1,
-      UnitPrice: Number(proposal.subtotal || proposal.total || 0),
-      TaxCodeRef: { value: 'NON' },
-    },
-  }];
-
-  const taxAmount = Math.max(0, Number(proposal.taxAmount || 0));
-  if (taxAmount > 0) {
-    lines.push({
-      Amount: taxAmount,
-      DetailType: 'SalesItemLineDetail',
-      Description: clean(proposal.taxLabel || 'Tax', 400),
-      SalesItemLineDetail: {
-        ItemRef: { value: itemId },
-        Qty: 1,
-        UnitPrice: taxAmount,
-        TaxCodeRef: { value: 'NON' },
-      },
-    });
-  }
-  return lines;
+  return buildQuickBooksEstimateLines(record, itemId);
 }
 
 async function ensureCustomer(context: Context, record: any) {
@@ -386,6 +345,7 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
           amount: Number(line?.Amount || 0),
           itemId: String(line?.SalesItemLineDetail?.ItemRef?.value || ''),
           itemName: String(line?.SalesItemLineDetail?.ItemRef?.name || ''),
+          taxCode: String(line?.SalesItemLineDetail?.TaxCodeRef?.value || ''),
         }));
       state.estimateDiscount = Number(estimate.DiscountAmt || 0);
       state.estimateLastSyncedAt = new Date().toISOString();
@@ -625,6 +585,256 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
   };
 }
 
+
+function roundMoney(value: unknown) {
+  return Math.round(Number(value || 0) * 100) / 100;
+}
+
+function repairLineView(lines: any[]) {
+  return (Array.isArray(lines) ? lines : []).map((line: any) => ({
+    description: clean(line?.Description ?? line?.description, 400) || 'Line item',
+    quantity: Number(line?.SalesItemLineDetail?.Qty ?? line?.quantity ?? 1),
+    unitPrice: roundMoney(line?.SalesItemLineDetail?.UnitPrice ?? line?.unitPrice ?? 0),
+    amount: roundMoney(line?.Amount ?? line?.amount ?? 0),
+    itemId: clean(line?.SalesItemLineDetail?.ItemRef?.value ?? line?.itemId, 80),
+    taxCode: clean(line?.SalesItemLineDetail?.TaxCodeRef?.value ?? line?.taxCode, 40).toUpperCase(),
+  }));
+}
+
+function accountingRepairState(record: any, itemId: string) {
+  const qbo = quickBooksState(record);
+  const expectedLines = proposalLines(record, itemId);
+  return {
+    proposalTotal: roundMoney(record?.proposal?.total || 0),
+    proposalDiscount: roundMoney(record?.proposal?.discountAmount || 0),
+    expectedLines: quickBooksEstimateLineFingerprint(expectedLines),
+    estimateId: String(qbo.estimateId || ''),
+    estimateDocNumber: String(qbo.estimateDocNumber || ''),
+    estimateTotal: qbo.estimateId ? roundMoney(qbo.estimateTotal || 0) : null,
+    estimateLines: quickBooksEstimateLineFingerprint(qbo.estimateLines || []),
+  };
+}
+
+function accountingRepairFingerprint(record: any, itemId: string) {
+  return JSON.stringify(accountingRepairState(record, itemId));
+}
+
+function repairPreviewKey(previewId: string) {
+  return 'quickbooks/accounting-repair-previews/' + clean(previewId, 120);
+}
+
+async function appendClientAccountingActivity(
+  context: Context,
+  tenant: any,
+  recordId: string,
+  type: string,
+  detail: string,
+) {
+  const store = tenantStoreFor(context, tenant, 'crm');
+  const current = ((await store.get('activity/index', { type:'json' })) || []) as any[];
+  const row = {
+    id: 'ACT-' + idSuffix(),
+    recordId,
+    type,
+    detail: clean(detail, 800),
+    createdAt: new Date().toISOString(),
+  };
+  await store.setJSON('activity/index', [row, ...current].slice(0, 5000));
+  return row;
+}
+
+async function buildAccountingRepairPreview(
+  context: Context,
+  tenant: any,
+  record: any,
+  records: any[],
+  itemId: string,
+  actor: string,
+) {
+  // Live reads only: the preview does not write to QuickBooks or save the refreshed mirror.
+  await syncQuickBooksAccountingStatus(context, record);
+  await refreshQuickBooksPaymentSnapshot(context, record);
+
+  const accountingAudit = buildQuickBooksAccountingAudit(records);
+  const auditRow = accountingAudit.rows.find((row: any) => row.recordId === record.id) || {
+    recordId: record.id,
+    clientName: clean(record?.customer?.name || record.id, 180),
+    proposalTotal: roundMoney(record?.proposal?.total || 0),
+    issues: [],
+    reconciled: true,
+  };
+  const state = quickBooksState(record);
+  const expectedLines = proposalLines(record, itemId);
+  const expectedLineView = repairLineView(expectedLines);
+  const currentLineView = repairLineView(state.estimateLines || []);
+  const expectedFingerprint = quickBooksEstimateLineFingerprint(expectedLines);
+  const currentFingerprint = quickBooksEstimateLineFingerprint(state.estimateLines || []);
+  const proposalTotal = roundMoney(record?.proposal?.total || 0);
+  const estimateTotal = state.estimateId ? roundMoney(state.estimateTotal || 0) : null;
+  const estimateNeedsRepair = Boolean(
+    !state.estimateId
+    || Math.abs(Number(estimateTotal || 0) - proposalTotal) >= 0.01
+    || expectedFingerprint !== currentFingerprint
+  );
+
+  const changes: any[] = [];
+  if (estimateNeedsRepair) {
+    changes.push({
+      id: 'estimate',
+      writesQuickBooks: true,
+      type: state.estimateId ? 'update_estimate' : 'create_estimate',
+      target: state.estimateId
+        ? 'QuickBooks estimate ' + (state.estimateDocNumber ? '#' + state.estimateDocNumber : state.estimateId)
+        : 'QuickBooks estimate',
+      before: {
+        exists: Boolean(state.estimateId),
+        estimateId: String(state.estimateId || ''),
+        docNumber: String(state.estimateDocNumber || ''),
+        total: estimateTotal,
+        lines: currentLineView,
+      },
+      after: {
+        total: proposalTotal,
+        discountAmount: roundMoney(record?.proposal?.discountAmount || 0),
+        lines: expectedLineView,
+        taxHandling: 'CRM-calculated tax stays as an explicit NON-taxable line; QuickBooks adds no tax on top.',
+      },
+    });
+  }
+
+  const safeCodes = new Set(['estimate_total','estimate_missing','stored_balance']);
+  const blockedIssues = (auditRow.issues || []).filter((issue: any) => !safeCodes.has(String(issue?.code || '')));
+  const missingServiceItem = changes.some((change: any) => change?.writesQuickBooks) && !clean(itemId, 80);
+  if (missingServiceItem) {
+    blockedIssues.push({
+      code: 'service_item_missing',
+      label: 'QuickBooks service item mapping',
+      expected: 'Configured service item',
+      actual: 'Not configured',
+      delta: null,
+    });
+  }
+
+  const previewId = 'ARP-' + idSuffix() + '-' + Date.now().toString(36).toUpperCase();
+  const createdAt = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+  const preview = {
+    previewId,
+    recordId: record.id,
+    clientName: clean(record?.customer?.name || record.id, 180),
+    actor,
+    createdAt,
+    expiresAt,
+    beforeFingerprint: accountingRepairFingerprint(record, itemId),
+    beforeAudit: auditRow,
+    changes,
+    blockedIssues,
+    postRepairSteps: [
+      'Refresh the QuickBooks estimate, invoice balances and payment snapshot.',
+      'Run the accounting reconciliation again.',
+      'Record the approved repair and before/after result in Client Workspace Activity.',
+    ],
+    canApply: changes.length > 0 && !missingServiceItem,
+    noChangesNeeded: changes.length === 0 && (auditRow.issues || []).length === 0,
+  };
+  await integrationStoreFor(context).setJSON(repairPreviewKey(previewId), preview);
+  return { preview, accountingAudit };
+}
+
+async function applyAccountingRepair(
+  context: Context,
+  tenant: any,
+  previewId: string,
+  approved: boolean,
+  actor: string,
+) {
+  if (!approved) throw new Error('Explicit approval is required before changing QuickBooks.');
+  const integrationStore = integrationStoreFor(context);
+  const preview: any = await integrationStore.get(repairPreviewKey(previewId), { type:'json' });
+  if (!preview?.previewId) throw new Error('Repair preview not found. Preview the repair again.');
+  if (Date.parse(String(preview.expiresAt || '')) <= Date.now()) {
+    await integrationStore.delete(repairPreviewKey(previewId));
+    throw new Error('Repair preview expired. Preview the repair again before approving it.');
+  }
+
+  let records = await readQuickBooksSalesRecords(context);
+  const record = records.find((entry: any) => entry.id === clean(preview.recordId, 100) && entry.kind === 'proposal');
+  if (!record) throw new Error('Proposal record not found.');
+  const settings = await getQuickBooksSettings(context);
+  const itemId = clean(settings?.serviceItemId, 80);
+  if (!itemId && preview.changes?.some((change: any) => change?.writesQuickBooks)) {
+    throw new Error('Choose the QuickBooks service item before applying this repair.');
+  }
+
+  // Re-read QuickBooks immediately before the write and reject stale approvals.
+  await syncQuickBooksAccountingStatus(context, record);
+  await refreshQuickBooksPaymentSnapshot(context, record);
+  const liveFingerprint = accountingRepairFingerprint(record, itemId);
+  if (liveFingerprint !== String(preview.beforeFingerprint || '')) {
+    throw new Error('CRM or QuickBooks changed after this preview. Preview the repair again so the approved changes match the current state.');
+  }
+
+  const beforeAudit = buildQuickBooksAccountingAudit(records);
+  const beforeRow = beforeAudit.rows.find((row: any) => row.recordId === record.id) || preview.beforeAudit || null;
+  let estimate: any = null;
+  if ((preview.changes || []).some((change: any) => change?.id === 'estimate' && change?.writesQuickBooks)) {
+    estimate = await syncEstimate(context, record, itemId);
+  }
+
+  await syncQuickBooksAccountingStatus(context, record);
+  await refreshQuickBooksPaymentSnapshot(context, record);
+  records = await saveQuickBooksSalesRecord(context, record, records);
+
+  const afterAudit = buildQuickBooksAccountingAudit(records);
+  const reconciliation = applyQuickBooksReconciliationHistory(records, afterAudit, 'repair', [record.id]);
+  if (reconciliation.changedRecordIds.includes(record.id)) {
+    records = await saveQuickBooksSalesRecord(context, record, records);
+  }
+  const afterRow = afterAudit.rows.find((row: any) => row.recordId === record.id) || null;
+  const qbo = quickBooksState(record);
+  const repairEntry = {
+    id: 'REPAIR-' + idSuffix(),
+    previewId,
+    approvedAt: new Date().toISOString(),
+    approvedBy: actor,
+    estimateId: String(estimate?.Id || qbo.estimateId || ''),
+    estimateDocNumber: String(estimate?.DocNumber || qbo.estimateDocNumber || ''),
+    before: beforeRow,
+    after: afterRow,
+    changes: preview.changes || [],
+  };
+  qbo.repairHistory = [repairEntry, ...(Array.isArray(qbo.repairHistory) ? qbo.repairHistory : [])].slice(0, 100);
+  records = await saveQuickBooksSalesRecord(context, record, records);
+
+  const beforeTotal = beforeRow?.estimateTotal == null ? 'missing' : '$' + roundMoney(beforeRow.estimateTotal).toFixed(2);
+  const afterTotal = afterRow?.estimateTotal == null ? 'missing' : '$' + roundMoney(afterRow.estimateTotal).toFixed(2);
+  const beforeIssues = (beforeRow?.issues || []).map((issue: any) => issue.code).filter(Boolean).join(', ') || 'none';
+  const afterIssues = (afterRow?.issues || []).map((issue: any) => issue.code).filter(Boolean).join(', ') || 'none';
+  const activity = await appendClientAccountingActivity(
+    context,
+    tenant,
+    record.id,
+    'accounting_repair',
+    'Accounting repair ' + previewId + ' approved by ' + actor + '. QuickBooks estimate ' + beforeTotal + ' → ' + afterTotal + '. Issues before: ' + beforeIssues + '. Issues after: ' + afterIssues + '.',
+  );
+  await appendEvent(context, {
+    type: 'quickbooks_accounting_repair',
+    recordId: record.id,
+    quoteId: record.quoteId || '',
+    detail: 'Approved accounting repair ' + previewId + ' applied. Estimate ' + beforeTotal + ' → ' + afterTotal + '. Remaining issues: ' + afterIssues + '.',
+  });
+  await integrationStore.delete(repairPreviewKey(previewId));
+
+  return {
+    repair: repairEntry,
+    activity,
+    record,
+    accountingAudit: afterAudit,
+    resolved: Boolean(afterRow?.reconciled),
+    remainingIssues: afterRow?.issues || [],
+  };
+}
+
 export default async (req: Request, context: Context) => {
   const url = new URL(req.url);
   const isCallback = url.pathname.endsWith('/callback');
@@ -768,6 +978,37 @@ export default async (req: Request, context: Context) => {
   const payload: any = await req.json().catch(() => null);
   const action = clean(payload?.action, 60);
   const actor = clean((auth.user as any)?.email || (auth.user as any)?.user_metadata?.email || 'staff', 240) || 'staff';
+
+
+  if (action === 'preview-accounting-repair') {
+    const recordId = clean(payload?.recordId, 100);
+    const records = await readQuickBooksSalesRecords(context);
+    const record = records.find((entry: any) => entry.id === recordId && entry.kind === 'proposal');
+    if (!record) return Response.json({ error:'Proposal record not found.' }, { status:404 });
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    try {
+      const result = await buildAccountingRepairPreview(context, tenant, record, records, itemId, actor);
+      return Response.json({ ok:true, ...result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview the accounting repair.' }, { status:409 });
+    }
+  }
+
+  if (action === 'apply-accounting-repair') {
+    try {
+      const result = await applyAccountingRepair(
+        context,
+        tenant,
+        clean(payload?.previewId, 120),
+        payload?.approved === true,
+        actor,
+      );
+      return Response.json({ ok:true, ...result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to apply the accounting repair.' }, { status:409 });
+    }
+  }
 
   if (action === 'preview-two-way') {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
