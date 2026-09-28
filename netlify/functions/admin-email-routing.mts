@@ -28,7 +28,7 @@ async function sendRouteTest(routeId:string,actor:string){
     ? 'Dynamic production recipient ('+(route.dynamicSource||'record')+'); test copy sent only to '+actor
     : route.to.join(', ');
   const html='<!doctype html><html><body style="font-family:Arial,sans-serif;color:#173d30">'+
-    '<h2>Koa’s Email Route Test</h2>'+
+    '<h2>'+esc(resolveTenant().displayName)+' Email Route Test</h2>'+
     '<p>This message verifies the current routing configuration for <strong>'+esc(route.label)+'</strong>.</p>'+
     '<table cellpadding="6" cellspacing="0" border="1" style="border-collapse:collapse">'+
       '<tr><td><strong>Production To</strong></td><td>'+esc(effectiveTo||'—')+'</td></tr>'+
@@ -42,7 +42,7 @@ async function sendRouteTest(routeId:string,actor:string){
       : 'For configurable routes, this test was delivered through the exact current To/CC/BCC route.')+
     '</p></body></html>';
   const text=[
-    'Koa’s Email Route Test',
+    resolveTenant().displayName+' Email Route Test',
     'Route: '+route.label,
     'Production To: '+(effectiveTo||'—'),
     'Production CC: '+((route.cc||[]).join(', ')||'—'),
@@ -56,7 +56,7 @@ async function sendRouteTest(routeId:string,actor:string){
     headers:{
       Authorization:'Bearer '+apiKey,
       'Content-Type':'application/json',
-      'Idempotency-Key':('koa-admin-email-route-test-'+routeId+'-'+Date.now()).slice(0,256),
+      'Idempotency-Key':('venueloom-email-route-test-'+resolveTenant().id+'-'+routeId+'-'+Date.now()).slice(0,256),
     },
     body:JSON.stringify({
       from:route.from,
