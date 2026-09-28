@@ -121,7 +121,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const q=String(search?.value||'').trim().toLowerCase();
       const rows=history.filter((row)=>{
         if(!matchesFilter(row))return false;
-        const text=[row.syncId,row.actor,row.status,row.completedAt,row.crm?.created,row.crm?.matched,row.conflictCount,row.warningCount].join(' ').toLowerCase();
+        const text=[row.syncId,row.actor,row.status,row.completedAt,row.crm?.created,row.crm?.matched,row.conflictCount,row.warningCount,...(Array.isArray(row.clients)?row.clients:[])].join(' ').toLowerCase();
         return !q||text.includes(q);
       });
       if(count)count.textContent=rows.length+' sync'+(rows.length===1?'':'s');
@@ -139,7 +139,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       empty?.classList.add('hidden');detail?.classList.remove('hidden');
       $('[data-detail-id]').textContent=row.syncId||'QuickBooks sync';
       $('[data-detail-title]').textContent='QuickBooks ↔ CRM sync';
-      $('[data-detail-meta]').textContent=fmt(row.completedAt)+' · triggered by '+String(row.actor||'Unknown staff')+(row.previewId?' · preview '+row.previewId:'');
+      $('[data-detail-meta]').textContent=fmt(row.completedAt)+' · triggered by '+String(row.actor||'Unknown staff')+(row.previewId?' · preview '+row.previewId:'')+(row.legacy?' · Legacy run: before/after snapshots were not captured at the time.':'');
       $('[data-detail-status]').textContent=String(row.status||'completed');
       $('[data-created]').textContent=Number(row.crm?.created||0);
       $('[data-matched]').textContent=Number(row.crm?.matched||0);
