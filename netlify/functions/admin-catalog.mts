@@ -1,5 +1,4 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import readXlsxFile from 'read-excel-file/node';
 import { Buffer } from 'node:buffer';
 import { hasCapability, requireCapability } from './_shared/admin';
@@ -12,7 +11,8 @@ import {
   saveQuickBooksCatalog,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
-import { clientTenantProfile, resolveTenant, tenantBlobStoreName } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import type { TenantProfile } from '../../src/data/tenants';
 
 type ImportMapping = Partial<Record<
@@ -34,17 +34,11 @@ const IMPORT_LIMIT_BYTES = 2 * 1024 * 1024;
 const IMPORT_LIMIT_ROWS = 1000;
 
 function storeFor(context: Context, tenant: TenantProfile) {
-  const name=tenantBlobStoreName(tenant,'integrations');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency:'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, tenant, 'integrations');
 }
 
 function salesStoreFor(context: Context, tenant: TenantProfile) {
-  const name=tenantBlobStoreName(tenant,'sales');
-  return context.deploy.context === 'production'
-    ? getStore({ name, consistency:'strong' })
-    : getDeployStore({ name });
+  return tenantStoreFor(context, tenant, 'sales');
 }
 
 function clean(value: unknown, max = 1000) {
