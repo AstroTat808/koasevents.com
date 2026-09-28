@@ -1,4 +1,4 @@
-// Release marker: QuickBooks exclusion reasons, bulk cleanup, and suggested exclusions.
+// Release marker: Configurable QuickBooks suggested exclusions and guided review.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import { resolveTenant, tenantBlobStoreName } from './tenant';
