@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenantAsync } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 
 const galleryCategories = ['Venue', 'Ceremony', 'Reception', 'Mobile Bar', 'Enhancements', 'Hospitality', 'Stay'] as const;
@@ -42,15 +43,11 @@ type GalleryState = {
   placementCrops: Record<string, Record<string, PlacementCrop>>;
 };
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-gallery', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-gallery' });
+function storeFor(context: Context, tenant:any) {
+  return tenantStoreFor(context, tenant, 'gallery');
 }
-function vendorStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendors' });
+function vendorStoreFor(context: Context, tenant:any) {
+  return tenantStoreFor(context, tenant, 'vendors');
 }
 function cleanVendorIds(value: unknown) {
   if (!Array.isArray(value)) return [];
@@ -78,8 +75,8 @@ function cleanOrder(value: unknown) {
   return [...new Set(value.map((item) => String(item || '')).filter((item) => item.startsWith('curated:') || item.startsWith('upload:')))].slice(0, 500);
 }
 
-async function readState(context: Context): Promise<GalleryState> {
-  const store = storeFor(context);
+async function readState(context: Context, tenant:any): Promise<GalleryState> {
+  const store = storeFor(context, tenant);
   const saved = (await store.get('gallery/index', { type: 'json' })) as Partial<GalleryState> | null;
   return {
     uploads: Array.isArray(saved?.uploads) ? saved.uploads : [],
@@ -100,11 +97,12 @@ function uploadKey(id: string) {
 }
 
 export default async (req: Request, context: Context) => {
-  const store = storeFor(context);
+  const tenant = await resolveTenantAsync(req, context);
+  const store = storeFor(context, tenant);
   const imageId = context.params.id;
 
   if (req.method === 'GET' && imageId) {
-    const state = await readState(context);
+    const state = await readState(context, tenant);
     const item = state.uploads.find((entry) => entry.id === imageId);
     if (!item) return new Response('Not found', { status: 404 });
     const data = await store.get('images/' + imageId, { type: 'arrayBuffer' });
@@ -118,7 +116,7 @@ export default async (req: Request, context: Context) => {
   }
 
   if (req.method === 'GET') {
-    const state = await readState(context);
+    const state = await readState(context, tenant);
     return Response.json({
       uploads: state.uploads.map((item) => ({
         ...item,
@@ -149,7 +147,7 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'POST') {
     if (!hasCapability(auth.user,'gallery.manage')) return Response.json({ error:'Gallery management permission required.' }, { status:403 });
     const contentType = req.headers.get('content-type') || '';
-    const state = await readState(context);
+    const state = await readState(context, tenant);
 
     if (contentType.includes('multipart/form-data')) {
       const form = await req.formData();
@@ -349,7 +347,7 @@ export default async (req: Request, context: Context) => {
     if (payload.action === 'assign-vendors') {
       const kind = String(payload.kind || '');
       const vendorIds = cleanVendorIds(payload.vendorIds);
-      const vendorStore = vendorStoreFor(context);
+      const vendorStore = vendorStoreFor(context, tenant);
       const vendors = ((await vendorStore.get('vendors/index', { type: 'json' })) || []) as any[];
       const validIds = new Set(vendors.map((vendor) => String(vendor.id || '')));
       const cleaned = vendorIds.filter((vendorId) => validIds.has(vendorId));
