@@ -772,7 +772,10 @@ def admin_mode(browser_name):
   def catalog_api_mock(route):
    req=route.request
    if req.method=="GET":
-    route.fulfill(status=200,content_type="application/json",body=json.dumps({"catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"],"priceHistory":catalog_runtime["priceHistory"]}))
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({
+     "tenant":{"id":"koa-events","slug":"koa-events","displayName":"Koa’s Events","locale":"en-US","currency":"USD","timezone":"Pacific/Honolulu","domains":{"primary":"koasevents.com","admin":"koasevents.com"},"tax":{"id":"hawaii-get","label":"Hawaiʻi GET","kind":"gross-receipts","enabled":True,"statutoryRate":4.5,"customerRate":4.712,"maxPassOnRate":4.712,"defaultTaxable":True,"exemptionPolicy":{"mode":"manual-review","itemLevelRulesConfigured":False,"reviewMessage":"QA tenant tax policy"}}},
+     "catalog":catalog_runtime["catalog"],"imports":catalog_runtime["imports"],"priceHistory":catalog_runtime["priceHistory"]
+    }))
     return
    try: payload=json.loads(req.post_data or "{}")
    except Exception: payload={}
@@ -789,8 +792,8 @@ def admin_mode(browser_name):
    elif action=="run-audit":
     body={"ok":True,"audit":{
      "checkedAt":"2026-09-27T00:10:00Z","qbo":{"connected":True,"error":""},
-     "getPolicy":{"status":"source-not-itemized","detail":"QA GET policy source check."},
-     "summary":{"total":1,"ok":1,"warnings":0,"errors":0,"publishedPriceMismatches":0,"categoryMismatches":0,"getExemptReview":0,"qboMapped":1,"qboUnmapped":0},
+     "taxPolicy":{"id":"hawaii-get","label":"Hawaiʻi GET","status":"manual-review","detail":"QA tenant tax policy","defaultTaxable":True},
+     "summary":{"total":1,"ok":1,"warnings":0,"errors":0,"publishedPriceMismatches":0,"categoryMismatches":0,"taxReview":0,"qboMapped":1,"qboUnmapped":0},
      "rows":[{"id":"gardenia","name":"Gardenia Wedding Collection","group":"packages","category":"service","unitPrice":5000,"getExempt":False,
               "quickBooksItemId":"44","quickBooksItemName":"Gardenia Wedding Collection","publicPrice":5000,"sourceExpected":True,
               "qboMatch":{"id":"44","name":"Gardenia Wedding Collection","type":"Service","active":True,"unitPrice":5000,"incomeAccountId":"1","incomeAccountName":"Venue Income"},
@@ -799,8 +802,8 @@ def admin_mode(browser_name):
    elif action=="reconcile-safe-audit":
     audit={
      "checkedAt":"2026-09-27T00:11:00Z","qbo":{"connected":True,"error":""},
-     "getPolicy":{"status":"source-not-itemized","detail":"QA GET policy source check."},
-     "summary":{"total":1,"ok":1,"warnings":0,"errors":0,"publishedPriceMismatches":0,"quickBooksPriceMismatches":0,"categoryMismatches":0,"getExemptReview":0,"qboMapped":1,"qboUnmapped":0},
+     "taxPolicy":{"id":"hawaii-get","label":"Hawaiʻi GET","status":"manual-review","detail":"QA tenant tax policy","defaultTaxable":True},
+     "summary":{"total":1,"ok":1,"warnings":0,"errors":0,"publishedPriceMismatches":0,"quickBooksPriceMismatches":0,"categoryMismatches":0,"taxReview":0,"qboMapped":1,"qboUnmapped":0},
      "rows":[{"id":"gardenia","name":"Gardenia Wedding Collection","group":"packages","category":"service","unitPrice":5000,"getExempt":False,
               "quickBooksItemId":"44","quickBooksItemName":"Wedding Packages:Wedding Package-Gardenia","publicPrice":5000,"sourceExpected":True,
               "qboMatch":{"id":"44","name":"Wedding Package-Gardenia","fullyQualifiedName":"Wedding Packages:Wedding Package-Gardenia","type":"Service","active":True,"taxable":True,"unitPrice":5000,"incomeAccountId":"1","incomeAccountName":"Venue Income"},
