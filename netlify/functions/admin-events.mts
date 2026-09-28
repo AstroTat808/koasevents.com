@@ -434,7 +434,7 @@ export default async (req: Request, context: Context) => {
     ops.eventStart = clean(payload?.eventStart, 20);
     ops.eventEnd = clean(payload?.eventEnd, 20);
     ops.teardownEnd = clean(payload?.teardownEnd, 20);
-    ops.venueArea = clean(payload?.venueArea, 180) || 'Koa’s Events';
+    ops.venueArea = clean(payload?.venueArea, 180) || tenant.displayName;
     ops.notes = clean(payload?.notes, 12000);
     if ((ops as any).vendorRequirementsMode !== 'manual') {
       ops.vendorRequirements = suggestVendorRequirements(record, ops).map((row) => ({ category: row.category, importance: row.importance, note: row.note }));
