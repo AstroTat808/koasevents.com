@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 
 type CitationStatus = 'verified' | 'needs-update' | 'unverified' | 'not-applicable';
@@ -93,27 +93,27 @@ const DEFAULT_CITATIONS: CitationRecord[] = [
   },
 ];
 
-function store() {
-  return getStore({ name: 'koa-local-seo', consistency: 'strong' });
+function store(context:Context,tenant:any) {
+  return tenantStoreFor(context,tenant,'localSeo');
 }
 
-async function readCitations() {
-  const saved = await store().get('citations', { type: 'json' }) as CitationRecord[] | null;
+async function readCitations(context:Context,tenant:any) {
+  const saved = await store(context,tenant).get('citations', { type: 'json' }) as CitationRecord[] | null;
   if (Array.isArray(saved) && saved.length) return saved;
-  await store().setJSON('citations', DEFAULT_CITATIONS);
+  await store(context,tenant).setJSON('citations', DEFAULT_CITATIONS);
   return DEFAULT_CITATIONS;
 }
 
-async function writeCitations(records: CitationRecord[]) {
-  await store().setJSON('citations', records);
+async function writeCitations(context:Context,tenant:any,records: CitationRecord[]) {
+  await store(context,tenant).setJSON('citations', records);
 }
 
-export default async (req: Request) => {
+export default async (req: Request, context:Context) => {
   const auth = await requireCapability('seo.view', req);
   if (auth.response) return auth.response;
 
   if (req.method === 'GET') {
-    const citations = await readCitations();
+    const citations = await readCitations(context,auth.tenant);
     return Response.json({
       citations,
       totals: {
@@ -140,7 +140,7 @@ export default async (req: Request) => {
       return Response.json({ error: 'Valid citation status required.' }, { status: 400 });
     }
 
-    const citations = await readCitations();
+    const citations = await readCitations(context,auth.tenant);
     const index = citations.findIndex((item) => item.id === id);
     if (index < 0) return Response.json({ error: 'Citation not found.' }, { status: 404 });
 
@@ -161,7 +161,7 @@ export default async (req: Request) => {
   if (body.action === 'add-citation') {
     const platform = String(body.platform || '').trim().slice(0, 160);
     if (!platform) return Response.json({ error: 'Platform name required.' }, { status: 400 });
-    const citations = await readCitations();
+    const citations = await readCitations(context,auth.tenant);
     const id = String(body.id || platform.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')).slice(0, 80);
     if (citations.some((item) => item.id === id)) return Response.json({ error: 'Citation already exists.' }, { status: 409 });
     const record: CitationRecord = {
