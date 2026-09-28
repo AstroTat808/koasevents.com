@@ -3,10 +3,6 @@ import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
 import { resolveTenant } from './tenant';
 
-const ADMIN_EMAILS = new Set([
-  'chris@sibel.org',
-  'koasadmin@koasevents.com',
-]);
 
 export const ROLE_IDS = [
   'admin',
@@ -174,7 +170,9 @@ export const DEFAULT_AUTH_SECURITY_POLICY: AuthSecurityPolicy = {
 };
 
 function securityStore() {
-  return getStore({ name:'koa-auth-security', consistency:'strong' });
+  const tenant=resolveTenant();
+  const name=tenant.storage.compatibilityBlobStores.authSecurity || 'venueloom-auth-security';
+  return getStore({ name, consistency:'strong' });
 }
 
 function clean(value: unknown, max = 300) {
@@ -214,7 +212,7 @@ function roleFromUser(user: any): EffectiveStaffRole | 'deactivated' | 'none' {
   const meta = metadataFor(user);
   const roles = normalizedRoles(user);
   if (roles.includes('deactivated') || meta?.active === false) return 'deactivated';
-  if (ADMIN_EMAILS.has(email)) return 'admin';
+  if (resolveTenant().bootstrapAdminEmails.map((value)=>value.toLowerCase()).includes(email)) return 'admin';
 
   const direct = normalizeRoleValue(user?.role);
   const candidates = [...roles, direct];
