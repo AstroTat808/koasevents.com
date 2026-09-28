@@ -1,10 +1,9 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './tenant';
+import { tenantStoreFor } from './tenant-storage';
 
-function store(context:Context,name:string){
-  return context.deploy.context==='production'
-    ? getStore({name,consistency:'strong'})
-    : getDeployStore({name});
+function store(context:Context,domain:'sales'|'eventOps'){
+  return tenantStoreFor(context,resolveTenant(),domain);
 }
 function cleanDate(value:unknown){
   const raw=String(value||'').trim().slice(0,10);
@@ -45,8 +44,8 @@ export function masterInsuranceForEvent(vendor:any,eventDateValue:unknown){
 }
 
 export async function syncVendorInsuranceToUpcomingEvents(context:Context,vendor:any){
-  const salesStore=store(context,'koa-sales');
-  const opsStore=store(context,'koa-event-ops');
+  const salesStore=store(context,'sales');
+  const opsStore=store(context,'eventOps');
   const records:any[]=(await salesStore.get('records/index',{type:'json'}))||[];
   const today=todayHst();
   const updated:any[]=[];
