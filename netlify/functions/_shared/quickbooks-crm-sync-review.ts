@@ -1,3 +1,4 @@
+// Release marker: reviewed QuickBooks CRM sync workflow.
 import type { Context } from '@netlify/functions';
 import { getDeployStore, getStore } from '@netlify/blobs';
 import {
