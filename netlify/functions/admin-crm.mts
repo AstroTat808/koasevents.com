@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantRows, tenantStore } from './_shared/tenant-storage';
 import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
 import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
@@ -19,16 +20,8 @@ type Template = { id:string; type:'email'|'form'|'questionnaire'|'proposal-note'
 type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; updatedAt:string; };
 type Activity = { id:string; recordId:string; type:string; detail:string; createdAt:string; };
 
-function crmStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-crm', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-crm' });
-}
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
+function crmStoreFor(context: Context) { return tenantStore(context,'crm',resolveTenant()); }
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
 function clean(v: unknown, max = 4000) { return String(v ?? '').trim().slice(0, max); }
 function id(prefix='CRM') {
   const bytes = new Uint8Array(6); crypto.getRandomValues(bytes);
@@ -49,13 +42,13 @@ async function appendActivity(store:any, recordId:string, type:string, detail:st
 
 function staffIdentity(user:any) {
   const metadata = user?.user_metadata || user?.userMetadata || {};
-  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Koa’s Events Team', 180);
+  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || (resolveTenant().displayName + ' Team'), 180);
   const explicitTitle = clean(metadata?.title || metadata?.job_title || metadata?.jobTitle, 120);
   const role = operationsRole(user);
   const roleTitle = role && role !== 'custom' && role in ROLE_LABELS ? ROLE_LABELS[role as keyof typeof ROLE_LABELS] : '';
   return {
     name,
-    title: explicitTitle || roleTitle || 'Koa’s Events Team',
+    title: explicitTitle || roleTitle || (resolveTenant().displayName + ' Team'),
     pronouns: clean(metadata?.pronouns,80),
     roleDescription: clean(metadata?.role_description || metadata?.roleDescription,220),
     showTitle: metadata?.signature_show_title !== false,
@@ -132,14 +125,15 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 export default async (req:Request, context:Context) => {
   const auth = await requireCapability('crm.view', req);
   if (auth.response) return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
 
-  const crm = crmStoreFor(context);
-  const sales = salesStoreFor(context);
+  const crm = tenantStore(context,'crm',tenant);
+  const sales = tenantStore(context,'sales',tenant);
 
   if (req.method === 'GET') {
     const requestUrl=new URL(req.url);
     const signWellPdfRecordId=clean(requestUrl.searchParams.get('signwellPdf'),100);
-    const salesRecords = await readIndex<any>(sales,'records/index');
+    const salesRecords = tenantRows(await readIndex<any>(sales,'records/index'),tenant);
 
     if(signWellPdfRecordId){
       const record=salesRecords.find((entry:any)=>entry?.id===signWellPdfRecordId);
@@ -148,7 +142,7 @@ export default async (req:Request, context:Context) => {
       if(!key)return Response.json({error:'A stored signed SignWell PDF is not available for this project yet.'},{status:404});
       const pdf=await eventStoreFor(context).get(key,{type:'arrayBuffer'});
       if(!pdf)return Response.json({error:'The signed SignWell PDF reference exists, but the stored file could not be found.'},{status:404});
-      const safeName=('Koa-Signed-Agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
+      const safeName=('Signed-Agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
       return new Response(pdf,{
         headers:{
           'Content-Type':'application/pdf',
