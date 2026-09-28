@@ -1,3 +1,4 @@
+// Release marker: QuickBooks preview audit export and targeted rollback.
 function clean(value: unknown, max = 12000) {
   return String(value ?? '').trim().slice(0, max);
 }
