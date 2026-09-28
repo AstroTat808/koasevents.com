@@ -1,5 +1,6 @@
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
+import { tenantEnv } from './tenant-env';
 
 export type EmailRouteId =
   | 'lead-notification'
@@ -89,10 +90,11 @@ function slug(value:unknown){
 }
 
 function activeTenant(){ return resolveTenant(); }
+function setting(...names:string[]){ return tenantEnv(activeTenant(),...names); }
 
 function defaultsFor(id: EmailRouteId) {
   if (id === 'lead-notification' || id === 'lead-response-reminder') {
-    const env = clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),240).toLowerCase();
+    const env = clean(setting('LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO'),240).toLowerCase();
     return normalizeEmails(env || activeTenant().contact.email);
   }
   return [];
@@ -100,17 +102,17 @@ function defaultsFor(id: EmailRouteId) {
 
 function senderFor(id:EmailRouteId){
   if(id==='lead-notification'||id==='lead-response-reminder'){
-    return clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
+    return clean(setting('LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
   }
   if(id==='vendor-event-brief'||id==='vendor-insurance-reminder'){
-    return clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
+    return clean(setting('VENDOR_EMAIL_FROM','KOA_VENDOR_EMAIL_FROM'),240)||clean(setting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
   }
-  return clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
+  return clean(setting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>');
 }
 
 function replyToFor(id:EmailRouteId){
   if(id==='lead-notification') return 'Client email from inquiry record';
-  return clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||activeTenant().contact.email;
+  return clean(setting('CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO'),240)||activeTenant().contact.email;
 }
 
 function store() {
@@ -183,10 +185,10 @@ export async function emailRoutingSummary() {
     updatedBy:stored.updatedBy||'',
     groups,
     senders:{
-      leadFrom:clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
-      clientFrom:clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
-      clientReplyTo:clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||activeTenant().contact.email,
-      vendorFrom:clean(Netlify.env.get('KOA_VENDOR_EMAIL_FROM'),240)||clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
+      leadFrom:clean(setting('LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
+      clientFrom:clean(setting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
+      clientReplyTo:clean(setting('CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO'),240)||activeTenant().contact.email,
+      vendorFrom:clean(setting('VENDOR_EMAIL_FROM','KOA_VENDOR_EMAIL_FROM'),240)||clean(setting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(activeTenant().displayName+' <'+activeTenant().contact.email+'>'),
     },
     routes,
   };
