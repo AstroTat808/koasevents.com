@@ -1268,6 +1268,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         twoWaySyncDetail.textContent=sync?.completedAt
           ? Number(sync.crm?.created||0)+' CRM customer(s) imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.qbo?.estimates||0)+' QBO estimate(s) · '+Number(sync.qbo?.invoices||0)+' invoice(s) · '+Number(sync.qbo?.payments||0)+' payment(s) · '+Number(sync.conflicts?.length||0)+' conflict(s) · '+Number(sync.warnings?.length||0)+' warning(s).'
           : 'Imports QuickBooks customers, estimates, invoices and payments into CRM, then safely updates linked QuickBooks customers and issued estimates from CRM. The bulk sync never creates a payment or invoice in QuickBooks.';
+      }
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
