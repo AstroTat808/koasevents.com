@@ -299,11 +299,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       itemUsageSummary.innerHTML=[
         ['Proposals',Number(p.count||0)],
         ['Website placements',Number(w.count||0)],
-        ['QuickBooks transactions',q.connected?Number(q.count||0):'Not connected'],
+        ['QuickBooks transactions',q.connected?(q.mapped===false?'Unmapped':Number(q.count||0)):'Not connected'],
       ].map(([label,value])=>'<div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="mt-1 block text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong></div>').join('');
       const proposalStatuses=Object.entries(p.statuses||{}).map(([k,v])=>esc(k)+': '+Number(v)).join(' · ')||'No proposal references.';
       const placements=(w.placements||[]).map((row)=>'<a class="underline" href="'+esc(row.path)+'" target="_blank" rel="noreferrer">'+esc(row.label)+'</a>').join(' · ')||'No known website placements.';
-      const tx=(q.samples||[]).map((row)=>esc(row.entity)+' '+esc(row.docNumber||('#'+row.id))+' '+money(row.total)).join(' · ')||(q.error?esc(q.error):q.connected?'No QuickBooks transaction references found.':'QuickBooks is not connected for transaction lookup.');
+      const tx=(q.samples||[]).map((row)=>esc(row.entity)+' '+esc(row.docNumber||('#'+row.id))+' '+money(row.total)).join(' · ')||(q.error?esc(q.error):q.connected?(q.mapped===false?'Map this catalog item to a QuickBooks Product/Service before transaction usage can be attributed uniquely.':'No QuickBooks transaction references found.'):'QuickBooks is not connected for transaction lookup.');
       const recent=(usage.priceHistory||[]).slice(0,5).map((row)=>money(row.oldPrice)+' → '+money(row.newPrice)+' · '+esc(row.source)+' · '+esc(dt(row.changedAt))).join('<br>')||'No recorded price changes.';
       itemUsageDetails.innerHTML='<div><strong class="text-[var(--koa-forest)]">Proposal status:</strong> '+proposalStatuses+'</div><div><strong class="text-[var(--koa-forest)]">Website:</strong> '+placements+'</div><div><strong class="text-[var(--koa-forest)]">QuickBooks:</strong> '+tx+'</div><div><strong class="text-[var(--koa-forest)]">Recent pricing:</strong><br>'+recent+'</div>';
     }
@@ -335,7 +335,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function reconcileAudit(){
       if(!canManage)return;
-      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will link only unique known QuickBooks matches, align QuickBooks taxable flags to the Catalog Manager GET setting, and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. Ambiguous mappings and intentional pricing overrides will not be changed.');
+      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will link only unique known QuickBooks matches and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. GET/taxability differences remain review-only because no item-level exemption policy is documented. Ambiguous mappings and intentional pricing overrides will not be changed.');
       if(!ok)return;
       if(auditMessage)auditMessage.textContent='Applying safe catalog reconciliation…';
       try{
