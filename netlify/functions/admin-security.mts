@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin.ts';
 import {
   applyAutomaticBlocks,
@@ -37,10 +37,8 @@ function topEntries(map: Record<string, number>, limit = 12) {
     .slice(0, limit);
 }
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, tenant:any) {
+  return tenantStoreFor(context, tenant, 'sales');
 }
 
 function securityEventId() {
@@ -50,7 +48,7 @@ function securityEventId() {
 }
 
 async function appendSalesEvent(context: Context, event: Record<string, unknown>) {
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, auth.tenant);
   const current = ((await store.get('analytics/events/index', { type: 'json' })) || []) as any[];
   await store.setJSON('analytics/events/index', [{
     id: 'EVT-' + securityEventId(),
@@ -67,7 +65,7 @@ async function autoTrashConfirmedSpamRecord(
   const recordId = clean(incident.recordId, 100);
   if (!recordId) return { moved: false, reason: 'Security incident has no CRM record.' };
 
-  const store = salesStoreFor(context);
+  const store = salesStoreFor(context, auth.tenant);
   const records = (((await store.get('records/index', { type: 'json', consistency: 'strong' })) || []) as any[]);
   const record = records.find((entry) => entry?.id === recordId);
   if (!record) return { moved: false, reason: 'CRM record is no longer active.' };
