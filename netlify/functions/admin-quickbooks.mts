@@ -616,9 +616,34 @@ function repairLineView(lines: any[]) {
   }));
 }
 
+function invoiceRepairSnapshot(record: any) {
+  const qbo = quickBooksState(record);
+  return (Array.isArray(qbo.invoices) ? qbo.invoices : [])
+    .filter((entry: any) => entry?.invoiceId)
+    .map((entry: any) => ({
+      invoiceId: String(entry.invoiceId || ''),
+      docNumber: String(entry.docNumber || ''),
+      paymentId: String(entry.paymentId || ''),
+      total: roundMoney(entry.total ?? entry.amount ?? 0),
+      balance: roundMoney(entry.balance ?? entry.total ?? entry.amount ?? 0),
+      paidAmount: roundMoney(entry.paidAmount ?? Math.max(0, Number(entry.total ?? entry.amount ?? 0) - Number(entry.balance ?? entry.total ?? entry.amount ?? 0))),
+      paymentState: String(entry.paymentState || ''),
+      dueDate: isoDate(entry.dueDate),
+      syncToken: String(entry.syncToken || ''),
+      lines: quickBooksEstimateLineFingerprint(entry.lines || []),
+    }))
+    .sort((a: any, b: any) => a.invoiceId.localeCompare(b.invoiceId));
+}
+
 function accountingRepairState(record: any, itemId: string) {
   const qbo = quickBooksState(record);
   const expectedLines = proposalLines(record, itemId);
+  const schedule = scheduleFor(record).map((entry: any) => ({
+    id: String(entry.id || ''),
+    amount: roundMoney(entry.amount || 0),
+    dueDate: isoDate(entry.dueDate),
+    label: clean(entry.label, 180),
+  }));
   return {
     proposalTotal: roundMoney(record?.proposal?.total || 0),
     proposalDiscount: roundMoney(record?.proposal?.discountAmount || 0),
@@ -627,6 +652,8 @@ function accountingRepairState(record: any, itemId: string) {
     estimateDocNumber: String(qbo.estimateDocNumber || ''),
     estimateTotal: qbo.estimateId ? roundMoney(qbo.estimateTotal || 0) : null,
     estimateLines: quickBooksEstimateLineFingerprint(qbo.estimateLines || []),
+    schedule,
+    invoices: invoiceRepairSnapshot(record),
   };
 }
 
@@ -656,6 +683,71 @@ async function appendClientAccountingActivity(
   };
   await store.setJSON('activity/index', [row, ...current].slice(0, 5000));
   return row;
+}
+
+function invoicePaymentProtection(entry: any) {
+  const total = roundMoney(entry?.total ?? entry?.amount ?? 0);
+  const balance = roundMoney(entry?.balance ?? total);
+  const paidAmount = Math.max(0, roundMoney(total - balance));
+  if (paidAmount <= 0.005) return { protected:false, state:'unpaid', total, balance, paidAmount };
+  if (balance <= 0.005) return { protected:true, state:'paid', total, balance, paidAmount };
+  return { protected:true, state:'partially_paid', total, balance, paidAmount };
+}
+
+async function updateUnpaidMilestoneInvoice(
+  context: Context,
+  record: any,
+  itemId: string,
+  change: any,
+) {
+  const paymentId = clean(change?.paymentId, 100);
+  const milestone = scheduleFor(record).find((entry: any) => String(entry.id || '') === paymentId);
+  if (!milestone) throw new Error('The payment milestone for this invoice no longer exists.');
+
+  const invoiceId = clean(change?.invoiceId, 100);
+  if (!invoiceId) throw new Error('QuickBooks invoice ID is missing from the approved repair.');
+  const data: any = await qboGet(context, 'invoice', invoiceId);
+  const invoice = data?.Invoice;
+  if (!invoice?.Id || invoice?.SyncToken == null) throw new Error('QuickBooks invoice could not be refreshed for repair.');
+
+  const total = roundMoney(invoice.TotalAmt || 0);
+  const balance = roundMoney(invoice.Balance ?? total);
+  const paidAmount = Math.max(0, roundMoney(total - balance));
+  if (paidAmount > 0.005) {
+    const state = balance <= 0.005 ? 'paid' : 'partially paid';
+    throw new Error('Invoice #' + clean(invoice.DocNumber || invoiceId, 80) + ' is now ' + state + '. Paid and partially paid invoices are protected and cannot be changed by Accounting Repair.');
+  }
+
+  if (roundMoney(change?.before?.total) !== total || roundMoney(change?.before?.balance) !== balance) {
+    throw new Error('Invoice #' + clean(invoice.DocNumber || invoiceId, 80) + ' changed after approval preview. Run Preview Accounting Repair again.');
+  }
+
+  const salesLines = (Array.isArray(invoice.Line) ? invoice.Line : [])
+    .filter((line: any) => line?.DetailType === 'SalesItemLineDetail');
+  if (salesLines.length !== 1) {
+    throw new Error('Invoice #' + clean(invoice.DocNumber || invoiceId, 80) + ' has ' + salesLines.length + ' sales lines. Automatic repair only changes one-line milestone invoices.');
+  }
+
+  const currentLine = salesLines[0];
+  const repairItemId = clean(currentLine?.SalesItemLineDetail?.ItemRef?.value || change?.itemId || itemId, 80);
+  if (!repairItemId) throw new Error('QuickBooks item mapping is missing for invoice #' + clean(invoice.DocNumber || invoiceId, 80) + '.');
+
+  const desiredAmount = roundMoney(milestone.amount || 0);
+  const line = buildQuickBooksMilestoneInvoiceLine({
+    amount: desiredAmount,
+    itemId: repairItemId,
+    description: currentLine?.Description || change?.before?.lines?.[0]?.description || ('Payment milestone: ' + clean(milestone.label, 180)),
+    lineId: clean(currentLine?.Id, 80),
+  });
+
+  const updated: any = await qboUpdate(context, 'invoice', {
+    Id: String(invoice.Id),
+    SyncToken: String(invoice.SyncToken),
+    DueDate: isoDate(milestone.dueDate) || undefined,
+    Line: [line],
+  });
+  if (!updated?.Invoice?.Id) throw new Error('QuickBooks did not return the repaired invoice.');
+  return updated.Invoice;
 }
 
 async function buildAccountingRepairPreview(
@@ -693,11 +785,14 @@ async function buildAccountingRepairPreview(
   );
 
   const changes: any[] = [];
+  const blockedIssues: any[] = [];
+
   if (estimateNeedsRepair) {
     changes.push({
       id: 'estimate',
       writesQuickBooks: true,
       type: state.estimateId ? 'update_estimate' : 'create_estimate',
+      documentType: 'estimate',
       target: state.estimateId
         ? 'QuickBooks estimate ' + (state.estimateDocNumber ? '#' + state.estimateDocNumber : state.estimateId)
         : 'QuickBooks estimate',
@@ -717,9 +812,107 @@ async function buildAccountingRepairPreview(
     });
   }
 
-  const safeCodes = new Set(['estimate_total','estimate_missing','stored_balance']);
-  const blockedIssues = (auditRow.issues || []).filter((issue: any) => !safeCodes.has(String(issue?.code || '')));
-  const missingServiceItem = changes.some((change: any) => change?.writesQuickBooks) && !clean(itemId, 80);
+  const schedule = scheduleFor(record);
+  const activeInvoices = (Array.isArray(state.invoices) ? state.invoices : []).filter((entry: any) =>
+    entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
+  );
+
+  for (const invoice of activeInvoices) {
+    const milestone = schedule.find((entry: any) => String(entry.id || '') === String(invoice.paymentId || ''));
+    const protection = invoicePaymentProtection(invoice);
+    const invoiceLabel = 'QuickBooks invoice ' + (invoice.docNumber ? '#' + invoice.docNumber : invoice.invoiceId);
+
+    if (!milestone) {
+      blockedIssues.push({
+        code: 'invoice_orphan',
+        label: invoiceLabel,
+        expected: null,
+        actual: protection.total,
+        delta: null,
+        protection: 'No CRM payment milestone matches this invoice, so Accounting Repair will not infer a replacement amount.',
+      });
+      continue;
+    }
+
+    const expectedAmount = roundMoney(milestone.amount || 0);
+    if (Math.abs(moneyDelta(protection.total, expectedAmount)) < 0.01) continue;
+
+    if (protection.protected) {
+      blockedIssues.push({
+        code: protection.state === 'paid' ? 'invoice_paid_protected' : 'invoice_partially_paid_protected',
+        label: invoiceLabel,
+        expected: expectedAmount,
+        actual: protection.total,
+        delta: moneyDelta(protection.total, expectedAmount),
+        protection: protection.state === 'paid'
+          ? 'This invoice is paid. Accounting Repair never changes a paid invoice.'
+          : 'This invoice has received $' + protection.paidAmount.toFixed(2) + '. Accounting Repair never changes a partially paid invoice.',
+      });
+      continue;
+    }
+
+    const salesLines = Array.isArray(invoice.lines) ? invoice.lines : [];
+    if (salesLines.length !== 1) {
+      blockedIssues.push({
+        code: 'invoice_structure_protected',
+        label: invoiceLabel,
+        expected: expectedAmount,
+        actual: protection.total,
+        delta: moneyDelta(protection.total, expectedAmount),
+        protection: 'Automatic repair only changes one-line CRM milestone invoices. This invoice has ' + salesLines.length + ' sales lines.',
+      });
+      continue;
+    }
+
+    changes.push({
+      id: 'invoice:' + invoice.invoiceId,
+      writesQuickBooks: true,
+      type: 'update_invoice',
+      documentType: 'invoice',
+      invoiceId: String(invoice.invoiceId || ''),
+      docNumber: String(invoice.docNumber || ''),
+      paymentId: String(invoice.paymentId || ''),
+      itemId: clean(salesLines[0]?.itemId || itemId, 80),
+      target: invoiceLabel,
+      before: {
+        exists: true,
+        invoiceId: String(invoice.invoiceId || ''),
+        docNumber: String(invoice.docNumber || ''),
+        total: protection.total,
+        balance: protection.balance,
+        paidAmount: protection.paidAmount,
+        paymentState: protection.state,
+        dueDate: isoDate(invoice.dueDate),
+        lines: salesLines,
+      },
+      after: {
+        total: expectedAmount,
+        balance: expectedAmount,
+        paidAmount: 0,
+        paymentState: 'unpaid',
+        dueDate: isoDate(milestone.dueDate),
+        lines: [buildQuickBooksMilestoneInvoiceLine({
+          amount: expectedAmount,
+          itemId: clean(salesLines[0]?.itemId || itemId, 80),
+          description: salesLines[0]?.description || ('Payment milestone: ' + clean(milestone.label, 180)),
+          lineId: clean(salesLines[0]?.id, 80),
+        })],
+        taxHandling: 'Milestone amount already reflects CRM contract pricing and is forced to QuickBooks NON tax code.',
+      },
+    });
+  }
+
+  for (const issue of (auditRow.issues || [])) {
+    const code = String(issue?.code || '');
+    if (['estimate_total','estimate_missing','stored_balance','allocation_total','remaining_balance','invoice_balance','invoice_milestone','invoice_orphan'].includes(code)) continue;
+    blockedIssues.push(issue);
+  }
+
+  const missingServiceItem = changes.some((change: any) => {
+    if (!change?.writesQuickBooks) return false;
+    if (change?.documentType === 'invoice' && clean(change?.itemId, 80)) return false;
+    return !clean(itemId, 80);
+  });
   if (missingServiceItem) {
     blockedIssues.push({
       code: 'service_item_missing',
@@ -727,6 +920,7 @@ async function buildAccountingRepairPreview(
       expected: 'Configured service item',
       actual: 'Not configured',
       delta: null,
+      protection: 'A QuickBooks item is required before this approved repair can be applied.',
     });
   }
 
@@ -744,10 +938,14 @@ async function buildAccountingRepairPreview(
     beforeAudit: auditRow,
     changes,
     blockedIssues,
+    protectedInvoiceCount: blockedIssues.filter((issue: any) => String(issue?.code || '').includes('protected')).length,
     postRepairSteps: [
+      'Validate that CRM, QuickBooks estimates, invoices and payment state are unchanged since this preview.',
+      'Apply only approved estimate changes and fully unpaid one-line milestone invoice repairs.',
+      'Refuse any invoice that became paid or partially paid before the write.',
       'Refresh the QuickBooks estimate, invoice balances and payment snapshot.',
       'Run the accounting reconciliation again.',
-      'Record the approved repair and before/after result in Client Workspace Activity.',
+      'Record the approved repair and before/after result in Client Workspace Accounting Repair History and Activity.',
     ],
     canApply: changes.length > 0 && !missingServiceItem,
     noChangesNeeded: changes.length === 0 && (auditRow.issues || []).length === 0,
@@ -777,11 +975,7 @@ async function applyAccountingRepair(
   if (!record) throw new Error('Proposal record not found.');
   const settings = await getQuickBooksSettings(context);
   const itemId = clean(settings?.serviceItemId, 80);
-  if (!itemId && preview.changes?.some((change: any) => change?.writesQuickBooks)) {
-    throw new Error('Choose the QuickBooks service item before applying this repair.');
-  }
 
-  // Re-read QuickBooks immediately before the write and reject stale approvals.
   await syncQuickBooksAccountingStatus(context, record);
   await refreshQuickBooksPaymentSnapshot(context, record);
   const liveFingerprint = accountingRepairFingerprint(record, itemId);
@@ -791,9 +985,31 @@ async function applyAccountingRepair(
 
   const beforeAudit = buildQuickBooksAccountingAudit(records);
   const beforeRow = beforeAudit.rows.find((row: any) => row.recordId === record.id) || preview.beforeAudit || null;
-  let estimate: any = null;
+  const documents: any[] = [];
+
   if ((preview.changes || []).some((change: any) => change?.id === 'estimate' && change?.writesQuickBooks)) {
-    estimate = await syncEstimate(context, record, itemId);
+    if (!itemId) throw new Error('Choose the QuickBooks service item before applying the estimate repair.');
+    const estimate = await syncEstimate(context, record, itemId);
+    documents.push({
+      type: 'estimate',
+      id: String(estimate?.Id || ''),
+      docNumber: String(estimate?.DocNumber || ''),
+      beforeTotal: preview.changes.find((change: any) => change?.id === 'estimate')?.before?.total ?? null,
+      afterTotal: roundMoney(estimate?.TotalAmt || record?.proposal?.total || 0),
+    });
+  }
+
+  for (const change of (preview.changes || []).filter((row: any) => row?.documentType === 'invoice' && row?.writesQuickBooks)) {
+    const invoice = await updateUnpaidMilestoneInvoice(context, record, itemId, change);
+    documents.push({
+      type: 'invoice',
+      id: String(invoice?.Id || change.invoiceId || ''),
+      docNumber: String(invoice?.DocNumber || change.docNumber || ''),
+      paymentId: String(change.paymentId || ''),
+      beforeTotal: roundMoney(change?.before?.total || 0),
+      afterTotal: roundMoney(invoice?.TotalAmt || change?.after?.total || 0),
+      balance: roundMoney(invoice?.Balance ?? change?.after?.balance ?? 0),
+    });
   }
 
   await syncQuickBooksAccountingStatus(context, record);
@@ -807,15 +1023,20 @@ async function applyAccountingRepair(
   }
   const afterRow = afterAudit.rows.find((row: any) => row.recordId === record.id) || null;
   const qbo = quickBooksState(record);
+  const resolved = Boolean(afterRow?.reconciled);
+  const remainingIssues = afterRow?.issues || [];
   const repairEntry = {
     id: 'REPAIR-' + idSuffix(),
     previewId,
     approvedAt: new Date().toISOString(),
     approvedBy: actor,
-    estimateId: String(estimate?.Id || qbo.estimateId || ''),
-    estimateDocNumber: String(estimate?.DocNumber || qbo.estimateDocNumber || ''),
+    resolved,
+    estimateId: String(qbo.estimateId || ''),
+    estimateDocNumber: String(qbo.estimateDocNumber || ''),
+    documents,
     before: beforeRow,
     after: afterRow,
+    remainingIssues,
     changes: preview.changes || [],
   };
   qbo.repairHistory = [repairEntry, ...(Array.isArray(qbo.repairHistory) ? qbo.repairHistory : [])].slice(0, 100);
@@ -824,19 +1045,22 @@ async function applyAccountingRepair(
   const beforeTotal = beforeRow?.estimateTotal == null ? 'missing' : '$' + roundMoney(beforeRow.estimateTotal).toFixed(2);
   const afterTotal = afterRow?.estimateTotal == null ? 'missing' : '$' + roundMoney(afterRow.estimateTotal).toFixed(2);
   const beforeIssues = (beforeRow?.issues || []).map((issue: any) => issue.code).filter(Boolean).join(', ') || 'none';
-  const afterIssues = (afterRow?.issues || []).map((issue: any) => issue.code).filter(Boolean).join(', ') || 'none';
+  const afterIssues = remainingIssues.map((issue: any) => issue.code).filter(Boolean).join(', ') || 'none';
+  const documentSummary = documents.length
+    ? documents.map((doc: any) => (doc.type === 'invoice' ? 'invoice' : 'estimate') + ' #' + (doc.docNumber || doc.id || 'unknown') + ' $' + Number(doc.beforeTotal || 0).toFixed(2) + ' → $' + Number(doc.afterTotal || 0).toFixed(2)).join('; ')
+    : 'no QuickBooks document write';
   const activity = await appendClientAccountingActivity(
     context,
     tenant,
     record.id,
     'accounting_repair',
-    'Accounting repair ' + previewId + ' approved by ' + actor + '. QuickBooks estimate ' + beforeTotal + ' → ' + afterTotal + '. Issues before: ' + beforeIssues + '. Issues after: ' + afterIssues + '.',
+    'Accounting repair ' + previewId + ' approved by ' + actor + '. ' + documentSummary + '. Estimate ' + beforeTotal + ' → ' + afterTotal + '. Issues before: ' + beforeIssues + '. Issues after: ' + afterIssues + '. Reconciled: ' + (resolved ? 'yes' : 'no') + '.',
   );
   await appendEvent(context, {
     type: 'quickbooks_accounting_repair',
     recordId: record.id,
     quoteId: record.quoteId || '',
-    detail: 'Approved accounting repair ' + previewId + ' applied. Estimate ' + beforeTotal + ' → ' + afterTotal + '. Remaining issues: ' + afterIssues + '.',
+    detail: 'Approved accounting repair ' + previewId + ' applied. ' + documentSummary + '. Remaining issues: ' + afterIssues + '.',
   });
   await integrationStore.delete(repairPreviewKey(previewId));
 
@@ -845,8 +1069,8 @@ async function applyAccountingRepair(
     activity,
     record,
     accountingAudit: afterAudit,
-    resolved: Boolean(afterRow?.reconciled),
-    remainingIssues: afterRow?.issues || [],
+    resolved,
+    remainingIssues,
   };
 }
 
