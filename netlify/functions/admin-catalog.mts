@@ -14,6 +14,7 @@ import {
 import { clientTenantProfile, resolveTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import type { TenantProfile } from '../../src/data/tenants';
+import { saveOrganization } from './_shared/organization';
 
 type ImportMapping = Partial<Record<
   'id' | 'name' | 'description' | 'group' | 'category' | 'unitLabel' | 'unitPrice' |
@@ -842,6 +843,13 @@ export default async (req:Request, context:Context)=>{
       afterFingerprint:await catalogFingerprint(next),rolledBackAt:'',
     };
     const imports=await writeImportHistory(context,tenant,entry);
+    await saveOrganization(context,tenant,(current)=>({
+      ...current,
+      onboarding:{
+        ...current.onboarding,
+        completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'catalog'])],
+      },
+    }));
     return Response.json({ok:true,catalog:next,import:entry,imports,summary});
   }
 
@@ -867,6 +875,15 @@ export default async (req:Request, context:Context)=>{
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
     const imports=await writeImportHistory(context,tenant,entry);
+    if(!catalog.length){
+      await saveOrganization(context,tenant,(current)=>({
+        ...current,
+        onboarding:{
+          ...current.onboarding,
+          completedSteps:(current.onboarding?.completedSteps||[]).filter((step)=>step!=='catalog'),
+        },
+      }));
+    }
     return Response.json({ok:true,catalog,imports,rollback:entry});
   }
 
