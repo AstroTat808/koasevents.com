@@ -870,9 +870,9 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
       capacity: skippedCapacity,
       ambiguous: skippedAmbiguous,
     },
-    conflicts: conflicts.slice(0, 250),
-    warnings: warnings.slice(0, 250),
-    changes: changes.slice(0, 1000),
+    conflicts,
+    warnings,
+    changes,
   };
 
   await writeRecords(context, records, changedRecordIds);
