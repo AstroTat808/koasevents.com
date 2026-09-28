@@ -54,3 +54,7 @@ export function clientTenantProfile(tenant: TenantProfile) {
 export function tenantStoragePrefix(tenant: TenantProfile) {
   return 'tenants/' + tenant.id;
 }
+
+export function tenantBlobStoreName(tenant: TenantProfile, kind: 'sales' | 'integrations') {
+  return tenant.storage.compatibilityBlobStores[kind];
+}
