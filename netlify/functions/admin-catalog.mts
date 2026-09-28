@@ -12,7 +12,7 @@ import {
   saveQuickBooksCatalog,
   type QuickBooksCatalogItem,
 } from './_shared/quickbooks';
-import { clientTenantProfile, resolveTenant } from './_shared/tenant';
+import { clientTenantProfile, resolveTenant, tenantBlobStoreName } from './_shared/tenant';
 import type { TenantProfile } from '../../src/data/tenants';
 
 type ImportMapping = Partial<Record<
@@ -33,16 +33,18 @@ type ImportRow = {
 const IMPORT_LIMIT_BYTES = 2 * 1024 * 1024;
 const IMPORT_LIMIT_ROWS = 1000;
 
-function storeFor(context: Context) {
+function storeFor(context: Context, tenant: TenantProfile) {
+  const name=tenantBlobStoreName(tenant,'integrations');
   return context.deploy.context === 'production'
-    ? getStore({ name:'koa-integrations', consistency:'strong' })
-    : getDeployStore({ name:'koa-integrations' });
+    ? getStore({ name, consistency:'strong' })
+    : getDeployStore({ name });
 }
 
-function salesStoreFor(context: Context) {
+function salesStoreFor(context: Context, tenant: TenantProfile) {
+  const name=tenantBlobStoreName(tenant,'sales');
   return context.deploy.context === 'production'
-    ? getStore({ name:'koa-sales', consistency:'strong' })
-    : getDeployStore({ name:'koa-sales' });
+    ? getStore({ name, consistency:'strong' })
+    : getDeployStore({ name });
 }
 
 function clean(value: unknown, max = 1000) {
@@ -191,8 +193,8 @@ function websitePlacementsForItem(item:QuickBooksCatalogItem, tenant: TenantProf
     .filter((row,index,all)=>all.findIndex(other=>other.path===row.path)===index);
 }
 
-async function readSalesRecords(context:Context) {
-  const raw=await salesStoreFor(context).get('records/index',{type:'json'}) as any;
+async function readSalesRecords(context:Context,tenant:TenantProfile) {
+  const raw=await salesStoreFor(context,tenant).get('records/index',{type:'json'}) as any;
   return Array.isArray(raw)?raw:[];
 }
 
@@ -272,7 +274,7 @@ function transactionUsage(transactions:any[],item:QuickBooksCatalogItem) {
 
 async function itemUsage(context:Context,item:QuickBooksCatalogItem,tenant:TenantProfile) {
   const [records,qbo,history]=await Promise.all([
-    readSalesRecords(context),
+    readSalesRecords(context,tenant),
     loadQuickBooksTransactions(context),
     getCatalogPriceHistory(context,{catalogItemId:item.id,limit:20}),
   ]);
@@ -648,15 +650,15 @@ export function buildImportRows(rawRows:Record<string,string>[], mapping:ImportM
   });
 }
 
-async function readImportHistory(context:Context){
-  const store=storeFor(context);
+async function readImportHistory(context:Context,tenant:TenantProfile){
+  const store=storeFor(context,tenant);
   const raw=await store.get('catalog/imports/index',{type:'json'}) as any;
   return Array.isArray(raw)?raw.slice(0,20):[];
 }
 
-async function writeImportHistory(context:Context,entry:any){
-  const store=storeFor(context);
-  const current=await readImportHistory(context);
+async function writeImportHistory(context:Context,tenant:TenantProfile,entry:any){
+  const store=storeFor(context,tenant);
+  const current=await readImportHistory(context,tenant);
   const next=[entry,...current.filter((row:any)=>row.id!==entry.id)].slice(0,20);
   await store.setJSON('catalog/imports/index',next);
   return next;
@@ -691,7 +693,7 @@ export default async (req:Request, context:Context)=>{
   if(req.method==='GET'){
     const [catalog,imports,priceHistory]=await Promise.all([
       ensureWebsiteCatalog(context,tenant),
-      readImportHistory(context),
+      readImportHistory(context,tenant),
       getCatalogPriceHistory(context,{limit:150}),
     ]);
     return Response.json({tenant:clientTenantProfile(tenant),catalog,imports,priceHistory},{headers:{'Cache-Control':'private, no-store'}});
@@ -810,7 +812,7 @@ export default async (req:Request, context:Context)=>{
     const usable=rows.filter((row)=>row.status!=='invalid'&&row.status!=='duplicate'&&(duplicateMode==='update'||row.status!=='update'));
     if(!usable.length)return Response.json({error:'No valid catalog rows are available to import.',summary},{status:400});
     const id=importId();
-    const store=storeFor(context);
+    const store=storeFor(context,tenant);
     await store.setJSON('catalog/imports/snapshots/'+id,{catalog,createdAt:new Date().toISOString(),filename});
     const byId=new Map(catalog.map((item)=>[item.id.toLowerCase(),item]));
     const byName=new Map(catalog.map((item)=>[item.name.toLowerCase(),item]));
@@ -845,14 +847,14 @@ export default async (req:Request, context:Context)=>{
       updatedCount:usable.filter((row)=>row.status==='update').length,duplicateMode,
       afterFingerprint:await catalogFingerprint(next),rolledBackAt:'',
     };
-    const imports=await writeImportHistory(context,entry);
+    const imports=await writeImportHistory(context,tenant,entry);
     return Response.json({ok:true,catalog:next,import:entry,imports,summary});
   }
 
   if(action==='rollback-import'){
     const id=clean(payload?.id,100);
-    const store=storeFor(context);
-    const history=await readImportHistory(context);
+    const store=storeFor(context,tenant);
+    const history=await readImportHistory(context,tenant);
     const latestActive=history.find((row:any)=>!row?.rolledBackAt);
     if(!latestActive||latestActive.id!==id){
       return Response.json({error:'Only the most recent active import can be rolled back. Roll back newer imports first so catalog history stays consistent.'},{status:409});
@@ -870,7 +872,7 @@ export default async (req:Request, context:Context)=>{
     );
     const previous=history.find((row:any)=>row.id===id);
     const entry={...(previous||{id}),rolledBackAt:new Date().toISOString(),rolledBackBy:clean(auth.user?.email,240)};
-    const imports=await writeImportHistory(context,entry);
+    const imports=await writeImportHistory(context,tenant,entry);
     return Response.json({ok:true,catalog,imports,rollback:entry});
   }
 
