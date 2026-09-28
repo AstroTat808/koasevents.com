@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { resolveTenant } from './_shared/tenant';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { tenantEnv } from './_shared/tenant-env';
 import { requireCapability } from './_shared/admin';
 import { readEmailHealthEvents } from './_shared/email-health';
 
@@ -46,8 +47,8 @@ function recommendation(status:string,bounceType:string,bounceSubType:string,mes
   if(status==='failed')return 'Review the failure reason and sender/recipient configuration. Correct the underlying issue before retrying.';
   return 'Review the delivery details and recipient address before taking action.';
 }
-async function resend(path:string){
-  const key=clean(Netlify.env.get('RESEND_MONITORING_API_KEY'),500);
+async function resend(tenant:any,path:string){
+  const key=clean(tenantEnv(tenant,'RESEND_MONITORING_API_KEY','RESEND_API_KEY'),500);
   if(!key)return {ok:false,status:0,body:{message:'RESEND_MONITORING_API_KEY is not configured.'}};
   try{
     const response=await fetch('https://api.resend.com'+path,{
@@ -198,7 +199,7 @@ async function emailAnalyticsSummary(context:Context,force=false){
   while(hasMore&&pages<100){
     const params=new URLSearchParams({limit:'100'});
     if(after)params.set('after',after);
-    const result=await resend('/emails?'+params.toString());
+    const result=await resend(tenant,'/emails?'+params.toString());
     if(!result.ok)throw new Error(clean(result.body?.message||'Unable to load email analytics history.',500));
     const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
     const mapped=raw.map(mapEmail);
@@ -243,6 +244,7 @@ async function emailAnalyticsSummary(context:Context,force=false){
 export default async (req:Request,context:Context)=>{
   const auth=await requireCapability('email.view',req);
   if(auth.response)return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
   const url=new URL(req.url);
 
   if(url.searchParams.get('summary')==='1'){
@@ -271,7 +273,7 @@ export default async (req:Request,context:Context)=>{
     while(hasMore&&pages<100){
       const params=new URLSearchParams({limit:'100'});
       if(after)params.set('after',after);
-      const result=await resend('/emails?'+params.toString());
+      const result=await resend(tenant,'/emails?'+params.toString());
       if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to scan email history.',500)},{status:result.status||400});
       const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
       const mapped=raw.map(mapEmail);
@@ -315,7 +317,7 @@ export default async (req:Request,context:Context)=>{
   const detailId=clean(url.searchParams.get('id'),180);
   if(detailId){
     const [emailResult,events]=await Promise.all([
-      resend('/emails/'+encodeURIComponent(detailId)),
+      resend(tenant,'/emails/'+encodeURIComponent(detailId)),
       readEmailHealthEvents(context,5000),
     ]);
     if(!emailResult.ok)return Response.json({error:clean(emailResult.body?.message||'Unable to load email detail.',500)},{status:emailResult.status||400});
@@ -360,7 +362,7 @@ export default async (req:Request,context:Context)=>{
   const params=new URLSearchParams({limit:String(limit)});
   if(after)params.set('after',after);
   else if(before)params.set('before',before);
-  const result=await resend('/emails?'+params.toString());
+  const result=await resend(tenant,'/emails?'+params.toString());
   if(!result.ok)return Response.json({error:clean(result.body?.message||'Unable to load email history.',500)},{status:result.status||400});
   const raw=Array.isArray(result.body?.data)?result.body.data:Array.isArray(result.body)?result.body:[];
   const clientIndex=await clientEmailIndex(context);
