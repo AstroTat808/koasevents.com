@@ -1,19 +1,12 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireAdmin } from './_shared/admin';
 import { syncVendorInsuranceToUpcomingEvents } from './_shared/vendor-insurance-sync.ts';
 import { isSyntheticHealthRequest } from './_shared/synthetic-health';
 
-function vendorStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendors' });
-}
-function filesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendor-files', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendor-files' });
-}
+function vendorStoreFor(context: Context,req?:Request) { return tenantStoreFor(context,resolveTenant(req),'vendors'); }
+function filesStoreFor(context: Context,req?:Request) { return tenantStoreFor(context,resolveTenant(req),'vendorFiles'); }
 function clean(value: unknown, max = 1000) {
   return String(value || '').trim().slice(0, max);
 }
@@ -21,7 +14,7 @@ function id(prefix = 'COI') {
   return prefix + '-' + crypto.randomUUID().replaceAll('-', '').slice(0, 12).toUpperCase();
 }
 async function vendors(context: Context) {
-  return (((await vendorStoreFor(context).get('vendors/index', { type: 'json' })) || []) as any[]);
+  return (((await vendorStoreFor(context,req).get('vendors/index', { type: 'json' })) || []) as any[]);
 }
 const ALLOWED = new Set(['application/pdf','image/jpeg','image/png','image/webp']);
 const MAX_BYTES = 15 * 1024 * 1024;
@@ -29,8 +22,8 @@ const MAX_BYTES = 15 * 1024 * 1024;
 export default async (req: Request, context: Context) => {
   const pathname = new URL(req.url).pathname;
   const isAdmin = pathname.startsWith('/api/admin/vendors/insurance/');
-  const store = vendorStoreFor(context);
-  const files = filesStoreFor(context);
+  const store = vendorStoreFor(context,req);
+  const files = filesStoreFor(context,req);
 
   if (req.method === 'HEAD' && isAdmin && clean(context.params.vendorId, 100) === '__health__' && isSyntheticHealthRequest(req)) {
     try {
@@ -38,9 +31,9 @@ export default async (req: Request, context: Context) => {
         store.get('vendors/index', { type: 'json' }),
         files.get('insurance/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
-      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'vendor-insurance-document' } });
+      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document' } });
     } catch {
-      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-Koa-Synthetic-Check': 'vendor-insurance-document' } });
+      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document' } });
     }
   }
 
