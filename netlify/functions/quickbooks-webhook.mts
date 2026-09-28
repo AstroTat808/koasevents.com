@@ -1,5 +1,6 @@
 import type { Context } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { requireAdmin } from './_shared/admin';
 import {
@@ -10,17 +11,8 @@ import {
 } from './_shared/quickbooks';
 import { markLifecycleEvent } from './_shared/lifecycle';
 
-function integrationStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-integrations', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-integrations' });
-}
-
-function salesStore(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
+function integrationStore(context: Context) { return tenantStore(context,'integrations',resolveTenant()); }
+function salesStore(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
 
 function verifySignature(rawBody: string, signature: string, verifierToken: string) {
   if (!rawBody || !signature || !verifierToken) return false;
@@ -157,23 +149,25 @@ function applyInvoiceToRecord(record: any, invoiceId: string, invoice: any, oper
 }
 
 async function appendSalesEvent(context: Context, event: Record<string, unknown>) {
-  const store = salesStore(context);
+  const tenant=resolveTenant();
+  const store = tenantStore(context,'sales',tenant);
   const current = (await store.get('analytics/events/index', { type: 'json' })) || [];
   await store.setJSON('analytics/events/index', [{
     id: 'EVT-' + idSuffix(),
     createdAt: new Date().toISOString(),
-    ...event,
+    ...stampTenant(event as any,tenant),
   }, ...current].slice(0, 10000));
 }
 
 async function processWebhook(context: Context, receipt: any) {
+  const tenant=resolveTenant();
   const connection = await getQuickBooksConnection(context);
   if (!connection) {
     return { status: 'skipped', reason: 'QuickBooks is not connected.', processedAt: new Date().toISOString(), affectedRecords: [] };
   }
 
-  const store = salesStore(context);
-  let records = ((await store.get('records/index', { type: 'json' })) || []) as any[];
+  const store = tenantStore(context,'sales',tenant);
+  let records = tenantRows(((await store.get('records/index', { type: 'json' })) || []) as any[],tenant);
   const originalDepositState = new Map<string, boolean>();
   records.forEach((record) => {
     originalDepositState.set(record.id, Boolean(record?.accounting?.quickbooks?.depositPaid));
@@ -276,6 +270,7 @@ async function processWebhook(context: Context, receipt: any) {
     const beforeDepositPaid = originalDepositState.get(record.id) || false;
     const beforeStage = String(record.stage || '');
     const state = updateBookingAndTotals(record);
+    Object.assign(record,stampTenant(record,tenant));
     await store.setJSON('records/' + record.id, record);
     await appendSalesEvent(context, {
       type: 'quickbooks_webhook_synced',
