@@ -135,7 +135,7 @@ const { id = '' } = Astro.params;
     const app=document.querySelector('[data-app]');\n    const clientRecordId=document.querySelector('[data-client-record-id]')?.dataset.clientRecordId||'';
     const unauthorized=document.querySelector('[data-unauthorized]');
     const message=document.querySelector('[data-message]');
-    let record=null;
+    let record=null;\n    let crmPayload=null;
 
     const money=(v)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(v||0));
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch]));
