@@ -132,4 +132,38 @@ assert.match(storageSource,/tenantDataPrefix\(tenant, domain\)/);
 assert.match(storageSource,/Cross-tenant data access was blocked\./);
 assert.match(storageSource,/legacyDataBelongsToTenant/);
 
-console.log('Tenant isolation QA passed: production boundary primitives, storage imports, and critical module contracts are isolated.');
+const scheduledTenantJobs=[
+  'netlify/functions/lead-response-reminders.mts',
+  'netlify/functions/quickbooks-hourly-reconciliation.mts',
+  'netlify/functions/health-monitor.mts',
+  'netlify/functions/office365-calendar-sync.mts',
+  'netlify/functions/vendor-insurance-reminders.mts',
+  'netlify/functions/post-deploy-verification.mts',
+];
+for(const file of scheduledTenantJobs){
+  const text=source(file);
+  assert.match(text,/runForEachTenant\s*\(/,file+' must iterate active tenants');
+  assert.match(text,/schedule\s*:/,file+' must remain a scheduled function');
+}
+
+const signWellSource=source('netlify/functions/_shared/signwell.ts');
+assert.match(signWellSource,/metadata:\{tenant_id:resolveTenant\(\)\.id,/, 'SignWell documents must carry tenant_id metadata');
+const signWellWebhook=source('netlify/functions/signwell-webhook.mts');
+assert.match(signWellWebhook,/payloadTenantId\s*\(/, 'SignWell webhook must resolve tenant from signed document metadata');
+assert.match(signWellWebhook,/readOrganizationById\s*\(/, 'SignWell webhook must resolve dynamic organizations');
+assert.match(signWellWebhook,/runWithTenant\s*\(/, 'SignWell webhook must bind tenant before verification and storage access');
+
+const orgApi=source('netlify/functions/admin-organization.mts');
+for(const invariant of [
+  /action === 'create-organization'/,
+  /action === 'verify-domain'/,
+  /action === 'validate-catalog-import'/,
+  /action === 'save-integration'/,
+  /action === 'create-subscription-checkout'/,
+]) {
+  assert.match(orgApi,invariant,'Organization onboarding capability is missing: '+String(invariant));
+}
+assert.match(source('netlify/functions/stripe-webhook.mts'),/tenant_id/, 'Stripe events must carry tenant_id metadata');
+assert.match(source('netlify/functions/_shared/tenant-env.ts'),/VENUELOOM_TENANT_/, 'Integration credentials must support tenant-scoped environment keys');
+
+console.log('Tenant isolation QA passed: production boundary primitives, storage imports, scheduled jobs, webhooks, and onboarding contracts are isolated.');
