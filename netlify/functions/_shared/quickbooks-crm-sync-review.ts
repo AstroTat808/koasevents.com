@@ -32,6 +32,94 @@ function clean(value: unknown, max = 1200) {
   return String(value ?? '').trim().slice(0, max);
 }
 
+export const QUICKBOOKS_EXCLUSION_REASONS = [
+  { code:'quickbooks_test_customer', label:'QuickBooks test customer' },
+  { code:'square_system_customer', label:'Square system customer' },
+  { code:'vendor_non_client', label:'Vendor / non-client' },
+  { code:'duplicate', label:'Duplicate' },
+  { code:'other', label:'Other' },
+] as const;
+
+export type QuickBooksExclusionReasonCode = typeof QUICKBOOKS_EXCLUSION_REASONS[number]['code'];
+
+function normalizeQuickBooksExclusionReasonCode(value: unknown): QuickBooksExclusionReasonCode | '' {
+  const code = clean(value, 60) as QuickBooksExclusionReasonCode;
+  return QUICKBOOKS_EXCLUSION_REASONS.some((row) => row.code === code) ? code : '';
+}
+
+function quickBooksExclusionReasonLabel(value: unknown) {
+  const code = normalizeQuickBooksExclusionReasonCode(value);
+  return QUICKBOOKS_EXCLUSION_REASONS.find((row) => row.code === code)?.label || 'Other';
+}
+
+function inferredStoredExclusionReasonCode(override: any): QuickBooksExclusionReasonCode {
+  const explicit = normalizeQuickBooksExclusionReasonCode(override?.exclusionReasonCode);
+  if (explicit) return explicit;
+  const name = normalizeQuickBooksMatchName(override?.customerName);
+  if (name === 'square customer') return 'square_system_customer';
+  if (
+    ['sample customer','test customer','quickbooks test customer','qbo test customer'].includes(name) ||
+    /(?:^|\s)(?:qbo|quickbooks|sandbox|smoke)\s+test(?:\s|$)/.test(name) ||
+    /(?:^|\s)test\s+customer(?:\s|$)/.test(name)
+  ) return 'quickbooks_test_customer';
+  const reason = clean(override?.exclusionReason, 500).toLowerCase();
+  if (reason.includes('vendor') || reason.includes('non-client') || reason.includes('non client')) return 'vendor_non_client';
+  if (reason.includes('duplicate')) return 'duplicate';
+  return 'other';
+}
+
+function suggestedQuickBooksExclusion(customer: any) {
+  const rawName = baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName, 240);
+  const name = normalizeQuickBooksMatchName(rawName);
+  const notes = clean(customer?.Notes, 4000).toLowerCase();
+
+  if (name === 'square customer') {
+    return {
+      code:'square_system_customer' as QuickBooksExclusionReasonCode,
+      label:quickBooksExclusionReasonLabel('square_system_customer'),
+      confidence:'high',
+      reason:'The QuickBooks display name exactly matches the common Square system customer record.',
+      evidence:['exact_name:square_customer'],
+      requiresApproval:true,
+      autoApplied:false,
+    };
+  }
+
+  const exactTestNames = new Set([
+    'sample customer',
+    'test customer',
+    'quickbooks test customer',
+    'qbo test customer',
+    'quickbooks sample customer',
+  ]);
+  const strongNameSignal =
+    exactTestNames.has(name) ||
+    /(?:^|\s)(?:qbo|quickbooks|sandbox|smoke)\s+test(?:\s|$)/.test(name) ||
+    /(?:^|\s)test\s+customer(?:\s|$)/.test(name) ||
+    /(?:^|\s)sample\s+customer(?:\s|$)/.test(name);
+  const notesSignal = /(?:quickbooks|qbo|sandbox|smoke)\s+test/.test(notes);
+
+  if (strongNameSignal || notesSignal) {
+    const evidence = [
+      strongNameSignal ? 'test_name_pattern' : '',
+      notesSignal ? 'test_notes_pattern' : '',
+    ].filter(Boolean);
+    return {
+      code:'quickbooks_test_customer' as QuickBooksExclusionReasonCode,
+      label:quickBooksExclusionReasonLabel('quickbooks_test_customer'),
+      confidence:'high',
+      reason:strongNameSignal
+        ? 'The QuickBooks customer name matches a strong test/sample customer pattern.'
+        : 'QuickBooks notes contain a strong test-record marker.',
+      evidence,
+      requiresApproval:true,
+      autoApplied:false,
+    };
+  }
+
+  return null;
+}
+
 function isoDate(value: unknown) {
   const raw = clean(value, 80);
   if (!raw) return '';
@@ -146,6 +234,8 @@ export type QuickBooksMatchOverride = {
   approvedBy: string;
   customerName?: string;
   approvalMode?: 'single' | 'bulk';
+  exclusionReasonCode?: QuickBooksExclusionReasonCode;
+  exclusionReasonLabel?: string;
   exclusionReason?: string;
 };
 
@@ -437,7 +527,9 @@ export function resolveQuickBooksCustomerMatch(
       exclusion: {
         excludedAt: clean(override.approvedAt, 80),
         excludedBy: clean(override.approvedBy, 180),
-        reason: clean(override.exclusionReason || 'Excluded from CRM synchronization by staff.', 500),
+        reasonCode: inferredStoredExclusionReasonCode(override),
+        reasonLabel: quickBooksExclusionReasonLabel(inferredStoredExclusionReasonCode(override)),
+        reason: clean(override.exclusionReason || quickBooksExclusionReasonLabel(inferredStoredExclusionReasonCode(override)), 500),
       },
     };
   }
@@ -625,7 +717,7 @@ export async function getQuickBooksMatchOverrides(context: Context) {
 
 export async function saveQuickBooksMatchOverride(
   context: Context,
-  input: { customerId: string; decision: 'match'|'new'|'exclude'|'clear'; recordId?: string; reason?: string },
+  input: { customerId: string; decision: 'match'|'new'|'exclude'|'clear'; recordId?: string; reasonCode?: string; reason?: string },
   actor = '',
 ) {
   const customerId = clean(input.customerId, 100);
@@ -668,6 +760,13 @@ export async function saveQuickBooksMatchOverride(
     }
   }
 
+  const requestedReasonCode = normalizeQuickBooksExclusionReasonCode(input.reasonCode);
+  if (decision === 'exclude' && clean(input.reasonCode,60) && !requestedReasonCode) {
+    throw new Error('Choose a valid exclusion reason.');
+  }
+  const exclusionReasonCode = decision === 'exclude' ? (requestedReasonCode || 'other') : undefined;
+  const exclusionReasonLabel = exclusionReasonCode ? quickBooksExclusionReasonLabel(exclusionReasonCode) : undefined;
+
   const override: QuickBooksMatchOverride = {
     customerId,
     decision,
@@ -676,8 +775,10 @@ export async function saveQuickBooksMatchOverride(
     approvedBy: clean(actor, 180),
     customerName: clean(qboCustomer.DisplayName, 240),
     approvalMode: 'single',
+    exclusionReasonCode,
+    exclusionReasonLabel,
     exclusionReason: decision === 'exclude'
-      ? clean(input.reason || 'Excluded from CRM synchronization by staff.', 500)
+      ? clean(input.reason || exclusionReasonLabel || 'Other', 500)
       : undefined,
   };
   overrides[customerId] = override;
@@ -737,6 +838,99 @@ export async function saveQuickBooksBulkNewOverrides(
 
   await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
   return { previewId, approvedAt, approvedBy, approved };
+}
+
+export async function saveQuickBooksBulkExclusionOverrides(
+  context: Context,
+  input: { previewId: string; customerIds: string[]; reasonCode: string; reason?: string },
+  actor = '',
+) {
+  const previewId = clean(input.previewId, 120);
+  const ids = [...new Set((Array.isArray(input.customerIds) ? input.customerIds : []).map((id) => clean(id,100)).filter(Boolean))].slice(0, 200);
+  const rawReasonCode = clean(input.reasonCode, 60);
+  const useSuggestedReasons = rawReasonCode === 'suggested';
+  const fixedReasonCode = useSuggestedReasons ? '' : normalizeQuickBooksExclusionReasonCode(rawReasonCode);
+  if (!previewId) throw new Error('Preview Sync ID is required.');
+  if (!ids.length) throw new Error('Select at least one unresolved QuickBooks customer to exclude.');
+  if (!useSuggestedReasons && !fixedReasonCode) throw new Error('Choose an exclusion reason before bulk exclusion.');
+
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (!preview?.previewId || clean(preview.previewId,120) !== previewId) {
+    throw new Error('That Preview Sync is no longer current. Run Preview Sync again before bulk exclusion.');
+  }
+  const generatedAt = Date.parse(String(preview.generatedAt || ''));
+  if (!generatedAt || Date.now() - generatedAt > PREVIEW_MAX_AGE_MS) {
+    throw new Error('The Preview Sync is older than 30 minutes. Run Preview Sync again before bulk exclusion.');
+  }
+
+  const plans = new Map((Array.isArray(preview.customerPlans) ? preview.customerPlans : []).map((plan: any) => [clean(plan?.customerId,100), plan]));
+  const invalid = ids
+    .map((id) => ({ id, plan:plans.get(id) }))
+    .filter(({ plan }: any) => {
+      if (!plan || !['new','ambiguous'].includes(clean(plan?.decision,40))) return true;
+      if (useSuggestedReasons && !normalizeQuickBooksExclusionReasonCode(plan?.suggestedExclusion?.code)) return true;
+      return false;
+    });
+
+  if (invalid.length) {
+    const names = invalid.slice(0,5).map(({ id, plan }: any) => clean(plan?.qbo?.name || id,180)).join(', ');
+    const qualifier = useSuggestedReasons
+      ? 'Bulk suggested-reason exclusion is limited to unresolved customers with a high-confidence suggested exclusion.'
+      : 'Bulk exclusion is limited to unresolved new/import or duplicate-review customers.';
+    throw new Error(qualifier + ' Review individually: ' + names + (invalid.length > 5 ? ' and ' + (invalid.length - 5) + ' more' : '') + '.');
+  }
+
+  const integrations = integrationStore(context);
+  const overrides = await getQuickBooksMatchOverrides(context);
+  const approvedAt = new Date().toISOString();
+  const approvedBy = clean(actor,180);
+  const excluded: any[] = [];
+
+  for (const id of ids) {
+    const plan: any = plans.get(id);
+    const reasonCode = useSuggestedReasons
+      ? normalizeQuickBooksExclusionReasonCode(plan?.suggestedExclusion?.code)
+      : fixedReasonCode;
+    if (!reasonCode) continue;
+    const reasonLabel = quickBooksExclusionReasonLabel(reasonCode);
+    const reason = clean(
+      input.reason ||
+      (useSuggestedReasons ? plan?.suggestedExclusion?.reason : '') ||
+      reasonLabel,
+      500,
+    );
+    const override: QuickBooksMatchOverride = {
+      customerId:id,
+      decision:'exclude',
+      recordId:'',
+      approvedAt,
+      approvedBy,
+      customerName:clean(plan?.qbo?.name,240),
+      approvalMode:'bulk',
+      exclusionReasonCode:reasonCode,
+      exclusionReasonLabel:reasonLabel,
+      exclusionReason:reason,
+    };
+    overrides[id] = override;
+    excluded.push({
+      customerId:id,
+      customerName:override.customerName,
+      reasonCode,
+      reasonLabel,
+      reason,
+    });
+  }
+
+  await integrations.setJSON(MATCH_OVERRIDES_KEY, overrides);
+  return {
+    previewId,
+    approvedAt,
+    approvedBy,
+    reasonMode:useSuggestedReasons ? 'suggested' : 'fixed',
+    reasonCode:fixedReasonCode || '',
+    reasonLabel:fixedReasonCode ? quickBooksExclusionReasonLabel(fixedReasonCode) : 'Suggested reason per customer',
+    excluded,
+  };
 }
 
 function customerFinancialSummary(customerId: string, estimateGroups: Map<string, any[]>, invoiceGroups: Map<string, any[]>, paymentGroups: Map<string, any[]>) {
@@ -1119,6 +1313,9 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       financial.paymentDocs || [],
     );
     const match = resolveQuickBooksCustomerMatch(customer, indexes, overrides, evidence);
+    const suggestedExclusion = ['new','ambiguous'].includes(match.status)
+      ? suggestedQuickBooksExclusion(customer)
+      : null;
     let predictedRecordId = '';
     if (['new','approved_new'].includes(match.status)) {
       const safe = clean(customerId, 100).replace(/[^A-Za-z0-9_-]/g, '-').replace(/-+/g, '-') || 'UNKNOWN';
@@ -1157,6 +1354,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
       duplicateRisk: match.duplicateRisk,
       bulkEligible: Boolean(match.bulkEligible),
       exclusion: match.exclusion || null,
+      suggestedExclusion,
       financial,
       before,
       after,
@@ -1216,6 +1414,7 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     qboPayments: payments.length,
     activeSyncCustomers: customerPlans.filter((row) => row.decision !== 'excluded').length,
     excludedCustomers: customerPlans.filter((row) => row.decision === 'excluded').length,
+    suggestedExclusions: customerPlans.filter((row) => Boolean(row.suggestedExclusion)).length,
     linked: customerPlans.filter((row) => row.decision === 'linked').length,
     matched: customerPlans.filter((row) => ['auto_match','approved_match'].includes(row.decision)).length,
     newImports: customerPlans.filter((row) => ['new','approved_new'].includes(row.decision)).length,
@@ -1262,6 +1461,24 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     ready: Number(summary.needsDecision || 0) === 0,
   };
 
+  const exclusionReport = QUICKBOOKS_EXCLUSION_REASONS.map((reason) => {
+    const customersForReason = customerPlans
+      .filter((row) => row.decision === 'excluded' && clean(row?.exclusion?.reasonCode,60) === reason.code)
+      .map((row) => ({
+        customerId:clean(row?.customerId,100),
+        customerName:clean(row?.qbo?.name,240),
+        excludedAt:clean(row?.exclusion?.excludedAt,80),
+        excludedBy:clean(row?.exclusion?.excludedBy,180),
+        reason:clean(row?.exclusion?.reason,500),
+      }));
+    return {
+      code:reason.code,
+      label:reason.label,
+      count:customersForReason.length,
+      customers:customersForReason,
+    };
+  }).filter((row) => row.count > 0);
+
   const executionDetails = {
     create: customerPlans.filter((row) => row.executionDisposition === 'create').map(executionCustomerDetail),
     matchRefresh: customerPlans.filter((row) => row.executionDisposition === 'match_refresh').map(executionCustomerDetail),
@@ -1292,6 +1509,8 @@ export async function buildQuickBooksCrmSyncPreview(context: Context, actor = ''
     summary,
     executionSummary,
     executionDetails,
+    exclusionReasons: QUICKBOOKS_EXCLUSION_REASONS,
+    exclusionReport,
     customerPlans,
     outbound,
   };
