@@ -1,11 +1,36 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
-
-const HAWAII_TZ = 'Hawaiian Standard Time';
-const MARKER_PREFIX = 'KOA_RECORD_ID:';
+import { tenantEnv } from './tenant-env';
 
 function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}
+function activeTenant(){return resolveTenant();}
+function graphTimeZone(){return activeTenant().microsoftTimeZone||'UTC';}
+function recordMarkerPrefixes(){
+  return [...new Set([
+    activeTenant().calendar.recordMarkerPrefix||'VENUELOOM_RECORD_ID:',
+    ...(activeTenant().calendar.legacyRecordMarkerPrefixes||[]),
+  ].map((value)=>clean(value,120)).filter(Boolean))];
+}
+function regexEscape(value:string){return value.replace(/[.*+?^\${}()|[\]\\]/g,'\\function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}');}
+function zonedInstant(date:string,time:string,timeZone:string){
+  const [year,month,day]=date.split('-').map(Number);
+  const [hour,minute]=time.split(':').map(Number);
+  const wanted=Date.UTC(year,month-1,day,hour,minute,0);
+  let guess=wanted;
+  const formatter=new Intl.DateTimeFormat('en-CA',{
+    timeZone,year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23',
+  });
+  for(let index=0;index<4;index+=1){
+    const parts=Object.fromEntries(formatter.formatToParts(new Date(guess)).map((part)=>[part.type,part.value]));
+    const represented=Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),Number(parts.hour),Number(parts.minute),Number(parts.second||0));
+    const delta=wanted-represented;
+    if(Math.abs(delta)<1000)break;
+    guess+=delta;
+  }
+  return new Date(guess).toISOString();
+}
 function isoDate(value:unknown){const raw=clean(value,40);return /^\d{4}-\d{2}-\d{2}$/.test(raw)?raw:'';}
 function timeValue(value:unknown){const raw=clean(value,10);return /^\d{2}:\d{2}$/.test(raw)?raw:'';}
 function addDays(date:string,days:number){const d=new Date(date+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}
@@ -79,13 +104,14 @@ type SyncAuditRun={
 };
 
 function env(){
+  const tenant=activeTenant();
   return {
-    tenantId:clean(Netlify.env.get('MICROSOFT_GRAPH_TENANT_ID'),200),
-    clientId:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_ID'),200),
-    clientSecret:clean(Netlify.env.get('MICROSOFT_GRAPH_CLIENT_SECRET'),500),
-    calendarOwner:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_OWNER')||'chris@koas.us',240),
-    calendarId:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_ID'),500),
-    calendarName:clean(Netlify.env.get('MICROSOFT_GRAPH_CALENDAR_NAME')||"Koa's Events",180),
+    tenantId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_TENANT_ID'),200),
+    clientId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CLIENT_ID'),200),
+    clientSecret:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CLIENT_SECRET'),500),
+    calendarOwner:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_OWNER'),240),
+    calendarId:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_ID'),500),
+    calendarName:clean(tenantEnv(tenant,'MICROSOFT_GRAPH_CALENDAR_NAME')||tenant.displayName,180),
   };
 }
 export function office365CalendarConfig(){
@@ -114,7 +140,7 @@ async function graph(path:string,accessToken:string,init:RequestInit={}){
   const headers=new Headers(init.headers||{});
   headers.set('Authorization','Bearer '+accessToken);
   headers.set('Accept','application/json');
-  headers.set('Prefer','outlook.timezone="'+HAWAII_TZ+'"');
+  headers.set('Prefer','outlook.timezone="'+graphTimeZone()+'"');
   if(init.body&&!headers.has('Content-Type'))headers.set('Content-Type','application/json');
   const res=await fetch('https://graph.microsoft.com/v1.0'+path,{...init,headers});
   if(res.status===204)return null;
@@ -176,7 +202,10 @@ export async function verifyOffice365Credentials(){
   }
 }
 async function listEvents(accessToken:string,start:string,end:string){
-  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(start+'T00:00:00-10:00')+'&endDateTime='+encodeURIComponent(end+'T23:59:59-10:00')+'&$top=999';
+  const timeZone=activeTenant().timezone||'UTC';
+  const startInstant=zonedInstant(start,'00:00',timeZone);
+  const endInstant=zonedInstant(addDays(end,1),'00:00',timeZone);
+  let next=(await calendarPath(accessToken))+'/calendarView?startDateTime='+encodeURIComponent(startInstant)+'&endDateTime='+encodeURIComponent(endInstant)+'&$top=999';
   const rows:GraphEvent[]=[];
   while(next){
     const payload:any=await graph(next,accessToken);
@@ -186,11 +215,14 @@ async function listEvents(accessToken:string,start:string,end:string){
   }
   return rows;
 }
-function marker(recordId:string){return MARKER_PREFIX+recordId;}
+function marker(recordId:string){return recordMarkerPrefixes()[0]+recordId;}
 function recordIdFromEvent(event:GraphEvent){
   const haystack=clean(event.body?.content||event.bodyPreview,10000);
-  const match=haystack.match(/KOA_RECORD_ID:([A-Za-z0-9._:-]+)/);
-  return clean(match?.[1],200);
+  for(const prefix of recordMarkerPrefixes()){
+    const match=haystack.match(new RegExp(regexEscape(prefix)+'([A-Za-z0-9._:-]+)'));
+    if(match?.[1])return clean(match[1],200);
+  }
+  return '';
 }
 function eventHasRecordMarker(event:GraphEvent,recordId:string){
   return recordIdFromEvent(event)===clean(recordId,200);
@@ -202,7 +234,7 @@ function eventBodyWithMarker(event:GraphEvent,recordId:string){
   if(String(event.body?.contentType||'').toLowerCase()==='text'){
     return {contentType:'Text',content:[existing,markerText].filter(Boolean).join('\n')};
   }
-  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with Koa’s Master Calendar.</p>')+'<p>'+markerText+'</p>'};
+  return {contentType:'HTML',content:existing+(existing?'':'<p>Synced with '+activeTenant().displayName+' Master Calendar.</p>')+'<p>'+markerText+'</p>'};
 }
 function localParts(event:GraphEvent){
   const start=clean(event.start?.dateTime,40);
@@ -223,7 +255,7 @@ function crmShape(record:any,ops:any){
     date:eventDate,
     startTime:start,
     endTime:end,
-    venue:clean(ops?.venueArea,180)||'Koa’s Events',
+    venue:clean(ops?.venueArea,180)||activeTenant().displayName,
     recordUpdatedAt:clean(record?.updatedAt,80),
     opsUpdatedAt:clean(ops?.updatedAt,80),
   };
@@ -246,7 +278,7 @@ function conflictSides(shape:any,event:GraphEvent){
   return {koa,office365,differingFields};
 }
 function eventBody(shape:any){
-  return '<p>Synced with Koa’s Master Calendar.</p><p>'+marker(shape.recordId)+'</p>';
+  return '<p>Synced with '+activeTenant().displayName+' Master Calendar.</p><p>'+marker(shape.recordId)+'</p>';
 }
 function graphPayload(shape:any){
   const allDay=!shape.startTime;
@@ -255,8 +287,8 @@ function graphPayload(shape:any){
   return {
     subject:shape.title,
     body:{contentType:'HTML',content:eventBody(shape)},
-    start:{dateTime:start,timeZone:HAWAII_TZ},
-    end:{dateTime:end,timeZone:HAWAII_TZ},
+    start:{dateTime:start,timeZone:graphTimeZone()},
+    end:{dateTime:end,timeZone:graphTimeZone()},
     isAllDay:allDay,
     location:{displayName:shape.venue},
     showAs:'busy',
