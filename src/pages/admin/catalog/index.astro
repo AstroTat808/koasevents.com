@@ -36,6 +36,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
             <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Live reconciliation</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Catalog audit</h2>
+              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Compare every catalog item against the current public pricing source and the live connected QuickBooks item mapping. GET exemptions are flagged when the repository has no item-level exemption rule supporting them.</p>
+            </div>
+            <button data-run-audit type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Run live audit</button>
+          </div>
+          <p data-audit-message class="mt-4 text-sm text-[var(--koa-ink)]/55">Run the audit to verify current prices, groups/categories, GET flags and QuickBooks mappings.</p>
+          <div data-audit-summary class="mt-5 hidden grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
+          <div data-audit-list class="mt-5 hidden grid gap-3"></div>
+        </section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
               <p class="eyebrow text-[var(--koa-clay)]">Pricing database</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Packages, rentals, bar + add-ons</h2>
               <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">The website catalog is seeded automatically. Edit sell price, internal cost, target margin and GET treatment here without re-entering your existing wedding collections.</p>
@@ -68,6 +82,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Pricing accountability</p>
+              <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Pricing change history</h2>
+              <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Every sell-price change records the old and new price, direct cost, actual and target margin, who changed it, its source, and how many draft proposals were automatically repriced.</p>
+            </div>
+          </div>
+          <div data-price-history class="mt-5 grid gap-3"></div>
+        </section>
+
+        <section class="rounded-[1.6rem] bg-white p-6 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
               <p class="eyebrow text-[var(--koa-clay)]">Import safety</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Recent catalog imports</h2>
               <p class="mt-2 text-sm leading-6 text-[var(--koa-ink)]/58">Every completed import stores a pre-import snapshot so the catalog can be restored if the file or mapping was wrong. Rollbacks run newest-first and are blocked if the catalog was edited afterward, preventing later manual, profitability, or QuickBooks changes from being erased.</p>
@@ -86,6 +111,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <div><p class="eyebrow text-[var(--koa-clay)]">Catalog item</p><h2 data-item-title class="display mt-2 text-4xl text-[var(--koa-forest)]">Add item</h2></div>
         <button data-close-item type="button" class="rounded-full border border-[var(--koa-line)] px-3 py-2">×</button>
       </div>
+      <section data-item-usage class="mt-6 hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/45 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div><p class="eyebrow text-[var(--koa-clay)]">Impact before edit</p><h3 class="mt-1 text-lg font-bold text-[var(--koa-forest)]">Where this item is used</h3></div>
+          <span data-item-usage-loading class="text-xs text-[var(--koa-ink)]/45"></span>
+        </div>
+        <div data-item-usage-summary class="mt-4 grid gap-2 sm:grid-cols-3"></div>
+        <div data-item-usage-details class="mt-4 grid gap-3 text-xs text-[var(--koa-ink)]/58"></div>
+      </section>
       <div class="mt-6 grid gap-4 sm:grid-cols-2">
         <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Name<input name="name" required maxlength="100" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold">Business group<select name="group" class="rounded-xl border border-[var(--koa-line)] bg-white px-4 py-3"><option value="packages">Wedding packages</option><option value="rentals">Rentals</option><option value="mobile-bar">Mobile Bar</option><option value="add-ons">Add-ons</option><option value="fees">Fees</option><option value="other">Other</option></select></label>
@@ -151,7 +184,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const showArchived=document.querySelector('[data-show-archived]');
     const manageActions=document.querySelector('[data-manage-actions]');
     const history=document.querySelector('[data-import-history]');
+    const priceHistory=document.querySelector('[data-price-history]');
+    const auditMessage=document.querySelector('[data-audit-message]');
+    const auditSummary=document.querySelector('[data-audit-summary]');
+    const auditList=document.querySelector('[data-audit-list]');
     const itemDialog=document.querySelector('[data-item-dialog]');
+    const itemUsage=document.querySelector('[data-item-usage]');
+    const itemUsageLoading=document.querySelector('[data-item-usage-loading]');
+    const itemUsageSummary=document.querySelector('[data-item-usage-summary]');
+    const itemUsageDetails=document.querySelector('[data-item-usage-details]');
     const itemForm=document.querySelector('[data-item-form]');
     const itemTitle=document.querySelector('[data-item-title]');
     const itemMessage=document.querySelector('[data-item-message]');
@@ -166,7 +207,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const importSummary=document.querySelector('[data-import-summary]');
     const duplicateMode=document.querySelector('[data-duplicate-mode]');
 
-    let state={catalog:[],imports:[]};
+    let state={catalog:[],imports:[],priceHistory:[],audit:null};
     let canManage=false;
     let importPayload=null;
 
@@ -185,6 +226,104 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Object.assign(new Error(data.error||'Catalog request failed.'),{data});
       return data;
+    }
+
+    async function refreshMetadata(){
+      const response=await fetch('/api/admin/catalog',{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Unable to refresh catalog metadata.');
+      state.catalog=data.catalog||state.catalog||[];
+      state.imports=data.imports||[];
+      state.priceHistory=data.priceHistory||[];
+      renderCatalog();renderHistory();renderPriceHistory();
+      return data;
+    }
+
+    function renderAudit(audit=state.audit){
+      if(!auditSummary||!auditList||!auditMessage)return;
+      if(!audit){
+        auditSummary.classList.add('hidden');auditList.classList.add('hidden');
+        return;
+      }
+      const s=audit.summary||{};
+      const cards=[
+        ['Items audited',Number(s.total||0)],
+        ['Clean',Number(s.ok||0)],
+        ['Warnings',Number(s.warnings||0)],
+        ['Errors',Number(s.errors||0)],
+        ['QBO mapped',Number(s.qboMapped||0)+' / '+Number(s.total||0)],
+      ];
+      auditSummary.innerHTML=cards.map(([label,value])=>'<div class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="display mt-1 block text-2xl text-[var(--koa-forest)]">'+esc(value)+'</strong></div>').join('');
+      auditSummary.classList.remove('hidden');
+      auditMessage.textContent='Last checked '+dt(audit.checkedAt)+' · QuickBooks '+(audit.qbo?.connected?(audit.qbo?.error?'connected, verification error':'connected and queried'):'not connected')+'. '+(audit.getPolicy?.detail||'');
+      auditList.innerHTML='';
+      (audit.rows||[]).forEach((row)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border '+(row.status==='error'?'border-red-200 bg-red-50/45':row.status==='warning'?'border-amber-200 bg-amber-50/45':'border-emerald-200 bg-emerald-50/35')+' p-4';
+        const issues=(row.issues||[]);
+        const qbo=row.qboMatch;
+        card.innerHTML='<div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between"><div><div class="flex flex-wrap items-center gap-2"><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.name)+'</strong><span class="rounded-full bg-white px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em]">'+esc(row.status)+'</span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/52">'+esc(groupLabels[row.group]||row.group)+' · '+esc(row.category)+' · '+(row.getExempt?'GET exempt':'GET taxable')+'</p></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Catalog</p><strong class="text-sm">'+money(row.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Published</p><strong class="text-sm">'+(row.publicPrice==null?'—':money(row.publicPrice))+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">QuickBooks</p><strong class="text-sm">'+(qbo?esc(qbo.name)+' #'+esc(qbo.id):(row.quickBooksItemId?'Missing #'+esc(row.quickBooksItemId):'Unmapped'))+'</strong></div></div></div>'+
+          (issues.length?'<div class="mt-3 grid gap-1">'+issues.map((issue)=>'<p class="text-xs '+(issue.severity==='error'?'text-red-700':'text-amber-800')+'">• '+esc(issue.detail)+'</p>').join(''):'<p class="mt-3 text-xs font-semibold text-emerald-800">No pricing/category/QBO mapping issues detected from the available sources.</p>')+
+          (row.qboSuggestion?'<p class="mt-2 text-xs text-blue-800">Exact-name QuickBooks candidate: '+esc(row.qboSuggestion.name)+' #'+esc(row.qboSuggestion.id)+' · '+esc(row.qboSuggestion.type)+'</p>':'');
+        auditList.appendChild(card);
+      });
+      auditList.classList.remove('hidden');
+    }
+
+    function renderPriceHistory(){
+      if(!priceHistory)return;
+      const rows=Array.isArray(state.priceHistory)?state.priceHistory:[];
+      priceHistory.innerHTML='';
+      if(!rows.length){priceHistory.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/55">No sell-price changes have been recorded yet. New changes are tracked from this release forward.</div>';return;}
+      rows.slice(0,150).forEach((row)=>{
+        const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const oldMargin=row.oldActualMargin==null?'—':Number(row.oldActualMargin).toFixed(1)+'%';
+        const newMargin=row.newActualMargin==null?'—':Number(row.newActualMargin).toFixed(1)+'%';
+        card.innerHTML='<div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><div><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.itemName||row.catalogItemId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(dt(row.changedAt))+' · '+esc(row.changedBy||'system')+' · '+esc(row.source||'catalog')+(row.sourceRef?' · '+esc(row.sourceRef):'')+'</p>'+(row.note?'<p class="mt-2 text-xs text-[var(--koa-ink)]/55">'+esc(row.note)+'</p>':'')+'</div><div class="grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Old</p><strong>'+money(row.oldPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">New</p><strong>'+money(row.newPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Margin</p><strong>'+esc(oldMargin)+' → '+esc(newMargin)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Draft proposals</p><strong>'+Number(row.draftProposalsUpdated||0)+'</strong></div></div></div>';
+        priceHistory.appendChild(card);
+      });
+    }
+
+    function renderItemUsage(usage){
+      if(!itemUsage||!itemUsageSummary||!itemUsageDetails)return;
+      if(!usage){itemUsage.classList.add('hidden');return;}
+      itemUsage.classList.remove('hidden');
+      const p=usage.proposals||{},w=usage.website||{},q=usage.quickBooks||{};
+      itemUsageSummary.innerHTML=[
+        ['Proposals',Number(p.count||0)],
+        ['Website placements',Number(w.count||0)],
+        ['QuickBooks transactions',q.connected?Number(q.count||0):'Not connected'],
+      ].map(([label,value])=>'<div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="mt-1 block text-lg text-[var(--koa-forest)]">'+esc(value)+'</strong></div>').join('');
+      const proposalStatuses=Object.entries(p.statuses||{}).map(([k,v])=>esc(k)+': '+Number(v)).join(' · ')||'No proposal references.';
+      const placements=(w.placements||[]).map((row)=>'<a class="underline" href="'+esc(row.path)+'" target="_blank" rel="noreferrer">'+esc(row.label)+'</a>').join(' · ')||'No known website placements.';
+      const tx=(q.samples||[]).map((row)=>esc(row.entity)+' '+esc(row.docNumber||('#'+row.id))+' '+money(row.total)).join(' · ')||(q.error?esc(q.error):q.connected?'No QuickBooks transaction references found.':'QuickBooks is not connected for transaction lookup.');
+      const recent=(usage.priceHistory||[]).slice(0,5).map((row)=>money(row.oldPrice)+' → '+money(row.newPrice)+' · '+esc(row.source)+' · '+esc(dt(row.changedAt))).join('<br>')||'No recorded price changes.';
+      itemUsageDetails.innerHTML='<div><strong class="text-[var(--koa-forest)]">Proposal status:</strong> '+proposalStatuses+'</div><div><strong class="text-[var(--koa-forest)]">Website:</strong> '+placements+'</div><div><strong class="text-[var(--koa-forest)]">QuickBooks:</strong> '+tx+'</div><div><strong class="text-[var(--koa-forest)]">Recent pricing:</strong><br>'+recent+'</div>';
+    }
+
+    async function loadUsage(item){
+      if(!item?.id)return null;
+      if(itemUsageLoading)itemUsageLoading.textContent='Checking usage…';
+      try{
+        const data=await api({action:'item-usage',id:item.id});
+        renderItemUsage(data.usage);
+        if(itemUsageLoading)itemUsageLoading.textContent='Live usage checked';
+        return data.usage;
+      }catch(error){
+        renderItemUsage({proposals:{count:0,statuses:{}},website:{count:0,placements:[]},quickBooks:{connected:false,count:0,error:error.message||'Usage lookup failed.'},priceHistory:[]});
+        if(itemUsageLoading)itemUsageLoading.textContent='Usage check failed';
+        return null;
+      }
+    }
+
+    async function runAudit(){
+      if(auditMessage)auditMessage.textContent='Running live catalog + QuickBooks reconciliation…';
+      try{
+        const data=await api({action:'run-audit'});
+        state.audit=data.audit;renderAudit();
+      }catch(error){
+        if(auditMessage)auditMessage.textContent=error.message||'Catalog audit failed.';
+      }
     }
 
     function renderSummary(){
@@ -225,11 +364,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const card=document.createElement('article');
         card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
         card.innerHTML='<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="text-base text-[var(--koa-forest)]">'+esc(item.name)+'</strong><span class="rounded-full bg-[var(--koa-sand)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+esc(groupLabels[item.group]||item.group)+'</span>'+(item.active===false?'<span class="rounded-full bg-red-50 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-red-700">Archived</span>':'')+'</div><p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">'+esc(item.description||'No description')+'</p><p class="mt-2 text-[.62rem] font-semibold text-[var(--koa-ink)]/45">'+esc(item.category)+' · '+esc(item.unitLabel||'each')+' · '+(item.getExempt?'GET exempt':'GET taxable')+' · source '+esc(item.source||'catalog')+(item.quickBooksItemId?' · QBO #'+esc(item.quickBooksItemId):' · QBO fallback item')+'</p></div><div class="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[490px]"><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Sell</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Cost</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.internalCost)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Margin</p><strong class="mt-1 block text-sm '+(actual!=null&&target>0&&actual+0.001<target?'text-red-700':'text-[var(--koa-forest)]')+'">'+marginText(item)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Target</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+(target?target.toFixed(1)+'%':'—')+'</strong></div></div></div>';
-        if(canManage){
+        {
           const actions=document.createElement('div'); actions.className='mt-3 flex flex-wrap gap-2';
-          const edit=document.createElement('button'); edit.type='button';edit.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';edit.textContent='Edit';edit.addEventListener('click',()=>openItem(item));
-          actions.appendChild(edit);
-          if(item.active!==false){const archive=document.createElement('button');archive.type='button';archive.className='rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-red-700';archive.textContent='Archive';archive.addEventListener('click',()=>archiveItem(item));actions.appendChild(archive);}
+          const usage=document.createElement('button');usage.type='button';usage.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';usage.textContent='Usage';usage.addEventListener('click',()=>openItem(item,true));actions.appendChild(usage);
+          if(canManage){
+            const edit=document.createElement('button'); edit.type='button';edit.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';edit.textContent='Edit';edit.addEventListener('click',()=>openItem(item,false));
+            actions.appendChild(edit);
+            if(item.active!==false){const archive=document.createElement('button');archive.type='button';archive.className='rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-red-700';archive.textContent='Archive';archive.addEventListener('click',()=>archiveItem(item));actions.appendChild(archive);}
+          }
           card.appendChild(actions);
         }
         list.appendChild(card);
@@ -252,8 +394,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       });
     }
 
-    function openItem(item=null){
-      if(!canManage)return;
+    async function openItem(item=null,usageOnly=false){
+      if(!item && !canManage)return;
       itemForm.reset();
       itemForm.elements.id.value=item?.id||'';
       itemForm.elements.name.value=item?.name||'';
@@ -266,21 +408,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       itemForm.elements.getExempt.checked=Boolean(item?.getExempt);
       itemForm.elements.active.checked=item?.active!==false;
       itemForm.elements.description.value=item?.description||'';
-      itemTitle.textContent=item?'Edit '+item.name:'Add catalog item';
+      itemTitle.textContent=item?(usageOnly?'Usage · '+item.name:'Edit '+item.name):'Add catalog item';
       itemMessage.textContent='';
+      itemUsage?.classList.toggle('hidden',!item);
+      itemForm.querySelectorAll('input,select,textarea,button[type="submit"]').forEach((el)=>{if(el.name!=='id')el.disabled=Boolean(usageOnly)||(!canManage&&Boolean(item));});
       itemDialog.showModal();
+      if(item)await loadUsage(item);else renderItemUsage(null);
     }
 
     async function archiveItem(item){
-      if(!confirm('Archive '+item.name+'? Existing proposal lines will not be changed.'))return;
+      message.textContent='Checking where '+item.name+' is used…';
+      const usage=await loadUsage(item);
+      const proposalCount=Number(usage?.proposals?.count||0);
+      const websiteCount=Number(usage?.website?.count||0);
+      const qboCount=Number(usage?.quickBooks?.count||0);
+      const prompt='Archive '+item.name+'? It is currently referenced by '+proposalCount+' proposal'+(proposalCount===1?'':'s')+', '+websiteCount+' website placement'+(websiteCount===1?'':'s')+', and '+qboCount+' QuickBooks transaction'+(qboCount===1?'':'s')+'. Existing records will not be rewritten.';
+      if(!confirm(prompt)){message.textContent='Archive cancelled.';return;}
       message.textContent='Archiving '+item.name+'…';
-      try{const data=await api({action:'archive-item',id:item.id});state.catalog=data.catalog||[];renderCatalog();message.textContent=item.name+' archived.';}catch(error){message.textContent=error.message||'Unable to archive item.';}
+      try{const data=await api({action:'archive-item',id:item.id});state.catalog=data.catalog||[];renderCatalog();await refreshMetadata();message.textContent=item.name+' archived.';}catch(error){message.textContent=error.message||'Unable to archive item.';}
     }
 
     async function rollback(row){
       if(!confirm('Restore the entire catalog to its state immediately before import '+row.id+'?'))return;
       message.textContent='Rolling back '+row.id+'…';
-      try{const data=await api({action:'rollback-import',id:row.id});state.catalog=data.catalog||[];state.imports=data.imports||[];renderCatalog();renderHistory();message.textContent='Catalog restored to the pre-import snapshot.';}catch(error){message.textContent=error.message||'Rollback failed.';}
+      try{const data=await api({action:'rollback-import',id:row.id});state.catalog=data.catalog||[];state.imports=data.imports||[];renderCatalog();renderHistory();await refreshMetadata();message.textContent='Catalog restored to the pre-import snapshot.';}catch(error){message.textContent=error.message||'Rollback failed.';}
     }
 
     function fileToBase64(file){
@@ -354,7 +505,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         importMessage.textContent='Creating rollback snapshot and importing catalog…';
         const data=await api({action:'commit-import',filename:importPayload.filename,base64:importPayload.base64,mapping,defaultGroup:defaultGroup?.value||'other',duplicateMode:duplicateMode?.value||'update'});
         state.catalog=data.catalog||[];state.imports=data.imports||[];
-        renderCatalog();renderHistory();
+        renderCatalog();renderHistory();await refreshMetadata();
         importMessage.textContent='Import complete: '+Number(data.import?.imported||0)+' rows. Rollback is available in Recent catalog imports.';
         setTimeout(()=>importDialog?.close(),900);
       }catch(error){importMessage.textContent=error.message||'Import failed.';}
@@ -371,7 +522,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const response=await fetch('/api/admin/catalog',{cache:'no-store'});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to load catalog.');
-        state=data;renderCatalog();renderHistory();
+        state=data;renderCatalog();renderHistory();renderPriceHistory();renderAudit();
         message.textContent=state.catalog.length+' catalog items loaded. Website packages and catalog entries are automatically seeded when missing.';
       }catch(error){message.textContent=error.message||'Unable to load catalog.';}
     }
@@ -380,6 +531,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     groupFilter?.addEventListener('change',renderCatalog);
     showArchived?.addEventListener('change',renderCatalog);
     document.querySelector('[data-new-item]')?.addEventListener('click',()=>openItem());
+    document.querySelector('[data-run-audit]')?.addEventListener('click',runAudit);
     document.querySelectorAll('[data-close-item]').forEach((b)=>b.addEventListener('click',()=>itemDialog?.close()));
     document.querySelector('[data-open-import]')?.addEventListener('click',()=>{importPayload=null;mappingSection?.classList.add('hidden');previewSection?.classList.add('hidden');if(importMessage)importMessage.textContent='';importDialog?.showModal();});
     document.querySelector('[data-close-import]')?.addEventListener('click',()=>importDialog?.close());
@@ -392,13 +544,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const data=new FormData(itemForm);itemMessage.textContent='Saving…';
       try{
         const result=await api({action:'save-item',item:{id:data.get('id'),name:data.get('name'),group:data.get('group'),category:data.get('category'),unitLabel:data.get('unitLabel'),unitPrice:Number(data.get('unitPrice')||0),internalCost:Number(data.get('internalCost')||0),targetMargin:Number(data.get('targetMargin')||0),getExempt:data.get('getExempt')==='on',active:data.get('active')==='on',description:data.get('description')}});
-        state.catalog=result.catalog||[];renderCatalog();itemMessage.textContent='Saved.';setTimeout(()=>itemDialog?.close(),500);
+        state.catalog=result.catalog||[];renderCatalog();await refreshMetadata();itemMessage.textContent='Saved.';setTimeout(()=>itemDialog?.close(),500);
       }catch(error){itemMessage.textContent=error.message||'Unable to save catalog item.';}
     });
 
     document.querySelector('[data-refresh-website]')?.addEventListener('click',async()=>{
       message.textContent='Synchronizing website catalog…';
-      try{const data=await api({action:'refresh-website-catalog'});state.catalog=data.catalog||[];renderCatalog();message.textContent='Website catalog synchronized: '+Number(data.added||0)+' added, '+Number(data.refreshed||0)+' source items refreshed.';}catch(error){message.textContent=error.message||'Unable to synchronize website catalog.';}
+      try{const data=await api({action:'refresh-website-catalog'});state.catalog=data.catalog||[];renderCatalog();await refreshMetadata();message.textContent='Website catalog synchronized: '+Number(data.added||0)+' added, '+Number(data.refreshed||0)+' source items refreshed.';}catch(error){message.textContent=error.message||'Unable to synchronize website catalog.';}
     });
 
     load();
