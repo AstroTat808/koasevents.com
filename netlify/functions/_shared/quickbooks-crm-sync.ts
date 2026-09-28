@@ -8,6 +8,13 @@ import {
   qboQuery,
   qboUpdate,
 } from './quickbooks';
+import {
+  addRecordToQuickBooksMatchIndexes,
+  buildQuickBooksMatchIndexes,
+  getQuickBooksMatchOverrides,
+  recordQuickBooksCrmSyncHistory,
+  resolveQuickBooksCustomerMatch,
+} from './quickbooks-crm-sync-review';
 
 const CRM_RECORD_LIMIT = 1500;
 const QUERY_PAGE_SIZE = 1000;
@@ -535,6 +542,58 @@ async function writeRecords(context: Context, records: any[], changedRecordIds: 
   await store.setJSON('records/index', records.slice(0, CRM_RECORD_LIMIT));
 }
 
+function crmSyncSnapshot(record: any) {
+  const qbo = record?.accounting?.quickbooks || {};
+  return {
+    recordId: clean(record?.id, 120),
+    stage: clean(record?.stage || record?.kind, 80),
+    status: clean(record?.status, 80),
+    customer: {
+      name: clean(record?.customer?.name, 180),
+      email: clean(record?.customer?.email, 240),
+      phone: clean(record?.customer?.phone, 80),
+      eventDate: clean(record?.customer?.eventDate, 40),
+    },
+    proposal: record?.proposal ? {
+      status: clean(record.proposal.status, 80),
+      total: money(record.proposal.total),
+    } : null,
+    quickbooks: {
+      customerId: clean(qbo.customerId, 100),
+      estimateId: clean(qbo.estimateId, 100),
+      estimateDocNumber: clean(qbo.estimateDocNumber, 100),
+      estimateTotal: money(qbo.estimateTotal),
+      invoiceCount: Array.isArray(qbo.invoices) ? qbo.invoices.length : 0,
+      paymentCount: Array.isArray(qbo.payments) ? qbo.payments.length : 0,
+      totalInvoiced: money(qbo.totalInvoiced),
+      totalPaid: money(qbo.totalPaid),
+      balanceDue: money(qbo.balanceDue),
+    },
+  };
+}
+
+function qboCustomerSnapshot(customer: any) {
+  if (!customer) return null;
+  return {
+    id: clean(customer?.Id, 100),
+    displayName: clean(customer?.DisplayName, 240),
+    email: clean(customer?.PrimaryEmailAddr?.Address, 240),
+    phone: clean(customer?.PrimaryPhone?.FreeFormNumber, 80),
+  };
+}
+
+function qboEstimateSnapshot(estimate: any) {
+  if (!estimate) return null;
+  return {
+    id: clean(estimate?.Id, 100),
+    docNumber: clean(estimate?.DocNumber, 100),
+    total: money(estimate?.TotalAmt),
+    expirationDate: isoDate(estimate?.ExpirationDate),
+    email: clean(estimate?.BillEmail?.Address, 240),
+    emailStatus: clean(estimate?.EmailStatus, 80),
+  };
+}
+
 async function appendSyncEvent(context: Context, result: any) {
   const store = salesStore(context);
   const current = ((await store.get('analytics/events/index', { type: 'json' })) || []) as any[];
@@ -558,7 +617,7 @@ export async function getLastQuickBooksCrmSync(context: Context) {
   return await integrationStore(context).get('quickbooks/manual-sync-last', { type: 'json' }) as any;
 }
 
-export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
+export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', previewId = '') {
   const startedAt = new Date().toISOString();
   const store = salesStore(context);
   const existingRecords = ((await store.get('records/index', { type: 'json' })) || []) as any[];
@@ -578,55 +637,38 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
   const customerById = new Map(customers.filter((row) => row?.Id).map((row) => [String(row.Id), row]));
   const estimateById = new Map(estimates.filter((row) => row?.Id).map((row) => [String(row.Id), row]));
 
-  const recordsById = new Map(records.map((record) => [String(record.id), record]));
-  const byQboCustomerId = new Map<string, any>();
-  for (const record of records) {
-    const customerId = clean(record?.accounting?.quickbooks?.customerId, 100);
-    if (customerId && !byQboCustomerId.has(customerId)) byQboCustomerId.set(customerId, record);
-  }
-
-  const exactDisplay = mapUnique(records, (record) => normalizeDisplayName(expectedDisplayName(record)));
-  const emailMap = mapUnique(records, (record) => normalizeEmail(record?.customer?.email));
-  const normalizedNameMap = mapUnique(records, (record) => normalizeName(record?.customer?.name));
+  const matchOverrides = await getQuickBooksMatchOverrides(context);
+  const matchIndexes = buildQuickBooksMatchIndexes(records);
 
   const changedRecordIds = new Set<string>();
   const importedRecordIds: string[] = [];
   const matchedRecordIds = new Set<string>();
   const conflicts: any[] = [];
   const warnings: string[] = [];
+  const changes: any[] = [];
   let skippedCapacity = 0;
+  let skippedAmbiguous = 0;
 
   for (const customer of customers) {
     const customerId = clean(customer?.Id, 100);
     if (!customerId) continue;
-    let record = byQboCustomerId.get(customerId);
 
-    const hintedId = qboRecordIdHint(customer);
-    if (!record && hintedId && recordsById.has(hintedId)) {
-      record = recordsById.get(hintedId);
+    const match = resolveQuickBooksCustomerMatch(customer, matchIndexes, matchOverrides);
+    if (match.status === 'ambiguous') {
+      skippedAmbiguous += 1;
+      conflicts.push({
+        type: 'ambiguous-customer-match',
+        quickBooksCustomerId: customerId,
+        quickBooksCustomerName: clean(customer?.DisplayName, 240),
+        quickBooksEmail: qboCustomerEmail(customer),
+        candidates: match.candidates,
+        detail: 'Multiple CRM clients could match this QuickBooks customer. Staff approval is required before this customer is imported or linked.',
+      });
+      continue;
     }
 
-    if (!record) {
-      const displayMatches = exactDisplay.get(normalizeDisplayName(customer?.DisplayName)) || [];
-      if (displayMatches.length === 1) record = displayMatches[0];
-    }
-
-    if (!record) {
-      const email = normalizeEmail(qboCustomerEmail(customer));
-      const emailMatches = email ? (emailMap.get(email) || []) : [];
-      if (emailMatches.length === 1) record = emailMatches[0];
-      else if (emailMatches.length > 1) {
-        const nameMatches = emailMatches.filter((candidate) =>
-          normalizeName(candidate?.customer?.name) === normalizeName(customer?.DisplayName),
-        );
-        if (nameMatches.length === 1) record = nameMatches[0];
-      }
-    }
-
-    if (!record) {
-      const nameMatches = normalizedNameMap.get(normalizeName(customer?.DisplayName)) || [];
-      if (nameMatches.length === 1) record = nameMatches[0];
-    }
+    let record = match.record || null;
+    const beforeRecord = record ? crmSyncSnapshot(record) : null;
 
     if (!record) {
       if (records.length >= CRM_RECORD_LIMIT) {
@@ -635,7 +677,7 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
       }
       let recordId = sanitizeQboRecordId(customerId);
       let counter = 2;
-      while (recordsById.has(recordId)) {
+      while (matchIndexes.recordsById.has(recordId)) {
         recordId = sanitizeQboRecordId(customerId) + '-' + counter;
         counter += 1;
       }
@@ -677,22 +719,8 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
         },
       };
       records.push(record);
-      recordsById.set(recordId, record);
-      byQboCustomerId.set(customerId, record);
       importedRecordIds.push(recordId);
-
-      const importedEmail = normalizeEmail(record.customer.email);
-      if (importedEmail) {
-        const rows = emailMap.get(importedEmail) || [];
-        rows.push(record);
-        emailMap.set(importedEmail, rows);
-      }
-      const importedName = normalizeName(record.customer.name);
-      if (importedName) {
-        const rows = normalizedNameMap.get(importedName) || [];
-        rows.push(record);
-        normalizedNameMap.set(importedName, rows);
-      }
+      addRecordToQuickBooksMatchIndexes(matchIndexes, record);
     } else {
       matchedRecordIds.add(String(record.id));
       const existingCustomerId = clean(record?.accounting?.quickbooks?.customerId, 100);
@@ -706,7 +734,6 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
         });
         continue;
       }
-      byQboCustomerId.set(customerId, record);
     }
 
     applyFinancialMirror(
@@ -716,7 +743,24 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
       invoiceGroups.get(customerId) || [],
       paymentGroups.get(customerId) || [],
     );
+    addRecordToQuickBooksMatchIndexes(matchIndexes, record);
     changedRecordIds.add(String(record.id));
+
+    const afterRecord = crmSyncSnapshot(record);
+    if (!beforeRecord || JSON.stringify(beforeRecord) !== JSON.stringify(afterRecord)) {
+      changes.push({
+        direction: 'QuickBooks → CRM',
+        system: 'CRM',
+        action: beforeRecord ? 'updated' : 'created',
+        recordId: clean(record.id, 120),
+        clientName: clean(record?.customer?.name, 180),
+        quickBooksCustomerId: customerId,
+        matchDecision: match.status,
+        matchReason: match.reason,
+        before: beforeRecord,
+        after: afterRecord,
+      });
+    }
   }
 
   const settings = await getQuickBooksSettings(context);
@@ -739,10 +783,29 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
     if (!hasProposal && !hasQboLink) continue;
 
     try {
+      const stateBefore = quickBooksState(record);
+      const existingCustomer = stateBefore.customerId ? customerById.get(String(stateBefore.customerId)) : null;
+      const beforeCustomer = qboCustomerSnapshot(existingCustomer);
+      const beforeEstimateId = clean(stateBefore.estimateId, 100);
+      const beforeEstimate = beforeEstimateId ? qboEstimateSnapshot(estimateById.get(beforeEstimateId)) : null;
+
       const customerSync = await syncCustomerOutbound(context, record, customerById);
       if (customerSync.created) pushed.customersCreated += 1;
       if (customerSync.updated) pushed.customersUpdated += 1;
       changedRecordIds.add(String(record.id));
+
+      const afterCustomer = qboCustomerSnapshot(customerSync.customer);
+      if (JSON.stringify(beforeCustomer) !== JSON.stringify(afterCustomer)) {
+        changes.push({
+          direction: 'CRM → QuickBooks',
+          system: 'QuickBooks',
+          action: beforeCustomer ? 'customer_updated' : 'customer_created',
+          recordId: clean(record.id, 120),
+          clientName: clean(record?.customer?.name, 180),
+          before: beforeCustomer,
+          after: afterCustomer,
+        });
+      }
 
       if (hasProposal) {
         const estimateSync = await syncEstimateOutbound(
@@ -757,6 +820,19 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
         } else if (!estimateSync.skipped) {
           if (estimateSync.created) pushed.estimatesCreated += 1;
           else pushed.estimatesUpdated += 1;
+
+          const afterEstimate = qboEstimateSnapshot(estimateSync.estimate);
+          if (JSON.stringify(beforeEstimate) !== JSON.stringify(afterEstimate)) {
+            changes.push({
+              direction: 'CRM → QuickBooks',
+              system: 'QuickBooks',
+              action: beforeEstimate ? 'estimate_updated' : 'estimate_created',
+              recordId: clean(record.id, 120),
+              clientName: clean(record?.customer?.name, 180),
+              before: beforeEstimate,
+              after: afterEstimate,
+            });
+          }
         }
       }
     } catch (error) {
@@ -768,7 +844,10 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
   }
 
   const completedAt = new Date().toISOString();
+  const syncId = 'QBSYNC-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix();
   const result = {
+    syncId,
+    previewId: clean(previewId, 120),
     status: 'completed',
     startedAt,
     completedAt,
@@ -789,16 +868,19 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '') {
     pushed,
     skipped: {
       capacity: skippedCapacity,
+      ambiguous: skippedAmbiguous,
     },
-    conflicts: conflicts.slice(0, 100),
-    warnings: warnings.slice(0, 100),
+    conflicts: conflicts.slice(0, 250),
+    warnings: warnings.slice(0, 250),
+    changes: changes.slice(0, 1000),
   };
 
   await writeRecords(context, records, changedRecordIds);
   const integrations = integrationStore(context);
   await integrations.setJSON('quickbooks/manual-sync-last', result);
   const history = ((await integrations.get('quickbooks/manual-sync-history', { type: 'json' })) || []) as any[];
-  await integrations.setJSON('quickbooks/manual-sync-history', [result, ...history].slice(0, 50));
+  await integrations.setJSON('quickbooks/manual-sync-history', [result, ...history].slice(0, 100));
+  await recordQuickBooksCrmSyncHistory(context, result);
   await appendSyncEvent(context, result);
   return result;
 }
