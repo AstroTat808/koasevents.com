@@ -1,9 +1,9 @@
 import type { Handler } from '@netlify/functions';
+import { tenantProfiles } from '../../src/data/tenants';
 
-const ADMIN_EMAILS = new Set([
-  'chris@sibel.org',
-  'koasadmin@koasevents.com',
-]);
+function bootstrapAdminEmails() {
+  return new Set(tenantProfiles.flatMap((tenant) => tenant.bootstrapAdminEmails).map((email) => String(email).toLowerCase()));
+}
 
 const handler: Handler = async (event) => {
   const payload = JSON.parse(event.body || '{}');
@@ -19,7 +19,7 @@ const handler: Handler = async (event) => {
     ? existingAppMetadata.roles.filter((role: unknown) => typeof role === 'string')
     : [];
 
-  const roles = ADMIN_EMAILS.has(email)
+  const roles = bootstrapAdminEmails().has(email)
     ? [...new Set([...existingRoles.filter((role: string) => role !== 'deactivated'), 'admin'])]
     : existingRoles;
 
