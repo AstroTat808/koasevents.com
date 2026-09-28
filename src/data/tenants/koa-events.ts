@@ -78,6 +78,10 @@ export const koaEventsTenantProfile: TenantProfile = {
   currency: 'USD',
   timezone: 'Pacific/Honolulu',
   microsoftTimeZone: 'Hawaiian Standard Time',
+  calendar: {
+    recordMarkerPrefix: 'VENUELOOM_RECORD_ID:',
+    legacyRecordMarkerPrefixes: ['KOA_RECORD_ID:'],
+  },
   domains: {
     primary: 'koasevents.com',
     admin: 'koasevents.com',
