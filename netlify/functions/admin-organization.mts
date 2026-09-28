@@ -220,7 +220,7 @@ const ONBOARDING_STEPS = [
   'test-workflow',
 ] as const;
 
-function readiness(organization: any, memberships: any[], integrations: ReturnType<typeof integrationReadiness>) {
+function readiness(organization: any, memberships: any[], integrations: ReturnType<typeof integrationReadiness>, tenant: any) {
   const verifiedDomain = (organization.domains || []).some((row: any) => row.status === 'verified');
   const configuredIntegration = Object.values(integrations).some((row: any) => row.configured);
   const checks: Record<string, boolean> = {
@@ -229,7 +229,7 @@ function readiness(organization: any, memberships: any[], integrations: ReturnTy
     venues: (organization.venues || []).some((row: any) => row.active),
     branding: Boolean(organization.branding?.logoPath || organization.branding?.tagline),
     'tax-profile': Boolean(organization.taxProfile?.label),
-    catalog: true,
+    catalog: Boolean((tenant?.catalog?.bootstrapItems || []).length || (organization.onboarding?.completedSteps || []).includes('catalog')),
     integrations: configuredIntegration,
     team: memberships.filter((row) => row.status === 'active').length > 0,
     templates: Array.isArray(organization.templates),
@@ -253,7 +253,7 @@ export default async (req: Request, context: Context) => {
       organization,
       memberships,
       integrations,
-      onboarding: readiness(organization, memberships, integrations),
+      onboarding: readiness(organization, memberships, integrations, tenant),
       catalog: {
         settingsUrl: '/admin/catalog/',
         bootstrapItemCount: tenant.catalog.bootstrapItems.length,
@@ -518,7 +518,7 @@ export default async (req: Request, context: Context) => {
       },
     }));
   } else if (action === 'activate') {
-    const currentReadiness = readiness(organization, memberships, integrations);
+    const currentReadiness = readiness(organization, memberships, integrations, tenant);
     const required = currentReadiness.filter((row) => !row.complete && !['subscription','test-workflow'].includes(row.id));
     if (required.length) {
       return Response.json({
@@ -546,7 +546,7 @@ export default async (req: Request, context: Context) => {
     organization: updated,
     memberships: nextMemberships,
     integrations: nextIntegrations,
-    onboarding: readiness(updated, nextMemberships, nextIntegrations),
+    onboarding: readiness(updated, nextMemberships, nextIntegrations, tenant),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 };
 
