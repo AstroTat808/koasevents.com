@@ -20,10 +20,10 @@ const patterns=[
   {id:'hawaii',re:/Hawai(?:i|ʻi|\u02bbi)|Honolulu|Hilo|Mountain View,?\s+HI|Pacific\/Honolulu|Hawaiian Standard Time/gi,kind:'tenant-locale'},
   {id:'tax-rate-4.712',re:/\b4\.712\b/g,kind:'tenant-tax'},
   {id:'tax-rate-4.5',re:/\b4\.5\b/g,kind:'tenant-tax'},
-  {id:'get-label',re:/\b(?:Hawai(?:i|ʻi|\u02bbi)\s+)?GET\b/g,kind:'tenant-tax'},
+  {id:'get-label',re:/\bHawai(?:i|ʻi|\u02bbi)\s+GET\b/gi,kind:'tenant-tax'},
   {id:'koa-package',re:/\b(?:Gardenia|Orchid|Hibiscus|Plumeria)\b/g,kind:'tenant-catalog'},
   {id:'island-package',re:/\b(?:Oahu|Maui|Big Island)\b/g,kind:'tenant-catalog'},
-  {id:'legacy-blob-store',re:/\bkoa-(?:sales|quotes|integrations|crm|events|event-ops|event-files|admin|vendors|email|gallery|health|system-health|calendar|auth-security)\b/g,kind:'tenant-storage'},
+  {id:'legacy-blob-store',re:/['"]koa-(?:sales|quotes|integrations|crm|events|event-ops|event-files|admin|vendors|email|gallery|health|system-health|calendar|auth-security)['"]/g,kind:'tenant-storage'},
   {id:'koa-css-token',re:/--koa-[a-z0-9-]+/gi,kind:'tenant-brand-token'},
 ];
 
