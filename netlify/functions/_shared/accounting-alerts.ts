@@ -1,4 +1,6 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
+import type { TenantProfile } from '../../../src/data/tenants';
+import { tenantEnv } from './tenant-env';
 type AccountingTransition = {
   recordId?: string;
   clientName?: string;
@@ -26,19 +28,23 @@ function issueSummary(issues: any[]) {
 export async function sendAccountingTransitionAlerts(
   transitions: AccountingTransition[],
   runId: string,
-  options: { test?: boolean } = {},
+  options: { test?: boolean; tenant?: TenantProfile } = {},
 ) {
   const detected = transitions.filter((entry) => entry.type === 'mismatch_detected');
   const resolved = transitions.filter((entry) => entry.type === 'resolved');
   if (!detected.length && !resolved.length) return { changed:false, test:Boolean(options.test), channels:[] };
 
+  const tenant=options.tenant;
+  if(!tenant) throw new Error('Tenant context is required for accounting alerts.');
+  const brand=tenant.displayName || 'VenueLoom tenant';
+  const adminOrigin='https://' + tenant.domains.admin;
   const prefix = options.test ? '[TEST] ' : '';
   const subject = prefix + (
     detected.length && resolved.length
-      ? 'Koa’s accounting reconciliation changed'
+      ? brand + ' accounting reconciliation changed'
       : detected.length
-        ? 'Koa’s accounting mismatch detected'
-        : 'Koa’s accounting mismatch resolved'
+        ? brand + ' accounting mismatch detected'
+        : brand + ' accounting mismatch resolved'
   );
   const summaryLines = [
     options.test ? 'This is a delivery test. No client accounting data was changed.' : '',
@@ -51,18 +57,18 @@ export async function sendAccountingTransitionAlerts(
   ];
 
   const channels:any[] = [];
-  const apiKey=clean(Netlify.env.get('RESEND_API_KEY'),500);
-  const configuredEmails=clean(Netlify.env.get('KOA_ACCOUNTING_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_HEALTH_ALERT_EMAILS'),500)
-    || clean(Netlify.env.get('KOA_LEAD_EMAIL_TO'),500)
-    || 'chris@sibel.org';
+  const apiKey=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
+  const configuredEmails=clean(tenantEnv(tenant,'ACCOUNTING_ALERT_EMAILS','KOA_ACCOUNTING_ALERT_EMAILS'),500)
+    || clean(tenantEnv(tenant,'HEALTH_ALERT_EMAILS','KOA_HEALTH_ALERT_EMAILS'),500)
+    || clean(tenantEnv(tenant,'LEAD_EMAIL_TO','KOA_LEAD_EMAIL_TO'),500)
+    || clean(tenant.contact.email,500);
   const recipients=configuredEmails.split(',').map(v=>v.trim()).filter(v=>v.includes('@'));
 
   if(apiKey&&recipients.length){
-    const from=clean(Netlify.env.get('KOA_ACCOUNTING_ALERT_FROM'),240)
-      || clean(Netlify.env.get('KOA_HEALTH_ALERT_FROM'),240)
-      || clean(Netlify.env.get('KOA_LEAD_EMAIL_FROM'),240)
-      || 'Koa’s Events <leads@koasevents.com>';
+    const from=clean(tenantEnv(tenant,'ACCOUNTING_ALERT_FROM','KOA_ACCOUNTING_ALERT_FROM'),240)
+      || clean(tenantEnv(tenant,'HEALTH_ALERT_FROM','KOA_HEALTH_ALERT_FROM'),240)
+      || clean(tenantEnv(tenant,'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM'),240)
+      || (brand+' <'+tenant.contact.email+'>');
     const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>'+esc(subject)+'</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
       +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
       +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:700px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
@@ -73,13 +79,13 @@ export async function sendAccountingTransitionAlerts(
       +details.map((entry)=>'<div style="margin:14px 0;padding:14px;border:1px solid #e7dfd0;border-radius:12px"><strong>'+esc(entry.heading)+': '+esc(entry.name)+'</strong>'
         +(entry.issues.length?'<ul>'+entry.issues.map((line)=>'<li>'+esc(line)+'</li>').join('')+'</ul>':'')
         +'</div>').join('')
-      +emailButton({href:'https://koasevents.com/admin/quotes/',label:'Open Sales CRM',marginTop:20})
+      +emailButton({href:''+adminOrigin+'/admin/quotes/',label:'Open Sales CRM',marginTop:20})
       +emailSignature()
       +'</td></tr></table></td></tr></table></body></html>';
     const textBody=[emailGreetingText('Team'),'',
       ...summaryLines,
       ...details.flatMap((entry)=>[entry.heading+': '+entry.name,...entry.issues]),
-      'Sales CRM: https://koasevents.com/admin/quotes/','',
+      'Sales CRM: '+adminOrigin+'/admin/quotes/','',
       emailSignatureText()
     ].join('\n');
     try{
@@ -98,14 +104,14 @@ export async function sendAccountingTransitionAlerts(
     channels.push({channel:'email',sent:false,reason:apiKey?'no-recipient':'not-configured'});
   }
 
-  const webhook=clean(Netlify.env.get('KOA_ACCOUNTING_SLACK_WEBHOOK_URL'),1000)
-    || clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
+  const webhook=clean(tenantEnv(tenant,'ACCOUNTING_SLACK_WEBHOOK_URL','KOA_ACCOUNTING_SLACK_WEBHOOK_URL'),1000)
+    || clean(tenantEnv(tenant,'HEALTH_SLACK_WEBHOOK_URL','KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(webhook){
     const lines=[
-      options.test?'🧪 *Koa’s accounting alert test*':'',
+      options.test?'🧪 *'+brand+' accounting alert test*':'',
       detected.length?'🚨 *Accounting mismatch detected:* '+detected.map((entry)=>entry.clientName||entry.recordId||'Test client').join(', '):'',
       resolved.length?'✅ *Accounting mismatch resolved:* '+resolved.map((entry)=>entry.clientName||entry.recordId||'Test client').join(', '):'',
-      '<https://koasevents.com/admin/quotes/|Open Sales CRM>',
+      '<'+adminOrigin+'/admin/quotes/|Open Sales CRM>',
     ].filter(Boolean);
     try{
       const response=await fetch(webhook,{
@@ -122,17 +128,17 @@ export async function sendAccountingTransitionAlerts(
     channels.push({channel:'slack',sent:false,reason:'not-configured'});
   }
 
-  const sid=clean(Netlify.env.get('TWILIO_ACCOUNT_SID'),200);
-  const token=clean(Netlify.env.get('TWILIO_AUTH_TOKEN'),300);
-  const fromNumber=clean(Netlify.env.get('TWILIO_FROM_NUMBER'),80);
-  const smsRecipients=(clean(Netlify.env.get('KOA_ACCOUNTING_SMS_TO'),500)||clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500))
+  const sid=clean(tenantEnv(tenant,'TWILIO_ACCOUNT_SID'),200);
+  const token=clean(tenantEnv(tenant,'TWILIO_AUTH_TOKEN'),300);
+  const fromNumber=clean(tenantEnv(tenant,'TWILIO_FROM_NUMBER'),80);
+  const smsRecipients=(clean(tenantEnv(tenant,'ACCOUNTING_SMS_TO','KOA_ACCOUNTING_SMS_TO'),500)||clean(tenantEnv(tenant,'HEALTH_SMS_TO','KOA_HEALTH_SMS_TO'),500))
     .split(',').map(v=>v.trim()).filter(Boolean);
   if(sid&&token&&fromNumber&&smsRecipients.length){
     const smsBody=[
       options.test?'TEST accounting alert.':'',
       detected.length?'Accounting mismatch: '+detected.map((entry)=>entry.clientName||entry.recordId||'Test client').join(', ')+'.':'',
       resolved.length?'Resolved: '+resolved.map((entry)=>entry.clientName||entry.recordId||'Test client').join(', ')+'.':'',
-      'https://koasevents.com/admin/quotes/',
+      ''+adminOrigin+'/admin/quotes/',
     ].filter(Boolean).join(' ').slice(0,1200);
     const auth='Basic '+btoa(sid+':'+token);
     const results:any[]=[];
