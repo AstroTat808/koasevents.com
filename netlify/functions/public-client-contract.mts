@@ -15,7 +15,7 @@ async function handleTenantRequest(req:Request,context:Context){
   const data=await files(context,req).get(key,{type:'arrayBuffer'});
   if(!data)return Response.json({error:'The signed agreement file is missing.'},{status:404});
   const safe=String(record.customer?.name||'Client').replace(/[^A-Za-z0-9_-]+/g,'-').replace(/^-|-$/g,'')||'Client';
-  return new Response(data,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="Koa-Agreement-'+safe+'.pdf"','Cache-Control':'private, no-store'}});
+  return new Response(data,{headers:{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="'+resolveTenant(req).slug+'-agreement-'+safe+'.pdf"','Cache-Control':'private, no-store'}});
 }
 
 export default async (req:Request, context:Context) => {
