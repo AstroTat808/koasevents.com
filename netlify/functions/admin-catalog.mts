@@ -295,9 +295,10 @@ async function loadQuickBooksTransactions(context:Context) {
 
 function transactionUsage(transactions:any[],item:QuickBooksCatalogItem) {
   const qboId=clean(item.quickBooksItemId,80);
-  if(!qboId)return {count:0,samples:[] as any[]};
+  if(!qboId)return {mapped:false,count:null,samples:[] as any[]};
   const used=transactions.filter((row:any)=>Array.isArray(row.itemIds)&&row.itemIds.includes(qboId));
   return {
+    mapped:true,
     count:used.length,
     samples:used.slice(0,12).map((row:any)=>({
       entity:row.entity,id:row.id,docNumber:row.docNumber,txnDate:row.txnDate,total:row.total,
@@ -412,6 +413,11 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
   const seedById=new Map(websiteSeed().map(item=>[item.id,item]));
   const qbo=await loadQuickBooksItems(context);
   const qboById=new Map(qbo.items.map((item:any)=>[item.id,item]));
+  const catalogByQboId=new Map<string,QuickBooksCatalogItem[]>();
+  catalog.forEach((item)=>{
+    const id=clean(item.quickBooksItemId,80);
+    if(id)catalogByQboId.set(id,[...(catalogByQboId.get(id)||[]),item]);
+  });
   const qboByName=qboNameIndex(qbo.items);
 
   const rows=catalog.map((item)=>{
@@ -459,15 +465,26 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
       if(live){
         if(live.active===false)issues.push({code:'qbo_item_inactive',severity:'warning',detail:'Matched QuickBooks item is inactive.'});
         if(item.quickBooksType!==live.type)issues.push({code:'qbo_type_mismatch',severity:'warning',detail:'Catalog expects '+item.quickBooksType+' but QuickBooks item is '+live.type+'.'});
-        if(item.incomeAccountId&&live.incomeAccountId&&item.incomeAccountId!==live.incomeAccountId){
+        if(qboMatch && clean(item.quickBooksItemName,160) && clean(item.quickBooksItemName,160).toLowerCase()!==clean(live.fullyQualifiedName||live.name,160).toLowerCase()){
+          issues.push({code:'qbo_name_mismatch',severity:'warning',detail:'Stored QuickBooks item name differs from the live Product/Service name.'});
+        }
+        if(!item.incomeAccountId&&live.incomeAccountId){
+          issues.push({code:'qbo_income_account_metadata_missing',severity:'warning',detail:'QuickBooks has an income account, but the catalog mapping is missing the account ID.'});
+        }else if(item.incomeAccountId&&live.incomeAccountId&&item.incomeAccountId!==live.incomeAccountId){
           issues.push({code:'qbo_income_account_mismatch',severity:'warning',detail:'Stored income-account mapping differs from the live QuickBooks item.'});
         }
-        if(publicPrice>0 && Math.abs(Number(live.unitPrice||0)-publicPrice)>0.005){
-          issues.push({code:'qbo_price_mismatch',severity:'warning',detail:'QuickBooks price '+money(live.unitPrice).toFixed(2)+' differs from published/source price '+publicPrice.toFixed(2)+'.'});
+        if(Number(item.unitPrice||0)>0 && Math.abs(Number(live.unitPrice||0)-Number(item.unitPrice||0))>0.005){
+          issues.push({code:'qbo_price_mismatch',severity:'warning',detail:'QuickBooks default rate '+money(live.unitPrice).toFixed(2)+' differs from Catalog Manager '+money(item.unitPrice).toFixed(2)+'.'});
+        }
+        if(qboMatch){
+          const shared=catalogByQboId.get(item.quickBooksItemId)||[];
+          if(shared.length>1){
+            issues.push({code:'qbo_mapping_shared',severity:'warning',detail:'QuickBooks Product/Service #'+item.quickBooksItemId+' is mapped to '+shared.length+' catalog items; transaction usage is not unique.'});
+          }
         }
         const expectedTaxable=item.getExempt!==true;
         if(Boolean(live.taxable)!==expectedTaxable){
-          issues.push({code:'qbo_tax_mismatch',severity:'warning',detail:'QuickBooks taxable flag does not match the Catalog Manager GET setting.'});
+          issues.push({code:'qbo_tax_mismatch',severity:'warning',detail:'QuickBooks taxable flag does not match the Catalog Manager GET setting. This is review-only because the repository has no item-level GET exemption policy.'});
         }
       }
     }
@@ -495,6 +512,7 @@ async function runCatalogAudit(context:Context,catalog:QuickBooksCatalogItem[]) 
       errors:rows.filter(row=>row.status==='error').length,
       publishedPriceMismatches:rows.filter(row=>row.issues.some(issue=>issue.code==='price_mismatch')).length,
       quickBooksPriceMismatches:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_price_mismatch')).length,
+      qboSharedMappings:rows.filter(row=>row.issues.some(issue=>issue.code==='qbo_mapping_shared')).length,
       categoryMismatches:rows.filter(row=>row.issues.some(issue=>['group_mismatch','category_mismatch'].includes(issue.code))).length,
       getExemptReview:rows.filter(row=>row.issues.some(issue=>issue.code==='get_exemption_unverified'||issue.code==='qbo_tax_mismatch')).length,
       qboMapped:rows.filter(row=>Boolean(row.qboMatch)).length,
@@ -541,12 +559,9 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
       shouldUpdate=true;
       actions.push({catalogItemId:item.id,action:'qbo-price',detail:'Updated QuickBooks price from '+money(live.unitPrice).toFixed(2)+' to '+publicPrice.toFixed(2)+'.'});
     }
-    const expectedTaxable=item.getExempt!==true;
-    if(Boolean(live.taxable)!==expectedTaxable){
-      patch.Taxable=expectedTaxable;
-      shouldUpdate=true;
-      actions.push({catalogItemId:item.id,action:'qbo-tax',detail:'Aligned QuickBooks taxable flag to Catalog Manager GET setting.'});
-    }
+    // GET/taxability mismatches are intentionally audit-only. The repository does
+    // not define item-level Hawaiʻi GET exemptions, so this workflow must not make
+    // an accounting taxability decision on the owner's behalf.
     if(shouldUpdate){
       if(!live.syncToken)throw new Error('QuickBooks item '+live.id+' is missing SyncToken; safe reconciliation stopped.');
       await qboUpdate(context,'item',patch);
@@ -556,7 +571,7 @@ async function reconcileSafeCatalogIssues(context:Context,catalog:QuickBooksCata
   const saved=await saveQuickBooksCatalog(
     context,
     next.sort((a,b)=>a.group.localeCompare(b.group)||a.name.localeCompare(b.name)),
-    {actor,source:'catalog-audit-reconcile',note:'Applied safe Catalog Manager ↔ QuickBooks mapping, published-price, and GET-taxability reconciliation.'},
+    {actor,source:'catalog-audit-reconcile',note:'Applied safe Catalog Manager ↔ QuickBooks mapping and published-price reconciliation. GET/taxability differences remain review-only.'},
   );
   return {catalog:saved,actions,audit:await runCatalogAudit(context,saved)};
 }
