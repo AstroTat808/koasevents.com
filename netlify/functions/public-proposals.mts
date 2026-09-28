@@ -1,5 +1,5 @@
 import type { Context, Config } from '@netlify/functions';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, signWellConfigured } from './_shared/signwell';
@@ -104,6 +104,9 @@ function publicRecord(record: any,tenant:any) {
 }
 
 export default async (req: Request, context: Context) => {
+  const tenant=await resolveTenantAsync(req,context).catch(()=>null);
+  if(!tenant)return new Response('Unknown tenant',{status:404,headers:{'Cache-Control':'no-store'}});
+  return runWithTenant(tenant,async()=>{
   const token = clean(context.params.token, 80);
   if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) return Response.json({ error: 'Invalid proposal link.' }, { status: 400 });
 
@@ -231,6 +234,6 @@ export default async (req: Request, context: Context) => {
   }
 
   return new Response('Method not allowed', { status: 405 });
+  });
 };
-
 export const config: Config = { path: '/api/proposals/:token' };
