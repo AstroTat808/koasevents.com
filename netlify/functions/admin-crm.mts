@@ -146,7 +146,7 @@ export default async (req:Request, context:Context) => {
       if(!key)return Response.json({error:'A stored signed SignWell PDF is not available for this project yet.'},{status:404});
       const pdf=await eventStoreFor(context).get(key,{type:'arrayBuffer'});
       if(!pdf)return Response.json({error:'The signed SignWell PDF reference exists, but the stored file could not be found.'},{status:404});
-      const safeName=('Koa-Signed-Agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
+      const safeName=(clean(tenant.slug,80)+'-signed-agreement-'+clean(record.id,100)+'.pdf').replace(/["\\]/g,'');
       return new Response(pdf,{
         headers:{
           'Content-Type':'application/pdf',
@@ -266,7 +266,7 @@ export default async (req:Request, context:Context) => {
     const localDateKey=(iso:string)=>{
       const d=new Date(iso);
       if(Number.isNaN(d.getTime())) return '';
-      const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
+      const parts=new Intl.DateTimeFormat(tenant.locale||'en-US',{timeZone:tenant.timezone||'UTC',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(d);
       const year=parts.find((p)=>p.type==='year')?.value||'';
       const month=parts.find((p)=>p.type==='month')?.value||'';
       const day=parts.find((p)=>p.type==='day')?.value||'';
@@ -274,7 +274,7 @@ export default async (req:Request, context:Context) => {
     };
     const weekStartKey=(dateKey:string)=>{
       if(!dateKey) return '';
-      const d=new Date(dateKey+'T12:00:00-10:00');
+      const d=new Date(dateKey+'T12:00:00Z');
       const day=d.getDay();
       const offset=day===0?-6:1-day;
       d.setDate(d.getDate()+offset);
@@ -282,7 +282,7 @@ export default async (req:Request, context:Context) => {
     };
     const labelDate=(key:string)=>{
       const d=new Date(key+'T12:00:00-10:00');
-      return new Intl.DateTimeFormat('en-US',{timeZone:'Pacific/Honolulu',month:'short',day:'numeric'}).format(d);
+      return new Intl.DateTimeFormat(tenant.locale||'en-US',{timeZone:tenant.timezone||'UTC',month:'short',day:'numeric'}).format(d);
     };
     const roundPct=(n:number,d:number)=>d>0?Math.round((n/d)*1000)/10:null;
     const allAudit=[...(cleanupAudit||[])].sort((a:any,b:any)=>Date.parse(a.createdAt)-Date.parse(b.createdAt));
@@ -700,14 +700,24 @@ export default async (req:Request, context:Context) => {
 
     const person=staffIdentity(auth.user);
     const rendered=buildStaffEmail(record,subject,messageBody,person);
-    const from=clean(Netlify.env.get('KOA_CLIENT_EMAIL_FROM'),240)||'Koa’s Events <aloha@koasevents.com>';
-    const replyTo=clean(Netlify.env.get('KOA_CLIENT_REPLY_TO'),240)||'aloha@koasevents.com';
+    const from=clean(
+      Netlify.env.get('VENUELOOM_CLIENT_EMAIL_FROM')
+      || Netlify.env.get('KOA_CLIENT_EMAIL_FROM')
+      || (tenant.displayName+' <'+tenant.contact.email+'>'),
+      240,
+    );
+    const replyTo=clean(
+      Netlify.env.get('VENUELOOM_CLIENT_REPLY_TO')
+      || Netlify.env.get('KOA_CLIENT_REPLY_TO')
+      || tenant.contact.email,
+      240,
+    );
     const sendId='CRM-'+id('EMAIL');
     let resendId='';
     try{
       const response=await fetch('https://api.resend.com/emails',{
         method:'POST',
-        headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-staff-client-'+recordId+'-'+sendId).slice(0,256)},
+        headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('venueloom-staff-client-'+tenant.id+'-'+recordId+'-'+sendId).slice(0,256)},
         body:JSON.stringify({from,to:[email],subject,html:rendered.html,text:rendered.text,reply_to:replyTo}),
         signal:AbortSignal.timeout(12_000),
       });
