@@ -363,7 +363,15 @@ if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
   for (const failure of failures) console.error(' - ' + failure);
   console.error('\nFix these structural errors before building or deploying.\n');
-  process.exit(2);
+  const first=String(failures[0]||'');
+  const diagnosticExit=
+    first.includes(' syntax:') ? 21 :
+    /multiple default exports|multiple exported config|duplicate top-level function|suspicious concatenated/.test(first) ? 22 :
+    /email|Email|Resend|Outlook|logo|branded/.test(first) ? 23 :
+    /Catalog|catalog|XLSX|CSV/.test(first) ? 24 :
+    /selector|script blocks|triple-dollar/.test(first) ? 25 :
+    26;
+  process.exit(diagnosticExit);
 }
 
 console.log('Build-safety audit passed: no malformed syntax, duplicate default/config exports, or duplicate top-level function bodies detected.');
