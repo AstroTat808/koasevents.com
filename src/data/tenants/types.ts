@@ -52,6 +52,19 @@ export type TenantSalesConfig = {
   privateEventPackageIds: string[];
 };
 
+export type TenantDamageDepositConfig = {
+  enabled: boolean;
+  defaultRentalType: 'one-day' | 'weekend';
+  oneDayAmount: number;
+  weekendAmount: number;
+  dueDaysBefore: number;
+  refundWithinDays: number;
+};
+
+export type TenantAccountingConfig = {
+  damageDeposit: TenantDamageDepositConfig;
+};
+
 export type TenantProfile = {
   id: string;
   slug: string;
@@ -79,6 +92,7 @@ export type TenantProfile = {
   tax: TenantTaxProfile;
   catalog: TenantCatalogConfig;
   sales: TenantSalesConfig;
+  accounting: TenantAccountingConfig;
   bootstrapAdminEmails: string[];
   storage: {
     legacyDataBelongsToTenant: boolean;

@@ -371,6 +371,23 @@ export type QuickBooksPaymentRule = {
   active: boolean;
 };
 
+export type QuickBooksDamageDepositSettings = {
+  enabled: boolean;
+  oneDayAmount: number;
+  weekendAmount: number;
+  dueDaysBefore: number;
+  refundWithinDays: number;
+  liabilityAccountId: string;
+  liabilityAccountName: string;
+  itemId: string;
+  itemName: string;
+  refundBankAccountId: string;
+  refundBankAccountName: string;
+  deductionIncomeAccountId: string;
+  deductionIncomeAccountName: string;
+  updatedAt: string;
+};
+
 export type QuickBooksDepositSettings = {
   defaultPercent: number;
   venueWeddingPercent: number;
@@ -496,6 +513,10 @@ function depositSettingsKey() {
   return 'quickbooks/deposit-settings/' + config().environment;
 }
 
+function damageDepositSettingsKey() {
+  return 'quickbooks/damage-deposit-settings/' + config().environment;
+}
+
 function cleanDepositPercent(value: unknown, fallback = 10) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
@@ -563,6 +584,50 @@ function cleanAutoRules(input: unknown): QuickBooksPaymentRule[] {
     };
   }).filter((item) => item.id && item.presetId)
     .sort((a,b) => a.priority - b.priority || a.name.localeCompare(b.name));
+}
+
+export async function getQuickBooksDamageDepositSettings(context: Context): Promise<QuickBooksDamageDepositSettings> {
+  const tenant = resolveTenant();
+  const defaults = tenant.accounting.damageDeposit;
+  const stored = await integrationStore(context).get(damageDepositSettingsKey(), { type: 'json' }) as any;
+  return {
+    enabled: stored?.enabled == null ? defaults.enabled : stored.enabled !== false,
+    oneDayAmount: Math.max(0, Math.round(Number(stored?.oneDayAmount ?? defaults.oneDayAmount) * 100) / 100),
+    weekendAmount: Math.max(0, Math.round(Number(stored?.weekendAmount ?? defaults.weekendAmount) * 100) / 100),
+    dueDaysBefore: cleanDueDays(stored?.dueDaysBefore, defaults.dueDaysBefore),
+    refundWithinDays: cleanDueDays(stored?.refundWithinDays, defaults.refundWithinDays),
+    liabilityAccountId: String(stored?.liabilityAccountId || '').trim().slice(0, 80),
+    liabilityAccountName: String(stored?.liabilityAccountName || '').trim().slice(0, 160),
+    itemId: String(stored?.itemId || '').trim().slice(0, 80),
+    itemName: String(stored?.itemName || 'Refundable Damage Deposit').trim().slice(0, 160),
+    refundBankAccountId: String(stored?.refundBankAccountId || '').trim().slice(0, 80),
+    refundBankAccountName: String(stored?.refundBankAccountName || '').trim().slice(0, 160),
+    deductionIncomeAccountId: String(stored?.deductionIncomeAccountId || '').trim().slice(0, 80),
+    deductionIncomeAccountName: String(stored?.deductionIncomeAccountName || '').trim().slice(0, 160),
+    updatedAt: String(stored?.updatedAt || ''),
+  };
+}
+
+export async function saveQuickBooksDamageDepositSettings(context: Context, settings: Partial<QuickBooksDamageDepositSettings>) {
+  const current = await getQuickBooksDamageDepositSettings(context);
+  const next: QuickBooksDamageDepositSettings = {
+    enabled: settings.enabled ?? current.enabled,
+    oneDayAmount: Math.max(0, Math.round(Number(settings.oneDayAmount ?? current.oneDayAmount) * 100) / 100),
+    weekendAmount: Math.max(0, Math.round(Number(settings.weekendAmount ?? current.weekendAmount) * 100) / 100),
+    dueDaysBefore: cleanDueDays(settings.dueDaysBefore, current.dueDaysBefore),
+    refundWithinDays: cleanDueDays(settings.refundWithinDays, current.refundWithinDays),
+    liabilityAccountId: String(settings.liabilityAccountId ?? current.liabilityAccountId).trim().slice(0, 80),
+    liabilityAccountName: String(settings.liabilityAccountName ?? current.liabilityAccountName).trim().slice(0, 160),
+    itemId: String(settings.itemId ?? current.itemId).trim().slice(0, 80),
+    itemName: String(settings.itemName ?? current.itemName ?? 'Refundable Damage Deposit').trim().slice(0, 160) || 'Refundable Damage Deposit',
+    refundBankAccountId: String(settings.refundBankAccountId ?? current.refundBankAccountId).trim().slice(0, 80),
+    refundBankAccountName: String(settings.refundBankAccountName ?? current.refundBankAccountName).trim().slice(0, 160),
+    deductionIncomeAccountId: String(settings.deductionIncomeAccountId ?? current.deductionIncomeAccountId).trim().slice(0, 80),
+    deductionIncomeAccountName: String(settings.deductionIncomeAccountName ?? current.deductionIncomeAccountName).trim().slice(0, 160),
+    updatedAt: new Date().toISOString(),
+  };
+  await integrationStore(context).setJSON(damageDepositSettingsKey(), next);
+  return next;
 }
 
 export async function getQuickBooksDepositSettings(context: Context): Promise<QuickBooksDepositSettings> {
