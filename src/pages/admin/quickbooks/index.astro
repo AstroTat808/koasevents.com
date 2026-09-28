@@ -1177,7 +1177,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const card=document.createElement('div');card.className='rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950';
         const title=document.createElement('strong');title.textContent='“'+a.name+'” overlaps “'+b.name+'”.';
         const detail=document.createElement('div');detail.className='mt-1 leading-5';
-        detail.textContent='Winner: “'+winner.name+'” because it appears above “'+loser.name+'” in priority order.'+(indeterminateBasis?' These rules use different tax bases, so overlap depends on the actual GET amount; the simulator will show the winner for a specific proposal.':'');
+        detail.textContent='Winner: “'+winner.name+'” because it appears above “'+loser.name+'” in priority order.'+(indeterminateBasis?' These rules use different tax bases, so overlap depends on the actual tax amount; the simulator will show the winner for a specific proposal.':'');
         card.append(title,detail);list.appendChild(card);
       });
     }
