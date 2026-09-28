@@ -1,23 +1,12 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { stampTenant, tenantRows, tenantStore } from './_shared/tenant-storage';
 import { baseVendorRequirements, isBaselineVendorRequirements, suggestVendorRequirements } from './_shared/vendor-requirements.ts';
 import { applyMasterInsuranceToAssignments } from './_shared/vendor-insurance-sync.ts';
 
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
-}
-function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
-}
-function vendorStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-vendors', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-vendors' });
-}
+function salesStoreFor(context: Context) { return tenantStore(context,'sales',resolveTenant()); }
+function opsStoreFor(context: Context) { return tenantStore(context,'eventOps',resolveTenant()); }
+function vendorStoreFor(context: Context) { return tenantStore(context,'vendors',resolveTenant()); }
 function clean(value: unknown, max = 1200) {
   return String(value || '').trim().slice(0, max);
 }
@@ -44,7 +33,7 @@ function seedQuestionnaire() {
     ['event','Confirm the final guest count.'],
     ['event','What time should guests begin arriving?'],
     ['event','Are there accessibility, mobility, or special accommodation needs?'],
-    ['ceremony','Will the ceremony be held at Koa’s? If yes, where and what setup do you want?'],
+    ['ceremony','Will the ceremony be held at this venue? If yes, where and what setup do you want?'],
     ['ceremony','How many ceremony chairs are needed, and are there aisle, arch, microphone, or processional requirements?'],
     ['reception','Where will the reception be held, and will it use the same space as the ceremony?'],
     ['reception','What meal style are you planning: plated, buffet, family-style, food stations, food truck, or something else?'],
@@ -53,8 +42,8 @@ function seedQuestionnaire() {
     ['layout','What is the rain/weather backup layout, and will any furniture need to move or flip between ceremony and reception?'],
     ['vendors','Are all vendors finalized? List any vendors still pending.'],
     ['vendors','Are there vendor power, water, staging, loading, or parking requirements?'],
-    ['rentals','Which Koa’s rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
-    ['bar','Will alcohol be served? If yes, are you using Koa’s Mobile Bar, another approved bartender, beer/wine only, cocktails, or a full bar?'],
+    ['rentals','Which venue rental inventory or outside rental items are confirmed? Include tents, canopies, linens, tabletop, specialty seating, or dance-floor rentals.'],
+    ['bar','Will alcohol be served? If yes, are you using the venue bar service, another approved bartender, beer/wine only, cocktails, or a full bar?'],
     ['bar','Where will bar service be located, and do you need cocktail-hour service, a satellite/second bar, or special beverage stations?'],
     ['decor','What decor, floral, signage, cake, or specialty installation details need coordination?'],
     ['timeline','List special entrances, announcements, dances, speeches, ceremonies, performances, or surprise moments.'],
@@ -187,7 +176,7 @@ export default async (req:Request,context:Context)=>{
   if(!/^[A-Za-z0-9_-]{24,100}$/.test(token)) return Response.json({error:'Invalid planning link.'},{status:400});
 
   const sales=salesStoreFor(context);
-  const opsStore=opsStoreFor(context);
+  const opsStore=tenantStore(context,'eventOps',tenant);
   const records=((await sales.get('records/index',{type:'json'})) || []) as any[];
   const record=records.find((entry:any)=>entry?.kind==='proposal' && entry?.proposal?.publicToken===token);
   if(!record) return Response.json({error:'Planning portal not found.'},{status:404});
@@ -199,7 +188,7 @@ export default async (req:Request,context:Context)=>{
   if(!ops){ops=defaultOps(record);await opsStore.setJSON('events/'+record.id,ops);}
   const mergedQuestionnaire=ensureQuestionnaire(ops.questionnaire||[]);
   if(mergedQuestionnaire.length!==(ops.questionnaire||[]).length){ops.questionnaire=mergedQuestionnaire;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
-  const masterVendorsForEvent:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+  const masterVendorsForEvent:any[]=(await tenantStore(context,'vendors',tenant).get('vendors/index',{type:'json'}))||[];
   const refreshedInsuranceVendors=applyMasterInsuranceToAssignments(ops.vendors||[],masterVendorsForEvent,record.customer?.eventDate);
   if(JSON.stringify(refreshedInsuranceVendors)!==JSON.stringify(ops.vendors||[])){ops.vendors=refreshedInsuranceVendors;ops.updatedAt=new Date().toISOString();await opsStore.setJSON('events/'+record.id,ops);}
   if(!Array.isArray(ops.vendorRequirements)){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';await opsStore.setJSON('events/'+record.id,ops);}
@@ -217,7 +206,7 @@ export default async (req:Request,context:Context)=>{
     ops.finalGuestCount=Math.round(num(payload?.finalGuestCount,0,1000));
     if(ops.vendorRequirementsMode!=='manual'){ops.vendorRequirements=suggestVendorRequirements(record,ops).map((r)=>({category:r.category,importance:r.importance,note:r.note}));ops.vendorRequirementsMode='auto';}
   } else if(action==='save-vendors') {
-    const masterVendors:any[]=(await vendorStoreFor(context).get('vendors/index',{type:'json'}))||[];
+    const masterVendors:any[]=(await tenantStore(context,'vendors',tenant).get('vendors/index',{type:'json'}))||[];
     ops.vendors=applyMasterInsuranceToAssignments(sanitizeClientVendors(payload?.vendors,ops.vendors||[]),masterVendors,record.customer?.eventDate);
   } else if(action==='save-questionnaire') {
     ops.questionnaire=sanitizeClientQuestionnaire(payload?.questionnaire,ops.questionnaire||[]);
