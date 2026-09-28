@@ -788,41 +788,69 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(previewLinked)previewLinked.textContent=Number(summary.linked||0);
       if(previewOutbound)previewOutbound.textContent=Number(summary.crmOutboundActions||0);
       if(previewAmbiguous)previewAmbiguous.textContent=Number(summary.needsDecision||0);
-      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' customers · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned.':'';
+      if(previewGenerated)previewGenerated.textContent=preview?'Preview '+when(preview.generatedAt)+' · expires '+when(preview.expiresAt)+' · '+Number(summary.qboCustomers||0)+' customers · '+Number(summary.qboEstimates||0)+' estimates · '+Number(summary.qboInvoices||0)+' invoices · '+Number(summary.qboPayments||0)+' payments scanned · '+Number(summary.duplicateFlags||0)+' duplicate/review flag'+(Number(summary.duplicateFlags||0)===1?'':'s')+'.':'';
 
       const needsDecision=Number(summary.needsDecision||0);
       const unapprovedNew=Number(summary.unapprovedNewImports||0);
       const ambiguousCount=Number(summary.ambiguousMatches||0);
+      const bulkEligibleCount=Number(summary.bulkEligibleNewImports||0);
+      const individualCount=Number(summary.needsIndividualReview||0);
       if(previewReviewWarning)previewReviewWarning.classList.toggle('hidden',!preview||needsDecision===0);
       if(previewReviewWarningTitle)previewReviewWarningTitle.textContent=needsDecision===1?'1 customer decision must be reviewed before sync.':needsDecision+' customer decisions must be reviewed before sync.';
       if(previewReviewWarningDetail)previewReviewWarningDetail.textContent=[
-        unapprovedNew?unapprovedNew+' proposed new CRM import'+(unapprovedNew===1?' requires':'s require')+' explicit approval.':'',
-        ambiguousCount?ambiguousCount+' ambiguous match'+(ambiguousCount===1?' requires':'es require')+' a CRM match decision.':'',
-        'Nothing in these unresolved rows will be imported by Run Approved Sync.'
+        unapprovedNew?unapprovedNew+' proposed new CRM import'+(unapprovedNew===1?' requires':'s require')+' approval.':'',
+        bulkEligibleCount?bulkEligibleCount+' low-risk import'+(bulkEligibleCount===1?' is':'s are')+' eligible for guarded bulk review.':'',
+        individualCount?individualCount+' row'+(individualCount===1?' requires':'s require')+' individual review because of duplicate evidence or missing reliable contact data.':'',
+        ambiguousCount?ambiguousCount+' possible duplicate match'+(ambiguousCount===1?' is':'es are')+' blocked until resolved.':'',
+        'Nothing unresolved can be imported by Run Approved Sync.'
       ].filter(Boolean).join(' ');
 
       const plans=Array.isArray(preview?.customerPlans)?preview.customerPlans:[];
+      const allBulkEligible=plans.filter((plan)=>String(plan?.decision||'')==='new'&&Boolean(plan?.bulkEligible));
+      const allBulkEligibleIds=new Set(allBulkEligible.map((plan)=>String(plan.customerId)));
+      [...bulkSelectedNew].forEach((id)=>{if(!allBulkEligibleIds.has(String(id)))bulkSelectedNew.delete(String(id));});
+
       const visiblePlans=plans.filter(previewPlanMatchesFilter);
       const imports=visiblePlans.filter((row)=>['new','approved_new'].includes(row.decision));
       const matches=visiblePlans.filter((row)=>['linked','auto_match','approved_match'].includes(row.decision));
-      const reviewPlans=visiblePlans.filter((row)=>['new','ambiguous'].includes(row.decision));
+      const reviewPlans=visiblePlans.filter((row)=>row.decision==='ambiguous'||(row.decision==='new'&&!row.bulkEligible));
+      const visibleBulk=imports.filter((row)=>row.decision==='new'&&row.bulkEligible);
+
       if(previewFilterCount)previewFilterCount.textContent=visiblePlans.length+' of '+plans.length+' customer'+(plans.length===1?'':'s')+' shown';
       if(previewImports)previewImports.innerHTML=imports.length?imports.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No proposed CRM imports match this view.</p>';
       if(previewMatches)previewMatches.innerHTML=matches.length?matches.map(compactPlanRow).join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No existing CRM matches match this view.</p>';
       wirePreviewDecisionButtons(previewImports);
       wirePreviewDecisionButtons(previewMatches);
 
+      if(bulkReview)bulkReview.classList.toggle('hidden',allBulkEligible.length===0);
+      if(bulkReviewDetail)bulkReviewDetail.textContent=allBulkEligible.length
+        ? allBulkEligible.length+' low-risk new customer'+(allBulkEligible.length===1?' has':'s have')+' no CRM duplicate evidence and a reliable email or phone. '+visibleBulk.length+' are visible in the current filter; '+bulkSelectedNew.size+' selected.'
+        : 'No customers currently qualify for bulk approval.';
+      if(bulkApprove){
+        bulkApprove.disabled=bulkSelectedNew.size===0;
+        bulkApprove.textContent='Approve selected ('+bulkSelectedNew.size+')';
+      }
+      if(bulkSelectVisible)bulkSelectVisible.disabled=visibleBulk.length===0;
+
       const outbound=Array.isArray(preview?.outbound)?preview.outbound:[];
       if(previewOutboundList)previewOutboundList.innerHTML=outbound.length?outbound.map((row)=>'<article class="min-w-0 rounded-lg bg-[var(--koa-sand)]/45 p-3"><strong class="block min-w-0 break-words text-sm text-[var(--koa-forest)]">'+esc(row.name||row.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">CRM '+esc(row.recordId)+'</p><div class="mt-2 grid min-w-0 gap-2">'+(row.actions||[]).map(outboundActionHtml).join('')+'</div></article>').join(''):'<p class="text-xs text-[var(--koa-ink)]/45">No CRM-origin QuickBooks changes are planned.</p>';
 
       if(matchReview)matchReview.classList.toggle('hidden',reviewPlans.length===0);
-      if(matchReviewCount)matchReviewCount.textContent=reviewPlans.length+' decision'+(reviewPlans.length===1?'':'s');
+      if(matchReviewCount)matchReviewCount.textContent=reviewPlans.length+' individual review'+(reviewPlans.length===1?'':'s');
       if(matchReviewList){
         matchReviewList.innerHTML=reviewPlans.map((plan)=>{
           const q=plan.qbo||{};
           const candidates=Array.isArray(plan.candidates)?plan.candidates:[];
           const noCandidate=String(plan.decision||'')==='new';
-          return '<article class="min-w-0 rounded-xl border border-amber-200 bg-white p-4"><div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><div class="min-w-0 rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block min-w-0 break-words text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/55">'+esc(q.phone||'No phone')+'</p><p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full bg-amber-900 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Approve as new CRM client</button></div><div class="min-w-0"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+(noCandidate?'Why this needs approval':'Possible CRM matches')+'</p>'+(noCandidate?'<div class="mt-2 rounded-xl border border-[var(--koa-line)] p-3"><strong class="text-sm">No CRM candidate was found automatically.</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52">Review the customer name, email, invoices, payments and exact projected CRM record. Approve the new import only when you are satisfied this is not an existing CRM client.</p></div>':'<div class="mt-2 grid min-w-0 gap-2">'+candidates.map((candidate)=>'<div class="min-w-0 rounded-xl border border-[var(--koa-line)] p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><strong class="block min-w-0 break-words text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] font-semibold text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p></div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked elsewhere</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>').join('')+'</div>')+'</div></div></article>';
+          const risk=plan?.duplicateRisk||{};
+          const riskSignals=Array.isArray(risk.signals)?risk.signals.map(duplicateSignalLabel).filter(Boolean):[];
+          const riskLine=(String(risk.level||'review')==='high'?'High duplicate risk':String(risk.level||'')==='medium'?'Medium duplicate risk':'Individual review')+(Number(risk.score||0)?' · score '+Number(risk.score||0):'')+(riskSignals.length?' · '+riskSignals.join(', '):'');
+          const candidateHtml=candidates.map((candidate)=>{
+            const signals=Array.isArray(candidate.signals)?candidate.signals.map(duplicateSignalLabel).filter(Boolean):[];
+            const riskClass=String(candidate.riskLevel||'')==='high'?'bg-red-100 text-red-800':String(candidate.riskLevel||'')==='medium'?'bg-amber-100 text-amber-900':'bg-slate-100 text-slate-700';
+            return '<div class="min-w-0 rounded-xl border border-[var(--koa-line)] p-3"><div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="block min-w-0 break-words text-sm">'+esc(candidate.name||candidate.recordId)+'</strong><span class="rounded-full px-2 py-1 text-[.5rem] font-black uppercase tracking-[.06em] '+riskClass+'">'+esc(String(candidate.riskLevel||'review'))+' · '+Number(candidate.score||0)+'</span></div><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/52">'+esc(candidate.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/52">'+esc(candidate.phone||'No phone')+'</p><p class="mt-1 min-w-0 break-words text-[.62rem] text-[var(--koa-ink)]/45">'+esc(candidate.eventDate||'No event date')+' · '+esc(candidate.stage||'')+'</p><p class="mt-2 min-w-0 break-words text-[.62rem] font-semibold leading-5 text-[var(--koa-clay)]">'+esc(candidate.reason||'Possible match')+'</p>'+(signals.length?'<p class="mt-1 min-w-0 break-words text-[.6rem] leading-5 text-[var(--koa-ink)]/45">Evidence: '+esc(signals.join(' · '))+'</p>':'')+'</div>'+(candidate.currentQuickBooksCustomerId&&String(candidate.currentQuickBooksCustomerId)!==String(plan.customerId)?'<span class="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-slate-600">Linked elsewhere</span>':'<button type="button" data-match-qbo="'+esc(plan.customerId)+'" data-match-record="'+esc(candidate.recordId)+'" class="shrink-0 rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Use this CRM client</button>')+'</div></div>';
+          }).join('');
+          return '<article class="min-w-0 rounded-xl border border-amber-200 bg-white p-4"><div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]"><div class="min-w-0 rounded-xl bg-amber-50 p-4"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-amber-900">QuickBooks customer</p><strong class="mt-2 block min-w-0 break-words text-base">'+esc(q.name||plan.customerId)+'</strong><p class="mt-1 min-w-0 break-all text-xs text-[var(--koa-ink)]/55">'+esc(q.email||'No email')+'</p><p class="mt-1 min-w-0 break-words text-xs text-[var(--koa-ink)]/55">'+esc(q.phone||'No phone')+(q.eventDate?' · event '+esc(q.eventDate):'')+'</p><p class="mt-2 min-w-0 break-all text-[.62rem] font-bold text-[var(--koa-clay)]">QBO #'+esc(plan.customerId)+'</p><p class="mt-2 rounded-lg bg-white/70 px-2 py-1.5 text-[.62rem] font-semibold leading-5 text-amber-950">'+esc(riskLine)+'</p><p class="mt-2 min-w-0 break-words text-xs leading-5 text-[var(--koa-ink)]/50">'+Number(plan.financial?.estimates||0)+' estimates · '+Number(plan.financial?.invoices||0)+' invoices · '+Number(plan.financial?.payments||0)+' payments · '+money(plan.financial?.invoiceTotal||0)+' invoiced · '+money(plan.financial?.openBalance||0)+' open</p><button type="button" data-match-new="'+esc(plan.customerId)+'" class="mt-4 rounded-full bg-amber-900 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.07em] text-white">Approve as new CRM client</button></div><div class="min-w-0"><p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+(noCandidate?'Why this needs individual review':'Possible CRM matches')+'</p>'+(noCandidate?'<div class="mt-2 rounded-xl border border-[var(--koa-line)] p-3"><strong class="text-sm">Bulk approval is intentionally unavailable.</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/52">No reliable email or phone is available for this QuickBooks customer. Review the name, transaction history, invoices, payments and projected CRM record individually before approving a new import.</p></div>':'<div class="mt-2 grid min-w-0 gap-2">'+candidateHtml+'</div>')+'</div></div></article>';
         }).join('');
 
         matchReviewList.querySelectorAll('[data-match-qbo]').forEach((button)=>button.addEventListener('click',async()=>{
