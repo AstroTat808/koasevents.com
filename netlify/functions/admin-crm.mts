@@ -1,5 +1,4 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
 import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
@@ -8,6 +7,8 @@ import { appendStaffAudit } from './_shared/staff-audit';
 import { recordCrmStartupSignal } from './_shared/system-health';
 import { ensureBooking } from './_shared/booking';
 import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfiguration, signWellConfigured } from './_shared/signwell';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; };
@@ -19,15 +20,11 @@ type Template = { id:string; type:'email'|'form'|'questionnaire'|'proposal-note'
 type ProjectMeta = { recordId:string; projectStatus:string; tags:string[]; owner:string; company:string; address:string; partnerName:string; sourceDetail:string; businessLine:string; projectType:string; customFields:Record<string,string>; updatedAt:string; };
 type Activity = { id:string; recordId:string; type:string; detail:string; createdAt:string; };
 
-function crmStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-crm', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-crm' });
+function crmStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'crm');
 }
-function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+function salesStoreFor(context: Context, req?: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'sales');
 }
 function clean(v: unknown, max = 4000) { return String(v ?? '').trim().slice(0, max); }
 function id(prefix='CRM') {
@@ -49,13 +46,13 @@ async function appendActivity(store:any, recordId:string, type:string, detail:st
 
 function staffIdentity(user:any) {
   const metadata = user?.user_metadata || user?.userMetadata || {};
-  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Koa’s Events Team', 180);
+  const name = clean(metadata?.full_name || metadata?.name || user?.name || user?.email || 'Team Member', 180);
   const explicitTitle = clean(metadata?.title || metadata?.job_title || metadata?.jobTitle, 120);
   const role = operationsRole(user);
   const roleTitle = role && role !== 'custom' && role in ROLE_LABELS ? ROLE_LABELS[role as keyof typeof ROLE_LABELS] : '';
   return {
     name,
-    title: explicitTitle || roleTitle || 'Koa’s Events Team',
+    title: explicitTitle || roleTitle || 'Team Member',
     pronouns: clean(metadata?.pronouns,80),
     roleDescription: clean(metadata?.role_description || metadata?.roleDescription,220),
     showTitle: metadata?.signature_show_title !== false,
@@ -130,16 +127,17 @@ function normalizeProject(record:any, meta:ProjectMeta|null) {
 }
 
 export default async (req:Request, context:Context) => {
-  const auth = await requireCapability('crm.view', req);
+  const auth = await requireCapability('crm.view', req, context);
   if (auth.response) return auth.response;
 
-  const crm = crmStoreFor(context);
-  const sales = salesStoreFor(context);
+  const tenant = auth.tenant || resolveTenant(req);
+  const crm = crmStoreFor(context, req);
+  const sales = salesStoreFor(context, req);
 
   if (req.method === 'GET') {
     const requestUrl=new URL(req.url);
     const signWellPdfRecordId=clean(requestUrl.searchParams.get('signwellPdf'),100);
-    const salesRecords = await readIndex<any>(sales,'records/index');
+    const salesRecords = (await readTenantIndex<any>(sales,tenant,'records/index')).rows;
 
     if(signWellPdfRecordId){
       const record=salesRecords.find((entry:any)=>entry?.id===signWellPdfRecordId);
