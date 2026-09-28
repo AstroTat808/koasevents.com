@@ -386,7 +386,7 @@ export async function getAccessContext(req?:Request, context?:Context) {
     capabilities,
     policy,
     security,
-    tenant,
+    tenant:tenantContext?.profile || tenant,
     tenantContext,
     membership:tenantContext?.membership || null,
     organization:tenantContext?.organization || null,
