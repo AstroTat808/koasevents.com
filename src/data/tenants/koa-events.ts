@@ -158,6 +158,7 @@ export const koaEventsTenantProfile: TenantProfile = {
   },
   bootstrapAdminEmails: ['chris@sibel.org', 'koasadmin@koasevents.com'],
   storage: {
+    legacyDataBelongsToTenant: true,
     compatibilityBlobStores: {
       sales: 'koa-sales',
       integrations: 'koa-integrations',
