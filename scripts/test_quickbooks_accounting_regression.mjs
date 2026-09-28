@@ -3,6 +3,10 @@ import {
   buildQuickBooksEstimateLines,
   summarizeQuickBooksEstimateLines,
 } from '../netlify/functions/_shared/quickbooks-estimate-lines.mjs';
+import {
+  buildQuickBooksMilestoneInvoiceLine,
+  evaluateAccountingTaxInvariant,
+} from '../netlify/functions/_shared/quickbooks-accounting-invariant.mjs';
 
 const record = {
   id: 'REGRESSION-15000-GET',
@@ -35,3 +39,16 @@ assert.ok(lines.every((line) => line.SalesItemLineDetail?.TaxCodeRef?.value === 
 assert.notEqual(summary.lineTotal, 16446.90, 'Regression guard: the historical tax-on-tax total must never be emitted.');
 
 console.log('Accounting regression passed: $15,000.00 + $706.80 CRM GET = $15,706.80 with $0 taxable payload.');
+
+
+const milestoneInvoiceLine = buildQuickBooksMilestoneInvoiceLine({
+  amount: 15706.80,
+  itemId: '257',
+  description: 'Representative milestone invoice',
+});
+assert.equal(milestoneInvoiceLine.Amount, 15706.80, 'Milestone invoice amount must remain exactly $15,706.80.');
+assert.equal(milestoneInvoiceLine.SalesItemLineDetail?.TaxCodeRef?.value, 'NON', 'Milestone invoice line must be explicitly non-taxable.');
+
+const invariant = evaluateAccountingTaxInvariant();
+assert.equal(invariant.ok, true, 'Runtime accounting invariant must remain healthy.');
+assert.deepEqual(invariant.failures, [], 'Runtime accounting invariant must have no failures.');
