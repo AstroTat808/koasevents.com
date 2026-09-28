@@ -69,6 +69,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
 
+        <section data-accounting-health-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Accounting protection</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">$15,706.80 tax invariant</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Continuously verifies that CRM tax remains authoritative, the QuickBooks payload is non-taxable, and live QuickBooks still exposes the NON tax code used by estimates and milestone invoices.</p>
+            </div>
+            <span data-accounting-health-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+          </div>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Invariant result</p><strong data-accounting-invariant-result class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-invariant-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">QuickBooks NON tax code</p><strong data-accounting-non-status class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-non-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last successful check</p><strong data-accounting-last-success class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-sample-count class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current taxable payload</p><strong data-accounting-taxable-payload class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Must remain $0.00 to prevent tax-on-tax.</p></article>
+          </div>
+          <div class="mt-5 grid gap-4 lg:grid-cols-2">
+            <div class="rounded-xl border border-[var(--koa-line)] p-4">
+              <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Recent failures</strong><span data-accounting-failure-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
+              <div data-accounting-failures class="mt-3 grid gap-2"></div>
+            </div>
+            <div class="rounded-xl border border-[var(--koa-line)] p-4">
+              <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Accounting alert history</strong><span data-accounting-alert-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
+              <div data-accounting-alert-history class="mt-3 grid gap-2"></div>
+            </div>
+          </div>
+        </section>
+
         <button data-health-run-warning type="button" aria-live="polite" aria-haspopup="dialog" class="hidden w-full rounded-[1.1rem] border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-950 transition hover:border-amber-300 hover:bg-amber-100/70 focus:outline-none focus:ring-2 focus:ring-amber-500">
           <span class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <span>
@@ -890,6 +917,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const coverageIntegrations=document.querySelector('[data-coverage-integrations]');
     const coveragePercent=document.querySelector('[data-coverage-percent]');
     const coverageDetail=document.querySelector('[data-coverage-detail]');
+    const accountingHealthStatus=document.querySelector('[data-accounting-health-status]');
+    const accountingInvariantResult=document.querySelector('[data-accounting-invariant-result]');
+    const accountingInvariantDetail=document.querySelector('[data-accounting-invariant-detail]');
+    const accountingNonStatus=document.querySelector('[data-accounting-non-status]');
+    const accountingNonDetail=document.querySelector('[data-accounting-non-detail]');
+    const accountingLastSuccess=document.querySelector('[data-accounting-last-success]');
+    const accountingSampleCount=document.querySelector('[data-accounting-sample-count]');
+    const accountingTaxablePayload=document.querySelector('[data-accounting-taxable-payload]');
+    const accountingFailureCount=document.querySelector('[data-accounting-failure-count]');
+    const accountingFailures=document.querySelector('[data-accounting-failures]');
+    const accountingAlertCount=document.querySelector('[data-accounting-alert-count]');
+    const accountingAlertHistory=document.querySelector('[data-accounting-alert-history]');
     const healthRunWarning=document.querySelector('[data-health-run-warning]');
     const healthRunWarningTitle=document.querySelector('[data-health-run-warning-title]');
     const healthRunWarningDetail=document.querySelector('[data-health-run-warning-detail]');
@@ -3651,9 +3690,81 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function accountingHistoryRow(title,detail,at,tone='slate'){
+      const row=document.createElement('article');
+      const tones={
+        red:'border-red-200 bg-red-50 text-red-900',
+        amber:'border-amber-200 bg-amber-50 text-amber-950',
+        emerald:'border-emerald-200 bg-emerald-50 text-emerald-900',
+        slate:'border-[var(--koa-line)] bg-[var(--koa-ivory)] text-[var(--koa-ink)]',
+      };
+      row.className='rounded-lg border p-3 '+(tones[tone]||tones.slate);
+      const top=document.createElement('div');
+      top.className='flex flex-wrap items-center justify-between gap-2';
+      const strong=document.createElement('strong');strong.className='text-xs';strong.textContent=title;
+      const time=document.createElement('span');time.className='text-[.58rem] opacity-55';time.textContent=at?new Date(at).toLocaleString():'—';
+      top.append(strong,time);
+      const p=document.createElement('p');p.className='mt-1 text-[.62rem] leading-5 opacity-75';p.textContent=detail||'';
+      row.append(top,p);
+      return row;
+    }
+
+    function renderAccountingHealth(summary){
+      const data=summary||{};
+      const latest=data.latest||null;
+      const healthy=Boolean(latest?.ok)&&String(latest?.severity||'')!=='red';
+      const warning=Boolean(latest?.ok)&&String(latest?.severity||'')==='yellow';
+      if(accountingHealthStatus){
+        accountingHealthStatus.textContent=!latest?'No sample':healthy?(warning?'Code safe · QBO unverified':'Healthy'):'Failed';
+        accountingHealthStatus.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] '+(!latest?'bg-slate-100 text-slate-700':healthy?(warning?'bg-amber-100 text-amber-900':'bg-emerald-100 text-emerald-800'):'bg-red-100 text-red-800');
+      }
+      if(accountingInvariantResult)accountingInvariantResult.textContent=latest?.ok?'$15,706.80 passed':latest?'Invariant failed':'No sample';
+      if(accountingInvariantDetail)accountingInvariantDetail.textContent=latest?.detail||'Run System Health to record the accounting invariant.';
+      const nonStatus=String(data.liveNonTaxStatus||'unverified');
+      if(accountingNonStatus){
+        accountingNonStatus.textContent=nonStatus==='available'?'Available':nonStatus==='missing-or-inactive'?'Missing / inactive':'Unverified';
+        accountingNonStatus.className='mt-2 block text-lg '+(nonStatus==='available'?'text-emerald-800':nonStatus==='missing-or-inactive'?'text-red-800':'text-amber-800');
+      }
+      if(accountingNonDetail)accountingNonDetail.textContent=nonStatus==='available'
+        ? 'Live QuickBooks NON tax code '+([data.liveNonTaxName,data.liveNonTaxId&&'#'+data.liveNonTaxId].filter(Boolean).join(' · ')||'verified')+'.'
+        : nonStatus==='missing-or-inactive'
+          ? 'Code math is checked separately, but live QuickBooks tax configuration is incompatible.'
+          : 'Live QuickBooks tax-code availability could not be confirmed on the latest sample.';
+      if(accountingLastSuccess)accountingLastSuccess.textContent=data.lastSuccessfulAt?new Date(data.lastSuccessfulAt).toLocaleString():'None recorded';
+      if(accountingSampleCount)accountingSampleCount.textContent=Number(data.sampleCount||0)+' stored accounting sample'+(Number(data.sampleCount||0)===1?'':'s')+'.';
+      if(accountingTaxablePayload){
+        const amount=Number(data.taxablePayload||0);
+        accountingTaxablePayload.textContent=new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(amount);
+        accountingTaxablePayload.className='mt-2 block text-lg '+(Math.abs(amount)<0.005?'text-emerald-800':'text-red-800');
+      }
+
+      const failures=Array.isArray(data.failures)?data.failures:[];
+      if(accountingFailureCount)accountingFailureCount.textContent=failures.length+' shown';
+      if(accountingFailures){
+        accountingFailures.innerHTML='';
+        if(!failures.length){
+          accountingFailures.appendChild(accountingHistoryRow('No stored failures','The accounting invariant has no failed samples in the retained System Health history.','', 'emerald'));
+        }else failures.forEach((row)=>accountingFailures.appendChild(accountingHistoryRow('Accounting invariant failed',row.detail,row.checkedAt,'red')));
+      }
+
+      const alerts=Array.isArray(data.alertHistory)?data.alertHistory:[];
+      if(accountingAlertCount)accountingAlertCount.textContent=alerts.length+' event'+(alerts.length===1?'':'s');
+      if(accountingAlertHistory){
+        accountingAlertHistory.innerHTML='';
+        if(!alerts.length){
+          accountingAlertHistory.appendChild(accountingHistoryRow('No accounting alerts','No failure, recovery, or live NON-tax configuration transition is stored yet.','', 'emerald'));
+        }else alerts.forEach((row)=>{
+          const type=String(row.type||'event').replaceAll('_',' ');
+          const tone=row.type==='recovered'?'emerald':row.type==='configuration_changed'?'amber':'red';
+          accountingAlertHistory.appendChild(accountingHistoryRow(type.charAt(0).toUpperCase()+type.slice(1),row.detail,row.checkedAt,tone));
+        });
+      }
+    }
+
     function render(data){
       markDashboardRenderPanel('Core summary');
       renderCoverage(data.coverage||{});
+      renderAccountingHealth(data.accountingHealth||{});
       const current=data.current;
       if(current){
         const bad=current.overall==='unhealthy';
