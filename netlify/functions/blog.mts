@@ -1,5 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { resolveTenant } from './_shared/tenant';
+import { tenantStoreFor } from './_shared/tenant-storage';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { wixBlogPosts } from '../../src/data/wixBlogPosts';
 
@@ -24,18 +25,16 @@ type BlogPost = {
   originalUrl?: string;
 };
 
-function storeFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-blog', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-blog' });
+function storeFor(context: Context, req: Request) {
+  return tenantStoreFor(context, resolveTenant(req), 'blog');
 }
 
 function legacySeed(): BlogPost[] {
   return wixBlogPosts.map((post) => ({ ...post })) as BlogPost[];
 }
 
-async function readPosts(context: Context): Promise<BlogPost[]> {
-  const store = storeFor(context);
+async function readPosts(context: Context, req: Request): Promise<BlogPost[]> {
+  const store = storeFor(context, req);
   const stored = ((await store.get('posts/index', { type: 'json' })) || []) as BlogPost[];
 
   if (!stored.length) {
@@ -48,10 +47,10 @@ async function readPosts(context: Context): Promise<BlogPost[]> {
 }
 
 export default async (req: Request, context: Context) => {
-  const store = storeFor(context);
+  const store = storeFor(context, req);
 
   if (req.method === 'GET') {
-    const posts = await readPosts(context);
+    const posts = await readPosts(context, req);
     const url = new URL(req.url);
     const admin = url.searchParams.get('admin') === '1';
 
@@ -74,7 +73,7 @@ export default async (req: Request, context: Context) => {
   if (req.method === 'POST') {
     const payload = await req.json();
     const action = payload.action || 'save';
-    const posts = await readPosts(context);
+    const posts = await readPosts(context, req);
     const canManageBlog = hasCapability(auth.user, 'blog.manage');
     if (!canManageBlog) return Response.json({ error:'Blog management permission required.' }, { status:403 });
 
@@ -130,7 +129,7 @@ export default async (req: Request, context: Context) => {
       updatedAt: now,
       featuredImage: String(payload.featuredImage || existing?.featuredImage || ''),
       images: existing?.images || [],
-      author: String(payload.author || existing?.author || 'Koa’s Events'),
+      author: String(payload.author || existing?.author || resolveTenant(req).displayName),
       category: String(payload.category || existing?.category || 'Wedding Planning'),
       tags: Array.isArray(payload.tags)
         ? payload.tags.map(String)
