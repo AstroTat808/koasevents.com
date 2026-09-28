@@ -789,7 +789,7 @@ export async function createOAuthState(context: Context, requestUrl: string) {
   }
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  const state = Buffer.from(bytes).toString('base64url');
+  const state = resolveTenant().id + '.' + Buffer.from(bytes).toString('base64url');
   const origin = new URL(requestUrl).origin;
   const redirectUri = c.redirectUri || origin + '/.netlify/functions/quickbooks-callback';
 
