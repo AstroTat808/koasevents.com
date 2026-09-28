@@ -1452,8 +1452,11 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'list-damage-deposit-accounts') {
-    const data: any = await qboQuery(context, 'select * from Account where Active = true maxresults 1000');
-    const rows = Array.isArray(data?.QueryResponse?.Account) ? data.QueryResponse.Account : [];
+    const [accountData,itemData]:any[] = await Promise.all([
+      qboQuery(context, 'select * from Account where Active = true maxresults 1000'),
+      qboQuery(context, 'select * from Item where Active = true maxresults 1000'),
+    ]);
+    const rows = Array.isArray(accountData?.QueryResponse?.Account) ? accountData.QueryResponse.Account : [];
     const map = (types: string[]) => rows.filter((account: any) => types.includes(String(account.AccountType || '')))
       .map((account: any) => ({
         id:String(account.Id),
@@ -1462,10 +1465,21 @@ export default async (req: Request, context: Context) => {
         subType:String(account.AccountSubType || ''),
       }))
       .sort((a: any,b: any)=>a.name.localeCompare(b.name));
+    const items=(Array.isArray(itemData?.QueryResponse?.Item)?itemData.QueryResponse.Item:[])
+      .filter((item:any)=>['Service','NonInventory'].includes(String(item.Type||'')))
+      .map((item:any)=>({
+        id:String(item.Id),
+        name:String(item.Name||''),
+        type:String(item.Type||''),
+        incomeAccountId:String(item?.IncomeAccountRef?.value||''),
+        incomeAccountName:String(item?.IncomeAccountRef?.name||''),
+      }))
+      .sort((a:any,b:any)=>a.name.localeCompare(b.name));
     return Response.json({
       liabilityAccounts: map(['Other Current Liability','Long Term Liability']),
       bankAccounts: map(['Bank']),
       incomeAccounts: map(['Income','Other Income']),
+      items,
     }, { headers: { 'Cache-Control':'private, no-store' } });
   }
 
@@ -1485,6 +1499,32 @@ export default async (req: Request, context: Context) => {
       deductionIncomeAccountId: clean(payload?.deductionIncomeAccountId,80),
       deductionIncomeAccountName: clean(payload?.deductionIncomeAccountName,160),
     });
+    if (damageDepositSettings.itemId && damageDepositSettings.liabilityAccountId) {
+      try {
+        const mappedData:any=await qboGet(context,'item',damageDepositSettings.itemId);
+        const mapped=mappedData?.Item;
+        const mappedAccountId=String(mapped?.IncomeAccountRef?.value||'');
+        const mappedAccountName=String(mapped?.IncomeAccountRef?.name||'');
+        if(!mapped?.Id) {
+          return Response.json({error:'The selected refundable-deposit QuickBooks item could not be loaded.'},{status:409});
+        }
+        if(mappedAccountId!==damageDepositSettings.liabilityAccountId) {
+          return Response.json({
+            error:'The selected QuickBooks item is mapped to '+(mappedAccountName||mappedAccountId||'another account')+', not the configured refundable-deposit liability account. Choose or create an item mapped to the liability account before enabling this workflow.',
+            damageDepositSettings,
+          },{status:409});
+        }
+        damageDepositSettings=await saveQuickBooksDamageDepositSettings(context,{
+          ...damageDepositSettings,
+          itemName:String(mapped.Name||damageDepositSettings.itemName||'Refundable Damage Deposit'),
+        });
+      } catch (error) {
+        return Response.json({
+          error:'Unable to verify the selected refundable-deposit item mapping in QuickBooks. '+(error instanceof Error?error.message:''),
+          damageDepositSettings,
+        },{status:409});
+      }
+    }
     if (!damageDepositSettings.itemId && damageDepositSettings.liabilityAccountId) {
       try {
         const created: any = await qboCreate(context, 'item', {
