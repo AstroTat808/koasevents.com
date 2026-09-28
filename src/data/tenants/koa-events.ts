@@ -161,6 +161,7 @@ export const koaEventsTenantProfile: TenantProfile = {
     legacyDataBelongsToTenant: true,
     compatibilityBlobStores: {
       sales: 'koa-sales',
+      quotes: 'koa-quotes',
       integrations: 'koa-integrations',
       crm: 'koa-crm',
       eventOps: 'koa-event-ops',
