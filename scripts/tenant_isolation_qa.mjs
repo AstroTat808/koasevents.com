@@ -38,6 +38,36 @@ assert.deepEqual(koaMigrated.rows,[{id:'legacy',tenantId:'koa-events'}]);
 assert.equal(koaMigrated.changed,true);
 assert.equal(koaMigrated.rejected,0);
 
+const requestedIsolationScenarios = [
+  ['Business CRM','crm','clients/index'],
+  ['Sales CRM','sales','records/index'],
+  ['Events','eventOps','events/index'],
+  ['Vendors','vendors','vendors/index'],
+  ['Documents','eventFiles','events/EVT-1/contract.pdf'],
+  ['Quotes','quotes','quotes/index'],
+  ['QuickBooks','integrations','quickbooks/connection'],
+  ['SignWell','integrations','signwell/connection'],
+  ['Client portal','sales','records/CLIENT-1'],
+  ['Vendor portal','vendorFiles','vendors/VENDOR-1/insurance.pdf'],
+];
+
+for (const [label,domain,key] of requestedIsolationScenarios) {
+  const aKey=tenantDataKey(tenantA,domain,key);
+  const bKey=tenantDataKey(tenantB,domain,key);
+  assert.notEqual(aKey,bKey,label+' must use distinct canonical keys per tenant');
+  assert.ok(aKey.startsWith('tenants/tenant-a/'+domain+'/'),label+' Tenant A key must stay in Tenant A namespace');
+  assert.ok(bKey.startsWith('tenants/tenant-b/'+domain+'/'),label+' Tenant B key must stay in Tenant B namespace');
+
+  const ownedA=stampTenantId(tenantA,{id:label+'-A'});
+  assert.equal(tenantOwnsRecord(tenantA,ownedA),true,label+' Tenant A owns its record');
+  assert.equal(tenantOwnsRecord(tenantB,ownedA),false,label+' Tenant B cannot own Tenant A record');
+  assert.throws(()=>stampTenantId(tenantB,ownedA),/Cross-tenant record access was blocked/,label+' cross-tenant mutation must be rejected');
+
+  const filtered=normalizeTenantRows(tenantB,[ownedA,{id:label+'-B',tenantId:'tenant-b'}]);
+  assert.deepEqual(filtered.rows,[{id:label+'-B',tenantId:'tenant-b'}],label+' cross-tenant read must filter Tenant A');
+  assert.equal(filtered.rejected,1,label+' must report the rejected foreign row');
+}
+
 function walk(dir){
   const rows=[];
   for(const entry of fs.readdirSync(dir,{withFileTypes:true})){
