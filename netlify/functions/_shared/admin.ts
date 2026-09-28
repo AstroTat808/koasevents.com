@@ -1,6 +1,7 @@
 import { getStore } from '@netlify/blobs';
 import { admin, getUser } from '@netlify/identity';
 import { managedSessionStatus } from './auth-security';
+import { resolveTenant } from './tenant';
 
 const ADMIN_EMAILS = new Set([
   'chris@sibel.org',
@@ -23,6 +24,8 @@ export type EffectiveStaffRole = StaffRole | 'custom';
 
 export const STAFF_CAPABILITIES = [
   'admin.dashboard.view',
+  'organization.view',
+  'organization.manage',
   'users.manage',
   'crm.view',
   'crm.manage',
@@ -74,6 +77,7 @@ const ALL_CAPABILITIES = [...STAFF_CAPABILITIES];
 export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
   admin: ALL_CAPABILITIES,
   manager: [
+    'organization.view',
     'crm.view','crm.manage','crm.destructive','crm.workflows','crm.templates','crm.cleanup_policy',
     'email.view','email.manage',
     'sales.view','sales.manage','sales.profit_settings',
@@ -118,6 +122,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
     'quickbooks.view','quickbooks.manage',
   ],
   read_only: [
+    'organization.view',
     'crm.view',
     'sales.view',
     'events.view',
@@ -135,6 +140,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, StaffCapability[]> = {
 export const PAGE_CAPABILITIES = {
   '/admin/': 'admin.dashboard.view',
   '/admin/staff/': 'users.manage',
+  '/admin/organization/': 'organization.view',
   '/admin/crm/': 'crm.view',
   '/admin/email/': 'email.view',
   '/admin/email-preview/': 'email.view',
@@ -339,6 +345,7 @@ export function passwordSecurityFor(user: any, sessionUser: any, policy: AuthSec
 }
 
 export async function getAccessContext(req?:Request) {
+  const tenant = resolveTenant(req);
   const sessionUser = await getUser();
   if (!sessionUser) {
     return {
@@ -348,6 +355,9 @@ export async function getAccessContext(req?:Request) {
       capabilities:[] as StaffCapability[],
       policy:await readAuthSecurityPolicy(),
       security:null,
+      tenant,
+      tenantId:tenant.id,
+      membership:null,
     };
   }
 
@@ -365,6 +375,21 @@ export async function getAccessContext(req?:Request) {
   const managedSession = req && authoritativeUser?.id ? await managedSessionStatus(req,String(authoritativeUser.id)) : null;
   if(managedSession?.revoked) security.sessionRevoked = true;
 
+  const email=clean(authoritativeUser?.email,240).toLowerCase();
+  const meta=metadataFor(authoritativeUser);
+  const configuredTenantIds=Array.isArray(meta?.tenantIds)
+    ? meta.tenantIds.map((value:unknown)=>clean(value,120)).filter(Boolean)
+    : [clean(meta?.tenantId || meta?.organizationId,120)].filter(Boolean);
+  const bootstrapMember=tenant.bootstrapAdminEmails.map((value)=>value.toLowerCase()).includes(email);
+  const membership={
+    tenant_id:tenant.id,
+    userId:clean(authoritativeUser?.id,160),
+    email,
+    role,
+    status:'active',
+    source:bootstrapMember?'tenant-bootstrap':configuredTenantIds.includes(tenant.id)?'identity-metadata':'legacy-single-tenant',
+  };
+
   return {
     sessionUser,
     user:authoritativeUser,
@@ -372,6 +397,9 @@ export async function getAccessContext(req?:Request) {
     capabilities,
     policy,
     security,
+    tenant,
+    tenantId:tenant.id,
+    membership,
   };
 }
 
@@ -411,7 +439,7 @@ export async function requireAdmin(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, tenant:ctx.tenant, tenantId:ctx.tenantId, membership:ctx.membership, response:null };
 }
 
 export async function requireManager(req?:Request) {
@@ -427,7 +455,7 @@ export async function requireManager(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, tenant:ctx.tenant, tenantId:ctx.tenantId, membership:ctx.membership, response:null };
 }
 
 export async function requireCapability(capability: StaffCapability, req?:Request) {
@@ -443,7 +471,7 @@ export async function requireCapability(capability: StaffCapability, req?:Reques
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, tenant:ctx.tenant, tenantId:ctx.tenantId, membership:ctx.membership, response:null };
 }
 
 export async function requireOperations(req?:Request) {
@@ -459,5 +487,5 @@ export async function requireOperations(req?:Request) {
       ),
     };
   }
-  return { user:ctx.user, response:null };
+  return { user:ctx.user, tenant:ctx.tenant, tenantId:ctx.tenantId, membership:ctx.membership, response:null };
 }
