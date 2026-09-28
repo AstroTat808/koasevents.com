@@ -23,16 +23,19 @@ async function runTenantJob(_req:Request,context:Context){
     const checkpoints=[30,14,7,0];
     if(!checkpoints.includes(days))continue;
     const key=String(days);const sent=insurance.reminders||{};if(sent[key])continue;
-    const token=String(vendor.portalToken||'');const url=token?'https://koasevents.com/vendor-portal/?token='+encodeURIComponent(token):'';
+    const tenant=resolveTenant();
+    const token=String(vendor.portalToken||'');
+    const origin=tenant.domains.primary?'https://'+tenant.domains.primary:'';
+    const url=token&&origin?origin+'/vendor-portal/?token='+encodeURIComponent(token):'';
     const result=await sendVendorEmail({
       to:[vendor.email],
-      subject:days===0?'Your Koa’s vendor insurance expires today':'Koa’s vendor insurance expires in '+days+' days',
+      subject:days===0?'Your '+tenant.displayName+' vendor insurance expires today':tenant.displayName+' vendor insurance expires in '+days+' days',
       title:days===0?'Your insurance certificate expires today.':'Your insurance certificate is approaching expiration.',
-      body:'Please update your current liability insurance information so future Koa’s events are not delayed by compliance review.',
-      detail:['Expiration: '+insurance.expiresAt,insurance.carrier?'Carrier: '+insurance.carrier:'','Koa’s should be listed as additional insured when required.'].filter(Boolean).join(' · '),
+      body:'Please update your current liability insurance information so future '+tenant.displayName+' events are not delayed by compliance review.',
+      detail:['Expiration: '+insurance.expiresAt,insurance.carrier?'Carrier: '+insurance.carrier:'',tenant.displayName+' should be listed as additional insured when required.'].filter(Boolean).join(' · '),
       actionLabel:'Update Insurance',
       actionUrl:url,
-      idempotencyKey:'koa-vendor-insurance-'+vendor.id+'-'+insurance.expiresAt+'-'+key,
+      idempotencyKey:tenant.id+'-vendor-insurance-'+vendor.id+'-'+insurance.expiresAt+'-'+key,
     });
     insurance.reminders={...sent,[key]:{sentAt:now,messageId:result.id||'',sent:result.sent}};changed=true;
   }
