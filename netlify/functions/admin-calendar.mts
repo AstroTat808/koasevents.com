@@ -1,17 +1,14 @@
 import type { Context, Config } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { requireCapability } from './_shared/admin';
 import { readOffice365ExternalItems } from './_shared/office365-calendar-sync';
+import { resolveTenant } from './_shared/tenant';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 
 function salesStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-sales', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-sales' });
+  return tenantStoreFor(context, resolveTenant(), 'sales');
 }
 function opsStoreFor(context: Context) {
-  return context.deploy.context === 'production'
-    ? getStore({ name: 'koa-event-ops', consistency: 'strong' })
-    : getDeployStore({ name: 'koa-event-ops' });
+  return tenantStoreFor(context, resolveTenant(), 'eventOps');
 }
 function clean(value: unknown, max=1000){return String(value||'').trim().slice(0,max);}
 function isoDate(value:unknown){
@@ -78,7 +75,8 @@ function basicChecklist(eventDate:string){
 }
 
 export default async(req:Request,context:Context)=>{
-  const auth=await requireCapability('calendar.view', req);if(auth.response)return auth.response;
+  const auth=await requireCapability('calendar.view', req, context);if(auth.response)return auth.response;
+  const tenant=auth.tenant||resolveTenant(req);
   if(req.method!=='GET')return new Response('Method not allowed',{status:405});
 
   const url=new URL(req.url);
@@ -87,7 +85,7 @@ export default async(req:Request,context:Context)=>{
   const end=isoDate(url.searchParams.get('end'))||offsetDate(today,180);
   if(end<start)return Response.json({error:'Calendar end date must be after start date.'},{status:400});
 
-  const records=((await salesStoreFor(context).get('records/index',{type:'json'}))||[]) as any[];
+  const records=(await readTenantIndex<any>(salesStoreFor(context),tenant,'records/index')).rows;
   const booked=records.filter((record)=>record?.kind==='proposal'&&record?.stage==='booked'&&record?.proposal?.status==='booked');
   const entries=await Promise.all(booked.map(async(record)=>{
     const ops:any=(await opsStoreFor(context).get('events/'+record.id,{type:'json'}))||{};
@@ -99,10 +97,11 @@ export default async(req:Request,context:Context)=>{
     const record=entry.record,ops=entry.ops||{};
     const eventDate=isoDate(record.customer?.eventDate);
     const customerName=clean(record.customer?.name,180)||record.id;
-    const venueArea=clean(ops.venueArea,180)||'Koa’s Events';
+    const venueArea=clean(ops.venueArea,180)||tenant.displayName||'Venue';
     const eventType=clean(record.inquiry?.eventType||record.customer?.eventType,120);
-    const packageId=clean(record.proposal?.packageId||record.quote?.packageId,120).toLowerCase();
-    const eventSubtype=eventType.toLowerCase().includes('wedding')||['gardenia','orchid','hibiscus','signature-wedding'].includes(packageId)?'wedding':'event';
+    const rawPackageId=clean(record.proposal?.packageId||record.packageId||record.quote?.state?.startingPoint||record.quote?.packageId,120).toLowerCase().replaceAll(' ','-');
+    const packageId=tenant.sales.packageAliases[rawPackageId]||rawPackageId;
+    const eventSubtype=eventType.toLowerCase().includes('wedding')||tenant.sales.weddingPackageIds.includes(packageId)?'wedding':'event';
 
     if(inRange(eventDate,start,end)){
       const scheduleDetail=[
@@ -169,8 +168,8 @@ export default async(req:Request,context:Context)=>{
       const a=entries[i],b=entries[j];
       const dateA=isoDate(a.record.customer?.eventDate),dateB=isoDate(b.record.customer?.eventDate);
       if(!dateA||dateA!==dateB||!inRange(dateA,start,end))continue;
-      const areaA=(clean(a.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
-      const areaB=(clean(b.ops?.venueArea,180)||'Koa’s Events').toLowerCase();
+      const areaA=(clean(a.ops?.venueArea,180)||tenant.displayName||'Venue').toLowerCase();
+      const areaB=(clean(b.ops?.venueArea,180)||tenant.displayName||'Venue').toLowerCase();
       const overlap=overlaps(a,b);
 
       if(areaA===areaB && overlap!==false){
@@ -178,7 +177,7 @@ export default async(req:Request,context:Context)=>{
           id:'venue-'+a.record.id+'-'+b.record.id,date:dateA,type:'venue',
           severity:overlap===true?'confirmed':'potential',
           title:overlap===true?'Venue schedule overlap':'Potential venue conflict',
-          detail:(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+' use '+(clean(a.ops?.venueArea,180)||'Koa’s Events')+(overlap===null?' but one or both event windows are incomplete.':'.'),
+          detail:(a.record.customer?.name||a.record.id)+' and '+(b.record.customer?.name||b.record.id)+' use '+(clean(a.ops?.venueArea,180)||tenant.displayName||'Venue')+(overlap===null?' but one or both event windows are incomplete.':'.'),
           recordIds:[a.record.id,b.record.id],
         });
       }
