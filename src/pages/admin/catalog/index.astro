@@ -1,11 +1,11 @@
 ---
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
-<BaseLayout noindex title="Catalog Manager | Koa’s Events" description="Central pricing catalog for Koa’s Events proposals, rentals, wedding packages, Mobile Bar and add-ons." canonical="https://koasevents.com/admin/catalog/">
+<BaseLayout noindex title="Catalog Manager | VenueLoom" description="Manage tenant pricing, packages, rentals, services and accounting mappings." canonical="/admin/catalog/">
   <main class="min-h-screen bg-[var(--koa-sand)] py-8">
     <div class="container-shell max-w-[96rem]">
       <section data-loading class="rounded-[1.6rem] bg-white p-7 shadow-[var(--shadow-soft)]">
-        <p class="eyebrow text-[var(--koa-clay)]">Koa’s Events</p>
+        <p class="eyebrow text-[var(--koa-clay)]">VenueLoom</p>
         <h1 class="display mt-3 text-5xl">Catalog Manager</h1>
         <p class="mt-3 text-sm text-[var(--koa-ink)]/55">Loading the central pricing catalog…</p>
       </section>
@@ -38,14 +38,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Live reconciliation</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Catalog audit</h2>
-              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Compare every catalog item against the current public pricing source and the live connected QuickBooks item mapping. GET exemptions are flagged when the repository has no item-level exemption rule supporting them.</p>
+              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">Compare every catalog item against the tenant pricing source and the live connected QuickBooks item mapping. Tax exemptions are evaluated using the active tenant’s tax profile.</p>
             </div>
             <div class="flex flex-wrap gap-2">
               <button data-run-audit type="button" class="rounded-full border border-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Run live audit</button>
               <button data-reconcile-audit type="button" class="hidden rounded-full bg-[var(--koa-forest)] px-5 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Fix safe issues</button>
             </div>
           </div>
-          <p data-audit-message class="mt-4 text-sm text-[var(--koa-ink)]/55">Run the audit to verify current prices, groups/categories, GET flags and QuickBooks mappings.</p>
+          <p data-audit-message class="mt-4 text-sm text-[var(--koa-ink)]/55">Run the audit to verify current prices, groups/categories, tax treatment and QuickBooks mappings.</p>
           <div data-audit-summary class="mt-5 hidden grid gap-3 sm:grid-cols-2 xl:grid-cols-5"></div>
           <div data-audit-list class="mt-5 hidden grid gap-3"></div>
         </section>
@@ -55,10 +55,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Pricing database</p>
               <h2 class="display mt-2 text-4xl text-[var(--koa-forest)]">Packages, rentals, bar + add-ons</h2>
-              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">The website catalog is seeded automatically. Edit sell price, internal cost, target margin and GET treatment here without re-entering your existing wedding collections.</p>
+              <p class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/58">The tenant catalog is seeded automatically. Edit sell price, internal cost, target margin and tax treatment here without re-entering existing packages or services.</p>
             </div>
             <div data-manage-actions class="flex flex-wrap gap-2">
-              <button data-refresh-website type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Sync website catalog</button>
+              <button data-refresh-website type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Sync tenant catalog</button>
               <button data-open-import type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">Import CSV / Excel</button>
               <button data-new-item type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-3 text-[.58rem] font-black uppercase tracking-[.09em] text-white">Add item</button>
             </div>
@@ -130,7 +130,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <label class="grid gap-2 text-sm font-semibold">Sell price<input name="unitPrice" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold">Internal/direct cost<input name="internalCost" type="number" min="0" step="0.01" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
         <label class="grid gap-2 text-sm font-semibold">Target margin %<input name="targetMargin" type="number" min="0" max="100" step="0.1" class="rounded-xl border border-[var(--koa-line)] px-4 py-3" /></label>
-        <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input name="getExempt" type="checkbox" /> GET exempt</label>
+        <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input name="getExempt" type="checkbox" /> Tax exempt</label>
         <label class="flex items-center gap-3 rounded-xl border border-[var(--koa-line)] px-4 py-3 text-sm font-semibold"><input name="active" type="checkbox" checked /> Active</label>
         <label class="grid gap-2 text-sm font-semibold sm:col-span-2">Description<textarea name="description" rows="4" maxlength="1000" class="rounded-xl border border-[var(--koa-line)] px-4 py-3"></textarea></label>
       </div>
@@ -168,7 +168,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div><p class="eyebrow text-[var(--koa-clay)]">Preview</p><h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Review before importing</h3><p data-import-summary class="mt-2 text-sm text-[var(--koa-ink)]/58"></p></div>
           <button data-commit-import type="button" class="rounded-full bg-[var(--koa-clay)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Import catalog</button>
         </div>
-        <div class="mt-4 overflow-x-auto"><table class="min-w-[1000px] w-full border-separate border-spacing-y-2 text-sm"><thead><tr class="text-left text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-3">Row</th><th class="px-3">Status</th><th class="px-3">Name</th><th class="px-3">Group</th><th class="px-3">Sell</th><th class="px-3">Cost</th><th class="px-3">Target margin</th><th class="px-3">GET</th></tr></thead><tbody data-preview-rows></tbody></table></div>
+        <div class="mt-4 overflow-x-auto"><table class="min-w-[1000px] w-full border-separate border-spacing-y-2 text-sm"><thead><tr class="text-left text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"><th class="px-3">Row</th><th class="px-3">Status</th><th class="px-3">Name</th><th class="px-3">Group</th><th class="px-3">Sell</th><th class="px-3">Cost</th><th class="px-3">Target margin</th><th class="px-3">Tax</th></tr></thead><tbody data-preview-rows></tbody></table></div>
       </section>
     </div>
   </dialog>
@@ -211,15 +211,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const importSummary=document.querySelector('[data-import-summary]');
     const duplicateMode=document.querySelector('[data-duplicate-mode]');
 
-    let state={catalog:[],imports:[],priceHistory:[],audit:null};
+    let state={tenant:null,catalog:[],imports:[],priceHistory:[],audit:null};
     let canManage=false;
     let importPayload=null;
 
     const groupLabels={packages:'Wedding Packages',rentals:'Rentals','mobile-bar':'Mobile Bar','add-ons':'Add-ons',fees:'Fees',other:'Other'};
-    const mappingLabels={id:'ID / SKU',name:'Name *',description:'Description',group:'Business group',category:'Accounting category',unitLabel:'Unit label',unitPrice:'Sell price',internalCost:'Internal cost',targetMargin:'Target margin %',getExempt:'GET exempt/status',active:'Active/status'};
+    const mappingLabels={id:'ID / SKU',name:'Name *',description:'Description',group:'Business group',category:'Accounting category',unitLabel:'Unit label',unitPrice:'Sell price',internalCost:'Internal cost',targetMargin:'Target margin %',getExempt:'Tax exempt/status',active:'Active/status'};
 
     function esc(value){return String(value??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-    function money(value){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:2}).format(Number(value||0));}
+    function tenantLocale(){return state.tenant?.locale||'en-US';}
+    function tenantCurrency(){return state.tenant?.currency||'USD';}
+    function taxLabel(){return state.tenant?.tax?.label||'Tax';}
+    function money(value){return new Intl.NumberFormat(tenantLocale(),{style:'currency',currency:tenantCurrency(),maximumFractionDigits:2}).format(Number(value||0));}
     function margin(item){const price=Number(item.unitPrice||0),cost=Number(item.internalCost||0);return price>0?((price-cost)/price)*100:null;}
     function marginText(item){const m=margin(item);return m==null?'—':m.toFixed(1)+'%';}
     function dt(value){if(!value)return '';const d=new Date(value);return Number.isNaN(d.getTime())?String(value):d.toLocaleString();}
@@ -259,14 +262,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       ];
       auditSummary.innerHTML=cards.map(([label,value])=>'<div class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(label)+'</p><strong class="display mt-1 block text-2xl text-[var(--koa-forest)]">'+esc(value)+'</strong></div>').join('');
       auditSummary.classList.remove('hidden');
-      auditMessage.textContent='Last checked '+dt(audit.checkedAt)+' · QuickBooks '+(audit.qbo?.connected?(audit.qbo?.error?'connected, verification error':'connected and queried'):'not connected')+'. '+(audit.getPolicy?.detail||'');
+      auditMessage.textContent='Last checked '+dt(audit.checkedAt)+' · QuickBooks '+(audit.qbo?.connected?(audit.qbo?.error?'connected, verification error':'connected and queried'):'not connected')+'. '+(audit.taxPolicy?.detail||'');
       auditList.innerHTML='';
       (audit.rows||[]).forEach((row)=>{
         const card=document.createElement('article');
         card.className='rounded-xl border '+(row.status==='error'?'border-red-200 bg-red-50/45':row.status==='warning'?'border-amber-200 bg-amber-50/45':'border-emerald-200 bg-emerald-50/35')+' p-4';
         const issues=(row.issues||[]);
         const qbo=row.qboMatch;
-        card.innerHTML='<div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between"><div><div class="flex flex-wrap items-center gap-2"><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.name)+'</strong><span class="rounded-full bg-white px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em]">'+esc(row.status)+'</span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/52">'+esc(groupLabels[row.group]||row.group)+' · '+esc(row.category)+' · '+(row.getExempt?'GET exempt':'GET taxable')+'</p></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Catalog</p><strong class="text-sm">'+money(row.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Published</p><strong class="text-sm">'+(row.publicPrice==null?'—':money(row.publicPrice))+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">QuickBooks</p><strong class="text-sm">'+(qbo?esc(qbo.name)+' #'+esc(qbo.id):(row.quickBooksItemId?'Missing #'+esc(row.quickBooksItemId):'Unmapped'))+'</strong></div></div></div>'+
+        card.innerHTML='<div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between"><div><div class="flex flex-wrap items-center gap-2"><strong class="text-sm text-[var(--koa-forest)]">'+esc(row.name)+'</strong><span class="rounded-full bg-white px-2 py-1 text-[.5rem] font-black uppercase tracking-[.07em]">'+esc(row.status)+'</span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/52">'+esc(groupLabels[row.group]||row.group)+' · '+esc(row.category)+' · '+(row.getExempt?taxLabel()+' exempt':taxLabel()+' taxable')+'</p></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-3"><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Catalog</p><strong class="text-sm">'+money(row.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Published</p><strong class="text-sm">'+(row.publicPrice==null?'—':money(row.publicPrice))+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">QuickBooks</p><strong class="text-sm">'+(qbo?esc(qbo.name)+' #'+esc(qbo.id):(row.quickBooksItemId?'Missing #'+esc(row.quickBooksItemId):'Unmapped'))+'</strong></div></div></div>'+
           (issues.length?'<div class="mt-3 grid gap-1">'+issues.map((issue)=>'<p class="text-xs '+(issue.severity==='error'?'text-red-700':'text-amber-800')+'">• '+esc(issue.detail)+'</p>').join(''):'<p class="mt-3 text-xs font-semibold text-emerald-800">No pricing/category/QBO mapping issues detected from the available sources.</p>')+
           (row.qboSuggestion?'<p class="mt-2 text-xs text-blue-800">Exact-name QuickBooks candidate: '+esc(row.qboSuggestion.name)+' #'+esc(row.qboSuggestion.id)+' · '+esc(row.qboSuggestion.type)+'</p>':'');
         auditList.appendChild(card);
@@ -335,7 +338,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     async function reconcileAudit(){
       if(!canManage)return;
-      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will restore website-defined catalog classifications, link only unique known QuickBooks matches, and update a QuickBooks price only when the Catalog Manager price exactly matches the published website price. GET/taxability differences remain review-only because no item-level exemption policy is documented. Ambiguous mappings and intentional pricing overrides will not be changed.');
+      const ok=confirm('Fix safe Catalog Manager ↔ QuickBooks issues? This will restore tenant-defined catalog classifications, link only unique known QuickBooks matches, and update a QuickBooks price only when the Catalog Manager price exactly matches the tenant reference price. Taxability differences remain governed by the tenant tax profile and are never guessed. Ambiguous mappings and intentional pricing overrides will not be changed.');
       if(!ok)return;
       if(auditMessage)auditMessage.textContent='Applying safe catalog reconciliation…';
       try{
@@ -388,7 +391,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const target=Number(item.targetMargin||0);
         const card=document.createElement('article');
         card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
-        card.innerHTML='<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="text-base text-[var(--koa-forest)]">'+esc(item.name)+'</strong><span class="rounded-full bg-[var(--koa-sand)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+esc(groupLabels[item.group]||item.group)+'</span>'+(item.active===false?'<span class="rounded-full bg-red-50 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-red-700">Archived</span>':'')+'</div><p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">'+esc(item.description||'No description')+'</p><p class="mt-2 text-[.62rem] font-semibold text-[var(--koa-ink)]/45">'+esc(item.category)+' · '+esc(item.unitLabel||'each')+' · '+(item.getExempt?'GET exempt':'GET taxable')+' · source '+esc(item.source||'catalog')+(item.quickBooksItemId?' · QBO #'+esc(item.quickBooksItemId):' · QBO fallback item')+'</p></div><div class="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[490px]"><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Sell</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Cost</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.internalCost)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Margin</p><strong class="mt-1 block text-sm '+(actual!=null&&target>0&&actual+0.001<target?'text-red-700':'text-[var(--koa-forest)]')+'">'+marginText(item)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Target</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+(target?target.toFixed(1)+'%':'—')+'</strong></div></div></div>';
+        card.innerHTML='<div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between"><div class="min-w-0"><div class="flex flex-wrap items-center gap-2"><strong class="text-base text-[var(--koa-forest)]">'+esc(item.name)+'</strong><span class="rounded-full bg-[var(--koa-sand)] px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">'+esc(groupLabels[item.group]||item.group)+'</span>'+(item.active===false?'<span class="rounded-full bg-red-50 px-2.5 py-1 text-[.52rem] font-black uppercase tracking-[.08em] text-red-700">Archived</span>':'')+'</div><p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/52">'+esc(item.description||'No description')+'</p><p class="mt-2 text-[.62rem] font-semibold text-[var(--koa-ink)]/45">'+esc(item.category)+' · '+esc(item.unitLabel||'each')+' · '+(item.getExempt?taxLabel()+' exempt':taxLabel()+' taxable')+' · source '+esc(item.source||'catalog')+(item.quickBooksItemId?' · QBO #'+esc(item.quickBooksItemId):' · QBO fallback item')+'</p></div><div class="grid shrink-0 grid-cols-2 gap-2 sm:grid-cols-4 xl:min-w-[490px]"><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Sell</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.unitPrice)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Cost</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+money(item.internalCost)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Margin</p><strong class="mt-1 block text-sm '+(actual!=null&&target>0&&actual+0.001<target?'text-red-700':'text-[var(--koa-forest)]')+'">'+marginText(item)+'</strong></div><div class="rounded-lg bg-white p-3"><p class="text-[.52rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Target</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]">'+(target?target.toFixed(1)+'%':'—')+'</strong></div></div></div>';
         {
           const actions=document.createElement('div'); actions.className='mt-3 flex flex-wrap gap-2';
           const usage=document.createElement('button');usage.type='button';usage.className='rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';usage.textContent='Usage';usage.addEventListener('click',()=>openItem(item,true));actions.appendChild(usage);
@@ -549,7 +552,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||'Unable to load catalog.');
         state=data;renderCatalog();renderHistory();renderPriceHistory();renderAudit();
-        message.textContent=state.catalog.length+' catalog items loaded. Website packages and catalog entries are automatically seeded when missing.';
+        message.textContent=state.catalog.length+' catalog items loaded for '+(state.tenant?.displayName||'this tenant')+'. Tenant catalog entries are automatically seeded when missing.';
       }catch(error){message.textContent=error.message||'Unable to load catalog.';}
     }
 
@@ -576,8 +579,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     });
 
     document.querySelector('[data-refresh-website]')?.addEventListener('click',async()=>{
-      message.textContent='Synchronizing website catalog…';
-      try{const data=await api({action:'refresh-website-catalog'});state.catalog=data.catalog||[];renderCatalog();await refreshMetadata();message.textContent='Website catalog synchronized: '+Number(data.added||0)+' added, '+Number(data.refreshed||0)+' source items refreshed.';}catch(error){message.textContent=error.message||'Unable to synchronize website catalog.';}
+      message.textContent='Synchronizing tenant catalog…';
+      try{const data=await api({action:'refresh-website-catalog'});state.catalog=data.catalog||[];renderCatalog();await refreshMetadata();message.textContent='Tenant catalog synchronized: '+Number(data.added||0)+' added, '+Number(data.refreshed||0)+' source items refreshed.';}catch(error){message.textContent=error.message||'Unable to synchronize tenant catalog.';}
     });
 
     load();
