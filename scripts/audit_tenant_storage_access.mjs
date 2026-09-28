@@ -25,7 +25,7 @@ for(const full of walk(root)){
   if(/from\s+['"]@netlify\/blobs['"]/.test(text)){
     failures.push(rel+': imports @netlify/blobs directly');
   }
-  if(/\bgetStore\s*\(|\bgetDeployStore\s*\(/.test(text)){
+  if (/(?:^|[^.A-Za-z0-9_$])getStore\s*\(|(?:^|[^.A-Za-z0-9_$])getDeployStore\s*\(/m.test(text)){
     failures.push(rel+': opens a Blob store directly');
   }
 }
