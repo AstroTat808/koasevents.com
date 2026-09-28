@@ -370,7 +370,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-save-domains]')?.addEventListener('click',async()=>{setMessage('[data-domains-message]','Saving…');try{await post({action:'save-domains',domains:readDomains()});setMessage('[data-domains-message]','Saved. New domains remain pending verification.');}catch(error){setMessage('[data-domains-message]',error.message);}});
     $('[data-add-template]')?.addEventListener('click',()=> $('[data-templates]').appendChild(templateRow({type:'other',enabled:true})));
     $('[data-save-templates]')?.addEventListener('click',async()=>{setMessage('[data-templates-message]','Saving…');try{await post({action:'save-templates',templates:readTemplates()});setMessage('[data-templates-message]','Saved.');}catch(error){setMessage('[data-templates-message]',error.message);}});
-    $('[data-save-flags]')?.addEventListener('click',async()=>{const featureFlags={};document.querySelectorAll('[data-flag]').forEach((el)=>featureFlags[el.dataset.flag]=el.checked);setMessage('[data-flags-message]','Saving…');try{await post({action:'save-feature-flags',featureFlags});setMessage('[data-flags-message]','Saved.');}catch(error){setMessage('[data-flags-message]',error.message);}});
+    $('[data-save-flags]')?.addEventListener('click',async()=>{
+      const featureFlags={};
+      document.querySelectorAll('[data-flag]').forEach((el)=>featureFlags[el.dataset.flag]=el.checked);
+      setMessage('[data-flags-message]','Saving…');
+      try{
+        await post({action:'save-feature-flags',featureFlags});
+        setMessage('[data-flags-message]','Saved.');
+      }catch(error){
+        setMessage('[data-flags-message]',error.message);
+      }
+    });
     $('[data-subscription-form]')?.addEventListener('submit',async(e)=>{e.preventDefault();setMessage('[data-subscription-message]','Saving…');try{await post({action:'save-subscription',...formObject(e.currentTarget)});setMessage('[data-subscription-message]','Saved.');}catch(error){setMessage('[data-subscription-message]',error.message);}});
     $('[data-run-migration-audit]')?.addEventListener('click',async()=>{setMessage('[data-migration-message]','Comparing legacy and tenant-scoped storage…');try{const data=await post({action:'run-migration-audit'});state.migrationAudit=data.migrationAudit;render();setMessage('[data-migration-message]',data.migrationAudit?.summary?.safeToRetireLegacy?'All storage domains passed the retirement safety checks.':'Audit complete. Legacy storage remains protected until the missing objects and fingerprint mismatches reach zero.');}catch(error){setMessage('[data-migration-message]',error.message);}});
         $('[data-activate]')?.addEventListener('click',async()=>{setMessage('[data-activate-message]','Checking onboarding…');try{await post({action:'activate'});setMessage('[data-activate-message]','Organization activated.');}catch(error){const missing=error.data?.incomplete?.join(', ');setMessage('[data-activate-message]',error.message+(missing?' Missing: '+missing+'.':''));}});
