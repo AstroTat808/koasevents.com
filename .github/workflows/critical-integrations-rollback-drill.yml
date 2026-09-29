@@ -1,0 +1,40 @@
+name: Critical Integrations rollback drill
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/critical-integrations-rollback-drill.yml'
+      - 'netlify/functions/_shared/critical-integration-release-guard.mjs'
+      - 'netlify/functions/_shared/system-health.ts'
+      - 'netlify/functions/admin-health.mts'
+      - 'src/pages/admin/health/index.astro'
+      - 'scripts/test_critical_integration_rollback_drill.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rollback-drill:
+    name: Safe non-production rollback drill
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      DRILL_ENVIRONMENT: github-actions-non-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Deliberately fail one synthetic probe and prove recovery
+        run: node scripts/test_critical_integration_rollback_drill.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: critical-integrations-rollback-drill-${{ github.run_id }}
+          path: visual-results/critical-integration-rollback-drill.json
+          retention-days: 90
+          if-no-files-found: error

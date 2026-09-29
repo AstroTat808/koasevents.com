@@ -79,9 +79,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Critical Integrations</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Groups the four zero-write release gates for Event Documents, Vendor Insurance, QuickBooks webhooks, and SignWell. Production verification must pass all four.</p>
             </div>
-            <span data-critical-integrations-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <span data-critical-integrations-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+              <a href="/api/admin/health?export=critical-integrations&format=csv" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</a>
+              <a href="/api/admin/health?export=critical-integrations&format=json" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export JSON</a>
+            </div>
           </div>
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
               <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Healthy now</p>
               <strong data-critical-integrations-count class="display mt-2 block text-3xl text-[var(--koa-forest)]">—</strong>
@@ -98,8 +102,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Oldest cached result</p>
               <strong data-critical-integrations-oldest-cache class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
             </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Rollback Ready</p>
+              <strong data-critical-integrations-rollback-status class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
+              <code data-critical-integrations-rollback-target class="mt-2 block break-all text-[.62rem] leading-5 text-[var(--koa-ink)]/55">—</code>
+            </article>
           </div>
-          <p data-critical-integrations-detail class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/55">Waiting for the latest System Health snapshot.</p>
+          <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <p data-critical-integrations-detail class="text-xs leading-5 text-[var(--koa-ink)]/55">Waiting for the latest System Health snapshot.</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <button data-critical-integrations-drill type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] disabled:cursor-not-allowed disabled:opacity-50">Run safe rollback drill</button>
+              <span data-critical-integrations-drill-message class="text-[.62rem] text-[var(--koa-ink)]/50"></span>
+            </div>
+          </div>
         </section>
 
         <section data-accounting-health-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -961,6 +976,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const criticalIntegrationsLastLive=document.querySelector('[data-critical-integrations-last-live]');
     const criticalIntegrationsSource=document.querySelector('[data-critical-integrations-source]');
     const criticalIntegrationsOldestCache=document.querySelector('[data-critical-integrations-oldest-cache]');
+    const criticalIntegrationsRollbackStatus=document.querySelector('[data-critical-integrations-rollback-status]');
+    const criticalIntegrationsRollbackTarget=document.querySelector('[data-critical-integrations-rollback-target]');
+    const criticalIntegrationsDrill=document.querySelector('[data-critical-integrations-drill]');
+    const criticalIntegrationsDrillMessage=document.querySelector('[data-critical-integrations-drill-message]');
     const criticalIntegrationsDetail=document.querySelector('[data-critical-integrations-detail]');
     const accountingHealthStatus=document.querySelector('[data-accounting-health-status]');
     const accountingInvariantResult=document.querySelector('[data-accounting-invariant-result]');
@@ -3954,7 +3973,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
-    function renderCriticalIntegrations(summary){
+    function renderCriticalIntegrations(summary,rollbackReady={},runtime={}){
       const data=summary||{};
       const healthyCount=Number(data.healthyCount||0);
       const totalCount=Number(data.totalCount||4);
@@ -3969,9 +3988,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         criticalIntegrationsCount.textContent=healthyCount+'/'+totalCount+' healthy';
         criticalIntegrationsCount.className='display mt-2 block text-3xl '+(healthy?'text-emerald-800':'text-red-800');
       }
-      if(criticalIntegrationsLastLive){
-        criticalIntegrationsLastLive.textContent=data.lastLiveVerification?new Date(data.lastLiveVerification).toLocaleString():'No live verification';
-      }
+      if(criticalIntegrationsLastLive)criticalIntegrationsLastLive.textContent=data.lastLiveVerification?new Date(data.lastLiveVerification).toLocaleString():'No live verification';
       if(criticalIntegrationsSource){
         criticalIntegrationsSource.textContent=liveCount+' live · '+cachedCount+' cached';
         criticalIntegrationsSource.className='mt-2 block text-sm '+(cachedCount?'text-amber-800':'text-emerald-800');
@@ -3982,18 +3999,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? String(oldest.name||oldest.id||'Cached probe')+' · '+(oldest.lastLiveCheckedAt?new Date(oldest.lastLiveCheckedAt).toLocaleString():'unknown time')
           : 'None — all results live';
       }
+      const rollback=rollbackReady||{};
+      const ready=Boolean(rollback.ready&&rollback.targetDeployId&&rollback.targetCommit);
+      if(criticalIntegrationsRollbackStatus){
+        criticalIntegrationsRollbackStatus.textContent=ready?'Ready':'Unavailable';
+        criticalIntegrationsRollbackStatus.className='mt-2 block text-sm font-semibold '+(ready?'text-emerald-800':'text-amber-800');
+      }
+      if(criticalIntegrationsRollbackTarget){
+        criticalIntegrationsRollbackTarget.textContent=ready
+          ? 'Deploy '+String(rollback.targetDeployId)+' · Commit '+String(rollback.targetCommit)
+          : String(rollback.detail||'No passing rollback target is recorded yet.');
+      }
+      if(criticalIntegrationsDrill){
+        const production=String(runtime?.deployContext||'')==='production';
+        criticalIntegrationsDrill.disabled=production;
+        criticalIntegrationsDrill.textContent=production?'Safe drill · preview only':'Run safe rollback drill';
+        if(criticalIntegrationsDrillMessage&&!criticalIntegrationsDrillMessage.dataset.result){
+          criticalIntegrationsDrillMessage.textContent=production
+            ? 'Production mutation is blocked; run the drill from a deploy preview.'
+            : 'Non-production only · no Netlify production restore is attempted.';
+        }
+      }
       if(criticalIntegrationsDetail){
         const probes=Array.isArray(data.probes)?data.probes:[];
         criticalIntegrationsDetail.textContent=probes.length
           ? probes.map((probe)=>String(probe.name||probe.id||'Probe')+': '+(probe.ok&&Number(probe.status)===204?'healthy':'failed')+' · HTTP '+String(probe.status||'—')+' · '+String(probe.source||'unknown')).join(' | ')
           : 'No Critical Integrations probe data is available yet.';
       }
-    }
-
-    function accountingMoney(value){
-      if(value==null||value==='')return '—';
-      const number=Number(value);
-      return Number.isFinite(number)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(number):String(value);
     }
 
     function accountingHistoryRow(title,detail,at,tone='slate'){
@@ -4113,7 +4145,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function render(data){
       markDashboardRenderPanel('Core summary');
       renderCoverage(data.coverage||{});
-      renderCriticalIntegrations(data.criticalIntegrations||{});
+      renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{});
       renderAccountingHealth(data.accountingHealth||{});
       const current=data.current;
       if(current){
@@ -5466,6 +5498,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-health-run-warning-close]')?.addEventListener('click',()=>healthRunWarningDialog?.close());
     healthRunWarningDialog?.addEventListener('click',(event)=>{
       if(event.target===healthRunWarningDialog)healthRunWarningDialog.close();
+    });
+
+    criticalIntegrationsDrill?.addEventListener('click',async()=>{
+      if(criticalIntegrationsDrill.disabled)return;
+      criticalIntegrationsDrill.disabled=true;
+      criticalIntegrationsDrill.textContent='Running drill…';
+      if(criticalIntegrationsDrillMessage){
+        delete criticalIntegrationsDrillMessage.dataset.result;
+        criticalIntegrationsDrillMessage.textContent='Deliberately failing SignWell in the non-production drill state machine…';
+      }
+      try{
+        const response=await fetch('/api/admin/health',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({action:'run-critical-integrations-rollback-drill',failedProbeId:'synthetic-signwell-webhook'}),
+        });
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||'Rollback drill failed.');
+        const drill=data.drill||{};
+        const phases=Array.isArray(drill.events)?drill.events:[];
+        if(criticalIntegrationsDrillMessage){
+          criticalIntegrationsDrillMessage.dataset.result='1';
+          criticalIntegrationsDrillMessage.textContent=(drill.ok?'Drill passed · ':'Drill failed · ')+phases.map((row)=>String(row.phase||'phase')+': '+(row.ok?'passed':'failed')).join(' → ');
+        }
+      }catch(error){
+        if(criticalIntegrationsDrillMessage){
+          criticalIntegrationsDrillMessage.dataset.result='1';
+          criticalIntegrationsDrillMessage.textContent=error instanceof Error?error.message:'Rollback drill failed.';
+        }
+      }finally{
+        criticalIntegrationsDrill.disabled=false;
+        criticalIntegrationsDrill.textContent='Run safe rollback drill';
+      }
     });
 
     document.querySelector('[data-close-release]')?.addEventListener('click',()=>releaseDialog.close());
