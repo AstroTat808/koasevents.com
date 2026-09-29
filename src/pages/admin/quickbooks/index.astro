@@ -878,6 +878,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function hasAdminAccess(user){return Boolean(user?.capabilities?.includes('quickbooks.view')||user?.permissions?.includes('quickbooks.view'));}
     function when(value){if(!value)return 'None yet';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();}
+    function verificationAge(value){
+      if(!value)return '';
+      const at=Date.parse(String(value));
+      if(!Number.isFinite(at))return '';
+      const seconds=Math.max(0,Math.floor((Date.now()-at)/1000));
+      if(seconds<60)return 'verified just now';
+      const minutes=Math.floor(seconds/60);
+      if(minutes<60)return 'verified '+minutes+' minute'+(minutes===1?'':'s')+' ago';
+      const hours=Math.floor(minutes/60);
+      if(hours<24)return 'verified '+hours+' hour'+(hours===1?'':'s')+' ago';
+      const days=Math.floor(hours/24);
+      return 'verified '+days+' day'+(days===1?'':'s')+' ago';
+    }
     function webhookEntities(receipt){return (receipt?.notifications||[]).flatMap((notification)=>notification?.entities||[]);}
     async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok){const error=new Error(data.error||'QuickBooks request failed.');Object.assign(error,data);throw error;}return data;}
 
@@ -1699,10 +1712,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const totals=document.createElement('p');totals.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/58';
         totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(estimateView.total)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
         card.appendChild(totals);
-        const verification=document.createElement('p');
-        verification.className='mt-2 text-[.66rem] font-semibold leading-5 '+(estimateView.verificationSource==='live'?'text-emerald-800':'text-[var(--koa-ink)]/48');
+        const verification=document.createElement('div');
+        verification.className='mt-2 flex flex-wrap items-center gap-2 text-[.66rem] font-semibold leading-5';
         const estimateNumber=estimateView.docNumber?'Estimate #'+estimateView.docNumber:(estimateView.estimateId?'Estimate ID '+estimateView.estimateId:'No estimate linked');
-        verification.textContent=estimateView.verificationLabel+(estimateView.verifiedAt?' · '+when(estimateView.verifiedAt):'')+' · '+estimateNumber;
+        if(estimateView.verificationSource==='live'){
+          const badge=document.createElement('span');
+          badge.className='rounded-full bg-emerald-100 px-2.5 py-1 text-[.56rem] font-black uppercase tracking-[.06em] text-emerald-800';
+          badge.textContent='Verified live';
+          verification.appendChild(badge);
+        }
+        const verificationDetail=document.createElement('span');
+        verificationDetail.className=estimateView.verificationSource==='live'?'text-emerald-800':'text-[var(--koa-ink)]/48';
+        verificationDetail.textContent=estimateNumber
+          +(estimateView.verifiedAt?' · '+verificationAge(estimateView.verifiedAt):'')
+          +(estimateView.verificationSource==='live'?'':' · '+estimateView.verificationLabel);
+        verification.title=estimateView.verifiedAt?'QuickBooks verification timestamp: '+when(estimateView.verifiedAt):estimateView.verificationLabel;
+        verification.appendChild(verificationDetail);
         card.appendChild(verification);
         if(row.reconciled){
           const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-[var(--koa-forest)]';ok.textContent=estimateView.verificationSource==='live'?'QuickBooks verified live. All accounting values reconcile; review flag cleared.':'All stored accounting values reconcile.';
