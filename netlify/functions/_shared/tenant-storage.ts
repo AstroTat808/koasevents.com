@@ -240,6 +240,37 @@ function jsonHash(value:any) {
   return createHash('sha256').update(stableJson(value)).digest('hex');
 }
 
+function inventoryHash(blobs:any[]) {
+  const rows=(blobs||[])
+    .map((blob:any)=>String(blob?.key||'')+':'+String(blob?.etag||''))
+    .sort();
+  return createHash('sha256').update(rows.join('\n')).digest('hex');
+}
+
+async function logicalObjectFingerprint(store:any,key:string,tenant:TenantProfile) {
+  const raw=await store.get(key,{type:'arrayBuffer'} as any);
+  if(raw==null)return {hash:'',bytes:0,kind:'missing'};
+  const bytes=new Uint8Array(raw as ArrayBuffer);
+  let text='';
+  try{text=new TextDecoder().decode(bytes);}catch{}
+  if(text){
+    try{
+      const parsed=JSON.parse(text);
+      const normalized=scopeJsonValue(tenant,parsed);
+      return {
+        hash:jsonHash(normalized),
+        bytes:bytes.byteLength,
+        kind:'json',
+      };
+    }catch{}
+  }
+  return {
+    hash:createHash('sha256').update(bytes).digest('hex'),
+    bytes:bytes.byteLength,
+    kind:'binary',
+  };
+}
+
 export async function tenantMigrationAudit(
   context: Context,
   tenant: TenantProfile,
@@ -247,6 +278,7 @@ export async function tenantMigrationAudit(
     'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
     'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','userPreferences','blog','gallery','localSeo','workspaceAlerts',
   ],
+  options: { deep?: boolean } = {},
 ) {
   const canonical=canonicalStore(context);
   const results:any[]=[];
@@ -268,6 +300,45 @@ export async function tenantMigrationAudit(
     const missingCanonical=[...legacyKeys].filter((key)=>!canonicalKeys.has(key)).sort();
     const canonicalOnly=[...canonicalKeys].filter((key)=>!legacyKeys.has(key)).sort();
     const critical:any[]=[];
+    const fullComparisons:any[]=[];
+    const fullMismatches:any[]=[];
+
+    if(options.deep && legacy && tenant.storage.legacyDataBelongsToTenant){
+      const shared=[...legacyKeys].filter((key)=>canonicalKeys.has(key)).sort();
+      for(const key of shared){
+        try{
+          const [legacyFingerprint,canonicalFingerprint]=await Promise.all([
+            logicalObjectFingerprint(legacy,key,tenant),
+            logicalObjectFingerprint(canonical,prefix+key,tenant),
+          ]);
+          const matches=legacyFingerprint.hash===canonicalFingerprint.hash;
+          const row={
+            key,
+            matches,
+            legacyHash:legacyFingerprint.hash,
+            canonicalHash:canonicalFingerprint.hash,
+            legacyBytes:legacyFingerprint.bytes,
+            canonicalBytes:canonicalFingerprint.bytes,
+            kind:legacyFingerprint.kind===canonicalFingerprint.kind?legacyFingerprint.kind:(legacyFingerprint.kind+'→'+canonicalFingerprint.kind),
+          };
+          fullComparisons.push(row);
+          if(!matches)fullMismatches.push(row);
+        }catch(error){
+          const row={
+            key,
+            matches:false,
+            legacyHash:'',
+            canonicalHash:'',
+            legacyBytes:0,
+            canonicalBytes:0,
+            kind:'error',
+            error:error instanceof Error?error.message:'Fingerprint comparison failed.',
+          };
+          fullComparisons.push(row);
+          fullMismatches.push(row);
+        }
+      }
+    }
 
     for(const key of MIGRATION_CRITICAL_KEYS[domain]||[]) {
       const legacyValue=legacy && tenant.storage.legacyDataBelongsToTenant
@@ -288,19 +359,30 @@ export async function tenantMigrationAudit(
       });
     }
 
+    const legacyStoreName=tenant.storage.compatibilityBlobStores[domain]||'';
+    const notApplicable=!tenant.storage.legacyDataBelongsToTenant||!legacyStoreName;
+    const checksumMismatches=options.deep?fullMismatches.length:critical.filter((row)=>!row.matches).length;
     results.push({
       domain,
-      legacyStore:tenant.storage.compatibilityBlobStores[domain]||'',
+      legacyStore:legacyStoreName,
       legacyCount:legacyKeys.size,
       canonicalCount:canonicalKeys.size,
+      legacyInventoryHash:inventoryHash(legacyList.blobs||[]),
+      canonicalInventoryHash:inventoryHash(canonicalList.blobs||[]),
       missingCanonicalCount:missingCanonical.length,
       canonicalOnlyCount:canonicalOnly.length,
-      missingCanonical:missingCanonical.slice(0,100),
-      canonicalOnly:canonicalOnly.slice(0,100),
+      missingCanonical:missingCanonical.slice(0,250),
+      canonicalOnly:canonicalOnly.slice(0,250),
       critical,
-      safeToRetireLegacy:
+      deepCompared:options.deep?fullComparisons.length:0,
+      fullChecksumMismatchCount:options.deep?fullMismatches.length:null,
+      fullChecksumMismatches:options.deep?fullMismatches.slice(0,250):[],
+      evidenceLevel:options.deep?'full-object-checksum':'critical-record-checksum',
+      notApplicable,
+      safeToRetireLegacy:notApplicable || (
         missingCanonical.length===0
-        && critical.every((row)=>row.matches),
+        && (options.deep ? fullMismatches.length===0 : critical.every((row)=>row.matches))
+      ),
     });
   }
 
@@ -317,6 +399,9 @@ export async function tenantMigrationAudit(
       canonicalObjects:results.reduce((sum,row)=>sum+row.canonicalCount,0),
       missingCanonical:results.reduce((sum,row)=>sum+row.missingCanonicalCount,0),
       criticalMismatches:results.reduce((sum,row)=>sum+row.critical.filter((item:any)=>!item.matches).length,0),
+      fullChecksumMismatches:results.reduce((sum,row)=>sum+Number(row.fullChecksumMismatchCount||0),0),
+      deepCompared:results.reduce((sum,row)=>sum+Number(row.deepCompared||0),0),
+      evidenceLevel:options.deep?'full-object-checksum':'critical-record-checksum',
       safeToRetireLegacy:results.every((row)=>row.safeToRetireLegacy),
     },
   };
