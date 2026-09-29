@@ -61,8 +61,19 @@ export type TenantDamageDepositConfig = {
   refundWithinDays: number;
 };
 
+export type TenantAccountingHealthInvariant = {
+  enabled: boolean;
+  label: string;
+  recordId: string;
+  customerDisplayName: string;
+  expectedSubtotal: number;
+  expectedTax: number;
+  expectedTotal: number;
+};
+
 export type TenantAccountingConfig = {
   damageDeposit: TenantDamageDepositConfig;
+  healthInvariant?: TenantAccountingHealthInvariant;
 };
 
 export type TenantProfile = {
