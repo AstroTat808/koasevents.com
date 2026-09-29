@@ -240,6 +240,17 @@ def source_mode():
  ]:
   if needle not in text:failures.append(label+" is missing: "+needle)
 
+ crm_ingest=(ROOT/"netlify/functions/crm-inquiries.mts").read_text(encoding="utf-8",errors="ignore")
+ turnstile_gate=crm_ingest.find("const expectedTurnstileAction")
+ blocklist_lookup=crm_ingest.find("const activeBlock")
+ if turnstile_gate<0 or blocklist_lookup<0 or turnstile_gate>blocklist_lookup:
+  failures.append("CRM Turnstile verification must fail closed before storage-backed blocklist/security telemetry.")
+ if "Turnstile rejection telemetry failed" not in crm_ingest or "context.waitUntil((async () => {" not in crm_ingest:
+  failures.append("CRM Turnstile rejection telemetry must be best-effort and must not replace the intended HTTP 403.")
+ quickbooks_admin=(SRC/"pages/admin/quickbooks/index.astro").read_text(encoding="utf-8",errors="ignore")
+ if "'before GET':'after GET'" not in quickbooks_admin:
+  failures.append("QuickBooks payment-rule simulator must label contract-value bases as before GET / after GET.")
+
  crm_page=(SRC/"pages/admin/crm/index.astro").read_text(encoding="utf-8",errors="ignore")
  if "@netlify/identity" in crm_page:
   failures.append("Business CRM must not depend on browser-side Netlify Identity during startup.")
