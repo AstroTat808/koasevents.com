@@ -43,6 +43,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-warning-count data-severity-filter="warning" type="button" class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-700"></button>
               <button data-info-count data-severity-filter="info" type="button" class="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800 transition hover:bg-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-700"></button>
             </div>
+            <div data-severity-section-hints class="mt-2 hidden grid gap-1 text-[.56rem] leading-4 text-[var(--koa-ink)]/55"></div>
             <p data-overall-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View issues ↓</p>
           </article>
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Passed</p><p data-passed class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
@@ -823,6 +824,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               Show failures only
             </label>
           </div>
+          <div data-health-active-filter class="mt-4 hidden items-center justify-between gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3">
+            <strong data-health-active-filter-label class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Showing: All checks</strong>
+            <button data-health-active-filter-clear type="button" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-3 py-1.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)] transition hover:border-[var(--koa-clay)]">Clear filter</button>
+          </div>
           <div data-results id="health-check-results" class="mt-5 grid gap-3 lg:grid-cols-2" tabindex="-1"></div>
         </section>
 
@@ -1199,7 +1204,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const overallHint=document.querySelector('[data-overall-hint]');
     const failedHint=document.querySelector('[data-failed-hint]');
     const failuresOnly=document.querySelector('[data-failures-only]');
+    const activeHealthFilter=document.querySelector('[data-health-active-filter]');
+    const activeHealthFilterLabel=document.querySelector('[data-health-active-filter-label]');
+    const activeHealthFilterClear=document.querySelector('[data-health-active-filter-clear]');
     const severitySummary=document.querySelector('[data-severity-summary]');
+    const severitySectionHints=document.querySelector('[data-severity-section-hints]');
     const criticalCount=document.querySelector('[data-critical-count]');
     const warningCount=document.querySelector('[data-warning-count]');
     const infoCount=document.querySelector('[data-info-count]');
@@ -1690,6 +1699,91 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       rootCauseClear?.classList.toggle('hidden',!activeRootCause);
     }
 
+    function activeHealthFilterLabelFor(count){
+      const suffix=count+' check'+(count===1?'':'s');
+      if(activeSeverity){
+        const label=activeSeverity==='critical'?'Critical':activeSeverity==='warning'?'Warning':'Info';
+        return 'Showing: '+label+' · '+suffix;
+      }
+      if(activeRootCause)return 'Showing: '+activeRootCause+' · '+suffix;
+      if(failuresOnly?.checked)return 'Showing: Issues · '+suffix;
+      return '';
+    }
+
+    function renderActiveHealthFilter(count){
+      if(!(activeHealthFilter instanceof HTMLElement)||!(activeHealthFilterLabel instanceof HTMLElement))return;
+      const label=activeHealthFilterLabelFor(Number(count||0));
+      activeHealthFilter.classList.toggle('hidden',!label);
+      activeHealthFilter.classList.toggle('flex',Boolean(label));
+      if(label)activeHealthFilterLabel.textContent=label;
+    }
+
+    function clearHealthFilters(){
+      activeRootCause='';
+      activeSeverity='';
+      if(failuresOnly)failuresOnly.checked=false;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+    }
+
+    function healthSectionDisplayName(section){
+      if(!(section instanceof HTMLElement))return '';
+      return String(section.querySelector('h2,h3')?.textContent||section.getAttribute('aria-label')||section.id||'System Health').trim();
+    }
+
+    function sectionsForSeverity(severity){
+      const normalized=String(severity||'');
+      if(normalized==='info'){
+        return latestHealthChecks.some((row)=>normalizedSeverity(row)==='info')?['Pages + APIs']:[];
+      }
+      const status=normalized==='critical'?'red':normalized==='warning'?'yellow':'';
+      if(!status)return [];
+      const selectors=[
+        '#health-pages-apis',
+        '#credential-health',
+        '#health-email',
+        '#health-office365',
+        '#health-deployment',
+        '#health-incidents',
+        '#health-uptime',
+        '[data-credit-panel]',
+      ];
+      const names=[];
+      selectors.forEach((selector)=>{
+        const section=document.querySelector(selector);
+        if(!(section instanceof HTMLElement)||String(section.dataset.healthSectionStatus||'')!==status)return;
+        const name=healthSectionDisplayName(section);
+        if(name&&!names.includes(name))names.push(name);
+      });
+      return names;
+    }
+
+    function updateSeverityBadgeSectionHints(){
+      const rows=[
+        {severity:'critical',node:criticalCount,count:latestHealthChecks.filter((row)=>normalizedSeverity(row)==='critical').length,label:'Critical'},
+        {severity:'warning',node:warningCount,count:latestHealthChecks.filter((row)=>normalizedSeverity(row)==='warning').length,label:'Warnings'},
+        {severity:'info',node:infoCount,count:latestHealthChecks.filter((row)=>normalizedSeverity(row)==='info').length,label:'Info'},
+      ];
+      const hintLines=[];
+      rows.forEach(({severity,node,count,label})=>{
+        if(!(node instanceof HTMLButtonElement)||!count)return;
+        const sections=sectionsForSeverity(severity);
+        const sectionText=sections.length?sections.join(', '):'Pages + APIs';
+        node.title=label+' found in: '+sectionText;
+        node.setAttribute('aria-label','Show '+count+' '+severity+' health check'+(count===1?'':'s')+'. Found in: '+sectionText+'.');
+        hintLines.push(label+' in: '+sectionText);
+      });
+      if(severitySectionHints instanceof HTMLElement){
+        severitySectionHints.innerHTML='';
+        hintLines.forEach((line)=>{
+          const row=document.createElement('p');
+          row.textContent=line;
+          severitySectionHints.appendChild(row);
+        });
+        severitySectionHints.classList.toggle('hidden',hintLines.length===0);
+      }
+    }
+
     function renderHealthChecks(){
       results.innerHTML='';
       const onlyFailures=Boolean(failuresOnly?.checked);
@@ -1700,6 +1794,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(onlyFailures&&severity==='healthy')return false;
         return true;
       });
+      renderActiveHealthFilter(rows.length);
       if(!rows.length){
         const message=activeRootCause
           ? 'No health checks currently match '+activeRootCause+'.'
@@ -1729,6 +1824,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderRootCauseSummary(latestHealthChecks);
       renderHealthChecks();
     });
+    activeHealthFilterClear?.addEventListener('click',clearHealthFilters);
     failuresOnly?.addEventListener('change',()=>{
       activeSeverity='';
       if(failuresOnly.checked)activeRootCause='';
@@ -1800,6 +1896,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function showHealthyChecks(){
       activeRootCause='';
+      activeSeverity='';
       if(failuresOnly)failuresOnly.checked=false;
       renderRootCauseSummary(latestHealthChecks);
       renderHealthChecks();
@@ -2422,6 +2519,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       healthSectionStatusesReady=true;
       refreshMobileHealthPresentation();
+      updateSeverityBadgeSectionHints();
     }
 
     function goToHighestPriorityProblem(){
@@ -4076,6 +4174,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         severitySummary.classList.add('hidden');
         latestHealthChecks=[];
         activeRootCause='';
+        activeSeverity='';
+        updateSeverityBadgeSectionHints();
+        renderActiveHealthFilter(0);
         renderRootCauseSummary([]);
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
