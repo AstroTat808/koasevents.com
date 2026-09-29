@@ -1189,7 +1189,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const result=await qboPost({action:'sync-and-recheck',recordId:record.id});
         message.textContent=result.accountingRepairPreview
           ? 'QuickBooks refreshed. A safe Accounting Repair preview is ready for review.'
-          : 'QuickBooks refreshed. Reconciliation recalculated.';
+          : result.reconciliationResolved
+            ? 'QuickBooks verified live. CRM and QuickBooks reconcile; the accounting review flag was cleared automatically.'
+            : 'QuickBooks refreshed. Reconciliation recalculated.';
         await load('accounting');
         if(result.accountingRepairPreview){
           renderRepairPreview(result.accountingRepairPreview);
