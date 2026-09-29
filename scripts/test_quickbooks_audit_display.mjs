@@ -49,3 +49,23 @@ for (const row of [missing, staleMirrorWithoutLink, linkedWithoutDocNumber, link
 }
 
 console.log('QuickBooks audit display regression passed: missing-link rows cannot display an estimate total.');
+
+const liveVerified = quickBooksAuditEstimateView({
+  estimateId: '176',
+  estimateDocNumber: '1042',
+  estimateTotal: 15706.80,
+  estimateVerifiedAt: '2026-09-29T12:00:00.000Z',
+  verificationSource: 'live',
+});
+assert.equal(liveVerified.verificationSource, 'live');
+assert.equal(liveVerified.verificationLabel, 'QuickBooks verified live');
+assert.equal(liveVerified.verifiedAt, '2026-09-29T12:00:00.000Z');
+
+const storedVerified = quickBooksAuditEstimateView({
+  estimateId: '176',
+  estimateTotal: 15706.80,
+  estimateVerifiedAt: '2026-09-29T12:00:00.000Z',
+  verificationSource: 'stored',
+});
+assert.equal(storedVerified.verificationSource, 'stored');
+assert.equal(storedVerified.verificationLabel, 'Stored CRM mirror · last live QuickBooks verification');

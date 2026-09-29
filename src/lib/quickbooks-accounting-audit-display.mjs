@@ -20,10 +20,23 @@ export function quickBooksAuditEstimateView(row) {
       ? 'Estimate linked · QBO ID ' + estimateId
       : 'No QBO estimate';
 
+  const verificationSource = row?.verificationSource === 'live' ? 'live' : 'stored';
+  const verifiedAt = clean(row?.estimateVerifiedAt, 80);
+  const verificationLabel = verificationSource === 'live'
+    ? 'QuickBooks verified live'
+    : verifiedAt
+      ? 'Stored CRM mirror · last live QuickBooks verification'
+      : 'Stored CRM mirror';
+
   return {
     linked,
     label,
     total,
+    estimateId,
+    docNumber,
+    verificationSource,
+    verifiedAt,
+    verificationLabel,
     consistent: label !== 'No QBO estimate' || total === null,
   };
 }

@@ -450,6 +450,8 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
         }));
       state.estimateDiscount = Number(estimate.DiscountAmt || 0);
       state.estimateLastSyncedAt = new Date().toISOString();
+      state.estimateVerifiedAt = state.estimateLastSyncedAt;
+      state.estimateVerificationSource = 'live';
     }
   }
 
@@ -562,6 +564,7 @@ export function applyQuickBooksReconciliationHistory(
       issues: currentIssues,
       checkedAt: now,
       source,
+      resolvedAt: currentOpen ? '' : (previousOpen ? now : String(previous?.resolvedAt || now)),
     };
 
     if (!type) continue;
@@ -675,6 +678,11 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         estimateId: String(qbo.estimateId || ''),
         estimateDocNumber: String(qbo.estimateDocNumber || ''),
         estimateTotal: qbo.estimateId ? Math.round(Number(qbo.estimateTotal || 0) * 100) / 100 : null,
+        estimateVerifiedAt: String(qbo.estimateVerifiedAt || qbo.estimateLastSyncedAt || qbo.lastSyncedAt || ''),
+        verificationSource: 'stored',
+        reconciliationOpen: Boolean(qbo.reconciliationState?.open),
+        reconciliationCheckedAt: String(qbo.reconciliationState?.checkedAt || ''),
+        reconciliationResolvedAt: String(qbo.reconciliationState?.resolvedAt || ''),
         invoiceCount: activeInvoices.length,
         issuedTotal,
         uninvoicedTotal,
@@ -2650,11 +2658,16 @@ export default async (req: Request, context: Context) => {
     records = await saveQuickBooksSalesRecord(context, record, records);
     const accountingAudit = buildQuickBooksAccountingAudit(records);
     const reconciliation = applyQuickBooksReconciliationHistory(records, accountingAudit, 'manual', [record.id]);
-    if (reconciliation.changedRecordIds.includes(record.id)) {
-      records = await saveQuickBooksSalesRecord(context, record, records);
-    }
+    records = await saveQuickBooksSalesRecord(context, record, records);
 
     const auditRow = accountingAudit.rows.find((row: any) => row.recordId === record.id);
+    if (auditRow) {
+      auditRow.verificationSource = 'live';
+      auditRow.estimateVerifiedAt = String(state.estimateVerifiedAt || state.estimateLastSyncedAt || state.lastSyncedAt || '');
+      auditRow.reconciliationOpen = !auditRow.reconciled;
+      auditRow.reconciliationCheckedAt = String(record?.accounting?.quickbooks?.reconciliationState?.checkedAt || '');
+      auditRow.reconciliationResolvedAt = String(record?.accounting?.quickbooks?.reconciliationState?.resolvedAt || '');
+    }
     let accountingRepairPreview: any = null;
     const hasEstimateMismatch = Boolean((auditRow?.issues || []).some((issue: any) =>
       ['estimate_total','estimate_missing'].includes(String(issue?.code || '')),
@@ -2678,10 +2691,12 @@ export default async (req: Request, context: Context) => {
       quoteId: record.quoteId || '',
       detail: accountingRepairPreview
         ? 'QuickBooks refreshed and a safe Accounting Repair preview is ready for review.'
-        : 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
+        : auditRow?.reconciled
+          ? 'QuickBooks verified live; CRM and QuickBooks reconcile and the accounting review flag was cleared automatically.'
+          : 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
     });
     return Response.json(
-      { ok: true, record, quickbooks: state, accountingAudit, accountingRepairPreview },
+      { ok: true, record, quickbooks: state, accountingAudit, accountingRepairPreview, reconciliationResolved: Boolean(auditRow?.reconciled) },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   }

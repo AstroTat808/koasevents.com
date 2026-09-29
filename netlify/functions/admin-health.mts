@@ -345,7 +345,8 @@ function accountingHealthSummary(latest:any,history:any[]){
     const recovered=!prior.ok&&sample.ok;
     const becameAlerted=!prior.alerted&&sample.alerted;
     const liveStatusChanged=String(prior?.accountingDetails?.liveNonTaxStatus||'')!==String(sample?.accountingDetails?.liveNonTaxStatus||'');
-    if(becameAlerted||becameFailed||recovered||liveStatusChanged){
+    const liveClientStatusChanged=String(prior?.accountingDetails?.liveClientInvariant?.status||'')!==String(sample?.accountingDetails?.liveClientInvariant?.status||'');
+    if(becameAlerted||becameFailed||recovered||liveStatusChanged||liveClientStatusChanged){
       alertHistory.push({
         checkedAt:sample.checkedAt,
         type:recovered?'recovered':becameAlerted?'alerted':becameFailed?'failed':'configuration_changed',
@@ -366,6 +367,7 @@ function accountingHealthSummary(latest:any,history:any[]){
     liveNonTaxVerified:Boolean(latestSample?.accountingDetails?.liveNonTaxVerified),
     liveNonTaxId:String(latestSample?.accountingDetails?.liveNonTaxId||''),
     liveNonTaxName:String(latestSample?.accountingDetails?.liveNonTaxName||''),
+    liveClientInvariant:latestSample?.accountingDetails?.liveClientInvariant||null,
     lastSuccessfulAt:String(lastSuccessful?.checkedAt||''),
     failures,
     alertHistory:alertHistory.reverse().slice(0,20),
