@@ -260,6 +260,7 @@ async function findExistingEstimateForRecord(context: Context, record: any, cust
   state.estimateTotal = Number(estimate.TotalAmt || 0);
   state.estimateEmailStatus = String(estimate.EmailStatus || '');
   state.estimateLastSyncedAt = new Date().toISOString();
+  state.estimateVerifiedLiveAt = state.estimateLastSyncedAt;
   state.lastSyncedAt = state.estimateLastSyncedAt;
   return estimate;
 }
@@ -308,6 +309,7 @@ async function syncEstimate(context: Context, record: any, itemId: string) {
   state.estimateTotal = Number(estimate.TotalAmt || record.proposal.total || 0);
   state.estimateEmailStatus = String(estimate.EmailStatus || '');
   state.estimateLastSyncedAt = new Date().toISOString();
+  state.estimateVerifiedLiveAt = state.estimateLastSyncedAt;
   state.lastSyncedAt = state.estimateLastSyncedAt;
   return estimate;
 }
@@ -450,6 +452,7 @@ export async function syncQuickBooksAccountingStatus(context: Context, record: a
         }));
       state.estimateDiscount = Number(estimate.DiscountAmt || 0);
       state.estimateLastSyncedAt = new Date().toISOString();
+      state.estimateVerifiedLiveAt = state.estimateLastSyncedAt;
     }
   }
 
@@ -549,6 +552,11 @@ export function applyQuickBooksReconciliationHistory(
     const previousOpen = Boolean(previous?.open);
     const previousFingerprint = String(previous?.fingerprint || '');
     const previousIssues = Array.isArray(previous?.issues) ? previous.issues : [];
+    const stateChanged = !previous
+      || previousOpen !== currentOpen
+      || previousFingerprint !== currentFingerprint
+      || Boolean(previous?.reviewRequired) !== currentOpen
+      || String(previous?.status || '') !== (currentOpen ? 'needs_review' : 'reconciled');
 
     let type = '';
     if (!previous && currentOpen) type = 'mismatch_detected';
@@ -558,12 +566,15 @@ export function applyQuickBooksReconciliationHistory(
 
     qbo.reconciliationState = {
       open: currentOpen,
+      reviewRequired: currentOpen,
+      status: currentOpen ? 'needs_review' : 'reconciled',
       fingerprint: currentFingerprint,
       issues: currentIssues,
       checkedAt: now,
       source,
     };
 
+    if (stateChanged && !changedRecordIds.includes(recordId)) changedRecordIds.push(recordId);
     if (!type) continue;
 
     const entry = {
@@ -588,7 +599,6 @@ export function applyQuickBooksReconciliationHistory(
       proposalTotal: Number(row?.proposalTotal || 0),
       remainingBalance: Number(row?.remainingBalance || 0),
     });
-    changedRecordIds.push(recordId);
   }
 
   return { records, transitions, changedRecordIds };
@@ -675,6 +685,12 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         estimateId: String(qbo.estimateId || ''),
         estimateDocNumber: String(qbo.estimateDocNumber || ''),
         estimateTotal: qbo.estimateId ? Math.round(Number(qbo.estimateTotal || 0) * 100) / 100 : null,
+        estimateVerifiedAt: String(qbo.estimateVerifiedLiveAt || qbo.estimateLastSyncedAt || ''),
+        estimateVerificationSource: qbo.estimateId
+          ? (qbo.estimateVerifiedLiveAt || qbo.estimateLastSyncedAt ? 'quickbooks_live' : 'crm_mirror')
+          : 'not_linked',
+        reviewRequired: issues.length > 0,
+        reviewStatus: issues.length > 0 ? 'needs_review' : 'reconciled',
         invoiceCount: activeInvoices.length,
         issuedTotal,
         uninvoicedTotal,
@@ -2678,10 +2694,20 @@ export default async (req: Request, context: Context) => {
       quoteId: record.quoteId || '',
       detail: accountingRepairPreview
         ? 'QuickBooks refreshed and a safe Accounting Repair preview is ready for review.'
-        : 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
+        : auditRow?.reconciled
+          ? 'QuickBooks verified live. CRM and QuickBooks reconcile; the accounting review flag was cleared.'
+          : 'QuickBooks estimate, invoice balances and payment-derived balances refreshed before accounting reconciliation.',
     });
     return Response.json(
-      { ok: true, record, quickbooks: state, accountingAudit, accountingRepairPreview },
+      {
+        ok: true,
+        record,
+        quickbooks: state,
+        accountingAudit,
+        accountingRepairPreview,
+        reviewCleared: Boolean(auditRow?.reconciled),
+        reconciled: Boolean(auditRow?.reconciled),
+      },
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   }
