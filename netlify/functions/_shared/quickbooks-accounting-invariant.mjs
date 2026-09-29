@@ -86,6 +86,293 @@ export function evaluateAccountingTaxInvariant() {
   };
 }
 
+export function evaluateLiveQuickBooksEstimateInvariant(estimate, options = {}) {
+  const expectedSubtotal = money(options.expectedSubtotal ?? 15000);
+  const expectedTax = money(options.expectedTax ?? 706.80);
+  const expectedTotal = money(options.expectedTotal ?? 15706.80);
+  const salesLines = (Array.isArray(estimate?.Line) ? estimate.Line : [])
+    .filter((line) => line?.DetailType === 'SalesItemLineDetail');
+  const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const taxableLines = salesLines.filter((line) =>
+    String(line?.SalesItemLineDetail?.TaxCodeRef?.value || '').trim().toUpperCase() !== 'NON'
+  );
+  const taxablePayload = money(taxableLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const quickBooksCalculatedTax = money(estimate?.TxnTaxDetail?.TotalTax || 0);
+  const total = money(estimate?.TotalAmt || 0);
+  const lineAmounts = salesLines.map((line) => money(line?.Amount || 0));
+  const failures = [];
+
+  if (!estimate?.Id) failures.push('live QuickBooks estimate is missing an id');
+  if (total !== expectedTotal) failures.push('live QuickBooks estimate total is not 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + expectedTotal.toFixed(2));
+  if (lineTotal !== expectedTotal) failures.push('live QuickBooks estimate line total is not 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + expectedTotal.toFixed(2));
+  if (!lineAmounts.includes(expectedSubtotal)) failures.push('live QuickBooks estimate is missing the 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + expectedSubtotal.toFixed(2) + ' service line');
+  if (!lineAmounts.includes(expectedTax)) failures.push('live QuickBooks estimate is missing the 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + expectedTax.toFixed(2) + ' CRM tax line');
+  if (taxablePayload !== 0) failures.push('live QuickBooks estimate exposes 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + taxablePayload.toFixed(2) + ' as taxable');
+  if (quickBooksCalculatedTax !== 0) failures.push('QuickBooks added 
+  const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
+    ? queryResponse.QueryResponse.TaxCode
+    : [];
+  if (!rows.length) {
+    return {
+      verified: false,
+      ok: true,
+      detail: 'QuickBooks returned no TaxCode rows, so live NON tax-code availability could not be verified.',
+    };
+  }
+
+  const non = rows.find((row) => {
+    const id = String(row?.Id || '').trim().toUpperCase();
+    const name = String(row?.Name || '').trim().toUpperCase();
+    return id === 'NON' || name === 'NON' || name === 'NON-TAXABLE' || name === 'NONTAXABLE';
+  });
+  if (!non) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks tax codes were readable, but the NON/non-taxable code used by CRM-controlled accounting payloads was not present.',
+    };
+  }
+
+  if (non?.Active === false) {
+    return {
+      verified: true,
+      ok: false,
+      detail: 'QuickBooks NON/non-taxable tax code exists but is inactive.',
+    };
+  }
+
+  return {
+    verified: true,
+    ok: true,
+    detail: 'QuickBooks NON/non-taxable tax code is available for CRM-controlled estimate and invoice lines.',
+    id: String(non?.Id || ''),
+    name: String(non?.Name || ''),
+  };
+}
+ + quickBooksCalculatedTax.toFixed(2) + ' tax on top of CRM pricing');
+
+  return {
+    ok: failures.length === 0,
+    estimateId: String(estimate?.Id || ''),
+    docNumber: String(estimate?.DocNumber || ''),
+    expectedSubtotal,
+    expectedTax,
+    expectedTotal,
+    total,
+    lineTotal,
+    taxablePayload,
+    quickBooksCalculatedTax,
+    allNonTaxable: taxableLines.length === 0 && salesLines.length > 0,
+    salesLineCount: salesLines.length,
+    failures,
+  };
+}
+
 export function inspectQuickBooksNonTaxCode(queryResponse) {
   const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
     ? queryResponse.QueryResponse.TaxCode
