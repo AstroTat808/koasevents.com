@@ -3989,8 +3989,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           accountingAlertHistory.appendChild(accountingHistoryRow('No accounting alerts','No failure, recovery, or live NON-tax configuration transition is stored yet.','', 'emerald'));
         }else alerts.forEach((row)=>{
           const type=String(row.type||'event').replaceAll('_',' ');
-          const tone=row.type==='recovered'?'emerald':row.type==='configuration_changed'?'amber':'red';
-          accountingAlertHistory.appendChild(accountingHistoryRow(type.charAt(0).toUpperCase()+type.slice(1),row.detail,row.checkedAt,tone));
+          const tone=row.type==='recovered'?'emerald':row.type==='configuration_changed'||row.type==='changed'?'amber':'red';
+          let detail=String(row.detail||'');
+          if(row.after){
+            const moneyFmt=(value)=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(value||0));
+            const beforeChris=row.before?.chris?.estimateTotal==null?'—':moneyFmt(row.before.chris.estimateTotal);
+            const afterChris=row.after?.chris?.estimateTotal==null?'—':moneyFmt(row.after.chris.estimateTotal);
+            const beforeDynamic=row.before?.dynamic?Number(row.before.dynamic.failedCount||0)+' failed of '+Number(row.before.dynamic.eligibleCount||0):'—';
+            const afterDynamic=Number(row.after?.dynamic?.failedCount||0)+' failed of '+Number(row.after?.dynamic?.eligibleCount||0);
+            detail='Chris Sibel '+beforeChris+' to '+afterChris
+              +' · taxable lines '+(row.before?.chris?.taxableLineCount??'—')+' to '+(row.after?.chris?.taxableLineCount??'—')
+              +' · all-client invariants '+beforeDynamic+' to '+afterDynamic
+              +(row.after?.detail?' · '+row.after.detail:'');
+          }
+          accountingAlertHistory.appendChild(accountingHistoryRow(type.charAt(0).toUpperCase()+type.slice(1),detail,row.checkedAt,tone));
         });
       }
     }
