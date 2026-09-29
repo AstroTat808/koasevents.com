@@ -424,6 +424,62 @@ export default async (req: Request, context: Context) => {
   if (!wildOnesSource.ok) {
     return json(req, { error: 'Wild Ones source authentication failed.', code: 'wild_ones_source_auth_failed' }, 403);
   }
+
+  const protectedActions: Record<string, string> = {
+    'koa-event-inquiry': 'event_inquiry',
+    'koa-wedding-inquiry': 'wedding_inquiry',
+    'koa-discovery-call-request': 'discovery_call',
+    'koa-stay-inquiry': 'stay_inquiry',
+  };
+  const expectedTurnstileAction = protectedActions[formName] || '';
+
+  if (expectedTurnstileAction) {
+    const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
+    const validationRecord = {
+      ok: turnstile.ok,
+      action: turnstile.verifiedAction || '',
+      expectedAction: expectedTurnstileAction,
+      hostname: turnstile.verifiedHostname || '',
+      requestHostname: turnstile.requestHostname || new URL(req.url).hostname,
+      codes: turnstile.codes || [],
+      detail: turnstile.detail || turnstile.error || '',
+    };
+
+    if (!turnstile.ok) {
+      context.waitUntil((async () => {
+        try {
+          const sourceFingerprint = wildOnesSource.fingerprint || mobileSource.fingerprint || await ipFingerprint(req);
+          const identity = await securityIdentity(payload);
+          await recordTurnstileValidation(context, validationRecord);
+          const securityEvent = await recordSecurityEvent(context, req, {
+            disposition: 'blocked',
+            category: 'turnstile_failed',
+            formName,
+            reasons: ['Cloudflare Turnstile verification failed'],
+            reasonCodes: ['turnstile_failed', ...((turnstile.codes || []).slice(0, 4))],
+            riskScore: 100,
+            ipFingerprint: sourceFingerprint,
+            ...identity,
+            detail: 'Rejected before CRM storage.',
+          });
+          const turnstileHistory = await getSecurityEvents(context);
+          await applyAutomaticBlocks(context, securityEvent, turnstileHistory);
+        } catch (error) {
+          console.error('Turnstile rejection telemetry failed', error);
+        }
+      })());
+      return json(req, {
+        error: turnstile.error || 'Security verification failed.',
+        code: 'turnstile_failed',
+      }, 403);
+    }
+
+    context.waitUntil(
+      recordTurnstileValidation(context, validationRecord)
+        .catch((error) => console.error('Turnstile success telemetry failed', error)),
+    );
+  }
+
   const sourceFingerprint = wildOnesSource.fingerprint || mobileSource.fingerprint || await ipFingerprint(req);
   const identity = await securityIdentity(payload);
 
@@ -470,47 +526,6 @@ export default async (req: Request, context: Context) => {
     const honeypotHistory = await getSecurityEvents(context);
     await applyAutomaticBlocks(context, securityEvent, honeypotHistory);
     return json(req, { ok: true, id: '' });
-  }
-
-
-  const protectedActions: Record<string, string> = {
-    'koa-event-inquiry': 'event_inquiry',
-    'koa-wedding-inquiry': 'wedding_inquiry',
-    'koa-discovery-call-request': 'discovery_call',
-    'koa-stay-inquiry': 'stay_inquiry',
-  };
-  const expectedTurnstileAction = protectedActions[formName] || '';
-
-  if (expectedTurnstileAction) {
-    const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
-    await recordTurnstileValidation(context, {
-      ok: turnstile.ok,
-      action: turnstile.verifiedAction || '',
-      expectedAction: expectedTurnstileAction,
-      hostname: turnstile.verifiedHostname || '',
-      requestHostname: turnstile.requestHostname || new URL(req.url).hostname,
-      codes: turnstile.codes || [],
-      detail: turnstile.detail || turnstile.error || '',
-    });
-    if (!turnstile.ok) {
-      const securityEvent = await recordSecurityEvent(context, req, {
-        disposition: 'blocked',
-        category: 'turnstile_failed',
-        formName,
-        reasons: ['Cloudflare Turnstile verification failed'],
-        reasonCodes: ['turnstile_failed', ...((turnstile.codes || []).slice(0, 4))],
-        riskScore: 100,
-        ipFingerprint: sourceFingerprint,
-        ...identity,
-        detail: 'Rejected before CRM storage.',
-      });
-      const turnstileHistory = await getSecurityEvents(context);
-      await applyAutomaticBlocks(context, securityEvent, turnstileHistory);
-      return json(req, {
-        error: turnstile.error || 'Security verification failed.',
-        code: 'turnstile_failed',
-      }, 403);
-    }
   }
 
   const recentSecurityEvents = await getSecurityEvents(context);
