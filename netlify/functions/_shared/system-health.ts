@@ -7,8 +7,8 @@ import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCredit
 import { emailHealthSummary } from './email-health';
 import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
-import { qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
-import { evaluateAccountingTaxInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
+import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
+import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 
@@ -42,6 +42,20 @@ export type HealthCheck = {
     liveNonTaxVerified: boolean;
     liveNonTaxId?: string;
     liveNonTaxName?: string;
+    liveClientInvariant?: {
+      status: 'passed' | 'failed' | 'unverified' | 'not-applicable';
+      verifiedAt: string;
+      recordId: string;
+      clientName: string;
+      eventDate: string;
+      estimateId: string;
+      estimateDocNumber: string;
+      proposalTotal: number;
+      estimateTotal: number | null;
+      taxableLineCount: number | null;
+      historicalTaxOnTaxDetected: boolean;
+      detail: string;
+    };
   };
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
@@ -1115,6 +1129,120 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     ms:Date.now()-started,
   };
 }
+async function chrisSibelLiveAccountingInvariant(context:Context) {
+  const tenant=resolveTenant();
+  const expected=CHRIS_SIBEL_ACCOUNTING_INVARIANT;
+  if(String(tenant?.id||'')!=='koa-events'){
+    return {
+      status:'not-applicable' as const,
+      ok:true,
+      verified:false,
+      verifiedAt:'',
+      recordId:expected.recordId,
+      clientName:expected.clientName,
+      eventDate:expected.eventDate,
+      estimateId:'',
+      estimateDocNumber:'',
+      proposalTotal:expected.expectedTotal,
+      estimateTotal:null,
+      taxableLineCount:null,
+      historicalTaxOnTaxDetected:false,
+      detail:'The Chris Sibel production accounting invariant applies only to the Koa’s Events tenant.',
+    };
+  }
+
+  const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
+  const record=records.find((row:any)=>String(row?.id||'')===expected.recordId)
+    || records.find((row:any)=>
+      String(row?.customer?.name||'').trim().toLowerCase()===expected.clientName.toLowerCase()
+      && String(row?.customer?.eventDate||'').slice(0,10)===expected.eventDate
+    );
+  if(!record){
+    return {
+      status:'failed' as const,
+      ok:false,
+      verified:true,
+      verifiedAt:new Date().toISOString(),
+      recordId:expected.recordId,
+      clientName:expected.clientName,
+      eventDate:expected.eventDate,
+      estimateId:'',
+      estimateDocNumber:'',
+      proposalTotal:0,
+      estimateTotal:null,
+      taxableLineCount:null,
+      historicalTaxOnTaxDetected:false,
+      detail:'Chris Sibel CRM test record '+expected.recordId+' was not found, so the production accounting invariant cannot be reconciled.',
+    };
+  }
+
+  const qbo=record?.accounting?.quickbooks||{};
+  let estimate:any=null;
+  let estimateId=String(qbo?.estimateId||'').trim();
+  if(estimateId){
+    const data:any=await qboGet(context,'estimate',estimateId);
+    estimate=data?.Estimate||null;
+  }else{
+    let customerId=String(qbo?.customerId||'').trim();
+    if(!customerId){
+      const displayName=String(qbo?.customerDisplayName||expected.clientName+' - '+expected.eventDate).replace(/'/g,"\\'");
+      const customerData:any=await qboQuery(context,"select * from Customer where DisplayName = '"+displayName+"' maxresults 1");
+      customerId=String(customerData?.QueryResponse?.Customer?.[0]?.Id||'');
+    }
+    if(customerId){
+      const estimateData:any=await qboQuery(context,"select * from Estimate where CustomerRef = '"+customerId.replace(/'/g,"\\'")+"' maxresults 1000");
+      const estimates=Array.isArray(estimateData?.QueryResponse?.Estimate)?estimateData.QueryResponse.Estimate:[];
+      const markers=[String(record?.id||''),String(record?.quoteId||'')].filter(Boolean).map((value)=>value.toLowerCase());
+      const marked=estimates.filter((row:any)=>{
+        const haystack=[row?.PrivateNote,row?.CustomerMemo?.value].map((value)=>String(value||'').toLowerCase()).join(' ');
+        return markers.some((marker)=>haystack.includes(marker));
+      });
+      if(marked.length===1) estimate=marked[0];
+      else if(estimates.length===1) estimate=estimates[0];
+    }
+  }
+
+  if(!estimate){
+    return {
+      status:'failed' as const,
+      ok:false,
+      verified:true,
+      verifiedAt:new Date().toISOString(),
+      recordId:String(record?.id||expected.recordId),
+      clientName:String(record?.customer?.name||expected.clientName),
+      eventDate:String(record?.customer?.eventDate||expected.eventDate).slice(0,10),
+      estimateId,
+      estimateDocNumber:String(qbo?.estimateDocNumber||''),
+      proposalTotal:Number(record?.proposal?.total||0),
+      estimateTotal:null,
+      taxableLineCount:null,
+      historicalTaxOnTaxDetected:false,
+      detail:'The Chris Sibel CRM record exists, but its live QuickBooks estimate could not be uniquely located.',
+    };
+  }
+
+  const evaluation=evaluateChrisSibelLiveInvariant(record,estimate);
+  const estimateNumber=String(evaluation.estimateDocNumber||evaluation.estimateId||'').trim();
+  return {
+    status:evaluation.ok?'passed' as const:'failed' as const,
+    ok:Boolean(evaluation.ok),
+    verified:true,
+    verifiedAt:new Date().toISOString(),
+    recordId:evaluation.recordId,
+    clientName:evaluation.clientName,
+    eventDate:evaluation.eventDate,
+    estimateId:evaluation.estimateId,
+    estimateDocNumber:evaluation.estimateDocNumber,
+    proposalTotal:Number(evaluation.proposalTotal||0),
+    estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+    taxableLineCount:Number(evaluation.taxableLineCount||0),
+    historicalTaxOnTaxDetected:Boolean(evaluation.historicalTaxOnTaxDetected),
+    detail:evaluation.ok
+      ? 'Live Chris Sibel invariant passed: CRM $15,706.80 = QuickBooks $15,706.80; estimate '+(estimateNumber||'linked')+' has zero taxable sales lines.'
+      : 'Live Chris Sibel invariant failed: '+evaluation.failures.join('; ')+(evaluation.historicalTaxOnTaxDetected?' Historical $16,446.90 tax-on-tax total detected.':''),
+  };
+}
+
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
   const started=Date.now();
   const invariant=evaluateAccountingTaxInvariant();
@@ -1151,7 +1279,10 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
   }
 
   try{
-    const taxCodeData:any=await qboQuery(context,'select * from TaxCode maxresults 100');
+    const [taxCodeData,liveClient]=await Promise.all([
+      qboQuery(context,'select * from TaxCode maxresults 100'),
+      chrisSibelLiveAccountingInvariant(context),
+    ]);
     const live=inspectQuickBooksNonTaxCode(taxCodeData);
     const accountingDetails:HealthCheck['accountingDetails']={
       ...baseDetails,
@@ -1159,7 +1290,25 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       liveNonTaxVerified:Boolean(live.verified),
       liveNonTaxId:String(live?.id||''),
       liveNonTaxName:String(live?.name||''),
+      liveClientInvariant:liveClient,
     };
+    if(liveClient.verified && !liveClient.ok){
+      return {
+        id:'quickbooks-tax-invariant',
+        name:'QuickBooks tax-on-tax invariant',
+        kind:'api',
+        path:'$15,000.00 + $706.80 tax = $15,706.80',
+        ok:false,
+        status:503,
+        ms:Date.now()-started,
+        severity:'red',
+        accountingDetails,
+        detail:clean(
+          liveClient.detail+' Production deploy verification will alert immediately while this invariant is failed.',
+          1200,
+        ),
+      };
+    }
     if(live.verified && !live.ok){
       return {
         id:'quickbooks-tax-invariant',
@@ -1190,7 +1339,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       accountingDetails,
       detail:clean(
         'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
-        +'milestone invoice line is NON-taxable. '+live.detail,
+        +'milestone invoice line is NON-taxable. '+live.detail+' '+liveClient.detail,
         1200,
       ),
     };
