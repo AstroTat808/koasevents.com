@@ -660,6 +660,640 @@ export async function getLastQuickBooksCrmSync(context: Context) {
   return await integrationStore(context).get('quickbooks/manual-sync-last', { type: 'json' }) as any;
 }
 
+const QUICKBOOKS_SYNC_JOB_CURRENT_KEY = 'quickbooks/manual-sync-job-current';
+const QUICKBOOKS_SYNC_JOB_PREFIX = 'quickbooks/manual-sync-jobs/';
+const QUICKBOOKS_SYNC_LAST_FAILURE_KEY = 'quickbooks/manual-sync-last-failure';
+const QUICKBOOKS_SYNC_LAST_SUCCESS_KEY = 'quickbooks/manual-sync-last-success';
+const QUICKBOOKS_SYNC_BATCH_SIZE = 2;
+
+function quickBooksSyncJobKey(jobId: string) {
+  return QUICKBOOKS_SYNC_JOB_PREFIX + clean(jobId, 140);
+}
+
+function arrayUnique(values: unknown[]) {
+  return [...new Set(values.map((value) => clean(value, 140)).filter(Boolean))];
+}
+
+function mergeRecoveryRow(rows: any[], next: any) {
+  const recordId = clean(next?.recordId, 120);
+  if (!recordId) return rows;
+  const index = rows.findIndex((row) => clean(row?.recordId, 120) === recordId);
+  if (index < 0) return [...rows, next];
+  const current = rows[index];
+  rows[index] = {
+    ...current,
+    clientName: clean(next?.clientName || current?.clientName, 180),
+    before: current?.before ?? next?.before ?? null,
+    after: next?.after ?? current?.after ?? null,
+    createdBySync: Boolean(current?.createdBySync || next?.createdBySync),
+  };
+  return rows;
+}
+
+function publicSyncJob(job: any) {
+  const inboundTotal = Number(job?.inboundTotal || 0);
+  const outboundTotal = Number(job?.outboundTotal || 0);
+  const inboundCursor = Number(job?.inboundCursor || 0);
+  const outboundCursor = Number(job?.outboundCursor || 0);
+  const processed = Math.min(inboundTotal, inboundCursor) + Math.min(outboundTotal, outboundCursor);
+  const total = inboundTotal + outboundTotal;
+  return {
+    jobId: clean(job?.jobId, 140),
+    previewId: clean(job?.previewId, 140),
+    actor: clean(job?.actor, 180),
+    status: clean(job?.status, 40),
+    stage: clean(job?.stage, 40),
+    startedAt: clean(job?.startedAt, 80),
+    updatedAt: clean(job?.updatedAt, 80),
+    completedAt: clean(job?.completedAt, 80),
+    inboundCursor,
+    inboundTotal,
+    outboundCursor,
+    outboundTotal,
+    processed,
+    total,
+    progressPercent: total ? Math.min(100, Math.round((processed / total) * 100)) : 100,
+    currentItem: job?.currentItem || null,
+    lastFailure: job?.lastFailure || null,
+    canResume: ['running','paused_error'].includes(clean(job?.status, 40)),
+    result: job?.status === 'completed' ? (job?.result || null) : null,
+  };
+}
+
+async function saveQuickBooksCrmSyncJob(context: Context, job: any) {
+  const store = integrationStore(context);
+  job.updatedAt = new Date().toISOString();
+  await store.setJSON(quickBooksSyncJobKey(job.jobId), job);
+  await store.setJSON(QUICKBOOKS_SYNC_JOB_CURRENT_KEY, {
+    jobId: job.jobId,
+    previewId: job.previewId,
+    status: job.status,
+    stage: job.stage,
+    updatedAt: job.updatedAt,
+  });
+  return job;
+}
+
+export async function getCurrentQuickBooksCrmSyncJob(context: Context) {
+  const store = integrationStore(context);
+  const pointer: any = await store.get(QUICKBOOKS_SYNC_JOB_CURRENT_KEY, { type:'json' });
+  const jobId = clean(pointer?.jobId, 140);
+  if (!jobId) return null;
+  return await store.get(quickBooksSyncJobKey(jobId), { type:'json' }) as any;
+}
+
+export async function getLastQuickBooksCrmSyncFailure(context: Context) {
+  return await integrationStore(context).get(QUICKBOOKS_SYNC_LAST_FAILURE_KEY, { type:'json' }) as any;
+}
+
+async function recordQuickBooksCrmSyncFailure(context: Context, job: any, input: any) {
+  const failure = {
+    id: 'QBSYNC-FAIL-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix(),
+    timestamp: new Date().toISOString(),
+    previewId: clean(job?.previewId, 140),
+    jobId: clean(job?.jobId, 140),
+    stage: clean(input?.stage || job?.stage, 80),
+    operation: clean(input?.operation, 120),
+    message: clean(input?.message || 'QuickBooks synchronization failed.', 1200),
+    recordId: clean(input?.recordId, 120),
+    customerId: clean(input?.customerId, 100),
+    customerName: clean(input?.customerName, 240),
+    estimateId: clean(input?.estimateId, 100),
+    cursor: Number(input?.cursor ?? 0),
+    fatal: input?.fatal !== false,
+    resolvedAt: '',
+  };
+  job.lastFailure = failure;
+  await integrationStore(context).setJSON(QUICKBOOKS_SYNC_LAST_FAILURE_KEY, failure);
+  return failure;
+}
+
+function qboFilterValue(value: unknown) {
+  return clean(value, 120).replace(/'/g, "\\'");
+}
+
+async function qboCustomerTransactions(context: Context, customerId: string) {
+  const ref = qboFilterValue(customerId);
+  const estimatesData: any = await qboQuery(context, "select * from Estimate where CustomerRef = '" + ref + "' maxresults 1000");
+  const invoicesData: any = await qboQuery(context, "select * from Invoice where CustomerRef = '" + ref + "' maxresults 1000");
+  const paymentsData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + ref + "' maxresults 1000");
+  return {
+    estimates: Array.isArray(estimatesData?.QueryResponse?.Estimate) ? estimatesData.QueryResponse.Estimate : [],
+    invoices: Array.isArray(invoicesData?.QueryResponse?.Invoice) ? invoicesData.QueryResponse.Invoice : [],
+    payments: Array.isArray(paymentsData?.QueryResponse?.Payment) ? paymentsData.QueryResponse.Payment : [],
+  };
+}
+
+export async function startQuickBooksCrmTwoWaySyncJob(context: Context, actor = '', previewId = '') {
+  const preview = await getLastQuickBooksCrmSyncPreview(context);
+  if (!preview?.previewId || clean(preview.previewId, 140) !== clean(previewId, 140)) {
+    throw new Error('Run a fresh QuickBooks sync preview before applying changes.');
+  }
+
+  const current = await getCurrentQuickBooksCrmSyncJob(context);
+  if (
+    current?.jobId &&
+    clean(current.previewId, 140) === clean(previewId, 140) &&
+    ['running','paused_error'].includes(clean(current.status, 40))
+  ) {
+    return publicSyncJob(current);
+  }
+
+  const records = (((await salesStore(context).get('records/index', { type:'json' })) || []) as any[])
+    .filter(Boolean)
+    .slice(0, CRM_RECORD_LIMIT);
+  const customerPlans = Array.isArray(preview.customerPlans) ? jsonClone(preview.customerPlans) : [];
+  const outbound = Array.isArray(preview.outbound) ? jsonClone(preview.outbound) : [];
+  const startedAt = new Date().toISOString();
+  const jobId = 'QBSYNCJOB-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix();
+  const job = {
+    version: 1,
+    jobId,
+    previewId: clean(previewId, 140),
+    actor: clean(actor, 180),
+    status: 'running',
+    stage: customerPlans.length ? 'inbound' : outbound.length ? 'outbound' : 'finalize',
+    startedAt,
+    updatedAt: startedAt,
+    completedAt: '',
+    inboundCursor: 0,
+    inboundTotal: customerPlans.length,
+    outboundCursor: 0,
+    outboundTotal: outbound.length,
+    currentItem: null,
+    lastFailure: null,
+    previewSnapshot: {
+      previewId: clean(preview.previewId, 140),
+      generatedAt: clean(preview.generatedAt, 80),
+      summary: jsonClone(preview.summary || {}),
+      executionSummary: jsonClone(preview.executionSummary || {}),
+      customerPlans,
+      outbound,
+    },
+    qbo: {
+      customers: Number(preview?.summary?.qboCustomers || customerPlans.length || 0),
+      estimates: Number(preview?.summary?.qboEstimates || 0),
+      invoices: Number(preview?.summary?.qboInvoices || 0),
+      payments: Number(preview?.summary?.qboPayments || 0),
+    },
+    recordsBefore: records.length,
+    importedRecordIds: [],
+    matchedRecordIds: [],
+    changedRecordIds: [],
+    skipped: { capacity:0, ambiguous:0, unapprovedNew:0, excluded:0 },
+    pushed: {
+      customersCreated:0,
+      customersUpdated:0,
+      estimatesCreated:0,
+      estimatesUpdated:0,
+      estimatesSkippedNoServiceItem:0,
+    },
+    customerOutcomes: [],
+    outboundOutcomes: [],
+    conflicts: [],
+    warnings: [],
+    changes: [],
+    recoveryRows: [],
+  };
+  await saveQuickBooksCrmSyncJob(context, job);
+  return publicSyncJob(job);
+}
+
+async function processQuickBooksInboundPlan(context: Context, job: any, plan: any, cursor: number) {
+  const disposition = clean(plan?.executionDisposition, 40);
+  const customerId = clean(plan?.customerId, 100);
+  const customerName = clean(plan?.qbo?.name || customerId, 240);
+  job.currentItem = { stage:'inbound', cursor, customerId, customerName, operation:disposition };
+
+  if (disposition === 'excluded') {
+    job.skipped.excluded += 1;
+    job.customerOutcomes.push({ customerId, name:customerName, outcome:'excluded', recordId:'', detail:clean(plan?.exclusion?.reason || 'Excluded from CRM synchronization by staff.',500) });
+    return;
+  }
+  if (disposition === 'blocked_duplicate') {
+    job.skipped.ambiguous += 1;
+    job.customerOutcomes.push({ customerId, name:customerName, outcome:'blocked_duplicate', recordId:'' });
+    job.conflicts.push({
+      type:'ambiguous-customer-match',
+      quickBooksCustomerId:customerId,
+      quickBooksCustomerName:customerName,
+      detail:'CRM duplicate evidence requires staff review before this QuickBooks customer can be imported or linked.',
+    });
+    return;
+  }
+  if (disposition === 'skip_unapproved') {
+    job.skipped.unapprovedNew += 1;
+    job.customerOutcomes.push({ customerId, name:customerName, outcome:'skip_unapproved', recordId:'' });
+    job.conflicts.push({
+      type:'unapproved-new-customer',
+      quickBooksCustomerId:customerId,
+      quickBooksCustomerName:customerName,
+      detail:'This QuickBooks customer was not explicitly approved as a new CRM import. It was not imported.',
+    });
+    return;
+  }
+  if (disposition === 'skip_capacity') {
+    job.skipped.capacity += 1;
+    job.customerOutcomes.push({ customerId, name:customerName, outcome:'skip_capacity', recordId:'' });
+    return;
+  }
+  if (!['create','match_refresh'].includes(disposition)) return;
+
+  const customerData: any = await qboGet(context, 'customer', customerId);
+  const customer = customerData?.Customer;
+  if (!customer?.Id) throw Object.assign(new Error('QuickBooks customer could not be loaded.'), { operation:'inbound_customer_load' });
+  const transactions = await qboCustomerTransactions(context, customerId);
+
+  const store = salesStore(context);
+  const records = (((await store.get('records/index', { type:'json' })) || []) as any[])
+    .filter(Boolean)
+    .slice(0, CRM_RECORD_LIMIT);
+  let record = disposition === 'match_refresh'
+    ? records.find((entry) => clean(entry?.id,120) === clean(plan?.matchedRecordId,120)) || null
+    : null;
+  const beforeFull = record ? jsonClone(record) : null;
+  const beforeRecord = record ? crmSyncSnapshot(record) : null;
+
+  if (!record && disposition === 'create') {
+    if (records.length >= CRM_RECORD_LIMIT) {
+      job.skipped.capacity += 1;
+      job.customerOutcomes.push({ customerId, name:customerName, outcome:'skip_capacity', recordId:'' });
+      return;
+    }
+    const recordId = clean(plan?.predictedRecordId,120) || sanitizeQboRecordId(customerId);
+    const collision = records.find((entry) => clean(entry?.id,120) === recordId);
+    if (collision) {
+      const linkedId = clean(collision?.accounting?.quickbooks?.customerId,100);
+      if (linkedId !== customerId) {
+        job.customerOutcomes.push({ customerId, name:customerName, outcome:'blocked_link_conflict', recordId:recordId });
+        job.conflicts.push({
+          type:'customer-link',
+          recordId,
+          crmQuickBooksCustomerId:linkedId,
+          incomingQuickBooksCustomerId:customerId,
+          detail:'The predicted CRM record ID is now occupied by a different customer. The import was skipped.',
+        });
+        return;
+      }
+      record = collision;
+    } else {
+      const now = new Date().toISOString();
+      record = {
+        id:recordId,
+        quoteId:'',
+        kind:'inquiry',
+        stage:'lead',
+        status:'lead',
+        source:'quickbooks-import',
+        businessLine:'events',
+        createdAt:clean(customer?.MetaData?.CreateTime,80) || now,
+        updatedAt:now,
+        customer:{
+          name:baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName,180) || recordId,
+          email:qboCustomerEmail(customer),
+          phone:qboCustomerPhone(customer),
+          eventDate:eventDateFromDisplayName(customer?.DisplayName),
+        },
+        inquiry:{ eventType:'', details:'Imported from QuickBooks Online.' },
+        cleanupReview:{ verdict:'legitimate', reviewedAt:now, reviewedBy:clean(job?.actor,180) || 'QuickBooks sync' },
+        accounting:{ quickbooks:{ origin:'quickbooks', customerId, customerDisplayName:clean(customer?.DisplayName,240), estimates:[], invoices:[], payments:[] } },
+      };
+      records.push(record);
+      job.importedRecordIds = arrayUnique([...(job.importedRecordIds || []), recordId]);
+    }
+  }
+
+  if (!record) {
+    throw Object.assign(new Error('The CRM record selected by Preview Sync no longer exists.'), { operation:'inbound_crm_record_missing' });
+  }
+
+  const existingCustomerId = clean(record?.accounting?.quickbooks?.customerId,100);
+  if (existingCustomerId && existingCustomerId !== customerId) {
+    job.customerOutcomes.push({ customerId, name:customerName, outcome:'blocked_link_conflict', recordId:clean(record.id,120) });
+    job.conflicts.push({
+      type:'customer-link',
+      recordId:clean(record.id,120),
+      crmQuickBooksCustomerId:existingCustomerId,
+      incomingQuickBooksCustomerId:customerId,
+      detail:'The CRM record is already linked to a different QuickBooks customer. The existing link was preserved.',
+    });
+    return;
+  }
+
+  if (disposition === 'match_refresh') {
+    job.matchedRecordIds = arrayUnique([...(job.matchedRecordIds || []), clean(record.id,120)]);
+  }
+
+  applyFinancialMirror(record, customer, transactions.estimates, transactions.invoices, transactions.payments);
+  const changedRecordIds = new Set<string>([clean(record.id,120)]);
+  await writeRecords(context, records, changedRecordIds);
+  job.changedRecordIds = arrayUnique([...(job.changedRecordIds || []), clean(record.id,120)]);
+
+  const afterRecord = crmSyncSnapshot(record);
+  if (!beforeRecord || JSON.stringify(beforeRecord) !== JSON.stringify(afterRecord)) {
+    job.changes.push({
+      direction:'QuickBooks → CRM',
+      system:'CRM',
+      action:beforeRecord ? 'updated' : 'created',
+      recordId:clean(record.id,120),
+      clientName:clean(record?.customer?.name,180),
+      quickBooksCustomerId:customerId,
+      matchDecision:clean(plan?.decision,40),
+      matchReason:clean(plan?.reason,500),
+      before:beforeRecord,
+      after:afterRecord,
+    });
+  }
+  job.recoveryRows = mergeRecoveryRow(job.recoveryRows || [], {
+    recordId:clean(record.id,120),
+    clientName:clean(record?.customer?.name,180),
+    before:beforeFull,
+    after:jsonClone(record),
+    createdBySync:beforeFull == null,
+  });
+  job.customerOutcomes.push({
+    customerId,
+    name:customerName,
+    outcome:beforeFull ? 'match_refresh' : 'create',
+    recordId:clean(record.id,120),
+  });
+}
+
+async function processQuickBooksOutboundRow(context: Context, job: any, row: any, cursor: number) {
+  const recordId = clean(row?.recordId,120);
+  const store = salesStore(context);
+  const records = (((await store.get('records/index', { type:'json' })) || []) as any[])
+    .filter(Boolean)
+    .slice(0, CRM_RECORD_LIMIT);
+  const record = records.find((entry) => clean(entry?.id,120) === recordId);
+  if (!record) {
+    job.warnings.push((clean(row?.name,180) || recordId) + ': CRM record no longer exists.');
+    job.outboundOutcomes.push({ recordId, name:clean(row?.name,180), type:'outbound', action:'error', reason:'CRM record no longer exists.' });
+    return;
+  }
+
+  const stateBefore = quickBooksState(record);
+  const beforeFull = jsonClone(record);
+  const beforeCustomerId = clean(stateBefore.customerId,100);
+  const beforeEstimateId = clean(stateBefore.estimateId,100);
+  job.currentItem = {
+    stage:'outbound',
+    cursor,
+    recordId,
+    customerId:beforeCustomerId,
+    customerName:clean(record?.customer?.name || row?.name,180),
+    estimateId:beforeEstimateId,
+    operation:'customer',
+  };
+
+  let customerSync: any;
+  try {
+    customerSync = await syncCustomerOutbound(context, record, new Map<string, any>());
+    if (customerSync.created) job.pushed.customersCreated += 1;
+    if (customerSync.updated) job.pushed.customersUpdated += 1;
+    job.outboundOutcomes.push({
+      recordId,
+      name:clean(record?.customer?.name,180),
+      type:'customer',
+      action:customerSync.created ? 'create' : customerSync.updated ? 'update' : 'no_change',
+    });
+  } catch (error) {
+    const message = error instanceof Error ? clean(error.message,600) : 'QuickBooks customer synchronization failed.';
+    const failure = await recordQuickBooksCrmSyncFailure(context, job, {
+      stage:'outbound',
+      operation:'outbound_customer',
+      message,
+      recordId,
+      customerId:beforeCustomerId,
+      customerName:clean(record?.customer?.name,180),
+      estimateId:beforeEstimateId,
+      cursor,
+      fatal:false,
+    });
+    job.warnings.push((clean(record?.customer?.name,180) || recordId) + ': ' + message);
+    job.outboundOutcomes.push({ recordId, name:clean(record?.customer?.name,180), type:'outbound', action:'error', reason:message });
+    job.lastFailure = failure;
+    return;
+  }
+
+  const afterCustomer = qboCustomerSnapshot(customerSync.customer);
+  const beforeCustomer = beforeCustomerId ? qboCustomerSnapshot((await qboGet(context,'customer',beforeCustomerId) as any)?.Customer) : null;
+  if (JSON.stringify(beforeCustomer) !== JSON.stringify(afterCustomer)) {
+    job.changes.push({
+      direction:'CRM → QuickBooks',
+      system:'QuickBooks',
+      action:beforeCustomer ? 'customer_updated' : 'customer_created',
+      recordId,
+      clientName:clean(record?.customer?.name,180),
+      before:beforeCustomer,
+      after:afterCustomer,
+    });
+  }
+
+  if (record?.proposal) {
+    job.currentItem.operation = 'estimate';
+    try {
+      const settings = await getQuickBooksSettings(context);
+      const serviceItemId = clean(settings?.serviceItemId || configuredServiceItemId(),100);
+      const beforeEstimate = beforeEstimateId ? qboEstimateSnapshot((await qboGet(context,'estimate',beforeEstimateId) as any)?.Estimate) : null;
+      const estimateSync = await syncEstimateOutbound(context, record, customerSync.customer, serviceItemId, new Map<string, any>());
+      if (estimateSync.reason === 'service-item-not-configured') {
+        job.pushed.estimatesSkippedNoServiceItem += 1;
+        job.outboundOutcomes.push({ recordId, name:clean(record?.customer?.name,180), type:'estimate', action:'blocked', reason:'service-item-not-configured' });
+      } else if (!estimateSync.skipped) {
+        if (estimateSync.created) job.pushed.estimatesCreated += 1;
+        else if (estimateSync.updated) job.pushed.estimatesUpdated += 1;
+        job.outboundOutcomes.push({
+          recordId,
+          name:clean(record?.customer?.name,180),
+          type:'estimate',
+          action:estimateSync.created ? 'create' : estimateSync.updated ? 'update' : 'no_change',
+        });
+        const afterEstimate = qboEstimateSnapshot(estimateSync.estimate);
+        if (JSON.stringify(beforeEstimate) !== JSON.stringify(afterEstimate)) {
+          job.changes.push({
+            direction:'CRM → QuickBooks',
+            system:'QuickBooks',
+            action:beforeEstimate ? 'estimate_updated' : 'estimate_created',
+            recordId,
+            clientName:clean(record?.customer?.name,180),
+            before:beforeEstimate,
+            after:afterEstimate,
+          });
+        }
+      } else {
+        job.outboundOutcomes.push({ recordId, name:clean(record?.customer?.name,180), type:'estimate', action:'no_change', reason:clean(estimateSync.reason,120) });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? clean(error.message,600) : 'QuickBooks estimate synchronization failed.';
+      const failure = await recordQuickBooksCrmSyncFailure(context, job, {
+        stage:'outbound',
+        operation:'outbound_estimate',
+        message,
+        recordId,
+        customerId:clean(record?.accounting?.quickbooks?.customerId,100),
+        customerName:clean(record?.customer?.name,180),
+        estimateId:beforeEstimateId,
+        cursor,
+        fatal:false,
+      });
+      job.warnings.push((clean(record?.customer?.name,180) || recordId) + ': ' + message);
+      job.outboundOutcomes.push({ recordId, name:clean(record?.customer?.name,180), type:'estimate', action:'error', reason:message });
+      job.lastFailure = failure;
+    }
+  }
+
+  const currentIndex = records.findIndex((entry) => clean(entry?.id,120) === recordId);
+  if (currentIndex >= 0) records[currentIndex] = record;
+  await writeRecords(context, records, new Set<string>([recordId]));
+  job.changedRecordIds = arrayUnique([...(job.changedRecordIds || []), recordId]);
+  job.recoveryRows = mergeRecoveryRow(job.recoveryRows || [], {
+    recordId,
+    clientName:clean(record?.customer?.name,180),
+    before:beforeFull,
+    after:jsonClone(record),
+    createdBySync:false,
+  });
+}
+
+async function finalizeQuickBooksCrmSyncJob(context: Context, job: any) {
+  const completedAt = new Date().toISOString();
+  const records = (((await salesStore(context).get('records/index', { type:'json' })) || []) as any[]).filter(Boolean);
+  const result: any = {
+    syncId:'QBSYNC-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix(),
+    previewId:clean(job.previewId,140),
+    status:'completed',
+    startedAt:clean(job.startedAt,80),
+    completedAt,
+    actor:clean(job.actor,180),
+    qbo:job.qbo || {},
+    crm:{
+      recordsBefore:Number(job.recordsBefore || 0),
+      recordsAfter:records.length,
+      created:arrayUnique(job.importedRecordIds || []).length,
+      matched:arrayUnique(job.matchedRecordIds || []).length,
+      updated:arrayUnique(job.changedRecordIds || []).length,
+    },
+    pushed:job.pushed || {},
+    skipped:job.skipped || {},
+    customerOutcomes:job.customerOutcomes || [],
+    outboundOutcomes:job.outboundOutcomes || [],
+    conflicts:job.conflicts || [],
+    warnings:job.warnings || [],
+    changes:job.changes || [],
+    recovery:{
+      version:1,
+      crmOnly:true,
+      capturedAt:completedAt,
+      records:job.recoveryRows || [],
+    },
+  };
+  result.reconciliation = buildQuickBooksCrmSyncReconciliation(job.previewSnapshot || {}, result);
+
+  const integrations = integrationStore(context);
+  await recordQuickBooksCrmSyncHistory(context, result);
+  const recoverySummary = {
+    version:result.recovery.version,
+    crmOnly:true,
+    capturedAt:result.recovery.capturedAt,
+    recordCount:result.recovery.records.length,
+  };
+  const lightweightResult = { ...result, recovery:recoverySummary };
+  await integrations.setJSON('quickbooks/manual-sync-last', lightweightResult);
+  const history = ((await integrations.get('quickbooks/manual-sync-history', { type:'json' })) || []) as any[];
+  await integrations.setJSON('quickbooks/manual-sync-history', [lightweightResult, ...history].slice(0,100));
+  await integrations.setJSON(QUICKBOOKS_SYNC_LAST_SUCCESS_KEY, {
+    jobId:job.jobId,
+    previewId:job.previewId,
+    completedAt,
+    syncId:result.syncId,
+  });
+  await appendSyncEvent(context, lightweightResult);
+
+  const lastFailure = await getLastQuickBooksCrmSyncFailure(context);
+  if (lastFailure?.fatal && clean(lastFailure?.jobId,140) === clean(job.jobId,140) && !clean(lastFailure?.resolvedAt,80)) {
+    await integrations.setJSON(QUICKBOOKS_SYNC_LAST_FAILURE_KEY, {
+      ...lastFailure,
+      resolvedAt:completedAt,
+    });
+  }
+
+  job.status = 'completed';
+  job.stage = 'completed';
+  job.completedAt = completedAt;
+  job.currentItem = null;
+  job.result = lightweightResult;
+  await saveQuickBooksCrmSyncJob(context, job);
+  return publicSyncJob(job);
+}
+
+export async function continueQuickBooksCrmTwoWaySyncJob(context: Context, jobId = '') {
+  const store = integrationStore(context);
+  const job: any = await store.get(quickBooksSyncJobKey(jobId), { type:'json' });
+  if (!job?.jobId) throw new Error('QuickBooks sync job was not found.');
+  if (job.status === 'completed') return publicSyncJob(job);
+  if (!['running','paused_error'].includes(clean(job.status,40))) {
+    throw new Error('QuickBooks sync job is not resumable.');
+  }
+
+  job.status = 'running';
+  job.lastFailure = null;
+  const stage = clean(job.stage,40);
+
+  try {
+    if (stage === 'inbound') {
+      const plans = Array.isArray(job?.previewSnapshot?.customerPlans) ? job.previewSnapshot.customerPlans : [];
+      let processed = 0;
+      while (job.inboundCursor < plans.length && processed < QUICKBOOKS_SYNC_BATCH_SIZE) {
+        const cursor = Number(job.inboundCursor || 0);
+        const plan = plans[cursor];
+        await processQuickBooksInboundPlan(context, job, plan, cursor);
+        job.inboundCursor = cursor + 1;
+        processed += 1;
+      }
+      if (job.inboundCursor >= plans.length) {
+        job.stage = Number(job.outboundTotal || 0) > 0 ? 'outbound' : 'finalize';
+      }
+    } else if (stage === 'outbound') {
+      const rows = Array.isArray(job?.previewSnapshot?.outbound) ? job.previewSnapshot.outbound : [];
+      let processed = 0;
+      while (job.outboundCursor < rows.length && processed < QUICKBOOKS_SYNC_BATCH_SIZE) {
+        const cursor = Number(job.outboundCursor || 0);
+        await processQuickBooksOutboundRow(context, job, rows[cursor], cursor);
+        job.outboundCursor = cursor + 1;
+        processed += 1;
+      }
+      if (job.outboundCursor >= rows.length) job.stage = 'finalize';
+    }
+
+    if (job.stage === 'finalize') {
+      return await finalizeQuickBooksCrmSyncJob(context, job);
+    }
+
+    await saveQuickBooksCrmSyncJob(context, job);
+    return publicSyncJob(job);
+  } catch (error) {
+    const meta: any = error || {};
+    const message = error instanceof Error ? clean(error.message,1200) : 'QuickBooks synchronization failed.';
+    const item = job.currentItem || {};
+    const failure = await recordQuickBooksCrmSyncFailure(context, job, {
+      stage:clean(item.stage || job.stage,80),
+      operation:clean(meta?.operation || item.operation || 'sync_batch',120),
+      message,
+      recordId:clean(item.recordId,120),
+      customerId:clean(item.customerId,100),
+      customerName:clean(item.customerName,240),
+      estimateId:clean(item.estimateId,100),
+      cursor:Number(item.cursor ?? 0),
+      fatal:true,
+    });
+    job.status = 'paused_error';
+    job.lastFailure = failure;
+    await saveQuickBooksCrmSyncJob(context, job);
+    throw Object.assign(new Error(message), { syncJob:publicSyncJob(job), failure });
+  }
+}
+
 export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', previewId = '') {
   const startedAt = new Date().toISOString();
   const store = salesStore(context);
