@@ -5,6 +5,7 @@ import {
   beginCreditSaverMeasurement,
   cachedDeploymentHistory,
   compareProductionReleaseCommits,
+  criticalIntegrationsSummary,
   calculateIncidents,
   calculateUptime,
   healthComponents,
@@ -713,7 +714,7 @@ export default async (req:Request,context:Context) => {
     );
     return Response.json({
       ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
       accountingHealth:accountingHealthSummary(current,healthHistory),
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
@@ -777,6 +778,7 @@ export default async (req:Request,context:Context) => {
     policy,
     components:healthComponents(),
     coverage:healthCoverageSummary(latest),
+    criticalIntegrations:criticalIntegrationsSummary(latest),
     deployments,
     office365,
     emailHealth,
