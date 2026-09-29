@@ -66,6 +66,15 @@ export function emailLogoAttachment() {
   };
 }
 
+export function emailLogoMetadata() {
+  return {
+    contentId: EMAIL_LOGO_CONTENT_ID,
+    cid: 'cid:' + EMAIL_LOGO_CONTENT_ID,
+    filename: EMAIL_LOGO_FILENAME,
+    contentType: 'image/png',
+  };
+}
+
 export function emailInlineAssetAudit(html: unknown, attachments: any[] = []) {
   const referencedContentIds = Array.from(
     new Set(
