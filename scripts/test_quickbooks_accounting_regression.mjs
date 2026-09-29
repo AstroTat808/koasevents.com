@@ -6,6 +6,7 @@ import {
 import {
   buildQuickBooksMilestoneInvoiceLine,
   evaluateAccountingTaxInvariant,
+  evaluateLiveQuickBooksEstimateInvariant,
 } from '../netlify/functions/_shared/quickbooks-accounting-invariant.mjs';
 
 const record = {
@@ -52,3 +53,54 @@ assert.equal(milestoneInvoiceLine.SalesItemLineDetail?.TaxCodeRef?.value, 'NON',
 const invariant = evaluateAccountingTaxInvariant();
 assert.equal(invariant.ok, true, 'Runtime accounting invariant must remain healthy.');
 assert.deepEqual(invariant.failures, [], 'Runtime accounting invariant must have no failures.');
+
+const liveHealthy = evaluateLiveQuickBooksEstimateInvariant({
+  Id: '176',
+  DocNumber: '1025',
+  TotalAmt: 15706.80,
+  TxnTaxDetail: { TotalTax: 0 },
+  Line: [
+    {
+      Id: '14',
+      DetailType: 'SalesItemLineDetail',
+      Amount: 15000,
+      SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+    },
+    {
+      Id: '15',
+      DetailType: 'SalesItemLineDetail',
+      Amount: 706.80,
+      SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+    },
+  ],
+});
+assert.equal(liveHealthy.ok, true, 'The live Chris Sibel estimate shape must pass at exactly $15,706.80.');
+assert.equal(liveHealthy.taxablePayload, 0, 'The live invariant must require a $0.00 taxable payload.');
+assert.equal(liveHealthy.quickBooksCalculatedTax, 0, 'The live invariant must require QuickBooks to add $0.00 extra tax.');
+
+const liveTaxOnTaxRegression = evaluateLiveQuickBooksEstimateInvariant({
+  Id: '176',
+  TotalAmt: 16446.90,
+  TxnTaxDetail: { TotalTax: 740.10 },
+  Line: [
+    {
+      Id: '14',
+      DetailType: 'SalesItemLineDetail',
+      Amount: 15000,
+      SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+    },
+    {
+      Id: '15',
+      DetailType: 'SalesItemLineDetail',
+      Amount: 706.80,
+      SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+    },
+  ],
+});
+assert.equal(liveTaxOnTaxRegression.ok, false, 'Historical $16,446.90 tax-on-tax must fail the live invariant.');
+assert.equal(liveTaxOnTaxRegression.total, 16446.90);
+assert.ok(liveTaxOnTaxRegression.taxablePayload > 0, 'Tax-on-tax regression must expose taxable payload.');
+assert.equal(liveTaxOnTaxRegression.quickBooksCalculatedTax, 740.10);
+
+console.log('Live QuickBooks invariant regression passed: $15,706.80 is required and $16,446.90 is rejected.');
+
