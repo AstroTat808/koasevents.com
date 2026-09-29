@@ -162,14 +162,28 @@ export function buildCrmDuplicateAudit(records: RecordLike[]) {
   const duplicateGroups: any[] = [];
   for (const [fingerprint, group] of buckets.entries()) {
     if (group.length < 2) continue;
-    const independent: RecordLike[] = [];
-    for (const record of group) {
-      if (!independent.some((existing) => sameLifecycleChain(existing, record, rows))) independent.push(record);
-    }
-    if (independent.length < 2) continue;
 
-    const scored = [...group].sort((a, b) => protectedScore(b) - protectedScore(a) || String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')));
-    const survivor = scored[0];
+    const chains: RecordLike[][] = [];
+    for (const record of group) {
+      const chain = chains.find((members) => sameLifecycleChain(members[0], record, rows));
+      if (chain) chain.push(record);
+      else chains.push([record]);
+    }
+    if (chains.length < 2) continue;
+
+    const representatives = chains.map((members) => {
+      const record = [...members].sort(
+        (a, b) => protectedScore(b) - protectedScore(a) || String(b?.updatedAt || '').localeCompare(String(a?.updatedAt || '')),
+      )[0];
+      return {
+        record,
+        lifecycleIds: members.map((member) => clean(member?.id, 120)).filter(Boolean),
+      };
+    }).sort(
+      (a, b) => protectedScore(b.record) - protectedScore(a.record) || String(b.record?.updatedAt || '').localeCompare(String(a.record?.updatedAt || '')),
+    );
+
+    const survivor = representatives[0].record;
     duplicateGroups.push({
       fingerprint,
       customerEmail: clean(survivor?.customer?.email, 240),
@@ -178,9 +192,10 @@ export function buildCrmDuplicateAudit(records: RecordLike[]) {
       packageId: packageId(survivor),
       businessLine: businessLine(survivor),
       recommendedSurvivorId: clean(survivor?.id, 120),
-      records: scored.map((record) => ({
+      records: representatives.map(({ record, lifecycleIds }) => ({
         ...traceCrmRecordCreation(record),
         protectionScore: protectedScore(record),
+        lifecycleIds,
       })),
     });
   }
@@ -210,9 +225,22 @@ function conflictId(a: any, b: any, path: string[]) {
 
 export function buildDuplicateMergePreview(records: RecordLike[], survivorId: string, duplicateIds: string[]) {
   const survivor = records.find((record) => clean(record?.id, 120) === survivorId);
-  const duplicates = duplicateIds.map((id) => records.find((record) => clean(record?.id, 120) === id)).filter(Boolean) as RecordLike[];
+  const duplicateRoots = duplicateIds.map((id) => records.find((record) => clean(record?.id, 120) === id)).filter(Boolean) as RecordLike[];
   if (!survivor) throw new Error('Surviving CRM record was not found.');
-  if (!duplicates.length) throw new Error('Select at least one duplicate record.');
+  if (!duplicateRoots.length) throw new Error('Select at least one duplicate record.');
+
+  const survivorChain = relatedComponent(survivorId, records);
+  const archiveIds = new Set<string>();
+  for (const root of duplicateRoots) {
+    const rootId = clean(root?.id, 120);
+    if (survivorChain.has(rootId)) {
+      throw new Error(rootId + ' belongs to the surviving lifecycle chain and must not be merged as a duplicate.');
+    }
+    for (const id of relatedComponent(rootId, records)) {
+      if (!survivorChain.has(id)) archiveIds.add(id);
+    }
+  }
+  const duplicates = records.filter((record) => archiveIds.has(clean(record?.id, 120)));
 
   const fingerprint = duplicateFingerprint(survivor);
   const blockers: any[] = [];
@@ -235,18 +263,21 @@ export function buildDuplicateMergePreview(records: RecordLike[], survivorId: st
     if (survivorTotal > 0 && duplicateTotal > 0 && Math.abs(survivorTotal - duplicateTotal) > 0.009) {
       blockers.push({ recordId: duplicate.id, reason: 'Both records contain different non-zero proposal totals.', survivorTotal, duplicateTotal });
     }
-    if (sameLifecycleChain(survivor, duplicate, records)) {
-      warnings.push(clean(duplicate.id, 120) + ' is already part of the same lifecycle chain; collapsing the pipeline is safer than merging this record.');
-    }
+  }
+
+  if (duplicates.some((record) => clean(record?.stage, 40).toLowerCase() === 'booked')) {
+    warnings.push('A duplicate lifecycle contains a booked record. Review all linked accounting, contract, and document identities before applying the merge.');
   }
 
   return {
     survivorId,
-    duplicateIds: duplicates.map((record) => clean(record?.id, 120)),
+    duplicateIds: duplicateRoots.map((record) => clean(record?.id, 120)),
+    archiveIds: [...archiveIds],
+    survivorLifecycleIds: [...survivorChain],
     fingerprint,
     blockers,
     warnings,
-    canApply: blockers.length === 0 && warnings.length === 0,
+    canApply: blockers.length === 0,
     survivor: traceCrmRecordCreation(survivor),
     duplicates: duplicates.map(traceCrmRecordCreation),
     archiveRequired: true,
