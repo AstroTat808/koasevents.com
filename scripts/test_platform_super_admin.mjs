@@ -39,6 +39,19 @@ assert.match(page,/Create safe sandbox tenant/,'UI must expose isolated Tenant #
 assert.match(page,/Legacy Blob migration dashboard/,'Super Admin must show the detailed migration dashboard');
 assert.match(page,/Run leakage test/,'Super Admin must expose the runtime leakage test');
 assert.match(page,/Run onboarding QA/,'Super Admin must expose the sandbox onboarding journey');
+
+assert.match(api,/reset-sandbox-tenant/,'platform API must support safe sandbox reset');
+assert.match(api,/delete-sandbox-tenant/,'platform API must support safe sandbox deletion');
+assert.match(api,/run-sandbox-onboarding-stage/,'platform API must support individual onboarding-stage reruns');
+assert.match(api,/purgeSandboxTenantData/,'sandbox reset and deletion must purge tenant-scoped data');
+assert.match(api,/deleteSandboxOrganizationControlPlane/,'sandbox deletion must remove disposable control-plane records');
+assert.match(sandboxQa,/appendPlatformSandboxQaHistory/,'sandbox QA results must be archived outside disposable tenant data');
+assert.match(sandboxQa,/SANDBOX_ONBOARDING_STAGES/,'sandbox onboarding stages must be explicitly allowlisted');
+assert.match(page,/Reset sandbox data/,'Super Admin must expose sandbox reset');
+assert.match(page,/Delete sandbox tenant/,'Super Admin must expose sandbox deletion');
+assert.match(page,/Rerun selected stage/,'Super Admin must expose individual onboarding-stage reruns');
+assert.match(page,/Historical QA reports/,'Super Admin must show retained sandbox QA history');
+assert.match(page,/Leakage surfaces/,'Super Admin must show per-surface isolation results');
 assert.doesNotMatch(api,/@netlify\/blobs/,'platform function must not bypass the control-plane/storage abstractions');
 
 console.log('VenueLoom Super Admin regression test passed.');
