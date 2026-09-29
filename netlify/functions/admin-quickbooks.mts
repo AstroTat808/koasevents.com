@@ -1429,9 +1429,15 @@ export default async (req: Request, context: Context) => {
     const actor = clean(auth.user?.email || auth.user?.name || 'admin', 180);
     const previewId = clean(payload?.previewId, 120);
     try {
-      await validateQuickBooksCrmSyncPreview(context, previewId);
+      const existingJob = await getCurrentQuickBooksCrmSyncJob(context);
+      const resumingExisting = Boolean(
+        existingJob?.jobId &&
+        clean(existingJob.previewId,120) === previewId &&
+        ['running','paused_error'].includes(clean(existingJob.status,40))
+      );
+      if (!resumingExisting) await validateQuickBooksCrmSyncPreview(context, previewId);
       const syncJob = await startQuickBooksCrmTwoWaySyncJob(context, actor, previewId);
-      return Response.json({ ok:true, syncJob }, { headers:{ 'Cache-Control':'private, no-store' } });
+      return Response.json({ ok:true, syncJob, resumed:resumingExisting }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
       const message = error instanceof Error ? clean(error.message,1000) : 'Unable to start QuickBooks synchronization.';
       return Response.json({ error:message, code:'quickbooks_sync_start_failed', previewId }, { status:409, headers:{ 'Cache-Control':'private, no-store' } });
