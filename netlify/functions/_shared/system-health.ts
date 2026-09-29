@@ -7,7 +7,7 @@ import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCredit
 import { emailHealthSummary, emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
-import { evaluateAccountingTaxInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
+import { evaluateAccountingTaxInvariant, evaluateLiveQuickBooksEstimateInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 
@@ -41,6 +41,18 @@ export type HealthCheck = {
     liveNonTaxVerified: boolean;
     liveNonTaxId?: string;
     liveNonTaxName?: string;
+    invariantLabel?: string;
+    crmRecordId?: string;
+    crmProposalTotal?: number;
+    liveEstimateStatus?: 'healthy' | 'mismatch' | 'missing' | 'ambiguous' | 'unverified' | 'not-configured';
+    liveEstimateVerified?: boolean;
+    liveEstimateCheckedAt?: string;
+    liveEstimateId?: string;
+    liveEstimateDocNumber?: string;
+    liveEstimateTotal?: number;
+    liveEstimateLineTotal?: number;
+    liveEstimateTaxablePayload?: number;
+    liveEstimateQuickBooksTax?: number;
   };
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
   deploymentDetails?: {
@@ -1081,16 +1093,176 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     ms:Date.now()-started,
   };
 }
+async function configuredLiveAccountingInvariant(context:Context){
+  const tenant=resolveTenant();
+  const config=tenant?.accounting?.healthInvariant;
+  if(!config?.enabled){
+    return {
+      configured:false,
+      verified:false,
+      ok:true,
+      status:'not-configured' as const,
+      checkedAt:'',
+      label:'',
+      recordId:'',
+      crmProposalTotal:0,
+      estimateId:'',
+      docNumber:'',
+      total:0,
+      lineTotal:0,
+      taxablePayload:0,
+      quickBooksCalculatedTax:0,
+      failures:[] as string[],
+    };
+  }
+
+  const checkedAt=new Date().toISOString();
+  const expectedTotal=Math.round(Number(config.expectedTotal||0)*100)/100;
+  const salesStore=tenantStoreFor(context,tenant,'sales');
+  const records=((await salesStore.get('records/index',{type:'json'}))||[]) as any[];
+  const record=records.find((row:any)=>String(row?.id||'')===String(config.recordId||''));
+  if(!record){
+    return {
+      configured:true,
+      verified:true,
+      ok:false,
+      status:'missing' as const,
+      checkedAt,
+      label:String(config.label||'Live accounting invariant'),
+      recordId:String(config.recordId||''),
+      crmProposalTotal:0,
+      estimateId:'',
+      docNumber:'',
+      total:0,
+      lineTotal:0,
+      taxablePayload:0,
+      quickBooksCalculatedTax:0,
+      failures:['configured CRM invariant record was not found in the tenant sales store'],
+    };
+  }
+
+  const crmProposalTotal=Math.round(Number(record?.proposal?.total||0)*100)/100;
+  const state=record?.accounting?.quickbooks||{};
+  let customerId=String(state?.customerId||'').trim();
+  if(!customerId&&config.customerDisplayName){
+    const displayName=String(config.customerDisplayName||'').replace(/'/g,"\\'");
+    const customerData:any=await qboQuery(
+      context,
+      "select * from Customer where DisplayName = '"+displayName+"' maxresults 10",
+    );
+    const customers=Array.isArray(customerData?.QueryResponse?.Customer)?customerData.QueryResponse.Customer:[];
+    if(customers.length===1)customerId=String(customers[0]?.Id||'');
+  }
+  if(!customerId){
+    return {
+      configured:true,
+      verified:true,
+      ok:false,
+      status:'missing' as const,
+      checkedAt,
+      label:String(config.label||'Live accounting invariant'),
+      recordId:String(config.recordId||''),
+      crmProposalTotal,
+      estimateId:'',
+      docNumber:'',
+      total:0,
+      lineTotal:0,
+      taxablePayload:0,
+      quickBooksCalculatedTax:0,
+      failures:['QuickBooks customer could not be resolved for the configured accounting invariant'],
+    };
+  }
+
+  const safeCustomerId=customerId.replace(/'/g,"\\'");
+  const estimateData:any=await qboQuery(
+    context,
+    "select * from Estimate where CustomerRef = '"+safeCustomerId+"' maxresults 1000",
+  );
+  const estimates=Array.isArray(estimateData?.QueryResponse?.Estimate)?estimateData.QueryResponse.Estimate:[];
+  const storedEstimateId=String(state?.estimateId||'').trim();
+  let matches=storedEstimateId
+    ? estimates.filter((estimate:any)=>String(estimate?.Id||'')===storedEstimateId)
+    : [];
+  if(!matches.length){
+    const marker=String(config.recordId||'').trim().toLowerCase();
+    matches=marker?estimates.filter((estimate:any)=>{
+      const haystack=[
+        estimate?.PrivateNote,
+        estimate?.CustomerMemo?.value,
+      ].map((value)=>String(value||'').toLowerCase()).join(' ');
+      return haystack.includes(marker);
+    }):[];
+  }
+  if(!matches.length&&estimates.length===1)matches=estimates;
+
+  if(matches.length!==1){
+    const status:'ambiguous'|'missing'=matches.length>1?'ambiguous':'missing';
+    return {
+      configured:true,
+      verified:true,
+      ok:false,
+      status,
+      checkedAt,
+      label:String(config.label||'Live accounting invariant'),
+      recordId:String(config.recordId||''),
+      crmProposalTotal,
+      estimateId:'',
+      docNumber:'',
+      total:0,
+      lineTotal:0,
+      taxablePayload:0,
+      quickBooksCalculatedTax:0,
+      failures:[
+        matches.length>1
+          ? 'multiple QuickBooks estimates matched the configured accounting invariant'
+          : 'no QuickBooks estimate matched the configured accounting invariant',
+      ],
+    };
+  }
+
+  const live=evaluateLiveQuickBooksEstimateInvariant(matches[0],{
+    expectedSubtotal:Number(config.expectedSubtotal||0),
+    expectedTax:Number(config.expectedTax||0),
+    expectedTotal,
+  });
+  const failures=[...(live.failures||[])];
+  if(crmProposalTotal!==expectedTotal){
+    failures.unshift('CRM proposal total is not $'+expectedTotal.toFixed(2));
+  }
+
+  return {
+    configured:true,
+    verified:true,
+    ok:failures.length===0,
+    status:(failures.length?'mismatch':'healthy') as 'mismatch'|'healthy',
+    checkedAt,
+    label:String(config.label||'Live accounting invariant'),
+    recordId:String(config.recordId||''),
+    crmProposalTotal,
+    estimateId:String(live.estimateId||''),
+    docNumber:String(live.docNumber||''),
+    total:Number(live.total||0),
+    lineTotal:Number(live.lineTotal||0),
+    taxablePayload:Number(live.taxablePayload||0),
+    quickBooksCalculatedTax:Number(live.quickBooksCalculatedTax||0),
+    failures,
+  };
+}
+
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
   const started=Date.now();
   const invariant=evaluateAccountingTaxInvariant();
+  const tenant=resolveTenant();
+  const configuredInvariant=tenant?.accounting?.healthInvariant;
   const baseDetails={
-    expectedSubtotal:Number(invariant.expectedSubtotal||15000),
-    expectedTax:Number(invariant.expectedTax||706.80),
-    expectedTotal:Number(invariant.expectedTotal||15706.80),
+    expectedSubtotal:Number(configuredInvariant?.expectedSubtotal??invariant.expectedSubtotal??15000),
+    expectedTax:Number(configuredInvariant?.expectedTax??invariant.expectedTax??706.80),
+    expectedTotal:Number(configuredInvariant?.expectedTotal??invariant.expectedTotal??15706.80),
     actualTotal:Number(invariant?.estimateSummary?.lineTotal||0),
     taxablePayload:Number(invariant?.estimateSummary?.taxableTotal||0),
     codeInvariantOk:Boolean(invariant.ok),
+    invariantLabel:String(configuredInvariant?.label||''),
+    crmRecordId:String(configuredInvariant?.recordId||''),
   };
   if(!invariant.ok){
     return {
@@ -1106,6 +1278,8 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         ...baseDetails,
         liveNonTaxStatus:'unverified',
         liveNonTaxVerified:false,
+        liveEstimateStatus:configuredInvariant?.enabled?'unverified':'not-configured',
+        liveEstimateVerified:false,
       },
       detail:clean(
         'Accounting configuration problem: the CRM-to-QuickBooks payload invariant failed. '
@@ -1117,16 +1291,31 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
   }
 
   try{
-    const taxCodeData:any=await qboQuery(context,'select * from TaxCode maxresults 100');
+    const [taxCodeData,liveEstimate]=await Promise.all([
+      qboQuery(context,'select * from TaxCode maxresults 100'),
+      configuredLiveAccountingInvariant(context),
+    ]);
     const live=inspectQuickBooksNonTaxCode(taxCodeData);
     const accountingDetails:HealthCheck['accountingDetails']={
       ...baseDetails,
+      crmProposalTotal:Number(liveEstimate.crmProposalTotal||0),
       liveNonTaxStatus:live.verified?(live.ok?'available':'missing-or-inactive'):'unverified',
       liveNonTaxVerified:Boolean(live.verified),
       liveNonTaxId:String(live?.id||''),
       liveNonTaxName:String(live?.name||''),
+      liveEstimateStatus:liveEstimate.status,
+      liveEstimateVerified:Boolean(liveEstimate.verified),
+      liveEstimateCheckedAt:String(liveEstimate.checkedAt||''),
+      liveEstimateId:String(liveEstimate.estimateId||''),
+      liveEstimateDocNumber:String(liveEstimate.docNumber||''),
+      liveEstimateTotal:Number(liveEstimate.total||0),
+      liveEstimateLineTotal:Number(liveEstimate.lineTotal||0),
+      liveEstimateTaxablePayload:Number(liveEstimate.taxablePayload||0),
+      liveEstimateQuickBooksTax:Number(liveEstimate.quickBooksCalculatedTax||0),
     };
-    if(live.verified && !live.ok){
+
+    const liveFailures=Array.isArray(liveEstimate.failures)?liveEstimate.failures:[];
+    if(live.verified&&!live.ok){
       return {
         id:'quickbooks-tax-invariant',
         name:'QuickBooks tax-on-tax invariant',
@@ -1144,6 +1333,37 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         ),
       };
     }
+    if(liveEstimate.configured&&liveEstimate.verified&&!liveEstimate.ok){
+      return {
+        id:'quickbooks-tax-invariant',
+        name:'QuickBooks tax-on-tax invariant',
+        kind:'api',
+        path:'$15,000.00 + $706.80 tax = $15,706.80',
+        ok:false,
+        status:503,
+        ms:Date.now()-started,
+        severity:'red',
+        accountingDetails,
+        detail:clean(
+          (liveEstimate.label?liveEstimate.label+': ':'Live QuickBooks accounting invariant: ')
+          +'the production CRM ↔ QuickBooks test failed. '
+          +liveFailures.join('; ')
+          +'. Expected live total $'+Number(baseDetails.expectedTotal).toFixed(2)
+          +', observed $'+Number(liveEstimate.total||0).toFixed(2)
+          +', taxable payload $'+Number(liveEstimate.taxablePayload||0).toFixed(2)
+          +', QuickBooks-added tax $'+Number(liveEstimate.quickBooksCalculatedTax||0).toFixed(2)+'.',
+          1200,
+        ),
+      };
+    }
+
+    const liveDetail=liveEstimate.configured
+      ? ' '+liveEstimate.label+' passed against live QuickBooks'
+        +(liveEstimate.docNumber?' estimate #'+liveEstimate.docNumber:liveEstimate.estimateId?' estimate '+liveEstimate.estimateId:'')
+        +' at $'+Number(liveEstimate.total||0).toFixed(2)
+        +' with $'+Number(liveEstimate.taxablePayload||0).toFixed(2)+' taxable payload and $'
+        +Number(liveEstimate.quickBooksCalculatedTax||0).toFixed(2)+' QuickBooks-added tax.'
+      : '';
     return {
       id:'quickbooks-tax-invariant',
       name:'QuickBooks tax-on-tax invariant',
@@ -1156,7 +1376,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       accountingDetails,
       detail:clean(
         'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
-        +'milestone invoice line is NON-taxable. '+live.detail,
+        +'milestone invoice line is NON-taxable. '+live.detail+liveDetail,
         1200,
       ),
     };
@@ -1174,10 +1394,12 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         ...baseDetails,
         liveNonTaxStatus:'unverified',
         liveNonTaxVerified:false,
+        liveEstimateStatus:configuredInvariant?.enabled?'unverified':'not-configured',
+        liveEstimateVerified:false,
       },
       detail:clean(
         'Code invariant passed at exactly $15,706.80 with $0.00 taxable payload. '
-        +'Live QuickBooks NON tax-code availability could not be verified during this run: '
+        +'Live QuickBooks verification could not be completed during this run: '
         +(error instanceof Error?error.message:'QuickBooks query unavailable')+'. '
         +'QuickBooks Credential Health reports connection problems separately.',
         1200,
