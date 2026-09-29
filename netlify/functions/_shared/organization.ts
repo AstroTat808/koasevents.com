@@ -102,6 +102,14 @@ export type OrganizationRecord = {
     completedSteps: string[];
     activatedAt: string;
   };
+  sandbox?: {
+    enabled: boolean;
+    syntheticDomainVerification: boolean;
+    syntheticBilling: boolean;
+    createdBy: string;
+    lastIsolationTestAt: string;
+    lastOnboardingTestAt: string;
+  };
   createdAt: string;
   updatedAt: string;
 };
@@ -661,4 +669,74 @@ export async function endPlatformSupportSession(context:Context|undefined,token:
 export async function listPlatformSupportSessions(context:Context|undefined,limit=100) {
   const rows=((await controlStore(context).get('support-sessions/history',{type:'json'}))||[]) as PlatformSupportSession[];
   return rows.slice(0,Math.max(1,Math.min(500,limit)));
+}
+
+
+export async function readTenantMigrationAuditReport(context:Context|undefined,tenantId:string) {
+  const id=clean(tenantId,120);
+  if(!id)return null;
+  return await controlStore(context).get('migration-audits/'+id+'/latest',{type:'json'}) as any;
+}
+
+export async function saveTenantMigrationAuditReport(context:Context|undefined,tenantId:string,report:any) {
+  const id=clean(tenantId,120);
+  if(!id)throw new Error('Tenant ID is required for migration audit storage.');
+  const store=controlStore(context);
+  const previous=await readTenantMigrationAuditReport(context,id);
+  const now=new Date().toISOString();
+  const previousByDomain=new Map((previous?.domains||[]).map((row:any)=>[row.domain,row]));
+  const domains=(report?.domains||[]).map((row:any)=>{
+    const prior:any=previousByDomain.get(row.domain);
+    const safe=row.safeToRetireLegacy===true;
+    return {
+      ...row,
+      safeSince:safe ? (prior?.safeToRetireLegacy===true && prior?.safeSince ? prior.safeSince : now) : '',
+      lastCheckedAt:now,
+      retirementStatus:row.notApplicable?'not-applicable':safe?'ready':'blocked',
+    };
+  });
+  const saved={
+    ...report,
+    tenantId:id,
+    generatedAt:report?.generatedAt||now,
+    savedAt:now,
+    domains,
+    summary:{
+      ...(report?.summary||{}),
+      safeToRetireLegacy:domains.every((row:any)=>row.safeToRetireLegacy===true),
+      safeDomains:domains.filter((row:any)=>row.safeToRetireLegacy===true).length,
+      blockedDomains:domains.filter((row:any)=>row.safeToRetireLegacy!==true).length,
+    },
+  };
+  await store.setJSON('migration-audits/'+id+'/latest',saved);
+  const history=((await store.get('migration-audits/'+id+'/history',{type:'json'}))||[]) as any[];
+  await store.setJSON('migration-audits/'+id+'/history',[saved,...history].slice(0,50));
+  return saved;
+}
+
+export async function savePlatformTenantTestReport(
+  context:Context|undefined,
+  tenantId:string,
+  kind:'isolation'|'onboarding',
+  report:any,
+) {
+  const id=clean(tenantId,120);
+  if(!id)throw new Error('Tenant ID is required for platform test storage.');
+  const store=controlStore(context);
+  const now=new Date().toISOString();
+  const saved={...report,tenantId:id,kind,storedAt:now};
+  await store.setJSON('platform-tests/'+id+'/'+kind+'/latest',saved);
+  const history=((await store.get('platform-tests/'+id+'/'+kind+'/history',{type:'json'}))||[]) as any[];
+  await store.setJSON('platform-tests/'+id+'/'+kind+'/history',[saved,...history].slice(0,100));
+  return saved;
+}
+
+export async function readPlatformTenantTestReport(
+  context:Context|undefined,
+  tenantId:string,
+  kind:'isolation'|'onboarding',
+) {
+  const id=clean(tenantId,120);
+  if(!id)return null;
+  return await controlStore(context).get('platform-tests/'+id+'/'+kind+'/latest',{type:'json'}) as any;
 }
