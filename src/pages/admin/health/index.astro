@@ -69,6 +69,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
 
+        <section data-critical-integrations-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Release-critical probes</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Critical Integrations</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Groups the four zero-write release gates for Event Documents, Vendor Insurance, QuickBooks webhooks, and SignWell. Production verification must pass all four.</p>
+            </div>
+            <span data-critical-integrations-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+          </div>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Healthy now</p>
+              <strong data-critical-integrations-count class="display mt-2 block text-3xl text-[var(--koa-forest)]">—</strong>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last live verification</p>
+              <strong data-critical-integrations-last-live class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current source</p>
+              <strong data-critical-integrations-source class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Oldest cached result</p>
+              <strong data-critical-integrations-oldest-cache class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
+            </article>
+          </div>
+          <p data-critical-integrations-detail class="mt-4 text-xs leading-5 text-[var(--koa-ink)]/55">Waiting for the latest System Health snapshot.</p>
+        </section>
+
         <section data-accounting-health-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -918,6 +948,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const coverageIntegrations=document.querySelector('[data-coverage-integrations]');
     const coveragePercent=document.querySelector('[data-coverage-percent]');
     const coverageDetail=document.querySelector('[data-coverage-detail]');
+    const criticalIntegrationsStatus=document.querySelector('[data-critical-integrations-status]');
+    const criticalIntegrationsCount=document.querySelector('[data-critical-integrations-count]');
+    const criticalIntegrationsLastLive=document.querySelector('[data-critical-integrations-last-live]');
+    const criticalIntegrationsSource=document.querySelector('[data-critical-integrations-source]');
+    const criticalIntegrationsOldestCache=document.querySelector('[data-critical-integrations-oldest-cache]');
+    const criticalIntegrationsDetail=document.querySelector('[data-critical-integrations-detail]');
     const accountingHealthStatus=document.querySelector('[data-accounting-health-status]');
     const accountingInvariantResult=document.querySelector('[data-accounting-invariant-result]');
     const accountingInvariantDetail=document.querySelector('[data-accounting-invariant-detail]');
@@ -2423,8 +2459,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         button.type='button';
         button.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4 text-left transition hover:border-[var(--koa-clay)]';
         const qaLabel=release.qa?.conclusion==='success'?'QA passed':release.qa?.conclusion==='failure'?'QA failed':'QA unavailable';
+        const probeAudit=release.syntheticProbeVerification||null;
+        const probePassed=probeAudit?.status==='passed';
+        const probeLabel=probeAudit
+          ? Number(probeAudit.healthyCount||0)+'/'+Number(probeAudit.totalCount||4)+' integrations'
+          : 'Probe audit unavailable';
         const incidentCount=(release.incidents||[]).length;
-        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span></div><p data-release-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/65"></p><p data-release-meta class="mt-2 text-xs text-[var(--koa-ink)]/55"></p>';
+        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span><span data-release-probes class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(probeAudit?(probePassed?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800'):'bg-slate-100 text-slate-700')+'">'+probeLabel+'</span></div></div><p data-release-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/65"></p><p data-release-meta class="mt-2 text-xs text-[var(--koa-ink)]/55"></p>';
         button.querySelector('strong').textContent=release.commitTitle||'Production release';
         button.querySelector('p.text-xs').textContent=(release.commit||'').slice(0,12)+' · '+(release.deployId||'');
         button.querySelector('[data-release-summary]').textContent=release.summary||'Release summary not recorded yet.';
@@ -2552,6 +2593,39 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         card.children[0].textContent=label;card.children[1].textContent=value;metrics.appendChild(card);
       });
       releaseDetail.appendChild(metrics);
+
+      const probeAudit=release.syntheticProbeVerification||null;
+      const probes=document.createElement('section');
+      probes.className='rounded-xl border '+(probeAudit?.status==='passed'?'border-emerald-200 bg-emerald-50':probeAudit?'border-red-200 bg-red-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]')+' p-4';
+      probes.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Critical Integrations release gate</p><p data-probe-summary class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><span data-probe-time class="text-xs text-[var(--koa-ink)]/48"></span></div><div data-probe-rows class="mt-3 grid gap-2"></div>';
+      probes.querySelector('[data-probe-summary]').textContent=probeAudit
+        ? Number(probeAudit.healthyCount||0)+' / '+Number(probeAudit.totalCount||4)+' passed · '+String(probeAudit.status||'unknown')
+        : 'No stored probe audit for this older release.';
+      probes.querySelector('[data-probe-time]').textContent=probeAudit?.checkedAt?new Date(probeAudit.checkedAt).toLocaleString():'';
+      const probeRows=probes.querySelector('[data-probe-rows]');
+      (probeAudit?.probes||[]).forEach((probe)=>{
+        const row=document.createElement('div');
+        const pass=Boolean(probe.ok)&&Number(probe.status)===204&&String(probe.marker||'')===String(probe.expectedMarker||'');
+        row.className='rounded-lg border p-3 '+(pass?'border-emerald-200 bg-white':'border-red-200 bg-white');
+        row.innerHTML='<div class="flex flex-wrap items-center justify-between gap-2"><strong class="text-xs text-[var(--koa-forest)]"></strong><span class="text-[.56rem] font-black uppercase tracking-[.06em]"></span></div><p class="mt-1 text-[.64rem] leading-5 text-[var(--koa-ink)]/55"></p>';
+        row.querySelector('strong').textContent=String(probe.name||probe.id||'Synthetic probe');
+        const badge=row.querySelector('span');
+        badge.textContent=pass?'Passed':'Failed';
+        badge.className='text-[.56rem] font-black uppercase tracking-[.06em] '+(pass?'text-emerald-800':'text-red-800');
+        row.querySelector('p').textContent='HTTP '+String(probe.status||'—')+' · marker '+String(probe.marker||'none')+' · '+String(probe.source||'unknown')+' · last live '+(probe.lastLiveCheckedAt?new Date(probe.lastLiveCheckedAt).toLocaleString():'unknown');
+        probeRows.appendChild(row);
+      });
+      if(!(probeAudit?.probes||[]).length)probeRows.innerHTML='<p class="text-xs text-[var(--koa-ink)]/48">Probe-level evidence was not recorded for this release.</p>';
+      const rollback=release.rollbackProtection||null;
+      if(rollback){
+        const guard=document.createElement('p');
+        guard.className='mt-3 rounded-lg border p-3 text-xs font-semibold '+(rollback.status==='rolled-back'?'border-amber-200 bg-amber-50 text-amber-950':'border-red-200 bg-red-50 text-red-900');
+        guard.textContent=rollback.status==='rolled-back'
+          ? 'Automatic rollback executed · restored deploy '+String(rollback.targetDeployId||'')+' ('+String(rollback.targetCommit||'').slice(0,12)+')'
+          : 'Automatic rollback '+String(rollback.status||'failed')+' · '+String(rollback.error||rollback.reason||'');
+        probes.appendChild(guard);
+      }
+      releaseDetail.appendChild(probes);
 
       const features=document.createElement('section');
       features.innerHTML='<p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Features changed</p>';
@@ -3732,6 +3806,42 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderCriticalIntegrations(summary){
+      const data=summary||{};
+      const healthyCount=Number(data.healthyCount||0);
+      const totalCount=Number(data.totalCount||4);
+      const healthy=Boolean(data.healthy)&&healthyCount===totalCount;
+      const liveCount=Number(data.liveCount||0);
+      const cachedCount=Number(data.cachedCount||0);
+      if(criticalIntegrationsStatus){
+        criticalIntegrationsStatus.textContent=healthy?'Healthy':'Attention';
+        criticalIntegrationsStatus.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] '+(healthy?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800');
+      }
+      if(criticalIntegrationsCount){
+        criticalIntegrationsCount.textContent=healthyCount+'/'+totalCount+' healthy';
+        criticalIntegrationsCount.className='display mt-2 block text-3xl '+(healthy?'text-emerald-800':'text-red-800');
+      }
+      if(criticalIntegrationsLastLive){
+        criticalIntegrationsLastLive.textContent=data.lastLiveVerification?new Date(data.lastLiveVerification).toLocaleString():'No live verification';
+      }
+      if(criticalIntegrationsSource){
+        criticalIntegrationsSource.textContent=liveCount+' live · '+cachedCount+' cached';
+        criticalIntegrationsSource.className='mt-2 block text-sm '+(cachedCount?'text-amber-800':'text-emerald-800');
+      }
+      if(criticalIntegrationsOldestCache){
+        const oldest=data.oldestCached||null;
+        criticalIntegrationsOldestCache.textContent=oldest
+          ? String(oldest.name||oldest.id||'Cached probe')+' · '+(oldest.lastLiveCheckedAt?new Date(oldest.lastLiveCheckedAt).toLocaleString():'unknown time')
+          : 'None — all results live';
+      }
+      if(criticalIntegrationsDetail){
+        const probes=Array.isArray(data.probes)?data.probes:[];
+        criticalIntegrationsDetail.textContent=probes.length
+          ? probes.map((probe)=>String(probe.name||probe.id||'Probe')+': '+(probe.ok&&Number(probe.status)===204?'healthy':'failed')+' · HTTP '+String(probe.status||'—')+' · '+String(probe.source||'unknown')).join(' | ')
+          : 'No Critical Integrations probe data is available yet.';
+      }
+    }
+
     function accountingHistoryRow(title,detail,at,tone='slate'){
       const row=document.createElement('article');
       const tones={
@@ -3823,6 +3933,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function render(data){
       markDashboardRenderPanel('Core summary');
       renderCoverage(data.coverage||{});
+      renderCriticalIntegrations(data.criticalIntegrations||{});
       renderAccountingHealth(data.accountingHealth||{});
       const current=data.current;
       if(current){
