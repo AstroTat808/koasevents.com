@@ -11,6 +11,8 @@ const [
   quickBooksWebhook,
   signWellWebhook,
   healthUi,
+  githubHealthSignal,
+  productionQa,
 ] = await Promise.all([
   read('netlify/functions/_shared/system-health.ts'),
   read('netlify/functions/_shared/synthetic-health.ts'),
@@ -19,6 +21,8 @@ const [
   read('netlify/functions/quickbooks-webhook.mts'),
   read('netlify/functions/signwell-webhook.mts'),
   read('src/pages/admin/health/index.astro'),
+  read('netlify/functions/github-main-health-signal.ts'),
+  read('.github/workflows/production-visual-qa.yml'),
 ]);
 
 function mustMatch(source, pattern, message) {
@@ -154,6 +158,26 @@ mustMatch(
   healthUi,
   /Marker /,
   'System Health UI must show the returned synthetic marker.',
+);
+mustMatch(
+  githubHealthSignal,
+  /action==='verify-synthetic-probes'/,
+  'GitHub OIDC health signal must support a live synthetic-probe verification action.',
+);
+mustMatch(
+  githubHealthSignal,
+  /runSystemHealth\(context,'post-deploy'\)/,
+  'OIDC verification must run live post-deploy System Health rather than reading cached results.',
+);
+mustMatch(
+  productionQa,
+  /verify-synthetic-probes/,
+  'Production QA must request the live synthetic-probe verification.',
+);
+mustMatch(
+  productionQa,
+  /p\.get\("status"\)==204/,
+  'Production QA must fail unless every live synthetic probe returns HTTP 204.',
 );
 
 // This gate intentionally validates the shared protocol contract rather than making network calls.
