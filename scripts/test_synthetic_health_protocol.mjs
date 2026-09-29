@@ -14,6 +14,10 @@ const [
   githubHealthSignal,
   productionQa,
   postDeployVerification,
+  adminHealth,
+  releaseGuard,
+  rollbackDrillScript,
+  rollbackDrillWorkflow,
 ] = await Promise.all([
   read('netlify/functions/_shared/system-health.ts'),
   read('netlify/functions/_shared/synthetic-health.ts'),
@@ -25,6 +29,10 @@ const [
   read('netlify/functions/github-main-health-signal.ts'),
   read('.github/workflows/production-visual-qa.yml'),
   read('netlify/functions/post-deploy-verification.mts'),
+  read('netlify/functions/admin-health.mts'),
+  read('netlify/functions/_shared/critical-integration-release-guard.mjs'),
+  read('scripts/test_critical_integration_rollback_drill.mjs'),
+  read('.github/workflows/critical-integrations-rollback-drill.yml'),
 ]);
 
 function mustMatch(source, pattern, message) {
@@ -275,6 +283,101 @@ mustMatch(
   productionQa,
   /http_status=/,
   'Production QA must capture a failing verification response so rollback evidence remains visible before CI fails.',
+);
+mustMatch(
+  systemHealth,
+  /export async function rollbackReadySummary/,
+  'System Health must expose the exact last-known-good rollback target.',
+);
+mustMatch(
+  systemHealth,
+  /PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments\/releases\/audit-index'/,
+  'Critical Integrations must maintain an uncapped release-audit index for complete exports.',
+);
+mustMatch(
+  systemHealth,
+  /export async function readAllProductionReleaseAudits/,
+  'Critical Integrations must be able to enumerate durable per-deploy audit records.',
+);
+mustMatch(
+  systemHealth,
+  /selectRollbackTargetFromReleases\(releases,deployId\)/,
+  'Production rollback and rollback readiness must share the same target-selection algorithm.',
+);
+mustMatch(
+  adminHealth,
+  /export'\)==='critical-integrations'/,
+  'System Health API must expose a Critical Integrations audit export.',
+);
+mustMatch(
+  adminHealth,
+  /text\/csv; charset=utf-8/,
+  'Critical Integrations audit export must support CSV.',
+);
+mustMatch(
+  adminHealth,
+  /application\/json; charset=utf-8/,
+  'Critical Integrations audit export must support JSON.',
+);
+mustMatch(
+  healthUi,
+  /data-critical-integrations-rollback-status/,
+  'Critical Integrations UI must show a Rollback Ready indicator.',
+);
+mustMatch(
+  healthUi,
+  /data-critical-integrations-rollback-target/,
+  'Critical Integrations UI must show the exact rollback deploy and commit.',
+);
+mustMatch(
+  healthUi,
+  /format=csv/,
+  'Critical Integrations UI must expose CSV export.',
+);
+mustMatch(
+  healthUi,
+  /format=json/,
+  'Critical Integrations UI must expose JSON export.',
+);
+mustMatch(
+  releaseGuard,
+  /environment === 'production'/,
+  'The rollback drill state machine must refuse production.',
+);
+mustMatch(
+  systemHealth,
+  /Critical Integrations rollback drill is blocked in production/,
+  'The server-side rollback drill action must be hard-blocked in production.',
+);
+mustMatch(
+  adminHealth,
+  /run-critical-integrations-rollback-drill/,
+  'System Health admin API must expose the safe non-production rollback drill.',
+);
+mustMatch(
+  rollbackDrillScript,
+  /\['detection','failed-audit','rollback','recovery'\]/,
+  'Rollback drill regression must assert the complete detection-to-recovery sequence.',
+);
+mustMatch(
+  rollbackDrillScript,
+  /productionMutationAttempted,false/,
+  'Rollback drill regression must prove no production mutation was attempted.',
+);
+mustMatch(
+  rollbackDrillWorkflow,
+  /pull_request:/,
+  'Rollback drill workflow must run in PR/non-production CI.',
+);
+mustMatch(
+  rollbackDrillWorkflow,
+  /DRILL_ENVIRONMENT: github-actions-non-production/,
+  'Rollback drill workflow must explicitly mark its environment as non-production.',
+);
+assert.doesNotMatch(
+  rollbackDrillWorkflow,
+  /^\s*push:/m,
+  'Rollback drill workflow must not be a production push workflow.',
 );
 
 // This gate intentionally validates the shared protocol contract rather than making network calls.
