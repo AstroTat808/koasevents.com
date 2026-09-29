@@ -765,7 +765,7 @@ export default async (req:Request,context:Context) => {
     );
     return Response.json({
       ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady,deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady,runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
       accountingHealth:accountingHealthSummary(current,healthHistory),
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
@@ -867,6 +867,7 @@ export default async (req:Request,context:Context) => {
     coverage:healthCoverageSummary(latest),
     criticalIntegrations:criticalIntegrationsSummary(latest),
     rollbackReady,
+    runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},
     deployments,
     office365,
     emailHealth,
