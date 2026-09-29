@@ -1,0 +1,155 @@
+---
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="VenueLoom Migration Dashboard" description="Tenant storage migration readiness for VenueLoom.">
+  <main class="min-h-screen bg-stone-100 py-8">
+    <div class="mx-auto grid w-[min(96vw,100rem)] gap-6">
+      <header class="rounded-3xl bg-stone-950 p-7 text-white shadow-sm">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.16em] text-stone-400">VenueLoom platform</p>
+            <h1 class="mt-2 text-4xl font-black">Migration Dashboard</h1>
+            <p class="mt-3 max-w-4xl text-sm leading-6 text-stone-300">Compare legacy tenant Blob stores with canonical VenueLoom storage using object counts, inventory fingerprints, per-object logical checksums, missing objects, and retirement readiness timestamps.</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <a href="/admin/platform/" class="rounded-full border border-white/20 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Super Admin</a>
+            <a href="/admin/organization/" class="rounded-full border border-white/20 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Organization Settings</a>
+          </div>
+        </div>
+      </header>
+
+      <section data-loading class="rounded-3xl bg-white p-7 shadow-sm"><p class="text-sm text-stone-600">Loading migration state…</p></section>
+      <section data-denied class="hidden rounded-3xl bg-white p-7 shadow-sm"><h2 class="text-2xl font-black">Super Admin access required</h2><p data-denied-message class="mt-2 text-sm text-stone-600"></p></section>
+
+      <div data-app class="hidden grid gap-6">
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Audit target</p>
+              <h2 class="mt-2 text-2xl font-black">Legacy → canonical storage</h2>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <select data-tenant class="rounded-full border border-stone-300 bg-white px-4 py-2.5 text-sm font-semibold"></select>
+              <button data-load class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Load saved audit</button>
+              <button data-run class="rounded-full bg-stone-900 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Run full checksum audit</button>
+            </div>
+          </div>
+          <p data-message class="mt-3 text-sm text-stone-600"></p>
+        </section>
+
+        <section data-summary class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6"></section>
+
+        <section class="rounded-3xl bg-white p-6 shadow-sm">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Legacy stores</p>
+            <h2 class="mt-2 text-2xl font-black">Retirement readiness</h2>
+            <p class="mt-2 text-sm text-stone-600">A store is only marked ready when every legacy object has a canonical counterpart and the full logical checksums match. JSON comparisons normalize tenant ownership before hashing.</p>
+          </div>
+          <div data-domains class="mt-5 grid gap-3"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    import { getAdminSession } from '../../../../lib/admin-session';
+
+    const $=(s)=>document.querySelector(s);
+    let fleet=null;
+    let detail=null;
+    const esc=(v)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    const fmt=(v)=>v?new Date(v).toLocaleString():'—';
+    const short=(v)=>String(v||'').slice(0,12)+(String(v||'').length>12?'…':'');
+    const pill=(label,good)=>'<span class="rounded-full px-2.5 py-1 text-[.6rem] font-black uppercase tracking-[.06em] '+(good?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800')+'">'+esc(label)+'</span>';
+
+    async function api(path='',options={}){
+      const response=await fetch('/api/admin/platform'+path,{cache:'no-store',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw Object.assign(new Error(data.error||'Migration request failed.'),{data,status:response.status});
+      return data;
+    }
+
+    function summaryCard(value,label){
+      return '<article class="rounded-2xl bg-white p-5 shadow-sm"><strong class="text-3xl text-stone-900">'+esc(value)+'</strong><p class="mt-1 text-xs font-semibold text-stone-500">'+esc(label)+'</p></article>';
+    }
+
+    function render(){
+      const audit=detail?.migrationAudit;
+      const summary=audit?.summary||{};
+      $('[data-summary]').innerHTML=[
+        [summary.domains??0,'Storage domains'],
+        [summary.safeDomains??0,'Ready'],
+        [summary.blockedDomains??0,'Blocked'],
+        [summary.legacyObjects??0,'Legacy objects'],
+        [summary.missingCanonical??0,'Missing canonical'],
+        [summary.fullChecksumMismatches??summary.criticalMismatches??0,'Checksum mismatches'],
+      ].map(([v,l])=>summaryCard(v,l)).join('');
+
+      const rows=audit?.domains||[];
+      $('[data-domains]').innerHTML=rows.length?rows.map((row)=>{
+        const safe=row.safeToRetireLegacy===true;
+        const mismatchCount=Number(row.fullChecksumMismatchCount??row.critical?.filter((item)=>!item.matches).length??0);
+        const missing=(row.missingCanonical||[]).slice(0,8);
+        const mismatches=(row.fullChecksumMismatches||[]).slice(0,8);
+        return '<article class="rounded-2xl border border-stone-200 p-5">'
+          +'<div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">'
+          +'<div><div class="flex flex-wrap items-center gap-2"><strong class="text-lg text-stone-900">'+esc(row.domain)+'</strong>'+pill(row.retirementStatus|| (safe?'ready':'blocked'),safe)+'</div><p class="mt-1 text-xs text-stone-500">Legacy store: '+esc(row.legacyStore||'not applicable')+' · Evidence: '+esc(row.evidenceLevel||'—')+'</p></div>'
+          +'<div class="grid grid-cols-2 gap-2 sm:grid-cols-4"><div class="rounded-xl bg-stone-100 p-3"><p class="text-[.6rem] font-black uppercase text-stone-500">Legacy</p><strong>'+Number(row.legacyCount||0)+'</strong></div><div class="rounded-xl bg-stone-100 p-3"><p class="text-[.6rem] font-black uppercase text-stone-500">Canonical</p><strong>'+Number(row.canonicalCount||0)+'</strong></div><div class="rounded-xl bg-stone-100 p-3"><p class="text-[.6rem] font-black uppercase text-stone-500">Missing</p><strong>'+Number(row.missingCanonicalCount||0)+'</strong></div><div class="rounded-xl bg-stone-100 p-3"><p class="text-[.6rem] font-black uppercase text-stone-500">Mismatch</p><strong>'+mismatchCount+'</strong></div></div>'
+          +'</div>'
+          +'<div class="mt-4 grid gap-3 lg:grid-cols-2"><div class="rounded-xl bg-stone-50 p-4"><p class="text-[.62rem] font-black uppercase tracking-[.06em] text-stone-500">Inventory fingerprints</p><p class="mt-2 break-all text-xs text-stone-700">Legacy: <code>'+esc(row.legacyInventoryHash||'—')+'</code></p><p class="mt-1 break-all text-xs text-stone-700">Canonical: <code>'+esc(row.canonicalInventoryHash||'—')+'</code></p></div><div class="rounded-xl bg-stone-50 p-4"><p class="text-[.62rem] font-black uppercase tracking-[.06em] text-stone-500">Retirement timing</p><p class="mt-2 text-xs text-stone-700">Last checked: '+esc(fmt(row.lastCheckedAt||audit.generatedAt))+'</p><p class="mt-1 text-xs text-stone-700">Safe since: '+esc(fmt(row.safeSince))+'</p></div></div>'
+          +(missing.length?'<div class="mt-3 rounded-xl bg-amber-50 p-4 text-xs text-amber-900"><strong>Missing canonical:</strong> '+missing.map(esc).join(' · ')+'</div>':'')
+          +(mismatches.length?'<div class="mt-3 rounded-xl bg-red-50 p-4 text-xs text-red-800"><strong>Checksum mismatches:</strong> '+mismatches.map((item)=>esc(item.key)+' ('+esc(short(item.legacyHash))+' ≠ '+esc(short(item.canonicalHash))+')').join(' · ')+'</div>':'')
+          +'</article>';
+      }).join(''):'<p class="text-sm text-stone-500">No saved migration audit yet. Run the full checksum audit.</p>';
+
+      if(audit){
+        $('[data-message]').textContent='Audit '+fmt(audit.generatedAt)+' · '+(summary.safeToRetireLegacy?'All legacy stores meet retirement checks.':'Legacy storage remains protected until every domain is ready.');
+      }
+    }
+
+    async function loadFleet(){
+      fleet=await api();
+      const select=$('[data-tenant]');
+      select.innerHTML=(fleet.organizations||[]).map((row)=>'<option value="'+esc(row.id)+'">'+esc(row.displayName)+' · '+esc(row.migrationStatus)+'</option>').join('');
+      const koa=(fleet.organizations||[]).find((row)=>row.legacyCompatibility);
+      if(koa)select.value=koa.id;
+    }
+
+    async function loadDetail(){
+      const id=$('[data-tenant]').value;
+      detail=await api('?tenant='+encodeURIComponent(id));
+      render();
+    }
+
+    async function runAudit(){
+      const id=$('[data-tenant]').value;
+      $('[data-message]').textContent='Running full object checksum comparison. This can take longer than a normal page load…';
+      const data=await api('',{method:'POST',body:JSON.stringify({action:'run-migration-audit',tenantId:id,deep:true})});
+      detail={...(detail||{}),migrationAudit:data.migrationAudit};
+      render();
+    }
+
+    $('[data-load]')?.addEventListener('click',()=>loadDetail().catch((error)=>$('[data-message]').textContent=error.message));
+    $('[data-run]')?.addEventListener('click',()=>runAudit().catch((error)=>$('[data-message]').textContent=error.message));
+    $('[data-tenant]')?.addEventListener('change',()=>loadDetail().catch(()=>{}));
+
+    async function boot(){
+      const session=await getAdminSession();
+      $('[data-loading]').classList.add('hidden');
+      if(!session||!session.capabilities?.includes('organization.view')){
+        $('[data-denied]').classList.remove('hidden');
+        $('[data-denied-message]').textContent='Organization access is required.';
+        return;
+      }
+      try{
+        await loadFleet();
+        $('[data-app]').classList.remove('hidden');
+        await loadDetail();
+      }catch(error){
+        $('[data-denied]').classList.remove('hidden');
+        $('[data-denied-message]').textContent=error.message||'Unable to load migration dashboard.';
+      }
+    }
+    boot();
+  </script>
+</BaseLayout>
