@@ -793,12 +793,25 @@ export default async (req: Request, context: Context) => {
     const existingRecords = (await store.get('records/index', { type: 'json' })) || [];
     const normalizedEmail = record.customer.email.toLowerCase();
     const duplicate = existingRecords.find((entry: any) => {
-      if (!entry || entry.source !== formName) return false;
+      if (!entry || String(entry.stage || '').toLowerCase() === 'lost') return false;
       if (String(entry.customer?.email || '').trim().toLowerCase() !== normalizedEmail) return false;
       if (String(entry.customer?.eventDate || '') !== record.customer.eventDate) return false;
-      if (quoteId && String(entry.quoteId || '') !== quoteId) return false;
-      const createdAt = Date.parse(String(entry.createdAt || ''));
-      return Number.isFinite(createdAt) && now.getTime() - createdAt >= 0 && now.getTime() - createdAt <= 10 * 60 * 1000;
+      const entryBusinessLine = String(entry.businessLine || (
+        String(entry.source || '').includes('mobile-bar') ? 'mobile-bar'
+          : String(entry.source || '').includes('wild-ones') ? 'wild-ones'
+            : 'events'
+      )).toLowerCase();
+      if (entryBusinessLine !== businessLine) return false;
+      const entryPackage = String(
+        entry.packageId
+          || entry.quote?.state?.startingPoint
+          || entry.inquiry?.venuePackage
+          || entry.inquiry?.mobileBarPackage
+          || ''
+      ).trim().toLowerCase();
+      const incomingPackage = String(packageId || record.inquiry?.venuePackage || record.inquiry?.mobileBarPackage || '').trim().toLowerCase();
+      if (entryPackage && incomingPackage && entryPackage !== incomingPackage) return false;
+      return true;
     });
 
     if (duplicate) {
