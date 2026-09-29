@@ -1,5 +1,16 @@
 import type { Config, Context } from '@netlify/functions';
-import { applyHealthAlertPolicy, persistHealth, readLatestHealth, readLatestHourlyHealth, recordGithubMainSignal, runSystemHealth, sendHealthTransitionAlerts } from './_shared/system-health';
+import {
+  applyHealthAlertPolicy,
+  persistHealth,
+  readLatestHealth,
+  readLatestHourlyHealth,
+  recordGithubMainSignal,
+  recordProductionRelease,
+  rollbackFailedProductionRelease,
+  runSystemHealth,
+  sendHealthTransitionAlerts,
+  syntheticProbeReleaseVerification,
+} from './_shared/system-health';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -98,27 +109,34 @@ export default async (req:Request,context:Context) => {
       await persistHealth(context,health);
       await sendHealthTransitionAlerts(previous,health);
 
-      const ids=new Set([
-        'synthetic-event-documents',
-        'synthetic-vendor-insurance-document',
-        'synthetic-quickbooks-webhook',
-        'synthetic-signwell-webhook',
-      ]);
-      const probes=health.checks
-        .filter((row:any)=>ids.has(String(row?.id||'')))
-        .map((row:any)=>({
-          id:row.id,
-          name:row.name,
-          ok:Boolean(row.ok),
-          severity:row.severity,
-          status:Number(row.status||0),
-          marker:String(row?.syntheticDetails?.returnedMarker||''),
-          expectedMarker:String(row?.syntheticDetails?.expectedMarker||''),
-          source:String(row?.syntheticDetails?.source||''),
-          lastLiveCheckedAt:String(row?.syntheticDetails?.lastLiveCheckedAt||health.checkedAt||''),
-          detail:String(row.detail||''),
-        }));
-      const probesVerified=probes.length===4&&probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
+      const deployId=String(Netlify.env.get('DEPLOY_ID')||'').trim();
+      const syntheticProbeVerification=syntheticProbeReleaseVerification(health,'github-actions-oidc');
+      const probes=syntheticProbeVerification.probes;
+      const probesVerified=syntheticProbeVerification.status==='passed'
+        && probes.length===4
+        && probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
+
+      let auditRecorded=false;
+      let auditError='';
+      try{
+        await recordProductionRelease(context,{
+          deployId,
+          commit:String(claims.sha||''),
+          checkedAt:health.checkedAt,
+          syntheticProbeVerification,
+        });
+        auditRecorded=true;
+      }catch(error){
+        auditError=error instanceof Error?error.message:'Unable to persist production synthetic-probe audit.';
+      }
+
+      const rollbackProtection=!probesVerified
+        ? await rollbackFailedProductionRelease(context,{
+            deployId,
+            commit:String(claims.sha||''),
+            syntheticProbeVerification,
+          })
+        : null;
 
       const accountingCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
       const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
@@ -152,16 +170,22 @@ export default async (req:Request,context:Context) => {
       );
       const requireAccounting=body?.action==='verify-production-health';
       const verified=probesVerified&&(!requireAccounting||accountingVerified);
+      const ok=verified&&auditRecorded;
       return Response.json({
-        ok:verified,
+        ok,
+        verified,
+        auditRecorded,
+        auditError,
         accepted:result.accepted,
         sha:result.signal.sha,
+        deployId,
         source:'github-actions-oidc',
         checkedAt:health.checkedAt,
         probes,
         accountingInvariant,
+        rollbackProtection,
       },{
-        status:verified?200:503,
+        status:ok?200:503,
         headers:{'Cache-Control':'no-store'},
       });
     }

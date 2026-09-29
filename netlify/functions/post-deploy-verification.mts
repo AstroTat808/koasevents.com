@@ -10,6 +10,7 @@ import {
   runSystemHealth,
   savePostDeployVerification,
   sendHealthTransitionAlerts,
+  syntheticProbeReleaseVerification,
 } from './_shared/system-health';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
 import { runBrandedEmailProductionVerification } from './_shared/email-health';
@@ -38,6 +39,7 @@ async function runTenantJob(_req:Request,context:Context){
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
 
+  const syntheticProbeVerification=syntheticProbeReleaseVerification(current,'post-deploy-scheduled');
   const verification={
     deployId,
     commit,
@@ -47,9 +49,16 @@ async function runTenantJob(_req:Request,context:Context){
     failed:current.failed,
     failedIds:current.failedIds,
     checkCount:current.checks.length,
+    syntheticProbeVerification,
   };
   await savePostDeployVerification(context,verification);
-  await recordProductionRelease(context,{deployId,commit,checkedAt:current.checkedAt,verification});
+  await recordProductionRelease(context,{
+    deployId,
+    commit,
+    checkedAt:current.checkedAt,
+    verification,
+    syntheticProbeVerification,
+  });
 }
 export default async (req:Request, context:Context) => {
   if (context.deploy.context !== 'production') return;

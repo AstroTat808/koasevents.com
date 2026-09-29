@@ -201,6 +201,85 @@ const SYNTHETIC_INTEGRATION_COMPONENTS = [
   {id:'synthetic-signwell-webhook',name:'SignWell webhook synthetic probe',path:'/api/webhooks/signwell',kind:'api' as const},
 ] as const;
 
+export const CRITICAL_SYNTHETIC_INTEGRATION_IDS = SYNTHETIC_INTEGRATION_COMPONENTS.map((row)=>row.id);
+
+export type SyntheticProbeAuditRow = {
+  id:string;
+  name:string;
+  ok:boolean;
+  status:number;
+  marker:string;
+  expectedMarker:string;
+  source:'live'|'cached'|'unknown';
+  lastLiveCheckedAt:string;
+  detail:string;
+};
+
+export type SyntheticProbeReleaseVerification = {
+  checkedAt:string;
+  status:'passed'|'failed';
+  healthyCount:number;
+  totalCount:number;
+  source:string;
+  probes:SyntheticProbeAuditRow[];
+};
+
+export function criticalIntegrationsSummary(snapshot:HealthSnapshot|null|undefined) {
+  const byId=new Map((snapshot?.checks||[]).map((row)=>[row.id,row]));
+  const probes=CRITICAL_SYNTHETIC_INTEGRATION_IDS.map((id)=>{
+    const row=byId.get(id);
+    const details=row?.syntheticDetails;
+    const source=details?.source==='live'||details?.source==='cached'?details.source:'unknown';
+    return {
+      id,
+      name:row?.name||SYNTHETIC_INTEGRATION_COMPONENTS.find((item)=>item.id===id)?.name||id,
+      ok:Boolean(row?.ok),
+      status:Number(row?.status||0),
+      marker:String(details?.returnedMarker||''),
+      expectedMarker:String(details?.expectedMarker||''),
+      source,
+      lastLiveCheckedAt:String(details?.lastLiveCheckedAt||''),
+      detail:String(row?.detail||''),
+    } satisfies SyntheticProbeAuditRow;
+  });
+  const liveTimes=probes
+    .map((row)=>Date.parse(row.lastLiveCheckedAt))
+    .filter((value)=>Number.isFinite(value));
+  const cached=probes
+    .filter((row)=>row.source==='cached'&&Number.isFinite(Date.parse(row.lastLiveCheckedAt)))
+    .sort((a,b)=>Date.parse(a.lastLiveCheckedAt)-Date.parse(b.lastLiveCheckedAt));
+  const healthyCount=probes.filter((row)=>row.ok&&row.status===204&&row.marker===row.expectedMarker).length;
+  return {
+    healthy:healthyCount===probes.length&&probes.length===CRITICAL_SYNTHETIC_INTEGRATION_IDS.length,
+    healthyCount,
+    totalCount:CRITICAL_SYNTHETIC_INTEGRATION_IDS.length,
+    liveCount:probes.filter((row)=>row.source==='live').length,
+    cachedCount:probes.filter((row)=>row.source==='cached').length,
+    lastLiveVerification:liveTimes.length?new Date(Math.max(...liveTimes)).toISOString():'',
+    oldestCached:cached.length?{
+      id:cached[0].id,
+      name:cached[0].name,
+      lastLiveCheckedAt:cached[0].lastLiveCheckedAt,
+    }:null,
+    probes,
+  };
+}
+
+export function syntheticProbeReleaseVerification(
+  snapshot:HealthSnapshot,
+  source='system-health',
+):SyntheticProbeReleaseVerification {
+  const summary=criticalIntegrationsSummary(snapshot);
+  return {
+    checkedAt:snapshot.checkedAt||new Date().toISOString(),
+    status:summary.healthy?'passed':'failed',
+    healthyCount:summary.healthyCount,
+    totalCount:summary.totalCount,
+    source:clean(source,120)||'system-health',
+    probes:summary.probes,
+  };
+}
+
 export function healthComponents() {
   return [
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
@@ -2267,6 +2346,19 @@ export async function readPostDeployVerification(context:Context) {
   return ((await healthStore(context).get('deployments/post-deploy-verification',{type:'json'})) || null) as any;
 }
 
+export type ProductionRollbackProtection = {
+  policy:'critical-integrations';
+  status:'rolled-back'|'rollback-failed'|'unavailable';
+  checkedAt:string;
+  fromDeployId:string;
+  fromCommit:string;
+  targetDeployId:string;
+  targetCommit:string;
+  reason:string;
+  httpStatus:number;
+  error:string;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2277,6 +2369,8 @@ export type ProductionRelease = {
   features:string[];
   changedFiles:string[];
   verification:any;
+  syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
+  rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
   pullRequestNumber:number|null;
@@ -2564,6 +2658,8 @@ export async function recordProductionRelease(context:Context,input:any) {
     features:featureLabelsForFiles(changedFiles),
     changedFiles,
     verification:input?.verification||previous?.verification||null,
+    syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
+    rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,
     pullRequestNumber,
@@ -2574,8 +2670,94 @@ export async function recordProductionRelease(context:Context,input:any) {
   const next=[record,...existing.filter(row=>row.deployId!==deployId)]
     .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
     .slice(0,100);
-  await store.setJSON('deployments/releases',next);
+  await Promise.all([
+    store.setJSON('deployments/releases',next),
+    // Durable per-deploy audit records are never trimmed when the dashboard's rolling
+    // release list is capped. This preserves the exact synthetic probe evidence for
+    // every production deploy by its immutable Netlify deploy id.
+    store.setJSON('deployments/releases/by-id/'+deployId,record),
+  ]);
   return record;
+}
+
+export async function rollbackFailedProductionRelease(
+  context:Context,
+  input:{
+    deployId:string;
+    commit:string;
+    syntheticProbeVerification:SyntheticProbeReleaseVerification;
+  },
+):Promise<ProductionRollbackProtection> {
+  const deployId=clean(input?.deployId,120);
+  const commit=clean(input?.commit,120);
+  const checkedAt=new Date().toISOString();
+  const releases=await readProductionReleases(context,100);
+  const target=releases
+    .filter((row)=>row.deployId&&row.deployId!==deployId)
+    .filter((row)=>row.syntheticProbeVerification?.status==='passed')
+    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))[0]||null;
+  const siteId=clean(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  const token=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+
+  let rollback:ProductionRollbackProtection={
+    policy:'critical-integrations',
+    status:'unavailable',
+    checkedAt,
+    fromDeployId:deployId,
+    fromCommit:commit,
+    targetDeployId:clean(target?.deployId,120),
+    targetCommit:clean(target?.commit,120),
+    reason:'Critical Integrations live verification failed.',
+    httpStatus:0,
+    error:'',
+  };
+
+  if(!deployId){
+    rollback.error='Current Netlify deploy id is unavailable.';
+  }else if(!target?.deployId){
+    rollback.error='No earlier production release with a passing four-probe verification is available yet.';
+  }else if(!siteId){
+    rollback.error='Netlify site id is unavailable to the rollback guard.';
+  }else if(!token){
+    rollback.error='NETLIFY_AUTH_TOKEN is unavailable to the rollback guard.';
+  }else{
+    try{
+      const response=await fetch(
+        'https://api.netlify.com/api/v1/sites/'+encodeURIComponent(siteId)+'/deploys/'+encodeURIComponent(target.deployId)+'/restore',
+        {
+          method:'POST',
+          headers:{
+            Authorization:'Bearer '+token,
+            'Accept':'application/json',
+            'User-Agent':'KoaEvents-Health/1.0',
+          },
+          signal:AbortSignal.timeout(15_000),
+        },
+      );
+      const body:any=await response.json().catch(()=>({}));
+      rollback={
+        ...rollback,
+        status:response.ok?'rolled-back':'rollback-failed',
+        httpStatus:response.status,
+        error:response.ok?'':clean(body?.message||body?.error||('Netlify restore returned HTTP '+response.status),500),
+      };
+    }catch(error){
+      rollback={
+        ...rollback,
+        status:'rollback-failed',
+        error:error instanceof Error?clean(error.message,500):'Netlify restore request failed.',
+      };
+    }
+  }
+
+  await recordProductionRelease(context,{
+    deployId,
+    commit,
+    checkedAt:input.syntheticProbeVerification?.checkedAt||checkedAt,
+    syntheticProbeVerification:input.syntheticProbeVerification,
+    rollbackProtection:rollback,
+  });
+  return rollback;
 }
 
 export async function hydrateProductionReleaseMetadata(context:Context,releases:ProductionRelease[],limit=20) {
