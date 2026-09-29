@@ -522,8 +522,54 @@ export default async (req:Request, context:Context) => {
     if(!survivor||sources.length!==sourceIds.length)return Response.json({error:'One or more selected CRM records no longer exist.'},{status:409});
     const merged=mergeDuplicateSalesRecord(survivor,sources,actor);
     const sourceSet=new Set(sourceIds);
-    const nextRecords=records.filter((entry:any)=>!sourceSet.has(clean(entry?.id,120))).map((entry:any)=>entry?.id===survivorId?merged:entry).slice(0,1500);
     const now=new Date().toISOString();
+    const eventOps=tenantStoreFor(context,tenant,'eventOps');
+    const eventFiles=tenantStoreFor(context,tenant,'eventFiles');
+
+    let survivorOps:any=await eventOps.get('events/'+survivorId,{type:'json'});
+    const survivorDocumentIds=new Set((Array.isArray(survivorOps?.documents)?survivorOps.documents:[]).map((doc:any)=>clean(doc?.id,100)).filter(Boolean));
+    for(const source of sources){
+      const sourceId=clean(source?.id,120);
+      const sourceOps:any=await eventOps.get('events/'+sourceId,{type:'json'});
+      if(sourceOps){
+        const sourceDocuments=Array.isArray(sourceOps.documents)?sourceOps.documents:[];
+        const migratedDocuments:any[]=[];
+        for(const document of sourceDocuments){
+          const originalId=clean(document?.id,100);
+          if(!originalId)continue;
+          let nextId=originalId;
+          if(survivorDocumentIds.has(nextId))nextId=clean(sourceId+'-'+originalId,100);
+          survivorDocumentIds.add(nextId);
+          const sourceKey='documents/'+sourceId+'/'+originalId;
+          const targetKey='documents/'+survivorId+'/'+nextId;
+          const bytes=await eventFiles.get(sourceKey,{type:'arrayBuffer'});
+          if(bytes!=null)await eventFiles.set(targetKey,bytes);
+          migratedDocuments.push({...document,id:nextId,mergedFromRecordId:sourceId});
+        }
+        if(!survivorOps){
+          survivorOps={...sourceOps,recordId:survivorId,id:sourceOps?.id===sourceId?survivorId:sourceOps?.id,documents:migratedDocuments,updatedAt:now};
+        }else if(migratedDocuments.length){
+          survivorOps={...survivorOps,documents:[...(Array.isArray(survivorOps.documents)?survivorOps.documents:[]),...migratedDocuments],updatedAt:now};
+        }
+        await eventOps.setJSON('merged/events/'+sourceId,{...sourceOps,mergedInto:survivorId,mergedAt:now,mergedBy:actor});
+        await eventOps.delete('events/'+sourceId);
+      }
+
+      const signedPdfKey=clean(source?.booking?.contract?.signwell?.signedPdfKey,500);
+      if(signedPdfKey){
+        const pdf=await eventFiles.get(signedPdfKey,{type:'arrayBuffer'});
+        if(pdf!=null){
+          const targetPdfKey='signed-contracts/'+survivorId+'/agreement.pdf';
+          const existingPdf=await eventFiles.get(targetPdfKey,{type:'arrayBuffer'});
+          if(existingPdf==null)await eventFiles.set(targetPdfKey,pdf);
+          const mergedSignwell=merged?.booking?.contract?.signwell;
+          if(mergedSignwell && clean(mergedSignwell.signedPdfKey,500)===signedPdfKey)mergedSignwell.signedPdfKey=targetPdfKey;
+        }
+      }
+    }
+    if(survivorOps)await eventOps.setJSON('events/'+survivorId,survivorOps);
+
+    const nextRecords=records.filter((entry:any)=>!sourceSet.has(clean(entry?.id,120))).map((entry:any)=>entry?.id===survivorId?merged:entry).slice(0,1500);
 
     const [tasks,appointments,notes,enrollments,activity,messages,metas,aliases]=await Promise.all([
       readIndex<Task>(crm,'tasks/index'),readIndex<Appointment>(crm,'appointments/index'),readIndex<Note>(crm,'notes/index'),readIndex<Enrollment>(crm,'enrollments/index'),readIndex<Activity>(crm,'activity/index'),readIndex<any>(crm,'client-messages/index'),readIndex<ProjectMeta>(crm,'projects/index'),readIndex<any>(sales,'merged/aliases'),
@@ -536,12 +582,18 @@ export default async (req:Request, context:Context) => {
     const relinkedMessages=relinkRecordIdRows(messages,sourceIds,survivorId);
     const survivorMeta=metas.find((row)=>row.recordId===survivorId)||null;
     const sourceMetas=metas.filter((row)=>sourceSet.has(row.recordId));
-    const mergedMeta:any=sourceMetas.reduce((acc:any,row:any)=>({
-      ...(row||{}),...(acc||{}),recordId:survivorId,
-      tags:[...new Set([...(row?.tags||[]),...(acc?.tags||[])])],
-      customFields:{...(row?.customFields||{}),...(acc?.customFields||{})},
-      updatedAt:now,
-    }),survivorMeta||{recordId:survivorId,tags:[],customFields:{}});
+    const mergedMeta:any=sourceMetas.reduce((acc:any,row:any)=>{
+      const next={...(acc||{})};
+      for(const [key,value] of Object.entries(row||{})){
+        if(['recordId','tags','customFields','updatedAt'].includes(key))continue;
+        if(next[key]===undefined||next[key]===null||next[key]==='')next[key]=value;
+      }
+      next.recordId=survivorId;
+      next.tags=[...new Set([...(acc?.tags||[]),...(row?.tags||[])])];
+      next.customFields={...(row?.customFields||{}),...(acc?.customFields||{})};
+      next.updatedAt=now;
+      return next;
+    },survivorMeta||{recordId:survivorId,tags:[],customFields:{}});
     const nextMetas=[mergedMeta,...metas.filter((row)=>row.recordId!==survivorId&&!sourceSet.has(row.recordId))].slice(0,1500);
     const nextAliases=[...sourceIds.map((sourceId)=>({sourceId,survivorId,mergedAt:now,mergedBy:actor})),...(aliases||[]).filter((row:any)=>!sourceSet.has(clean(row?.sourceId,120)))].slice(0,5000);
 
