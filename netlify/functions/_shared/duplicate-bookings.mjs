@@ -80,7 +80,7 @@ export function bookingIdentity(record) {
     name,
     packageId: pkg,
     strongKey: eventDate && email ? 'email|' + email + '|date|' + eventDate : '',
-    fallbackKey: eventDate && name ? 'name|' + name + '|date|' + eventDate + (pkg ? '|pkg|' + pkg : '') : '',
+    fallbackKey: eventDate && name ? 'name|' + name + '|date|' + eventDate : '',
   };
 }
 
@@ -94,8 +94,7 @@ export function recordAuthorityScore(record) {
     + signWellStrength(record)
     + bookingStrength(record)
     + proposalStrength(record)
-    + (clean(record?.quoteId, 120) ? 25000 : 0)
-    + createdAtScore(record);
+    + (clean(record?.quoteId, 120) ? 25000 : 0);
 }
 
 export function describeRecordOrigin(record) {
@@ -258,7 +257,27 @@ export function mergeDuplicateSalesRecord(survivor, sources, actor) {
     merged.quote = merged.quote || source?.quote || null;
     merged.proposal = merged.proposal || source?.proposal || null;
     merged.booking = merged.booking || source?.booking || null;
+    if(merged.booking && source?.booking){
+      merged.booking = mergeMissingObject(merged.booking, source.booking);
+      merged.booking.contract = mergeMissingObject(merged.booking.contract, source.booking?.contract);
+      if(merged.booking.contract || source.booking?.contract){
+        merged.booking.contract ||= {};
+        merged.booking.contract.signwell = mergeMissingObject(merged.booking.contract.signwell, source.booking?.contract?.signwell);
+      }
+      const payments = dedupeRows([...(Array.isArray(merged.booking?.payments)?merged.booking.payments:[]),...(Array.isArray(source.booking?.payments)?source.booking.payments:[])]);
+      if(payments.length)merged.booking.payments=payments;
+    }
     merged.accounting = mergeMissingObject(merged.accounting, source?.accounting);
+    if(merged.accounting || source?.accounting){
+      merged.accounting ||= {};
+      merged.accounting.quickbooks = mergeMissingObject(merged.accounting.quickbooks, source?.accounting?.quickbooks);
+      if(merged.accounting.quickbooks){
+        for(const key of ['estimates','invoices','payments']){
+          const combined=dedupeRows([...(Array.isArray(merged.accounting.quickbooks?.[key])?merged.accounting.quickbooks[key]:[]),...(Array.isArray(source?.accounting?.quickbooks?.[key])?source.accounting.quickbooks[key]:[])]);
+          if(combined.length)merged.accounting.quickbooks[key]=combined;
+        }
+      }
+    }
     merged.communications = mergeMissingObject(merged.communications, source?.communications);
     merged.assignment = mergeMissingObject(merged.assignment, source?.assignment);
     merged.security = mergeMissingObject(merged.security, source?.security);
