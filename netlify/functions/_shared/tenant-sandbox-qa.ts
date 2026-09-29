@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { tenantById } from '../../../src/data/tenants/index.ts';
 import {
+  appendPlatformSandboxQaHistory,
   listMemberships,
   profileFromOrganization,
   saveMembership,
@@ -161,6 +162,7 @@ export async function runCrossTenantLeakageTest(
   };
 
   await runWithTenant(sandbox,()=>tenantStoreFor(context,sandbox,'systemHealth').setJSON('qa/tenant-isolation/latest',report));
+  await appendPlatformSandboxQaHistory(context,sandbox.id,{kind:'leakage',runId:report.runId,generatedAt:report.generatedAt,summary:report.summary,report});
   return report;
 }
 
@@ -394,5 +396,134 @@ export async function runSandboxOnboardingJourney(
     },
   };
   await runWithTenant(profile,()=>tenantStoreFor(context,profile,'systemHealth').setJSON('qa/onboarding/latest',report));
+  await appendPlatformSandboxQaHistory(context,profile.id,{kind:'onboarding',runId:report.runId,generatedAt:report.generatedAt,summary:report.summary,report});
   return {organization:updated,report};
 }
+
+
+export const SANDBOX_ONBOARDING_STAGES = [
+  'organization','branding','venue','tax','catalog','team','domain','integrations','templates','stripe','test-proposal','activation',
+] as const;
+
+export async function runSandboxOnboardingStage(
+  context: Context,
+  organization: OrganizationRecord,
+  actor: { id?:string; email?:string },
+  requestedStage: string,
+) {
+  const stage=clean(requestedStage,80);
+  if (!SANDBOX_ONBOARDING_STAGES.includes(stage as any)) throw new Error('Unknown sandbox onboarding stage.');
+  if (!isSandboxOrganization(organization)) throw new Error('Onboarding QA is restricted to VenueLoom sandbox organizations.');
+
+  const profile=profileFromOrganization(organization);
+  const runId='ONB-STAGE-'+Date.now().toString(36)+'-'+crypto.randomUUID().slice(0,8);
+  const at=now();
+  let updated=organization;
+  let step:any={id:stage,passed:false,detail:'Stage did not complete.'};
+
+  if(stage==='organization'){
+    updated=await saveOrganization(context,profile,(current)=>({
+      ...current,status:'trial',
+      displayName:current.displayName||'VenueLoom Sandbox Venue',
+      legalName:current.legalName||'VenueLoom Sandbox Venue LLC',
+      locale:current.locale||'en-US',currency:current.currency||'USD',timezone:current.timezone||'UTC',country:current.country||'United States',
+      onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'organization','locale'])],activatedAt:''},
+    }));
+    step={id:stage,passed:Boolean(updated.displayName&&updated.legalName&&updated.locale&&updated.currency&&updated.timezone),detail:'Organization identity and locale settings saved.'};
+  }
+
+  if(stage==='branding'){
+    updated=await saveOrganization(context,profile,(current)=>({
+      ...current,branding:{...current.branding,tagline:'Tenant #2 end-to-end onboarding sandbox',logoPath:current.branding.logoPath||'/brand/venueloom-sandbox.svg',primaryColor:current.branding.primaryColor||'#334155',accentColor:current.branding.accentColor||'#64748b',backgroundColor:current.branding.backgroundColor||'#f8fafc'},
+      onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'branding'])]},
+    }));
+    step={id:stage,passed:Boolean(updated.branding.tagline&&updated.branding.logoPath),detail:'Branding saved.'};
+  }
+
+  if(stage==='venue'){
+    updated=await saveOrganization(context,profile,(current)=>({
+      ...current,venues:(current.venues||[]).length?current.venues:[{id:'sandbox-main',name:'Sandbox Venue',address:'Test data only',timezone:current.timezone||'UTC',capacity:120,active:true}],
+      onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'venues'])]},
+    }));
+    step={id:stage,passed:(updated.venues||[]).some((row)=>row.active),detail:'Venue saved.'};
+  }
+
+  if(stage==='tax'){
+    updated=await saveOrganization(context,profile,(current)=>({
+      ...current,taxProfile:{id:'sandbox-tax',label:'Sandbox Tax',kind:'sales-tax',enabled:true,statutoryRate:4.25,customerRate:4.25,maxPassOnRate:4.25,defaultTaxable:true},
+      onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'tax-profile'])]},
+    }));
+    step={id:stage,passed:Boolean(updated.taxProfile.label),detail:'Tax profile saved.'};
+  }
+
+  if(stage==='catalog'){
+    const store=tenantStoreFor(context,profile,'integrations');
+    const item={id:'sandbox-package-stage',tenantId:profile.id,name:'Sandbox Event Package',description:'Tenant #2 onboarding QA item',category:'service',group:'packages',unitLabel:'package',unitPrice:2500,internalCost:900,targetMargin:60,active:true,getExempt:false,source:'catalog-manager',sourceRef:runId,quickBooksItemId:'',quickBooksItemName:'',quickBooksType:'Service',incomeAccountId:'',incomeAccountName:'',updatedAt:at};
+    const current=((await runWithTenant(profile,()=>store.get('quickbooks/catalog',{type:'json'} as any)).catch(()=>null))||[]) as any[];
+    const next=[item,...current.filter((row:any)=>row?.id!==item.id)].slice(0,100);
+    await runWithTenant(profile,()=>store.setJSON('quickbooks/catalog',next));
+    updated=await saveOrganization(context,profile,(currentOrg)=>({...currentOrg,onboarding:{...currentOrg.onboarding,completedSteps:[...new Set([...(currentOrg.onboarding?.completedSteps||[]),'catalog'])]}}));
+    step={id:stage,passed:next.some((row:any)=>row.id===item.id),detail:'Catalog item created in Tenant #2 only.',catalogItemId:item.id};
+  }
+
+  if(stage==='team'){
+    const member:MembershipRecord={id:'m_'+profile.id+'_sandbox_qa_stage',tenantId:profile.id,userId:'sandbox_qa_stage',email:'sandbox.qa.stage@example.invalid',role:'sales',capabilities:['sales.view','sales.manage','events.view','vendors.view'],status:'active',invitedAt:at,acceptedAt:at,createdAt:at,updatedAt:at};
+    await saveMembership(context,member);
+    const memberships=await listMemberships(context,profile.id);
+    updated=await saveOrganization(context,profile,(current)=>({...current,onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'team'])]}}));
+    step={id:stage,passed:memberships.some((row)=>row.userId===member.userId),detail:'Synthetic sandbox team membership created without sending email.',membershipId:member.id};
+  }
+
+  if(stage==='domain'){
+    const hostname=profile.slug+'.invalid';
+    updated=await saveOrganization(context,profile,(current)=>({...current,domains:[{id:'sandbox-domain',hostname,kind:'custom',status:'verified',primary:true,verificationToken:'sandbox-only',verifiedAt:at,lastCheckedAt:at,verificationError:'Sandbox verification only; .invalid cannot route publicly.'}],onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'domains'])]}}));
+    step={id:stage,passed:updated.domains.some((row)=>row.hostname===hostname&&row.status==='verified'),detail:'Reserved .invalid domain completed sandbox verification without DNS changes.',hostname,mode:'sandbox'};
+  }
+
+  if(stage==='integrations'){
+    const providers=['quickbooks','signwell','resend','microsoft'] as const;
+    updated=await saveOrganization(context,profile,(current)=>({...current,integrations:(current.integrations||[]).map((row)=>providers.includes(row.provider as any)?{...row,enabled:true,status:'configured',remoteAccountId:'sandbox-'+row.provider+'-'+runId,remoteAccountName:'Sandbox '+row.provider+' test connection',connectedAt:at,lastVerifiedAt:at,credentialRef:'sandbox://'+profile.id+'/'+row.provider}:row),onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'integrations'])]}}));
+    step={id:stage,passed:providers.every((provider)=>updated.integrations.some((row)=>row.provider===provider&&row.status==='configured')),detail:'QuickBooks, SignWell, email, and Microsoft paths configured in simulation mode; no external credentials were used.'};
+  }
+
+  if(stage==='templates'){
+    updated=await saveOrganization(context,profile,(current)=>({...current,templates:[...(current.templates||[]).filter((row)=>row.id!=='sandbox-proposal'),{id:'sandbox-proposal',type:'proposal',name:'Sandbox Proposal',enabled:true,source:'tenant',updatedAt:at}],onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'templates'])]}}));
+    step={id:stage,passed:updated.templates.some((row)=>row.id==='sandbox-proposal'),detail:'Proposal template configured.'};
+  }
+
+  if(stage==='stripe'){
+    updated=await saveOrganization(context,profile,(current)=>({...current,subscription:{...current.subscription,provider:'stripe',status:'trialing',plan:'sandbox',interval:'monthly',seats:2,billingEmail:current.contact.email||'sandbox-billing@example.invalid',stripeCustomerId:'sandbox_customer_'+runId,stripeSubscriptionId:'sandbox_subscription_'+runId,currentPeriodEnd:'',trialEndsAt:new Date(Date.now()+14*24*60*60*1000).toISOString()},onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'subscription'])]}}));
+    step={id:stage,passed:updated.subscription.status==='trialing',detail:'Stripe subscription lifecycle exercised in simulation mode; no charge or external Stripe object was created.',mode:'sandbox'};
+  }
+
+  if(stage==='test-proposal'){
+    const sales=tenantStoreFor(context,profile,'sales');
+    const catalog=tenantStoreFor(context,profile,'integrations');
+    const items=((await runWithTenant(profile,()=>catalog.get('quickbooks/catalog',{type:'json'} as any)).catch(()=>null))||[]) as any[];
+    const item=items.find((row:any)=>row?.id==='sandbox-package-stage')||items[0]||{id:'sandbox-package-stage',name:'Sandbox Event Package',unitPrice:2500};
+    const proposalId='VL-SANDBOX-STAGE-'+runId;
+    const taxRate=Number(organization.taxProfile?.customerRate||4.25);
+    const proposal={id:proposalId,tenantId:profile.id,kind:'proposal',stage:'proposal',customer:{name:'Sandbox Client',email:'sandbox.client@example.invalid',eventDate:'2030-01-15'},proposal:{status:'draft',lineItems:[{id:'collection',catalogItemId:item.id,description:item.name,quantity:1,unitPrice:Number(item.unitPrice||2500),amount:Number(item.unitPrice||2500)}],subtotal:Number(item.unitPrice||2500),taxAmount:Number(item.unitPrice||2500)*(taxRate/100),total:Number(item.unitPrice||2500)*(1+taxRate/100)},createdAt:at,updatedAt:at};
+    await runWithTenant(profile,async()=>{const index=((await sales.get('records/index',{type:'json'} as any))||[]) as any[];await sales.setJSON('records/'+proposalId,proposal);await sales.setJSON('records/index',[proposal,...index.filter((row:any)=>row?.id!==proposalId)].slice(0,1500));});
+    const loaded=await runWithTenant(profile,()=>sales.get('records/'+proposalId,{type:'json'} as any)) as any;
+    updated=await saveOrganization(context,profile,(current)=>({...current,onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'test-workflow'])]}}));
+    step={id:stage,passed:loaded?.tenantId===profile.id&&loaded?.proposal?.status==='draft',detail:'Test proposal created and read back inside Tenant #2.',proposalId};
+  }
+
+  if(stage==='activation'){
+    const required=['organization','locale','venues','branding','tax-profile','catalog','team','domains','integrations','templates','subscription','test-workflow'];
+    const missing=required.filter((id)=>!(organization.onboarding?.completedSteps||[]).includes(id));
+    updated=missing.length?organization:await saveOrganization(context,profile,(current)=>({...current,status:'active',onboarding:{...current.onboarding,activatedAt:at}}));
+    step={id:stage,passed:missing.length===0&&updated.status==='active',detail:missing.length?'Activation blocked; missing completed stages: '+missing.join(', '):'Sandbox tenant activated after required onboarding stages were present.',missing};
+  }
+
+  const report={
+    runId,tenantId:profile.id,generatedAt:now(),mode:'sandbox-safe-stage',requestedStage:stage,
+    externalSideEffects:{dns:false,quickbooks:false,signwell:false,email:false,microsoft:false,stripe:false},
+    step,
+    summary:{steps:1,passed:step.passed?1:0,failed:step.passed?0:1,clean:Boolean(step.passed),activated:updated.status==='active'},
+  };
+  await appendPlatformSandboxQaHistory(context,profile.id,{kind:'onboarding-stage',stage,runId:report.runId,generatedAt:report.generatedAt,summary:report.summary,report});
+  return {organization:updated,report};
+}
+

@@ -6,6 +6,8 @@ const org=fs.readFileSync('netlify/functions/_shared/organization.ts','utf8');
 const page=fs.readFileSync('src/pages/admin/platform/index.astro','utf8');
 const sandboxQa=fs.readFileSync('netlify/functions/_shared/tenant-sandbox-qa.ts','utf8');
 const storage=fs.readFileSync('netlify/functions/_shared/tenant-storage.ts','utf8');
+const health=fs.readFileSync('netlify/functions/_shared/system-health.ts','utf8');
+const isolationWorkflow=fs.readFileSync('.github/workflows/venueloom-tenant-isolation-ci.yml','utf8');
 
 assert.match(api,/VENUELOOM_SUPER_ADMIN_EMAILS/,'platform access must be explicitly allowlisted');
 assert.match(api,/createPlatformSupportSession/,'support sessions must use control-plane audit storage');
@@ -39,6 +41,33 @@ assert.match(page,/Create safe sandbox tenant/,'UI must expose isolated Tenant #
 assert.match(page,/Legacy Blob migration dashboard/,'Super Admin must show the detailed migration dashboard');
 assert.match(page,/Run leakage test/,'Super Admin must expose the runtime leakage test');
 assert.match(page,/Run onboarding QA/,'Super Admin must expose the sandbox onboarding journey');
+
+assert.match(api,/reset-sandbox-tenant/,'platform API must support safe sandbox reset');
+assert.match(api,/delete-sandbox-tenant/,'platform API must support safe sandbox deletion');
+assert.match(api,/run-sandbox-onboarding-stage/,'platform API must support individual onboarding-stage reruns');
+assert.match(api,/purgeSandboxTenantData/,'sandbox reset and deletion must purge tenant-scoped data');
+assert.match(api,/deleteSandboxOrganizationControlPlane/,'sandbox deletion must remove disposable control-plane records');
+assert.match(sandboxQa,/appendPlatformSandboxQaHistory/,'sandbox QA results must be archived outside disposable tenant data');
+assert.match(sandboxQa,/SANDBOX_ONBOARDING_STAGES/,'sandbox onboarding stages must be explicitly allowlisted');
+assert.match(page,/Reset sandbox data/,'Super Admin must expose sandbox reset');
+assert.match(page,/Delete sandbox tenant/,'Super Admin must expose sandbox deletion');
+assert.match(page,/Rerun selected stage/,'Super Admin must expose individual onboarding-stage reruns');
+assert.match(page,/Historical QA reports/,'Super Admin must show retained sandbox QA history');
+assert.match(page,/Leakage surfaces/,'Super Admin must show per-surface isolation results');
+assert.match(api,/sandboxReadinessSnapshot/,'platform detail must evaluate the real-tenant readiness gate');
+assert.match(api,/readGithubMainWorkflowSignal/,'readiness gate must consume a signed isolation-CI signal');
+assert.match(api,/Credential separation/,'readiness gate must require credential separation');
+assert.match(api,/Domain isolation/,'readiness gate must require domain isolation');
+assert.match(api,/Storage isolation/,'readiness gate must require storage isolation');
+assert.match(api,/Billing isolation/,'readiness gate must require billing isolation');
+assert.match(page,/Tenant ready for real onboarding/,'Super Admin must expose the single readiness gate');
+assert.match(page,/LOCKED — every readiness control must be green/,'readiness gate must remain locked until every control is green');
+assert.match(page,/statusPill/,'readiness criteria must render strict green yellow red states');
+assert.match(health,/readGithubMainWorkflowSignal/,'System Health must retain signed GitHub identity by workflow');
+assert.match(health,/github\/main\/workflows\//,'signed workflow identities must use independent storage keys');
+assert.match(isolationWorkflow,/push:/,'tenant isolation CI must run on main after merge');
+assert.match(isolationWorkflow,/id-token: write/,'tenant isolation CI must be able to publish a signed OIDC result');
+assert.match(isolationWorkflow,/Publish signed isolation-CI identity/,'main isolation CI must publish signed production readiness evidence');
 assert.doesNotMatch(api,/@netlify\/blobs/,'platform function must not bypass the control-plane/storage abstractions');
 
 console.log('VenueLoom Super Admin regression test passed.');
