@@ -1,5 +1,5 @@
 import type { Context } from '@netlify/functions';
-import { tenantById, type TenantProfile } from '../../../src/data/tenants/index.ts';
+import { tenantProfiles, type TenantProfile } from '../../../src/data/tenants/index.ts';
 import {
   createOrganization,
   listMemberships,
@@ -33,6 +33,12 @@ const SANDBOX_DOMAIN='tenant2-sandbox.venueloom.invalid';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function now(){return new Date().toISOString();}
+
+function legacyTenantOne(){
+  const tenant=tenantProfiles.find((row)=>row.storage.legacyDataBelongsToTenant);
+  if(!tenant)throw new Error('The legacy-compatible Tenant 1 profile is missing.');
+  return tenant;
+}
 
 export type SandboxCreator={id:string;email:string};
 
@@ -240,8 +246,7 @@ export async function runTenant2IsolationProbe(
 ){
   const startedAt=now();
   const runId='iso_'+crypto.randomUUID().replaceAll('-').slice(0,20);
-  const koa=tenantById('koa-events');
-  if(!koa)throw new Error('Koa Tenant 1 profile is missing.');
+  const koa=legacyTenantOne();
   const sandbox=profileFromOrganization(sandboxOrganization);
 
   const before=await tenantMigrationAudit(context,koa,undefined,{deep:false});
@@ -404,8 +409,7 @@ export async function runTenant2OnboardingJourney(
 ){
   const startedAt=now();
   const {organization:initial,profile:initialProfile}=await ensureTenant2Sandbox(context,creator);
-  const koa=tenantById('koa-events');
-  if(!koa)throw new Error('Koa Tenant 1 profile is missing.');
+  const koa=legacyTenantOne();
   const koaBefore=inventoryState(await tenantMigrationAudit(context,koa,undefined,{deep:false}));
   const steps:any[]=[];
   let organization=initial;
@@ -546,7 +550,7 @@ export async function sandboxFleetCheck(context:Context) {
   const tenants=await listActiveTenantProfiles(context);
   return {
     tenantIds:tenants.map((row)=>row.id),
-    hasKoa:tenants.some((row)=>row.id==='koa-events'),
+    hasTenantOne:tenants.some((row)=>row.storage.legacyDataBelongsToTenant),
     hasSandbox:tenants.some((row)=>row.id===SANDBOX_ID),
   };
 }
