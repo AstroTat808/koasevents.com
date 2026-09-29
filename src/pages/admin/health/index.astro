@@ -110,9 +110,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <span data-accounting-health-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
           </div>
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Invariant result</p><strong data-accounting-invariant-result class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-invariant-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Chris Sibel live estimate</p><strong data-accounting-live-client class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-live-client-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Accepted / booked clients</p><strong data-accounting-dynamic-clients class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-dynamic-clients-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">QuickBooks NON tax code</p><strong data-accounting-non-status class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-non-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last successful check</p><strong data-accounting-last-success class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-sample-count class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current taxable payload</p><strong data-accounting-taxable-payload class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Must remain $0.00 to prevent tax-on-tax.</p></article>
@@ -961,6 +962,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingInvariantDetail=document.querySelector('[data-accounting-invariant-detail]');
     const accountingLiveClient=document.querySelector('[data-accounting-live-client]');
     const accountingLiveClientDetail=document.querySelector('[data-accounting-live-client-detail]');
+    const accountingDynamicClients=document.querySelector('[data-accounting-dynamic-clients]');
+    const accountingDynamicClientsDetail=document.querySelector('[data-accounting-dynamic-clients-detail]');
     const accountingNonStatus=document.querySelector('[data-accounting-non-status]');
     const accountingNonDetail=document.querySelector('[data-accounting-non-detail]');
     const accountingLastSuccess=document.querySelector('[data-accounting-last-success]');
