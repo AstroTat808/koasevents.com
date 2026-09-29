@@ -1665,9 +1665,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(auditRemaining)auditRemaining.textContent=money(audit.totalRemainingBalance||0);
       if(auditStatus){
         auditStatus.textContent=flagged.length?flagged.length+' need review':'Reconciled';
-        auditStatus.className='rounded-full px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] '+(flagged.length?'bg-red-50 text-red-700 border border-red-200':'bg-[var(--koa-sand)] text-[var(--koa-forest)]');
+        auditStatus.className='rounded-full px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] '+(flagged.length?'bg-red-50 text-red-700 border border-red-200':'bg-emerald-100 text-emerald-800 border border-emerald-200');
       }
-      if(auditGenerated)auditGenerated.textContent=audit.generatedAt?'Audit generated '+when(audit.generatedAt)+'. Values reflect the latest CRM-stored QuickBooks synchronization.':'';
+      if(auditGenerated)auditGenerated.textContent=audit.generatedAt?'Audit generated '+when(audit.generatedAt)+'. Each row identifies whether its estimate was verified live in QuickBooks or is showing the stored CRM mirror.':'';
       if(!auditList)return;
       auditList.innerHTML='';
       if(!rows.length){
@@ -1677,12 +1677,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const visible=flagged.length?flagged:rows.slice(0,8);
       visible.forEach((row)=>{
         const card=document.createElement('article');
-        card.className='rounded-xl border '+(row.reconciled?'border-[var(--koa-line)] bg-[var(--koa-ivory)]':'border-red-200 bg-red-50/55')+' p-4';
+        card.className='rounded-xl border '+(row.reconciled?'border-emerald-200 bg-emerald-50/55':'border-red-200 bg-red-50/55')+' p-4';
         const top=document.createElement('div');top.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
         const left=document.createElement('div');
         const title=document.createElement('a');title.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';title.className='text-sm font-bold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]';title.textContent=row.clientName||row.recordId;
         const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';const estimateView=quickBooksAuditEstimateView(row);meta.textContent=[row.recordId,row.eventDate,estimateView.label].filter(Boolean).join(' · ');
-        left.append(title,meta);
+        const verification=document.createElement('p');verification.className='mt-1 text-[.68rem] font-semibold '+(estimateView.liveVerified?'text-emerald-800':'text-[var(--koa-ink)]/45');verification.textContent=estimateView.liveVerified
+          ? 'QuickBooks verified live '+when(estimateView.verifiedAt)+' · '+estimateView.label
+          : estimateView.linked
+            ? 'CRM mirror only · live QuickBooks verification not recorded yet · '+estimateView.label
+            : 'CRM mirror only · no linked QuickBooks estimate';
+        left.append(title,meta,verification);
         const actions=document.createElement('div');actions.className='flex flex-wrap items-center gap-2';
         const link=document.createElement('a');link.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';link.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';link.textContent='Open client →';
         actions.appendChild(link);
@@ -1700,7 +1705,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(estimateView.total)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
         card.appendChild(totals);
         if(row.reconciled){
-          const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-[var(--koa-forest)]';ok.textContent='All stored accounting values reconcile.';
+          const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-emerald-800';ok.textContent=estimateView.liveVerified?'QuickBooks verified live. Accounting reconciles and the review flag is cleared.':'Accounting reconciles and the review flag is cleared.';
           card.appendChild(ok);
         }else{
           const issues=document.createElement('div');issues.className='mt-3 grid gap-2';
