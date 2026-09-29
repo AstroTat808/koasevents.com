@@ -66,6 +66,42 @@ export function emailLogoAttachment() {
   };
 }
 
+export function emailInlineAssetAudit(html: unknown, attachments: any[] = []) {
+  const referencedContentIds = Array.from(
+    new Set(
+      Array.from(String(html ?? '').matchAll(/cid:([^"'\\s>]+)/gi))
+        .map((match) => String(match[1] || '').trim())
+        .filter(Boolean),
+    ),
+  );
+  const attachedContentIds = Array.from(
+    new Set(
+      (Array.isArray(attachments) ? attachments : [])
+        .map((attachment) => String(attachment?.content_id || attachment?.contentId || '').trim())
+        .filter(Boolean),
+    ),
+  );
+  const attached = new Set(attachedContentIds);
+  const missingContentIds = referencedContentIds.filter((contentId) => !attached.has(contentId));
+  return {
+    ok: missingContentIds.length === 0,
+    referencedContentIds,
+    attachedContentIds,
+    missingContentIds,
+    detail: missingContentIds.length
+      ? 'Missing inline attachment for CID: ' + missingContentIds.join(', ')
+      : referencedContentIds.length
+        ? 'Every CID image reference has a matching inline attachment.'
+        : 'No CID image references were found in the email HTML.',
+  };
+}
+
+export function assertEmailInlineAssets(html: unknown, attachments: any[] = []) {
+  const audit = emailInlineAssetAudit(html, attachments);
+  if (!audit.ok) throw new Error('Email inline asset validation failed. ' + audit.detail);
+  return audit;
+}
+
 export function emailDocumentOpen(args: {
   title: string;
   previewText?: string;
