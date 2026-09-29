@@ -181,3 +181,71 @@ export function evaluateChrisSibelLiveInvariant(record, estimate) {
     failures,
   };
 }
+
+
+export function evaluateLiveAccountingInvariant(record, estimate) {
+  const proposalTotal = money(record?.proposal?.total);
+  const estimateTotal = estimate ? money(estimate?.TotalAmt) : null;
+  const salesLines = (Array.isArray(estimate?.Line) ? estimate.Line : [])
+    .filter((line) => line?.DetailType === 'SalesItemLineDetail');
+  const taxableLines = salesLines.filter((line) =>
+    String(line?.SalesItemLineDetail?.TaxCodeRef?.value || '').trim().toUpperCase() !== 'NON'
+  );
+  const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const failures = [];
+
+  if (!record) failures.push('CRM record is missing');
+  if (record && proposalTotal <= 0) failures.push('CRM proposal total is not positive');
+  if (!estimate) failures.push('live QuickBooks estimate is missing');
+  if (estimate && estimateTotal !== proposalTotal) {
+    failures.push('live QuickBooks estimate total does not equal the CRM proposal total');
+  }
+  if (estimate && lineTotal !== proposalTotal) {
+    failures.push('live QuickBooks estimate sales lines do not equal the CRM proposal total');
+  }
+  if (taxableLines.length) {
+    failures.push('live QuickBooks estimate contains taxable sales lines');
+  }
+
+  return {
+    ok: failures.length === 0,
+    recordId: String(record?.id || ''),
+    clientName: String(record?.customer?.name || ''),
+    eventDate: String(record?.customer?.eventDate || '').slice(0, 10),
+    proposalStatus: String(record?.proposal?.status || '').toLowerCase(),
+    estimateId: String(estimate?.Id || record?.accounting?.quickbooks?.estimateId || ''),
+    estimateDocNumber: String(estimate?.DocNumber || record?.accounting?.quickbooks?.estimateDocNumber || ''),
+    proposalTotal,
+    estimateTotal,
+    lineTotal,
+    taxableLineCount: taxableLines.length,
+    failures,
+  };
+}
+
+export function accountingInvariantEligible(record) {
+  const status = String(record?.proposal?.status || '').trim().toLowerCase();
+  if (!['accepted', 'booked'].includes(status)) return false;
+  if (money(record?.proposal?.total) <= 0) return false;
+  if (String(record?.proposal?.source || '').trim().toLowerCase() === 'quickbooks-import') return false;
+  if (record?.archivedAt || record?.deletedAt) return false;
+  return true;
+}
+
+export function summarizeLiveAccountingInvariants(records, estimatesById) {
+  const eligible = (Array.isArray(records) ? records : []).filter(accountingInvariantEligible);
+  const rows = eligible.map((record) => {
+    const estimateId = String(record?.accounting?.quickbooks?.estimateId || '').trim();
+    const estimate = estimateId && estimatesById instanceof Map ? estimatesById.get(estimateId) : null;
+    return evaluateLiveAccountingInvariant(record, estimate || null);
+  });
+  const failed = rows.filter((row) => !row.ok);
+  return {
+    ok: failed.length === 0,
+    eligibleCount: rows.length,
+    passedCount: rows.length - failed.length,
+    failedCount: failed.length,
+    rows,
+    failures: failed.slice(0, 25),
+  };
+}
