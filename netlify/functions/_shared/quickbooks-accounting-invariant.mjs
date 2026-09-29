@@ -86,6 +86,47 @@ export function evaluateAccountingTaxInvariant() {
   };
 }
 
+export function evaluateLiveQuickBooksEstimateInvariant(estimate, options = {}) {
+  const expectedSubtotal = money(options.expectedSubtotal ?? 15000);
+  const expectedTax = money(options.expectedTax ?? 706.80);
+  const expectedTotal = money(options.expectedTotal ?? 15706.80);
+  const salesLines = (Array.isArray(estimate?.Line) ? estimate.Line : [])
+    .filter((line) => line?.DetailType === 'SalesItemLineDetail');
+  const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const taxableLines = salesLines.filter((line) =>
+    String(line?.SalesItemLineDetail?.TaxCodeRef?.value || '').trim().toUpperCase() !== 'NON'
+  );
+  const taxablePayload = money(taxableLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const quickBooksCalculatedTax = money(estimate?.TxnTaxDetail?.TotalTax || 0);
+  const total = money(estimate?.TotalAmt || 0);
+  const lineAmounts = salesLines.map((line) => money(line?.Amount || 0));
+  const failures = [];
+
+  if (!estimate?.Id) failures.push('live QuickBooks estimate is missing an id');
+  if (total !== expectedTotal) failures.push('live QuickBooks estimate total is not $' + expectedTotal.toFixed(2));
+  if (lineTotal !== expectedTotal) failures.push('live QuickBooks estimate line total is not $' + expectedTotal.toFixed(2));
+  if (!lineAmounts.includes(expectedSubtotal)) failures.push('live QuickBooks estimate is missing the $' + expectedSubtotal.toFixed(2) + ' service line');
+  if (!lineAmounts.includes(expectedTax)) failures.push('live QuickBooks estimate is missing the $' + expectedTax.toFixed(2) + ' CRM tax line');
+  if (taxablePayload !== 0) failures.push('live QuickBooks estimate exposes $' + taxablePayload.toFixed(2) + ' as taxable');
+  if (quickBooksCalculatedTax !== 0) failures.push('QuickBooks added $' + quickBooksCalculatedTax.toFixed(2) + ' tax on top of CRM pricing');
+
+  return {
+    ok: failures.length === 0,
+    estimateId: String(estimate?.Id || ''),
+    docNumber: String(estimate?.DocNumber || ''),
+    expectedSubtotal,
+    expectedTax,
+    expectedTotal,
+    total,
+    lineTotal,
+    taxablePayload,
+    quickBooksCalculatedTax,
+    allNonTaxable: taxableLines.length === 0 && salesLines.length > 0,
+    salesLineCount: salesLines.length,
+    failures,
+  };
+}
+
 export function inspectQuickBooksNonTaxCode(queryResponse) {
   const rows = Array.isArray(queryResponse?.QueryResponse?.TaxCode)
     ? queryResponse.QueryResponse.TaxCode
