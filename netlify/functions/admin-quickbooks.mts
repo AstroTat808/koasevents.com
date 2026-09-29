@@ -710,11 +710,20 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
     });
 
   const flagged = rows.filter((row: any) => !row.reconciled);
+  const historicalRows = rows.filter((row: any) => row?.reconciliationMode === 'quickbooks-history');
+  const historicalObservedIssueCount = historicalRows.reduce(
+    (sum: number, row: any) => sum + (Array.isArray(row?.observedIssues) ? row.observedIssues.length : 0),
+    0,
+  );
   return {
     generatedAt: new Date().toISOString(),
     clientCount: rows.length,
     reconciledCount: rows.length - flagged.length,
     flaggedCount: flagged.length,
+    currentBookingFlaggedCount: flagged.filter((row: any) => row?.reconciliationMode !== 'quickbooks-history').length,
+    historicalCount: historicalRows.length,
+    historicalObservedIssueCount,
+    historicalRows,
     totalProposalValue: Math.round(rows.reduce((sum: number, row: any) => sum + row.proposalTotal, 0) * 100) / 100,
     totalPaymentsReceived: Math.round(rows.reduce((sum: number, row: any) => sum + row.paymentsReceived, 0) * 100) / 100,
     totalRemainingBalance: Math.round(rows.reduce((sum: number, row: any) => sum + row.remainingBalance, 0) * 100) / 100,
