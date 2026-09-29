@@ -12,6 +12,7 @@ import {
   healthCoverageSummary,
   hydrateProductionReleaseMetadata,
   persistHealth,
+  readAccountingIncidentTimeline,
   readHealthAlertPolicy,
   readHealthHistory,
   readLatestHealth,
@@ -297,7 +298,7 @@ async function office365HealthSummary(context:Context,deployments:any=null){
   };
 }
 
-function accountingHealthSummary(latest:any,history:any[]){
+function accountingHealthSummary(latest:any,history:any[],incidentTimeline:any[]=[]){
   const rows=[latest,...(Array.isArray(history)?history:[])].filter(Boolean);
   const seen=new Set<string>();
   const samples=rows
@@ -369,9 +370,10 @@ function accountingHealthSummary(latest:any,history:any[]){
     liveNonTaxId:String(latestSample?.accountingDetails?.liveNonTaxId||''),
     liveNonTaxName:String(latestSample?.accountingDetails?.liveNonTaxName||''),
     liveClientInvariant:latestSample?.accountingDetails?.liveClientInvariant||null,
+    dynamicClientInvariants:latestSample?.accountingDetails?.dynamicClientInvariants||null,
     lastSuccessfulAt:String(lastSuccessful?.checkedAt||''),
     failures,
-    alertHistory:alertHistory.reverse().slice(0,20),
+    alertHistory:(Array.isArray(incidentTimeline)&&incidentTimeline.length?incidentTimeline:alertHistory.reverse()).slice(0,50),
     sampleCount:samples.length,
   };
 }
@@ -761,6 +763,12 @@ export default async (req:Request,context:Context) => {
     ()=>weeklySystemHealthExecutiveSummary(context),
     {} as any,
   );
+  const accountingIncidentTimeline=await safeHealthSection(
+    enrichmentWarnings,
+    'Accounting incident timeline',
+    ()=>readAccountingIncidentTimeline(context,200),
+    [] as any[],
+  );
   const uptime=calculateUptime(uptimeHistory);
   const incidents=calculateIncidents(uptimeHistory);
   const hydratedReleases=await safeHealthSection(
@@ -784,7 +792,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
-    accountingHealth:accountingHealthSummary(latest,history),
+    accountingHealth:accountingHealthSummary(latest,history,accountingIncidentTimeline),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
