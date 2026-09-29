@@ -95,6 +95,19 @@ async function organizationSummary(context:Context,organization:any){
   });
 }
 
+async function sandboxQaSnapshot(context:Context,organization:any){
+  const profile=profileFromOrganization(organization);
+  if(!organization?.featureFlags?.['platform.sandbox'])return null;
+  return runWithTenant(profile,async()=>{
+    const store=tenantStoreFor(context,profile,'systemHealth');
+    const [leakage,onboarding]=await Promise.all([
+      store.get('qa/tenant-isolation/latest',{type:'json'} as any).catch(()=>null),
+      store.get('qa/onboarding/latest',{type:'json'} as any).catch(()=>null),
+    ]);
+    return {leakage,onboarding};
+  });
+}
+
 async function platformSnapshot(context:Context){
   const index=await listOrganizations(context);
   const organizations=[];
@@ -142,6 +155,7 @@ export default async(req:Request,context:Context)=>{
         supportSession:{...session,token:undefined},
         organization:await organizationSummary(context,organization),
         migrationAudit,
+        sandboxQa:await sandboxQaSnapshot(context,organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -155,6 +169,7 @@ export default async(req:Request,context:Context)=>{
       return Response.json({
         organization:await organizationSummary(context,organization),
         migrationAudit,
+        sandboxQa:await sandboxQaSnapshot(context,organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
