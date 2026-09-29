@@ -19,6 +19,7 @@ import {
   recordQuickBooksCrmSyncHistory,
   resolveQuickBooksCustomerMatch,
 } from './quickbooks-crm-sync-review';
+import { findExistingBookingCandidate } from './duplicate-bookings.mjs';
 
 const CRM_RECORD_LIMIT = 1500;
 const QUERY_PAGE_SIZE = 1000;
@@ -956,7 +957,29 @@ async function processQuickBooksInboundPlan(context: Context, job: any, plan: an
       return;
     }
     const recordId = clean(plan?.predictedRecordId,120) || sanitizeQboRecordId(customerId);
-    const collision = records.find((entry) => clean(entry?.id,120) === recordId);
+    const candidate = {
+      id:recordId,
+      source:'quickbooks-import',
+      customer:{
+        name:baseNameFromDisplayName(customer?.DisplayName) || clean(customer?.DisplayName,180) || recordId,
+        email:qboCustomerEmail(customer),
+        phone:qboCustomerPhone(customer),
+        eventDate:eventDateFromDisplayName(customer?.DisplayName),
+      },
+    };
+    const existingBooking = findExistingBookingCandidate(records, candidate);
+    if(existingBooking){
+      record = existingBooking;
+      job.matchedRecordIds = arrayUnique([...(job.matchedRecordIds || []), clean(record.id,120)]);
+      job.conflicts.push({
+        type:'duplicate-booking-prevented',
+        recordId:clean(record.id,120),
+        quickBooksCustomerId:customerId,
+        quickBooksCustomerName:customerName,
+        detail:'A matching CRM booking already existed for this client and event date. QuickBooks sync reused that record instead of creating a duplicate.',
+      });
+    }
+    const collision = record ? null : records.find((entry) => clean(entry?.id,120) === recordId);
     if (collision) {
       const linkedId = clean(collision?.accounting?.quickbooks?.customerId,100);
       if (linkedId !== customerId) {
@@ -971,7 +994,7 @@ async function processQuickBooksInboundPlan(context: Context, job: any, plan: an
         return;
       }
       record = collision;
-    } else {
+    } else if(!record) {
       const now = new Date().toISOString();
       record = {
         id:recordId,
