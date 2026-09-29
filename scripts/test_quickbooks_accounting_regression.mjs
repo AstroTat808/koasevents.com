@@ -8,6 +8,7 @@ import {
   buildQuickBooksMilestoneInvoiceLine,
   evaluateAccountingTaxInvariant,
   evaluateChrisSibelLiveInvariant,
+  evaluateLiveClientAccountingInvariant,
 } from '../netlify/functions/_shared/quickbooks-accounting-invariant.mjs';
 
 const record = {
@@ -120,3 +121,52 @@ assert.equal(failedLiveInvariant.historicalTaxOnTaxDetected, true, 'The exact hi
 assert.ok(failedLiveInvariant.failures.some((failure) => failure.includes('estimate total')), 'The failure must identify the live QuickBooks total mismatch.');
 
 console.log('Live accounting invariant regression passed: Chris Sibel $15,706.80 is green and $16,446.90 is red.');
+
+
+const dynamicBookedRecord = {
+  id: 'KEP-DYNAMIC-BOOKED',
+  customer: { name: 'Dynamic Booked Client', eventDate: '2027-11-08' },
+  proposal: { status: 'booked', total: 9200 },
+  accounting: { quickbooks: { estimateId: '920' } },
+};
+const dynamicHealthyEstimate = {
+  Id: '920',
+  DocNumber: 'DYN-920',
+  TotalAmt: 9200,
+  Line: [
+    {
+      Id: '1',
+      Amount: 9200,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+    },
+  ],
+};
+const dynamicHealthy = evaluateLiveClientAccountingInvariant(dynamicBookedRecord, dynamicHealthyEstimate);
+assert.equal(dynamicHealthy.ok, true, 'Any accepted/booked client should pass when live QuickBooks equals the CRM proposal total.');
+assert.equal(dynamicHealthy.proposalTotal, 9200);
+assert.equal(dynamicHealthy.estimateTotal, 9200);
+assert.equal(dynamicHealthy.taxableLineCount, 0);
+
+const dynamicTaxable = evaluateLiveClientAccountingInvariant(dynamicBookedRecord, {
+  ...dynamicHealthyEstimate,
+  Line: [{
+    ...dynamicHealthyEstimate.Line[0],
+    SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+  }],
+});
+assert.equal(dynamicTaxable.ok, false, 'A taxable live QuickBooks line must fail the dynamic client invariant.');
+assert.ok(dynamicTaxable.failures.some((failure) => failure.includes('taxable sales lines')));
+
+const dynamicMismatch = evaluateLiveClientAccountingInvariant(dynamicBookedRecord, {
+  ...dynamicHealthyEstimate,
+  TotalAmt: 9300,
+  Line: [{
+    ...dynamicHealthyEstimate.Line[0],
+    Amount: 9300,
+  }],
+});
+assert.equal(dynamicMismatch.ok, false, 'A live QuickBooks total that differs from CRM must fail the dynamic client invariant.');
+assert.ok(dynamicMismatch.failures.some((failure) => failure.includes('estimate total')));
+
+console.log('Dynamic client accounting invariant regression passed: booked clients must match live QuickBooks totals with zero taxable lines.');
