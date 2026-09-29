@@ -4,8 +4,10 @@ import {
   summarizeQuickBooksEstimateLines,
 } from '../netlify/functions/_shared/quickbooks-estimate-lines.mjs';
 import {
+  CHRIS_SIBEL_ACCOUNTING_INVARIANT,
   buildQuickBooksMilestoneInvoiceLine,
   evaluateAccountingTaxInvariant,
+  evaluateChrisSibelLiveInvariant,
 } from '../netlify/functions/_shared/quickbooks-accounting-invariant.mjs';
 
 const record = {
@@ -52,3 +54,69 @@ assert.equal(milestoneInvoiceLine.SalesItemLineDetail?.TaxCodeRef?.value, 'NON',
 const invariant = evaluateAccountingTaxInvariant();
 assert.equal(invariant.ok, true, 'Runtime accounting invariant must remain healthy.');
 assert.deepEqual(invariant.failures, [], 'Runtime accounting invariant must have no failures.');
+
+
+const liveRecord = {
+  id: CHRIS_SIBEL_ACCOUNTING_INVARIANT.recordId,
+  customer: {
+    name: CHRIS_SIBEL_ACCOUNTING_INVARIANT.clientName,
+    eventDate: CHRIS_SIBEL_ACCOUNTING_INVARIANT.eventDate,
+  },
+  proposal: {
+    total: CHRIS_SIBEL_ACCOUNTING_INVARIANT.expectedTotal,
+  },
+  accounting: {
+    quickbooks: {
+      estimateId: '176',
+    },
+  },
+};
+
+const healthyLiveEstimate = {
+  Id: '176',
+  DocNumber: '1042',
+  TotalAmt: 15706.80,
+  Line: [
+    {
+      Id: '14',
+      Amount: 15000,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+    },
+    {
+      Id: '15',
+      Amount: 706.80,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+    },
+  ],
+};
+const healthyLiveInvariant = evaluateChrisSibelLiveInvariant(liveRecord, healthyLiveEstimate);
+assert.equal(healthyLiveInvariant.ok, true, 'Live Chris Sibel estimate must reconcile at exactly $15,706.80.');
+assert.equal(healthyLiveInvariant.taxableLineCount, 0, 'Live Chris Sibel estimate must have zero taxable sales lines.');
+assert.equal(healthyLiveInvariant.historicalTaxOnTaxDetected, false);
+
+const historicalTaxOnTaxEstimate = {
+  ...healthyLiveEstimate,
+  TotalAmt: 16446.90,
+  Line: [
+    {
+      Id: '14',
+      Amount: 15000,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+    },
+    {
+      Id: '15',
+      Amount: 706.80,
+      DetailType: 'SalesItemLineDetail',
+      SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+    },
+  ],
+};
+const failedLiveInvariant = evaluateChrisSibelLiveInvariant(liveRecord, historicalTaxOnTaxEstimate);
+assert.equal(failedLiveInvariant.ok, false, 'Historical $16,446.90 tax-on-tax must fail the live invariant.');
+assert.equal(failedLiveInvariant.historicalTaxOnTaxDetected, true, 'The exact historical tax-on-tax total must be identified.');
+assert.ok(failedLiveInvariant.failures.some((failure) => failure.includes('estimate total')), 'The failure must identify the live QuickBooks total mismatch.');
+
+console.log('Live accounting invariant regression passed: Chris Sibel $15,706.80 is green and $16,446.90 is red.');
