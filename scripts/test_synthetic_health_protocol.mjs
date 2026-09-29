@@ -193,6 +193,16 @@ mustMatch(
 );
 mustMatch(
   productionQa,
+  /dynamicClientStatus/,
+  'Production QA must require the dynamic accepted/booked client invariant status.',
+);
+mustMatch(
+  githubHealthSignal,
+  /dynamicClientFailedCount/,
+  'Signed production verification must expose dynamic client invariant failures.',
+);
+mustMatch(
+  productionQa,
   /p\.get\("status"\)==204/,
   'Production QA must fail unless every live synthetic probe returns HTTP 204.',
 );
