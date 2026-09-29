@@ -36,12 +36,25 @@ const linkedWithDocNumber = quickBooksAuditEstimateView({
   estimateId: '98765',
   estimateDocNumber: '1042',
   estimateTotal: 15706.80,
+  estimateVerifiedAt: '2026-09-29T11:30:00.000Z',
 });
 assert.equal(linkedWithDocNumber.label, 'Estimate #1042');
 assert.equal(linkedWithDocNumber.total, 15706.80);
+assert.equal(linkedWithDocNumber.liveVerified, true);
+assert.equal(linkedWithDocNumber.verificationSource, 'quickbooks_live');
+assert.equal(linkedWithDocNumber.verifiedAt, '2026-09-29T11:30:00.000Z');
 assert.equal(linkedWithDocNumber.consistent, true);
 
-for (const row of [missing, staleMirrorWithoutLink, linkedWithoutDocNumber, linkedWithDocNumber]) {
+const linkedMirrorOnly = quickBooksAuditEstimateView({
+  estimateId: '76543',
+  estimateDocNumber: '1043',
+  estimateTotal: 15706.80,
+});
+assert.equal(linkedMirrorOnly.liveVerified, false);
+assert.equal(linkedMirrorOnly.verificationSource, 'crm_mirror');
+assert.equal(linkedMirrorOnly.verifiedAt, '');
+
+for (const row of [missing, staleMirrorWithoutLink, linkedWithoutDocNumber, linkedWithDocNumber, linkedMirrorOnly]) {
   assert.ok(
     !(row.label === 'No QBO estimate' && row.total !== null),
     'Regression: the audit must never show “No QBO estimate” with a QuickBooks estimate total.',
