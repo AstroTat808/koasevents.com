@@ -1,6 +1,6 @@
 import type { Config } from '@netlify/functions';
 import { requireCapability, operationsRole, ROLE_LABELS } from './_shared/admin';
-import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText, type EmailBrandKey } from './_shared/email-brand';
 import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 
@@ -108,11 +108,13 @@ export default async(req:Request)=>{
   const replyTo=clean(tenantEnv(tenant,'CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO'),240)||tenant.contact.email;
   const subject='[TEST] '+template.subject+' · '+(brand==='mobile'?tenant.displayName+' Mobile Bar':tenant.displayName);
 
+  const attachments=[emailLogoAttachment()];
+  assertEmailInlineAssets(rendered.html,attachments);
   try{
     const response=await fetch('https://api.resend.com/emails',{
       method:'POST',
       headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json'},
-      body:JSON.stringify({from,to:[to],subject,html:rendered.html,text:rendered.text,attachments:[emailLogoAttachment()],reply_to:replyTo}),
+      body:JSON.stringify({from,to:[to],subject,html:rendered.html,text:rendered.text,attachments,reply_to:replyTo}),
       signal:AbortSignal.timeout(12_000),
     });
     const result:any=await response.json().catch(()=>({}));

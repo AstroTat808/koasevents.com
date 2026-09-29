@@ -1,4 +1,4 @@
-import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
+import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailLogoUrl, emailSignature, emailSignatureText } from './email-brand.ts';
 import { resolveEmailRoute } from './email-routing.ts';
 import { resolveTenant } from './tenant.ts';
 import { tenantEnv } from './tenant-env.ts';
@@ -378,15 +378,18 @@ export async function sendLeadNotification(record: LeadRecord) {
   const route = await resolveEmailRoute('lead-notification');
   const from = String(tenantEnv(resolveTenant(),'LEAD_EMAIL_FROM','KOA_LEAD_EMAIL_FROM') || 'Koa’s Events <leads@koasevents.com>').trim();
   const subject = heading(record) + ' — ' + (record.customer?.name || record.id);
+  const renderedHtml = buildHtml(record);
+  const attachments = [emailLogoAttachment()];
+  assertEmailInlineAssets(renderedHtml, attachments);
   const requestBody = JSON.stringify({
     from,
     to: route.to,
     cc: route.cc.length ? route.cc : undefined,
     bcc: route.bcc.length ? route.bcc : undefined,
     subject,
-    html: buildHtml(record),
+    html: renderedHtml,
     text: buildText(record),
-    attachments: [emailLogoAttachment()],
+    attachments,
     reply_to: record.customer?.email || undefined,
   });
   const idempotencyKey = ('koa-lead-' + record.id + '-' + String(record.source || 'website')).slice(0, 256);
@@ -553,6 +556,8 @@ async function sendWithResend(args: {
   const apiKey = String(tenantEnv(resolveTenant(),'RESEND_API_KEY') || '').trim();
   if (!apiKey) return { sent: false, configured: false, id: '' };
 
+  const attachments = [emailLogoAttachment()];
+  assertEmailInlineAssets(args.html, attachments);
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -569,7 +574,7 @@ async function sendWithResend(args: {
         subject: args.subject,
         html: args.html,
         text: args.text,
-        attachments: [emailLogoAttachment()],
+        attachments,
         reply_to: args.replyTo || undefined,
       }),
       signal: AbortSignal.timeout(12_000),

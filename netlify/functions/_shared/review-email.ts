@@ -1,4 +1,4 @@
-import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
+import { emailBrandForRecord, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
 import { resolveTenant } from './tenant.ts';
 import { tenantEnv } from './tenant-env.ts';
 
@@ -110,6 +110,9 @@ export async function sendReviewRequest(record: ReviewRecord) {
   const from = String(tenantEnv(resolveTenant(),'CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM') || (resolveTenant().displayName+' <'+resolveTenant().contact.email+'>')).trim();
   const replyTo = String(tenantEnv(resolveTenant(),'CLIENT_REPLY_TO','KOA_CLIENT_REPLY_TO') || resolveTenant().contact.email).trim();
 
+  const renderedHtml = html(record);
+  const attachments = [emailLogoAttachment()];
+  assertEmailInlineAssets(renderedHtml, attachments);
   try {
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -122,9 +125,9 @@ export async function sendReviewRequest(record: ReviewRecord) {
         from,
         to: [email],
         subject: 'Mahalo from ' + brandName + ' — would you share your experience?',
-        html: html(record),
+        html: renderedHtml,
         text: text(record),
-        attachments: [emailLogoAttachment()],
+        attachments,
         reply_to: replyTo,
       }),
       signal: AbortSignal.timeout(12_000),

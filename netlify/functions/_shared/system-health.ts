@@ -1,4 +1,4 @@
-import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
 import { tenantStoreFor } from './tenant-storage';
 import { resolveTenant } from './tenant';
@@ -1949,11 +1949,13 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     'System Health: https://koasevents.com/admin/health/','',
     emailSignatureText(),
   ].filter(Boolean).join('\n');
+  const attachments=[emailLogoAttachment()];
+  assertEmailInlineAssets(html,attachments);
   try{
     const response=await fetch('https://api.resend.com/emails',{
       method:'POST',
       headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-health-email-'+current.id).slice(0,256)},
-      body:JSON.stringify({from,to:recipients,subject,html,text,attachments:[emailLogoAttachment()]}),
+      body:JSON.stringify({from,to:recipients,subject,html,text,attachments}),
       signal:AbortSignal.timeout(12_000),
     });
     const body:any=await response.json().catch(()=>({}));
