@@ -8,6 +8,8 @@ import {
   buildQuickBooksMilestoneInvoiceLine,
   evaluateAccountingTaxInvariant,
   evaluateChrisSibelLiveInvariant,
+  evaluateLiveAccountingInvariant,
+  summarizeLiveAccountingInvariants,
 } from '../netlify/functions/_shared/quickbooks-accounting-invariant.mjs';
 
 const record = {
@@ -120,3 +122,60 @@ assert.equal(failedLiveInvariant.historicalTaxOnTaxDetected, true, 'The exact hi
 assert.ok(failedLiveInvariant.failures.some((failure) => failure.includes('estimate total')), 'The failure must identify the live QuickBooks total mismatch.');
 
 console.log('Live accounting invariant regression passed: Chris Sibel $15,706.80 is green and $16,446.90 is red.');
+
+
+const acceptedRecord = {
+  id: 'KEP-DYNAMIC-1',
+  customer: { name: 'Dynamic Client', eventDate: '2027-10-10' },
+  proposal: { status: 'accepted', total: 2500 },
+  accounting: { quickbooks: { estimateId: 'DYN-1' } },
+};
+const acceptedEstimate = {
+  Id: 'DYN-1',
+  TotalAmt: 2500,
+  Line: [{
+    Amount: 2500,
+    DetailType: 'SalesItemLineDetail',
+    SalesItemLineDetail: { TaxCodeRef: { value: 'NON' } },
+  }],
+};
+const acceptedInvariant = evaluateLiveAccountingInvariant(acceptedRecord, acceptedEstimate);
+assert.equal(acceptedInvariant.ok, true, 'Accepted client invariant must pass when totals match and lines are NON-taxable.');
+
+const dynamicSummary = summarizeLiveAccountingInvariants(
+  [
+    acceptedRecord,
+    {
+      id: 'KEP-DYNAMIC-2',
+      customer: { name: 'Broken Client', eventDate: '2027-11-11' },
+      proposal: { status: 'booked', total: 3000 },
+      accounting: { quickbooks: { estimateId: 'DYN-2' } },
+    },
+    {
+      id: 'KEP-IMPORT-OLD',
+      proposal: { status: 'accepted', total: 1000, source: 'quickbooks-import' },
+      accounting: { quickbooks: { estimateId: 'OLD' } },
+    },
+  ],
+  new Map([
+    ['DYN-1', acceptedEstimate],
+    ['DYN-2', {
+      Id: 'DYN-2',
+      TotalAmt: 3150,
+      Line: [{
+        Amount: 3150,
+        DetailType: 'SalesItemLineDetail',
+        SalesItemLineDetail: { TaxCodeRef: { value: 'TAX' } },
+      }],
+    }],
+  ]),
+);
+assert.equal(dynamicSummary.eligibleCount, 2, 'Dynamic invariant must cover CRM-managed accepted/booked clients and exclude historical QuickBooks imports.');
+assert.equal(dynamicSummary.passedCount, 1);
+assert.equal(dynamicSummary.failedCount, 1);
+assert.equal(dynamicSummary.ok, false);
+assert.equal(dynamicSummary.failures[0].recordId, 'KEP-DYNAMIC-2');
+assert.ok(dynamicSummary.failures[0].failures.some((failure) => failure.includes('estimate total')));
+assert.ok(dynamicSummary.failures[0].failures.some((failure) => failure.includes('taxable')));
+
+console.log('Dynamic accepted/booked accounting invariant regression passed.');
