@@ -13,6 +13,7 @@ const [
   healthUi,
   githubHealthSignal,
   productionQa,
+  postDeployVerification,
 ] = await Promise.all([
   read('netlify/functions/_shared/system-health.ts'),
   read('netlify/functions/_shared/synthetic-health.ts'),
@@ -23,6 +24,7 @@ const [
   read('src/pages/admin/health/index.astro'),
   read('netlify/functions/github-main-health-signal.ts'),
   read('.github/workflows/production-visual-qa.yml'),
+  read('netlify/functions/post-deploy-verification.mts'),
 ]);
 
 function mustMatch(source, pattern, message) {
@@ -193,6 +195,71 @@ mustMatch(
   productionQa,
   /p\.get\("status"\)==204/,
   'Production QA must fail unless every live synthetic probe returns HTTP 204.',
+);
+mustMatch(
+  systemHealth,
+  /export function criticalIntegrationsSummary/,
+  'System Health must publish one Critical Integrations summary for the four release-critical probes.',
+);
+mustMatch(
+  systemHealth,
+  /lastLiveVerification/,
+  'Critical Integrations must expose the most recent live verification time.',
+);
+mustMatch(
+  systemHealth,
+  /oldestCached/,
+  'Critical Integrations must expose the oldest cached result when hourly checks are using cache.',
+);
+mustMatch(
+  healthUi,
+  /data-critical-integrations-card/,
+  'System Health UI must render the Critical Integrations summary card.',
+);
+mustMatch(
+  healthUi,
+  /data-critical-integrations-oldest-cache/,
+  'Critical Integrations UI must display the oldest cached result.',
+);
+mustMatch(
+  systemHealth,
+  /deployments\/releases\/by-id\//,
+  'Each production release must have a durable per-deploy audit record outside the rolling release list.',
+);
+mustMatch(
+  systemHealth,
+  /syntheticProbeVerification/,
+  'Production release records must carry the four-probe verification evidence.',
+);
+mustMatch(
+  postDeployVerification,
+  /syntheticProbeReleaseVerification\(current,'post-deploy-scheduled'\)/,
+  'Scheduled post-deploy verification must archive the four synthetic probes with the release.',
+);
+mustMatch(
+  githubHealthSignal,
+  /recordProductionRelease\(context,/,
+  'Signed production QA must persist the live four-probe release audit before reporting success.',
+);
+mustMatch(
+  githubHealthSignal,
+  /rollbackFailedProductionRelease/,
+  'Signed production QA must invoke the automatic rollback guard when release-critical probes fail.',
+);
+mustMatch(
+  systemHealth,
+  /\/deploys\/'\+encodeURIComponent\(target\.deployId\)\+'\/restore'/,
+  'Automatic rollback must restore the last production deploy whose four-probe audit passed.',
+);
+mustMatch(
+  productionQa,
+  /auditRecorded/,
+  'Production QA must fail if the per-release synthetic probe audit could not be persisted.',
+);
+mustMatch(
+  productionQa,
+  /http_status=/,
+  'Production QA must capture a failing verification response so rollback evidence remains visible before CI fails.',
 );
 
 // This gate intentionally validates the shared protocol contract rather than making network calls.
