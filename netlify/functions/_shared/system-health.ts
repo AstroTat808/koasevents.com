@@ -11,6 +11,7 @@ import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
+import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -2626,9 +2627,84 @@ export type ProductionRelease = {
   recordedAt:string;
 };
 
+const PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments/releases/audit-index';
+
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
   const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
   return rows.slice(0,Math.max(1,Math.min(100,limit)));
+}
+
+export async function readAllProductionReleaseAudits(context:Context):Promise<ProductionRelease[]> {
+  const store=healthStore(context);
+  const [rolling,indexed,listResult]=await Promise.all([
+    readProductionReleases(context,100),
+    store.get(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,{type:'json'}).catch(()=>[] as any),
+    store.list({prefix:'deployments/releases/by-id/'}).catch(()=>({blobs:[]} as any)),
+  ]);
+  const deployIds=new Set<string>();
+  for(const id of Array.isArray(indexed)?indexed:[]){
+    const value=clean(id,120);
+    if(value)deployIds.add(value);
+  }
+  for(const row of rolling){
+    const value=clean(row?.deployId,120);
+    if(value)deployIds.add(value);
+  }
+  for(const blob of listResult?.blobs||[]){
+    const key=clean(blob?.key,400);
+    const prefix='deployments/releases/by-id/';
+    if(key.startsWith(prefix)){
+      const value=clean(key.slice(prefix.length),120);
+      if(value)deployIds.add(value);
+    }
+  }
+  const records=await Promise.all([...deployIds].map(async(deployId)=>{
+    const stored=await store.get('deployments/releases/by-id/'+deployId,{type:'json'}).catch(()=>null) as ProductionRelease|null;
+    return stored||rolling.find((row)=>row.deployId===deployId)||null;
+  }));
+  return records
+    .filter((row):row is ProductionRelease=>Boolean(row?.deployId))
+    .sort((a,b)=>Date.parse(String(b.publishedAt||b.recordedAt||''))-Date.parse(String(a.publishedAt||a.recordedAt||'')));
+}
+
+export async function rollbackReadySummary(context:Context,currentDeployId='') {
+  const releases=await readProductionReleases(context,100);
+  const current=clean(currentDeployId||context.deploy?.id,120);
+  const target:any=selectRollbackTargetFromReleases(releases,current);
+  return {
+    ready:Boolean(target?.deployId),
+    currentDeployId:current,
+    targetDeployId:clean(target?.deployId,120),
+    targetCommit:clean(target?.commit,120),
+    targetPublishedAt:clean(target?.publishedAt,80),
+    targetVerifiedAt:clean(target?.syntheticProbeVerification?.checkedAt,80),
+    source:target?.deployId?'production-release-audit':'unavailable',
+    detail:target?.deployId
+      ? 'If the current release fails a live Critical Integrations gate, rollback protection will restore this last-known-good production deploy.'
+      : 'No earlier production deploy with a complete passing 4/4 Critical Integrations audit is available yet.',
+  };
+}
+
+export async function runSafeCriticalIntegrationRollbackDrill(context:Context,input:any={}) {
+  const environment=clean(context.deploy?.context||'unknown',80);
+  if(environment==='production') throw new Error('Critical Integrations rollback drill is blocked in production.');
+  const releases=await readProductionReleases(context,100);
+  const report=runCriticalIntegrationRollbackDrill({
+    environment,
+    releases,
+    failedProbeId:clean(input?.failedProbeId,120)||'synthetic-signwell-webhook',
+    currentDeployId:clean(input?.currentDeployId,120)||('drill-'+clean(context.deploy?.id,80)),
+    currentCommit:clean(input?.currentCommit,120)||'non-production-drill',
+    startedAt:new Date().toISOString(),
+  });
+  const drillId=new Date().toISOString().replace(/[:.]/g,'-')+'-'+clean(context.deploy?.id,60);
+  const record={...report,drillId,deployContext:environment,deployId:clean(context.deploy?.id,120),recordedAt:new Date().toISOString()};
+  const store=healthStore(context);
+  await Promise.all([
+    store.setJSON('deployments/rollback-drills/latest',record),
+    store.setJSON('deployments/rollback-drills/by-id/'+drillId,record),
+  ]);
+  return record;
 }
 
 export function featureLabelsForFiles(files:string[]) {
@@ -2917,8 +2993,11 @@ export async function recordProductionRelease(context:Context,input:any) {
   const next=[record,...existing.filter(row=>row.deployId!==deployId)]
     .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))
     .slice(0,100);
+  const currentAuditIndex=((await store.get(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,{type:'json'}).catch(()=>[]))||[]) as string[];
+  const nextAuditIndex=[deployId,...currentAuditIndex.map((id)=>clean(id,120)).filter((id)=>id&&id!==deployId)];
   await Promise.all([
     store.setJSON('deployments/releases',next),
+    store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex),
     // Durable per-deploy audit records are never trimmed when the dashboard's rolling
     // release list is capped. This preserves the exact synthetic probe evidence for
     // every production deploy by its immutable Netlify deploy id.
@@ -2938,11 +3017,8 @@ export async function rollbackFailedProductionRelease(
   const deployId=clean(input?.deployId,120);
   const commit=clean(input?.commit,120);
   const checkedAt=new Date().toISOString();
-  const releases=await readProductionReleases(context,100);
-  const target=releases
-    .filter((row)=>row.deployId&&row.deployId!==deployId)
-    .filter((row)=>row.syntheticProbeVerification?.status==='passed')
-    .sort((a,b)=>Date.parse(b.publishedAt)-Date.parse(a.publishedAt))[0]||null;
+  const releases=await readAllProductionReleaseAudits(context);
+  const target:any=selectRollbackTargetFromReleases(releases,deployId);
   const siteId=clean(context.site?.id||Netlify.env.get('SITE_ID'),120);
   const token=clean(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
 
