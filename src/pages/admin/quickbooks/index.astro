@@ -2783,6 +2783,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           data=await api({action:'sync-two-way-continue',jobId:String(job.jobId||'')});
           job=data.syncJob||job;
           state.manualSyncJob=job;
+          if(data.lastSyncFailure!==undefined)state.lastSyncFailure=data.lastSyncFailure;
           if(data.failure)state.lastSyncFailure=data.failure;
           if(data.accountingAudit)state.accountingAudit=data.accountingAudit;
           renderSyncJobProgress();
