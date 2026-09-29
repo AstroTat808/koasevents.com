@@ -1509,6 +1509,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       healthDetailSeverity.className='eyebrow '+(severity==='critical'?'text-red-800':severity==='warning'?'text-amber-800':severity==='info'?'text-sky-800':'text-emerald-800');
       healthDetailTitle.textContent=String(row.name||'Health check');
       const deploymentDetails=row?.deploymentDetails||null;
+      const syntheticDetails=row?.syntheticDetails||null;
       const deploymentMeta=deploymentDetails
         ? [
             deploymentDetails.githubCommit?'GitHub '+String(deploymentDetails.githubCommit).slice(0,12):'',
@@ -1519,8 +1520,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             deploymentDetails.verificationSourceLabel?('Verified by '+String(deploymentDetails.verificationSourceLabel)):'',
           ].filter(Boolean).join(' · ')
         : '';
+      const syntheticMeta=syntheticDetails
+        ? [
+            String(syntheticDetails.source||'live').toUpperCase(),
+            'Expected HTTP '+String(syntheticDetails.expectedStatus||204),
+            syntheticDetails.returnedMarker?'Marker '+String(syntheticDetails.returnedMarker):'No marker returned',
+            syntheticDetails.lastLiveCheckedAt?'Last live '+new Date(syntheticDetails.lastLiveCheckedAt).toLocaleString():'',
+          ].filter(Boolean).join(' · ')
+        : '';
       healthDetailMeta.textContent=[
         String(row.kind||'check')+' · '+String(row.path||'')+' · HTTP '+String(row.status||'—')+' · '+String(row.ms||0)+' ms',
+        syntheticMeta,
         deploymentMeta,
       ].filter(Boolean).join(' · ');
       if(healthDetailIssueType){
@@ -1529,7 +1539,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         healthDetailIssueType.classList.toggle('hidden',!issueType);
       }
       healthDetailError.textContent=String(row.detail||'No additional detail was recorded.');
-      if(deploymentDetails){
+      if(syntheticDetails){
+        const source=String(syntheticDetails.source||'live').toUpperCase();
+        const returned=String(syntheticDetails.returnedMarker||'none');
+        const expected=String(syntheticDetails.expectedMarker||'');
+        const lastLive=syntheticDetails.lastLiveCheckedAt?new Date(syntheticDetails.lastLiveCheckedAt).toLocaleString():'unknown';
+        healthDetailVerification.textContent=source+' synthetic verification · last live '+lastLive+' · returned marker '+returned+(expected?' · expected '+expected:'')+' · expected HTTP '+String(syntheticDetails.expectedStatus||204);
+        healthDetailVerificationWrap.classList.remove('hidden');
+      }else if(deploymentDetails){
         const verificationLabel=String(deploymentDetails.verificationSourceLabel||deploymentDetails.verificationSource||'Unverified');
         const githubSource=String(deploymentDetails.githubMetadataSource||'').trim();
         healthDetailVerification.textContent=verificationLabel+(githubSource?' · '+githubSource:'');
@@ -1580,8 +1597,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const badge=document.createElement('span');badge.className='shrink-0 rounded-full px-3 py-1 text-[.58rem] font-black uppercase tracking-[.08em] '+badgePalette;badge.textContent=badgeText;
       top.append(left,badge);
       const detail=document.createElement('p');detail.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='HTTP '+(row.status||'—')+' · '+row.ms+' ms · '+(row.detail||'');
+      const synthetic=row?.syntheticDetails||null;
+      let diagnostics=null;
+      if(synthetic){
+        diagnostics=document.createElement('div');
+        diagnostics.className='mt-3 flex flex-wrap gap-2 text-[.54rem] font-black uppercase tracking-[.07em]';
+        const source=document.createElement('span');
+        const sourceName=String(synthetic.source||'live').toLowerCase();
+        source.className='rounded-full px-2.5 py-1 '+(sourceName==='cached'?'bg-amber-100 text-amber-900':'bg-emerald-100 text-emerald-800');
+        source.textContent=sourceName==='cached'?'Cached result':'Live result';
+        const http=document.createElement('span');
+        http.className='rounded-full bg-white/80 px-2.5 py-1 text-[var(--koa-forest)]';
+        http.textContent='HTTP '+String(row.status||'—')+' / '+String(synthetic.expectedStatus||204);
+        const marker=document.createElement('span');
+        marker.className='rounded-full bg-white/80 px-2.5 py-1 text-[var(--koa-forest)]';
+        marker.textContent='Marker '+String(synthetic.returnedMarker||'none');
+        const verified=document.createElement('span');
+        verified.className='rounded-full bg-white/80 px-2.5 py-1 text-[var(--koa-forest)]';
+        verified.textContent='Last live '+(synthetic.lastLiveCheckedAt?new Date(synthetic.lastLiveCheckedAt).toLocaleString():'unknown');
+        diagnostics.append(source,http,marker,verified);
+      }
       const more=document.createElement('p');more.className='mt-3 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';more.textContent='Open explanation →';
-      card.append(top,detail,more);return card;
+      card.append(top,detail);
+      if(diagnostics)card.appendChild(diagnostics);
+      card.append(more);return card;
     }
 
     function renderRootCauseSummary(rows){
