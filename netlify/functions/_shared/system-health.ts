@@ -1196,7 +1196,7 @@ async function configuredLiveAccountingInvariant(context:Context){
   if(!matches.length&&estimates.length===1)matches=estimates;
 
   if(matches.length!==1){
-    const status=matches.length>1?'ambiguous':'missing';
+    const status:'ambiguous'|'missing'=matches.length>1?'ambiguous':'missing';
     return {
       configured:true,
       verified:true,
@@ -1234,7 +1234,7 @@ async function configuredLiveAccountingInvariant(context:Context){
     configured:true,
     verified:true,
     ok:failures.length===0,
-    status:failures.length?'mismatch':'healthy',
+    status:(failures.length?'mismatch':'healthy') as 'mismatch'|'healthy',
     checkedAt,
     label:String(config.label||'Live accounting invariant'),
     recordId:String(config.recordId||''),
