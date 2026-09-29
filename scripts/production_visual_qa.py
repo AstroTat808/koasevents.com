@@ -41,6 +41,7 @@ ADMIN_ROUTES=[
  ("admin-security","/admin/security/"),
  ("admin-seo","/admin/seo/"),
  ("admin-health","/admin/health/"),
+ ("admin-platform","/admin/platform/"),
  ("admin-insurance","/admin/insurance/"),
  ("admin-vendors","/admin/vendors/")
 ]
@@ -62,6 +63,7 @@ PROTECTED_ADMIN_APIS=[
  ("security-api","/api/admin/security?days=7"),
  ("local-seo-api","/api/admin/local-seo"),
  ("system-health-api","/api/admin/health"),
+ ("platform-admin-api","/api/admin/platform"),
 ]
 
 # Hybrid APIs intentionally expose a public read surface while protecting mutations.
@@ -192,6 +194,7 @@ def source_mode():
   SRC/"pages/admin/seo/index.astro",
   SRC/"pages/admin/staff/index.astro",
   SRC/"pages/admin/health/index.astro",
+  SRC/"pages/admin/platform/index.astro",
  ]
  for path in protected_admin_pages:
   text=path.read_text(encoding="utf-8",errors="ignore")
@@ -538,7 +541,7 @@ def admin_mode(browser_name):
         const s=getComputedStyle(el),r=el.getBoundingClientRect();
         return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
       };
-      const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-admin-ui]','[data-app]','[data-admin-links]'];
+      const selectors=['[data-unauthorized]','[data-login-form]','[data-role-warning]','[data-denied]','[data-admin-ui]','[data-app]','[data-admin-links]'];
       const visibleSelectors=selectors.filter((selector)=>visible(document.querySelector(selector)));
       return {visibleSelectors,title:document.title,bodyText:(document.body.innerText||'').trim().slice(0,500)};
     }""")
@@ -563,6 +566,47 @@ def admin_mode(browser_name):
     "consoleErrors":console_errors,"requestFailed":request_failed,"failure":detail,"screenshot":str(shot)
    })
    page.close()
+
+  # Authorized VenueLoom Super Admin startup regression. This proves the deployed
+  # platform page can initialize its protected shell without touching production tenant data.
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
+  platform_session_fixture={
+   "email":"qa-superadmin@koasevents.test","role":"admin","roles":["admin"],"isAdmin":True,
+   "permissions":["admin"],"capabilities":["admin"],"accessBlocked":False,
+   "app_metadata":{"roles":["admin"],"permissions":["admin"]},
+   "appMetadata":{"roles":["admin"],"permissions":["admin"]}
+  }
+  platform_fixture={
+   "generatedAt":"2026-09-29T00:00:00Z",
+   "organizations":[],
+   "supportSessions":[],
+   "summary":{"organizations":0,"active":0,"trial":0,"attention":0,"subscriptionsActive":0}
+  }
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(platform_session_fixture)))
+  page.route("**/api/admin/platform**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(platform_fixture)))
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/platform/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-app]:not(.hidden)",state="visible",timeout=8000)
+   page.wait_for_selector("[data-create-sandbox]",state="visible",timeout=3000)
+   title=page.locator("h1").inner_text().strip()
+   create_label=page.locator("[data-create-sandbox]").inner_text().strip()
+   if "VenueLoom Super Admin" not in title or "Create safe sandbox tenant" not in create_label:
+    detail="VenueLoom Super Admin did not reach its expected initialized state."
+   elif page_errors:
+    detail="VenueLoom Super Admin JavaScript page errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="VenueLoom Super Admin startup regression: "+str(exc)
+  shot=root/"platform-authorized-startup.png"
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"platform-authorized-startup","path":"/admin/platform/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/platform/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
 
   # Authorized-style Business CRM boot regression test. The protected API is mocked
   # so this catches client startup failures without storing production credentials in CI.
