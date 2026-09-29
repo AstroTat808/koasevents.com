@@ -8,7 +8,7 @@ import {
   type MembershipRecord,
   type OrganizationRecord,
 } from './organization';
-import { runWithTenant } from './tenant';
+import { runForEachTenant, runWithTenant } from './tenant';
 import { tenantStoreFor, type TenantStorageDomain } from './tenant-storage';
 
 type LeakageSurface = {
@@ -126,6 +126,19 @@ export async function runCrossTenantLeakageTest(
     'crm-lifecycle','lead-response-reminders','quickbooks-hourly-reconciliation','health-monitor',
     'office365-calendar-sync','vendor-insurance-reminders','post-deploy-verification','review-requests',
   ];
+  const iterator=await runForEachTenant(context,async(tenant)=>({
+    tenantId:tenant.id,
+    schedulerProbeKey:tenantStoreFor(context,tenant,'systemHealth').canonicalKey('qa/scheduler-readonly-probe'),
+  }));
+  const koaIterator=iterator.find((row)=>row.tenantId===koa.id);
+  const sandboxIterator=iterator.find((row)=>row.tenantId===sandbox.id);
+  const scheduledPassed=Boolean(
+    koaIterator?.ok
+    && sandboxIterator?.ok
+    && koaIterator.value?.schedulerProbeKey
+    && sandboxIterator.value?.schedulerProbeKey
+    && koaIterator.value.schedulerProbeKey!==sandboxIterator.value.schedulerProbeKey
+  );
   const report={
     runId,
     sandboxTenantId:sandbox.id,
@@ -133,16 +146,17 @@ export async function runCrossTenantLeakageTest(
     generatedAt:now(),
     surfaces:results,
     scheduledJobs:{
-      passed:true,
-      mode:'build-gated',
+      passed:scheduledPassed,
+      mode:'runtime-iterator-plus-build-gate',
       jobs:scheduledJobs,
-      evidence:'Each scheduled function is build-gated to use runForEachTenant; runtime storage sentinels above verify tenant namespaces independently.',
+      iterator,
+      evidence:'The production tenant iterator resolved Koa and Tenant #2 to different canonical scheduler namespaces; each scheduled function is also build-gated to use runForEachTenant.',
     },
     summary:{
       surfaces:results.length,
       passed:results.filter((row)=>row.passed).length,
       failed:results.filter((row)=>!row.passed).length,
-      clean:results.every((row)=>row.passed),
+      clean:results.every((row)=>row.passed) && scheduledPassed,
     },
   };
 
