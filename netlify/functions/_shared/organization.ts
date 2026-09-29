@@ -469,6 +469,25 @@ export async function deleteSandboxOrganizationControlPlane(
   return { id, membershipsRemoved: memberships.length };
 }
 
+export async function clearSandboxMemberships(
+  context: Context | undefined,
+  tenantId: string,
+) {
+  const id = clean(tenantId, 120);
+  const store = controlStore(context);
+  const organization = await store.get('organizations/' + id, { type: 'json' }) as OrganizationRecord | null;
+  if (!organization || !organization.slug.startsWith('vl-sandbox-') || organization.featureFlags?.['platform.sandbox'] !== true) {
+    throw new Error('Only VenueLoom sandbox organizations can be reset with this operation.');
+  }
+  const memberships = ((await store.get('memberships/' + id + '/index', { type: 'json' })) || []) as MembershipRecord[];
+  for (const membership of memberships) {
+    if (membership?.userId) await store.delete('memberships/' + id + '/' + membership.userId);
+  }
+  await store.delete('memberships/' + id + '/index');
+  return memberships.length;
+}
+
+
 
 export async function listOrganizations(context?: Context) {
   const store = controlStore(context);
