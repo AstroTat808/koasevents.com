@@ -4,7 +4,9 @@ import {
   createOrganization,
   listMemberships,
   readOrganization,
+  readTenantMigrationAuditReport,
   saveOrganization,
+  saveTenantMigrationAuditReport,
   type OrganizationDomain,
   type OrganizationTemplate,
   type OrganizationVenue,
@@ -222,7 +224,10 @@ const ONBOARDING_STEPS = [
 
 function readiness(organization: any, memberships: any[], integrations: ReturnType<typeof integrationReadiness>, tenant: any) {
   const verifiedDomain = (organization.domains || []).some((row: any) => row.status === 'verified');
-  const configuredIntegration = Object.values(integrations).some((row: any) => row.configured);
+  const configuredIntegration = Object.values(integrations).some((row: any) => row.configured)
+    || Boolean(organization.sandbox?.enabled && (organization.integrations || []).some((row:any)=>
+      row.status === 'configured' && String(row.credentialRef || '').startsWith('sandbox:')
+    ));
   const checks: Record<string, boolean> = {
     organization: Boolean(organization.displayName && organization.legalName),
     locale: Boolean(organization.locale && organization.currency && organization.timezone),
@@ -249,10 +254,12 @@ export default async (req: Request, context: Context) => {
   const integrations = integrationReadiness(tenant);
 
   if (req.method === 'GET') {
+    const migrationAudit = await readTenantMigrationAuditReport(context, tenant.id);
     return Response.json({
       organization,
       memberships,
       integrations,
+      migrationAudit,
       onboarding: readiness(organization, memberships, integrations, tenant),
       catalog: {
         settingsUrl: '/admin/catalog/',
@@ -302,7 +309,8 @@ export default async (req: Request, context: Context) => {
   }
 
   if (action === 'run-migration-audit') {
-    const migrationAudit = await tenantMigrationAudit(context, tenant);
+    const rawAudit = await tenantMigrationAudit(context, tenant, undefined, { deep:true });
+    const migrationAudit = await saveTenantMigrationAuditReport(context, tenant.id, rawAudit);
     return Response.json({ ok:true, migrationAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
   }
 
