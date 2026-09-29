@@ -1660,7 +1660,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const rows=Array.isArray(audit.rows)?audit.rows:[];
       const flagged=rows.filter((row)=>!row.reconciled);
       if(auditClients)auditClients.textContent=String(Number(audit.clientCount||0));
-      if(auditFlagged)auditFlagged.textContent=String(Number(audit.flaggedCount||0));
+      if(auditFlagged){
+        const flaggedCount=Number(audit.flaggedCount||0);
+        auditFlagged.textContent=String(flaggedCount);
+        auditFlagged.className='display mt-2 block text-3xl '+(flaggedCount?'text-red-800':'text-emerald-800');
+        const flaggedCard=auditFlagged.closest('article');
+        flaggedCard?.classList.toggle('bg-emerald-50',flaggedCount===0);
+        flaggedCard?.classList.toggle('border',flaggedCount===0);
+        flaggedCard?.classList.toggle('border-emerald-200',flaggedCount===0);
+        flaggedCard?.classList.toggle('bg-red-50',flaggedCount>0);
+        flaggedCard?.classList.toggle('border-red-200',flaggedCount>0);
+      }
       if(auditPaid)auditPaid.textContent=money(audit.totalPaymentsReceived||0);
       if(auditRemaining)auditRemaining.textContent=money(audit.totalRemainingBalance||0);
       if(auditStatus){
