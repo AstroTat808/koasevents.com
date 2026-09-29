@@ -240,6 +240,32 @@ function jsonHash(value:any) {
   return createHash('sha256').update(stableJson(value)).digest('hex');
 }
 
+function bytesHash(value:ArrayBuffer) {
+  return createHash('sha256').update(Buffer.from(value)).digest('hex');
+}
+
+async function normalizedBlobHash(
+  store:any,
+  key:string,
+  tenant:TenantProfile,
+) {
+  try {
+    const value=await store.get(key,{type:'json'} as any);
+    if(value!=null)return {hash:jsonHash(scopeJsonValue(tenant,value)),kind:'json'};
+  } catch {}
+  try {
+    const value=await store.get(key,{type:'arrayBuffer'} as any) as ArrayBuffer | null;
+    if(value!=null)return {hash:bytesHash(value),kind:'binary'};
+  } catch {}
+  return {hash:'',kind:'missing'};
+}
+
+function aggregateManifestHash(rows:Array<{key:string;hash:string}>) {
+  return createHash('sha256')
+    .update(rows.slice().sort((a,b)=>a.key.localeCompare(b.key)).map((row)=>row.key+':'+row.hash).join('\n'))
+    .digest('hex');
+}
+
 export async function tenantMigrationAudit(
   context: Context,
   tenant: TenantProfile,
@@ -250,6 +276,7 @@ export async function tenantMigrationAudit(
 ) {
   const canonical=canonicalStore(context);
   const results:any[]=[];
+  const auditedAt=new Date().toISOString();
 
   for(const domain of domains) {
     const prefix=tenantDataPrefix(tenant,domain);
@@ -264,10 +291,49 @@ export async function tenantMigrationAudit(
       ? await legacy.list({})
       : {blobs:[] as any[]};
     const legacyKeys=new Set((legacyList.blobs||[]).map((blob:any)=>String(blob.key||'')));
+    const legacyInfoByKey=new Map((legacyList.blobs||[]).map((blob:any)=>[String(blob.key||''),blob]));
+    const canonicalInfoByKey=new Map((canonicalList.blobs||[]).map((blob:any)=>{
+      const raw=String(blob.key||'');
+      const logical=raw.startsWith(prefix)?raw.slice(prefix.length):raw;
+      return [logical,blob];
+    }));
 
     const missingCanonical=[...legacyKeys].filter((key)=>!canonicalKeys.has(key)).sort();
     const canonicalOnly=[...canonicalKeys].filter((key)=>!legacyKeys.has(key)).sort();
     const critical:any[]=[];
+    const objectComparisons:any[]=[];
+    const legacyManifest:Array<{key:string;hash:string}>=[];
+    const canonicalMirrorManifest:Array<{key:string;hash:string}>=[];
+
+    if(legacy && tenant.storage.legacyDataBelongsToTenant) {
+      for(const key of [...legacyKeys].sort()) {
+        const legacyInfo:any=legacyInfoByKey.get(key);
+        const canonicalInfo:any=canonicalInfoByKey.get(key);
+        const matchingEtag=Boolean(
+          legacyInfo?.etag
+          && canonicalInfo?.etag
+          && String(legacyInfo.etag)===String(canonicalInfo.etag)
+        );
+        const legacyHash=matchingEtag
+          ? {hash:String(legacyInfo.etag),kind:'etag'}
+          : await normalizedBlobHash(legacy,key,tenant);
+        const canonicalHash=!canonicalKeys.has(key)
+          ? {hash:'',kind:'missing'}
+          : matchingEtag
+            ? {hash:String(canonicalInfo.etag),kind:'etag'}
+            : await normalizedBlobHash(canonical,prefix+key,tenant);
+        const matches=Boolean(legacyHash.hash) && legacyHash.hash===canonicalHash.hash;
+        legacyManifest.push({key,hash:legacyHash.hash});
+        if(canonicalHash.hash)canonicalMirrorManifest.push({key,hash:canonicalHash.hash});
+        objectComparisons.push({
+          key,
+          kind:matchingEtag?'etag':legacyHash.kind,
+          legacyHash:legacyHash.hash,
+          canonicalHash:canonicalHash.hash,
+          matches,
+        });
+      }
+    }
 
     for(const key of MIGRATION_CRITICAL_KEYS[domain]||[]) {
       const legacyValue=legacy && tenant.storage.legacyDataBelongsToTenant
@@ -288,25 +354,46 @@ export async function tenantMigrationAudit(
       });
     }
 
+    const mirroredCount=objectComparisons.filter((row)=>row.matches).length;
+    const checksumMismatch=objectComparisons.filter((row)=>!row.matches && row.canonicalHash).length;
+    const objectMismatches=objectComparisons.filter((row)=>!row.matches);
+    const safeToRetireLegacy=!tenant.storage.legacyDataBelongsToTenant
+      ? true
+      : missingCanonical.length===0
+        && checksumMismatch===0
+        && critical.every((row)=>row.matches);
+
     results.push({
       domain,
       legacyStore:tenant.storage.compatibilityBlobStores[domain]||'',
+      canonicalNamespace:prefix,
       legacyCount:legacyKeys.size,
       canonicalCount:canonicalKeys.size,
+      mirroredCount,
       missingCanonicalCount:missingCanonical.length,
+      checksumMismatchCount:checksumMismatch,
       canonicalOnlyCount:canonicalOnly.length,
+      legacyChecksum:legacyManifest.length?aggregateManifestHash(legacyManifest):'',
+      canonicalMirrorChecksum:canonicalMirrorManifest.length?aggregateManifestHash(canonicalMirrorManifest):'',
       missingCanonical:missingCanonical.slice(0,100),
+      checksumMismatches:objectMismatches.filter((row)=>row.canonicalHash).slice(0,100),
       canonicalOnly:canonicalOnly.slice(0,100),
       critical,
-      safeToRetireLegacy:
-        missingCanonical.length===0
-        && critical.every((row)=>row.matches),
+      safeToRetireLegacy,
+      retirementStatus:!tenant.storage.legacyDataBelongsToTenant?'not-applicable':safeToRetireLegacy?'safe':'blocked',
+      safeToRetireAsOf:safeToRetireLegacy?auditedAt:'',
+      auditedAt,
+      blockers:[
+        ...(missingCanonical.length?[missingCanonical.length+' legacy object(s) are not mirrored']:[]),
+        ...(checksumMismatch?[checksumMismatch+' mirrored object(s) have checksum mismatches']:[]),
+        ...(!critical.every((row)=>row.matches)?['Critical-record fingerprints do not all match']:[]),
+      ],
     });
   }
 
   return {
     tenantId:tenant.id,
-    generatedAt:new Date().toISOString(),
+    generatedAt:auditedAt,
     canonicalStore:CANONICAL_STORE,
     legacyDataBelongsToTenant:tenant.storage.legacyDataBelongsToTenant,
     domains:results,
@@ -316,6 +403,8 @@ export async function tenantMigrationAudit(
       legacyObjects:results.reduce((sum,row)=>sum+row.legacyCount,0),
       canonicalObjects:results.reduce((sum,row)=>sum+row.canonicalCount,0),
       missingCanonical:results.reduce((sum,row)=>sum+row.missingCanonicalCount,0),
+      checksumMismatches:results.reduce((sum,row)=>sum+row.checksumMismatchCount,0),
+      mirroredObjects:results.reduce((sum,row)=>sum+row.mirroredCount,0),
       criticalMismatches:results.reduce((sum,row)=>sum+row.critical.filter((item:any)=>!item.matches).length,0),
       safeToRetireLegacy:results.every((row)=>row.safeToRetireLegacy),
     },

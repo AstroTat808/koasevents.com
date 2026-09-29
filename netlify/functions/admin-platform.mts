@@ -13,6 +13,7 @@ import {
 } from './_shared/organization.ts';
 import { tenantMigrationAudit, tenantStoreFor } from './_shared/tenant-storage.ts';
 import { runWithTenant } from './_shared/tenant.ts';
+import { runCrossTenantLeakageTest, runSandboxOnboardingJourney } from './_shared/tenant-sandbox-qa.ts';
 import { tenantEnvConfigured } from './_shared/tenant-env.ts';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
@@ -94,6 +95,19 @@ async function organizationSummary(context:Context,organization:any){
   });
 }
 
+async function sandboxQaSnapshot(context:Context,organization:any){
+  const profile=profileFromOrganization(organization);
+  if(!organization?.featureFlags?.['platform.sandbox'])return null;
+  return runWithTenant(profile,async()=>{
+    const store=tenantStoreFor(context,profile,'systemHealth');
+    const [leakage,onboarding]=await Promise.all([
+      store.get('qa/tenant-isolation/latest',{type:'json'} as any).catch(()=>null),
+      store.get('qa/onboarding/latest',{type:'json'} as any).catch(()=>null),
+    ]);
+    return {leakage,onboarding};
+  });
+}
+
 async function platformSnapshot(context:Context){
   const index=await listOrganizations(context);
   const organizations=[];
@@ -141,6 +155,7 @@ export default async(req:Request,context:Context)=>{
         supportSession:{...session,token:undefined},
         organization:await organizationSummary(context,organization),
         migrationAudit,
+        sandboxQa:await sandboxQaSnapshot(context,organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -154,6 +169,7 @@ export default async(req:Request,context:Context)=>{
       return Response.json({
         organization:await organizationSummary(context,organization),
         migrationAudit,
+        sandboxQa:await sandboxQaSnapshot(context,organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -193,7 +209,7 @@ export default async(req:Request,context:Context)=>{
       email:email(body.email)||email(auth.access.user?.email),
       locale:clean(body.locale,60)||'en-US',
       currency:clean(body.currency,8)||'USD',
-      timezone:clean(body.timezone,100)||'Pacific/Honolulu',
+      timezone:clean(body.timezone,100)||'UTC',
       country:clean(body.country,100)||'United States',
     },{id:auth.access.user?.id,email:auth.access.user?.email});
 
@@ -204,18 +220,51 @@ export default async(req:Request,context:Context)=>{
       venues:[{id:'sandbox-main',name:'Sandbox Venue',address:'Test data only',timezone:current.timezone,capacity:120,active:true}],
       taxProfile:{id:'sandbox-tax',label:'Sandbox Tax',kind:'sales-tax',enabled:true,statutoryRate:4.25,customerRate:4.25,maxPassOnRate:4.25,defaultTaxable:true},
       templates:[{id:'sandbox-proposal',type:'proposal',name:'Sandbox Proposal',enabled:true,source:'tenant',updatedAt:new Date().toISOString()}],
-      featureFlags:{crm:true,sales:true,events:true,vendors:true,quickbooks:false,signwell:false,email:false,calendar:false,profitability:true,client_portal:true,vendor_portal:true},
+      featureFlags:{'platform.sandbox':true,crm:true,sales:true,events:true,vendors:true,quickbooks:false,signwell:false,email:false,calendar:false,profitability:true,client_portal:true,vendor_portal:true},
       domains:[{id:'sandbox-domain',hostname:slug+'.invalid',kind:'custom',status:'pending',primary:true}],
       subscription:{...current.subscription,plan:'sandbox',billingEmail:current.contact.email},
       onboarding:{...current.onboarding,completedSteps:[...new Set([...(current.onboarding?.completedSteps||[]),'venues','branding','tax-profile','templates'])]},
     }));
-    return Response.json({ok:true,sandbox:true,organization:await organizationSummary(context,organization),safety:{
+    let leakageTest:any=null;
+    let onboardingTest:any=null;
+    if(body.runChecks===true){
+      const koaOrganization=await readOrganizationById(context,'koa-events');
+      if(!koaOrganization)throw new Error('Koa Tenant #1 control-plane record was not found.');
+      leakageTest=await runCrossTenantLeakageTest(context,organization,koaOrganization);
+      onboardingTest=(await runSandboxOnboardingJourney(context,organization,{
+        id:auth.access.user?.id,
+        email:auth.access.user?.email,
+      })).report;
+    }
+    const latestOrganization=await readOrganizationById(context,organization.id) || organization;
+    return Response.json({ok:true,sandbox:true,organization:await organizationSummary(context,latestOrganization),safety:{
       legacyCompatibility:false,
       integrationsConnected:false,
       domainVerified:false,
       stripeCheckoutStarted:false,
       koaDataTouched:false,
-    }},{status:201,headers:{'Cache-Control':'private, no-store'}});
+    },leakageTest,onboardingTest},{status:201,headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='run-sandbox-leakage-test'){
+    const tenantId=clean(body.tenantId,120);
+    const sandbox=await readOrganizationById(context,tenantId);
+    const koa=await readOrganizationById(context,'koa-events');
+    if(!sandbox)return Response.json({error:'Sandbox organization not found.'},{status:404});
+    if(!koa)return Response.json({error:'Koa Tenant #1 control-plane record was not found.'},{status:404});
+    const leakageTest=await runCrossTenantLeakageTest(context,sandbox,koa);
+    return Response.json({ok:true,leakageTest},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='run-sandbox-onboarding-test'){
+    const tenantId=clean(body.tenantId,120);
+    const sandbox=await readOrganizationById(context,tenantId);
+    if(!sandbox)return Response.json({error:'Sandbox organization not found.'},{status:404});
+    const result=await runSandboxOnboardingJourney(context,sandbox,{
+      id:auth.access.user?.id,
+      email:auth.access.user?.email,
+    });
+    return Response.json({ok:true,organization:await organizationSummary(context,result.organization),onboardingTest:result.report},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   return Response.json({error:'Unknown platform action.'},{status:400});

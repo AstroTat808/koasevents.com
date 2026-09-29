@@ -63,8 +63,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const $=(s)=>document.querySelector(s);
     let state=null;
     let activeSupportToken='';
+    let currentDetailTenant='';
     const esc=(v)=>String(v??'').replace(/[&<>"']/g,(ch)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
     const fmt=(v)=>v?new Date(v).toLocaleString():'—';
+    const shortHash=(v)=>v?String(v).slice(0,12)+'…':'—';
     const pill=(label,good=true)=>'<span class="rounded-full px-2 py-1 text-[.62rem] font-black uppercase tracking-[.05em] '+(good?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800')+'">'+esc(label)+'</span>';
 
     async function api(path='',options={}){
@@ -116,16 +118,33 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       try{
         const data=await api(supportToken?'?support='+encodeURIComponent(supportToken):'?tenant='+encodeURIComponent(id));
         const row=data.organization;
+        currentDetailTenant=row.id;
         $('[data-detail]').classList.remove('hidden');
         $('[data-detail-title]').textContent=row.displayName;
         const migration=data.migrationAudit?.summary||{};
+        const migrationDomains=data.migrationAudit?.domains||[];
         const integrations=(row.integrations||[]).map((i)=>'<div class="flex items-center justify-between rounded-xl bg-stone-100 px-3 py-2 text-xs"><span class="capitalize">'+esc(i.provider)+'</span>'+pill(i.configured?'configured':i.status,i.configured)+'</div>').join('');
         const domains=(row.domains||[]).map((d)=>'<div class="rounded-xl bg-stone-100 px-3 py-2 text-xs"><strong>'+esc(d.hostname)+'</strong><span class="ml-2 text-stone-500">'+esc(d.kind)+' · '+esc(d.status)+'</span></div>').join('');
+        const migrationRows=migrationDomains.map((m)=>{
+          const missing=(m.missingCanonical||[]).slice(0,12);
+          const mismatches=(m.checksumMismatches||[]).slice(0,12);
+          const details=[...missing.map((key)=>'Missing: '+key),...mismatches.map((row)=>'Checksum: '+row.key)];
+          return '<tr class="border-t border-stone-200 align-top"><td class="px-3 py-3 font-semibold">'+esc(m.domain)+'</td><td class="px-3 py-3">'+esc(m.legacyStore||'—')+'</td><td class="px-3 py-3 text-right">'+esc(m.legacyCount??0)+'</td><td class="px-3 py-3 text-right">'+esc(m.mirroredCount??0)+'</td><td class="px-3 py-3 text-right">'+esc(m.missingCanonicalCount??0)+'</td><td class="px-3 py-3 text-right">'+esc(m.checksumMismatchCount??0)+'</td><td class="px-3 py-3 font-mono text-[.65rem]">'+esc(shortHash(m.legacyChecksum))+'</td><td class="px-3 py-3 font-mono text-[.65rem]">'+esc(shortHash(m.canonicalMirrorChecksum))+'</td><td class="px-3 py-3">'+pill(m.retirementStatus|| (m.safeToRetireLegacy?'safe':'blocked'),m.safeToRetireLegacy===true)+(m.safeToRetireAsOf?'<p class="mt-1 whitespace-nowrap text-[.62rem] text-stone-500">as of '+esc(fmt(m.safeToRetireAsOf))+'</p>':'')+'</td><td class="px-3 py-3 text-[.65rem] text-stone-600">'+esc((m.blockers||[]).join(' · ')||'None')+(details.length?'<details class="mt-2"><summary class="cursor-pointer font-bold">Show mismatch keys</summary><div class="mt-1 grid gap-1 font-mono">'+details.map((row)=>'<span>'+esc(row)+'</span>').join('')+'</div></details>':'')+'</td></tr>';
+        }).join('');
+        const leakage=data.sandboxQa?.leakage;
+        const onboarding=data.sandboxQa?.onboarding;
+        const isSandbox=String(row.slug||'').startsWith('vl-sandbox-');
+        const qaActions=isSandbox&&!supportToken?'<div class="mt-4 flex flex-wrap gap-2"><button data-run-leakage class="rounded-full bg-stone-900 px-4 py-2 text-xs font-black text-white">Run leakage test</button><button data-run-onboarding class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black">Run onboarding QA</button></div>':'';
+        const qaCard=isSandbox?'<article class="rounded-2xl border border-stone-200 p-5 xl:col-span-2"><h3 class="font-black">Tenant #2 validation</h3><div class="mt-3 grid gap-3 sm:grid-cols-2"><div class="rounded-xl bg-stone-100 p-4"><p class="text-xs font-black uppercase text-stone-500">Cross-tenant leakage</p><p class="mt-1 text-sm font-semibold">'+(leakage?(leakage.summary?.clean?'Clean · ':'Failed · ')+(leakage.summary?.passed||0)+'/'+(leakage.summary?.surfaces||0)+' surfaces':'Not run')+'</p><p class="mt-1 text-xs text-stone-500">'+(leakage?fmt(leakage.generatedAt):'')+'</p></div><div class="rounded-xl bg-stone-100 p-4"><p class="text-xs font-black uppercase text-stone-500">Onboarding journey</p><p class="mt-1 text-sm font-semibold">'+(onboarding?(onboarding.summary?.clean?'Clean · ':'Failed · ')+(onboarding.summary?.passed||0)+'/'+(onboarding.summary?.steps||0)+' steps':'Not run')+'</p><p class="mt-1 text-xs text-stone-500">'+(onboarding?fmt(onboarding.generatedAt):'')+'</p></div></div>'+qaActions+'</article>':'';
         $('[data-detail-grid]').innerHTML=
           '<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Platform status</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Status:</strong> '+esc(row.status)+'</p><p><strong>Health:</strong> '+(row.health?.healthy===true?'Healthy':row.health?.healthy===false?(row.health.failed+' checks failed'):'No sample')+'</p><p><strong>Last health check:</strong> '+fmt(row.health?.checkedAt)+'</p><p><strong>Subscription:</strong> '+esc(row.subscription?.status||'not configured')+'</p><p><strong>Migration:</strong> '+esc(row.migrationStatus)+'</p><p><strong>Legacy retirement:</strong> '+(migration.safeToRetireLegacy===true?'Safe':row.legacyCompatibility?'Blocked / not yet proven':'Not applicable')+'</p></div></article>'
-          +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Storage migration</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Legacy objects:</strong> '+esc(migration.legacyObjects??'—')+'</p><p><strong>Canonical objects:</strong> '+esc(migration.canonicalObjects??'—')+'</p><p><strong>Missing canonical:</strong> '+esc(migration.missingCanonical??'—')+'</p><p><strong>Critical mismatches:</strong> '+esc(migration.criticalMismatches??'—')+'</p></div></article>'
+          +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Storage migration summary</h3><div class="mt-3 grid gap-2 text-sm"><p><strong>Legacy objects:</strong> '+esc(migration.legacyObjects??'—')+'</p><p><strong>Mirrored objects:</strong> '+esc(migration.mirroredObjects??'—')+'</p><p><strong>Canonical objects:</strong> '+esc(migration.canonicalObjects??'—')+'</p><p><strong>Missing canonical:</strong> '+esc(migration.missingCanonical??'—')+'</p><p><strong>Checksum mismatches:</strong> '+esc(migration.checksumMismatches??'—')+'</p><p><strong>Critical mismatches:</strong> '+esc(migration.criticalMismatches??'—')+'</p></div></article>'
+          +qaCard
+          +'<article class="overflow-hidden rounded-2xl border border-stone-200 xl:col-span-2"><div class="p-5"><h3 class="font-black">Legacy Blob migration dashboard</h3><p class="mt-1 text-xs text-stone-500">Full normalized object checksums are compared per legacy store. A store is safe to retire only when every legacy object is mirrored and every checksum/critical fingerprint matches.</p></div><div class="overflow-x-auto"><table class="min-w-[1050px] w-full text-xs"><thead class="bg-stone-100 text-left"><tr><th class="px-3 py-2">Domain</th><th class="px-3 py-2">Legacy store</th><th class="px-3 py-2 text-right">Legacy</th><th class="px-3 py-2 text-right">Mirrored</th><th class="px-3 py-2 text-right">Missing</th><th class="px-3 py-2 text-right">Mismatch</th><th class="px-3 py-2">Legacy checksum</th><th class="px-3 py-2">Mirror checksum</th><th class="px-3 py-2">Retire</th><th class="px-3 py-2">Remaining blockers</th></tr></thead><tbody>'+migrationRows+'</tbody></table></div></article>'
           +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Domains</h3><div class="mt-3 grid gap-2">'+(domains||'<p class="text-sm text-stone-500">No domains configured.</p>')+'</div></article>'
           +'<article class="rounded-2xl border border-stone-200 p-5"><h3 class="font-black">Integrations</h3><div class="mt-3 grid gap-2">'+integrations+'</div></article>';
+        $('[data-run-leakage]')?.addEventListener('click',()=>runSandboxQa('run-sandbox-leakage-test'));
+        $('[data-run-onboarding]')?.addEventListener('click',()=>runSandboxQa('run-sandbox-onboarding-test'));
         $('[data-message]').textContent='';
       }catch(error){$('[data-message]').textContent=error.message;}
     }
@@ -154,12 +173,26 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       await load();
     }
 
+    async function runSandboxQa(action){
+      if(!currentDetailTenant)return;
+      $('[data-message]').textContent=action==='run-sandbox-leakage-test'?'Running full Tenant #2 leakage test…':'Running Tenant #2 onboarding journey…';
+      try{
+        const data=await api('',{method:'POST',body:JSON.stringify({action,tenantId:currentDetailTenant})});
+        const report=data.leakageTest||data.onboardingTest;
+        $('[data-message]').textContent=report?.summary?.clean?'Validation passed cleanly.':'Validation completed with failures. Review the tenant detail.';
+        await loadDetail(currentDetailTenant);
+        await load();
+      }catch(error){$('[data-message]').textContent=error.message;}
+    }
+
     async function createSandbox(){
-      if(!confirm('Create a production sandbox tenant with tenant-native storage, no connected integrations, no verified domain, and no Stripe checkout?'))return;
+      if(!confirm('Create a tenant-native sandbox and immediately run the cross-tenant leakage test plus the safe end-to-end onboarding QA? External providers, DNS and Stripe charges stay simulated/off.'))return;
       $('[data-message]').textContent='Creating isolated sandbox tenant…';
       try{
-        const data=await api('',{method:'POST',body:JSON.stringify({action:'create-sandbox-tenant'})});
-        $('[data-message]').textContent='Created '+data.organization.displayName+' ('+data.organization.slug+'). No Koa storage or integrations were touched.';
+        const data=await api('',{method:'POST',body:JSON.stringify({action:'create-sandbox-tenant',runChecks:true})});
+        const leak=data.leakageTest?.summary;
+        const onboard=data.onboardingTest?.summary;
+        $('[data-message]').textContent='Created '+data.organization.displayName+' ('+data.organization.slug+'). Leakage '+(leak?.clean?'clean':'needs review')+'; onboarding '+(onboard?.clean?'clean':'needs review')+'. No Koa writes, DNS changes, provider connections, emails, or Stripe charges were performed.';
         await load();
         await loadDetail(data.organization.id);
       }catch(error){$('[data-message]').textContent=error.message;}
