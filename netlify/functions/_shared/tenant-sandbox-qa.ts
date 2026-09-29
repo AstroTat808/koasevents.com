@@ -1,4 +1,5 @@
 import type { Context } from '@netlify/functions';
+import { tenantById } from '../../../src/data/tenants/index.ts';
 import {
   listMemberships,
   profileFromOrganization,
@@ -62,7 +63,7 @@ export async function runCrossTenantLeakageTest(
   }
 
   const sandbox = profileFromOrganization(sandboxOrganization);
-  const koa = profileFromOrganization(koaOrganization);
+  const koa = tenantById(koaOrganization.id) || profileFromOrganization(koaOrganization);
   if (sandbox.storage.legacyDataBelongsToTenant) {
     throw new Error('Sandbox tenant must not have legacy compatibility enabled.');
   }
