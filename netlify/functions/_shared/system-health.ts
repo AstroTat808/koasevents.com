@@ -11,7 +11,7 @@ import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
-import { selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
+import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -2437,6 +2437,28 @@ export async function rollbackReadySummary(context:Context,currentDeployId='') {
       ? 'If the current release fails a live Critical Integrations gate, rollback protection will restore this last-known-good production deploy.'
       : 'No earlier production deploy with a complete passing 4/4 Critical Integrations audit is available yet.',
   };
+}
+
+export async function runSafeCriticalIntegrationRollbackDrill(context:Context,input:any={}) {
+  const environment=clean(context.deploy?.context||'unknown',80);
+  if(environment==='production') throw new Error('Critical Integrations rollback drill is blocked in production.');
+  const releases=await readProductionReleases(context,100);
+  const report=runCriticalIntegrationRollbackDrill({
+    environment,
+    releases,
+    failedProbeId:clean(input?.failedProbeId,120)||'synthetic-signwell-webhook',
+    currentDeployId:clean(input?.currentDeployId,120)||('drill-'+clean(context.deploy?.id,80)),
+    currentCommit:clean(input?.currentCommit,120)||'non-production-drill',
+    startedAt:new Date().toISOString(),
+  });
+  const drillId=new Date().toISOString().replace(/[:.]/g,'-')+'-'+clean(context.deploy?.id,60);
+  const record={...report,drillId,deployContext:environment,deployId:clean(context.deploy?.id,120),recordedAt:new Date().toISOString()};
+  const store=healthStore(context);
+  await Promise.all([
+    store.setJSON('deployments/rollback-drills/latest',record),
+    store.setJSON('deployments/rollback-drills/by-id/'+drillId,record),
+  ]);
+  return record;
 }
 
 export function featureLabelsForFiles(files:string[]) {
