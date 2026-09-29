@@ -101,7 +101,7 @@ jobs:
           python-version: '3.12'
       - name: Wait for Netlify staging deploy
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
-      - name: Publish signed GitHub main identity and verify live synthetic probes
+      - name: Publish signed GitHub main identity and verify production health
         shell: bash
         run: |
           set -euo pipefail
@@ -111,10 +111,10 @@ jobs:
             -X POST \
             -H "Authorization: Bearer $token" \
             -H "Content-Type: application/json" \
-            --data '{"action":"verify-synthetic-probes"}' \
+            --data '{"action":"verify-production-health"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
           echo "$verification"
-          python -c 'import json,sys; data=json.load(sys.stdin); assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"])' <<<"$verification"
+          python -c 'import json,sys; data=json.load(sys.stdin); accounting=data.get("accountingInvariant") or {}; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==15706.8; assert accounting.get("actualTotal")==15706.8; assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientEstimateTotal")==15706.8; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False' <<<"$verification"
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
