@@ -19,6 +19,7 @@ import {
   readProductionReleases,
   readAllProductionReleaseAudits,
   rollbackReadySummary,
+  runSafeCriticalIntegrationRollbackDrill,
   readUptimeHistory,
   releaseTimelineWithIncidents,
   runSystemHealth,
@@ -420,6 +421,19 @@ export default async (req:Request,context:Context) => {
     if(body?.action==='save-policy'){
       const policy=await saveHealthAlertPolicy(context,body.policy||{},actor);
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
+    }
+
+    if(body?.action==='run-critical-integrations-rollback-drill'){
+      try{
+        const drill=await runSafeCriticalIntegrationRollbackDrill(context,{
+          failedProbeId:String(body?.failedProbeId||'synthetic-signwell-webhook'),
+        });
+        return Response.json({ok:Boolean(drill?.ok),drill},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        const message=error instanceof Error?error.message:'Unable to run Critical Integrations rollback drill.';
+        const blocked=/blocked in production/i.test(message);
+        return Response.json({error:message},{status:blocked?409:400,headers:{'Cache-Control':'private, no-store'}});
+      }
     }
 
     if(body?.action==='test-resend-webhook'){
