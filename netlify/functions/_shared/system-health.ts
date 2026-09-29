@@ -2140,7 +2140,7 @@ async function recordAccountingInvariantIncidents(context:Context,previous:Healt
       ? (after.status==='passed'?'baseline':'failed')
       : before?.status!=='passed'&&after.status==='passed'
         ? 'recovered'
-        : before.status==='passed'&&after.status!=='passed'
+        : before?.status==='passed'&&after.status!=='passed'
           ? 'failed'
           : 'changed';
     const id='AINC-'+String(current.id||current.checkedAt||'').replace(/[^A-Za-z0-9]/g,'').slice(-18)+'-'+after.recordId.replace(/[^A-Za-z0-9]/g,'').slice(-24)+'-'+type;
