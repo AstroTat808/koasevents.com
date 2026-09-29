@@ -13,7 +13,7 @@ export function syntheticHealthToken(){
 
 export function isSyntheticHealthRequest(req:Request){
   const expected=syntheticHealthToken();
-  const received=String(req.headers.get('x-koa-synthetic-token')||'').trim();
+  const received=String(req.headers.get('x-venueloom-synthetic-token')||req.headers.get('x-koa-synthetic-token')||'').trim();
   if(!expected||!received)return false;
   const a=Buffer.from(expected);
   const b=Buffer.from(received);
