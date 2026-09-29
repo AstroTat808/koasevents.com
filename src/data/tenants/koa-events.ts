@@ -199,6 +199,15 @@ export const koaEventsTenantProfile: TenantProfile = {
       dueDaysBefore: 30,
       refundWithinDays: 14,
     },
+    healthInvariant: {
+      enabled: true,
+      label: 'Chris Sibel live accounting invariant',
+      recordId: 'KEP-2026-7980A44276',
+      customerDisplayName: 'Chris Sibel - 2027-09-18',
+      expectedSubtotal: 15000,
+      expectedTax: 706.80,
+      expectedTotal: 15706.80,
+    },
   },
   bootstrapAdminEmails: ['chris@sibel.org', 'koasadmin@koasevents.com'],
   storage: {
