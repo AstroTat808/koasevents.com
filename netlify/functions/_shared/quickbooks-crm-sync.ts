@@ -958,6 +958,40 @@ async function processQuickBooksInboundPlan(context: Context, job: any, plan: an
   let record = disposition === 'match_refresh'
     ? records.find((entry) => clean(entry?.id,120) === clean(plan?.matchedRecordId,120)) || null
     : null;
+
+  if (!record && disposition === 'create') {
+    const identityMatches=exactBookingIdentityMatches(records,customer);
+    if(identityMatches.length>1){
+      job.customerOutcomes.push({ customerId, name:customerName, outcome:'blocked_duplicate_identity', recordId:'' });
+      job.conflicts.push({
+        type:'duplicate-booking-identity',
+        recordId:'',
+        incomingQuickBooksCustomerId:customerId,
+        crmRecordIds:identityMatches.map((entry:any)=>clean(entry?.id,120)),
+        detail:'QuickBooks import matched more than one CRM record by exact email and event date. The import was blocked for duplicate review.',
+      });
+      return;
+    }
+    if(identityMatches.length===1){
+      const exact=identityMatches[0];
+      const linkedId=clean(exact?.accounting?.quickbooks?.customerId,100);
+      if(linkedId&&linkedId!==customerId){
+        job.customerOutcomes.push({ customerId, name:customerName, outcome:'blocked_link_conflict', recordId:clean(exact?.id,120) });
+        job.conflicts.push({
+          type:'customer-link',
+          recordId:clean(exact?.id,120),
+          crmQuickBooksCustomerId:linkedId,
+          incomingQuickBooksCustomerId:customerId,
+          detail:'Exact CRM booking identity is already linked to a different QuickBooks customer. The import was blocked.',
+        });
+        return;
+      }
+      record=exact;
+      job.matchedRecordIds=arrayUnique([...(job.matchedRecordIds||[]),clean(record?.id,120)]);
+      job.currentItem.operation='inbound_exact_identity_reuse';
+    }
+  }
+
   const beforeFull = record ? jsonClone(record) : null;
   const beforeRecord = record ? crmSyncSnapshot(record) : null;
 
