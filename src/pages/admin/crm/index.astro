@@ -82,6 +82,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <section data-duplicate-audit class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="eyebrow text-amber-800">Duplicate booking audit</p>
+              <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Possible duplicate booking chains</h2>
+              <p data-duplicate-audit-summary class="mt-2 max-w-4xl text-sm leading-6 text-[var(--koa-ink)]/60"></p>
+            </div>
+            <button type="button" data-open-first-duplicate class="rounded-full bg-amber-900 px-4 py-2.5 text-[.6rem] font-black uppercase tracking-[.08em] text-white">Review first duplicate</button>
+          </div>
+          <div data-duplicate-audit-list class="mt-4 grid gap-2"></div>
+        </section>
+
         <section class="grid gap-5 xl:grid-cols-[.78fr_1.22fr]">
           <div class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]">
             <div class="flex items-end justify-between gap-3"><div><p class="eyebrow text-[var(--koa-clay)]">Projects + contacts</p><h2 class="display mt-2 text-3xl">Client pipeline</h2></div><span data-project-count class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-ink)]/45">0 shown</span></div>
@@ -123,6 +135,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Proposal</p><p data-detail-proposal class="mt-1 font-semibold"></p></div>
                 <div class="rounded-xl border border-white/10 bg-white/[.05] p-4"><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-white/45">Payments</p><p data-detail-payments class="mt-1 font-semibold"></p></div>
               </div>
+            </section>
+
+            <section data-duplicate-panel class="hidden rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5 shadow-[var(--shadow-soft)]">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p class="eyebrow text-amber-800">Duplicate booking review</p>
+                  <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">Merge duplicate booking</h3>
+                  <p data-duplicate-detail-summary class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60"></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button type="button" data-duplicate-preview class="rounded-full border border-amber-300 bg-white px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-amber-900">Preview merge</button>
+                  <button type="button" data-duplicate-merge class="rounded-full bg-amber-900 px-4 py-2.5 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Merge duplicates</button>
+                </div>
+              </div>
+              <div data-duplicate-records class="mt-4 grid gap-2"></div>
+              <div data-duplicate-preview-result class="mt-4 hidden rounded-xl border border-amber-200 bg-white p-4 text-sm leading-6 text-[var(--koa-ink)]/65"></div>
             </section>
 
             <section data-quickbooks-panel class="hidden rounded-[1.5rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -523,7 +551,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const approvedAdminEmails = new Set(['chris@sibel.org','koasadmin@koasevents.com']);
   const $=(s)=>document.querySelector(s);
   const $$=(s)=>[...document.querySelectorAll(s)];
-  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],cleanupAudit:[],cleanupAnalytics:{},cleanupSettings:{mode:'auto_trash'},integrations:{signwell:{}},staff:[]};
+  let data={projects:[],tasks:[],appointments:[],notes:[],workflows:[],enrollments:[],templates:[],activity:[],messages:[],trash:[],trashGroups:[],duplicateAudit:{duplicateGroups:[],lifecycleChains:[],trace:[],summary:{}},cleanupAudit:[],cleanupAnalytics:{},cleanupSettings:{mode:'auto_trash'},integrations:{signwell:{}},staff:[]};
   let analyticsRange='7';
   let trendGranularity='day';
   let analyticsBreakdown='websiteForm';
@@ -657,7 +685,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $('[data-trash-count]').textContent=(data.trashGroups||[]).length || data.trash.length;
     const settings=$('[data-cleanup-settings]'); if(settings) settings.mode.value=data.cleanupSettings?.mode||'auto_trash';
     const meta=$('[data-cleanup-policy-meta]'); if(meta) meta.textContent=data.cleanupSettings?.updatedAt?('Updated '+fmt(data.cleanupSettings.updatedAt)):'';
-    renderProjects(); renderTrash(); renderAnalytics(); renderAudit(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
+    renderProjects(); renderTrash(); renderDuplicateAudit(); renderAnalytics(); renderAudit(); renderWorkflows(); renderTemplates(); if(selectedId) renderDetail();
   }
   function updateBulkUi(){
     const n=selectedProjects.size, b=$('[data-bulk-trash]');
@@ -706,6 +734,98 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     $$('[data-project-check]').forEach(ch=>ch.addEventListener('change',()=>{ch.checked?selectedProjects.add(ch.dataset.projectCheck):selectedProjects.delete(ch.dataset.projectCheck);updateBulkUi();}));
     updateBulkUi();
   }
+  function duplicateGroupFor(recordId){
+    return (data.duplicateAudit?.duplicateGroups||[]).find(group=>(group.records||[]).some(record=>record.recordId===recordId||(record.lifecycleIds||[]).includes(recordId)))||null;
+  }
+
+  function renderDuplicateAudit(){
+    const groups=data.duplicateAudit?.duplicateGroups||[];
+    const panel=$('[data-duplicate-audit]');
+    if(!panel)return;
+    panel.classList.toggle('hidden',groups.length===0);
+    if(!groups.length)return;
+    const summary=data.duplicateAudit?.summary||{};
+    $('[data-duplicate-audit-summary]').textContent=groups.length+' independent duplicate booking group'+(groups.length===1?'':'s')+' found across '+Number(summary.duplicateRecords||0)+' booking chain representatives. Converted lifecycle records are hidden from the active pipeline but remain preserved in history.';
+    $('[data-duplicate-audit-list]').innerHTML=groups.slice(0,10).map((group,index)=>{
+      const survivor=(group.records||[]).find(record=>record.recordId===group.recommendedSurvivorId);
+      const qbo=survivor?.quickBooksCustomerId?(' · QBO #'+esc(survivor.quickBooksCustomerId)):'';
+      return '<button type="button" data-duplicate-group="'+index+'" class="rounded-xl border border-amber-200 bg-white p-4 text-left transition hover:border-amber-500"><div class="flex items-start justify-between gap-3"><div><strong>'+esc(group.customerName||group.customerEmail||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(group.eventDate||'No date')+' · '+esc(group.packageId||'No package')+' · '+Number((group.records||[]).length)+' independent chain'+((group.records||[]).length===1?'':'s')+'</p></div><span class="rounded-full bg-amber-100 px-2 py-1 text-[.55rem] font-black uppercase tracking-[.07em] text-amber-900">Review</span></div><p class="mt-2 text-xs text-[var(--koa-ink)]/55">Recommended survivor: '+esc(group.recommendedSurvivorId||'')+qbo+'</p></button>';
+    }).join('');
+    $('[data-duplicate-group]').forEach(button=>button.onclick=()=>{
+      const group=groups[Number(button.dataset.duplicateGroup)];
+      if(!group)return;
+      selectedId=group.recommendedSurvivorId;
+      renderProjects();renderDetail();renderAudit();
+      $('[data-duplicate-panel]')?.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+    const first=$('[data-open-first-duplicate]');
+    if(first)first.onclick=()=>{
+      const group=groups[0];if(!group)return;
+      selectedId=group.recommendedSurvivorId;renderProjects();renderDetail();renderAudit();
+      $('[data-duplicate-panel]')?.scrollIntoView({behavior:'smooth',block:'start'});
+    };
+  }
+
+  function renderDuplicateDetail(p){
+    const group=duplicateGroupFor(p.id);
+    const panel=$('[data-duplicate-panel]');
+    if(!panel)return;
+    panel.classList.toggle('hidden',!group);
+    if(!group)return;
+    const survivorId=group.recommendedSurvivorId;
+    const duplicateIds=(group.records||[]).map(record=>record.recordId).filter(id=>id&&id!==survivorId);
+    const survivor=(group.records||[]).find(record=>record.recordId===survivorId);
+    $('[data-duplicate-detail-summary]').textContent='This audit treats each inquiry → lead → proposal conversion chain as one booking. The recommended survivor is '+survivorId+(survivor?.quickBooksCustomerId?' because it is linked to QuickBooks customer #'+survivor.quickBooksCustomerId:'')+'. No merge is applied until the server-side preview passes.';
+    $('[data-duplicate-records]').innerHTML=(group.records||[]).map(record=>{
+      const survivorBadge=record.recordId===survivorId?'<span class="rounded-full bg-emerald-100 px-2 py-1 text-[.52rem] font-black uppercase tracking-[.07em] text-emerald-800">Survivor</span>':'<span class="rounded-full bg-amber-100 px-2 py-1 text-[.52rem] font-black uppercase tracking-[.07em] text-amber-900">Duplicate chain</span>';
+      const external=[
+        record.quickBooksCustomerId?'QBO customer #'+record.quickBooksCustomerId:'',
+        record.quickBooksEstimateId?'estimate #'+record.quickBooksEstimateId:'',
+        record.signWellDocumentId?'SignWell '+record.signWellDocumentId:'',
+      ].filter(Boolean).join(' · ');
+      return '<div class="rounded-xl border border-amber-200 bg-white p-4"><div class="flex flex-wrap items-start justify-between gap-2"><div><strong class="break-all">'+esc(record.recordId)+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(record.mechanism||'crm-record')+' · '+esc(record.stage||record.kind||'')+' · created '+esc(record.createdAt||'unknown')+'</p></div>'+survivorBadge+'</div><p class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">'+money(record.proposalTotal||0)+' proposal'+(record.proposalStatus?' · '+esc(record.proposalStatus):'')+'</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">'+esc(external||'No external accounting/signature identity')+'</p>'+(record.lifecycleIds?.length>1?'<p class="mt-1 text-[.65rem] text-[var(--koa-ink)]/40">Lifecycle records: '+record.lifecycleIds.map(esc).join(', ')+'</p>':'')+'</div>';
+    }).join('');
+
+    const result=$('[data-duplicate-preview-result]');
+    if(result){result.classList.add('hidden');result.innerHTML='';}
+    const previewButton=$('[data-duplicate-preview]');
+    const mergeButton=$('[data-duplicate-merge]');
+    if(previewButton)previewButton.onclick=async()=>{
+      previewButton.disabled=true;previewButton.textContent='Checking…';
+      try{
+        const response=await post({action:'preview-duplicate-merge',survivorId,duplicateIds});
+        const preview=response.preview||{};
+        if(result){
+          result.classList.remove('hidden');
+          const blockers=(preview.blockers||[]).map(item=>'<li>'+esc(item.reason||'Merge blocker')+(item.path?' · '+esc(item.path):'')+'</li>').join('');
+          const warnings=(preview.warnings||[]).map(item=>'<li>'+esc(item)+'</li>').join('');
+          result.innerHTML='<strong>'+(preview.canApply?'Safe to merge after review':'Merge blocked')+'</strong><p class="mt-1">Survivor: '+esc(preview.survivorId||survivorId)+' · '+Number((preview.archiveIds||[]).length)+' lifecycle record(s) would be archived.</p>'+(blockers?'<ul class="mt-2 list-disc pl-5">'+blockers+'</ul>':'')+(warnings?'<ul class="mt-2 list-disc pl-5">'+warnings+'</ul>':'');
+        }
+      }catch(error){
+        if(result){result.classList.remove('hidden');result.textContent=error instanceof Error?error.message:'Unable to preview merge.';}
+      }finally{previewButton.disabled=false;previewButton.textContent='Preview merge';}
+    };
+    if(mergeButton)mergeButton.onclick=async()=>{
+      mergeButton.disabled=true;mergeButton.textContent='Checking…';
+      try{
+        const previewResponse=await post({action:'preview-duplicate-merge',survivorId,duplicateIds});
+        const preview=previewResponse.preview||{};
+        if(!preview.canApply){
+          if(result){result.classList.remove('hidden');result.textContent='Merge blocked. Resolve the identity conflicts shown by Preview merge first.';}
+          return;
+        }
+        const archiveCount=Number((preview.archiveIds||[]).length);
+        if(!confirm('Merge '+archiveCount+' duplicate lifecycle record(s) into '+survivorId+'?\n\nThe originals will be archived, not permanently deleted. Tasks, notes, appointments, messages, event documents, QuickBooks mirror data, SignWell state and audit history will be preserved or remapped.'))return;
+        mergeButton.textContent='Merging…';
+        await post({action:'merge-duplicate-booking',survivorId,duplicateIds,reason:'Approved from Business CRM duplicate review'});
+        selectedId=survivorId;
+        await load();
+      }catch(error){
+        if(result){result.classList.remove('hidden');result.textContent=error instanceof Error?error.message:'Unable to merge duplicates.';}
+      }finally{mergeButton.disabled=false;mergeButton.textContent='Merge duplicates';}
+    };
+  }
+
   function renderTrash(){
     const groups=[...(data.trashGroups||[])].sort((a,b)=>String(b.deletedAt).localeCompare(String(a.deletedAt)));
     $('[data-trash-list]').innerHTML=groups.length?groups.map(g=>'<div class="rounded-xl border border-[var(--koa-line)] bg-white p-4"><div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><strong>'+esc(g.customerName||'Unnamed client')+'</strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48">'+esc(g.customerEmail||'No email')+' · '+esc(g.eventDate||'No date')+' · '+g.count+' related record'+(g.count===1?'':'s')+'</p><p class="mt-2 text-[.6rem] font-bold uppercase tracking-[.06em] text-[var(--koa-clay)]">Deleted '+fmt(g.deletedAt)+' · expires '+fmt(g.expiresAt)+'</p></div><div class="flex gap-2"><button data-restore-chain="'+esc(g.rootId)+'" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-white">Restore client</button><button data-permadelete-chain="'+esc(g.rootId)+'" class="rounded-full border border-red-300 px-3 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-red-800">Delete forever</button></div></div></div>').join(''):'<p class="rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/50">Trash is empty.</p>';
@@ -781,6 +901,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
   function renderDetail(){
     const p=data.projects.find(x=>x.id===selectedId); if(!p)return;
+    renderDuplicateDetail(p);
     $('[data-detail-empty]').classList.add('hidden'); $('[data-detail]').classList.remove('hidden');
     $('[data-detail-stage]').textContent=(p.meta?.projectStatus||p.stage||'Project').toUpperCase();
     const cleanup=p.cleanup||{disposition:'clean',score:0,reasons:[],signals:[],approvedLegitimate:false,manuallyFlagged:false};
