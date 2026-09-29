@@ -2537,6 +2537,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
 
       activeRootCause='';
+      activeSeverity='';
       if(failuresOnly)failuresOnly.checked=true;
       renderRootCauseSummary(latestHealthChecks);
       renderHealthChecks();
