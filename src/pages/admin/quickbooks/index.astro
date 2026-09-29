@@ -1619,11 +1619,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         wireMatchEvidenceButtons(matchReviewList);
       }
 
-      if(twoWaySync)twoWaySync.disabled=!valid||needsDecision>0;
+      const resumableJob=Boolean(
+        state?.manualSyncJob?.jobId
+        && String(state.manualSyncJob.previewId||'')===String(preview?.previewId||'')
+        && ['running','paused_error'].includes(String(state.manualSyncJob.status||''))
+      );
+      if(twoWaySync)twoWaySync.disabled=!resumableJob&&(!valid||needsDecision>0);
       if(twoWaySyncStatus&&preview){
-        twoWaySyncStatus.textContent=needsDecision>0
-          ? needsDecision+' customer decision'+(needsDecision===1?' needs':'s need')+' review before sync can run.'
-          : valid?'Preview approved for execution. All customer decisions are resolved; review the audit, then run the sync.':'Preview expired. Run Preview Sync again.';
+        twoWaySyncStatus.textContent=resumableJob
+          ? (state.manualSyncJob.status==='paused_error'?'Sync paused safely. Resume Approved Sync continues from the saved batch.':'A resumable sync job is already in progress.')
+          : needsDecision>0
+            ? needsDecision+' customer decision'+(needsDecision===1?' needs':'s need')+' review before sync can run.'
+            : valid?'Preview approved for execution. All customer decisions are resolved; review the audit, then run the sync.':'Preview expired. Run Preview Sync again.';
       }
     }
 
@@ -2714,11 +2721,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function openSyncConfirmation(){
       const preview=state?.manualSyncPreview;
       if(!preview?.previewId)throw new Error('Run Preview Sync first.');
+      const resumableJob=Boolean(
+        state?.manualSyncJob?.jobId
+        && String(state.manualSyncJob.previewId||'')===String(preview.previewId||'')
+        && ['running','paused_error'].includes(String(state.manualSyncJob.status||''))
+      );
       const expires=Date.parse(preview.expiresAt||0);
-      if(!expires||expires<=Date.now())throw new Error('This Preview Sync has expired. Run Preview Sync again.');
+      if((!expires||expires<=Date.now())&&!resumableJob)throw new Error('This Preview Sync has expired. Run Preview Sync again.');
       const summary=preview.summary||{};
       const execution=executionSummaryFor(preview);
-      if(Number(summary.needsDecision||0)>0||!execution.ready){
+      if(!resumableJob&&(Number(summary.needsDecision||0)>0||!execution.ready)){
         throw new Error('Resolve every proposed new import and duplicate match before opening the final sync confirmation.');
       }
 
@@ -2757,7 +2769,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(syncConfirmWarning)syncConfirmWarning.textContent='Excluded QuickBooks customers remain untouched in QuickBooks and are omitted from CRM import/matching until restored. Invoices and payments remain QuickBooks-owned. Run Approved Sync may create or update QuickBooks customers and issued estimates shown in this preview; it will not manufacture an invoice or payment.';
       if(syncConfirmExecute){
         syncConfirmExecute.disabled=false;
-        syncConfirmExecute.textContent='Run approved sync now';
+        syncConfirmExecute.textContent=resumableJob?'Resume approved sync':'Run approved sync now';
       }
       syncConfirmDialog?.showModal();
     }
