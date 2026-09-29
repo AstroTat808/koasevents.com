@@ -468,7 +468,7 @@ function syntheticResult(
   expectedHeader:string,
 ):HealthCheck {
   const status=result.response?.status||0;
-  const marker=result.response?.headers.get('x-koa-synthetic-check')||'';
+  const marker=result.response?.headers.get('x-venueloom-synthetic-check')||result.response?.headers.get('x-koa-synthetic-check')||'';
   const ok=Boolean(result.response&&status===204&&marker===expectedHeader);
   return {
     id,
@@ -487,7 +487,7 @@ function syntheticResult(
 
 async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCheck[]> {
   const internalSyntheticToken=syntheticHealthToken();
-  const internalHeaders=internalSyntheticToken?{'X-Koa-Synthetic-Token':internalSyntheticToken}:{};
+  const internalHeaders=internalSyntheticToken?{'X-VenueLoom-Synthetic-Token':internalSyntheticToken,'X-Koa-Synthetic-Token':internalSyntheticToken}:{};
   const eventDocumentsPromise=internalSyntheticToken
     ? timedFetch(origin+'/api/admin/events/documents/__health__',{method:'HEAD',headers:internalHeaders})
     : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
@@ -496,13 +496,14 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
 
   const quickBooksToken=clean(quickBooksWebhookVerifierToken(),1000);
-  const quickBooksBody=JSON.stringify({koaHealthCheck:true,eventNotifications:[]});
+  const quickBooksBody=JSON.stringify({venueLoomHealthCheck:true,koaHealthCheck:true,eventNotifications:[]});
   const quickBooksPromise=quickBooksToken
     ? timedFetch(origin+'/.netlify/functions/quickbooks-webhook',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
           'Intuit-Signature':createHmac('sha256',quickBooksToken).update(quickBooksBody,'utf8').digest('base64'),
+          'X-VenueLoom-Health-Check':'1',
           'X-Koa-Health-Check':'1',
         },
         body:quickBooksBody,
@@ -516,6 +517,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     ? createHmac('sha256',signWellWebhookId).update(signWellEventType+'@'+String(signWellEventTime),'utf8').digest('hex')
     : '';
   const signWellBody=JSON.stringify({
+    venueLoomHealthCheck:true,
     koaHealthCheck:true,
     event:{type:signWellEventType,time:signWellEventTime,hash:signWellHash},
   });
