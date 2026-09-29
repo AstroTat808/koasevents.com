@@ -480,6 +480,8 @@ export default async (req:Request, context:Context) => {
     'trash-client-chain':'crm.destructive',
     'bulk-trash-client-chains':'crm.destructive',
     'restore-client-chain':'crm.destructive',
+    'preview-duplicate-merge':'crm.destructive',
+    'merge-duplicate-booking':'crm.destructive',
     'permanent-delete-client-chain':'crm.destructive',
     'save-workflow':'crm.workflows',
     'save-template':'crm.templates',
@@ -686,6 +688,162 @@ export default async (req:Request, context:Context) => {
     await appendActivity(crm,record.id,'cleanup_flagged','Manually flagged for review by '+actor);
     await appendCleanupAudit(context,{recordId:record.id,action:'manual_flagged',actor,detail:record.cleanupManualFlag.note||'Client manually flagged for review.',score:assessment.score,reasons:assessment.reasons,dimensions:cleanupDimensionsFromRecord(record),client:cleanupClientSnapshotFromRecord(record)});
     return Response.json({ok:true,recordId:record.id,cleanup:assessment});
+  }
+
+  if (action === 'preview-duplicate-merge') {
+    const survivorId=clean(body.survivorId,120);
+    const duplicateIds=Array.from(new Set((Array.isArray(body.duplicateIds)?body.duplicateIds:[]).map((value:any)=>clean(value,120)).filter(Boolean))).filter((id:any)=>id!==survivorId).slice(0,20);
+    const records=await readIndex<any>(sales,'records/index');
+    try{
+      const preview=buildDuplicateMergePreview(records,survivorId,duplicateIds as string[]);
+      return Response.json({ok:true,preview},{headers:{'Cache-Control':'private, no-store'}});
+    }catch(error){
+      return Response.json({error:error instanceof Error?clean(error.message,800):'Unable to preview duplicate merge.'},{status:400});
+    }
+  }
+
+  if (action === 'merge-duplicate-booking') {
+    const survivorId=clean(body.survivorId,120);
+    const duplicateIds=Array.from(new Set((Array.isArray(body.duplicateIds)?body.duplicateIds:[]).map((value:any)=>clean(value,120)).filter(Boolean))).filter((id:any)=>id!==survivorId).slice(0,20) as string[];
+    if(!survivorId||!duplicateIds.length)return Response.json({error:'Select one surviving record and at least one duplicate.'},{status:400});
+
+    const records=await readIndex<any>(sales,'records/index');
+    let preview:any;
+    try{ preview=buildDuplicateMergePreview(records,survivorId,duplicateIds); }
+    catch(error){ return Response.json({error:error instanceof Error?clean(error.message,800):'Unable to prepare duplicate merge.'},{status:400}); }
+    if(!preview.canApply){
+      return Response.json({error:'Duplicate merge is blocked until all identity conflicts are resolved.',preview},{status:409});
+    }
+
+    const survivor=records.find((entry:any)=>entry?.id===survivorId);
+    const duplicates=duplicateIds.map((recordId)=>records.find((entry:any)=>entry?.id===recordId)).filter(Boolean);
+    if(!survivor||duplicates.length!==duplicateIds.length)return Response.json({error:'One or more CRM records no longer exist. Refresh and preview again.'},{status:409});
+
+    const now=new Date().toISOString();
+    let mergedRecord=structuredClone(survivor);
+    for(const duplicate of duplicates) mergedRecord=coalesceRecord(mergedRecord,duplicate);
+    mergedRecord.id=survivorId;
+    mergedRecord.updatedAt=now;
+    mergedRecord.mergeHistory=[
+      ...(Array.isArray(mergedRecord.mergeHistory)?mergedRecord.mergeHistory:[]),
+      {mergedAt:now,mergedBy:actor,duplicateIds:[...duplicateIds],reason:clean(body.reason,500)||'Duplicate booking merge'},
+    ].slice(-100);
+
+    const duplicateSet=new Set(duplicateIds);
+    const nextRecords=records.filter((entry:any)=>!duplicateSet.has(clean(entry?.id,120))).map((entry:any)=>entry?.id===survivorId?mergedRecord:entry);
+
+    const archiveIndex=((await sales.get('duplicate-archive/index',{type:'json'}))||[]) as any[];
+    const archiveRows:any[]=[];
+    for(const duplicate of duplicates){
+      const row={
+        id:clean(duplicate.id,120),
+        survivorId,
+        archivedAt:now,
+        archivedBy:actor,
+        fingerprint:preview.fingerprint,
+        customerName:clean(duplicate?.customer?.name,180),
+        customerEmail:clean(duplicate?.customer?.email,240),
+        eventDate:clean(duplicate?.customer?.eventDate,40),
+      };
+      archiveRows.push(row);
+      await sales.setJSON('duplicate-archive/records/'+row.id,{...duplicate,duplicateArchive:row});
+      await sales.delete('records/'+row.id);
+    }
+    await sales.setJSON('duplicate-archive/index',[...archiveRows,...archiveIndex.filter((row:any)=>!duplicateSet.has(clean(row?.id,120)))].slice(0,2000));
+    await sales.setJSON('records/'+survivorId,mergedRecord);
+    await sales.setJSON('records/index',nextRecords.slice(0,1500));
+
+    const remapIndex=async(key:string,max:number)=>{
+      const rows=await readIndex<any>(crm,key);
+      const seen=new Set<string>();
+      const mapped=rows.map((row:any)=>{
+        if(!duplicateSet.has(clean(row?.recordId,120)))return row;
+        return {...row,recordId:survivorId,updatedAt:row.updatedAt||now};
+      }).filter((row:any)=>{
+        const rowId=clean(row?.id,160)||JSON.stringify(row);
+        if(seen.has(rowId))return false;
+        seen.add(rowId);return true;
+      });
+      await crm.setJSON(key,mapped.slice(0,max));
+      return mapped.filter((row:any)=>clean(row?.recordId,120)===survivorId).length;
+    };
+
+    const remapResults:any={};
+    for(const [key,max] of [['tasks/index',5000],['appointments/index',3000],['notes/index',5000],['enrollments/index',3000],['activity/index',5000],['client-messages/index',5000]] as Array<[string,number]>){
+      remapResults[key]=await remapIndex(key,max);
+    }
+
+    const metas=await readIndex<ProjectMeta>(crm,'projects/index');
+    const survivorMeta=metas.find((row)=>row.recordId===survivorId);
+    const duplicateMetas=metas.filter((row)=>duplicateSet.has(row.recordId));
+    if(survivorMeta||duplicateMetas.length){
+      const base:any={...(duplicateMetas[0]||{}),...(survivorMeta||{}),recordId:survivorId,updatedAt:now};
+      base.tags=Array.from(new Set([...(duplicateMetas.flatMap((row)=>row.tags||[])),...(survivorMeta?.tags||[])])).slice(0,30);
+      base.customFields=Object.assign({},...duplicateMetas.map((row)=>row.customFields||{}),survivorMeta?.customFields||{});
+      const nextMetas=[base,...metas.filter((row)=>row.recordId!==survivorId&&!duplicateSet.has(row.recordId))].slice(0,1500);
+      await crm.setJSON('projects/index',nextMetas);
+      await crm.setJSON('projects/'+survivorId,base);
+      for(const id of duplicateIds)await crm.delete('projects/'+id);
+    }
+
+    const opsStore=tenantStoreFor(context,tenant,'eventOps');
+    const filesStore=eventStoreFor(context);
+    let survivorOps:any=await opsStore.get('events/'+survivorId,{type:'json'});
+    for(const duplicateId of duplicateIds){
+      const duplicateOps:any=await opsStore.get('events/'+duplicateId,{type:'json'});
+      if(duplicateOps){
+        if(!survivorOps)survivorOps={...duplicateOps,recordId:survivorId};
+        else{
+          survivorOps={
+            ...duplicateOps,
+            ...survivorOps,
+            recordId:survivorId,
+            documents:[
+              ...(Array.isArray(survivorOps.documents)?survivorOps.documents:[]),
+              ...(Array.isArray(duplicateOps.documents)?duplicateOps.documents:[]),
+            ].filter((doc:any,index:number,all:any[])=>all.findIndex((candidate:any)=>clean(candidate?.id,160)===clean(doc?.id,160))===index),
+          };
+        }
+        const fileList=await filesStore.list({prefix:'documents/'+duplicateId+'/'});
+        for(const blob of fileList.blobs||[]){
+          const bytes=await filesStore.get(blob.key,{type:'arrayBuffer'});
+          if(bytes!=null){
+            const suffix=String(blob.key).slice(('documents/'+duplicateId+'/').length);
+            await filesStore.set('documents/'+survivorId+'/'+suffix,bytes);
+          }
+        }
+        await opsStore.delete('events/'+duplicateId);
+      }
+    }
+    if(survivorOps)await opsStore.setJSON('events/'+survivorId,survivorOps);
+
+    const signedKey=clean(mergedRecord?.booking?.contract?.signwell?.signedPdfKey,500);
+    if(signedKey&&duplicateIds.some((id)=>signedKey.startsWith('signed-contracts/'+id+'/'))){
+      const sourceId=duplicateIds.find((id)=>signedKey.startsWith('signed-contracts/'+id+'/'))||'';
+      const bytes=await filesStore.get(signedKey,{type:'arrayBuffer'});
+      if(bytes!=null){
+        const targetKey=signedKey.replace('signed-contracts/'+sourceId+'/','signed-contracts/'+survivorId+'/');
+        await filesStore.set(targetKey,bytes);
+        mergedRecord.booking.contract.signwell.signedPdfKey=targetKey;
+        await sales.setJSON('records/'+survivorId,mergedRecord);
+        await sales.setJSON('records/index',nextRecords.map((entry:any)=>entry?.id===survivorId?mergedRecord:entry).slice(0,1500));
+      }
+    }
+
+    await appendActivity(crm,survivorId,'duplicate_booking_merged','Merged duplicate CRM booking record(s): '+duplicateIds.join(', ')+' · by '+actor);
+    await appendStaffAudit(context,{actor,action:'crm_duplicate_booking_merged',detail:'Merged '+duplicateIds.length+' duplicate CRM booking record(s) into '+survivorId+'.',metadata:{survivorId,duplicateIds,fingerprint:preview.fingerprint}});
+
+    return Response.json({
+      ok:true,
+      survivorId,
+      archivedDuplicateIds:duplicateIds,
+      preserved:{
+        crmIndexes:remapResults,
+        quickbooks:Boolean(mergedRecord?.accounting?.quickbooks),
+        signwell:Boolean(mergedRecord?.booking?.contract?.signwell),
+        eventOps:Boolean(survivorOps),
+      },
+    },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if (action === 'send-client-email') {
