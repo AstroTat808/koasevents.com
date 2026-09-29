@@ -103,14 +103,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Accounting protection</p>
-              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">$15,706.80 tax invariant</h2>
-              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Continuously verifies that CRM tax remains authoritative, the QuickBooks payload is non-taxable, and live QuickBooks still exposes the NON tax code used by estimates and milestone invoices.</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Live accounting invariants</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Protects the $15,706.80 Chris Sibel canary and dynamically verifies every accepted/booked CRM proposal against its live QuickBooks estimate, including non-taxable line behavior.</p>
             </div>
             <span data-accounting-health-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
           </div>
-          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Invariant result</p><strong data-accounting-invariant-result class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-invariant-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Chris Sibel live estimate</p><strong data-accounting-live-client class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-live-client-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Accepted / booked clients</p><strong data-accounting-live-clients class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-live-clients-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">QuickBooks NON tax code</p><strong data-accounting-non-status class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-non-detail class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last successful check</p><strong data-accounting-last-success class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-sample-count class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current taxable payload</p><strong data-accounting-taxable-payload class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Must remain $0.00 to prevent tax-on-tax.</p></article>
@@ -121,7 +122,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div data-accounting-failures class="mt-3 grid gap-2"></div>
             </div>
             <div class="rounded-xl border border-[var(--koa-line)] p-4">
-              <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Accounting alert history</strong><span data-accounting-alert-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
+              <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Accounting incident timeline</strong><span data-accounting-alert-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
               <div data-accounting-alert-history class="mt-3 grid gap-2"></div>
             </div>
           </div>
@@ -959,6 +960,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingInvariantDetail=document.querySelector('[data-accounting-invariant-detail]');
     const accountingLiveClient=document.querySelector('[data-accounting-live-client]');
     const accountingLiveClientDetail=document.querySelector('[data-accounting-live-client-detail]');
+    const accountingLiveClients=document.querySelector('[data-accounting-live-clients]');
+    const accountingLiveClientsDetail=document.querySelector('[data-accounting-live-clients-detail]');
     const accountingNonStatus=document.querySelector('[data-accounting-non-status]');
     const accountingNonDetail=document.querySelector('[data-accounting-non-detail]');
     const accountingLastSuccess=document.querySelector('[data-accounting-last-success]');
@@ -3842,6 +3845,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function accountingMoney(value){
+      if(value==null||value==='')return '—';
+      const number=Number(value);
+      return Number.isFinite(number)?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(number):String(value);
+    }
+
     function accountingHistoryRow(title,detail,at,tone='slate'){
       const row=document.createElement('article');
       const tones={
@@ -3889,6 +3898,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? estimateNumber+' · verified '+verifiedAt+' · taxable lines '+(liveClient?.taxableLineCount==null?'—':Number(liveClient.taxableLineCount))+'. '+String(liveClient.detail||'')
           : 'Run System Health to verify the live Chris Sibel estimate.';
       }
+      const liveClients=data.liveClientInvariants||null;
+      const clientStatus=String(liveClients?.status||'unverified');
+      const clientCount=Number(liveClients?.clientCount||0);
+      const clientPassed=Number(liveClients?.passedCount||0);
+      const clientFailed=Number(liveClients?.failedCount||0);
+      const clientUnverified=Number(liveClients?.unverifiedCount||0);
+      if(accountingLiveClients){
+        accountingLiveClients.textContent=liveClients
+          ? clientPassed+'/'+clientCount+' passed'
+          : 'Unverified';
+        accountingLiveClients.className='mt-2 block text-lg '+(clientStatus==='passed'?'text-emerald-800':clientStatus==='failed'?'text-red-800':'text-amber-800');
+      }
+      if(accountingLiveClientsDetail){
+        accountingLiveClientsDetail.textContent=liveClients
+          ? clientFailed+' failed · '+clientUnverified+' unverified · '+String(liveClients.detail||'')
+          : 'Run System Health to verify every accepted/booked client against live QuickBooks.';
+      }
       const nonStatus=String(data.liveNonTaxStatus||'unverified');
       if(accountingNonStatus){
         accountingNonStatus.textContent=nonStatus==='available'?'Available':nonStatus==='missing-or-inactive'?'Missing / inactive':'Unverified';
@@ -3916,16 +3942,25 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         }else failures.forEach((row)=>accountingFailures.appendChild(accountingHistoryRow('Accounting invariant failed',row.detail,row.checkedAt,'red')));
       }
 
-      const alerts=Array.isArray(data.alertHistory)?data.alertHistory:[];
-      if(accountingAlertCount)accountingAlertCount.textContent=alerts.length+' event'+(alerts.length===1?'':'s');
+      const incidents=Array.isArray(data.incidentTimeline)?data.incidentTimeline:[];
+      if(accountingAlertCount)accountingAlertCount.textContent=incidents.length+' permanent event'+(incidents.length===1?'':'s');
       if(accountingAlertHistory){
         accountingAlertHistory.innerHTML='';
-        if(!alerts.length){
-          accountingAlertHistory.appendChild(accountingHistoryRow('No accounting alerts','No failure, recovery, or live NON-tax configuration transition is stored yet.','', 'emerald'));
-        }else alerts.forEach((row)=>{
+        if(!incidents.length){
+          accountingAlertHistory.appendChild(accountingHistoryRow('No invariant transitions yet','The permanent accounting timeline will record each client baseline, failure, value change, and recovery with before/after totals.','', 'emerald'));
+        }else incidents.forEach((row)=>{
           const type=String(row.type||'event').replaceAll('_',' ');
-          const tone=row.type==='recovered'?'emerald':row.type==='configuration_changed'?'amber':'red';
-          accountingAlertHistory.appendChild(accountingHistoryRow(type.charAt(0).toUpperCase()+type.slice(1),row.detail,row.checkedAt,tone));
+          const tone=row.type==='recovered'||row.type==='baseline'?'emerald':row.type==='changed'?'amber':'red';
+          const before=row.before||null;
+          const after=row.after||{};
+          const estimateNumber=row.estimateDocNumber?'Estimate #'+row.estimateDocNumber:(row.estimateId?'Estimate ID '+row.estimateId:'No estimate');
+          const beforeText=before
+            ? 'Before: CRM '+accountingMoney(before.proposalTotal)+' · QBO '+accountingMoney(before.estimateTotal)+' · taxable lines '+(before.taxableLineCount==null?'—':before.taxableLineCount)+'. '
+            : 'Before: no stored invariant baseline. ';
+          const afterText='After: CRM '+accountingMoney(after.proposalTotal)+' · QBO '+accountingMoney(after.estimateTotal)+' · taxable lines '+(after.taxableLineCount==null?'—':after.taxableLineCount)+'. ';
+          const detail=beforeText+afterText+estimateNumber+'. '+String(row.detail||'');
+          const title=[row.clientName||row.recordId,type.charAt(0).toUpperCase()+type.slice(1)].filter(Boolean).join(' · ');
+          accountingAlertHistory.appendChild(accountingHistoryRow(title,detail,row.checkedAt,tone));
         });
       }
     }
