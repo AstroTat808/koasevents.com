@@ -291,6 +291,12 @@ export async function tenantMigrationAudit(
       ? await legacy.list({})
       : {blobs:[] as any[]};
     const legacyKeys=new Set((legacyList.blobs||[]).map((blob:any)=>String(blob.key||'')));
+    const legacyInfoByKey=new Map((legacyList.blobs||[]).map((blob:any)=>[String(blob.key||''),blob]));
+    const canonicalInfoByKey=new Map((canonicalList.blobs||[]).map((blob:any)=>{
+      const raw=String(blob.key||'');
+      const logical=raw.startsWith(prefix)?raw.slice(prefix.length):raw;
+      return [logical,blob];
+    }));
 
     const missingCanonical=[...legacyKeys].filter((key)=>!canonicalKeys.has(key)).sort();
     const canonicalOnly=[...canonicalKeys].filter((key)=>!legacyKeys.has(key)).sort();
@@ -301,16 +307,27 @@ export async function tenantMigrationAudit(
 
     if(legacy && tenant.storage.legacyDataBelongsToTenant) {
       for(const key of [...legacyKeys].sort()) {
-        const legacyHash=await normalizedBlobHash(legacy,key,tenant);
-        const canonicalHash=canonicalKeys.has(key)
-          ? await normalizedBlobHash(canonical,prefix+key,tenant)
-          : {hash:'',kind:'missing'};
+        const legacyInfo:any=legacyInfoByKey.get(key);
+        const canonicalInfo:any=canonicalInfoByKey.get(key);
+        const matchingEtag=Boolean(
+          legacyInfo?.etag
+          && canonicalInfo?.etag
+          && String(legacyInfo.etag)===String(canonicalInfo.etag)
+        );
+        const legacyHash=matchingEtag
+          ? {hash:String(legacyInfo.etag),kind:'etag'}
+          : await normalizedBlobHash(legacy,key,tenant);
+        const canonicalHash=!canonicalKeys.has(key)
+          ? {hash:'',kind:'missing'}
+          : matchingEtag
+            ? {hash:String(canonicalInfo.etag),kind:'etag'}
+            : await normalizedBlobHash(canonical,prefix+key,tenant);
         const matches=Boolean(legacyHash.hash) && legacyHash.hash===canonicalHash.hash;
         legacyManifest.push({key,hash:legacyHash.hash});
         if(canonicalHash.hash)canonicalMirrorManifest.push({key,hash:canonicalHash.hash});
         objectComparisons.push({
           key,
-          kind:legacyHash.kind,
+          kind:matchingEtag?'etag':legacyHash.kind,
           legacyHash:legacyHash.hash,
           canonicalHash:canonicalHash.hash,
           matches,
