@@ -62,6 +62,13 @@ export type HealthCheck = {
     emailRenderingBehind?: boolean;
     emailRenderingChangedFiles?: string[];
   };
+  syntheticDetails?: {
+    lastLiveCheckedAt: string;
+    source: 'live' | 'cached';
+    returnedMarker: string;
+    expectedMarker: string;
+    expectedStatus: 204;
+  };
 };
 
 export type HealthSnapshot = {
@@ -467,9 +474,10 @@ function syntheticResult(
   path:string,
   result:{response:Response|null;ms:number;error:string},
   expectedHeader:string,
+  lastLiveCheckedAt:string,
 ):HealthCheck {
   const status=result.response?.status||0;
-  const marker=result.response?.headers.get('x-koa-synthetic-check')||'';
+  const marker=result.response?.headers.get('x-venueloom-synthetic-check')||result.response?.headers.get('x-koa-synthetic-check')||'';
   const ok=Boolean(result.response&&status===204&&marker===expectedHeader);
   return {
     id,
@@ -480,6 +488,13 @@ function syntheticResult(
     status,
     ms:result.ms,
     severity:ok?'green':'red',
+    syntheticDetails:{
+      lastLiveCheckedAt,
+      source:'live',
+      returnedMarker:marker,
+      expectedMarker:expectedHeader,
+      expectedStatus:204,
+    },
     detail:result.error || (ok
       ? 'Non-destructive synthetic request completed with HTTP 204 and the expected health marker.'
       : 'Synthetic request did not return the expected HTTP 204 health marker.'),
@@ -488,7 +503,7 @@ function syntheticResult(
 
 async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCheck[]> {
   const internalSyntheticToken=syntheticHealthToken();
-  const internalHeaders=internalSyntheticToken?{'X-Koa-Synthetic-Token':internalSyntheticToken}:{};
+  const internalHeaders=internalSyntheticToken?{'X-VenueLoom-Synthetic-Token':internalSyntheticToken,'X-Koa-Synthetic-Token':internalSyntheticToken}:{};
   const eventDocumentsPromise=internalSyntheticToken
     ? timedFetch(origin+'/api/admin/events/documents/__health__',{method:'HEAD',headers:internalHeaders})
     : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
@@ -497,14 +512,14 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     : Promise.resolve({response:null,ms:0,error:'Internal synthetic health token is unavailable because NETLIFY_AUTH_TOKEN is not configured.'});
 
   const quickBooksToken=clean(quickBooksWebhookVerifierToken(),1000);
-  const quickBooksBody=JSON.stringify({koaHealthCheck:true,eventNotifications:[]});
+  const quickBooksBody=JSON.stringify({venueLoomHealthCheck:true,koaHealthCheck:true,eventNotifications:[]});
   const quickBooksPromise=quickBooksToken
     ? timedFetch(origin+'/.netlify/functions/quickbooks-webhook',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
           'Intuit-Signature':createHmac('sha256',quickBooksToken).update(quickBooksBody,'utf8').digest('base64'),
-          'X-Koa-Health-Check':'1',
+          'X-VenueLoom-Health-Check':'1',
         },
         body:quickBooksBody,
       })
@@ -517,6 +532,7 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     ? createHmac('sha256',signWellWebhookId).update(signWellEventType+'@'+String(signWellEventTime),'utf8').digest('hex')
     : '';
   const signWellBody=JSON.stringify({
+    venueLoomHealthCheck:true,
     koaHealthCheck:true,
     event:{type:signWellEventType,time:signWellEventTime,hash:signWellHash},
   });
@@ -534,9 +550,10 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
     quickBooksPromise,
     signWellPromise,
   ]);
+  const lastLiveCheckedAt=new Date().toISOString();
 
   const signWellCheck=signWellWebhookId
-    ? syntheticResult('synthetic-signwell-webhook','SignWell webhook HMAC synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook')
+    ? syntheticResult('synthetic-signwell-webhook','SignWell webhook HMAC synthetic probe','/api/webhooks/signwell',signWell,'signwell-webhook',lastLiveCheckedAt)
     : {
         id:'synthetic-signwell-webhook',
         name:'SignWell webhook HMAC synthetic probe',
@@ -546,13 +563,20 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
         status:0,
         ms:0,
         severity:'yellow' as const,
+        syntheticDetails:{
+          lastLiveCheckedAt,
+          source:'live' as const,
+          returnedMarker:'',
+          expectedMarker:'signwell-webhook',
+          expectedStatus:204 as const,
+        },
         detail:'SIGNWELL_WEBHOOK_ID is not configured, so the zero-write HMAC webhook probe is skipped. This is attention-only until SignWell is enabled.',
       };
 
   return [
-    syntheticResult('synthetic-event-documents','Event Documents synthetic probe','/api/admin/events/documents/:recordId',eventDocuments,'event-documents'),
-    syntheticResult('synthetic-vendor-insurance-document','Vendor Insurance document synthetic probe','/api/admin/vendors/insurance/:vendorId',vendorInsurance,'vendor-insurance-document'),
-    syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/.netlify/functions/quickbooks-webhook',quickBooks,'quickbooks-webhook'),
+    syntheticResult('synthetic-event-documents','Event Documents synthetic probe','/api/admin/events/documents/:recordId',eventDocuments,'event-documents',lastLiveCheckedAt),
+    syntheticResult('synthetic-vendor-insurance-document','Vendor Insurance document synthetic probe','/api/admin/vendors/insurance/:vendorId',vendorInsurance,'vendor-insurance-document',lastLiveCheckedAt),
+    syntheticResult('synthetic-quickbooks-webhook','QuickBooks webhook synthetic probe','/.netlify/functions/quickbooks-webhook',quickBooks,'quickbooks-webhook',lastLiveCheckedAt),
     signWellCheck,
   ];
 }
@@ -568,6 +592,15 @@ async function syntheticIntegrationChecks(context:Context,origin:string,force:bo
       if(rows.length===SYNTHETIC_INTEGRATION_COMPONENTS.length&&Number.isFinite(checkedAt)&&Date.now()-checkedAt<6*60*60*1000){
         return rows.map((row:any)=>({
           ...row,
+          syntheticDetails:row?.syntheticDetails
+            ? {...row.syntheticDetails,source:'cached' as const}
+            : {
+                lastLiveCheckedAt:new Date(checkedAt).toISOString(),
+                source:'cached' as const,
+                returnedMarker:'',
+                expectedMarker:'',
+                expectedStatus:204 as const,
+              },
           detail:clean(String(row?.detail||'')+' · Cached live synthetic verification from '+new Date(checkedAt).toISOString()+'; hourly probes run at most every 6 hours to limit Netlify credit usage.',1200),
         }));
       }

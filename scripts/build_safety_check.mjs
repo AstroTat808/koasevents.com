@@ -144,7 +144,8 @@ function checkEmailFeatureContracts() {
       ['credential Workspace Alert projection', 'credentialWorkspaceAlert'],
     ]],
     ['netlify/functions/_shared/system-health.ts', [
-      ['Email Health integration', "import { emailHealthSummary } from './email-health'"],
+      ['Email Health integration module', "from './email-health'"],
+      ['Email Health summary integration', 'emailHealthSummary'],
       ['Credential Health scheduled integration', 'credentialHealthPromise'],
       ['health issue classification', 'export function classifyHealthIssue'],
       ['email logo component', "id:'email-logo'"],

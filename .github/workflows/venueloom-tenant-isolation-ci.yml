@@ -41,6 +41,9 @@ jobs:
           node scripts/test_tenant_isolation.mjs
           node scripts/tenant_isolation_qa.mjs
 
+      - name: Run synthetic health protocol regression
+        run: node scripts/test_synthetic_health_protocol.mjs
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 

@@ -498,7 +498,9 @@ export default async (req: Request, context: Context) => {
     return new Response('Invalid JSON', { status: 400 });
   }
 
-  if (req.headers.get('x-venueloom-health-check') === '1' && payload?.venueLoomHealthCheck === true) {
+  const isHealthCheck=req.headers.get('x-venueloom-health-check') === '1'
+    && (payload?.venueLoomHealthCheck === true||payload?.koaHealthCheck === true);
+  if (isHealthCheck) {
     const tenant=await resolveTenantAsync(req,context);
     return runWithTenant(tenant,()=>{
       const verifierToken=quickBooksWebhookVerifierToken();

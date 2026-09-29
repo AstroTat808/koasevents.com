@@ -45,7 +45,8 @@ async function bookedRecord(context: Context, tenant: any, recordId: string) {
 
 export default async (req: Request, context: Context) => {
   const syntheticRecordId = clean(context.params.recordId, 100);
-  if (req.method === 'HEAD' && syntheticRecordId === '__health__' && isSyntheticHealthRequest(req)) {
+  const syntheticPath = new URL(req.url).pathname.endsWith('/api/admin/events/documents/__health__');
+  if ((req.method === 'HEAD' || req.method === 'GET') && (syntheticRecordId === '__health__' || syntheticPath) && isSyntheticHealthRequest(req)) {
     try {
       const tenant=resolveTenant(req);
       await Promise.all([
@@ -53,9 +54,17 @@ export default async (req: Request, context: Context) => {
         opsStoreFor(context,tenant).get('events/__health__', { type: 'json' }),
         filesStoreFor(context,tenant).get('documents/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
-      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 204, headers: {
+        'Cache-Control': 'no-store',
+        'X-VenueLoom-Synthetic-Check': 'event-documents',
+        'X-Koa-Synthetic-Check': 'event-documents',
+      } });
     } catch {
-      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'event-documents' } });
+      return new Response(null, { status: 503, headers: {
+        'Cache-Control': 'no-store',
+        'X-VenueLoom-Synthetic-Check': 'event-documents',
+        'X-Koa-Synthetic-Check': 'event-documents',
+      } });
     }
   }
 
