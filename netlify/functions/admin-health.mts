@@ -18,6 +18,9 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
+  readAllProductionReleaseAudits,
+  rollbackReadySummary,
+  runSafeCriticalIntegrationRollbackDrill,
   readUptimeHistory,
   releaseTimelineWithIncidents,
   runSystemHealth,
@@ -39,6 +42,35 @@ import {
   readOffice365SyncAudit,
   readOffice365SyncState,
 } from './_shared/office365-calendar-sync';
+
+function csvCell(value:any){
+  const text=String(value??'');
+  return /[",\n\r]/.test(text)?'"'+text.replace(/"/g,'""')+'"':text;
+}
+
+function criticalIntegrationAuditCsv(releases:any[]){
+  const headers=[
+    'deploy_id','commit','commit_title','published_at','recorded_at',
+    'release_verification_status','healthy_count','total_count','verification_checked_at',
+    'probe_id','probe_name','probe_ok','probe_http_status','probe_source','probe_marker','probe_expected_marker','probe_last_live_checked_at','probe_detail',
+    'rollback_status','rollback_checked_at','rollback_from_deploy_id','rollback_from_commit','rollback_target_deploy_id','rollback_target_commit','rollback_reason','rollback_http_status','rollback_error'
+  ];
+  const rows=[headers];
+  for(const release of releases||[]){
+    const verification=release?.syntheticProbeVerification||null;
+    const probes=Array.isArray(verification?.probes)&&verification.probes.length?verification.probes:[null];
+    for(const probe of probes){
+      const rollback=release?.rollbackProtection||null;
+      rows.push([
+        release?.deployId||'',release?.commit||'',release?.commitTitle||'',release?.publishedAt||'',release?.recordedAt||'',
+        verification?.status||'unrecorded',verification?.healthyCount??'',verification?.totalCount??'',verification?.checkedAt||'',
+        probe?.id||'',probe?.name||'',probe==null?'':Boolean(probe?.ok),probe?.status??'',probe?.source||'',probe?.marker||'',probe?.expectedMarker||'',probe?.lastLiveCheckedAt||'',probe?.detail||'',
+        rollback?.status||'',rollback?.checkedAt||'',rollback?.fromDeployId||'',rollback?.fromCommit||'',rollback?.targetDeployId||'',rollback?.targetCommit||'',rollback?.reason||'',rollback?.httpStatus??'',rollback?.error||''
+      ]);
+    }
+  }
+  return rows.map((row)=>row.map(csvCell).join(',')).join('\n');
+}
 
 function saverModeCredits(control:any,mode:string){
   if(mode==='paused')return Number(control?.pausedSavingsPerDay||0);
@@ -394,6 +426,19 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 
+    if(body?.action==='run-critical-integrations-rollback-drill'){
+      try{
+        const drill=await runSafeCriticalIntegrationRollbackDrill(context,{
+          failedProbeId:String(body?.failedProbeId||'synthetic-signwell-webhook'),
+        });
+        return Response.json({ok:Boolean(drill?.ok),drill},{headers:{'Cache-Control':'private, no-store'}});
+      }catch(error){
+        const message=error instanceof Error?error.message:'Unable to run Critical Integrations rollback drill.';
+        const blocked=/blocked in production/i.test(message);
+        return Response.json({error:message},{status:blocked?409:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+    }
+
     if(body?.action==='test-resend-webhook'){
       try{
         const webhookTest=await testResendWebhookDelivery();
@@ -718,13 +763,31 @@ export default async (req:Request,context:Context) => {
     );
     return Response.json({
       ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
       accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
+
+  const url=new URL(req.url);
+  if(url.searchParams.get('export')==='critical-integrations'){
+    if(!admin)return Response.json({error:'System Health management permission required.'},{status:403,headers:{'Cache-Control':'private, no-store'}});
+    const releases=await readAllProductionReleaseAudits(context);
+    const format=String(url.searchParams.get('format')||'csv').toLowerCase();
+    const date=new Date().toISOString().slice(0,10);
+    if(format==='json'){
+      return new Response(JSON.stringify({generatedAt:new Date().toISOString(),releaseCount:releases.length,releases},null,2),{
+        status:200,
+        headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.json"','Cache-Control':'private, no-store'},
+      });
+    }
+    return new Response(criticalIntegrationAuditCsv(releases),{
+      status:200,
+      headers:{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.csv"','Cache-Control':'private, no-store'},
+    });
+  }
 
   const latest=await readLatestHealth(context);
   if(!admin){
@@ -784,6 +847,8 @@ export default async (req:Request,context:Context) => {
     components:healthComponents(),
     coverage:healthCoverageSummary(latest),
     criticalIntegrations:criticalIntegrationsSummary(latest),
+    rollbackReady:await rollbackReadySummary(context,String(latest?.deployId||'')),
+    runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},
     deployments,
     office365,
     emailHealth,
