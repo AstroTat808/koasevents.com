@@ -13,6 +13,7 @@ import {
   persistHealth,
   readHealthAlertPolicy,
   readHealthHistory,
+  readAccountingInvariantIncidents,
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
@@ -296,7 +297,7 @@ async function office365HealthSummary(context:Context,deployments:any=null){
   };
 }
 
-function accountingHealthSummary(latest:any,history:any[]){
+function accountingHealthSummary(latest:any,history:any[],persistentIncidents:any[]=[]){
   const rows=[latest,...(Array.isArray(history)?history:[])].filter(Boolean);
   const seen=new Set<string>();
   const samples=rows
@@ -368,9 +369,11 @@ function accountingHealthSummary(latest:any,history:any[]){
     liveNonTaxId:String(latestSample?.accountingDetails?.liveNonTaxId||''),
     liveNonTaxName:String(latestSample?.accountingDetails?.liveNonTaxName||''),
     liveClientInvariant:latestSample?.accountingDetails?.liveClientInvariant||null,
+    liveClientInvariants:latestSample?.accountingDetails?.liveClientInvariants||null,
     lastSuccessfulAt:String(lastSuccessful?.checkedAt||''),
     failures,
     alertHistory:alertHistory.reverse().slice(0,20),
+    incidentTimeline:Array.isArray(persistentIncidents)?persistentIncidents:[],
     sampleCount:samples.length,
   };
 }
@@ -677,9 +680,10 @@ export default async (req:Request,context:Context) => {
     await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
     await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
 
-    const [uptimeHistory,healthHistory,policy,deployments,releases]=await Promise.all([
+    const [uptimeHistory,healthHistory,accountingInvariantIncidents,policy,deployments,releases]=await Promise.all([
       safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
       safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
+      safeHealthSection(runWarnings,'Accounting invariant timeline',()=>readAccountingInvariantIncidents(context,500),[] as any),
       safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
       safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
       safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
@@ -714,7 +718,7 @@ export default async (req:Request,context:Context) => {
     return Response.json({
       ok:true,
       current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
-      accountingHealth:accountingHealthSummary(current,healthHistory),
+      accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
       enrichmentWarnings,
     },{headers:{'Cache-Control':'private, no-store'}});
   }
@@ -735,9 +739,10 @@ export default async (req:Request,context:Context) => {
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 
-  const [history,uptimeHistory,deployments,policy,releases]=await Promise.all([
+  const [history,uptimeHistory,accountingInvariantIncidents,deployments,policy,releases]=await Promise.all([
     readHealthHistory(context,120),
     readUptimeHistory(context,2300),
+    readAccountingInvariantIncidents(context,500),
     cachedDeploymentHistory(context),
     readHealthAlertPolicy(context),
     readProductionReleases(context,50),
@@ -782,7 +787,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
-    accountingHealth:accountingHealthSummary(latest,history),
+    accountingHealth:accountingHealthSummary(latest,history,accountingInvariantIncidents),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});
 };
