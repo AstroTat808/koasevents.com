@@ -19,6 +19,7 @@ import { tenantMigrationAudit, tenantStoreFor } from './_shared/tenant-storage.t
 import { runWithTenant } from './_shared/tenant.ts';
 import { runCrossTenantLeakageTest, runSandboxOnboardingJourney, runSandboxOnboardingStage, SANDBOX_ONBOARDING_STAGES } from './_shared/tenant-sandbox-qa.ts';
 import { tenantEnvConfigured } from './_shared/tenant-env.ts';
+import { readGithubMainWorkflowSignal } from './_shared/system-health.ts';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function email(value:unknown){return clean(value,240).toLowerCase();}
@@ -144,6 +145,119 @@ async function sandboxQaSnapshot(context:Context,organization:any){
   });
 }
 
+
+function readinessCriterion(id:string,label:string,status:'green'|'yellow'|'red',detail:string){
+  return {id,label,status,ok:status==='green',detail};
+}
+
+async function sandboxReadinessSnapshot(context:Context,organization:any,migrationAudit:any,sandboxQa:any){
+  if(!organization?.featureFlags?.['platform.sandbox'])return null;
+  const profile=profileFromOrganization(organization);
+  const liveCommit=clean(Netlify.env.get('COMMIT_REF'),80);
+  const ciSignal=await readGithubMainWorkflowSignal(context,'VenueLoom tenant isolation CI').catch(()=>null);
+  const ciStatus=!ciSignal
+    ? 'yellow'
+    : liveCommit && ciSignal.sha===liveCommit
+      ? 'green'
+      : 'yellow';
+
+  const leakage=sandboxQa?.leakage;
+  const leakageStatus=!leakage ? 'yellow' : (leakage.summary?.clean&&leakage.scheduledJobs?.passed ? 'green' : 'red');
+
+  const onboarding=sandboxQa?.onboarding;
+  const onboardingStatus=!onboarding ? 'yellow' : (onboarding.summary?.clean&&onboarding.summary?.activated ? 'green' : 'red');
+
+  const koa=await readOrganizationById(context,'koa-events');
+  const koaIntegrations=new Map((koa?.integrations||[]).map((row:any)=>[row.provider,row]));
+  const requiredProviders=['quickbooks','signwell','resend','microsoft'];
+  const sandboxProviderRows=requiredProviders.map((provider)=>organization.integrations?.find((row:any)=>row.provider===provider)).filter(Boolean);
+  const sharedCredential=sandboxProviderRows.find((row:any)=>{
+    const other:any=koaIntegrations.get(row.provider);
+    return Boolean(row.credentialRef && other?.credentialRef && row.credentialRef===other.credentialRef);
+  });
+  const sharedRemote=sandboxProviderRows.find((row:any)=>{
+    const other:any=koaIntegrations.get(row.provider);
+    return Boolean(row.remoteAccountId && other?.remoteAccountId && row.remoteAccountId===other.remoteAccountId);
+  });
+  const sandboxCredentialsReady=requiredProviders.every((provider)=>{
+    const row=organization.integrations?.find((item:any)=>item.provider===provider);
+    return row?.status==='configured' && row?.credentialRef==='sandbox://'+organization.id+'/'+provider;
+  });
+  const credentialStatus=sharedCredential||sharedRemote ? 'red' : (sandboxCredentialsReady?'green':'yellow');
+
+  const organizationIndex=await listOrganizations(context);
+  const otherOrganizations=[];
+  for(const row of organizationIndex){
+    if(row.id===organization.id)continue;
+    const other=await readOrganizationById(context,row.id);
+    if(other)otherOrganizations.push(other);
+  }
+  const otherHosts=new Set(otherOrganizations.flatMap((row:any)=>(row.domains||[]).map((domain:any)=>String(domain.hostname||'').toLowerCase()).filter(Boolean)));
+  const sandboxHosts=(organization.domains||[]).map((domain:any)=>String(domain.hostname||'').toLowerCase()).filter(Boolean);
+  const duplicateHost=sandboxHosts.find((host:string)=>otherHosts.has(host));
+  const sandboxDomainsReady=(organization.domains||[]).length>0 && (organization.domains||[]).every((domain:any)=>domain.status==='verified'&&String(domain.hostname||'').endsWith('.invalid'));
+  const domainStatus=duplicateHost?'red':(sandboxDomainsReady?'green':'yellow');
+
+  const legacyObjects=Number(migrationAudit?.summary?.legacyObjects||0);
+  const storageStatus=profile.storage.legacyDataBelongsToTenant
+    ? 'red'
+    : (leakage?.summary?.clean&&leakage?.scheduledJobs?.passed&&legacyObjects===0 ? 'green' : 'yellow');
+
+  const sub=organization.subscription||{};
+  const otherCustomerIds=new Set(otherOrganizations.map((row:any)=>row.subscription?.stripeCustomerId).filter(Boolean));
+  const otherSubscriptionIds=new Set(otherOrganizations.map((row:any)=>row.subscription?.stripeSubscriptionId).filter(Boolean));
+  const sharedBillingId=Boolean(
+    (sub.stripeCustomerId&&otherCustomerIds.has(sub.stripeCustomerId))
+    || (sub.stripeSubscriptionId&&otherSubscriptionIds.has(sub.stripeSubscriptionId))
+  );
+  const sandboxBillingIds=String(sub.stripeCustomerId||'').startsWith('sandbox_customer_')
+    && String(sub.stripeSubscriptionId||'').startsWith('sandbox_subscription_');
+  const billingStatus=sharedBillingId
+    ? 'red'
+    : (sub.status==='trialing'&&sandboxBillingIds ? 'green'
+      : ((sub.stripeCustomerId||sub.stripeSubscriptionId)&&!sandboxBillingIds ? 'red' : 'yellow'));
+
+  const criteria=[
+    readinessCriterion('isolation-ci','Isolation CI',ciStatus,ciStatus==='green'
+      ? 'Signed VenueLoom tenant-isolation CI passed for the exact production commit '+liveCommit.slice(0,12)+'.'
+      : ciSignal
+        ? 'Latest signed isolation CI is '+ciSignal.sha.slice(0,12)+' while production is '+(liveCommit?liveCommit.slice(0,12):'unknown')+'.'
+        : 'No signed production isolation-CI result has been recorded yet.'),
+    readinessCriterion('leakage','Leakage testing',leakageStatus,leakageStatus==='green'
+      ? 'All '+Number(leakage?.summary?.surfaces||0)+' leakage surfaces and scheduled-job namespace checks are clean.'
+      : leakage ? Number(leakage?.summary?.failed||0)+' leakage surfaces failed or scheduled-job isolation is not clean.' : 'Leakage testing has not run.'),
+    readinessCriterion('onboarding','Onboarding QA',onboardingStatus,onboardingStatus==='green'
+      ? 'All onboarding QA steps passed and the sandbox activated.'
+      : onboarding ? Number(onboarding?.summary?.failed||0)+' onboarding steps failed or activation is incomplete.' : 'Onboarding QA has not run.'),
+    readinessCriterion('credentials','Credential separation',credentialStatus,credentialStatus==='green'
+      ? 'QuickBooks, SignWell, Resend, and Microsoft use sandbox-only credential references with no Koa remote-ID overlap.'
+      : credentialStatus==='red' ? 'A sandbox integration shares a credential reference or remote account ID with Koa.' : 'Sandbox-only credential simulation is incomplete.'),
+    readinessCriterion('domains','Domain isolation',domainStatus,domainStatus==='green'
+      ? 'Sandbox domains are unique reserved .invalid hosts and are verified only in simulation.'
+      : domainStatus==='red' ? 'A sandbox hostname overlaps another tenant.' : 'Sandbox domain verification is incomplete.'),
+    readinessCriterion('storage','Storage isolation',storageStatus,storageStatus==='green'
+      ? 'Tenant-native storage is active, legacy compatibility is off, no legacy objects are attached, and runtime namespace isolation is clean.'
+      : profile.storage.legacyDataBelongsToTenant ? 'Sandbox is incorrectly using legacy compatibility storage.' : 'Tenant-native storage exists, but runtime isolation or legacy-object proof is incomplete.'),
+    readinessCriterion('billing','Billing isolation',billingStatus,billingStatus==='green'
+      ? 'Stripe lifecycle uses sandbox-only identifiers with no customer/subscription overlap with another tenant.'
+      : billingStatus==='red' ? 'Sandbox billing identifiers are real-looking or overlap another tenant.' : 'Sandbox billing lifecycle has not completed.'),
+  ];
+  return {
+    ready:criteria.every((row)=>row.status==='green'),
+    locked:criteria.some((row)=>row.status!=='green'),
+    checkedAt:new Date().toISOString(),
+    liveCommit,
+    ciSignal,
+    criteria,
+    summary:{
+      green:criteria.filter((row)=>row.status==='green').length,
+      yellow:criteria.filter((row)=>row.status==='yellow').length,
+      red:criteria.filter((row)=>row.status==='red').length,
+      total:criteria.length,
+    },
+  };
+}
+
 async function platformSnapshot(context:Context){
   const index=await listOrganizations(context);
   const organizations=[];
@@ -187,11 +301,13 @@ export default async(req:Request,context:Context)=>{
       if(!organization)return Response.json({error:'Organization not found.'},{status:404});
       const profile=profileFromOrganization(organization);
       const migrationAudit=await runWithTenant(profile,()=>tenantMigrationAudit(context,profile));
+      const sandboxQa=await sandboxQaSnapshot(context,organization);
       return Response.json({
         supportSession:{...session,token:undefined},
         organization:await organizationSummary(context,organization),
         migrationAudit,
-        sandboxQa:await sandboxQaSnapshot(context,organization),
+        sandboxQa,
+        readiness:await sandboxReadinessSnapshot(context,organization,migrationAudit,sandboxQa),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -202,10 +318,12 @@ export default async(req:Request,context:Context)=>{
       if(!organization)return Response.json({error:'Organization not found.'},{status:404});
       const profile=profileFromOrganization(organization);
       const migrationAudit=await runWithTenant(profile,()=>tenantMigrationAudit(context,profile));
+      const sandboxQa=await sandboxQaSnapshot(context,organization);
       return Response.json({
         organization:await organizationSummary(context,organization),
         migrationAudit,
-        sandboxQa:await sandboxQaSnapshot(context,organization),
+        sandboxQa,
+        readiness:await sandboxReadinessSnapshot(context,organization,migrationAudit,sandboxQa),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
