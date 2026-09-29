@@ -2012,6 +2012,100 @@ export async function readHealthHistory(context:Context,limit=100):Promise<Healt
   return rows.slice(0,Math.max(1,Math.min(500,limit))).map((row)=>hydrateIssueTypes(row) as HealthSnapshot);
 }
 
+function accountingInvariantClientRows(snapshot:HealthSnapshot|null){
+  const check=(Array.isArray(snapshot?.checks)?snapshot?.checks:[]).find((row:any)=>row?.id==='quickbooks-tax-invariant') as any;
+  const details=check?.accountingDetails||{};
+  const dynamicRows=Array.isArray(details?.liveClientInvariants?.rows)?details.liveClientInvariants.rows:[];
+  const staticRow=details?.liveClientInvariant||null;
+  const rows=[...dynamicRows];
+  if(staticRow&&staticRow?.recordId&&!rows.some((row:any)=>String(row?.recordId||'')===String(staticRow.recordId))){
+    rows.push(staticRow);
+  }
+  return rows.map((row:any)=>({
+    status:String(row?.status||'unverified'),
+    verifiedAt:String(row?.verifiedAt||snapshot?.checkedAt||''),
+    recordId:String(row?.recordId||''),
+    clientName:String(row?.clientName||row?.recordId||''),
+    eventDate:String(row?.eventDate||'').slice(0,10),
+    proposalStatus:String(row?.proposalStatus||''),
+    estimateId:String(row?.estimateId||''),
+    estimateDocNumber:String(row?.estimateDocNumber||''),
+    proposalTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
+    estimateTotal:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
+    taxableLineCount:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
+    historicalTaxOnTaxDetected:Boolean(row?.historicalTaxOnTaxDetected),
+    detail:String(row?.detail||''),
+  })).filter((row:any)=>row.recordId);
+}
+
+function accountingInvariantStateChanged(before:any,after:any){
+  if(!before)return true;
+  return [
+    'status','estimateId','estimateDocNumber','proposalTotal','estimateTotal','taxableLineCount','historicalTaxOnTaxDetected'
+  ].some((key)=>String(before?.[key]??'')!==String(after?.[key]??''));
+}
+
+async function recordAccountingInvariantIncidents(context:Context,previous:HealthSnapshot|null,current:HealthSnapshot){
+  const store=healthStore(context);
+  const existing=((await store.get('accounting/client-invariant-incidents',{type:'json'}))||[]) as any[];
+  const existingIds=new Set(existing.map((row:any)=>String(row?.id||'')));
+  const beforeByRecord=new Map(accountingInvariantClientRows(previous).map((row:any)=>[row.recordId,row]));
+  const currentRows=accountingInvariantClientRows(current);
+  const additions:any[]=[];
+
+  for(const after of currentRows){
+    const before:any=beforeByRecord.get(after.recordId)||null;
+    if(!accountingInvariantStateChanged(before,after))continue;
+    const type=!before
+      ? (after.status==='passed'?'baseline':'failed')
+      : before.status!=='passed'&&after.status==='passed'
+        ? 'recovered'
+        : before.status==='passed'&&after.status!=='passed'
+          ? 'failed'
+          : 'changed';
+    const id='AINC-'+String(current.id||current.checkedAt||'').replace(/[^A-Za-z0-9]/g,'').slice(-18)+'-'+after.recordId.replace(/[^A-Za-z0-9]/g,'').slice(-24)+'-'+type;
+    if(existingIds.has(id))continue;
+    additions.push({
+      id,
+      checkedAt:String(current.checkedAt||after.verifiedAt||new Date().toISOString()),
+      source:String(current.source||''),
+      type,
+      severity:after.status==='passed'?'green':after.status==='unverified'?'yellow':'red',
+      recordId:after.recordId,
+      clientName:after.clientName,
+      eventDate:after.eventDate,
+      proposalStatus:after.proposalStatus,
+      estimateId:after.estimateId,
+      estimateDocNumber:after.estimateDocNumber,
+      before:before?{
+        status:before.status,
+        proposalTotal:before.proposalTotal,
+        estimateTotal:before.estimateTotal,
+        taxableLineCount:before.taxableLineCount,
+        historicalTaxOnTaxDetected:before.historicalTaxOnTaxDetected,
+      }:null,
+      after:{
+        status:after.status,
+        proposalTotal:after.proposalTotal,
+        estimateTotal:after.estimateTotal,
+        taxableLineCount:after.taxableLineCount,
+        historicalTaxOnTaxDetected:after.historicalTaxOnTaxDetected,
+      },
+      detail:after.detail,
+    });
+  }
+
+  if(additions.length){
+    await store.setJSON('accounting/client-invariant-incidents',[...additions.reverse(),...existing]);
+  }
+  return additions;
+}
+
+export async function readAccountingInvariantIncidents(context:Context,limit=500){
+  const rows=((await healthStore(context).get('accounting/client-invariant-incidents',{type:'json'}))||[]) as any[];
+  return rows.slice(0,Math.max(1,Math.min(2000,limit)));
+}
+
 export async function applyHealthAlertPolicy(context:Context,current:HealthSnapshot,previousHourly:HealthSnapshot|null) {
   const policy=await readHealthAlertPolicy(context);
   const ruleById=new Map(policy.rules.map(rule=>[rule.id,rule]));
@@ -2029,6 +2123,7 @@ export async function applyHealthAlertPolicy(context:Context,current:HealthSnaps
 export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
   const store=healthStore(context);
   const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
+  await recordAccountingInvariantIncidents(context,history[0]||null,snapshot);
   await store.setJSON('latest',snapshot);
   await store.setJSON('history',[snapshot,...history].slice(0,500));
 
