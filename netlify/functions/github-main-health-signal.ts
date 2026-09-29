@@ -146,6 +146,7 @@ export default async (req:Request,context:Context) => {
 
       const accountingCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
       const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
+      const liveClients=accountingCheck?.accountingDetails?.liveClientInvariants||null;
       const accountingInvariant={
         id:String(accountingCheck?.id||'quickbooks-tax-invariant'),
         ok:Boolean(accountingCheck?.ok),
@@ -161,6 +162,11 @@ export default async (req:Request,context:Context) => {
         estimateId:String(liveClient?.estimateId||''),
         estimateDocNumber:String(liveClient?.estimateDocNumber||''),
         verifiedAt:String(liveClient?.verifiedAt||health.checkedAt||''),
+        dynamicClientStatus:String(liveClients?.status||'unverified'),
+        dynamicClientCount:Number(liveClients?.clientCount||0),
+        dynamicClientPassedCount:Number(liveClients?.passedCount||0),
+        dynamicClientFailedCount:Number(liveClients?.failedCount||0),
+        dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
         detail:String(accountingCheck?.detail||''),
       };
       const accountingVerified=Boolean(
@@ -173,6 +179,10 @@ export default async (req:Request,context:Context) => {
         && accountingInvariant.liveClientEstimateTotal===15706.80
         && accountingInvariant.liveClientTaxableLineCount===0
         && !accountingInvariant.historicalTaxOnTaxDetected
+        && accountingInvariant.dynamicClientStatus==='passed'
+        && accountingInvariant.dynamicClientFailedCount===0
+        && accountingInvariant.dynamicClientUnverifiedCount===0
+        && accountingInvariant.dynamicClientPassedCount===accountingInvariant.dynamicClientCount
       );
       const requireAccounting=body?.action==='verify-production-health';
       const verified=probesVerified&&(!requireAccounting||accountingVerified);
