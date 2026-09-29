@@ -210,6 +210,289 @@ function checkInlineAssets() {
   };
 }
 
+const EMAIL_RENDER_VERIFICATION_KEY = 'email/render-verification-v1';
+
+export async function readBrandedEmailProductionVerification(context: Context): Promise<BrandedEmailProductionVerification | null> {
+  return ((await storeFor(context).get(EMAIL_RENDER_VERIFICATION_KEY, { type: 'json' })) || null) as BrandedEmailProductionVerification | null;
+}
+
+async function saveBrandedEmailProductionVerification(context: Context, row: BrandedEmailProductionVerification) {
+  await storeFor(context).setJSON(EMAIL_RENDER_VERIFICATION_KEY, row);
+  return row;
+}
+
+function githubHeaders() {
+  const token=clean(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  return {
+    'Accept':'application/vnd.github+json',
+    'User-Agent':'KoaEvents-EmailHealth/1.0',
+    ...(token?{Authorization:'Bearer '+token}:{}),
+  };
+}
+
+async function changedEmailRenderingFiles(baseCommit:string,headCommit:string) {
+  const base=clean(baseCommit,120);
+  const head=clean(headCommit,120);
+  if(!head) return {ok:false,files:[] as string[],detail:'Production commit is unavailable.'};
+  if(base&&base===head) return {ok:true,files:[] as string[],detail:'Production commit already has a successful branded email verification.'};
+  try{
+    const url=base
+      ? 'https://api.github.com/repos/AstroTat808/koasevents.com/compare/'+encodeURIComponent(base)+'...'+encodeURIComponent(head)
+      : 'https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+encodeURIComponent(head);
+    const response=await fetch(url,{headers:githubHeaders(),signal:AbortSignal.timeout(12_000)});
+    if(!response.ok) return {ok:false,files:[] as string[],detail:'GitHub email-rendering comparison returned HTTP '+response.status+'.'};
+    const body:any=await response.json();
+    const files=emailRenderingFiles(Array.isArray(body?.files)?body.files:[]);
+    return {
+      ok:true,
+      files,
+      detail:base
+        ? 'Compared production changes since the last successful branded email verification.'
+        : 'Inspected the current production commit for email-rendering changes.',
+    };
+  }catch(error){
+    return {ok:false,files:[] as string[],detail:error instanceof Error?error.message:'GitHub email-rendering comparison failed.'};
+  }
+}
+
+function syntheticBrandedEmail(commit:string) {
+  const tenant=resolveTenant();
+  const shortCommit=clean(commit,12)||'unknown';
+  const title='Inline logo verification';
+  const html=
+    emailDocumentOpen({title:'Production email rendering verification',previewText:'Automated production email rendering verification.'})
+    +emailHeader({brand:'events',eyebrow:'Production QA',title})
+    +'<tr><td style="padding-top:26px;padding-right:22px;padding-bottom:26px;padding-left:22px;">'
+    +emailGreeting('Email QA')
+    +'<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:25px;color:#46564f;">This controlled message verifies that the production email renderer embeds the organization logo as a matching CID PNG attachment after email-rendering changes.</p>'
+    +'<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:20px;color:#66736d;">Production commit: '+shortCommit+'</p>'
+    +emailSignature()
+    +'</td></tr>'
+    +emailDocumentClose();
+  const text=[
+    emailGreetingText('Email QA'),'',
+    'Production email rendering verification','',
+    'This controlled message verifies that the production email renderer embeds the organization logo as a matching CID PNG attachment after email-rendering changes.',
+    'Production commit: '+shortCommit,'',
+    emailSignatureText(),
+  ].join('\n');
+  return {
+    subject:'[PRODUCTION QA] '+tenant.displayName+' inline logo verification · '+shortCommit,
+    html,
+    text,
+  };
+}
+
+async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
+  const metadata=emailLogoMetadata();
+  let html='';
+  let resendStatus='';
+  let attachmentPresent=false;
+  let attachmentContentId='';
+  let detail='';
+  for(let attempt=0;attempt<6;attempt+=1){
+    try{
+      const headers={
+        Authorization:'Bearer '+monitoringKey,
+        'Content-Type':'application/json',
+        'User-Agent':'KoaEvents-EmailHealth/1.0',
+      };
+      const [emailResponse,attachmentResponse]=await Promise.all([
+        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId),{headers,signal:AbortSignal.timeout(10_000)}),
+        fetch('https://api.resend.com/emails/'+encodeURIComponent(messageId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(10_000)}),
+      ]);
+      const emailBody:any=await emailResponse.json().catch(()=>({}));
+      const attachmentBody:any=await attachmentResponse.json().catch(()=>({}));
+      html=String(emailBody?.html||html||'');
+      resendStatus=canonicalStatus(emailBody?.last_event||emailBody?.status||resendStatus);
+      const rows=Array.isArray(attachmentBody?.data)?attachmentBody.data:Array.isArray(attachmentBody)?attachmentBody:[];
+      const matching=rows.find((row:any)=>
+        clean(row?.filename,240)===metadata.filename
+        && clean(row?.content_type||row?.contentType,120).toLowerCase()===metadata.contentType
+      );
+      attachmentContentId=clean(matching?.content_id||matching?.contentId,240);
+      attachmentPresent=Boolean(matching && (!attachmentContentId||attachmentContentId===metadata.contentId));
+      if(emailResponse.ok&&attachmentResponse.ok&&html&&attachmentPresent){
+        detail='Resend stored the branded HTML and matching inline PNG attachment.';
+        break;
+      }
+      detail='Resend verification is waiting for the sent email and attachment metadata to become available.';
+    }catch(error){
+      detail=error instanceof Error?error.message:'Unable to inspect the sent branded email.';
+    }
+    if(attempt<5) await wait(750);
+  }
+  const htmlCidPresent=html.toLowerCase().includes(metadata.cid.toLowerCase());
+  const failedStatus=['failed','bounced','complained','suppressed'].includes(resendStatus);
+  return {
+    ok:htmlCidPresent&&attachmentPresent&&!failedStatus,
+    htmlCidPresent,
+    attachmentPresent,
+    attachmentContentId,
+    resendStatus,
+    detail,
+  };
+}
+
+export async function runBrandedEmailProductionVerification(
+  context: Context,
+  input: { deployId?: string; commit?: string; force?: boolean } = {},
+): Promise<BrandedEmailProductionVerification> {
+  const deployId=clean(input.deployId||Netlify.env.get('DEPLOY_ID'),120);
+  const commit=clean(input.commit||Netlify.env.get('COMMIT_REF'),120);
+  const previous=await readBrandedEmailProductionVerification(context);
+  const metadata=emailLogoMetadata();
+  const previousSuccess={
+    at:clean(previous?.lastSuccessfulAt,100),
+    commit:clean(previous?.lastSuccessfulCommit,120),
+    messageId:clean(previous?.lastSuccessfulMessageId,180),
+  };
+  if(previous?.deployId===deployId&&previous?.commit===commit&&['success','failure'].includes(previous?.status||'')){
+    return previous;
+  }
+
+  const comparison=await changedEmailRenderingFiles(previousSuccess.commit,commit);
+  const required=Boolean(input.force||!previousSuccess.commit||!comparison.ok||comparison.files.length);
+  if(!required){
+    return saveBrandedEmailProductionVerification(context,{
+      deployId,
+      commit,
+      checkedAt:new Date().toISOString(),
+      required:false,
+      status:'skipped',
+      changedFiles:[],
+      messageId:'',
+      resendStatus:'',
+      htmlCidPresent:true,
+      attachmentPresent:true,
+      contentId:metadata.contentId,
+      filename:metadata.filename,
+      contentType:metadata.contentType,
+      lastSuccessfulAt:previousSuccess.at,
+      lastSuccessfulCommit:previousSuccess.commit,
+      lastSuccessfulMessageId:previousSuccess.messageId,
+      detail:'No email-rendering files changed since the last successful production branded-email verification.',
+    });
+  }
+
+  const apiKey=clean(tenantSetting('RESEND_API_KEY'),500);
+  const monitoringKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
+  const testTo=clean(tenantSetting('EMAIL_RENDER_TEST_TO','KOA_EMAIL_RENDER_TEST_TO'),240).toLowerCase();
+  const baseFailure=(detail:string):BrandedEmailProductionVerification=>({
+    deployId,
+    commit,
+    checkedAt:new Date().toISOString(),
+    required:true,
+    status:'failure',
+    changedFiles:comparison.files,
+    messageId:'',
+    resendStatus:'',
+    htmlCidPresent:false,
+    attachmentPresent:false,
+    contentId:metadata.contentId,
+    filename:metadata.filename,
+    contentType:metadata.contentType,
+    lastSuccessfulAt:previousSuccess.at,
+    lastSuccessfulCommit:previousSuccess.commit,
+    lastSuccessfulMessageId:previousSuccess.messageId,
+    detail,
+  });
+  if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.'));
+  if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.'));
+  if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.'));
+  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.'));
+
+  const rendered=syntheticBrandedEmail(commit);
+  const attachments=[emailLogoAttachment()];
+  try{
+    assertEmailInlineAssets(rendered.html,attachments);
+  }catch(error){
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Local inline logo validation failed.'));
+  }
+  const tenant=resolveTenant();
+  const from=clean(tenantSetting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
+  try{
+    const response=await fetch('https://api.resend.com/emails',{
+      method:'POST',
+      headers:{
+        Authorization:'Bearer '+apiKey,
+        'Content-Type':'application/json',
+        'Idempotency-Key':('venueloom-email-render-qa-'+tenant.id+'-'+deployId).slice(0,256),
+      },
+      body:JSON.stringify({
+        from,
+        to:[testTo],
+        subject:rendered.subject,
+        html:rendered.html,
+        text:rendered.text,
+        attachments,
+      }),
+      signal:AbortSignal.timeout(12_000),
+    });
+    const body:any=await response.json().catch(()=>({}));
+    const messageId=clean(body?.id,180);
+    if(!response.ok||!messageId){
+      return saveBrandedEmailProductionVerification(context,{
+        ...baseFailure(clean(body?.message||'Resend rejected the branded production verification email.',600)),
+        messageId,
+      });
+    }
+    const inspected=await inspectSentBrandedEmail(messageId,monitoringKey);
+    const success=Boolean(inspected.ok);
+    const checkedAt=new Date().toISOString();
+    return saveBrandedEmailProductionVerification(context,{
+      deployId,
+      commit,
+      checkedAt,
+      required:true,
+      status:success?'success':'failure',
+      changedFiles:comparison.files,
+      messageId,
+      resendStatus:clean(inspected.resendStatus,80),
+      htmlCidPresent:Boolean(inspected.htmlCidPresent),
+      attachmentPresent:Boolean(inspected.attachmentPresent),
+      contentId:metadata.contentId,
+      filename:metadata.filename,
+      contentType:metadata.contentType,
+      lastSuccessfulAt:success?checkedAt:previousSuccess.at,
+      lastSuccessfulCommit:success?commit:previousSuccess.commit,
+      lastSuccessfulMessageId:success?messageId:previousSuccess.messageId,
+      detail:success
+        ? 'Production branded email verified in Resend: CID HTML and matching inline PNG attachment are both present.'
+        : clean(inspected.detail||'Production branded email verification did not confirm both the CID HTML and inline PNG attachment.',800),
+    });
+  }catch(error){
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Production branded email verification failed.'));
+  }
+}
+
+export async function inlineLogoHealthSummary(context: Context) {
+  const metadata=emailLogoMetadata();
+  const staticAudit=checkInlineAssets();
+  const productionVerification=await readBrandedEmailProductionVerification(context);
+  const productionOk=!productionVerification?.required||productionVerification?.status==='success';
+  return {
+    ok:Boolean(staticAudit.ok&&productionOk),
+    severity:staticAudit.ok&&productionOk?'green':'red',
+    cid:metadata.cid,
+    contentId:metadata.contentId,
+    filename:metadata.filename,
+    contentType:metadata.contentType,
+    staticAudit,
+    productionVerification,
+    lastSuccessfulAt:clean(productionVerification?.lastSuccessfulAt,100),
+    lastSuccessfulCommit:clean(productionVerification?.lastSuccessfulCommit,120),
+    lastSuccessfulMessageId:clean(productionVerification?.lastSuccessfulMessageId,180),
+    detail:!staticAudit.ok
+      ? staticAudit.detail
+      : productionVerification?.required&&productionVerification?.status!=='success'
+        ? productionVerification.detail
+        : productionVerification?.lastSuccessfulAt
+          ? 'Inline logo is healthy and the most recent required production branded-email verification succeeded.'
+          : 'Inline logo structure is healthy; the first production branded-email verification has not been recorded yet.',
+  };
+}
+
 export async function checkResendSendAccess() {
   const apiKey = clean(tenantSetting('RESEND_API_KEY'), 500);
   if (!apiKey) {
