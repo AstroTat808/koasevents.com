@@ -483,13 +483,52 @@ async function syncEstimateOutbound(
   }
 
   let created = false;
+  let updated = false;
   if (estimate?.Id && estimate?.SyncToken != null) {
-    const updated: any = await qboUpdate(context, 'estimate', {
-      Id: String(estimate.Id),
-      SyncToken: String(estimate.SyncToken),
-      ...payload,
+    const existingFingerprint = JSON.stringify({
+      customerId: clean(estimate?.CustomerRef?.value, 100),
+      txnDate: isoDate(estimate?.TxnDate),
+      expirationDate: isoDate(estimate?.ExpirationDate),
+      billEmail: normalizeEmail(estimate?.BillEmail?.Address),
+      customerMemo: clean(estimate?.CustomerMemo?.value, 1000),
+      privateNote: clean(estimate?.PrivateNote, 1000),
+      discountAmount: money(estimate?.DiscountAmt),
+      lines: qboLines(estimate).map((line: any) => ({
+        description: clean(line?.description, 1000),
+        quantity: Number(line?.quantity || 0),
+        unitPrice: money(line?.unitPrice),
+        amount: money(line?.amount),
+        itemId: clean(line?.itemId, 100),
+      })),
     });
-    estimate = updated?.Estimate || estimate;
+    const desiredFingerprint = JSON.stringify({
+      customerId: clean(payload?.CustomerRef?.value, 100),
+      txnDate: isoDate(payload?.TxnDate),
+      expirationDate: isoDate(payload?.ExpirationDate),
+      billEmail: normalizeEmail(payload?.BillEmail?.Address),
+      customerMemo: clean(payload?.CustomerMemo?.value, 1000),
+      privateNote: clean(payload?.PrivateNote, 1000),
+      discountAmount: money(payload?.DiscountAmt),
+      lines: (Array.isArray(payload?.Line) ? payload.Line : [])
+        .filter((line: any) => line?.DetailType === 'SalesItemLineDetail')
+        .map((line: any) => ({
+          description: clean(line?.Description, 1000),
+          quantity: Number(line?.SalesItemLineDetail?.Qty || 0),
+          unitPrice: money(line?.SalesItemLineDetail?.UnitPrice),
+          amount: money(line?.Amount),
+          itemId: clean(line?.SalesItemLineDetail?.ItemRef?.value, 100),
+        })),
+    });
+
+    if (existingFingerprint !== desiredFingerprint) {
+      const updateResult: any = await qboUpdate(context, 'estimate', {
+        Id: String(estimate.Id),
+        SyncToken: String(estimate.SyncToken),
+        ...payload,
+      });
+      estimate = updateResult?.Estimate || estimate;
+      updated = true;
+    }
   } else {
     const result: any = await qboCreate(context, 'estimate', payload);
     estimate = result?.Estimate;
@@ -508,7 +547,7 @@ async function syncEstimateOutbound(
   state.estimateEmailStatus = normalized.emailStatus;
   state.estimateLastSyncedAt = new Date().toISOString();
   state.lastSyncedAt = state.estimateLastSyncedAt;
-  return { skipped: false, created, estimate };
+  return { skipped: !created && !updated, created, updated, reason: !created && !updated ? 'no_change' : '', estimate };
 }
 
 function mapUnique<T>(items: T[], key: (item: T) => string) {
