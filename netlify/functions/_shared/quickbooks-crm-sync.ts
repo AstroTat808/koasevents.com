@@ -778,10 +778,13 @@ function qboFilterValue(value: unknown) {
   return clean(value, 120).replace(/'/g, "\\'");
 }
 
-async function qboCustomerTransactions(context: Context, customerId: string) {
+async function qboCustomerTransactions(context: Context, customerId: string, onOperation: (operation:string) => void = () => {}) {
   const ref = qboFilterValue(customerId);
+  onOperation('inbound_estimates_query');
   const estimatesData: any = await qboQuery(context, "select * from Estimate where CustomerRef = '" + ref + "' maxresults 1000");
+  onOperation('inbound_invoices_query');
   const invoicesData: any = await qboQuery(context, "select * from Invoice where CustomerRef = '" + ref + "' maxresults 1000");
+  onOperation('inbound_payments_query');
   const paymentsData: any = await qboQuery(context, "select * from Payment where CustomerRef = '" + ref + "' maxresults 1000");
   return {
     estimates: Array.isArray(estimatesData?.QueryResponse?.Estimate) ? estimatesData.QueryResponse.Estimate : [],
@@ -808,8 +811,32 @@ export async function startQuickBooksCrmTwoWaySyncJob(context: Context, actor = 
   const records = (((await salesStore(context).get('records/index', { type:'json' })) || []) as any[])
     .filter(Boolean)
     .slice(0, CRM_RECORD_LIMIT);
-  const customerPlans = Array.isArray(preview.customerPlans) ? jsonClone(preview.customerPlans) : [];
-  const outbound = Array.isArray(preview.outbound) ? jsonClone(preview.outbound) : [];
+  const customerPlans = (Array.isArray(preview.customerPlans) ? preview.customerPlans : []).map((plan: any) => ({
+    customerId:clean(plan?.customerId,100),
+    qbo:{
+      name:clean(plan?.qbo?.name,240),
+      email:clean(plan?.qbo?.email,240),
+      phone:clean(plan?.qbo?.phone,80),
+      eventDate:clean(plan?.qbo?.eventDate,40),
+    },
+    decision:clean(plan?.decision,40),
+    reason:clean(plan?.reason,500),
+    matchedRecordId:clean(plan?.matchedRecordId,120),
+    predictedRecordId:clean(plan?.predictedRecordId,120),
+    executionDisposition:clean(plan?.executionDisposition,40),
+    exclusion:plan?.exclusion ? {
+      reasonCode:clean(plan.exclusion.reasonCode,60),
+      reason:clean(plan.exclusion.reason,500),
+      reasonLabel:clean(plan.exclusion.reasonLabel,120),
+    } : null,
+  }));
+  const outbound = (Array.isArray(preview.outbound) ? preview.outbound : []).map((row: any) => ({
+    recordId:clean(row?.recordId,120),
+    name:clean(row?.name,180),
+    customerId:clean(row?.customerId,100),
+    estimateId:clean(row?.estimateId,100),
+    actions:jsonClone(Array.isArray(row?.actions) ? row.actions : []),
+  }));
   const startedAt = new Date().toISOString();
   const jobId = 'QBSYNCJOB-' + Date.now().toString(36).toUpperCase() + '-' + idSuffix();
   const job = {
@@ -905,10 +932,12 @@ async function processQuickBooksInboundPlan(context: Context, job: any, plan: an
   }
   if (!['create','match_refresh'].includes(disposition)) return;
 
+  job.currentItem.operation = 'inbound_customer_load';
   const customerData: any = await qboGet(context, 'customer', customerId);
   const customer = customerData?.Customer;
   if (!customer?.Id) throw Object.assign(new Error('QuickBooks customer could not be loaded.'), { operation:'inbound_customer_load' });
-  const transactions = await qboCustomerTransactions(context, customerId);
+  const transactions = await qboCustomerTransactions(context, customerId, (operation) => { job.currentItem.operation = operation; });
+  job.currentItem.operation = 'inbound_crm_mirror';
 
   const store = salesStore(context);
   const records = (((await store.get('records/index', { type:'json' })) || []) as any[])
