@@ -109,7 +109,12 @@ export default async (req:Request,context:Context) => {
       await persistHealth(context,health);
       await sendHealthTransitionAlerts(previous,health);
 
-      const deployId=String(Netlify.env.get('DEPLOY_ID')||'').trim();
+      const deploymentSyncCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='netlify-github-sync')||null;
+      const deployId=String(
+        deploymentSyncCheck?.deploymentDetails?.netlifyDeployId
+        || Netlify.env.get('DEPLOY_ID')
+        || ''
+      ).trim();
       const syntheticProbeVerification=syntheticProbeReleaseVerification(health,'github-actions-oidc');
       const probes=syntheticProbeVerification.probes;
       const probesVerified=syntheticProbeVerification.status==='passed'
@@ -119,13 +124,14 @@ export default async (req:Request,context:Context) => {
       let auditRecorded=false;
       let auditError='';
       try{
-        await recordProductionRelease(context,{
+        const releaseRecord=await recordProductionRelease(context,{
           deployId,
           commit:String(claims.sha||''),
           checkedAt:health.checkedAt,
           syntheticProbeVerification,
         });
-        auditRecorded=true;
+        auditRecorded=Boolean(releaseRecord?.deployId);
+        if(!auditRecorded)auditError='Production deploy id could not be resolved, so the per-release probe audit was not persisted.';
       }catch(error){
         auditError=error instanceof Error?error.message:'Unable to persist production synthetic-probe audit.';
       }
