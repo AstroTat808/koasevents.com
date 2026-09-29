@@ -1405,10 +1405,25 @@ export default async (req: Request, context: Context) => {
     } catch (error) {
       return Response.json({ error:error instanceof Error ? error.message : 'Run a fresh QuickBooks sync preview.' }, { status:409 });
     }
-    const result = await runQuickBooksCrmTwoWaySync(context, actor, previewId);
-    const records = await readQuickBooksSalesRecords(context);
-    const accountingAudit = buildQuickBooksAccountingAudit(records);
-    return Response.json({ ok:true, result, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+    try {
+      const result = await runQuickBooksCrmTwoWaySync(context, actor, previewId);
+      const records = await readQuickBooksSalesRecords(context);
+      const accountingAudit = buildQuickBooksAccountingAudit(records);
+      return Response.json({ ok:true, result, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      const message = error instanceof Error ? clean(error.message, 1000) : 'QuickBooks synchronization failed.';
+      console.error('QuickBooks two-way sync failed', {
+        tenantId: clean(tenant?.id, 120),
+        previewId,
+        actor,
+        message,
+      });
+      return Response.json({
+        error: message || 'QuickBooks synchronization failed.',
+        code: 'quickbooks_sync_failed',
+        previewId,
+      }, { status:502, headers:{ 'Cache-Control':'private, no-store' } });
+    }
   }
 
   if (action === 'test-accounting-alert') {
