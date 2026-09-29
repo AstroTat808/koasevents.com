@@ -519,7 +519,6 @@ async function runLiveSyntheticIntegrationChecks(origin:string):Promise<HealthCh
           'Content-Type':'application/json',
           'Intuit-Signature':createHmac('sha256',quickBooksToken).update(quickBooksBody,'utf8').digest('base64'),
           'X-VenueLoom-Health-Check':'1',
-          'X-Koa-Health-Check':'1',
         },
         body:quickBooksBody,
       })
