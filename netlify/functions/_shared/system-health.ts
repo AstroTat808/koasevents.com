@@ -8,7 +8,7 @@ import { emailHealthSummary } from './email-health';
 import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
-import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
+import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode, summarizeLiveAccountingInvariants } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 
@@ -55,6 +55,25 @@ export type HealthCheck = {
       taxableLineCount: number | null;
       historicalTaxOnTaxDetected: boolean;
       detail: string;
+    };
+    dynamicClientInvariants?: {
+      status: 'passed' | 'failed' | 'unverified';
+      verifiedAt: string;
+      eligibleCount: number;
+      passedCount: number;
+      failedCount: number;
+      failures: Array<{
+        recordId: string;
+        clientName: string;
+        eventDate: string;
+        proposalStatus: string;
+        estimateId: string;
+        estimateDocNumber: string;
+        proposalTotal: number;
+        estimateTotal: number | null;
+        taxableLineCount: number;
+        failures: string[];
+      }>;
     };
   };
   deploymentState?: 'synced' | 'deploying' | 'waiting' | 'release-policy-skipped' | 'auto-deploy-broken' | 'deploy-failed' | 'unknown';
@@ -1322,6 +1341,33 @@ async function chrisSibelLiveAccountingInvariant(context:Context) {
   };
 }
 
+async function dynamicClientAccountingInvariants(context:Context, estimateQueryData:any) {
+  const tenant=resolveTenant();
+  const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
+  const estimates=Array.isArray(estimateQueryData?.QueryResponse?.Estimate)?estimateQueryData.QueryResponse.Estimate:[];
+  const estimatesById=new Map(estimates.map((estimate:any)=>[String(estimate?.Id||''),estimate]));
+  const summary=summarizeLiveAccountingInvariants(records,estimatesById);
+  return {
+    status:summary.ok?'passed' as const:'failed' as const,
+    verifiedAt:new Date().toISOString(),
+    eligibleCount:Number(summary.eligibleCount||0),
+    passedCount:Number(summary.passedCount||0),
+    failedCount:Number(summary.failedCount||0),
+    failures:(summary.failures||[]).map((row:any)=>({
+      recordId:String(row.recordId||''),
+      clientName:String(row.clientName||''),
+      eventDate:String(row.eventDate||''),
+      proposalStatus:String(row.proposalStatus||''),
+      estimateId:String(row.estimateId||''),
+      estimateDocNumber:String(row.estimateDocNumber||''),
+      proposalTotal:Number(row.proposalTotal||0),
+      estimateTotal:row.estimateTotal==null?null:Number(row.estimateTotal),
+      taxableLineCount:Number(row.taxableLineCount||0),
+      failures:Array.isArray(row.failures)?row.failures.map((value:any)=>String(value)).slice(0,8):[],
+    })),
+  };
+}
+
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
   const started=Date.now();
   const invariant=evaluateAccountingTaxInvariant();
@@ -1358,11 +1404,15 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
   }
 
   try{
-    const [taxCodeData,liveClient]=await Promise.all([
+    const [taxCodeData,liveClient,estimateQueryData]=await Promise.all([
       qboQuery(context,'select * from TaxCode maxresults 100'),
       chrisSibelLiveAccountingInvariant(context),
+      qboQuery(context,'select * from Estimate maxresults 1000'),
     ]);
-    const live=inspectQuickBooksNonTaxCode(taxCodeData);
+    const [live,dynamicClients]=[
+      inspectQuickBooksNonTaxCode(taxCodeData),
+      await dynamicClientAccountingInvariants(context,estimateQueryData),
+    ];
     const accountingDetails:HealthCheck['accountingDetails']={
       ...baseDetails,
       liveNonTaxStatus:live.verified?(live.ok?'available':'missing-or-inactive'):'unverified',
@@ -1370,6 +1420,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       liveNonTaxId:String(live?.id||''),
       liveNonTaxName:String(live?.name||''),
       liveClientInvariant:liveClient,
+      dynamicClientInvariants:dynamicClients,
     };
     if(liveClient.verified && !liveClient.ok){
       return {
@@ -1384,6 +1435,26 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         accountingDetails,
         detail:clean(
           liveClient.detail+' Production deploy verification will alert immediately while this invariant is failed.',
+          1200,
+        ),
+      };
+    }
+    if(dynamicClients.failedCount>0){
+      const first=dynamicClients.failures[0];
+      const label=[first?.clientName,first?.eventDate].filter(Boolean).join(' · ')||first?.recordId||'accepted/booked client';
+      return {
+        id:'quickbooks-tax-invariant',
+        name:'QuickBooks tax-on-tax invariant',
+        kind:'api',
+        path:'Accepted/booked CRM ↔ QuickBooks invariants',
+        ok:false,
+        status:503,
+        ms:Date.now()-started,
+        severity:'red',
+        accountingDetails,
+        detail:clean(
+          'Dynamic accounting invariant failed for '+dynamicClients.failedCount+' of '+dynamicClients.eligibleCount+' accepted/booked CRM-managed client'+(dynamicClients.eligibleCount===1?'':'s')+'. '
+          +'First failure: '+label+' — '+(first?.failures||[]).join('; ')+'.',
           1200,
         ),
       };
@@ -1418,7 +1489,8 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       accountingDetails,
       detail:clean(
         'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
-        +'milestone invoice line is NON-taxable. '+live.detail+' '+liveClient.detail,
+        +'milestone invoice line is NON-taxable. '+live.detail+' '+liveClient.detail+' '
+        +'Dynamic client invariants: '+dynamicClients.passedCount+'/'+dynamicClients.eligibleCount+' accepted/booked CRM-managed clients passed.',
         1200,
       ),
     };
