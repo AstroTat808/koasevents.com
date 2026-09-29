@@ -385,11 +385,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function renderEmailHealth(summary){
       if(!emailHealthGrid)return;
       const periods=Array.isArray(summary?.periods)?summary.periods:[];
+      const inlineLogo=summary?.inlineLogo||null;
       if(emailHealthState)emailHealthState.textContent=summary?.generatedAt?'Updated '+new Date(summary.generatedAt).toLocaleString():'Unavailable';
       if(emailHealthNote)emailHealthNote.textContent=String(summary?.note||'');
       emailHealthGrid.innerHTML='';
+      if(inlineLogo){
+        const healthy=Boolean(inlineLogo.ok);
+        const lastVerified=String(inlineLogo.lastSuccessfulAt||'');
+        const production=inlineLogo.productionVerification||{};
+        const logoCard=document.createElement('article');
+        logoCard.className='rounded-[1.1rem] border '+(healthy?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50')+' p-5 xl:col-span-3';
+        logoCard.innerHTML=
+          '<div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">'+
+            '<div><p class="text-[.52rem] font-black uppercase tracking-[.08em] '+(healthy?'text-emerald-700':'text-red-700')+'">Brand rendering</p>'+
+            '<h3 class="mt-1 text-2xl font-semibold text-[var(--koa-forest)]">Inline Logo: '+(healthy?'Healthy':'Needs attention')+'</h3>'+
+            '<p class="mt-2 max-w-3xl text-xs leading-5 text-[var(--koa-ink)]/55">'+esc(inlineLogo.detail||'Inline logo verification unavailable.')+'</p></div>'+
+            '<span class="shrink-0 rounded-full px-3 py-1.5 text-[.52rem] font-black uppercase tracking-[.08em] '+(healthy?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800')+'">'+(healthy?'Healthy':'Failed')+'</span>'+
+          '</div>'+
+          '<div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">CID</p><p class="mt-1 break-all text-sm font-semibold text-[var(--koa-forest)]">'+esc(inlineLogo.cid||'—')+'</p></div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Filename</p><p class="mt-1 break-all text-sm font-semibold text-[var(--koa-forest)]">'+esc(inlineLogo.filename||'—')+'</p></div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">MIME type</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+esc(inlineLogo.contentType||'—')+'</p></div>'+
+            '<div class="rounded-xl bg-white p-3"><p class="text-[.5rem] font-black uppercase tracking-[.07em] text-[var(--koa-clay)]">Last successful branded verification</p><p class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">'+esc(lastVerified?new Date(lastVerified).toLocaleString():'Awaiting first production verification')+'</p></div>'+
+          '</div>'+
+          '<p class="mt-3 text-[.62rem] leading-5 text-[var(--koa-ink)]/45">'+
+            (inlineLogo.lastSuccessfulCommit?'Verified commit '+esc(String(inlineLogo.lastSuccessfulCommit).slice(0,12)):'No production commit verified yet')+
+            (inlineLogo.lastSuccessfulMessageId?' · Resend '+esc(inlineLogo.lastSuccessfulMessageId):'')+
+            (production.required&&production.status!=='success'?' · Current production verification is required and has not passed.':'')+
+          '</p>';
+        emailHealthGrid.appendChild(logoCard);
+      }
       if(!periods.length){
-        emailHealthGrid.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/50">Email health metrics are not currently available.</div>';
+        const empty=document.createElement('div');
+        empty.className='rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/50 xl:col-span-3';
+        empty.textContent='Email delivery metrics are not currently available.';
+        emailHealthGrid.appendChild(empty);
         return;
       }
       for(const period of periods){
