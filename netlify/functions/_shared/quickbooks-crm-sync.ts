@@ -1476,6 +1476,48 @@ export async function runQuickBooksCrmTwoWaySync(context: Context, actor = '', p
     }
 
     let record = match.record || null;
+    if(!record){
+      const identityMatches=exactBookingIdentityMatches(records,customer);
+      if(identityMatches.length>1){
+        customerOutcomes.push({
+          customerId,
+          name:clean(customer?.DisplayName,240),
+          outcome:'blocked_duplicate_identity',
+          recordId:'',
+        });
+        conflicts.push({
+          type:'duplicate-booking-identity',
+          quickBooksCustomerId:customerId,
+          quickBooksCustomerName:clean(customer?.DisplayName,240),
+          quickBooksEmail:qboCustomerEmail(customer),
+          crmRecordIds:identityMatches.map((entry:any)=>clean(entry?.id,120)),
+          detail:'QuickBooks import matched more than one CRM record by exact email and event date. The import was blocked for duplicate review.',
+        });
+        continue;
+      }
+      if(identityMatches.length===1){
+        const exact=identityMatches[0];
+        const linkedId=clean(exact?.accounting?.quickbooks?.customerId,100);
+        if(linkedId&&linkedId!==customerId){
+          customerOutcomes.push({
+            customerId,
+            name:clean(customer?.DisplayName,240),
+            outcome:'blocked_link_conflict',
+            recordId:clean(exact?.id,120),
+          });
+          conflicts.push({
+            type:'customer-link',
+            recordId:clean(exact?.id,120),
+            crmQuickBooksCustomerId:linkedId,
+            incomingQuickBooksCustomerId:customerId,
+            detail:'Exact CRM booking identity is already linked to a different QuickBooks customer. The import was blocked.',
+          });
+          continue;
+        }
+        record=exact;
+        matchedRecordIds.push(clean(record?.id,120));
+      }
+    }
     const beforeRecord = record ? crmSyncSnapshot(record) : null;
 
     if (!record) {
