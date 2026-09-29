@@ -392,18 +392,23 @@ export async function readCrmStartupSignal(context:Context):Promise<CrmStartupSi
   return ((await healthStore(context).get('client/business-crm-startup/latest',{type:'json'}))||null) as CrmStartupSignal|null;
 }
 
+function githubWorkflowSignalKey(value:string) {
+  return clean(value,240).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,120);
+}
+
 export async function readGithubMainSignal(context:Context):Promise<GithubMainSignal|null> {
   return ((await healthStore(context).get('github/main/latest',{type:'json'}))||null) as GithubMainSignal|null;
 }
 
+export async function readGithubMainWorkflowSignal(context:Context,workflow:string):Promise<GithubMainSignal|null> {
+  const key=githubWorkflowSignalKey(workflow);
+  if(!key)return null;
+  return ((await healthStore(context).get('github/main/workflows/'+key+'/latest',{type:'json'}))||null) as GithubMainSignal|null;
+}
+
 export async function recordGithubMainSignal(context:Context,input:GithubMainSignal) {
   const store=healthStore(context);
-  const existing=((await store.get('github/main/latest',{type:'json'}))||null) as GithubMainSignal|null;
   const incomingIssuedAt=Math.max(0,Number(input?.issuedAt||0));
-  const existingIssuedAt=Math.max(0,Number(existing?.issuedAt||0));
-  if(existing && incomingIssuedAt<existingIssuedAt){
-    return {accepted:false,signal:existing,reason:'older-oidc-identity'};
-  }
   const signal:GithubMainSignal={
     sha:clean(input?.sha,80),
     repository:clean(input?.repository,240),
@@ -416,8 +421,25 @@ export async function recordGithubMainSignal(context:Context,input:GithubMainSig
     reportedAt:new Date().toISOString(),
     source:'github-actions-oidc',
   };
-  await store.setJSON('github/main/latest',signal);
-  return {accepted:true,signal,reason:'stored'};
+
+  const workflowKey=githubWorkflowSignalKey(signal.workflow);
+  const workflowPath=workflowKey?'github/main/workflows/'+workflowKey+'/latest':'';
+  const [existing,existingWorkflow]=await Promise.all([
+    store.get('github/main/latest',{type:'json'}) as Promise<GithubMainSignal|null>,
+    workflowPath ? store.get(workflowPath,{type:'json'}) as Promise<GithubMainSignal|null> : Promise.resolve(null),
+  ]);
+  const genericIssuedAt=Math.max(0,Number(existing?.issuedAt||0));
+  const workflowIssuedAt=Math.max(0,Number(existingWorkflow?.issuedAt||0));
+
+  if(workflowPath && (!existingWorkflow || incomingIssuedAt>=workflowIssuedAt)) {
+    await store.setJSON(workflowPath,signal);
+  }
+  if(!existing || incomingIssuedAt>=genericIssuedAt) {
+    await store.setJSON('github/main/latest',signal);
+  }
+
+  const accepted=!workflowPath || !existingWorkflow || incomingIssuedAt>=workflowIssuedAt;
+  return {accepted,signal:accepted?signal:(existingWorkflow||existing||signal),reason:accepted?'stored':'older-workflow-oidc-identity'};
 }
 
 function baseUrl() {
