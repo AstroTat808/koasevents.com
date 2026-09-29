@@ -43,6 +43,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <button data-warning-count data-severity-filter="warning" type="button" class="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800 transition hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-700"></button>
               <button data-info-count data-severity-filter="info" type="button" class="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800 transition hover:bg-sky-200 focus:outline-none focus:ring-2 focus:ring-sky-700"></button>
             </div>
+            <div data-severity-section-previews class="mt-2 hidden grid gap-1 text-[.62rem] leading-5 text-[var(--koa-ink)]/55"></div>
             <p data-overall-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View issues ↓</p>
           </article>
           <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Passed</p><p data-passed class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
@@ -823,6 +824,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               Show failures only
             </label>
           </div>
+          <div data-active-health-filter class="mt-4 hidden items-center justify-between gap-3 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3">
+            <strong data-active-health-filter-label class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]"></strong>
+            <button data-clear-health-filter type="button" class="shrink-0 rounded-full border border-[var(--koa-line)] bg-white px-3 py-1.5 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear filter</button>
+          </div>
           <div data-results id="health-check-results" class="mt-5 grid gap-3 lg:grid-cols-2" tabindex="-1"></div>
         </section>
 
@@ -1204,6 +1209,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const warningCount=document.querySelector('[data-warning-count]');
     const infoCount=document.querySelector('[data-info-count]');
     const severityFilterButtons=[...document.querySelectorAll('[data-severity-filter]')];
+    const severitySectionPreviews=document.querySelector('[data-severity-section-previews]');
+    const activeHealthFilter=document.querySelector('[data-active-health-filter]');
+    const activeHealthFilterLabel=document.querySelector('[data-active-health-filter-label]');
+    const clearHealthFilter=document.querySelector('[data-clear-health-filter]');
     const rootCauseButtons=[...document.querySelectorAll('[data-root-cause-filter]')];
     const rootCauseClear=document.querySelector('[data-root-cause-clear]');
     let activeRootCause='';
@@ -1690,6 +1699,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       rootCauseClear?.classList.toggle('hidden',!activeRootCause);
     }
 
+    function updateActiveHealthFilter(rows){
+      if(!(activeHealthFilter instanceof HTMLElement)||!(activeHealthFilterLabel instanceof HTMLElement))return;
+      const count=Array.isArray(rows)?rows.length:0;
+      let label='';
+      if(activeSeverity){
+        label='Showing: '+activeSeverity.charAt(0).toUpperCase()+activeSeverity.slice(1)+' · '+count+' check'+(count===1?'':'s');
+      }else if(activeRootCause){
+        label='Showing: '+activeRootCause+' · '+count+' check'+(count===1?'':'s');
+      }else if(failuresOnly?.checked){
+        label='Showing: Problems only · '+count+' check'+(count===1?'':'s');
+      }
+      activeHealthFilterLabel.textContent=label;
+      activeHealthFilter.classList.toggle('hidden',!label);
+      activeHealthFilter.classList.toggle('flex',Boolean(label));
+    }
+
     function renderHealthChecks(){
       results.innerHTML='';
       const onlyFailures=Boolean(failuresOnly?.checked);
@@ -1700,6 +1725,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(onlyFailures&&severity==='healthy')return false;
         return true;
       });
+      updateActiveHealthFilter(rows);
       if(!rows.length){
         const message=activeRootCause
           ? 'No health checks currently match '+activeRootCause+'.'
@@ -1728,6 +1754,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       activeRootCause='';
       renderRootCauseSummary(latestHealthChecks);
       renderHealthChecks();
+    });
+    clearHealthFilter?.addEventListener('click',()=>{
+      activeRootCause='';
+      activeSeverity='';
+      if(failuresOnly)failuresOnly.checked=false;
+      renderRootCauseSummary(latestHealthChecks);
+      renderHealthChecks();
+      results.scrollIntoView({behavior:'smooth',block:'start'});
     });
     failuresOnly?.addEventListener('change',()=>{
       activeSeverity='';
@@ -2116,6 +2150,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function healthSectionLabel(section){
+      if(!(section instanceof HTMLElement))return '';
+      return String(section.querySelector('h2,h3')?.textContent||section.id||'System Health section').trim();
+    }
+
+    function updateSeveritySectionPreviews(){
+      if(!(severitySectionPreviews instanceof HTMLElement))return;
+      const rows=[
+        ['critical','red',criticalCount],
+        ['warning','yellow',warningCount],
+        ['info','info',infoCount],
+      ];
+      const lines=[];
+      rows.forEach(([severity,status,node])=>{
+        if(!(node instanceof HTMLButtonElement)||node.disabled)return;
+        const sections=status==='info'
+          ? ['Pages + APIs']
+          : [...document.querySelectorAll('[data-mobile-collapsible]')]
+              .filter((section)=>section instanceof HTMLElement&&String(section.dataset.healthSectionStatus||'')===status)
+              .map((section)=>healthSectionLabel(section))
+              .filter(Boolean);
+        const unique=[...new Set(sections)];
+        const label=severity.charAt(0).toUpperCase()+severity.slice(1);
+        const summary=unique.length?unique.join(' · '):'Pages + APIs';
+        node.title=label+' checks appear in: '+summary;
+        const line=document.createElement('p');
+        line.textContent=label+': '+summary;
+        lines.push(line);
+      });
+      severitySectionPreviews.innerHTML='';
+      lines.forEach((line)=>severitySectionPreviews.appendChild(line));
+      severitySectionPreviews.classList.toggle('hidden',lines.length===0);
+    }
+
     function refreshMobileHealthPresentation(){
       if(!(app instanceof HTMLElement)||!healthSectionStatusesReady)return;
       const directSections=[...app.children].filter((node)=>
@@ -2422,6 +2490,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
       healthSectionStatusesReady=true;
       refreshMobileHealthPresentation();
+      updateSeveritySectionPreviews();
     }
 
     function goToHighestPriorityProblem(){
