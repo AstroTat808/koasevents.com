@@ -5,6 +5,7 @@ const helper=fs.readFileSync('netlify/functions/_shared/tenant-sandbox-qa.ts','u
 const platform=fs.readFileSync('netlify/functions/admin-platform.mts','utf8');
 const storage=fs.readFileSync('netlify/functions/_shared/tenant-storage.ts','utf8');
 const dashboard=fs.readFileSync('src/pages/admin/platform/migrations/index.astro','utf8');
+const runner=fs.readFileSync('netlify/functions/internal-tenant2-runtime-runner.mts','utf8');
 
 for(const invariant of [
   /vl-sandbox-tenant-2/,
@@ -63,3 +64,12 @@ for(const invariant of [
 }
 
 console.log('VenueLoom Tenant #2 sandbox, leakage-test, onboarding and migration-dashboard contracts are present.');
+
+
+assert.match(runner,/VENUELOOM_TENANT2_RUNNER_TOKEN_SHA256/,'Temporary production runner must require a hashed secret token.');
+assert.match(runner,/timingSafeEqual/,'Temporary production runner token comparison must be timing safe.');
+assert.match(runner,/context\.deploy\.context!=='production'/,'Runtime runner must refuse non-production contexts.');
+assert.match(runner,/mode==='isolation'/,'Runtime runner must expose the isolation probe.');
+assert.match(runner,/mode==='onboarding'/,'Runtime runner must expose the onboarding probe.');
+assert.match(runner,/mode==='migration'/,'Runtime runner must expose the full migration audit.');
+assert.doesNotMatch(runner,/VENUELOOM_TENANT2_RUNNER_TOKEN_SHA256\s*=\s*['"]/,'Runner secret must never be committed.');
