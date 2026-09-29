@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
 import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
+import { buildCrmDuplicateAudit, buildDuplicateMergePreview, coalesceRecord } from './_shared/crm-duplicates';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
 import { recordCrmStartupSignal } from './_shared/system-health';
@@ -171,8 +172,9 @@ export default async (req:Request, context:Context) => {
     ]);
     const metaMap = new Map(metas.map(m => [m.recordId,m]));
     const cleanupSettings:any = (await sales.get('settings/crm-cleanup',{type:'json'})) || { mode:'auto_trash', updatedAt:'', updatedBy:'' };
+    const duplicateAudit=buildCrmDuplicateAudit(salesRecords);
     const projects = salesRecords
-      .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test')
+      .filter((r:any) => Boolean(r) && r.kind !== 'quickbooks-test' && String(r.stage||'').toLowerCase() !== 'converted')
       .slice(0,1500)
       .map(r => ({...normalizeProject(r, metaMap.get(r.id) || null), cleanup: assessCrmRecord(r)}));
 
@@ -444,7 +446,7 @@ export default async (req:Request, context:Context) => {
         capabilities:capabilitiesFor(auth.user),
         email:clean(auth.user?.email,240).toLowerCase(),
       },
-      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
+      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,duplicateAudit,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
         mode: normalizeCleanupMode(cleanupSettings.mode),
         updatedAt: cleanupSettings.updatedAt || '',
         updatedBy: cleanupSettings.updatedBy || '',
