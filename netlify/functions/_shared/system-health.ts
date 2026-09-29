@@ -2422,7 +2422,7 @@ export async function readAllProductionReleaseAudits(context:Context):Promise<Pr
 }
 
 export async function rollbackReadySummary(context:Context,currentDeployId='') {
-  const releases=await readAllProductionReleaseAudits(context);
+  const releases=await readProductionReleases(context,100);
   const current=clean(currentDeployId||context.deploy?.id,120);
   const target:any=selectRollbackTargetFromReleases(releases,current);
   return {
