@@ -416,6 +416,60 @@ export async function buildTenantContext(
 }
 
 
+export async function appendPlatformSandboxQaHistory(
+  context: Context | undefined,
+  tenantId: string,
+  entry: Record<string, any>,
+) {
+  const id = clean(tenantId, 120);
+  if (!id) throw new Error('Sandbox tenant ID is required.');
+  const store = controlStore(context);
+  const key = 'sandbox-qa-history/' + id + '/index';
+  const current = ((await store.get(key, { type: 'json' })) || []) as Record<string, any>[];
+  const row = {
+    ...entry,
+    tenantId: id,
+    archivedAt: new Date().toISOString(),
+  };
+  await store.setJSON(key, [row, ...current].slice(0, 250));
+  return row;
+}
+
+export async function listPlatformSandboxQaHistory(
+  context: Context | undefined,
+  tenantId: string,
+  limit = 100,
+) {
+  const id = clean(tenantId, 120);
+  if (!id) return [];
+  const rows = ((await controlStore(context).get('sandbox-qa-history/' + id + '/index', { type: 'json' })) || []) as Record<string, any>[];
+  return rows.slice(0, Math.max(1, Math.min(250, Number(limit || 100))));
+}
+
+export async function deleteSandboxOrganizationControlPlane(
+  context: Context | undefined,
+  tenantId: string,
+) {
+  const id = clean(tenantId, 120);
+  const store = controlStore(context);
+  const organization = await store.get('organizations/' + id, { type: 'json' }) as OrganizationRecord | null;
+  if (!organization || !organization.slug.startsWith('vl-sandbox-') || organization.featureFlags?.['platform.sandbox'] !== true) {
+    throw new Error('Only VenueLoom sandbox organizations can be deleted with this operation.');
+  }
+
+  const memberships = ((await store.get('memberships/' + id + '/index', { type: 'json' })) || []) as MembershipRecord[];
+  for (const membership of memberships) {
+    if (membership?.userId) await store.delete('memberships/' + id + '/' + membership.userId);
+  }
+  await store.delete('memberships/' + id + '/index');
+  await store.delete('organizations/' + id);
+
+  const index = ((await store.get('organizations/index', { type: 'json' })) || []) as Array<{id:string;slug:string;displayName:string;status:string}>;
+  await store.setJSON('organizations/index', index.filter((row) => row.id !== id));
+  return { id, membershipsRemoved: memberships.length };
+}
+
+
 export async function listOrganizations(context?: Context) {
   const store = controlStore(context);
   const index = ((await store.get('organizations/index', { type: 'json' })) || []) as Array<{id:string;slug:string;displayName:string;status:string}>;
