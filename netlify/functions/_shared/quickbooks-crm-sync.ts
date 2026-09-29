@@ -36,6 +36,12 @@ function clean(value: unknown, max = 1200) {
   return String(value ?? '').trim().slice(0, max);
 }
 
+function idSuffix() {
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+}
+
 function isoDate(value: unknown) {
   const raw = clean(value, 80);
   if (!raw) return '';
@@ -1047,6 +1053,12 @@ async function processQuickBooksOutboundRow(context: Context, job: any, row: any
   };
 
   let customerSync: any;
+  let beforeCustomer: any = null;
+  if (beforeCustomerId) {
+    try {
+      beforeCustomer = qboCustomerSnapshot((await qboGet(context,'customer',beforeCustomerId) as any)?.Customer);
+    } catch {}
+  }
   try {
     customerSync = await syncCustomerOutbound(context, record, new Map<string, any>());
     if (customerSync.created) job.pushed.customersCreated += 1;
@@ -1077,7 +1089,6 @@ async function processQuickBooksOutboundRow(context: Context, job: any, row: any
   }
 
   const afterCustomer = qboCustomerSnapshot(customerSync.customer);
-  const beforeCustomer = beforeCustomerId ? qboCustomerSnapshot((await qboGet(context,'customer',beforeCustomerId) as any)?.Customer) : null;
   if (JSON.stringify(beforeCustomer) !== JSON.stringify(afterCustomer)) {
     job.changes.push({
       direction:'CRM → QuickBooks',
