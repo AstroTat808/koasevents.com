@@ -3938,6 +3938,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? estimateNumber+' · verified '+verifiedAt+' · taxable lines '+(liveClient?.taxableLineCount==null?'—':Number(liveClient.taxableLineCount))+'. '+String(liveClient.detail||'')
           : 'Run System Health to verify the live Chris Sibel estimate.';
       }
+      const dynamicClients=data.dynamicClientInvariants||null;
+      const dynamicStatus=String(dynamicClients?.status||'unverified');
+      if(accountingDynamicClients){
+        accountingDynamicClients.textContent=dynamicClients
+          ? Number(dynamicClients.passedCount||0)+' / '+Number(dynamicClients.eligibleCount||0)+' passed'
+          : 'Unverified';
+        accountingDynamicClients.className='mt-2 block text-lg '+(dynamicStatus==='passed'?'text-emerald-800':dynamicStatus==='failed'?'text-red-800':'text-amber-800');
+      }
+      if(accountingDynamicClientsDetail){
+        const dynamicFailures=Array.isArray(dynamicClients?.failures)?dynamicClients.failures:[];
+        accountingDynamicClientsDetail.textContent=!dynamicClients
+          ? 'Run System Health to verify all accepted/booked CRM-managed clients.'
+          : dynamicFailures.length
+            ? dynamicFailures.slice(0,3).map((row)=>[row.clientName||row.recordId,row.eventDate,(row.failures||[]).join('; ')].filter(Boolean).join(' · ')).join(' | ')
+            : 'Every accepted/booked CRM-managed client has matching live QuickBooks totals and zero taxable estimate lines.';
+      }
       const nonStatus=String(data.liveNonTaxStatus||'unverified');
       if(accountingNonStatus){
         accountingNonStatus.textContent=nonStatus==='available'?'Available':nonStatus==='missing-or-inactive'?'Missing / inactive':'Unverified';
