@@ -607,8 +607,8 @@ def admin_mode(browser_name):
    document_title=page.title()
    heading=page.locator("h1").inner_text().strip()
    create_label=page.locator("[data-create-sandbox]").inner_text().strip()
-   if "VenueLoom Super Admin" not in document_title or heading!="Super Admin" or "Create safe sandbox tenant" not in create_label:
-    detail="VenueLoom Super Admin did not reach its expected initialized state."
+   if "VenueLoom Super Admin" not in document_title or heading.strip().lower()!="super admin" or create_label.strip().lower()!="create safe sandbox tenant":
+    detail="VenueLoom Super Admin did not reach its expected initialized state: title="+repr(document_title)+", heading="+repr(heading)+", createButton="+repr(create_label)
    elif page_errors:
     detail="VenueLoom Super Admin JavaScript page errors: "+" | ".join(page_errors[:5])
   except Exception as exc:
