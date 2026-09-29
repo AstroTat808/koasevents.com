@@ -716,8 +716,9 @@ export default async (req:Request, context:Context) => {
     }
 
     const survivor=records.find((entry:any)=>entry?.id===survivorId);
-    const duplicates=duplicateIds.map((recordId)=>records.find((entry:any)=>entry?.id===recordId)).filter(Boolean);
-    if(!survivor||duplicates.length!==duplicateIds.length)return Response.json({error:'One or more CRM records no longer exist. Refresh and preview again.'},{status:409});
+    const archiveIds=(Array.isArray(preview.archiveIds)?preview.archiveIds:duplicateIds).map((value:any)=>clean(value,120)).filter(Boolean);
+    const duplicates=archiveIds.map((recordId:string)=>records.find((entry:any)=>entry?.id===recordId)).filter(Boolean);
+    if(!survivor||duplicates.length!==archiveIds.length)return Response.json({error:'One or more CRM records no longer exist. Refresh and preview again.'},{status:409});
 
     const now=new Date().toISOString();
     let mergedRecord=structuredClone(survivor);
@@ -726,10 +727,10 @@ export default async (req:Request, context:Context) => {
     mergedRecord.updatedAt=now;
     mergedRecord.mergeHistory=[
       ...(Array.isArray(mergedRecord.mergeHistory)?mergedRecord.mergeHistory:[]),
-      {mergedAt:now,mergedBy:actor,duplicateIds:[...duplicateIds],reason:clean(body.reason,500)||'Duplicate booking merge'},
+      {mergedAt:now,mergedBy:actor,duplicateIds:[...archiveIds],reason:clean(body.reason,500)||'Duplicate booking merge'},
     ].slice(-100);
 
-    const duplicateSet=new Set(duplicateIds);
+    const duplicateSet=new Set(archiveIds);
     const nextRecords=records.filter((entry:any)=>!duplicateSet.has(clean(entry?.id,120))).map((entry:any)=>entry?.id===survivorId?mergedRecord:entry);
 
     const archiveIndex=((await sales.get('duplicate-archive/index',{type:'json'}))||[]) as any[];
@@ -783,13 +784,13 @@ export default async (req:Request, context:Context) => {
       const nextMetas=[base,...metas.filter((row)=>row.recordId!==survivorId&&!duplicateSet.has(row.recordId))].slice(0,1500);
       await crm.setJSON('projects/index',nextMetas);
       await crm.setJSON('projects/'+survivorId,base);
-      for(const id of duplicateIds)await crm.delete('projects/'+id);
+      for(const id of archiveIds)await crm.delete('projects/'+id);
     }
 
     const opsStore=tenantStoreFor(context,tenant,'eventOps');
     const filesStore=eventStoreFor(context);
     let survivorOps:any=await opsStore.get('events/'+survivorId,{type:'json'});
-    for(const duplicateId of duplicateIds){
+    for(const duplicateId of archiveIds){
       const duplicateOps:any=await opsStore.get('events/'+duplicateId,{type:'json'});
       if(duplicateOps){
         if(!survivorOps)survivorOps={...duplicateOps,recordId:survivorId};
@@ -818,8 +819,8 @@ export default async (req:Request, context:Context) => {
     if(survivorOps)await opsStore.setJSON('events/'+survivorId,survivorOps);
 
     const signedKey=clean(mergedRecord?.booking?.contract?.signwell?.signedPdfKey,500);
-    if(signedKey&&duplicateIds.some((id)=>signedKey.startsWith('signed-contracts/'+id+'/'))){
-      const sourceId=duplicateIds.find((id)=>signedKey.startsWith('signed-contracts/'+id+'/'))||'';
+    if(signedKey&&archiveIds.some((id:string)=>signedKey.startsWith('signed-contracts/'+id+'/'))){
+      const sourceId=archiveIds.find((id:string)=>signedKey.startsWith('signed-contracts/'+id+'/'))||'';
       const bytes=await filesStore.get(signedKey,{type:'arrayBuffer'});
       if(bytes!=null){
         const targetKey=signedKey.replace('signed-contracts/'+sourceId+'/','signed-contracts/'+survivorId+'/');
@@ -830,13 +831,13 @@ export default async (req:Request, context:Context) => {
       }
     }
 
-    await appendActivity(crm,survivorId,'duplicate_booking_merged','Merged duplicate CRM booking record(s): '+duplicateIds.join(', ')+' · by '+actor);
-    await appendStaffAudit(context,{actor,action:'crm_duplicate_booking_merged',detail:'Merged '+duplicateIds.length+' duplicate CRM booking record(s) into '+survivorId+'.',metadata:{survivorId,duplicateIds,fingerprint:preview.fingerprint}});
+    await appendActivity(crm,survivorId,'duplicate_booking_merged','Merged duplicate CRM booking lifecycle record(s): '+archiveIds.join(', ')+' · by '+actor);
+    await appendStaffAudit(context,{actor,action:'crm_duplicate_booking_merged',detail:'Merged '+archiveIds.length+' duplicate CRM lifecycle record(s) into '+survivorId+'.',metadata:{survivorId,duplicateIds:archiveIds,fingerprint:preview.fingerprint}});
 
     return Response.json({
       ok:true,
       survivorId,
-      archivedDuplicateIds:duplicateIds,
+      archivedDuplicateIds:archiveIds,
       preserved:{
         crmIndexes:remapResults,
         quickbooks:Boolean(mergedRecord?.accounting?.quickbooks),
