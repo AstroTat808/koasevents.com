@@ -1,6 +1,6 @@
 import type { Context, Config } from '@netlify/functions';
 import { capabilitiesFor, hasCapability, operationsRole, requireCapability, ROLE_LABELS } from './_shared/admin';
-import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './_shared/email-brand';
+import { emailBrandForRecord, emailBrandName, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './_shared/email-brand';
 import { assessCrmRecord, normalizeCleanupMode } from './_shared/crm-cleanup';
 import { appendCleanupAudit, cleanupClientSnapshotFromRecord, cleanupDimensionsFromRecord, readCleanupAudit } from './_shared/crm-cleanup-audit';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -713,11 +713,13 @@ export default async (req:Request, context:Context) => {
     );
     const sendId='CRM-'+id('EMAIL');
     let resendId='';
+    const attachments=[emailLogoAttachment()];
+    assertEmailInlineAssets(rendered.html,attachments);
     try{
       const response=await fetch('https://api.resend.com/emails',{
         method:'POST',
         headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('venueloom-staff-client-'+tenant.id+'-'+recordId+'-'+sendId).slice(0,256)},
-        body:JSON.stringify({from,to:[email],subject,html:rendered.html,text:rendered.text,attachments:[emailLogoAttachment()],reply_to:replyTo}),
+        body:JSON.stringify({from,to:[email],subject,html:rendered.html,text:rendered.text,attachments,reply_to:replyTo}),
         signal:AbortSignal.timeout(12_000),
       });
       const result:any=await response.json().catch(()=>({}));
