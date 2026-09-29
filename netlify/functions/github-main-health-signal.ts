@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { recordGithubMainSignal, runSystemHealth } from './_shared/system-health';
+import { applyHealthAlertPolicy, persistHealth, readLatestHealth, readLatestHourlyHealth, recordGithubMainSignal, runSystemHealth, sendHealthTransitionAlerts } from './_shared/system-health';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -79,7 +79,7 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
-    if(body?.action==='verify-synthetic-probes'){
+    if(body?.action==='verify-synthetic-probes'||body?.action==='verify-production-health'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
         return Response.json({
@@ -88,7 +88,16 @@ export default async (req:Request,context:Context) => {
           deployed:deployedCommit,
         },{status:409,headers:{'Cache-Control':'no-store'}});
       }
+
+      const [previous,previousHourly]=await Promise.all([
+        readLatestHealth(context),
+        readLatestHourlyHealth(context),
+      ]);
       const health=await runSystemHealth(context,'post-deploy');
+      await applyHealthAlertPolicy(context,health,previousHourly);
+      await persistHealth(context,health);
+      await sendHealthTransitionAlerts(previous,health);
+
       const ids=new Set([
         'synthetic-event-documents',
         'synthetic-vendor-insurance-document',
@@ -109,7 +118,40 @@ export default async (req:Request,context:Context) => {
           lastLiveCheckedAt:String(row?.syntheticDetails?.lastLiveCheckedAt||health.checkedAt||''),
           detail:String(row.detail||''),
         }));
-      const verified=probes.length===4&&probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
+      const probesVerified=probes.length===4&&probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
+
+      const accountingCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
+      const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
+      const accountingInvariant={
+        id:String(accountingCheck?.id||'quickbooks-tax-invariant'),
+        ok:Boolean(accountingCheck?.ok),
+        severity:String(accountingCheck?.severity||''),
+        status:Number(accountingCheck?.status||0),
+        expectedTotal:Number(accountingCheck?.accountingDetails?.expectedTotal||15706.80),
+        actualTotal:Number(accountingCheck?.accountingDetails?.actualTotal||0),
+        taxablePayload:Number(accountingCheck?.accountingDetails?.taxablePayload||0),
+        liveClientStatus:String(liveClient?.status||'unverified'),
+        liveClientEstimateTotal:liveClient?.estimateTotal==null?null:Number(liveClient.estimateTotal),
+        liveClientTaxableLineCount:liveClient?.taxableLineCount==null?null:Number(liveClient.taxableLineCount),
+        historicalTaxOnTaxDetected:Boolean(liveClient?.historicalTaxOnTaxDetected),
+        estimateId:String(liveClient?.estimateId||''),
+        estimateDocNumber:String(liveClient?.estimateDocNumber||''),
+        verifiedAt:String(liveClient?.verifiedAt||health.checkedAt||''),
+        detail:String(accountingCheck?.detail||''),
+      };
+      const accountingVerified=Boolean(
+        accountingInvariant.ok
+        && accountingInvariant.status===200
+        && accountingInvariant.expectedTotal===15706.80
+        && accountingInvariant.actualTotal===15706.80
+        && accountingInvariant.taxablePayload===0
+        && accountingInvariant.liveClientStatus==='passed'
+        && accountingInvariant.liveClientEstimateTotal===15706.80
+        && accountingInvariant.liveClientTaxableLineCount===0
+        && !accountingInvariant.historicalTaxOnTaxDetected
+      );
+      const requireAccounting=body?.action==='verify-production-health';
+      const verified=probesVerified&&(!requireAccounting||accountingVerified);
       return Response.json({
         ok:verified,
         accepted:result.accepted,
@@ -117,6 +159,7 @@ export default async (req:Request,context:Context) => {
         source:'github-actions-oidc',
         checkedAt:health.checkedAt,
         probes,
+        accountingInvariant,
       },{
         status:verified?200:503,
         headers:{'Cache-Control':'no-store'},
