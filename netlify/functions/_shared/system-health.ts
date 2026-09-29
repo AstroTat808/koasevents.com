@@ -8,7 +8,7 @@ import { emailHealthSummary } from './email-health';
 import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
-import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
+import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 
@@ -54,6 +54,30 @@ export type HealthCheck = {
       estimateTotal: number | null;
       taxableLineCount: number | null;
       historicalTaxOnTaxDetected: boolean;
+      detail: string;
+    };
+    liveClientInvariants?: {
+      status: 'passed' | 'failed' | 'unverified' | 'not-applicable';
+      verifiedAt: string;
+      clientCount: number;
+      passedCount: number;
+      failedCount: number;
+      unverifiedCount: number;
+      rows: Array<{
+        status: 'passed' | 'failed' | 'unverified';
+        verifiedAt: string;
+        recordId: string;
+        clientName: string;
+        eventDate: string;
+        proposalStatus: string;
+        estimateId: string;
+        estimateDocNumber: string;
+        proposalTotal: number;
+        estimateTotal: number | null;
+        taxableLineCount: number | null;
+        failures: string[];
+        detail: string;
+      }>;
       detail: string;
     };
   };
