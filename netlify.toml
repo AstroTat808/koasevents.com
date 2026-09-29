@@ -1,5 +1,5 @@
-# Release marker: Client Workspace 360
-# Production release: 2026-09-27 Client Workspace 360 + client navigation + accounting reconciliation
+# Release marker: QuickBooks audit relink + automatic safe repair preview
+# Production release: 2026-09-29 PR #166 QuickBooks accounting reconciliation repair
 [build]
   command = "python3 scripts/production_visual_qa.py --mode source && npm run build"
   publish = "dist"
