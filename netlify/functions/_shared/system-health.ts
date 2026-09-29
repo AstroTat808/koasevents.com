@@ -8,7 +8,7 @@ import { emailHealthSummary } from './email-health';
 import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
-import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
+import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 
@@ -54,6 +54,30 @@ export type HealthCheck = {
       estimateTotal: number | null;
       taxableLineCount: number | null;
       historicalTaxOnTaxDetected: boolean;
+      detail: string;
+    };
+    liveClientInvariants?: {
+      status: 'passed' | 'failed' | 'unverified' | 'not-applicable';
+      verifiedAt: string;
+      clientCount: number;
+      passedCount: number;
+      failedCount: number;
+      unverifiedCount: number;
+      rows: Array<{
+        status: 'passed' | 'failed' | 'unverified';
+        verifiedAt: string;
+        recordId: string;
+        clientName: string;
+        eventDate: string;
+        proposalStatus: string;
+        estimateId: string;
+        estimateDocNumber: string;
+        proposalTotal: number;
+        estimateTotal: number | null;
+        taxableLineCount: number | null;
+        failures: string[];
+        detail: string;
+      }>;
       detail: string;
     };
   };
@@ -1322,6 +1346,114 @@ async function chrisSibelLiveAccountingInvariant(context:Context) {
   };
 }
 
+async function mapWithConcurrency<T,R>(items:T[],limit:number,mapper:(item:T,index:number)=>Promise<R>):Promise<R[]> {
+  const results=new Array<R>(items.length);
+  let cursor=0;
+  const worker=async()=>{
+    while(true){
+      const index=cursor++;
+      if(index>=items.length)return;
+      results[index]=await mapper(items[index],index);
+    }
+  };
+  await Promise.all(Array.from({length:Math.min(Math.max(1,limit),Math.max(1,items.length))},()=>worker()));
+  return results;
+}
+
+async function acceptedBookedLiveAccountingInvariants(context:Context) {
+  const tenant=resolveTenant();
+  const now=new Date().toISOString();
+  const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
+  const candidates=records
+    .filter((record:any)=>record?.kind==='proposal'&&record?.proposal&&record?.archived!==true)
+    .filter((record:any)=>['accepted','booked'].includes(String(record?.proposal?.status||record?.status||'').trim().toLowerCase()))
+    .sort((a:any,b:any)=>String(a?.customer?.eventDate||'9999').localeCompare(String(b?.customer?.eventDate||'9999'))||String(a?.id||'').localeCompare(String(b?.id||'')));
+
+  const rows=await mapWithConcurrency(candidates,4,async(record:any)=>{
+    const qbo=record?.accounting?.quickbooks||{};
+    const estimateId=String(qbo?.estimateId||'').trim();
+    const base={
+      verifiedAt:now,
+      recordId:String(record?.id||''),
+      clientName:String(record?.customer?.name||record?.id||''),
+      eventDate:String(record?.customer?.eventDate||'').slice(0,10),
+      proposalStatus:String(record?.proposal?.status||record?.status||''),
+      estimateId,
+      estimateDocNumber:String(qbo?.estimateDocNumber||''),
+      proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
+    };
+    if(!estimateId){
+      return {
+        ...base,
+        status:'failed' as const,
+        estimateTotal:null,
+        taxableLineCount:null,
+        failures:['accepted/booked proposal has no linked QuickBooks estimate'],
+        detail:'Accepted/booked CRM proposal has no linked QuickBooks estimate.',
+      };
+    }
+    try{
+      const data:any=await qboGet(context,'estimate',estimateId);
+      const estimate=data?.Estimate||null;
+      if(!estimate){
+        return {
+          ...base,
+          status:'failed' as const,
+          estimateTotal:null,
+          taxableLineCount:null,
+          failures:['linked QuickBooks estimate was not returned'],
+          detail:'QuickBooks did not return linked estimate '+estimateId+'.',
+        };
+      }
+      const evaluation=evaluateLiveClientAccountingInvariant(record,estimate);
+      const number=String(evaluation.estimateDocNumber||evaluation.estimateId||estimateId);
+      return {
+        ...base,
+        status:evaluation.ok?'passed' as const:'failed' as const,
+        estimateId:String(evaluation.estimateId||estimateId),
+        estimateDocNumber:String(evaluation.estimateDocNumber||base.estimateDocNumber),
+        proposalTotal:Number(evaluation.proposalTotal||0),
+        estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        taxableLineCount:Number(evaluation.taxableLineCount||0),
+        failures:Array.isArray(evaluation.failures)?evaluation.failures.map((value:any)=>String(value)):[],
+        detail:evaluation.ok
+          ? 'CRM and live QuickBooks reconcile at $'+Number(evaluation.proposalTotal||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+'; estimate '+number+' has zero taxable sales lines.'
+          : 'Live accounting invariant failed: '+evaluation.failures.join('; ')+'.',
+      };
+    }catch(error){
+      return {
+        ...base,
+        status:'unverified' as const,
+        estimateTotal:null,
+        taxableLineCount:null,
+        failures:['QuickBooks estimate verification request failed'],
+        detail:'Live QuickBooks estimate '+estimateId+' could not be verified: '+(error instanceof Error?error.message:'request failed'),
+      };
+    }
+  });
+
+  const failedCount=rows.filter((row:any)=>row.status==='failed').length;
+  const unverifiedCount=rows.filter((row:any)=>row.status==='unverified').length;
+  const passedCount=rows.filter((row:any)=>row.status==='passed').length;
+  const status=failedCount?'failed':unverifiedCount?'unverified':'passed';
+  const problemRows=rows.filter((row:any)=>row.status!=='passed').slice(0,5);
+  return {
+    status:status as 'passed'|'failed'|'unverified',
+    ok:failedCount===0&&unverifiedCount===0,
+    verifiedAt:now,
+    clientCount:rows.length,
+    passedCount,
+    failedCount,
+    unverifiedCount,
+    rows,
+    detail:rows.length===0
+      ? 'No accepted/booked proposals currently require a live CRM ↔ QuickBooks invariant.'
+      : failedCount||unverifiedCount
+        ? passedCount+' of '+rows.length+' accepted/booked client invariants passed. '+problemRows.map((row:any)=>row.clientName+': '+row.detail).join(' ')
+        : 'All '+rows.length+' accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines.',
+  };
+}
+
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
   const started=Date.now();
   const invariant=evaluateAccountingTaxInvariant();
@@ -1358,9 +1490,10 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
   }
 
   try{
-    const [taxCodeData,liveClient]=await Promise.all([
+    const [taxCodeData,liveClient,liveClients]=await Promise.all([
       qboQuery(context,'select * from TaxCode maxresults 100'),
       chrisSibelLiveAccountingInvariant(context),
+      acceptedBookedLiveAccountingInvariants(context),
     ]);
     const live=inspectQuickBooksNonTaxCode(taxCodeData);
     const accountingDetails:HealthCheck['accountingDetails']={
@@ -1370,6 +1503,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       liveNonTaxId:String(live?.id||''),
       liveNonTaxName:String(live?.name||''),
       liveClientInvariant:liveClient,
+      liveClientInvariants:liveClients,
     };
     if(liveClient.verified && !liveClient.ok){
       return {
@@ -1384,6 +1518,23 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
         accountingDetails,
         detail:clean(
           liveClient.detail+' Production deploy verification will alert immediately while this invariant is failed.',
+          1200,
+        ),
+      };
+    }
+    if(!liveClients.ok){
+      return {
+        id:'quickbooks-tax-invariant',
+        name:'QuickBooks tax-on-tax invariant',
+        kind:'api',
+        path:'Accepted/booked CRM ↔ QuickBooks invariants',
+        ok:false,
+        status:503,
+        ms:Date.now()-started,
+        severity:'red',
+        accountingDetails,
+        detail:clean(
+          liveClients.detail+' Every accepted/booked proposal must match its live QuickBooks estimate and remain non-taxable.',
           1200,
         ),
       };
@@ -1418,7 +1569,7 @@ async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<Health
       accountingDetails,
       detail:clean(
         'Invariant passed: $15,000.00 + $706.80 CRM tax = exactly $15,706.80; estimate taxable payload = $0.00; '
-        +'milestone invoice line is NON-taxable. '+live.detail+' '+liveClient.detail,
+        +'milestone invoice line is NON-taxable. '+live.detail+' '+liveClient.detail+' '+liveClients.detail,
         1200,
       ),
     };
@@ -1977,6 +2128,101 @@ export async function readHealthHistory(context:Context,limit=100):Promise<Healt
   return rows.slice(0,Math.max(1,Math.min(500,limit))).map((row)=>hydrateIssueTypes(row) as HealthSnapshot);
 }
 
+function accountingInvariantClientRows(snapshot:HealthSnapshot|null){
+  const check=(Array.isArray(snapshot?.checks)?snapshot?.checks:[]).find((row:any)=>row?.id==='quickbooks-tax-invariant') as any;
+  const details=check?.accountingDetails||{};
+  const dynamicRows=Array.isArray(details?.liveClientInvariants?.rows)?details.liveClientInvariants.rows:[];
+  const staticRow=details?.liveClientInvariant||null;
+  const rows=[...dynamicRows];
+  if(staticRow&&staticRow?.recordId&&!rows.some((row:any)=>String(row?.recordId||'')===String(staticRow.recordId))){
+    rows.push(staticRow);
+  }
+  return rows.map((row:any)=>({
+    status:String(row?.status||'unverified'),
+    verifiedAt:String(row?.verifiedAt||snapshot?.checkedAt||''),
+    recordId:String(row?.recordId||''),
+    clientName:String(row?.clientName||row?.recordId||''),
+    eventDate:String(row?.eventDate||'').slice(0,10),
+    proposalStatus:String(row?.proposalStatus||''),
+    estimateId:String(row?.estimateId||''),
+    estimateDocNumber:String(row?.estimateDocNumber||''),
+    proposalTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
+    estimateTotal:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
+    taxableLineCount:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
+    historicalTaxOnTaxDetected:Boolean(row?.historicalTaxOnTaxDetected),
+    detail:String(row?.detail||''),
+  })).filter((row:any)=>row.recordId);
+}
+
+function accountingInvariantStateChanged(before:any,after:any){
+  if(!before)return true;
+  return [
+    'status','estimateId','estimateDocNumber','proposalTotal','estimateTotal','taxableLineCount','historicalTaxOnTaxDetected'
+  ].some((key)=>String(before?.[key]??'')!==String(after?.[key]??''));
+}
+
+async function recordAccountingInvariantIncidents(context:Context,previous:HealthSnapshot|null,current:HealthSnapshot){
+  const store=healthStore(context);
+  const existing=((await store.get('accounting/client-invariant-incidents',{type:'json'}))||[]) as any[];
+  const existingIds=new Set(existing.map((row:any)=>String(row?.id||'')));
+  const beforeByRecord=new Map(accountingInvariantClientRows(previous).map((row:any)=>[row.recordId,row]));
+  const currentRows=accountingInvariantClientRows(current);
+  const additions:any[]=[];
+
+  for(const after of currentRows){
+    const before:any=beforeByRecord.get(after.recordId)||null;
+    const hasStoredTimeline=existing.some((row:any)=>String(row?.recordId||'')===after.recordId);
+    if(hasStoredTimeline&&!accountingInvariantStateChanged(before,after))continue;
+    const type=!hasStoredTimeline
+      ? (after.status==='passed'?'baseline':'failed')
+      : before?.status!=='passed'&&after.status==='passed'
+        ? 'recovered'
+        : before?.status==='passed'&&after.status!=='passed'
+          ? 'failed'
+          : 'changed';
+    const id='AINC-'+String(current.id||current.checkedAt||'').replace(/[^A-Za-z0-9]/g,'').slice(-18)+'-'+after.recordId.replace(/[^A-Za-z0-9]/g,'').slice(-24)+'-'+type;
+    if(existingIds.has(id))continue;
+    additions.push({
+      id,
+      checkedAt:String(current.checkedAt||after.verifiedAt||new Date().toISOString()),
+      source:String(current.source||''),
+      type,
+      severity:after.status==='passed'?'green':after.status==='unverified'?'yellow':'red',
+      recordId:after.recordId,
+      clientName:after.clientName,
+      eventDate:after.eventDate,
+      proposalStatus:after.proposalStatus,
+      estimateId:after.estimateId,
+      estimateDocNumber:after.estimateDocNumber,
+      before:before?{
+        status:before.status,
+        proposalTotal:before.proposalTotal,
+        estimateTotal:before.estimateTotal,
+        taxableLineCount:before.taxableLineCount,
+        historicalTaxOnTaxDetected:before.historicalTaxOnTaxDetected,
+      }:null,
+      after:{
+        status:after.status,
+        proposalTotal:after.proposalTotal,
+        estimateTotal:after.estimateTotal,
+        taxableLineCount:after.taxableLineCount,
+        historicalTaxOnTaxDetected:after.historicalTaxOnTaxDetected,
+      },
+      detail:after.detail,
+    });
+  }
+
+  if(additions.length){
+    await store.setJSON('accounting/client-invariant-incidents',[...additions.reverse(),...existing]);
+  }
+  return additions;
+}
+
+export async function readAccountingInvariantIncidents(context:Context,limit=500){
+  const rows=((await healthStore(context).get('accounting/client-invariant-incidents',{type:'json'}))||[]) as any[];
+  return rows.slice(0,Math.max(1,Math.min(2000,limit)));
+}
+
 export async function applyHealthAlertPolicy(context:Context,current:HealthSnapshot,previousHourly:HealthSnapshot|null) {
   const policy=await readHealthAlertPolicy(context);
   const ruleById=new Map(policy.rules.map(rule=>[rule.id,rule]));
@@ -1994,6 +2240,7 @@ export async function applyHealthAlertPolicy(context:Context,current:HealthSnaps
 export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
   const store=healthStore(context);
   const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
+  await recordAccountingInvariantIncidents(context,history[0]||null,snapshot);
   await store.setJSON('latest',snapshot);
   await store.setJSON('history',[snapshot,...history].slice(0,500));
 

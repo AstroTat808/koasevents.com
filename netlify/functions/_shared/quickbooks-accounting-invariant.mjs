@@ -139,9 +139,9 @@ export const CHRIS_SIBEL_ACCOUNTING_INVARIANT = Object.freeze({
   historicalTaxOnTaxTotal: 16446.90,
 });
 
-export function evaluateChrisSibelLiveInvariant(record, estimate) {
-  const expected = CHRIS_SIBEL_ACCOUNTING_INVARIANT;
+export function evaluateLiveClientAccountingInvariant(record, estimate, options = {}) {
   const proposalTotal = money(record?.proposal?.total);
+  const expectedTotal = options.expectedTotal == null ? proposalTotal : money(options.expectedTotal);
   const estimateTotal = estimate ? money(estimate?.TotalAmt) : null;
   const salesLines = (Array.isArray(estimate?.Line) ? estimate.Line : [])
     .filter((line) => line?.DetailType === 'SalesItemLineDetail');
@@ -151,33 +151,60 @@ export function evaluateChrisSibelLiveInvariant(record, estimate) {
   const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
   const failures = [];
 
-  if (!record) failures.push('Chris Sibel CRM test record is missing');
-  if (record && proposalTotal !== expected.expectedTotal) {
-    failures.push('CRM proposal total is not $15,706.80');
+  if (!record) failures.push('CRM proposal record is missing');
+  if (record && options.expectedTotal != null && proposalTotal !== expectedTotal) {
+    failures.push('CRM proposal total does not equal the protected expected total');
   }
   if (!estimate) failures.push('live QuickBooks estimate is missing');
-  if (estimate && estimateTotal !== expected.expectedTotal) {
-    failures.push('live QuickBooks estimate total is not $15,706.80');
+  if (estimate && estimateTotal !== expectedTotal) {
+    failures.push('live QuickBooks estimate total does not equal the CRM proposal total');
   }
-  if (estimate && lineTotal !== expected.expectedTotal) {
-    failures.push('live QuickBooks estimate sales lines do not total $15,706.80');
+  if (estimate && lineTotal !== expectedTotal) {
+    failures.push('live QuickBooks estimate sales lines do not equal the CRM proposal total');
   }
   if (taxableLines.length) {
     failures.push('live QuickBooks estimate contains taxable sales lines');
   }
 
+  const historicalTaxOnTaxTotal = options.historicalTaxOnTaxTotal == null
+    ? null
+    : money(options.historicalTaxOnTaxTotal);
+
   return {
     ok: failures.length === 0,
-    recordId: String(record?.id || expected.recordId),
-    clientName: String(record?.customer?.name || expected.clientName),
-    eventDate: String(record?.customer?.eventDate || expected.eventDate).slice(0, 10),
+    recordId: String(record?.id || options.recordId || ''),
+    clientName: String(record?.customer?.name || options.clientName || ''),
+    eventDate: String(record?.customer?.eventDate || options.eventDate || '').slice(0, 10),
+    proposalStatus: String(record?.proposal?.status || record?.status || ''),
     estimateId: String(estimate?.Id || record?.accounting?.quickbooks?.estimateId || ''),
     estimateDocNumber: String(estimate?.DocNumber || record?.accounting?.quickbooks?.estimateDocNumber || ''),
     proposalTotal,
+    expectedTotal,
     estimateTotal,
     lineTotal,
     taxableLineCount: taxableLines.length,
-    historicalTaxOnTaxDetected: estimateTotal === expected.historicalTaxOnTaxTotal,
+    historicalTaxOnTaxDetected: historicalTaxOnTaxTotal != null && estimateTotal === historicalTaxOnTaxTotal,
     failures,
+  };
+}
+
+export function evaluateChrisSibelLiveInvariant(record, estimate) {
+  const expected = CHRIS_SIBEL_ACCOUNTING_INVARIANT;
+  const result = evaluateLiveClientAccountingInvariant(record, estimate, {
+    recordId: expected.recordId,
+    clientName: expected.clientName,
+    eventDate: expected.eventDate,
+    expectedTotal: expected.expectedTotal,
+    historicalTaxOnTaxTotal: expected.historicalTaxOnTaxTotal,
+  });
+  return {
+    ...result,
+    failures: result.failures.map((failure) => {
+      if (failure === 'CRM proposal total does not equal the protected expected total') return 'CRM proposal total is not $15,706.80';
+      if (failure === 'live QuickBooks estimate total does not equal the CRM proposal total') return 'live QuickBooks estimate total is not $15,706.80';
+      if (failure === 'live QuickBooks estimate sales lines do not equal the CRM proposal total') return 'live QuickBooks estimate sales lines do not total $15,706.80';
+      if (failure === 'CRM proposal record is missing') return 'Chris Sibel CRM test record is missing';
+      return failure;
+    }),
   };
 }

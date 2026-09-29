@@ -192,6 +192,36 @@ mustMatch(
   'Production QA must require the live Chris Sibel estimate total.',
 );
 mustMatch(
+  githubHealthSignal,
+  /dynamicClientStatus/,
+  'Signed production health must expose the dynamic accepted/booked client invariant status.',
+);
+mustMatch(
+  productionQa,
+  /dynamicClientFailedCount/,
+  'Production QA must fail when any accepted/booked client accounting invariant fails.',
+);
+mustMatch(
+  systemHealth,
+  /accounting\/client-invariant-incidents/,
+  'System Health must persist client accounting invariant transitions outside the rolling health history.',
+);
+mustMatch(
+  systemHealth,
+  /readAccountingInvariantIncidents/,
+  'System Health must expose the persistent accounting invariant incident timeline.',
+);
+mustMatch(
+  healthUi,
+  /Accounting incident timeline/,
+  'System Health UI must label the persistent accounting transition history as an incident timeline.',
+);
+mustMatch(
+  healthUi,
+  /Before: CRM /,
+  'Accounting incident rows must display before/after CRM and QuickBooks totals.',
+);
+mustMatch(
   productionQa,
   /p\.get\("status"\)==204/,
   'Production QA must fail unless every live synthetic probe returns HTTP 204.',
