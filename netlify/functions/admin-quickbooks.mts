@@ -6,7 +6,13 @@ import { tenantStoreFor } from './_shared/tenant-storage';
 import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { buildQuickBooksMilestoneInvoiceLine } from './_shared/quickbooks-accounting-invariant.mjs';
 import { evaluateInvoiceRepairCandidate, invoicePaymentProtection } from './_shared/quickbooks-accounting-repair-safety.mjs';
-import { getLastQuickBooksCrmSync, runQuickBooksCrmTwoWaySync } from './_shared/quickbooks-crm-sync';
+import {
+  continueQuickBooksCrmTwoWaySyncJob,
+  getCurrentQuickBooksCrmSyncJob,
+  getLastQuickBooksCrmSync,
+  getLastQuickBooksCrmSyncFailure,
+  startQuickBooksCrmTwoWaySyncJob,
+} from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
 import {
   buildQuickBooksCrmSyncPreview,
@@ -1183,7 +1189,7 @@ export default async (req: Request, context: Context) => {
       return Response.json({ error:'Choose CSV or PDF export format.' }, { status:400 });
     }
 
-    const [connection, settings, catalog, getSettings, depositSettings, damageDepositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview, suggestedExclusionRules, suggestedExclusionDismissalCount] = await Promise.all([
+    const [connection, settings, catalog, getSettings, depositSettings, damageDepositSettings, webhookReceipt, webhookHistory, webhookProcessed, smokeTest, linkedTest, productionTest, productionLinkedTest, manualSync, manualSyncPreview, manualSyncJob, lastSyncFailure, suggestedExclusionRules, suggestedExclusionDismissalCount] = await Promise.all([
       getQuickBooksConnection(context),
       getQuickBooksSettings(context),
       getQuickBooksCatalog(context),
@@ -1199,6 +1205,8 @@ export default async (req: Request, context: Context) => {
       integrationStoreFor(context).get('quickbooks/production-linked-booking-test', { type: 'json' }),
       getLastQuickBooksCrmSync(context),
       getLastQuickBooksCrmSyncPreview(context),
+      getCurrentQuickBooksCrmSyncJob(context),
+      getLastQuickBooksCrmSyncFailure(context),
       getQuickBooksSuggestedExclusionRules(context),
       getQuickBooksSuggestedExclusionDismissalCount(context),
     ]);
@@ -1246,6 +1254,26 @@ export default async (req: Request, context: Context) => {
       productionLinkedTest: productionLinkedTest || null,
       manualSync: manualSync || null,
       manualSyncPreview: manualSyncPreview || null,
+      manualSyncJob: manualSyncJob ? {
+        jobId: clean(manualSyncJob.jobId,140),
+        previewId: clean(manualSyncJob.previewId,140),
+        status: clean(manualSyncJob.status,40),
+        stage: clean(manualSyncJob.stage,40),
+        startedAt: clean(manualSyncJob.startedAt,80),
+        updatedAt: clean(manualSyncJob.updatedAt,80),
+        completedAt: clean(manualSyncJob.completedAt,80),
+        inboundCursor: Number(manualSyncJob.inboundCursor || 0),
+        inboundTotal: Number(manualSyncJob.inboundTotal || 0),
+        outboundCursor: Number(manualSyncJob.outboundCursor || 0),
+        outboundTotal: Number(manualSyncJob.outboundTotal || 0),
+        processed: Number(manualSyncJob.inboundCursor || 0) + Number(manualSyncJob.outboundCursor || 0),
+        total: Number(manualSyncJob.inboundTotal || 0) + Number(manualSyncJob.outboundTotal || 0),
+        currentItem: manualSyncJob.currentItem || null,
+        lastFailure: manualSyncJob.lastFailure || null,
+        canResume: ['running','paused_error'].includes(clean(manualSyncJob.status,40)),
+        result: manualSyncJob.status === 'completed' ? (manualSyncJob.result || null) : null,
+      } : null,
+      lastSyncFailure: lastSyncFailure || null,
       suggestedExclusionRules,
       suggestedExclusionDismissalCount,
       accountingAudit,
@@ -1402,26 +1430,42 @@ export default async (req: Request, context: Context) => {
     const previewId = clean(payload?.previewId, 120);
     try {
       await validateQuickBooksCrmSyncPreview(context, previewId);
+      const syncJob = await startQuickBooksCrmTwoWaySyncJob(context, actor, previewId);
+      return Response.json({ ok:true, syncJob }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
-      return Response.json({ error:error instanceof Error ? error.message : 'Run a fresh QuickBooks sync preview.' }, { status:409 });
+      const message = error instanceof Error ? clean(error.message,1000) : 'Unable to start QuickBooks synchronization.';
+      return Response.json({ error:message, code:'quickbooks_sync_start_failed', previewId }, { status:409, headers:{ 'Cache-Control':'private, no-store' } });
     }
+  }
+
+  if (action === 'sync-two-way-continue') {
+    const jobId = clean(payload?.jobId, 140);
     try {
-      const result = await runQuickBooksCrmTwoWaySync(context, actor, previewId);
-      const records = await readQuickBooksSalesRecords(context);
-      const accountingAudit = buildQuickBooksAccountingAudit(records);
-      return Response.json({ ok:true, result, accountingAudit }, { headers:{ 'Cache-Control':'private, no-store' } });
+      const syncJob = await continueQuickBooksCrmTwoWaySyncJob(context, jobId);
+      const records = syncJob?.status === 'completed' ? await readQuickBooksSalesRecords(context) : null;
+      const accountingAudit = records ? buildQuickBooksAccountingAudit(records) : null;
+      return Response.json({
+        ok:true,
+        syncJob,
+        result:syncJob?.result || null,
+        accountingAudit,
+      }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
-      const message = error instanceof Error ? clean(error.message, 1000) : 'QuickBooks synchronization failed.';
-      console.error('QuickBooks two-way sync failed', {
-        tenantId: clean(tenant?.id, 120),
-        previewId,
+      const detail: any = error || {};
+      const message = error instanceof Error ? clean(error.message,1000) : 'QuickBooks synchronization batch failed.';
+      console.error('QuickBooks two-way sync batch failed', {
+        tenantId:clean(tenant?.id,120),
+        jobId,
         actor,
         message,
       });
       return Response.json({
-        error: message || 'QuickBooks synchronization failed.',
-        code: 'quickbooks_sync_failed',
-        previewId,
+        error:message,
+        code:'quickbooks_sync_batch_failed',
+        jobId,
+        syncJob:detail?.syncJob || null,
+        failure:detail?.failure || null,
+        canResume:Boolean(detail?.syncJob?.canResume),
       }, { status:502, headers:{ 'Cache-Control':'private, no-store' } });
     }
   }
