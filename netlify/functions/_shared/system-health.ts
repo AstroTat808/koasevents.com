@@ -2134,10 +2134,11 @@ async function recordAccountingInvariantIncidents(context:Context,previous:Healt
 
   for(const after of currentRows){
     const before:any=beforeByRecord.get(after.recordId)||null;
-    if(!accountingInvariantStateChanged(before,after))continue;
-    const type=!before
+    const hasStoredTimeline=existing.some((row:any)=>String(row?.recordId||'')===after.recordId);
+    if(hasStoredTimeline&&!accountingInvariantStateChanged(before,after))continue;
+    const type=!hasStoredTimeline
       ? (after.status==='passed'?'baseline':'failed')
-      : before.status!=='passed'&&after.status==='passed'
+      : before?.status!=='passed'&&after.status==='passed'
         ? 'recovered'
         : before.status==='passed'&&after.status!=='passed'
           ? 'failed'
