@@ -36,7 +36,7 @@ async function handleTenantWebhook(req:Request,context:Context,payload:any){
 
   const name=eventName(payload);
   const documentId=docId(payload);
-  const isSynthetic=payload?.koaHealthCheck===true&&name==='koa_health_check';
+  const isSynthetic=(payload?.venueLoomHealthCheck===true||payload?.koaHealthCheck===true)&&name==='koa_health_check';
 
   if(isSynthetic){
     await Promise.all([
