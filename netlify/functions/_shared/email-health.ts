@@ -2,7 +2,7 @@ import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
 import { tenantEnv } from './tenant-env';
-import { emailHeader, emailInlineAssetAudit, emailLogoAttachment } from './email-brand';
+import { assertEmailInlineAssets, emailDocumentClose, emailDocumentOpen, emailGreeting, emailGreetingText, emailHeader, emailInlineAssetAudit, emailLogoAttachment, emailLogoMetadata, emailSignature, emailSignatureText } from './email-brand';
 
 export type EmailHealthEvent = {
   id: string;
@@ -24,6 +24,41 @@ export type EmailHealthEvent = {
 type EmailHealthSummaryOptions = {
   force?: boolean;
 };
+
+export type BrandedEmailProductionVerification = {
+  deployId: string;
+  commit: string;
+  checkedAt: string;
+  required: boolean;
+  status: 'success' | 'failure' | 'skipped';
+  changedFiles: string[];
+  messageId: string;
+  resendStatus: string;
+  htmlCidPresent: boolean;
+  attachmentPresent: boolean;
+  contentId: string;
+  filename: string;
+  contentType: string;
+  lastSuccessfulAt: string;
+  lastSuccessfulCommit: string;
+  lastSuccessfulMessageId: string;
+  detail: string;
+};
+
+export const EMAIL_RENDERING_PATH_PATTERNS = [
+  /^netlify\/functions\/_shared\/(?:email-brand|lead-email|review-email|vendor-email|accounting-alerts|auth-security|system-health|email-health|email-routing)\.ts$/,
+  /^netlify\/functions\/(?:admin-email-preview|admin-email-routing|admin-crm)\.mts$/,
+  /^netlify\/functions\/resend-webhook\.mts$/,
+  /^src\/pages\/admin\/email(?:-preview)?\/index\.astro$/,
+  /^src\/pages\/admin\/health\/index\.astro$/,
+  /^scripts\/build_safety_check\.mjs$/,
+] as const;
+
+export function emailRenderingFiles(files: unknown[]) {
+  return (Array.isArray(files) ? files : [])
+    .map((file)=>clean(typeof file === 'string' ? file : (file as any)?.filename, 400))
+    .filter((file)=>file && EMAIL_RENDERING_PATH_PATTERNS.some((pattern)=>pattern.test(file)));
+}
 
 const COMPATIBILITY_TEMPLATES = [
   'lead-notification',
