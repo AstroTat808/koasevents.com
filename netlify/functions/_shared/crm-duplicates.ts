@@ -269,9 +269,79 @@ export function coalesceRecord(survivor: RecordLike, duplicate: RecordLike) {
   merged.packageId = pick(survivor.packageId, duplicate.packageId);
   merged.businessLine = pick(survivor.businessLine, duplicate.businessLine);
   merged.projectType = pick(survivor.projectType, duplicate.projectType);
-  merged.proposal = pick(survivor.proposal, duplicate.proposal);
-  merged.booking = pick(survivor.booking, duplicate.booking);
-  merged.accounting = pick(survivor.accounting, duplicate.accounting);
+  const survivorProposal = survivor?.proposal || null;
+  const duplicateProposal = duplicate?.proposal || null;
+  merged.proposal = survivorProposal && Number(survivorProposal?.total || 0) > 0
+    ? structuredClone(survivorProposal)
+    : duplicateProposal
+      ? structuredClone(duplicateProposal)
+      : survivorProposal;
+
+  if (survivor?.booking || duplicate?.booking) {
+    const sb = structuredClone(survivor?.booking || {});
+    const db = structuredClone(duplicate?.booking || {});
+    const sContract = sb?.contract || {};
+    const dContract = db?.contract || {};
+    const sSignWell = sContract?.signwell || {};
+    const dSignWell = dContract?.signwell || {};
+    const paymentRows = [...(Array.isArray(db?.payments) ? db.payments : []), ...(Array.isArray(sb?.payments) ? sb.payments : [])];
+    const paymentMap = new Map<string, any>();
+    for (const row of paymentRows) {
+      const key = clean(row?.id || row?.paymentId || row?.txnId || JSON.stringify(row), 300);
+      if (!paymentMap.has(key)) paymentMap.set(key, row);
+    }
+    merged.booking = {
+      ...db,
+      ...sb,
+      payments: [...paymentMap.values()],
+      contract: {
+        ...dContract,
+        ...sContract,
+        signwell: {
+          ...dSignWell,
+          ...sSignWell,
+          documentId: pick(sSignWell?.documentId, dSignWell?.documentId),
+          signedPdfKey: pick(sSignWell?.signedPdfKey, dSignWell?.signedPdfKey),
+          clientSigningUrl: pick(sSignWell?.clientSigningUrl, dSignWell?.clientSigningUrl),
+          completedAt: pick(sSignWell?.completedAt, dSignWell?.completedAt),
+          sentAt: pick(sSignWell?.sentAt, dSignWell?.sentAt),
+          lastWebhookAt: pick(sSignWell?.lastWebhookAt, dSignWell?.lastWebhookAt),
+        },
+      },
+    };
+  }
+
+  if (survivor?.accounting || duplicate?.accounting) {
+    const sa = structuredClone(survivor?.accounting || {});
+    const da = structuredClone(duplicate?.accounting || {});
+    const sq = sa?.quickbooks || {};
+    const dq = da?.quickbooks || {};
+    const mergeRows = (left: any, right: any) => {
+      const rows = [...(Array.isArray(left) ? left : []), ...(Array.isArray(right) ? right : [])];
+      const map = new Map<string, any>();
+      for (const row of rows) {
+        const key = clean(row?.id || row?.estimateId || row?.invoiceId || row?.paymentId || row?.docNumber || JSON.stringify(row), 300);
+        if (!map.has(key)) map.set(key, row);
+      }
+      return [...map.values()];
+    };
+    merged.accounting = {
+      ...da,
+      ...sa,
+      quickbooks: {
+        ...dq,
+        ...sq,
+        customerId: pick(sq?.customerId, dq?.customerId),
+        customerDisplayName: pick(sq?.customerDisplayName, dq?.customerDisplayName),
+        estimateId: pick(sq?.estimateId, dq?.estimateId),
+        estimateDocNumber: pick(sq?.estimateDocNumber, dq?.estimateDocNumber),
+        estimates: mergeRows(sq?.estimates, dq?.estimates),
+        invoices: mergeRows(sq?.invoices, dq?.invoices),
+        payments: mergeRows(sq?.payments, dq?.payments),
+      },
+    };
+  }
+
   merged.profitModel = pick(survivor.profitModel, duplicate.profitModel);
   merged.updatedAt = new Date().toISOString();
   merged.mergeHistory = [
