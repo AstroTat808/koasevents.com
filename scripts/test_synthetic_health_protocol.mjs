@@ -156,6 +156,7 @@ mustMatch(
   'System Health UI must show the returned synthetic marker.',
 );
 
+// This gate intentionally validates the shared protocol contract rather than making network calls.
 console.log(
   'Synthetic health protocol regression passed: request headers, payload markers, response markers, HTTP 204 expectations, and diagnostics are synchronized.',
 );
