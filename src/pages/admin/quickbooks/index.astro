@@ -45,6 +45,21 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               </div>
             </div>
 
+            <section data-sync-job-progress class="mt-5 hidden rounded-xl border border-[var(--koa-line)] bg-white p-4">
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p class="text-[.55rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Resumable sync job</p>
+                  <strong data-sync-job-title class="mt-1 block text-sm text-[var(--koa-forest)]">Preparing…</strong>
+                  <p data-sync-job-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50"></p>
+                </div>
+                <span data-sync-job-badge class="self-start rounded-full bg-[var(--koa-sand)] px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] text-[var(--koa-forest)]">Running</span>
+              </div>
+              <div class="mt-3 h-2 overflow-hidden rounded-full bg-[var(--koa-sand)]">
+                <div data-sync-job-bar class="h-full bg-[var(--koa-forest)] transition-[width] duration-300" style="width:0%"></div>
+              </div>
+              <p data-sync-job-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/55"></p>
+            </section>
+
             <section data-suggestion-rules-panel class="mt-5 border-t border-[var(--koa-line)] pt-5">
               <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                 <div class="min-w-0">
@@ -224,6 +239,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)]/35 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Last sandbox test</p><strong data-diag-test class="mt-2 block text-base text-[var(--koa-forest)]">Not run</strong><p data-diag-test-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48"></p></article>
           </div>
           <div data-diag-webhook-check class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4 text-sm text-[var(--koa-ink)]/60"></div>
+          <article data-diag-sync-failure class="mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-4">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Last sync failure</p>
+                <strong data-diag-sync-failure-title class="mt-2 block text-sm text-[var(--koa-forest)]">None recorded</strong>
+              </div>
+              <span data-diag-sync-failure-status class="self-start rounded-full bg-emerald-100 px-3 py-2 text-[.52rem] font-black uppercase tracking-[.06em] text-emerald-800">Clear</span>
+            </div>
+            <p data-diag-sync-failure-error class="mt-3 break-words text-xs font-semibold leading-5 text-[var(--koa-ink)]/70"></p>
+            <div data-diag-sync-failure-meta class="mt-3 grid gap-1 text-[.62rem] leading-5 text-[var(--koa-ink)]/48 sm:grid-cols-2"></div>
+          </article>
         </section>
 
         <section id="accounting-audit" data-accounting-audit class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
@@ -732,6 +758,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const syncReconciliationStatus=document.querySelector('[data-sync-reconciliation-status]');
     const syncReconciliationCounts=document.querySelector('[data-sync-reconciliation-counts]');
     const syncReconciliationDeviations=document.querySelector('[data-sync-reconciliation-deviations]');
+    const syncJobProgress=document.querySelector('[data-sync-job-progress]');
+    const syncJobTitle=document.querySelector('[data-sync-job-title]');
+    const syncJobMeta=document.querySelector('[data-sync-job-meta]');
+    const syncJobBadge=document.querySelector('[data-sync-job-badge]');
+    const syncJobBar=document.querySelector('[data-sync-job-bar]');
+    const syncJobDetail=document.querySelector('[data-sync-job-detail]');
     const exclusionTools=document.querySelector('[data-exclusion-tools]');
     const exclusionReport=document.querySelector('[data-exclusion-report]');
     const bulkExclusionDetail=document.querySelector('[data-bulk-exclusion-detail]');
@@ -819,6 +851,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const diagTest=document.querySelector('[data-diag-test]');
     const diagTestMeta=document.querySelector('[data-diag-test-meta]');
     const diagWebhookCheck=document.querySelector('[data-diag-webhook-check]');
+    const diagSyncFailure=document.querySelector('[data-diag-sync-failure]');
+    const diagSyncFailureTitle=document.querySelector('[data-diag-sync-failure-title]');
+    const diagSyncFailureStatus=document.querySelector('[data-diag-sync-failure-status]');
+    const diagSyncFailureError=document.querySelector('[data-diag-sync-failure-error]');
+    const diagSyncFailureMeta=document.querySelector('[data-diag-sync-failure-meta]');
     const auditStatus=document.querySelector('[data-audit-status]');
     const auditClients=document.querySelector('[data-audit-clients]');
     const auditFlagged=document.querySelector('[data-audit-flagged]');
@@ -842,7 +879,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function hasAdminAccess(user){return Boolean(user?.capabilities?.includes('quickbooks.view')||user?.permissions?.includes('quickbooks.view'));}
     function when(value){if(!value)return 'None yet';const date=new Date(value);return Number.isNaN(date.getTime())?String(value):date.toLocaleString();}
     function webhookEntities(receipt){return (receipt?.notifications||[]).flatMap((notification)=>notification?.entities||[]);}
-    async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok)throw new Error(data.error||'QuickBooks request failed.');return data;}
+    async function api(body){const res=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const data=await res.json().catch(()=>({}));if(!res.ok){const error=new Error(data.error||'QuickBooks request failed.');Object.assign(error,data);throw error;}return data;}
 
 
     function openCatalogItem(item=null){
@@ -1582,11 +1619,18 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         wireMatchEvidenceButtons(matchReviewList);
       }
 
-      if(twoWaySync)twoWaySync.disabled=!valid||needsDecision>0;
+      const resumableJob=Boolean(
+        state?.manualSyncJob?.jobId
+        && String(state.manualSyncJob.previewId||'')===String(preview?.previewId||'')
+        && ['running','paused_error'].includes(String(state.manualSyncJob.status||''))
+      );
+      if(twoWaySync)twoWaySync.disabled=!resumableJob&&(!valid||needsDecision>0);
       if(twoWaySyncStatus&&preview){
-        twoWaySyncStatus.textContent=needsDecision>0
-          ? needsDecision+' customer decision'+(needsDecision===1?' needs':'s need')+' review before sync can run.'
-          : valid?'Preview approved for execution. All customer decisions are resolved; review the audit, then run the sync.':'Preview expired. Run Preview Sync again.';
+        twoWaySyncStatus.textContent=resumableJob
+          ? (state.manualSyncJob.status==='paused_error'?'Sync paused safely. Resume Approved Sync continues from the saved batch.':'A resumable sync job is already in progress.')
+          : needsDecision>0
+            ? needsDecision+' customer decision'+(needsDecision===1?' needs':'s need')+' review before sync can run.'
+            : valid?'Preview approved for execution. All customer decisions are resolved; review the audit, then run the sync.':'Preview expired. Run Preview Sync again.';
       }
     }
 
@@ -1675,6 +1719,38 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderSyncJobProgress(){
+      const job=state?.manualSyncJob;
+      if(!syncJobProgress)return;
+      const visible=Boolean(job?.jobId&&['running','paused_error','completed'].includes(String(job.status||'')));
+      syncJobProgress.classList.toggle('hidden',!visible);
+      if(!visible)return;
+      const processed=Number(job.processed??(Number(job.inboundCursor||0)+Number(job.outboundCursor||0)));
+      const total=Number(job.total??(Number(job.inboundTotal||0)+Number(job.outboundTotal||0)));
+      const percent=total?Math.min(100,Math.round((processed/total)*100)):100;
+      const status=String(job.status||'running');
+      const stage=String(job.stage||'');
+      if(syncJobBar)syncJobBar.style.width=percent+'%';
+      if(syncJobTitle)syncJobTitle.textContent=status==='completed'
+        ? 'Sync completed'
+        : status==='paused_error'
+          ? 'Sync paused — safe to resume'
+          : 'Synchronizing in small resumable batches';
+      if(syncJobMeta)syncJobMeta.textContent=(job.jobId?'Job '+String(job.jobId)+' · ':'')+processed+' of '+total+' steps · '+percent+'% · stage '+(stage||'starting')+(job.updatedAt?' · updated '+when(job.updatedAt):'');
+      if(syncJobBadge){
+        syncJobBadge.textContent=status==='completed'?'Completed':status==='paused_error'?'Paused':'Running';
+        syncJobBadge.className='self-start rounded-full px-3 py-2 text-[.55rem] font-black uppercase tracking-[.07em] '+(status==='completed'?'bg-emerald-100 text-emerald-800':status==='paused_error'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]');
+      }
+      const item=job.currentItem||{};
+      const failure=job.lastFailure||null;
+      if(syncJobDetail)syncJobDetail.textContent=status==='paused_error'&&failure
+        ? 'Paused at '+String(failure.operation||item.operation||'sync step')+(failure.customerName?' for '+String(failure.customerName):'')+'. '+String(failure.message||'')+' Click Run Approved Sync again to resume from this exact batch.'
+        : status==='completed'
+          ? 'All batches finished and the final reconciliation/history records were saved.'
+          : [item.operation,item.customerName||item.recordId||item.customerId].filter(Boolean).join(' · ')||'Preparing the next batch.';
+      if(twoWaySync&&status==='paused_error')twoWaySync.textContent='Resume Approved Sync';
+    }
+
     function renderDiagnostics(){
       const connected=Boolean(state?.connection?.connected);
       if(diagConnection)diagConnection.textContent=connected?'Connected':'Not connected';
@@ -1705,6 +1781,30 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         : verified
           ? 'Sandbox webhook verified: Intuit delivered matching Invoice and Payment events for the last successful test.'
           : 'Sandbox transaction passed, but matching webhook events are not yet fully verified. Invoice event: '+(invoiceMatched?'received':'not confirmed')+' · Payment event: '+(paymentMatched?'received':'not confirmed')+'.';
+
+      const failure=state?.lastSyncFailure;
+      if(diagSyncFailureTitle)diagSyncFailureTitle.textContent=failure?.timestamp
+        ? (failure.customerName||failure.recordId||failure.customerId||failure.operation||'QuickBooks sync failure')
+        : 'None recorded';
+      if(diagSyncFailureError)diagSyncFailureError.textContent=failure?.timestamp?String(failure.message||'QuickBooks synchronization failed.'):'No QuickBooks manual-sync failure has been recorded.';
+      if(diagSyncFailureStatus){
+        const resolved=Boolean(failure?.resolvedAt);
+        diagSyncFailureStatus.textContent=!failure?.timestamp?'Clear':resolved?'Resolved':'Needs attention';
+        diagSyncFailureStatus.className='self-start rounded-full px-3 py-2 text-[.52rem] font-black uppercase tracking-[.06em] '+(!failure?.timestamp||resolved?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800');
+      }
+      if(diagSyncFailureMeta){
+        const fields=failure?.timestamp?[
+          ['Time',when(failure.timestamp)],
+          ['Operation',failure.operation||failure.stage||'sync'],
+          ['Customer',failure.customerName||failure.customerId||'—'],
+          ['CRM record',failure.recordId||'—'],
+          ['Estimate',failure.estimateId||'—'],
+          ['Preview ID',failure.previewId||'—'],
+          ['Job ID',failure.jobId||'—'],
+          ['Resolved',failure.resolvedAt?when(failure.resolvedAt):'No'],
+        ]:[];
+        diagSyncFailureMeta.innerHTML=fields.map(([label,value])=>'<p><strong class="text-[var(--koa-ink)]/65">'+esc(label)+':</strong> <span class="break-all">'+esc(value)+'</span></p>').join('');
+      }
     }
 
     async function loadItems(){
@@ -2456,13 +2556,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           : 'Ready to connect Koa’s QuickBooks Online company.';
       if(twoWaySyncStatus&&twoWaySyncDetail){
         const sync=state?.manualSync;
-        twoWaySyncDetail.textContent=sync?.completedAt
-          ? 'Last completed sync '+when(sync.completedAt)+' · '+Number(sync.crm?.created||0)+' imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.changes?.length||0)+' recorded change(s). Run a new preview before the next sync.'
-          : 'Preview is required before the first full synchronization. The bulk sync never creates a payment or invoice in QuickBooks.';
+        const job=state?.manualSyncJob;
+        if(job?.status==='paused_error'){
+          twoWaySyncStatus.textContent='Previous sync paused safely and can be resumed.';
+          twoWaySyncDetail.textContent='Job '+String(job.jobId||'')+' saved progress at '+Number(job.processed||0)+' of '+Number(job.total||0)+' steps. Click Resume Approved Sync to continue from the failed batch.';
+        }else if(job?.status==='running'){
+          twoWaySyncStatus.textContent='A resumable sync job is in progress.';
+          twoWaySyncDetail.textContent='Job '+String(job.jobId||'')+' is saved at '+Number(job.processed||0)+' of '+Number(job.total||0)+' steps. Run Approved Sync will continue it.';
+        }else{
+          twoWaySyncDetail.textContent=sync?.completedAt
+            ? 'Last completed sync '+when(sync.completedAt)+' · '+Number(sync.crm?.created||0)+' imported · '+Number(sync.crm?.matched||0)+' matched · '+Number(sync.changes?.length||0)+' recorded change(s). Run a new preview before the next sync.'
+            : 'Preview is required before the first full synchronization. The bulk sync never creates a payment or invoice in QuickBooks.';
+        }
       }
       renderSuggestedExclusionRules();
       renderSyncPreview();
       renderSyncReconciliation();
+      renderSyncJobProgress();
       if(prodCreds)prodCreds.textContent=state?.configuration?.productionCredentialsConfigured?'Configured':'Not configured';
       if(prodWebhook)prodWebhook.textContent=state?.configuration?.productionWebhookConfigured?'Configured':'Not configured';
       if(prodRedirect)prodRedirect.textContent=state?.configuration?.productionRedirectConfigured?'Configured':'Not configured';
@@ -2611,11 +2721,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     function openSyncConfirmation(){
       const preview=state?.manualSyncPreview;
       if(!preview?.previewId)throw new Error('Run Preview Sync first.');
+      const resumableJob=Boolean(
+        state?.manualSyncJob?.jobId
+        && String(state.manualSyncJob.previewId||'')===String(preview.previewId||'')
+        && ['running','paused_error'].includes(String(state.manualSyncJob.status||''))
+      );
       const expires=Date.parse(preview.expiresAt||0);
-      if(!expires||expires<=Date.now())throw new Error('This Preview Sync has expired. Run Preview Sync again.');
+      if((!expires||expires<=Date.now())&&!resumableJob)throw new Error('This Preview Sync has expired. Run Preview Sync again.');
       const summary=preview.summary||{};
       const execution=executionSummaryFor(preview);
-      if(Number(summary.needsDecision||0)>0||!execution.ready){
+      if(!resumableJob&&(Number(summary.needsDecision||0)>0||!execution.ready)){
         throw new Error('Resolve every proposed new import and duplicate match before opening the final sync confirmation.');
       }
 
@@ -2654,7 +2769,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(syncConfirmWarning)syncConfirmWarning.textContent='Excluded QuickBooks customers remain untouched in QuickBooks and are omitted from CRM import/matching until restored. Invoices and payments remain QuickBooks-owned. Run Approved Sync may create or update QuickBooks customers and issued estimates shown in this preview; it will not manufacture an invoice or payment.';
       if(syncConfirmExecute){
         syncConfirmExecute.disabled=false;
-        syncConfirmExecute.textContent='Run approved sync now';
+        syncConfirmExecute.textContent=resumableJob?'Resume approved sync':'Run approved sync now';
       }
       syncConfirmDialog?.showModal();
     }
@@ -2665,28 +2780,54 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(syncConfirmExecute){syncConfirmExecute.disabled=true;syncConfirmExecute.textContent='Starting sync…';}
       syncConfirmDialog?.close();
       if(twoWaySync){twoWaySync.disabled=true;twoWaySync.textContent='Syncing…';}
-      if(twoWaySyncStatus)twoWaySyncStatus.textContent='Synchronizing QuickBooks and CRM…';
-      if(twoWaySyncDetail)twoWaySyncDetail.textContent='Reading customers, estimates, invoices and payments, matching records, then applying safe outbound CRM customer and estimate updates.';
+      if(twoWaySyncStatus)twoWaySyncStatus.textContent='Synchronizing QuickBooks and CRM in resumable batches…';
+      if(twoWaySyncDetail)twoWaySyncDetail.textContent='Each request performs only a small bounded batch. Progress is saved after every batch, so a browser refresh or transient failure can resume from the last completed step.';
       try{
-        const previewId=String(state?.manualSyncPreview?.previewId||'');
+        const previewId=String(state?.manualSyncPreview?.previewId||state?.manualSyncJob?.previewId||'');
         if(!previewId)throw new Error('Run Preview Sync first.');
-        const data=await api({action:'sync-two-way',previewId});
-        state.manualSync=data.result||null;
+        let data=await api({action:'sync-two-way',previewId});
+        let job=data.syncJob||null;
+        state.manualSyncJob=job;
+        renderSyncJobProgress();
+
+        while(job&&job.status!=='completed'){
+          if(syncConfirmExecute)syncConfirmExecute.textContent='Sync '+Number(job.progressPercent||0)+'%';
+          if(twoWaySync)twoWaySync.textContent='Sync '+Number(job.progressPercent||0)+'%';
+          data=await api({action:'sync-two-way-continue',jobId:String(job.jobId||'')});
+          job=data.syncJob||job;
+          state.manualSyncJob=job;
+          if(data.lastSyncFailure!==undefined)state.lastSyncFailure=data.lastSyncFailure;
+          if(data.failure)state.lastSyncFailure=data.failure;
+          if(data.accountingAudit)state.accountingAudit=data.accountingAudit;
+          renderSyncJobProgress();
+        }
+
+        const result=job?.result||data?.result||null;
+        state.manualSync=result||state.manualSync;
         state.manualSyncPreview=null;
-        state.accountingAudit=data.accountingAudit||state.accountingAudit;
-        const result=data.result||{};
-        if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync completed '+when(result.completedAt)+'.';
-        if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.changes?.length||0)+' recorded changes · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings · reconciliation '+(String(result?.reconciliation?.status||'not recorded')==='matched'?'matched preview':Number(result?.reconciliation?.deviationCount||0)+' deviation(s)')+'.';
+        if(data?.accountingAudit)state.accountingAudit=data.accountingAudit;
+        if(result){
+          if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync completed '+when(result.completedAt)+'.';
+          if(twoWaySyncDetail)twoWaySyncDetail.textContent=Number(result.crm?.created||0)+' imported · '+Number(result.crm?.matched||0)+' matched · '+Number(result.crm?.updated||0)+' CRM records refreshed · '+Number(result.qbo?.estimates||0)+' estimates · '+Number(result.qbo?.invoices||0)+' invoices · '+Number(result.qbo?.payments||0)+' payments · '+Number(result.changes?.length||0)+' recorded changes · '+Number(result.conflicts?.length||0)+' conflicts · '+Number(result.warnings?.length||0)+' warnings · reconciliation '+(String(result?.reconciliation?.status||'not recorded')==='matched'?'matched preview':Number(result?.reconciliation?.deviationCount||0)+' deviation(s)')+'.';
+        }
         renderSyncPreview();
         renderSyncReconciliation();
+        renderSyncJobProgress();
+        renderDiagnostics();
         renderAccountingAudit();
       }catch(err){
-        if(twoWaySyncStatus)twoWaySyncStatus.textContent='Two-way sync did not complete.';
-        if(twoWaySyncDetail)twoWaySyncDetail.textContent=err.message||'QuickBooks synchronization failed.';
-        throw err;
+        if(err?.syncJob)state.manualSyncJob=err.syncJob;
+        if(err?.failure)state.lastSyncFailure=err.failure;
+        renderSyncJobProgress();
+        renderDiagnostics();
+        if(twoWaySyncStatus)twoWaySyncStatus.textContent=err?.canResume?'Two-way sync paused and can be resumed.':'Two-way sync did not complete.';
+        if(twoWaySyncDetail)twoWaySyncDetail.textContent=(err.message||'QuickBooks synchronization failed.')+(err?.canResume?' Progress through the last completed batch is saved. Click Run Approved Sync again to resume.':'');
       }finally{
-        if(twoWaySync)twoWaySync.textContent=original;
-        if(syncConfirmExecute)syncConfirmExecute.textContent=confirmOriginal;
+        if(twoWaySync){
+          twoWaySync.disabled=false;
+          twoWaySync.textContent=state?.manualSyncJob?.status==='paused_error'?'Resume Approved Sync':original;
+        }
+        if(syncConfirmExecute){syncConfirmExecute.disabled=false;syncConfirmExecute.textContent=confirmOriginal;}
         renderSyncPreview();
       }
     }
