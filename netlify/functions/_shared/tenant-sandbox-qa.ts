@@ -495,25 +495,45 @@ export async function runTenant2OnboardingJourney(
     detail:proposal.id+' · '+proposal.proposal.total,
   });
 
-  organization=await saveOrganization(context,sandbox,(current)=>({
-    ...current,
-    status:'active',
-    onboarding:{
-      ...current.onboarding,
-      completedSteps:[
-        'organization','locale','venues','branding','tax-profile','catalog','integrations','team','templates','domains','subscription','test-workflow',
-      ],
-      activatedAt:current.onboarding?.activatedAt||now(),
-    },
-    sandbox:{
-      ...(current.sandbox||{
-        enabled:true,syntheticDomainVerification:true,syntheticBilling:true,createdBy:creator.email,lastIsolationTestAt:'',lastOnboardingTestAt:'',
-      }),
-      lastOnboardingTestAt:now(),
-    },
-  }));
-  sandbox=profileFromOrganization(organization);
-  steps.push({id:'activation',pass:organization.status==='active'&&Boolean(organization.onboarding.activatedAt),detail:organization.onboarding.activatedAt});
+  const preActivationMemberships=await listMemberships(context,sandbox.id);
+  const activationChecks={
+    organization:Boolean(organization.displayName&&organization.legalName),
+    locale:Boolean(organization.locale&&organization.currency&&organization.timezone),
+    venues:(organization.venues||[]).some((row)=>row.active),
+    branding:Boolean(organization.branding?.tagline),
+    tax:Boolean(organization.taxProfile?.label),
+    catalog:catalog.some((row)=>row.id==='sandbox-venue-package'),
+    integrations:integrationPass,
+    team:preActivationMemberships.some((row)=>row.status==='active'&&row.userId==='sandbox_team_user'),
+    templates:(organization.templates||[]).length>=3,
+    domains:domain?.status==='verified',
+    subscription:organization.subscription?.status==='trialing',
+    testProposal:proposal.tenantId===sandbox.id&&proposal.proposal.status==='draft',
+  };
+  const activationFailures=Object.entries(activationChecks).filter(([,ok])=>!ok).map(([key])=>key);
+  if(activationFailures.length){
+    steps.push({id:'activation',pass:false,detail:'Blocked by: '+activationFailures.join(', ')});
+  }else{
+    organization=await saveOrganization(context,sandbox,(current)=>({
+      ...current,
+      status:'active',
+      onboarding:{
+        ...current.onboarding,
+        completedSteps:[
+          'organization','locale','venues','branding','tax-profile','catalog','integrations','team','templates','domains','subscription','test-workflow',
+        ],
+        activatedAt:current.onboarding?.activatedAt||now(),
+      },
+      sandbox:{
+        ...(current.sandbox||{
+          enabled:true,syntheticDomainVerification:true,syntheticBilling:true,createdBy:creator.email,lastIsolationTestAt:'',lastOnboardingTestAt:'',
+        }),
+        lastOnboardingTestAt:now(),
+      },
+    }));
+    sandbox=profileFromOrganization(organization);
+    steps.push({id:'activation',pass:organization.status==='active'&&Boolean(organization.onboarding.activatedAt),detail:organization.onboarding.activatedAt});
+  }
 
   const isolation=await runTenant2IsolationProbe(context,organization);
   steps.push({id:'post-onboarding-isolation',pass:isolation.pass,detail:isolation.id});
