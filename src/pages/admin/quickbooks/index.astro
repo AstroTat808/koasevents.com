@@ -2245,7 +2245,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(rule.maxContractValue!=null&&value>rule.maxContractValue)return false;
         return true;
       });
-      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(winnerValue)+' '+(matched.contractValueBasis==='beforeGet'?'before tax':'after tax')+' contract value'+(allMatches.length>1?' · '+allMatches.length+' rules matched; this one wins by priority':'');
+      const detail=document.createElement('div');detail.className='mt-2 text-xs text-[var(--koa-ink)]/55';detail.textContent=months+' months ('+(leadDays??'—')+' days) lead time · '+money(winnerValue)+' '+(matched.contractValueBasis==='beforeGet'?'before GET':'after GET')+' contract value'+(allMatches.length>1?' · '+allMatches.length+' rules matched; this one wins by priority':'');
       result.append(eyebrow,heading,presetLine,detail);
     }
 
