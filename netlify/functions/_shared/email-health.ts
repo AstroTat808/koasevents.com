@@ -347,7 +347,7 @@ export async function runBrandedEmailProductionVerification(
     commit:clean(previous?.lastSuccessfulCommit,120),
     messageId:clean(previous?.lastSuccessfulMessageId,180),
   };
-  if(previous?.deployId===deployId&&previous?.commit===commit&&['success','failure'].includes(previous?.status||'')){
+  if(previous?.deployId===deployId&&previous?.commit===commit&&(previous?.status==='success'||(previous?.status==='skipped'&&!previous?.required))){
     return previous;
   }
 
