@@ -22,21 +22,33 @@ const MAX_BYTES = 15 * 1024 * 1024;
 export default async (req: Request, context: Context) => {
   const pathname = new URL(req.url).pathname;
   const isAdmin = pathname.startsWith('/api/admin/vendors/insurance/');
-  const store = vendorStoreFor(context,req);
-  const files = filesStoreFor(context,req);
+  const syntheticPath = pathname.endsWith('/api/admin/vendors/insurance/__health__');
 
-  if (req.method === 'HEAD' && isAdmin && clean(context.params.vendorId, 100) === '__health__' && isSyntheticHealthRequest(req)) {
+  if ((req.method === 'HEAD' || req.method === 'GET') && isAdmin && (clean(context.params.vendorId, 100) === '__health__' || syntheticPath) && isSyntheticHealthRequest(req)) {
     try {
+      const tenant=resolveTenant(req);
+      const store=tenantStoreFor(context,tenant,'vendors');
+      const files=tenantStoreFor(context,tenant,'vendorFiles');
       await Promise.all([
         store.get('vendors/index', { type: 'json' }),
         files.get('insurance/__health__/__health__', { type: 'arrayBuffer' }),
       ]);
-      return new Response(null, { status: 204, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document' } });
+      return new Response(null, { status: 204, headers: {
+        'Cache-Control': 'no-store',
+        'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document',
+        'X-Koa-Synthetic-Check': 'vendor-insurance-document',
+      } });
     } catch {
-      return new Response(null, { status: 503, headers: { 'Cache-Control': 'no-store', 'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document' } });
+      return new Response(null, { status: 503, headers: {
+        'Cache-Control': 'no-store',
+        'X-VenueLoom-Synthetic-Check': 'vendor-insurance-document',
+        'X-Koa-Synthetic-Check': 'vendor-insurance-document',
+      } });
     }
   }
 
+  const store = vendorStoreFor(context,req);
+  const files = filesStoreFor(context,req);
   const rows = await vendors(context);
   let vendor: any = null;
 
