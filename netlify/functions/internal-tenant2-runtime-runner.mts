@@ -16,7 +16,11 @@ import { tenantMigrationAudit } from './_shared/tenant-storage.ts';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 
-function authorized(token:string){
+function authorized(req:Request){
+  const auth=clean(req.headers.get('authorization'),800);
+  const bearer=auth.toLowerCase().startsWith('bearer ')?auth.slice(7).trim():'';
+  const header=clean(req.headers.get('x-venueloom-runner-token'),800);
+  const token=bearer||header;
   const expected=clean(Netlify.env.get('VENUELOOM_TENANT2_RUNNER_TOKEN_SHA256'),128).toLowerCase();
   if(!expected||!/^[0-9a-f]{64}$/.test(expected))return false;
   const actual=createHash('sha256').update(token).digest('hex');
@@ -35,13 +39,12 @@ export default async(req:Request,context:Context)=>{
   if(context.deploy.context!=='production'){
     return Response.json({error:'Runtime sandbox verification is production-only.'},{status:404});
   }
-  if(req.method!=='GET')return new Response('Method not allowed',{status:405});
-  const url=new URL(req.url);
-  if(!authorized(clean(url.searchParams.get('token'),500))){
+  if(req.method!=='POST')return new Response('Method not allowed',{status:405});
+  if(!authorized(req)){
     return Response.json({error:'Not found.'},{status:404});
   }
-
-  const mode=clean(url.searchParams.get('mode')||'status',40);
+  const body:any=await req.json().catch(()=>({}));
+  const mode=clean(body?.mode||'status',40);
   const creator={id:'tenant2-runtime-runner',email:'tenant2-runner@venueloom.invalid'};
   const headers={'Cache-Control':'private, no-store'};
 
