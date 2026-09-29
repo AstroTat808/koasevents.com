@@ -225,11 +225,47 @@ async function ensureCustomer(context: Context, record: any) {
   return customer;
 }
 
+async function findExistingEstimateForRecord(context: Context, record: any, customerId: string) {
+  const state = quickBooksState(record);
+  if (state.estimateId || !customerId) return null;
+
+  const data: any = await qboQuery(
+    context,
+    "select * from Estimate where CustomerRef = '" + escapeQbo(customerId) + "' maxresults 1000",
+  );
+  const estimates = Array.isArray(data?.QueryResponse?.Estimate) ? data.QueryResponse.Estimate : [];
+  const recordId = clean(record?.id, 120);
+  const quoteId = clean(record?.quoteId, 120);
+  const markers = [recordId, quoteId].filter(Boolean).map((value) => value.toLowerCase());
+  if (!markers.length) return null;
+
+  const matches = estimates.filter((estimate: any) => {
+    const haystack = [
+      estimate?.PrivateNote,
+      estimate?.CustomerMemo?.value,
+    ].map((value) => clean(value, 4000).toLowerCase()).join(' ');
+    return markers.some((marker) => haystack.includes(marker));
+  });
+
+  if (matches.length !== 1) return null;
+  const estimate = matches[0];
+  state.estimateId = String(estimate.Id || '');
+  state.estimateDocNumber = String(estimate.DocNumber || '');
+  state.estimateTotal = Number(estimate.TotalAmt || 0);
+  state.estimateEmailStatus = String(estimate.EmailStatus || '');
+  state.estimateLastSyncedAt = new Date().toISOString();
+  state.lastSyncedAt = state.estimateLastSyncedAt;
+  return estimate;
+}
+
 async function syncEstimate(context: Context, record: any, itemId: string) {
   if (!record.proposal) throw new Error('Proposal not found.');
 
   const state = quickBooksState(record);
   const customer = await ensureCustomer(context, record);
+  if (!state.estimateId) {
+    await findExistingEstimateForRecord(context, record, String(customer.Id || ''));
+  }
   const payload: any = {
     CustomerRef: { value: String(customer.Id) },
     TxnDate: today(),
@@ -380,6 +416,12 @@ export async function refreshQuickBooksPaymentSnapshot(context: Context, record:
 
 export async function syncQuickBooksAccountingStatus(context: Context, record: any) {
   const state = quickBooksState(record);
+
+  if (!state.estimateId && state.customerId) {
+    try {
+      await findExistingEstimateForRecord(context, record, String(state.customerId));
+    } catch {}
+  }
 
   if (state.estimateId) {
     const estimateData: any = await qboGet(context, 'estimate', state.estimateId);
