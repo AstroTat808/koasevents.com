@@ -3,7 +3,7 @@ import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
-import { readEmailHealthEvents } from './_shared/email-health';
+import { inlineLogoHealthSummary, readEmailHealthEvents } from './_shared/email-health';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function normalizeStatus(value:unknown){return clean(value,80).toLowerCase().replace(/^email\./,'').replace(/-/g,'_');}
@@ -184,9 +184,10 @@ function summaryStore(context:Context){
 }
 async function emailAnalyticsSummary(context:Context,force=false){
   const store=summaryStore(context);
-  const cached:any=await store.get('summary-v2',{type:'json'});
+  const inlineLogo=await inlineLogoHealthSummary(context);
+  const cached:any=await store.get('summary-v3',{type:'json'});
   const cachedAt=Date.parse(String(cached?.generatedAt||''));
-  if(!force&&Number.isFinite(cachedAt)&&Date.now()-cachedAt<15*60*1000)return cached;
+  if(!force&&Number.isFinite(cachedAt)&&Date.now()-cachedAt<15*60*1000)return {...cached,inlineLogo};
 
   const now=Date.now();
   const cutoff180=now-180*24*60*60*1000;
@@ -228,6 +229,7 @@ async function emailAnalyticsSummary(context:Context,force=false){
     retainedRowsScanned:rows.length,
     coverageComplete180d:coverageComplete,
     oldestLoadedAt:Number.isFinite(oldestLoaded)?new Date(oldestLoaded).toISOString():'',
+    inlineLogo,
     note:coverageComplete
       ? 'Metrics cover the current and immediately preceding equivalent windows needed for 7, 30, and 90-day comparisons.'
       : 'Metrics use the newest 10,000 retained Resend records; very high-volume activity may limit the oldest comparison window.',
@@ -237,7 +239,7 @@ async function emailAnalyticsSummary(context:Context,force=false){
       summarizePeriod(rows,90,now),
     ],
   };
-  await store.setJSON('summary-v2',summary);
+  await store.setJSON('summary-v3',summary);
   return summary;
 }
 

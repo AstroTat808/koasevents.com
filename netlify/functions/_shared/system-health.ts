@@ -4,7 +4,7 @@ import { tenantStoreFor } from './tenant-storage';
 import { resolveTenant } from './tenant';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
-import { emailHealthSummary } from './email-health';
+import { emailHealthSummary, emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { evaluateAccountingTaxInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
@@ -915,15 +915,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     }
   }
 
-  const emailRenderingPathPatterns=[
-    /^netlify\/functions\/_shared\/(?:email-brand|lead-email|review-email|vendor-email|accounting-alerts|auth-security|system-health|email-health)\.ts$/,
-    /^netlify\/functions\/admin-email-preview\.mts$/,
-    /^netlify\/functions\/resend-webhook\.mts$/,
-    /^src\/pages\/admin\/email-preview\/index\.astro$/,
-    /^src\/pages\/admin\/health\/index\.astro$/,
-    /^scripts\/build_safety_check\.mjs$/,
-  ];
-  const emailRenderingChangedFiles=changedFilesBetween.filter((file)=>emailRenderingPathPatterns.some((pattern)=>pattern.test(file)));
+  const emailRenderingChangedFiles=emailRenderingFiles(changedFilesBetween);
   const emailRenderingMessage=/\b(email|resend|mail|logo|template)\b/i.test(mainCommitMessage);
   const emailRenderingBehind=Boolean(
     commitsBehind!=null&&commitsBehind>0&&
@@ -1218,7 +1210,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       severity:ok?'green':(defaultAlertAfter(id)===1?'red':'yellow'),
     };
   });
-  const emailHealthPromise=emailHealthSummary(context,{force:source==='manual'});
+  const emailHealthPromise=emailHealthSummary(context,{force:source!=='hourly'});
   const credentialHealthPromise=emailHealthPromise.then((emailHealth)=>
     credentialHealthSummary(context,{force:source==='manual',emailHealth})
   );
@@ -1339,6 +1331,30 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     ms:Number(emailHealth?.logo?.ms||0),
     severity:emailHealth?.logo?.ok?'green':'red',
     detail:clean(emailHealth?.logo?.detail||'Email logo health unavailable.',1200),
+  };
+  const inlineLogo=emailHealth?.inlineLogo||{};
+  const productionEmailVerification=inlineLogo?.productionVerification||{};
+  const productionVerificationRequired=Boolean(productionEmailVerification?.required);
+  const productionVerificationStatus=String(productionEmailVerification?.status||'');
+  const productionVerificationOk=Boolean(
+    inlineLogo?.staticAudit?.ok
+    && (!productionVerificationRequired||productionVerificationStatus==='success')
+  );
+  const emailInlineLogoCheck:HealthCheck={
+    id:'email-inline-logo-verification',
+    name:'Email inline logo verification',
+    kind:'api',
+    path:'controlled production email → Resend attachment audit',
+    ok:productionVerificationOk,
+    status:productionVerificationOk?200:503,
+    ms:0,
+    severity:productionVerificationOk?'green':'red',
+    detail:clean(
+      String(inlineLogo?.detail||'Inline logo production verification is unavailable.')
+      +(inlineLogo?.lastSuccessfulAt?' · Last successful production verification: '+String(inlineLogo.lastSuccessfulAt):'')
+      +(productionEmailVerification?.messageId?' · Resend ID: '+String(productionEmailVerification.messageId):''),
+      1200,
+    ),
   };
   const emailSendAccess=emailHealth?.sendAccess||{};
   const emailSendAccessCheck:HealthCheck={
@@ -1654,7 +1670,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {

@@ -12,6 +12,7 @@ import {
   sendHealthTransitionAlerts,
 } from './_shared/system-health';
 import { shouldRunScheduledJob } from './_shared/credit-saver';
+import { runBrandedEmailProductionVerification } from './_shared/email-health';
 
 function clean(value:unknown,max=300){
   return String(value||'').trim().slice(0,max);
@@ -31,6 +32,7 @@ async function runTenantJob(_req:Request,context:Context){
     readLatestHourlyHealth(context),
   ]);
 
+  await runBrandedEmailProductionVerification(context,{deployId,commit});
   const current=await runSystemHealth(context,'post-deploy');
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
