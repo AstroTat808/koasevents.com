@@ -170,9 +170,24 @@ mustMatch(
   'OIDC verification must run live post-deploy System Health rather than reading cached results.',
 );
 mustMatch(
+  githubHealthSignal,
+  /action==='verify-production-health'/,
+  'GitHub OIDC health signal must support the full production-health verification action.',
+);
+mustMatch(
   productionQa,
-  /verify-synthetic-probes/,
-  'Production QA must request the live synthetic-probe verification.',
+  /verify-production-health/,
+  'Production QA must request the full live production-health verification.',
+);
+mustMatch(
+  productionQa,
+  /accountingInvariant/,
+  'Production QA must gate the deploy on the live accounting invariant.',
+);
+mustMatch(
+  productionQa,
+  /liveClientEstimateTotal/,
+  'Production QA must require the live Chris Sibel estimate total.',
 );
 mustMatch(
   productionQa,
