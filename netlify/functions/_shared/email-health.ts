@@ -927,7 +927,8 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   const cachedAt = Date.parse(String(cached?.generatedAt || ''));
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
-  const inlineAssets = checkInlineAssets();
+  const inlineLogo = await inlineLogoHealthSummary(context);
+  const inlineAssets = inlineLogo.staticAudit;
   const [logo, sendAccess, resend, webhookEvents, webhook, webhookDelivery] = await Promise.all([
     checkLogo(),
     checkResendSendAccess(),
@@ -975,7 +976,7 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   };
 
   const webhookAttention = webhook.existsInResend === false || webhook.enabled === false || !webhookConfigured;
-  const overall = !logo.ok || !inlineAssets.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
+  const overall = !logo.ok || !inlineLogo.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
     ? 'red'
     : deliverySeverity === 'yellow' || monitoringAccessSeverity === 'yellow' || webhookAttention
       ? 'yellow'
@@ -986,6 +987,7 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     overall,
     logo,
     inlineAssets,
+    inlineLogo,
     sendAccess,
     monitoringAccess: {
       severity: monitoringAccessSeverity,
