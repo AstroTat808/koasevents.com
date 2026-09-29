@@ -2063,11 +2063,84 @@ export async function applyHealthAlertPolicy(context:Context,current:HealthSnaps
   return {snapshot:current,policy};
 }
 
+function accountingIncidentState(snapshot:HealthSnapshot|null|undefined){
+  const check=(snapshot?.checks||[]).find((row:any)=>row?.id==='quickbooks-tax-invariant') as any;
+  const details=check?.accountingDetails||{};
+  const live=details?.liveClientInvariant||{};
+  const dynamic=details?.dynamicClientInvariants||{};
+  return {
+    ok:Boolean(check?.ok),
+    severity:String(check?.severity||''),
+    expectedTotal:Number(details?.expectedTotal||0),
+    actualTotal:Number(details?.actualTotal||0),
+    taxablePayload:Number(details?.taxablePayload||0),
+    chris:{
+      status:String(live?.status||'unverified'),
+      proposalTotal:Number(live?.proposalTotal||0),
+      estimateTotal:live?.estimateTotal==null?null:Number(live.estimateTotal),
+      taxableLineCount:live?.taxableLineCount==null?null:Number(live.taxableLineCount),
+      estimateId:String(live?.estimateId||''),
+      estimateDocNumber:String(live?.estimateDocNumber||''),
+    },
+    dynamic:{
+      status:String(dynamic?.status||'unverified'),
+      eligibleCount:Number(dynamic?.eligibleCount||0),
+      passedCount:Number(dynamic?.passedCount||0),
+      failedCount:Number(dynamic?.failedCount||0),
+    },
+    detail:String(check?.detail||''),
+  };
+}
+
+function accountingIncidentChanged(before:any,after:any){
+  if(!before)return !after.ok;
+  return before.ok!==after.ok
+    || before.actualTotal!==after.actualTotal
+    || before.taxablePayload!==after.taxablePayload
+    || before.chris?.status!==after.chris?.status
+    || before.chris?.estimateTotal!==after.chris?.estimateTotal
+    || before.chris?.taxableLineCount!==after.chris?.taxableLineCount
+    || before.dynamic?.status!==after.dynamic?.status
+    || before.dynamic?.failedCount!==after.dynamic?.failedCount;
+}
+
+export async function readAccountingIncidentTimeline(context:Context,limit=200){
+  const rows=((await healthStore(context).get('accounting/incidents',{type:'json'}))||[]) as any[];
+  return rows.slice(0,Math.max(1,Math.min(1000,limit)));
+}
+
 export async function persistHealth(context:Context,snapshot:HealthSnapshot) {
   const store=healthStore(context);
-  const history=((await store.get('history',{type:'json'})) || []) as HealthSnapshot[];
+  const [history,previous]=await Promise.all([
+    store.get('history',{type:'json'}),
+    store.get('latest',{type:'json'}),
+  ]);
+  const priorHistory=(history||[]) as HealthSnapshot[];
+  const previousSnapshot=(previous||null) as HealthSnapshot|null;
+  const before=previousSnapshot?accountingIncidentState(previousSnapshot):null;
+  const after=accountingIncidentState(snapshot);
+
   await store.setJSON('latest',snapshot);
-  await store.setJSON('history',[snapshot,...history].slice(0,500));
+  await store.setJSON('history',[snapshot,...priorHistory].slice(0,500));
+
+  if(accountingIncidentChanged(before,after)){
+    const incidents=((await store.get('accounting/incidents',{type:'json'}))||[]) as any[];
+    const type=!before
+      ? 'failed'
+      : !before.ok&&after.ok
+        ? 'recovered'
+        : before.ok&&!after.ok
+          ? 'failed'
+          : 'changed';
+    await store.setJSON('accounting/incidents',[{
+      id:'ACC-'+Date.now().toString(36).toUpperCase(),
+      checkedAt:snapshot.checkedAt,
+      source:snapshot.source,
+      type,
+      before,
+      after,
+    },...incidents].slice(0,1000));
+  }
 
   if(snapshot.source==='hourly'){
     const uptimeRows=((await store.get('uptime/hourly',{type:'json'})) || []) as any[];
