@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
 import { tenantEnv } from './tenant-env';
+import { emailHeader, emailInlineAssetAudit, emailLogoAttachment } from './email-brand';
 
 export type EmailHealthEvent = {
   id: string;
@@ -159,6 +160,19 @@ async function checkLogo() {
       detail: error instanceof Error ? error.message : 'Logo request failed.',
     };
   }
+}
+
+function checkInlineAssets() {
+  const html = emailHeader({ brand: 'events', eyebrow: 'Email Health', title: 'Inline asset verification' });
+  const attachments = [emailLogoAttachment()];
+  const audit = emailInlineAssetAudit(html, attachments);
+  return {
+    ...audit,
+    severity: audit.ok ? 'green' : 'red',
+    detail: audit.ok
+      ? 'Branded email HTML references a CID logo and the matching inline PNG attachment is present.'
+      : audit.detail,
+  };
 }
 
 export async function checkResendSendAccess() {
@@ -595,6 +609,7 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   const cachedAt = Date.parse(String(cached?.generatedAt || ''));
   if (!options.force && Number.isFinite(cachedAt) && Date.now() - cachedAt < 5 * 60 * 1000) return cached;
 
+  const inlineAssets = checkInlineAssets();
   const [logo, sendAccess, resend, webhookEvents, webhook, webhookDelivery] = await Promise.all([
     checkLogo(),
     checkResendSendAccess(),
@@ -642,7 +657,7 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
   };
 
   const webhookAttention = webhook.existsInResend === false || webhook.enabled === false || !webhookConfigured;
-  const overall = !logo.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
+  const overall = !logo.ok || !inlineAssets.ok || !templateCompatibility.passed || deliverySeverity === 'red' || !sendAccess.ok
     ? 'red'
     : deliverySeverity === 'yellow' || monitoringAccessSeverity === 'yellow' || webhookAttention
       ? 'yellow'
@@ -652,6 +667,7 @@ export async function emailHealthSummary(context: Context, options: EmailHealthS
     generatedAt: new Date().toISOString(),
     overall,
     logo,
+    inlineAssets,
     sendAccess,
     monitoringAccess: {
       severity: monitoringAccessSeverity,
