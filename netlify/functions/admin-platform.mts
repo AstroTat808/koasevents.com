@@ -1,10 +1,14 @@
 import type { Context, Config } from '@netlify/functions';
 import { getAccessContext } from './_shared/admin.ts';
 import {
+  appendPlatformSandboxQaHistory,
+  clearSandboxMemberships,
   createOrganization,
   createPlatformSupportSession,
+  deleteSandboxOrganizationControlPlane,
   endPlatformSupportSession,
   listOrganizations,
+  listPlatformSandboxQaHistory,
   listPlatformSupportSessions,
   profileFromOrganization,
   readOrganizationById,
@@ -13,7 +17,7 @@ import {
 } from './_shared/organization.ts';
 import { tenantMigrationAudit, tenantStoreFor } from './_shared/tenant-storage.ts';
 import { runWithTenant } from './_shared/tenant.ts';
-import { runCrossTenantLeakageTest, runSandboxOnboardingJourney } from './_shared/tenant-sandbox-qa.ts';
+import { runCrossTenantLeakageTest, runSandboxOnboardingJourney, runSandboxOnboardingStage, SANDBOX_ONBOARDING_STAGES } from './_shared/tenant-sandbox-qa.ts';
 import { tenantEnvConfigured } from './_shared/tenant-env.ts';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
@@ -95,6 +99,37 @@ async function organizationSummary(context:Context,organization:any){
   });
 }
 
+
+const SANDBOX_DATA_DOMAINS = [
+  'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
+  'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit',
+  'staffAvailability','security','systemHealth','calendarSync','userPreferences','blog','gallery',
+  'localSeo','workspaceAlerts',
+] as const;
+
+async function purgeSandboxTenantData(context:Context,organization:any){
+  const profile=profileFromOrganization(organization);
+  if(!String(organization?.slug||'').startsWith('vl-sandbox-') || organization?.featureFlags?.['platform.sandbox']!==true){
+    throw new Error('Only VenueLoom sandbox organizations can be purged.');
+  }
+  const removed:any[]=[];
+  await runWithTenant(profile,async()=>{
+    for(const domain of SANDBOX_DATA_DOMAINS){
+      const store=tenantStoreFor(context,profile,domain as any);
+      const rows=await store.list({});
+      let count=0;
+      for(const blob of rows.blobs||[]){
+        const key=String(blob?.key||'');
+        if(!key)continue;
+        await store.delete(key);
+        count++;
+      }
+      removed.push({domain,count});
+    }
+  });
+  return removed;
+}
+
 async function sandboxQaSnapshot(context:Context,organization:any){
   const profile=profileFromOrganization(organization);
   if(!organization?.featureFlags?.['platform.sandbox'])return null;
@@ -104,7 +139,8 @@ async function sandboxQaSnapshot(context:Context,organization:any){
       store.get('qa/tenant-isolation/latest',{type:'json'} as any).catch(()=>null),
       store.get('qa/onboarding/latest',{type:'json'} as any).catch(()=>null),
     ]);
-    return {leakage,onboarding};
+    const history=await listPlatformSandboxQaHistory(context,organization.id,100);
+    return {leakage,onboarding,history};
   });
 }
 
@@ -265,6 +301,56 @@ export default async(req:Request,context:Context)=>{
       email:auth.access.user?.email,
     });
     return Response.json({ok:true,organization:await organizationSummary(context,result.organization),onboardingTest:result.report},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+
+  if(action==='run-sandbox-onboarding-stage'){
+    const tenantId=clean(body.tenantId,120);
+    const stage=clean(body.stage,80);
+    if(!SANDBOX_ONBOARDING_STAGES.includes(stage as any))return Response.json({error:'Unknown onboarding stage.'},{status:400});
+    const sandbox=await readOrganizationById(context,tenantId);
+    if(!sandbox)return Response.json({error:'Sandbox organization not found.'},{status:404});
+    const result=await runSandboxOnboardingStage(context,sandbox,{
+      id:auth.access.user?.id,
+      email:auth.access.user?.email,
+    },stage);
+    return Response.json({ok:true,organization:await organizationSummary(context,result.organization),onboardingStageTest:result.report},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='reset-sandbox-tenant'){
+    const tenantId=clean(body.tenantId,120);
+    const sandbox=await readOrganizationById(context,tenantId);
+    if(!sandbox)return Response.json({error:'Sandbox organization not found.'},{status:404});
+    const profile=profileFromOrganization(sandbox);
+    const removedData=await purgeSandboxTenantData(context,sandbox);
+    const membershipsRemoved=await clearSandboxMemberships(context,tenantId);
+    const resetAt=new Date().toISOString();
+    const reset=await saveOrganization(context,profile,(current)=>({
+      ...current,
+      status:'trial',
+      branding:{...current.branding,tagline:'Sandbox organization for tenant-isolation verification'},
+      venues:[{id:'sandbox-main',name:'Sandbox Venue',address:'Test data only',timezone:current.timezone||'UTC',capacity:120,active:true}],
+      taxProfile:{id:'sandbox-tax',label:'Sandbox Tax',kind:'sales-tax',enabled:true,statutoryRate:4.25,customerRate:4.25,maxPassOnRate:4.25,defaultTaxable:true},
+      domains:[{id:'sandbox-domain',hostname:current.slug+'.invalid',kind:'custom',status:'pending',primary:true}],
+      integrations:(current.integrations||[]).map((row:any)=>({...row,status:'not_configured',remoteAccountId:'',remoteAccountName:'',connectedAt:'',lastVerifiedAt:'',credentialRef:''})),
+      templates:[{id:'sandbox-proposal',type:'proposal',name:'Sandbox Proposal',enabled:true,source:'tenant',updatedAt:resetAt}],
+      subscription:{...current.subscription,status:'not_configured',plan:'sandbox',stripeCustomerId:'',stripeSubscriptionId:'',currentPeriodEnd:'',trialEndsAt:''},
+      onboarding:{completedSteps:['organization','locale','venues','branding','tax-profile','templates'],activatedAt:''},
+      updatedAt:resetAt,
+    }));
+    await appendPlatformSandboxQaHistory(context,tenantId,{kind:'reset',runId:'RESET-'+Date.now().toString(36),generatedAt:resetAt,summary:{clean:true},report:{removedData,membershipsRemoved}});
+    return Response.json({ok:true,organization:await organizationSummary(context,reset),removedData,membershipsRemoved},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='delete-sandbox-tenant'){
+    const tenantId=clean(body.tenantId,120);
+    const sandbox=await readOrganizationById(context,tenantId);
+    if(!sandbox)return Response.json({error:'Sandbox organization not found.'},{status:404});
+    const removedData=await purgeSandboxTenantData(context,sandbox);
+    const deletedAt=new Date().toISOString();
+    await appendPlatformSandboxQaHistory(context,tenantId,{kind:'delete',runId:'DELETE-'+Date.now().toString(36),generatedAt:deletedAt,summary:{clean:true},report:{removedData}});
+    const controlPlane=await deleteSandboxOrganizationControlPlane(context,tenantId);
+    return Response.json({ok:true,deletedTenantId:tenantId,removedData,controlPlane},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   return Response.json({error:'Unknown platform action.'},{status:400});
