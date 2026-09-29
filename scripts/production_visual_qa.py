@@ -604,9 +604,10 @@ def admin_mode(browser_name):
    response=page.goto(BASE+"/admin/platform/",wait_until="domcontentloaded",timeout=45000)
    page.wait_for_selector("[data-app]:not(.hidden)",state="visible",timeout=8000)
    page.wait_for_selector("[data-create-sandbox]",state="visible",timeout=3000)
-   title=page.locator("h1").inner_text().strip()
+   document_title=page.title()
+   heading=page.locator("h1").inner_text().strip()
    create_label=page.locator("[data-create-sandbox]").inner_text().strip()
-   if "VenueLoom Super Admin" not in title or "Create safe sandbox tenant" not in create_label:
+   if "VenueLoom Super Admin" not in document_title or heading!="Super Admin" or "Create safe sandbox tenant" not in create_label:
     detail="VenueLoom Super Admin did not reach its expected initialized state."
    elif page_errors:
     detail="VenueLoom Super Admin JavaScript page errors: "+" | ".join(page_errors[:5])
