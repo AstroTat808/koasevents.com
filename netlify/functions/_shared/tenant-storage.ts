@@ -276,6 +276,7 @@ export async function tenantMigrationAudit(
 ) {
   const canonical=canonicalStore(context);
   const results:any[]=[];
+  const auditedAt=new Date().toISOString();
 
   for(const domain of domains) {
     const prefix=tenantDataPrefix(tenant,domain);
@@ -363,6 +364,8 @@ export async function tenantMigrationAudit(
       critical,
       safeToRetireLegacy,
       retirementStatus:!tenant.storage.legacyDataBelongsToTenant?'not-applicable':safeToRetireLegacy?'safe':'blocked',
+      safeToRetireAsOf:safeToRetireLegacy?auditedAt:'',
+      auditedAt,
       blockers:[
         ...(missingCanonical.length?[missingCanonical.length+' legacy object(s) are not mirrored']:[]),
         ...(checksumMismatch?[checksumMismatch+' mirrored object(s) have checksum mismatches']:[]),
@@ -373,7 +376,7 @@ export async function tenantMigrationAudit(
 
   return {
     tenantId:tenant.id,
-    generatedAt:new Date().toISOString(),
+    generatedAt:auditedAt,
     canonicalStore:CANONICAL_STORE,
     legacyDataBelongsToTenant:tenant.storage.legacyDataBelongsToTenant,
     domains:results,
