@@ -671,6 +671,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
   </dialog>
 
   <script>
+    import { quickBooksAuditEstimateView } from '../../../lib/quickbooks-accounting-audit-display.mjs';
     import { getAdminSession } from '../../../lib/admin-session';
         const app=document.querySelector('[data-app]');
     const unauthorized=document.querySelector('[data-unauthorized]');
@@ -1636,7 +1637,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const top=document.createElement('div');top.className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between';
         const left=document.createElement('div');
         const title=document.createElement('a');title.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';title.className='text-sm font-bold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4 hover:text-[var(--koa-clay)]';title.textContent=row.clientName||row.recordId;
-        const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';meta.textContent=[row.recordId,row.eventDate,row.estimateDocNumber?'Estimate #'+row.estimateDocNumber:'No QBO estimate'].filter(Boolean).join(' · ');
+        const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';const estimateView=quickBooksAuditEstimateView(row);meta.textContent=[row.recordId,row.eventDate,estimateView.label].filter(Boolean).join(' · ');
         left.append(title,meta);
         const actions=document.createElement('div');actions.className='flex flex-wrap items-center gap-2';
         const link=document.createElement('a');link.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';link.className='text-[.58rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]';link.textContent='Open client →';
@@ -1645,14 +1646,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const recheck=document.createElement('button');recheck.type='button';recheck.className='rounded-full border border-red-200 bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-red-700';recheck.textContent='Sync & Recheck';
           recheck.addEventListener('click',async()=>{
             recheck.disabled=true;recheck.textContent='Syncing…';
-            try{const result=await api({action:'sync-and-recheck',recordId:row.recordId});state.accountingAudit=result.accountingAudit||state.accountingAudit;renderAccountingAudit();}
+            try{const result=await api({action:'sync-and-recheck',recordId:row.recordId});state.accountingAudit=result.accountingAudit||state.accountingAudit;if(result.accountingRepairPreview){location.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting&repair=preview';return;}renderAccountingAudit();}
             catch(err){recheck.disabled=false;recheck.textContent='Retry Sync & Recheck';alert(err.message||'Unable to sync and recheck this client.');}
           });
           actions.appendChild(recheck);
         }
         top.append(left,actions);card.appendChild(top);
         const totals=document.createElement('p');totals.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/58';
-        totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(row.estimateTotal)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
+        totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(estimateView.total)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
         card.appendChild(totals);
         if(row.reconciled){
           const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-[var(--koa-forest)]';ok.textContent='All stored accounting values reconcile.';

@@ -1186,9 +1186,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(!record)return;
       message.textContent='Refreshing QuickBooks estimate, invoices and payments…';
       try{
-        await qboPost({action:'sync-and-recheck',recordId:record.id});
-        message.textContent='QuickBooks refreshed. Reconciliation recalculated.';
+        const result=await qboPost({action:'sync-and-recheck',recordId:record.id});
+        message.textContent=result.accountingRepairPreview
+          ? 'QuickBooks refreshed. A safe Accounting Repair preview is ready for review.'
+          : 'QuickBooks refreshed. Reconciliation recalculated.';
         await load('accounting');
+        if(result.accountingRepairPreview){
+          renderRepairPreview(result.accountingRepairPreview);
+          document.querySelector('[data-repair-panel]')?.scrollIntoView({behavior:'smooth',block:'start'});
+        }
       }catch(error){
         message.textContent=error.message||'Unable to sync QuickBooks.';
       }
@@ -1214,6 +1220,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     document.querySelector('[data-sync-2]')?.addEventListener('click',sync);
     document.querySelector('[data-repair-preview]')?.addEventListener('click',previewRepair);
 
-    load();
+    load().then(async()=>{
+      const url=new URL(location.href);
+      if(url.searchParams.get('repair')==='preview'&&record?.proposal){
+        url.searchParams.delete('repair');
+        history.replaceState({},'',url);
+        await previewRepair();
+        document.querySelector('[data-repair-panel]')?.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+    });
   </script>
 </BaseLayout>
