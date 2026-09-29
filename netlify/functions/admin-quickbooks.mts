@@ -1450,11 +1450,13 @@ export default async (req: Request, context: Context) => {
       const syncJob = await continueQuickBooksCrmTwoWaySyncJob(context, jobId);
       const records = syncJob?.status === 'completed' ? await readQuickBooksSalesRecords(context) : null;
       const accountingAudit = records ? buildQuickBooksAccountingAudit(records) : null;
+      const lastSyncFailure = await getLastQuickBooksCrmSyncFailure(context);
       return Response.json({
         ok:true,
         syncJob,
         result:syncJob?.result || null,
         accountingAudit,
+        lastSyncFailure:lastSyncFailure || null,
       }, { headers:{ 'Cache-Control':'private, no-store' } });
     } catch (error) {
       const detail: any = error || {};
