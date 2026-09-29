@@ -31,6 +31,7 @@ assert.match(storage,/legacyChecksum/,'migration audit must calculate legacy che
 assert.match(storage,/canonicalMirrorChecksum/,'migration audit must calculate mirror checksums');
 assert.match(storage,/checksumMismatchCount/,'migration audit must report checksum mismatches');
 assert.match(storage,/retirementStatus/,'migration audit must expose per-store retirement status');
+assert.match(storage,/matchingEtag/,'migration audit must avoid downloading identical large Blob objects when etags already match');
 assert.match(org,/support-sessions\/history/,'support sessions must be auditable');
 assert.match(org,/expiresAt/,'support sessions must have an expiry');
 assert.match(page,/Read-only support mode/,'UI must clearly identify support impersonation as read-only');
