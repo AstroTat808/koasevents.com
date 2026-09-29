@@ -1,4 +1,4 @@
-import { emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
+import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import { resolveTenant } from './tenant';
 import { tenantEnv } from './tenant-env';
 type AccountingTransition = {
@@ -85,11 +85,13 @@ export async function sendAccountingTransitionAlerts(
       'Sales CRM: https://koasevents.com/admin/quotes/','',
       emailSignatureText()
     ].join('\n');
+    const attachments=[emailLogoAttachment()];
+    assertEmailInlineAssets(html,attachments);
     try{
       const response=await fetch('https://api.resend.com/emails',{
         method:'POST',
         headers:{Authorization:'Bearer '+apiKey,'Content-Type':'application/json','Idempotency-Key':('koa-accounting-'+runId).slice(0,256)},
-        body:JSON.stringify({from,to:recipients,subject,html,text:textBody,attachments:[emailLogoAttachment()]}),
+        body:JSON.stringify({from,to:recipients,subject,html,text:textBody,attachments}),
         signal:AbortSignal.timeout(12_000),
       });
       const body:any=await response.json().catch(()=>({}));
