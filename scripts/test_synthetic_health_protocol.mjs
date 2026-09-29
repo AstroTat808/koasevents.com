@@ -238,8 +238,23 @@ mustMatch(
 );
 mustMatch(
   githubHealthSignal,
+  /deploymentSyncCheck\?\.deploymentDetails\?\.netlifyDeployId/,
+  'Signed production QA must resolve the immutable Netlify deploy id from the live deployment health check when runtime DEPLOY_ID is unavailable.',
+);
+mustMatch(
+  githubHealthSignal,
+  /auditRecorded=Boolean\(releaseRecord\?\.deployId\)/,
+  'Signed production QA must only report the release audit as recorded when a deploy-keyed record was actually written.',
+);
+mustMatch(
+  githubHealthSignal,
   /recordProductionRelease\(context,/,
   'Signed production QA must persist the live four-probe release audit before reporting success.',
+);
+mustMatch(
+  postDeployVerification,
+  /deploymentSyncCheck\?\.deploymentDetails\?\.netlifyDeployId/,
+  'Scheduled post-deploy verification must also resolve release identity from live deployment evidence.',
 );
 mustMatch(
   githubHealthSignal,
