@@ -14,6 +14,12 @@ export function quickBooksAuditEstimateView(row) {
   const docNumber = clean(row?.estimateDocNumber, 100);
   const linked = Boolean(estimateId);
   const total = linked ? finiteMoney(row?.estimateTotal) : null;
+  const verifiedAt = linked ? clean(row?.estimateVerifiedAt, 80) : '';
+  const verificationSource = !linked
+    ? 'not_linked'
+    : verifiedAt
+      ? 'quickbooks_live'
+      : 'crm_mirror';
   const label = docNumber
     ? 'Estimate #' + docNumber
     : linked
@@ -24,6 +30,9 @@ export function quickBooksAuditEstimateView(row) {
     linked,
     label,
     total,
+    verifiedAt,
+    verificationSource,
+    liveVerified: verificationSource === 'quickbooks_live',
     consistent: label !== 'No QBO estimate' || total === null,
   };
 }
