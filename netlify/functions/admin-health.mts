@@ -345,13 +345,15 @@ function accountingHealthSummary(latest:any,history:any[]){
     const recovered=!prior.ok&&sample.ok;
     const becameAlerted=!prior.alerted&&sample.alerted;
     const liveStatusChanged=String(prior?.accountingDetails?.liveNonTaxStatus||'')!==String(sample?.accountingDetails?.liveNonTaxStatus||'');
-    if(becameAlerted||becameFailed||recovered||liveStatusChanged){
+    const liveEstimateStatusChanged=String(prior?.accountingDetails?.liveEstimateStatus||'')!==String(sample?.accountingDetails?.liveEstimateStatus||'');
+    if(becameAlerted||becameFailed||recovered||liveStatusChanged||liveEstimateStatusChanged){
       alertHistory.push({
         checkedAt:sample.checkedAt,
         type:recovered?'recovered':becameAlerted?'alerted':becameFailed?'failed':'configuration_changed',
         severity:sample.severity,
         detail:sample.detail,
         liveNonTaxStatus:String(sample?.accountingDetails?.liveNonTaxStatus||'unverified'),
+        liveEstimateStatus:String(sample?.accountingDetails?.liveEstimateStatus||'unverified'),
       });
     }
     prior=sample;
@@ -366,6 +368,18 @@ function accountingHealthSummary(latest:any,history:any[]){
     liveNonTaxVerified:Boolean(latestSample?.accountingDetails?.liveNonTaxVerified),
     liveNonTaxId:String(latestSample?.accountingDetails?.liveNonTaxId||''),
     liveNonTaxName:String(latestSample?.accountingDetails?.liveNonTaxName||''),
+    invariantLabel:String(latestSample?.accountingDetails?.invariantLabel||''),
+    crmRecordId:String(latestSample?.accountingDetails?.crmRecordId||''),
+    crmProposalTotal:Number(latestSample?.accountingDetails?.crmProposalTotal||0),
+    liveEstimateStatus:String(latestSample?.accountingDetails?.liveEstimateStatus||'unverified'),
+    liveEstimateVerified:Boolean(latestSample?.accountingDetails?.liveEstimateVerified),
+    liveEstimateCheckedAt:String(latestSample?.accountingDetails?.liveEstimateCheckedAt||''),
+    liveEstimateId:String(latestSample?.accountingDetails?.liveEstimateId||''),
+    liveEstimateDocNumber:String(latestSample?.accountingDetails?.liveEstimateDocNumber||''),
+    liveEstimateTotal:Number(latestSample?.accountingDetails?.liveEstimateTotal||0),
+    liveEstimateLineTotal:Number(latestSample?.accountingDetails?.liveEstimateLineTotal||0),
+    liveEstimateTaxablePayload:Number(latestSample?.accountingDetails?.liveEstimateTaxablePayload||0),
+    liveEstimateQuickBooksTax:Number(latestSample?.accountingDetails?.liveEstimateQuickBooksTax||0),
     lastSuccessfulAt:String(lastSuccessful?.checkedAt||''),
     failures,
     alertHistory:alertHistory.reverse().slice(0,20),
