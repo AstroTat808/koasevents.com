@@ -1,6 +1,6 @@
 import { resolveTenant } from './tenant.ts';
 import { tenantEnv } from './tenant-env.ts';
-import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
+import { type EmailBrandKey, emailBrandName, emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand.ts';
 
 function esc(value:unknown){
   return String(value??'').replace(/[&<>"']/g,(m)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]||m));
@@ -75,6 +75,8 @@ export async function sendVendorEmail(args:{
     emailSignatureText(),
   ].filter(Boolean).join('\n');
 
+  const attachments=[emailLogoAttachment()];
+  assertEmailInlineAssets(html,attachments);
   try{
     const response=await fetch('https://api.resend.com/emails',{
       method:'POST',
@@ -89,7 +91,7 @@ export async function sendVendorEmail(args:{
         subject:args.subject,
         html,
         text,
-        attachments:[emailLogoAttachment()],
+        attachments,
         reply_to:replyTo()
       }),
       signal:AbortSignal.timeout(12000)
