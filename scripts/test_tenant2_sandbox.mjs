@@ -68,6 +68,9 @@ console.log('VenueLoom Tenant #2 sandbox, leakage-test, onboarding and migration
 
 assert.match(runner,/VENUELOOM_TENANT2_RUNNER_TOKEN_SHA256/,'Temporary production runner must require a hashed secret token.');
 assert.match(runner,/timingSafeEqual/,'Temporary production runner token comparison must be timing safe.');
+assert.match(runner,/authorization/,'Runtime runner must accept its secret through a request header, not the URL.');
+assert.match(runner,/req\.method!=='POST'/,'Runtime runner must require POST so secrets and actions are not encoded in URLs.');
+assert.doesNotMatch(runner,/searchParams\.get\(['"]token['"]\)/,'Runtime runner token must never be accepted through the query string.');
 assert.match(runner,/context\.deploy\.context!=='production'/,'Runtime runner must refuse non-production contexts.');
 assert.match(runner,/mode==='isolation'/,'Runtime runner must expose the isolation probe.');
 assert.match(runner,/mode==='onboarding'/,'Runtime runner must expose the onboarding probe.');
