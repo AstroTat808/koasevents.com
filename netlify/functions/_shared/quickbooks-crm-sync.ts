@@ -93,6 +93,18 @@ function baseNameFromDisplayName(value: unknown) {
   return clean(value, 240).replace(/\s+-\s+\d{4}-\d{2}-\d{2}\s*$/, '').trim();
 }
 
+function exactBookingIdentityMatches(records:any[], customer:any) {
+  const email=normalizeEmail(qboCustomerEmail(customer));
+  const eventDate=eventDateFromDisplayName(customer?.DisplayName);
+  if(!email||!eventDate)return [];
+  return records.filter((record:any)=>
+    normalizeEmail(record?.customer?.email)===email
+    && isoDate(record?.customer?.eventDate)===eventDate
+    && clean(record?.kind,40)!=='quickbooks-test'
+    && clean(record?.stage,40)!=='lost'
+  );
+}
+
 function expectedDisplayName(record: any) {
   const name = clean(record?.customer?.name, 180);
   const eventDate = isoDate(record?.customer?.eventDate);
