@@ -25,6 +25,8 @@ assert.match(sandboxQa,/externalSideEffects:\{/,'onboarding QA must disclose ext
 assert.match(sandboxQa,/stripe:false/,'sandbox onboarding must not create billable Stripe activity');
 assert.match(sandboxQa,/dns:false/,'sandbox onboarding must not mutate DNS');
 assert.match(sandboxQa,/quickbooks:false/,'sandbox onboarding must not connect QuickBooks');
+assert.match(sandboxQa,/runForEachTenant/,'sandbox QA must probe the runtime scheduled-job tenant iterator');
+assert.match(sandboxQa,/schedulerProbeKey/,'scheduled-job probe must compare canonical tenant namespaces');
 assert.match(storage,/legacyChecksum/,'migration audit must calculate legacy checksums');
 assert.match(storage,/canonicalMirrorChecksum/,'migration audit must calculate mirror checksums');
 assert.match(storage,/checksumMismatchCount/,'migration audit must report checksum mismatches');
