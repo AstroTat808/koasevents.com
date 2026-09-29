@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { tenantById } from '../../../src/data/tenants/index.ts';
 import {
+  appendPlatformSandboxQaHistory,
   listMemberships,
   profileFromOrganization,
   saveMembership,
@@ -161,6 +162,7 @@ export async function runCrossTenantLeakageTest(
   };
 
   await runWithTenant(sandbox,()=>tenantStoreFor(context,sandbox,'systemHealth').setJSON('qa/tenant-isolation/latest',report));
+  await appendPlatformSandboxQaHistory(context,sandbox.id,{kind:'leakage',runId:report.runId,generatedAt:report.generatedAt,summary:report.summary,report});
   return report;
 }
 
@@ -394,5 +396,47 @@ export async function runSandboxOnboardingJourney(
     },
   };
   await runWithTenant(profile,()=>tenantStoreFor(context,profile,'systemHealth').setJSON('qa/onboarding/latest',report));
+  await appendPlatformSandboxQaHistory(context,profile.id,{kind:'onboarding',runId:report.runId,generatedAt:report.generatedAt,summary:report.summary,report});
   return {organization:updated,report};
+}
+
+
+export const SANDBOX_ONBOARDING_STAGES = [
+  'organization','branding','venue','tax','catalog','team','domain','integrations','templates','stripe','test-proposal','activation',
+] as const;
+
+export async function runSandboxOnboardingStage(
+  context: Context,
+  organization: OrganizationRecord,
+  actor: { id?:string; email?:string },
+  requestedStage: string,
+) {
+  const stage=clean(requestedStage,80);
+  if (!SANDBOX_ONBOARDING_STAGES.includes(stage as any)) {
+    throw new Error('Unknown sandbox onboarding stage.');
+  }
+  if (!isSandboxOrganization(organization)) {
+    throw new Error('Onboarding QA is restricted to VenueLoom sandbox organizations.');
+  }
+
+  const full=await runSandboxOnboardingJourney(context,organization,actor);
+  const step=full.report.steps.find((row:any)=>row.id===stage) || null;
+  const stageReport={
+    runId:full.report.runId+'-'+stage,
+    tenantId:full.report.tenantId,
+    generatedAt:now(),
+    mode:'sandbox-safe-stage',
+    requestedStage:stage,
+    externalSideEffects:full.report.externalSideEffects,
+    step,
+    summary:{
+      steps:step?1:0,
+      passed:step?.passed?1:0,
+      failed:step&&!step.passed?1:0,
+      clean:Boolean(step?.passed),
+      activated:full.report.summary.activated,
+    },
+  };
+  await appendPlatformSandboxQaHistory(context,organization.id,{kind:'onboarding-stage',stage,runId:stageReport.runId,generatedAt:stageReport.generatedAt,summary:stageReport.summary,report:stageReport});
+  return {organization:full.organization,report:stageReport,fullReport:full.report};
 }
