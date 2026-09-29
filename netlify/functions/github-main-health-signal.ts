@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { recordGithubMainSignal } from './_shared/system-health';
+import { recordGithubMainSignal, runSystemHealth } from './_shared/system-health';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -77,6 +77,52 @@ export default async (req:Request,context:Context) => {
       reportedAt:new Date().toISOString(),
       source:'github-actions-oidc',
     });
+
+    const body:any=await req.json().catch(()=>({}));
+    if(body?.action==='verify-synthetic-probes'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      const health=await runSystemHealth(context,'post-deploy');
+      const ids=new Set([
+        'synthetic-event-documents',
+        'synthetic-vendor-insurance-document',
+        'synthetic-quickbooks-webhook',
+        'synthetic-signwell-webhook',
+      ]);
+      const probes=health.checks
+        .filter((row:any)=>ids.has(String(row?.id||'')))
+        .map((row:any)=>({
+          id:row.id,
+          name:row.name,
+          ok:Boolean(row.ok),
+          severity:row.severity,
+          status:Number(row.status||0),
+          marker:String(row?.syntheticDetails?.returnedMarker||''),
+          expectedMarker:String(row?.syntheticDetails?.expectedMarker||''),
+          source:String(row?.syntheticDetails?.source||''),
+          lastLiveCheckedAt:String(row?.syntheticDetails?.lastLiveCheckedAt||health.checkedAt||''),
+          detail:String(row.detail||''),
+        }));
+      const verified=probes.length===4&&probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
+      return Response.json({
+        ok:verified,
+        accepted:result.accepted,
+        sha:result.signal.sha,
+        source:'github-actions-oidc',
+        checkedAt:health.checkedAt,
+        probes,
+      },{
+        status:verified?200:503,
+        headers:{'Cache-Control':'no-store'},
+      });
+    }
+
     return Response.json({ok:true,accepted:result.accepted,sha:result.signal.sha,source:'github-actions-oidc'},{headers:{'Cache-Control':'no-store'}});
   }catch(error){
     return Response.json({error:error instanceof Error?error.message:'GitHub OIDC verification failed.'},{status:403,headers:{'Cache-Control':'no-store'}});
