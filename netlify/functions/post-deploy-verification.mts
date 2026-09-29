@@ -21,12 +21,11 @@ function clean(value:unknown,max=300){
 
 async function runTenantJob(_req:Request,context:Context){
   if(!(await shouldRunScheduledJob(context,'post-deploy-verification'))) return;
-  const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
-  const commit=clean(Netlify.env.get('COMMIT_REF'),120);
-  if(!deployId) return;
+  const runtimeDeployId=clean(Netlify.env.get('DEPLOY_ID'),120);
+  const runtimeCommit=clean(Netlify.env.get('COMMIT_REF'),120);
 
   const previousVerification=await readPostDeployVerification(context);
-  if(previousVerification?.deployId===deployId && previousVerification?.status==='success') return;
+  if(runtimeDeployId&&previousVerification?.deployId===runtimeDeployId && previousVerification?.status==='success') return;
 
   const [previous,previousHourly]=await Promise.all([
     readLatestHealth(context),
@@ -35,6 +34,19 @@ async function runTenantJob(_req:Request,context:Context){
 
   await runBrandedEmailProductionVerification(context,{deployId,commit});
   const current=await runSystemHealth(context,'post-deploy');
+  const deploymentSyncCheck:any=current.checks.find((row:any)=>String(row?.id||'')==='netlify-github-sync')||null;
+  const deployId=clean(
+    runtimeDeployId
+      || deploymentSyncCheck?.deploymentDetails?.netlifyDeployId
+      || '',
+    120,
+  );
+  const commit=clean(
+    runtimeCommit
+      || deploymentSyncCheck?.deploymentDetails?.netlifyCommit
+      || '',
+    120,
+  );
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
@@ -52,13 +64,15 @@ async function runTenantJob(_req:Request,context:Context){
     syntheticProbeVerification,
   };
   await savePostDeployVerification(context,verification);
-  await recordProductionRelease(context,{
-    deployId,
-    commit,
-    checkedAt:current.checkedAt,
-    verification,
-    syntheticProbeVerification,
-  });
+  if(deployId){
+    await recordProductionRelease(context,{
+      deployId,
+      commit,
+      checkedAt:current.checkedAt,
+      verification,
+      syntheticProbeVerification,
+    });
+  }
 }
 export default async (req:Request, context:Context) => {
   if (context.deploy.context !== 'production') return;
