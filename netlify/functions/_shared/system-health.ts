@@ -305,6 +305,55 @@ export function syntheticProbeReleaseVerification(
   };
 }
 
+export function productionAccountingVerification(snapshot:HealthSnapshot):ProductionAccountingVerification {
+  const accountingCheck:any=(snapshot?.checks||[]).find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
+  const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
+  const liveClients=accountingCheck?.accountingDetails?.liveClientInvariants||null;
+  const invariant={
+    id:String(accountingCheck?.id||'quickbooks-tax-invariant'),
+    ok:Boolean(accountingCheck?.ok),
+    severity:String(accountingCheck?.severity||''),
+    status:Number(accountingCheck?.status||0),
+    expectedTotal:Number(accountingCheck?.accountingDetails?.expectedTotal||15706.80),
+    actualTotal:Number(accountingCheck?.accountingDetails?.actualTotal||0),
+    taxablePayload:Number(accountingCheck?.accountingDetails?.taxablePayload||0),
+    liveClientStatus:String(liveClient?.status||'unverified'),
+    liveClientEstimateTotal:liveClient?.estimateTotal==null?null:Number(liveClient.estimateTotal),
+    liveClientTaxableLineCount:liveClient?.taxableLineCount==null?null:Number(liveClient.taxableLineCount),
+    historicalTaxOnTaxDetected:Boolean(liveClient?.historicalTaxOnTaxDetected),
+    estimateId:String(liveClient?.estimateId||''),
+    estimateDocNumber:String(liveClient?.estimateDocNumber||''),
+    verifiedAt:String(liveClient?.verifiedAt||snapshot?.checkedAt||''),
+    dynamicClientStatus:String(liveClients?.status||'unverified'),
+    dynamicClientCount:Number(liveClients?.clientCount||0),
+    dynamicClientPassedCount:Number(liveClients?.passedCount||0),
+    dynamicClientFailedCount:Number(liveClients?.failedCount||0),
+    dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
+    detail:String(accountingCheck?.detail||''),
+  };
+  const accountingVerified=Boolean(
+    invariant.ok
+    && invariant.status===200
+    && invariant.expectedTotal===15706.80
+    && invariant.actualTotal===15706.80
+    && invariant.taxablePayload===0
+    && invariant.liveClientStatus==='passed'
+    && invariant.liveClientEstimateTotal===15706.80
+    && invariant.liveClientTaxableLineCount===0
+    && !invariant.historicalTaxOnTaxDetected
+    && invariant.dynamicClientStatus==='passed'
+    && invariant.dynamicClientFailedCount===0
+    && invariant.dynamicClientUnverifiedCount===0
+    && invariant.dynamicClientPassedCount===invariant.dynamicClientCount
+  );
+  return {
+    checkedAt:String(snapshot?.checkedAt||new Date().toISOString()),
+    status:accountingVerified?'passed':'failed',
+    accountingVerified,
+    invariant,
+  };
+}
+
 export function healthComponents() {
   return [
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
