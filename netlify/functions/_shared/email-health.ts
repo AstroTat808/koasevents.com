@@ -217,7 +217,7 @@ const EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY = 'email/render-verification-aud
 export type BrandedEmailVerificationAuditRecord = {
   id: string;
   recordedAt: string;
-  source: 'post-deploy-email-render-verification';
+  source: 'post-deploy-email-render-verification' | 'legacy-branded-email-test';
   deployId: string;
   commit: string;
   checkedAt: string;
@@ -277,6 +277,70 @@ async function persistBrandedEmailVerificationAudit(context: Context, row: Brand
   await store.setJSON('email/render-verification-audit/records/'+id,record);
   await store.setJSON(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,[id,...index.filter((value)=>value!==id)].slice(0,1000));
   return record;
+}
+
+async function backfillLegacyInlineLogoVerification(context: Context) {
+  const legacyEmailId=clean(tenantSetting('INLINE_LOGO_LEGACY_TEST_EMAIL_ID'),180);
+  if(!legacyEmailId) return null;
+  const store=storeFor(context);
+  const id='EVR-LEGACY-'+legacyEmailId.replace(/[^a-z0-9]/gi,'').slice(0,40);
+  const index=((await store.get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
+  if(index.includes(id)){
+    return ((await store.get('email/render-verification-audit/records/'+id,{type:'json'}))||null) as BrandedEmailVerificationAuditRecord|null;
+  }
+  const monitoringKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
+  if(!monitoringKey) return null;
+  const headers={
+    Authorization:'Bearer '+monitoringKey,
+    'Content-Type':'application/json',
+    'User-Agent':'KoaEvents-EmailHealth/1.0',
+  };
+  try{
+    const [emailResponse,attachmentResponse]=await Promise.all([
+      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId),{headers,signal:AbortSignal.timeout(10_000)}),
+      fetch('https://api.resend.com/emails/'+encodeURIComponent(legacyEmailId)+'/attachments?limit=20',{headers,signal:AbortSignal.timeout(10_000)}),
+    ]);
+    if(!emailResponse.ok||!attachmentResponse.ok) return null;
+    const email:any=await emailResponse.json().catch(()=>({}));
+    const attachmentBody:any=await attachmentResponse.json().catch(()=>({}));
+    const metadata=emailLogoMetadata();
+    const html=String(email?.html||'');
+    const htmlCidPresent=html.toLowerCase().includes(metadata.cid.toLowerCase());
+    const attachments=Array.isArray(attachmentBody?.data)?attachmentBody.data:Array.isArray(attachmentBody)?attachmentBody:[];
+    const matching=attachments.find((row:any)=>
+      clean(row?.filename,240)===metadata.filename
+      && clean(row?.content_type||row?.contentType,120).toLowerCase()===metadata.contentType
+    );
+    const attachmentPresent=Boolean(matching);
+    const resendStatus=canonicalStatus(email?.last_event||email?.status);
+    const successfulStatus=['sent','delivered','opened','clicked'].includes(resendStatus);
+    if(!htmlCidPresent||!attachmentPresent||!successfulStatus) return null;
+    const record:BrandedEmailVerificationAuditRecord={
+      id,
+      recordedAt:new Date().toISOString(),
+      source:'legacy-branded-email-test',
+      deployId:'',
+      commit:'',
+      checkedAt:clean(email?.created_at||email?.createdAt,100),
+      status:'success',
+      failureCategory:'',
+      messageId:legacyEmailId,
+      resendStatus,
+      cid:metadata.cid,
+      contentId:metadata.contentId,
+      filename:metadata.filename,
+      contentType:metadata.contentType,
+      htmlCidPresent:true,
+      attachmentPresent:true,
+      changedFiles:[],
+      detail:'Legacy Business CRM branded email test verified from Resend and backfilled into permanent inline-logo audit history.',
+    };
+    await store.setJSON('email/render-verification-audit/records/'+id,record);
+    await store.setJSON(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,[id,...index.filter((value)=>value!==id)].slice(0,1000));
+    return record;
+  }catch{
+    return null;
+  }
 }
 
 export async function readBrandedEmailVerificationAudit(context: Context, limit=50) {
@@ -566,6 +630,7 @@ export async function inlineLogoHealthSummary(context: Context) {
   const staticAudit=checkInlineAssets();
   const productionVerification=await readBrandedEmailProductionVerification(context);
   if(productionVerification) await persistBrandedEmailVerificationAudit(context,productionVerification);
+  await backfillLegacyInlineLogoVerification(context);
   const [auditHistory,auditRecordCount]=await Promise.all([
     readBrandedEmailVerificationAudit(context,20),
     readBrandedEmailVerificationAuditCount(context),
