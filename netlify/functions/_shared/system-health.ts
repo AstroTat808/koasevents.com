@@ -1799,6 +1799,16 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const productionEmailVerification=inlineLogo?.productionVerification||{};
   const productionVerificationRequired=Boolean(productionEmailVerification?.required);
   const productionVerificationStatus=String(productionEmailVerification?.status||'');
+  const productionVerificationFailureCategory=String(productionEmailVerification?.failureCategory||'');
+  const productionVerificationFailureLabel=productionVerificationFailureCategory==='html_cid'
+    ? 'HTML/CID'
+    : productionVerificationFailureCategory==='attachment_metadata'
+      ? 'Attachment metadata'
+      : productionVerificationFailureCategory==='delivery'
+        ? 'Delivery'
+        : productionVerificationFailureCategory==='system_health'
+          ? 'System Health'
+          : '';
   const productionVerificationOk=Boolean(
     inlineLogo?.staticAudit?.ok
     && (!productionVerificationRequired||productionVerificationStatus==='success')
@@ -1814,6 +1824,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     severity:productionVerificationOk?'green':'red',
     detail:clean(
       String(inlineLogo?.detail||'Inline logo production verification is unavailable.')
+      +(productionVerificationStatus==='failure'&&productionVerificationFailureLabel?' · Failure area: '+productionVerificationFailureLabel:'')
       +(inlineLogo?.lastSuccessfulAt?' · Last successful production verification: '+String(inlineLogo.lastSuccessfulAt):'')
       +(productionEmailVerification?.messageId?' · Resend ID: '+String(productionEmailVerification.messageId):''),
       1200,
