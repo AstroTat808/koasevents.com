@@ -42,13 +42,12 @@ export function classifyLoginRisk({
     ? failures + ' failed sign-in attempts in the last 30 minutes'
     : '';
 
-  const shouldAlert =
-    failures >= 3
-    || (!trustedDevice && failures >= 2 && contextReasons.length >= 1);
+  const shouldAlert = failures >= 3;
 
   const suspicious =
     shouldAlert
-    || (!trustedDevice && contextReasons.length >= 2);
+    || (!trustedDevice && contextReasons.length >= 2)
+    || (!trustedDevice && failures >= 2 && contextReasons.length >= 1);
 
   const riskLevel: LoginRiskLevel = shouldAlert
     ? 'high'
