@@ -1755,13 +1755,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const issueType=String(row?.issueType||'').toLowerCase();
       const haystack=[id,name,path,issueType].join(' ');
 
-      if(row?.deploymentState||row?.deploymentDetails||issueType==='deployment problem'||/\\b(netlify|github|deploy(?:ment)?|release)\\b/.test(haystack)){
+      if(row?.deploymentState||row?.deploymentDetails||issueType==='deployment problem'||/(netlify|github|deploy(?:ment)?|release)/.test(haystack)){
         return {label:'Deployment',selector:'#health-deployment'};
       }
       if(/office[ -]?365|microsoft graph|calendar sync/.test(haystack)){
         return {label:'Office 365 calendar sync',selector:'#health-office365'};
       }
-      if(/\\b(email|resend|mailer|mail|renderer)\\b|inline logo/.test(haystack)){
+      if(/(email|resend|mailer|mail|renderer)|inline logo/.test(haystack)){
         return {label:'Email Health',selector:'#health-email'};
       }
       if(row?.syntheticDetails||/event[- ]?documents?|vendor[- ]?insurance|quickbooks[- ]?webhook|signwell/.test(haystack)){
