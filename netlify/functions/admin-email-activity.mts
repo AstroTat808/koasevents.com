@@ -3,7 +3,7 @@ import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { tenantStoreFor } from './_shared/tenant-storage';
 import { requireCapability } from './_shared/admin';
-import { inlineLogoHealthSummary, readEmailHealthEvents } from './_shared/email-health';
+import { inlineLogoHealthSummary, readBrandedEmailVerificationAudit, readBrandedEmailVerificationAuditCount, readEmailHealthEvents } from './_shared/email-health';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function normalizeStatus(value:unknown){return clean(value,80).toLowerCase().replace(/^email\./,'').replace(/-/g,'_');}
@@ -255,6 +255,24 @@ export default async (req:Request,context:Context)=>{
       });
     }catch(error){
       return Response.json({error:error instanceof Error?error.message:'Unable to calculate email analytics.'},{status:400});
+    }
+  }
+
+  if(url.searchParams.get('inline-logo-history')==='1'){
+    try{
+      await inlineLogoHealthSummary(context);
+      const limit=Math.max(1,Math.min(1000,Number(url.searchParams.get('limit')||1000)||1000));
+      const [rows,total]=await Promise.all([
+        readBrandedEmailVerificationAudit(context,limit),
+        readBrandedEmailVerificationAuditCount(context),
+      ]);
+      return Response.json({
+        ok:true,
+        total,
+        rows,
+      },{headers:{'Cache-Control':'private, no-store'}});
+    }catch(error){
+      return Response.json({error:error instanceof Error?error.message:'Unable to load inline logo verification history.'},{status:400});
     }
   }
 
