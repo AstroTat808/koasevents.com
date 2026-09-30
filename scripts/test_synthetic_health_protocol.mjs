@@ -359,6 +359,7 @@ mustMatch(rollbackDrillScript,/productionMutationAttempted,false/,'Rollback dril
 mustMatch(rollbackDrillWorkflow,/pull_request:/,'Rollback drill workflow must run the simulated drill in PR CI.');
 mustMatch(rollbackDrillWorkflow,/push:/,'Rollback drill workflow must run the real isolated infrastructure drill after main changes.');
 mustMatch(rollbackDrillWorkflow,/id-token: write/,'Real sandbox rollback drill must use signed GitHub OIDC rather than a repository Netlify token.');
+mustMatch(rollbackDrillWorkflow,/EXPECTED_COMMIT: \\?\$\{\{ github\.sha \}\}/,'Real sandbox rollback drill must wait for the exact GitHub commit to be live before invoking the production control plane.');
 mustMatch(rollbackDrillWorkflow,/run-real-sandbox-rollback-drill/,'Post-merge rollback drill must invoke the real isolated Netlify restore action.');
 mustMatch(rollbackDrillWorkflow,/productionMutationAttempted/,'Real sandbox rollback workflow must assert that production was not mutated.');
 mustMatch(rollbackDrillWorkflow,/sandboxSiteName/,'Real sandbox rollback workflow must assert the expected dedicated site identity.');
