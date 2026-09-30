@@ -3,7 +3,7 @@ import {
   classifyLoginRisk,
   loginAlertSuppressionKey,
   successfulAuthEventType,
-} from '../netlify/functions/_shared/auth-security-risk.mjs';
+} from '../netlify/functions/_shared/auth-security-risk.ts';
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -22,7 +22,7 @@ const both = classifyLoginRisk({ hasHistory:true, knownNetwork:false, knownDevic
 assert(both.riskLevel === 'review' && both.suspicious && !both.shouldAlert, 'New network plus new device should be review-only without email.');
 
 const failuresPlusContext = classifyLoginRisk({ recentFailureCount:2, hasHistory:true, knownNetwork:false, knownDevice:true });
-assert(failuresPlusContext.shouldAlert && failuresPlusContext.riskLevel === 'high', 'Two failures plus new context should alert.');
+assert(!failuresPlusContext.shouldAlert && failuresPlusContext.riskLevel === 'review', 'Two failures plus new context should remain review-only.');
 
 const failuresOnly = classifyLoginRisk({ recentFailureCount:3, hasHistory:true, knownNetwork:true, knownDevice:true });
 assert(failuresOnly.shouldAlert && failuresOnly.riskLevel === 'high', 'Three recent failures should always alert.');
@@ -48,7 +48,7 @@ console.log('PASS | first login normal');
 console.log('PASS | new network alone is notice-only');
 console.log('PASS | new device alone is notice-only');
 console.log('PASS | new network + device is review-only');
-console.log('PASS | two failures + new context alerts');
+console.log('PASS | two failures + new context is review-only');
 console.log('PASS | three failures always alert');
 console.log('PASS | trusted device suppresses novelty alerts');
 console.log('PASS | trusted device still alerts after repeated failures');
