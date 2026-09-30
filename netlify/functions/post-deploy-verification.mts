@@ -3,6 +3,7 @@ import { runForEachTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
   persistHealth,
+  productionAccountingVerification,
   readLatestHealth,
   readLatestHourlyHealth,
   readPostDeployVerification,
@@ -32,7 +33,6 @@ async function runTenantJob(_req:Request,context:Context){
     readLatestHourlyHealth(context),
   ]);
 
-  await runBrandedEmailProductionVerification(context,{deployId,commit});
   const current=await runSystemHealth(context,'post-deploy');
   const deploymentSyncCheck:any=current.checks.find((row:any)=>String(row?.id||'')==='netlify-github-sync')||null;
   const deployId=clean(
@@ -47,11 +47,13 @@ async function runTenantJob(_req:Request,context:Context){
       || '',
     120,
   );
+  await runBrandedEmailProductionVerification(context,{deployId,commit});
   await applyHealthAlertPolicy(context,current,previousHourly);
   await persistHealth(context,current);
   await sendHealthTransitionAlerts(previous,current);
 
   const syntheticProbeVerification=syntheticProbeReleaseVerification(current,'post-deploy-scheduled');
+  const accountingVerification=productionAccountingVerification(current);
   const verification={
     deployId,
     commit,
@@ -62,6 +64,7 @@ async function runTenantJob(_req:Request,context:Context){
     failedIds:current.failedIds,
     checkCount:current.checks.length,
     syntheticProbeVerification,
+    accountingVerification,
   };
   await savePostDeployVerification(context,verification);
   if(deployId){
@@ -71,6 +74,7 @@ async function runTenantJob(_req:Request,context:Context){
       checkedAt:current.checkedAt,
       verification,
       syntheticProbeVerification,
+      accountingVerification,
     });
   }
 }
