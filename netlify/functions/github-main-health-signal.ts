@@ -104,6 +104,17 @@ async function latestPublishedSandboxDeploy(token:string,siteId:string){
   };
 }
 
+async function waitForPublishedSandboxDeploy(token:string,siteId:string,expectedDeployId:string,timeoutMs=12_000){
+  const started=Date.now();
+  let latest={deployId:'',state:'',publishedAt:''};
+  while(Date.now()-started<timeoutMs){
+    latest=await latestPublishedSandboxDeploy(token,siteId);
+    if(latest.deployId===expectedDeployId)return latest;
+    await new Promise((resolve)=>setTimeout(resolve,500));
+  }
+  throw new Error('Sandbox site did not publish expected deploy '+expectedDeployId+' within '+Math.ceil(timeoutMs/1000)+' seconds. Latest: '+(latest.deployId||'none')+'.');
+}
+
 async function runRealSandboxRollbackDrill(context:Context,claims:any){
   const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
   const sandboxSiteId=cleanText(Netlify.env.get('KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID'),120);
@@ -123,20 +134,17 @@ async function runRealSandboxRollbackDrill(context:Context,claims:any){
   const candidateHtml='<!doctype html><html><body><main data-rollback-drill="candidate-failure" data-run="'+runMarker+'">Deliberate rollback drill candidate</main></body></html>';
 
   const knownGood=await createSandboxStaticDeploy(token,sandboxSiteId,knownGoodHtml,'known-good sandbox release');
-  const afterKnownGood=await latestPublishedSandboxDeploy(token,sandboxSiteId);
-  if(afterKnownGood.deployId!==knownGood.deployId)throw new Error('Known-good sandbox deploy did not become the current published release.');
+  const afterKnownGood=await waitForPublishedSandboxDeploy(token,sandboxSiteId,knownGood.deployId);
 
   const candidate=await createSandboxStaticDeploy(token,sandboxSiteId,candidateHtml,'candidate sandbox release');
-  const beforeRestore=await latestPublishedSandboxDeploy(token,sandboxSiteId);
-  if(beforeRestore.deployId!==candidate.deployId)throw new Error('Candidate sandbox deploy did not become current before the restore drill.');
+  const beforeRestore=await waitForPublishedSandboxDeploy(token,sandboxSiteId,candidate.deployId);
 
   const {response:restoreResponse,body:restoreBody}=await netlifyJson(
     token,
     '/sites/'+encodeURIComponent(sandboxSiteId)+'/deploys/'+encodeURIComponent(knownGood.deployId)+'/restore',
     {method:'POST'},
   );
-  const restored=await latestPublishedSandboxDeploy(token,sandboxSiteId);
-  if(restored.deployId!==knownGood.deployId)throw new Error('Netlify restore completed but the known-good deploy is not current.');
+  const restored=await waitForPublishedSandboxDeploy(token,sandboxSiteId,knownGood.deployId);
 
   return {
     ok:true,
