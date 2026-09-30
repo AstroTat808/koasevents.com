@@ -31,6 +31,7 @@ export type BrandedEmailProductionVerification = {
   checkedAt: string;
   required: boolean;
   status: 'success' | 'failure' | 'skipped';
+  failureCategory: '' | 'html_cid' | 'attachment_metadata' | 'delivery' | 'system_health';
   changedFiles: string[];
   messageId: string;
   resendStatus: string;
@@ -211,13 +212,82 @@ function checkInlineAssets() {
 }
 
 const EMAIL_RENDER_VERIFICATION_KEY = 'email/render-verification-v1';
+const EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY = 'email/render-verification-audit/index-v1';
+
+export type BrandedEmailVerificationAuditRecord = {
+  id: string;
+  recordedAt: string;
+  source: 'post-deploy-email-render-verification';
+  deployId: string;
+  commit: string;
+  checkedAt: string;
+  messageId: string;
+  resendStatus: string;
+  cid: string;
+  contentId: string;
+  filename: string;
+  contentType: string;
+  htmlCidPresent: boolean;
+  attachmentPresent: boolean;
+  changedFiles: string[];
+  detail: string;
+};
 
 export async function readBrandedEmailProductionVerification(context: Context): Promise<BrandedEmailProductionVerification | null> {
   return ((await storeFor(context).get(EMAIL_RENDER_VERIFICATION_KEY, { type: 'json' })) || null) as BrandedEmailProductionVerification | null;
 }
 
+function verificationAuditId(row: BrandedEmailProductionVerification) {
+  const stamp=clean(row.checkedAt,100).replace(/[^0-9]/g,'').slice(0,18) || 'unknown';
+  const commit=clean(row.commit,120).replace(/[^a-z0-9]/gi,'').slice(0,16) || 'commit';
+  const message=clean(row.messageId,180).replace(/[^a-z0-9]/gi,'').slice(0,20) || 'message';
+  return 'EVR-'+stamp+'-'+commit+'-'+message;
+}
+
+async function persistSuccessfulBrandedEmailVerificationAudit(context: Context, row: BrandedEmailProductionVerification) {
+  if(row.status!=='success') return null;
+  const store=storeFor(context);
+  const id=verificationAuditId(row);
+  const index=((await store.get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
+  if(index.includes(id)){
+    return ((await store.get('email/render-verification-audit/records/'+id,{type:'json'}))||null) as BrandedEmailVerificationAuditRecord|null;
+  }
+  const record:BrandedEmailVerificationAuditRecord={
+    id,
+    recordedAt:new Date().toISOString(),
+    source:'post-deploy-email-render-verification',
+    deployId:clean(row.deployId,120),
+    commit:clean(row.commit,120),
+    checkedAt:clean(row.checkedAt,100),
+    messageId:clean(row.messageId,180),
+    resendStatus:clean(row.resendStatus,80),
+    cid:'cid:'+clean(row.contentId,240),
+    contentId:clean(row.contentId,240),
+    filename:clean(row.filename,240),
+    contentType:clean(row.contentType,120),
+    htmlCidPresent:Boolean(row.htmlCidPresent),
+    attachmentPresent:Boolean(row.attachmentPresent),
+    changedFiles:(Array.isArray(row.changedFiles)?row.changedFiles:[]).map((file)=>clean(file,400)).filter(Boolean).slice(0,200),
+    detail:clean(row.detail,1200),
+  };
+  await store.setJSON('email/render-verification-audit/records/'+id,record);
+  await store.setJSON(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,[id,...index.filter((value)=>value!==id)].slice(0,1000));
+  return record;
+}
+
+export async function readBrandedEmailVerificationAudit(context: Context, limit=50) {
+  const store=storeFor(context);
+  const index=((await store.get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
+  const ids=index.slice(0,Math.max(1,Math.min(200,limit)));
+  const rows=await Promise.all(ids.map(async(id)=>
+    ((await store.get('email/render-verification-audit/records/'+clean(id,180),{type:'json'}))||null) as BrandedEmailVerificationAuditRecord|null
+  ));
+  return rows.filter(Boolean) as BrandedEmailVerificationAuditRecord[];
+}
+
 async function saveBrandedEmailProductionVerification(context: Context, row: BrandedEmailProductionVerification) {
   await storeFor(context).setJSON(EMAIL_RENDER_VERIFICATION_KEY, row);
+  if(row.status==='success') await persistSuccessfulBrandedEmailVerificationAudit(context,row);
   return row;
 }
 
@@ -324,8 +394,16 @@ async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
   }
   const htmlCidPresent=html.toLowerCase().includes(metadata.cid.toLowerCase());
   const failedStatus=['failed','bounced','complained','suppressed'].includes(resendStatus);
+  const failureCategory:BrandedEmailProductionVerification['failureCategory']=!htmlCidPresent
+    ? 'html_cid'
+    : !attachmentPresent
+      ? 'attachment_metadata'
+      : failedStatus
+        ? 'delivery'
+        : '';
   return {
     ok:htmlCidPresent&&attachmentPresent&&!failedStatus,
+    failureCategory,
     htmlCidPresent,
     attachmentPresent,
     attachmentContentId,
@@ -360,6 +438,7 @@ export async function runBrandedEmailProductionVerification(
       checkedAt:new Date().toISOString(),
       required:false,
       status:'skipped',
+      failureCategory:'',
       changedFiles:[],
       messageId:'',
       resendStatus:'',
@@ -378,12 +457,13 @@ export async function runBrandedEmailProductionVerification(
   const apiKey=clean(tenantSetting('RESEND_API_KEY'),500);
   const monitoringKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
   const testTo=clean(tenantSetting('EMAIL_RENDER_TEST_TO','KOA_EMAIL_RENDER_TEST_TO'),240).toLowerCase();
-  const baseFailure=(detail:string):BrandedEmailProductionVerification=>({
+  const baseFailure=(detail:string,failureCategory:BrandedEmailProductionVerification['failureCategory']='system_health'):BrandedEmailProductionVerification=>({
     deployId,
     commit,
     checkedAt:new Date().toISOString(),
     required:true,
     status:'failure',
+    failureCategory,
     changedFiles:comparison.files,
     messageId:'',
     resendStatus:'',
@@ -397,17 +477,17 @@ export async function runBrandedEmailProductionVerification(
     lastSuccessfulMessageId:previousSuccess.messageId,
     detail,
   });
-  if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.'));
-  if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.'));
-  if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.'));
-  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.'));
+  if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.','system_health'));
+  if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.','system_health'));
+  if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.','system_health'));
+  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.','system_health'));
 
   const rendered=syntheticBrandedEmail(commit);
   const attachments=[emailLogoAttachment()];
   try{
     assertEmailInlineAssets(rendered.html,attachments);
   }catch(error){
-    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Local inline logo validation failed.'));
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Local inline logo validation failed.','html_cid'));
   }
   const tenant=resolveTenant();
   const from=clean(tenantSetting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
@@ -433,7 +513,7 @@ export async function runBrandedEmailProductionVerification(
     const messageId=clean(body?.id,180);
     if(!response.ok||!messageId){
       return saveBrandedEmailProductionVerification(context,{
-        ...baseFailure(clean(body?.message||'Resend rejected the branded production verification email.',600)),
+        ...baseFailure(clean(body?.message||'Resend rejected the branded production verification email.',600),'delivery'),
         messageId,
       });
     }
@@ -446,6 +526,7 @@ export async function runBrandedEmailProductionVerification(
       checkedAt,
       required:true,
       status:success?'success':'failure',
+      failureCategory:success?'':inspected.failureCategory||'system_health',
       changedFiles:comparison.files,
       messageId,
       resendStatus:clean(inspected.resendStatus,80),
@@ -462,7 +543,7 @@ export async function runBrandedEmailProductionVerification(
         : clean(inspected.detail||'Production branded email verification did not confirm both the CID HTML and inline PNG attachment.',800),
     });
   }catch(error){
-    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Production branded email verification failed.'));
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Production branded email verification failed.','delivery'));
   }
 }
 
@@ -470,6 +551,8 @@ export async function inlineLogoHealthSummary(context: Context) {
   const metadata=emailLogoMetadata();
   const staticAudit=checkInlineAssets();
   const productionVerification=await readBrandedEmailProductionVerification(context);
+  if(productionVerification?.status==='success') await persistSuccessfulBrandedEmailVerificationAudit(context,productionVerification);
+  const auditHistory=await readBrandedEmailVerificationAudit(context,20);
   const productionOk=!productionVerification?.required||productionVerification?.status==='success';
   return {
     ok:Boolean(staticAudit.ok&&productionOk),
@@ -480,6 +563,8 @@ export async function inlineLogoHealthSummary(context: Context) {
     contentType:metadata.contentType,
     staticAudit,
     productionVerification,
+    auditRecordCount:auditHistory.length,
+    auditHistory,
     lastSuccessfulAt:clean(productionVerification?.lastSuccessfulAt,100),
     lastSuccessfulCommit:clean(productionVerification?.lastSuccessfulCommit,120),
     lastSuccessfulMessageId:clean(productionVerification?.lastSuccessfulMessageId,180),

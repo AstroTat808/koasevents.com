@@ -393,6 +393,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const healthy=Boolean(inlineLogo.ok);
         const lastVerified=String(inlineLogo.lastSuccessfulAt||'');
         const production=inlineLogo.productionVerification||{};
+        const failureCategory=String(production.failureCategory||'');
+        const failureLabel=failureCategory==='html_cid'
+          ? 'HTML/CID'
+          : failureCategory==='attachment_metadata'
+            ? 'Attachment metadata'
+            : failureCategory==='delivery'
+              ? 'Delivery'
+              : failureCategory==='system_health'
+                ? 'System Health'
+                : '';
+        const auditCount=Number(inlineLogo.auditRecordCount||0);
         const logoCard=document.createElement('article');
         logoCard.className='rounded-[1.1rem] border '+(healthy?'border-emerald-200 bg-emerald-50':'border-red-200 bg-red-50')+' p-5 xl:col-span-3';
         logoCard.innerHTML=
@@ -411,6 +422,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           '<p class="mt-3 text-[.62rem] leading-5 text-[var(--koa-ink)]/45">'+
             (inlineLogo.lastSuccessfulCommit?'Verified commit '+esc(String(inlineLogo.lastSuccessfulCommit).slice(0,12)):'No production commit verified yet')+
             (inlineLogo.lastSuccessfulMessageId?' · Resend '+esc(inlineLogo.lastSuccessfulMessageId):'')+
+            (auditCount?' · Permanent audit records '+esc(auditCount):'')+
+            (production.status==='failure'&&failureLabel?' · Failure area: '+esc(failureLabel):'')+
             (production.required&&production.status!=='success'?' · Current production verification is required and has not passed.':'')+
           '</p>';
         emailHealthGrid.appendChild(logoCard);
