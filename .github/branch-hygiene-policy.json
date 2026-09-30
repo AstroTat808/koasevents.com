@@ -4,5 +4,319 @@
     "qa/*",
     "ops/*"
   ],
-  "notes": "Keep patterns are conservative. Closed or similarly named branches are never assumed superseded without commit evidence."
+  "notes": "Keep patterns are conservative. reviewedSafe entries are exact-SHA manual supersession decisions; a changed tip automatically returns to needs-review.",
+  "reviewedSafe": [
+    {
+      "branch": "admin-wedding-profitability-and-package-sales-2026-09-23",
+      "sha": "c3267c3e64ab86d026e3ec4b6a9b6d9af6447a54",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Wedding Profitability, central catalog/package rules, and current public-site presentation on main."
+    },
+    {
+      "branch": "codex/p0-tenant-sales-ingest",
+      "sha": "48e13b8700597c6a0f3e60dbb70e75f38fc2b484",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "codex/venueloom-super-admin-ops",
+      "sha": "c895011681b1b62d9611a45d88fc43b8dd44399e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "deploy-pipeline-audit",
+      "sha": "6d94d14f07f57bc0c784cafd55c387854e978746",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Temporary deployment/debug trigger work has no remaining production value; current Netlify release guards and production QA replace it."
+    },
+    {
+      "branch": "deploy-pipeline-verification",
+      "sha": "eb466160a8f4b1f329e53a6647351f5ebb62dbb6",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Temporary deployment/debug trigger work has no remaining production value; current Netlify release guards and production QA replace it."
+    },
+    {
+      "branch": "feat/credential-health-thresholds-report-timeline",
+      "sha": "54f2e8fdf1125d10733b242b8e7ebb35af3a0f33",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current System Health: credential thresholds/timeline, Rollback Ready, live integration guards, active filters, and production verification are already on main."
+    },
+    {
+      "branch": "feat/critical-integrations-rollback-readiness-audit-drill",
+      "sha": "64ec7b2e48193fbb7f7d43afe72a3c4684e2860a",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current System Health: credential thresholds/timeline, Rollback Ready, live integration guards, active filters, and production verification are already on main."
+    },
+    {
+      "branch": "feat/system-health-filter-context",
+      "sha": "9a29dd0326d699e16c8f20f80968bb4d25610931",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current System Health: credential thresholds/timeline, Rollback Ready, live integration guards, active filters, and production verification are already on main."
+    },
+    {
+      "branch": "feature/accounting-history-filters-alert-test-flex-schedules",
+      "sha": "450197a4574acdf757698f6370f3254c06524efd",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/accounting-invariant-v2",
+      "sha": "d558d309da17de9c7d5ec1786b3584e3f92d2ab6",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/crm-audit-alert-sync-deposit-defaults",
+      "sha": "2ab6fbf12411fcdd78d2c601680c8f7a59f210bd",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/crm-audit-alert-sync-deposit-defaults-final",
+      "sha": "ab14de92ecaa5fb99d897d4f26f99611cc49c936",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/crm-catalog-get-20260920",
+      "sha": "c8feb3084995adeb0f9e6c91318174cc43ca989e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Reviewed against current main and later successor work; unique commits are obsolete implementation history rather than missing production capability."
+    },
+    {
+      "branch": "feature/crm-catalog-get-current",
+      "sha": "89bafdbf85f0f60cf447ab18c0381b8de896cadc",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Reviewed against current main and later successor work; unique commits are obsolete implementation history rather than missing production capability."
+    },
+    {
+      "branch": "feature/custom-payment-presets-comparison-rules",
+      "sha": "8f269359358c9fb8b77c93b70de0231e923a906e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/custom-payment-presets-comparison-rules-final",
+      "sha": "b9a33a503090e3bf87206b2354afe858455cdbac",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/dynamic-accounting-invariants",
+      "sha": "793fbbed4631802ae3572b0b70529ba2aabd077a",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/inline-audit-hourly-payment-schedules",
+      "sha": "32251ee22306b8bdce3874f5ce9f54c109c2ab9d",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/locked-get-exempt-financial-summary",
+      "sha": "409a2413c4f4e8380f8867f51eb4bbfeb8ad33c2",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Reviewed against current main and later successor work; unique commits are obsolete implementation history rather than missing production capability."
+    },
+    {
+      "branch": "feature/mobile-bar-staffing-operations",
+      "sha": "b93d248b3056f2758ae0059d0aa36f01eb602447",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-bar-workforce-portal",
+      "sha": "2e3e0d4e74fb0c1d4a6d67a5ef666b30d953b620",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-goals-simulator-scenarios",
+      "sha": "cccbff94af3021720dcaa427efe42dc9fe8f388b",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-planning-controls",
+      "sha": "50a19759dc308a13059fd885c0794ab67a01a71c",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-planning-controls-v2",
+      "sha": "9a3fc02515f08eb12dce9932db39913bde14c0fe",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-planning-intelligence",
+      "sha": "214c7ba72fcd5bebb77428c6a95f66f0aaa17b61",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-seasonality-scoring-staffing",
+      "sha": "d715093e0287ea8ec71c0a287ac4bd30b96287ee",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/mobile-profit-seasonality-scoring-staffing-v2",
+      "sha": "a219f3b402423170f7d1f98904a19beca91ac3c7",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Mobile Bar profitability dashboard, pricing controls, staffing/workforce, payroll, and bartender-portal implementation on main."
+    },
+    {
+      "branch": "feature/payment-rule-simulator-drag-value",
+      "sha": "b6bea05dd0230aeb441e0ede022702e695d25a3c",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/payment-rule-simulator-drag-value-final",
+      "sha": "1bbe9c9884359bcce1b44d1c8a83c0cfb5c76535",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/payment-rule-simulator-drag-value-live",
+      "sha": "0657891766fc0df9ae43ce2c547be46223a2545e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/refundable-damage-deposit",
+      "sha": "d19df1f8bd84cd2d8f247072dedc1f734972a7b1",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "feature/security-abuse-controls",
+      "sha": "a6cce8718e0abc0eb025952bc855565da9e06a6e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current fail-closed Turnstile, security telemetry, blocklist, and production QA controls on main."
+    },
+    {
+      "branch": "feature/tenant2-sandbox-migration-e2e",
+      "sha": "b9b0b8a6910b9d9391d07eab6feb5230d2aadce7",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "feature/venueloom-p0-multitenant",
+      "sha": "3a4c36454aa504eb886909476e027ecf4d7259f4",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "feature/venueloom-p0-tenancy-onboarding",
+      "sha": "cdf357cda4c4beb9fe8fac6e8292a440f045f527",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "feature/venueloom-saas-boundary",
+      "sha": "c96a476ea02d51e0cd2b9f2eaccaa5620916999f",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "feature/venueloom-tenant-foundation",
+      "sha": "fd9c956b8b86a63e3a8d9ce49216ec305fbe1b1e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current tenant context/storage, Tenant #2 isolation QA, Super Admin lifecycle controls, and signed tenant-isolation readiness already on main."
+    },
+    {
+      "branch": "fix/crm-duplicate-booking-merge",
+      "sha": "49b11322e2d4033960949e24842a545a82870056",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Reviewed replacement is already on main through the consolidated duplicate-booking/historical-accounting implementation and follow-up System Health scope fix."
+    },
+    {
+      "branch": "fix/crm-duplicate-bookings",
+      "sha": "bc74482cc62bf342e5f5e8bf734a14c27ba36a98",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Reviewed replacement is already on main through the consolidated duplicate-booking/historical-accounting implementation and follow-up System Health scope fix."
+    },
+    {
+      "branch": "fix/historical-qbo-import-action-center",
+      "sha": "9cd15c994f79aef956001fdc7a4b04cf01a59495",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "fix/qbo-audit-live-verification-health",
+      "sha": "97fc3863bc56a1f9d64eb48936105ba0bb4c0158",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "fix/qbo-audit-live-verification-health-v2",
+      "sha": "0aa96953f10c393e33bece9610b873208840f8a9",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "fix/qbo-audit-live-verification-health-v3",
+      "sha": "75d50ea45a47f51769d265b1a72657138efbcd63",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "fix/qbo-crm-reconciliation-grand-total",
+      "sha": "6eef522a9eb604209b97790db38b95fd2aa2c8a2",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current QuickBooks/accounting scope, reconciliation, payment-rule, invariant, repair, damage-deposit, and production release-guard implementations on main."
+    },
+    {
+      "branch": "fix/role-aware-workspace-nav",
+      "sha": "d1526ef1dbe9c629befe053ee9115d71eccb9c88",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current StaffUtilityNav capability-aware navigation, alert center, and responsive workspace controls on main."
+    },
+    {
+      "branch": "fix/workspace-collapse-toggle",
+      "sha": "d287423cc266b4b3d88dc987d35d6169f0cb9866",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by current StaffUtilityNav capability-aware navigation, alert center, and responsive workspace controls on main."
+    },
+    {
+      "branch": "gallery-export-2026-09-18",
+      "sha": "e98a6ee023e11cfd21f98ce86ef206f5551cbd59",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Preserved the useful gallery-export capability as a safer manual, read-only workflow on current main; the old PR-triggered implementation is superseded."
+    },
+    {
+      "branch": "photo-refresh",
+      "sha": "7b403266d2f644c9e2872044ee34120c99eb950e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Wedding Profitability, central catalog/package rules, and current public-site presentation on main."
+    },
+    {
+      "branch": "productization/venueloom-tenant-foundation",
+      "sha": "99b711076304c852a50005dacb2e004a7af0421e",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Preserved the durable VenueLoom brand and launch-roadmap material under docs/venueloom/archive; its older runtime tenant implementation is superseded by current main."
+    },
+    {
+      "branch": "profitability-crm-pricing-performance-2026-09-23",
+      "sha": "e4854d7b5f5ab23b4142aef7906c1a56bcaab102",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Wedding Profitability, central catalog/package rules, and current public-site presentation on main."
+    },
+    {
+      "branch": "revise-wedding-package-value-2026-09-23",
+      "sha": "d788b1254b4b4486a507a9c183462eb90e414776",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Superseded by the current Wedding Profitability, central catalog/package rules, and current public-site presentation on main."
+    },
+    {
+      "branch": "source-bundle-trigger",
+      "sha": "d2666725f0983d54d39378a0ba798d46b3c3ecdb",
+      "reviewedAt": "2026-09-30T10:55:00Z",
+      "reason": "Temporary deployment/debug trigger work has no remaining production value; current Netlify release guards and production QA replace it."
+    }
+  ]
 }

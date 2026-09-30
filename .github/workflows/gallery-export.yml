@@ -1,0 +1,13 @@
+name: Archived gallery-export note
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Legacy gallery-export workflow was reviewed on 2026-09-30 and intentionally not restored. Current gallery operations remain authoritative."
