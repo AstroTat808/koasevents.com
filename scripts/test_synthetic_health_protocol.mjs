@@ -200,9 +200,14 @@ mustMatch(
   'Production QA must require the live Chris Sibel estimate total.',
 );
 mustMatch(
+  systemHealth,
+  /dynamicClientStatus:String\(liveClients\?\.status\|\|'unverified'\)/,
+  'Shared production accounting verification must expose the dynamic accepted/booked client invariant status.',
+);
+mustMatch(
   githubHealthSignal,
-  /dynamicClientStatus/,
-  'Signed production health must expose the dynamic accepted/booked client invariant status.',
+  /productionAccountingVerification\(health\)/,
+  'Signed production health must use the shared accounting verifier before persisting release evidence.',
 );
 mustMatch(
   productionQa,
@@ -273,6 +278,11 @@ mustMatch(
   postDeployVerification,
   /syntheticProbeReleaseVerification\(current,'post-deploy-scheduled'\)/,
   'Scheduled post-deploy verification must archive the four synthetic probes with the release.',
+);
+mustMatch(
+  postDeployVerification,
+  /accountingVerification=productionAccountingVerification\(current\)/,
+  'Scheduled post-deploy verification must archive accounting evidence from the same health snapshot.',
 );
 mustMatch(
   githubHealthSignal,
