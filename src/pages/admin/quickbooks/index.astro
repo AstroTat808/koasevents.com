@@ -275,6 +275,23 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-audit-generated class="mt-3 text-xs text-[var(--koa-ink)]/45"></p>
         </section>
 
+        <section id="historical-accounting" data-historical-accounting class="rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
+          <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Historical accounting</p>
+              <h2 class="display mt-3 text-4xl">Imported QuickBooks history</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Past QuickBooks-imported bookings are shown here for reference. Legacy estimate, invoice, milestone, and balance differences remain visible but do not count as Critical Action Center items.</p>
+            </div>
+            <span data-historical-status class="self-start rounded-full border border-[var(--koa-line)] bg-[var(--koa-sand)] px-4 py-2 text-[.6rem] font-black uppercase tracking-[.1em] text-[var(--koa-forest)]">0 historical</span>
+          </div>
+          <div class="mt-6 grid gap-3 sm:grid-cols-2">
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Historical clients</p><strong data-historical-clients class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+            <article class="rounded-xl bg-[var(--koa-sand)]/45 p-4"><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[var(--koa-ink)]/45">Observed differences</p><strong data-historical-issues class="display mt-2 block text-3xl text-[var(--koa-forest)]">0</strong></article>
+          </div>
+          <div data-historical-list class="mt-5 grid gap-3"></div>
+          <p class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/45">Historical rows are read-only context. Use the normal CRM ↔ QuickBooks audit above for current CRM-managed bookings that require action.</p>
+        </section>
+
         <section data-item-section class="hidden rounded-[1.5rem] bg-white p-7 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="eyebrow text-[var(--koa-clay)]">Accounting mapping</p><h2 class="display mt-3 text-4xl">Default Koa’s service item</h2><p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--koa-ink)]/58">Choose the QuickBooks Service or Non-Inventory item used on synchronized Koa’s estimate and invoice lines. Revenue account treatment stays controlled by that QuickBooks item.</p></div>
@@ -863,6 +880,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const auditRemaining=document.querySelector('[data-audit-remaining]');
     const auditList=document.querySelector('[data-audit-list]');
     const auditGenerated=document.querySelector('[data-audit-generated]');
+    const historicalStatus=document.querySelector('[data-historical-status]');
+    const historicalClients=document.querySelector('[data-historical-clients]');
+    const historicalIssues=document.querySelector('[data-historical-issues]');
+    const historicalList=document.querySelector('[data-historical-list]');
     const refreshAudit=document.querySelector('[data-refresh-audit]');
     let state=null;
     let items=[];
@@ -1668,6 +1689,52 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(twoWaySyncDetail)twoWaySyncDetail.textContent=err.message||'QuickBooks preview failed.';
       }finally{previewTwoWay.disabled=false;previewTwoWay.textContent=original;}
     }
+    function renderHistoricalAccounting(){
+      const audit=state?.accountingAudit||{};
+      const rows=Array.isArray(audit.historicalRows)?audit.historicalRows:[];
+      const observedCount=Number(audit.historicalObservedIssueCount||rows.reduce((sum,row)=>sum+(Array.isArray(row?.observedIssues)?row.observedIssues.length:0),0));
+      if(historicalClients)historicalClients.textContent=String(Number(audit.historicalCount||rows.length));
+      if(historicalIssues)historicalIssues.textContent=String(observedCount);
+      if(historicalStatus)historicalStatus.textContent=rows.length?rows.length+' historical':'No historical rows';
+      if(!historicalList)return;
+      historicalList.innerHTML='';
+      if(!rows.length){
+        historicalList.innerHTML='<div class="rounded-xl border border-dashed border-[var(--koa-line)] p-5 text-sm text-[var(--koa-ink)]/55">No QuickBooks-imported historical bookings are currently in the accounting audit.</div>';
+        return;
+      }
+      rows.forEach((row)=>{
+        const card=document.createElement('article');
+        card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+        const top=document.createElement('div');top.className='flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between';
+        const left=document.createElement('div');
+        const title=document.createElement('a');title.href='/admin/clients/?id='+encodeURIComponent(row.recordId)+'&tab=accounting';title.className='text-sm font-bold text-[var(--koa-forest)] underline decoration-[var(--koa-line)] underline-offset-4';title.textContent=row.clientName||row.recordId;
+        const meta=document.createElement('p');meta.className='mt-1 text-xs text-[var(--koa-ink)]/50';meta.textContent=[row.eventDate,row.estimateDocNumber?'Estimate #'+row.estimateDocNumber:'',row.reconciliationScopeReason].filter(Boolean).join(' · ');
+        left.append(title,meta);
+        const badge=document.createElement('span');badge.className='self-start rounded-full bg-slate-100 px-3 py-2 text-[.52rem] font-black uppercase tracking-[.06em] text-slate-700';badge.textContent='Historical · informational';
+        top.append(left,badge);card.appendChild(top);
+        const totals=document.createElement('p');totals.className='mt-3 text-xs leading-5 text-[var(--koa-ink)]/58';
+        totals.textContent='CRM '+money(row.proposalTotal)+' · QBO estimate '+auditValue(row.estimateTotal)+' · issued '+money(row.issuedTotal)+' · payments '+money(row.paymentsReceived)+' · remaining '+money(row.remainingBalance);
+        card.appendChild(totals);
+        const observed=Array.isArray(row.observedIssues)?row.observedIssues:[];
+        if(observed.length){
+          const details=document.createElement('details');details.className='mt-3 rounded-lg border border-[var(--koa-line)] bg-white p-3';
+          const summary=document.createElement('summary');summary.className='cursor-pointer text-xs font-bold text-[var(--koa-forest)]';summary.textContent=observed.length+' observed historical difference'+(observed.length===1?'':'s');
+          details.appendChild(summary);
+          const list=document.createElement('div');list.className='mt-2 grid gap-2';
+          observed.forEach((issue)=>{
+            const item=document.createElement('div');item.className='rounded-lg bg-[var(--koa-sand)]/40 px-3 py-2 text-xs leading-5 text-[var(--koa-ink)]/65';
+            item.textContent=issue.label+': expected '+auditValue(issue.expected)+', actual '+auditValue(issue.actual)+(issue.delta==null?'':' · difference '+money(issue.delta));
+            list.appendChild(item);
+          });
+          details.appendChild(list);card.appendChild(details);
+        }else{
+          const ok=document.createElement('p');ok.className='mt-3 text-xs font-semibold text-[var(--koa-forest)]';ok.textContent='No historical differences observed.';
+          card.appendChild(ok);
+        }
+        historicalList.appendChild(card);
+      });
+    }
+
     function renderAccountingAudit(){
       const audit=state?.accountingAudit||{};
       const rows=Array.isArray(audit.rows)?audit.rows:[];
@@ -1744,6 +1811,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const note=document.createElement('p');note.className='text-xs text-[var(--koa-ink)]/45';note.textContent='Showing the first '+visible.length+' reconciled clients.';
         auditList.appendChild(note);
       }
+      renderHistoricalAccounting();
     }
 
     function renderSyncJobProgress(){
