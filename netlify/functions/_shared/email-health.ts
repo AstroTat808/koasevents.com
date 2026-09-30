@@ -221,6 +221,8 @@ export type BrandedEmailVerificationAuditRecord = {
   deployId: string;
   commit: string;
   checkedAt: string;
+  status: 'success' | 'failure';
+  failureCategory: '' | 'html_cid' | 'attachment_metadata' | 'delivery' | 'system_health';
   messageId: string;
   resendStatus: string;
   cid: string;
@@ -244,8 +246,8 @@ function verificationAuditId(row: BrandedEmailProductionVerification) {
   return 'EVR-'+stamp+'-'+commit+'-'+message;
 }
 
-async function persistSuccessfulBrandedEmailVerificationAudit(context: Context, row: BrandedEmailProductionVerification) {
-  if(row.status!=='success') return null;
+async function persistBrandedEmailVerificationAudit(context: Context, row: BrandedEmailProductionVerification) {
+  if(!['success','failure'].includes(row.status)) return null;
   const store=storeFor(context);
   const id=verificationAuditId(row);
   const index=((await store.get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
@@ -259,6 +261,8 @@ async function persistSuccessfulBrandedEmailVerificationAudit(context: Context, 
     deployId:clean(row.deployId,120),
     commit:clean(row.commit,120),
     checkedAt:clean(row.checkedAt,100),
+    status:row.status==='failure'?'failure':'success',
+    failureCategory:row.status==='failure'?row.failureCategory||'system_health':'',
     messageId:clean(row.messageId,180),
     resendStatus:clean(row.resendStatus,80),
     cid:'cid:'+clean(row.contentId,240),
@@ -278,16 +282,25 @@ async function persistSuccessfulBrandedEmailVerificationAudit(context: Context, 
 export async function readBrandedEmailVerificationAudit(context: Context, limit=50) {
   const store=storeFor(context);
   const index=((await store.get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
-  const ids=index.slice(0,Math.max(1,Math.min(200,limit)));
+  const ids=index.slice(0,Math.max(1,Math.min(1000,limit)));
   const rows=await Promise.all(ids.map(async(id)=>
     ((await store.get('email/render-verification-audit/records/'+clean(id,180),{type:'json'}))||null) as BrandedEmailVerificationAuditRecord|null
   ));
-  return rows.filter(Boolean) as BrandedEmailVerificationAuditRecord[];
+  return rows.filter(Boolean).map((row:any)=>({
+    ...row,
+    status:row?.status==='failure'?'failure':'success',
+    failureCategory:row?.status==='failure'?clean(row?.failureCategory,80)||'system_health':'',
+  })) as BrandedEmailVerificationAuditRecord[];
+}
+
+export async function readBrandedEmailVerificationAuditCount(context: Context) {
+  const index=((await storeFor(context).get(EMAIL_RENDER_VERIFICATION_AUDIT_INDEX_KEY,{type:'json'}))||[]) as string[];
+  return index.length;
 }
 
 async function saveBrandedEmailProductionVerification(context: Context, row: BrandedEmailProductionVerification) {
   await storeFor(context).setJSON(EMAIL_RENDER_VERIFICATION_KEY, row);
-  if(row.status==='success') await persistSuccessfulBrandedEmailVerificationAudit(context,row);
+  await persistBrandedEmailVerificationAudit(context,row);
   return row;
 }
 
@@ -419,6 +432,7 @@ export async function runBrandedEmailProductionVerification(
   const deployId=clean(input.deployId||Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(input.commit||Netlify.env.get('COMMIT_REF'),120);
   const previous=await readBrandedEmailProductionVerification(context);
+  if(previous) await persistBrandedEmailVerificationAudit(context,previous);
   const metadata=emailLogoMetadata();
   const previousSuccess={
     at:clean(previous?.lastSuccessfulAt,100),
@@ -551,8 +565,11 @@ export async function inlineLogoHealthSummary(context: Context) {
   const metadata=emailLogoMetadata();
   const staticAudit=checkInlineAssets();
   const productionVerification=await readBrandedEmailProductionVerification(context);
-  if(productionVerification?.status==='success') await persistSuccessfulBrandedEmailVerificationAudit(context,productionVerification);
-  const auditHistory=await readBrandedEmailVerificationAudit(context,20);
+  if(productionVerification) await persistBrandedEmailVerificationAudit(context,productionVerification);
+  const [auditHistory,auditRecordCount]=await Promise.all([
+    readBrandedEmailVerificationAudit(context,20),
+    readBrandedEmailVerificationAuditCount(context),
+  ]);
   const productionOk=!productionVerification?.required||productionVerification?.status==='success';
   return {
     ok:Boolean(staticAudit.ok&&productionOk),
@@ -563,7 +580,7 @@ export async function inlineLogoHealthSummary(context: Context) {
     contentType:metadata.contentType,
     staticAudit,
     productionVerification,
-    auditRecordCount:auditHistory.length,
+    auditRecordCount,
     auditHistory,
     lastSuccessfulAt:clean(productionVerification?.lastSuccessfulAt,100),
     lastSuccessfulCommit:clean(productionVerification?.lastSuccessfulCommit,120),
