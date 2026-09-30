@@ -333,9 +333,9 @@ mustMatch(systemHealth,/export async function readAllProductionReleaseAudits/,'C
 mustMatch(systemHealth,/selectRollbackTargetFromReleases\(releases,deployId\)/,'Production rollback and rollback readiness must share the same target-selection algorithm.');
 mustMatch(githubHealthSignal,/accountingVerification/,'Signed release verification must persist QuickBooks accounting evidence with the same production release audit.');
 mustMatch(githubHealthSignal,/run-real-sandbox-rollback-drill/,'GitHub OIDC health signal must expose the isolated real Netlify rollback drill.');
-mustMatch(githubHealthSignal,/KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID/,'Real rollback drills must target an explicitly configured sandbox site id.');
+mustMatch(githubHealthSignal,/ROLLBACK_DRILL_SANDBOX_SITE_ID='fcc8fc59-68fb-46f3-bbd2-082a67718730'/,'Real rollback drills must pin the dedicated sandbox site id in the server-side safety boundary.');
 mustMatch(githubHealthSignal,/sandboxSiteId===productionSiteId/,'Real rollback drills must block any attempt to target the production site.');
-mustMatch(githubHealthSignal,/koasevents-rollback-drill-sandbox/,'Real rollback drills must verify the dedicated sandbox site name.');
+mustMatch(githubHealthSignal,/ROLLBACK_DRILL_SANDBOX_SITE_NAME='koasevents-rollback-drill-sandbox'/,'Real rollback drills must verify the dedicated sandbox site name.');
 mustMatch(githubHealthSignal,/\/restore'/,'Real sandbox drill must exercise Netlify restore infrastructure.');
 mustMatch(adminHealth,/searchParams\.get\('export'\)==='critical-integrations'/,'System Health API must expose a Critical Integrations audit export.');
 mustMatch(adminHealth,/criticalIntegrationAuditFilters/,'Critical Integrations export must parse date, integration, failure, and rollback filters.');
