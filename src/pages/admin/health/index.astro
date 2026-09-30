@@ -1459,6 +1459,19 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthRunWarningDialog();
     }
 
+    function prepareMobileHealthTables(){
+      document.querySelectorAll('main[data-system-health-page] table').forEach((table)=>{
+        if(!(table instanceof HTMLTableElement))return;
+        table.classList.add('koa-mobile-card-table');
+        const labels=[...table.querySelectorAll('thead th')].map((cell)=>String(cell.textContent||'').trim());
+        table.querySelectorAll('tbody tr').forEach((row)=>{
+          [...row.children].forEach((cell,index)=>{
+            if(cell instanceof HTMLElement)cell.dataset.mobileLabel=labels[index]||'';
+          });
+        });
+      });
+    }
+
     function renderHealthPayload(payload,source='System Health'){
       clearHealthRunWarning();
       updateCoreCheckStatus(payload?.current);
@@ -1478,6 +1491,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
         });
       }
+
+      prepareMobileHealthTables();
 
       const warnings=[...backendWarnings,...latestDashboardRenderWarnings];
       updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
