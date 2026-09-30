@@ -1,0 +1,31 @@
+name: Gallery export
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Package checked-in gallery media
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gallery-export
+          if [ -d public/media/koa ]; then cp -R public/media/koa gallery-export/koa; fi
+          if [ -d public/media/wix ]; then cp -R public/media/wix gallery-export/wix; fi
+          printf '%s\n' "Generated from commit $GITHUB_SHA" > gallery-export/README.txt
+          zip -rq Koa_Events_Gallery_Photos.zip gallery-export
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: Koa_Events_Gallery_Photos
+          path: Koa_Events_Gallery_Photos.zip
+          retention-days: 7
+          if-no-files-found: error
