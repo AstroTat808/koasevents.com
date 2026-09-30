@@ -37,7 +37,8 @@ class Api:
         if body:h["Content-Type"]="application/json"
         for n in range(4):
             try:
-                url=self.root if path=="/" else self.root+path\n                with urlopen(Request(url,data=body,headers=h,method=method),timeout=45) as r:return json.load(r)
+                url=self.root if path=="/" else self.root+path
+                with urlopen(Request(url,data=body,headers=h,method=method),timeout=45) as r:return json.load(r)
             except HTTPError as e:
                 if method=="GET" and e.code in (429,500,502,503,504) and n<3: time.sleep(2**(n+1)); continue
                 raise RuntimeError(f"GitHub {method} {path}: HTTP {e.code}")
