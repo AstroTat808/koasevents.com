@@ -4,8 +4,24 @@ import { ipFingerprint } from './security.ts';
 import { resolveTenant } from './tenant';
 import { tenantStoreFor } from './tenant-storage';
 import { tenantEnv } from './tenant-env';
+import {
+  LOGIN_ALERT_COOLDOWN_MS,
+  LOGIN_FAILURE_WINDOW_MS,
+  classifyLoginRisk,
+  loginAlertSuppressionKey,
+  successfulAuthEventType,
+  type LoginRiskLevel,
+} from './auth-security-risk';
 
-export type AuthEventType = 'login_success'|'login_failed'|'suspicious_login'|'session_revoked'|'sessions_revoked';
+export type AuthEventType =
+  | 'login_success'
+  | 'login_failed'
+  | 'suspicious_login'
+  | 'session_revoked'
+  | 'sessions_revoked'
+  | 'device_trusted'
+  | 'device_untrusted';
+
 export type AuthEvent = {
   id:string;
   createdAt:string;
@@ -18,6 +34,11 @@ export type AuthEvent = {
   detail:string;
   suspicious:boolean;
   reasons:string[];
+  deviceFingerprint?:string;
+  riskLevel?:LoginRiskLevel;
+  alertSent?:boolean;
+  alertSuppressed?:boolean;
+  trustedDevice?:boolean;
 };
 
 export type ManagedSession = {
@@ -32,6 +53,27 @@ export type ManagedSession = {
   device:string;
   revokedAt:string;
   revokedBy:string;
+};
+
+export type TrustedDevice = {
+  fingerprint:string;
+  userId:string;
+  email:string;
+  device:string;
+  trustedAt:string;
+  trustedBy:string;
+  lastSeenAt:string;
+};
+
+type LoginAlertState = {
+  suppressionKey:string;
+  reservedAt:string;
+  sentAt:string;
+  nonce:string;
+  email:string;
+  userId:string;
+  device:string;
+  deviceFingerprint:string;
 };
 
 function store(){return tenantStoreFor(undefined,resolveTenant(),'authSecurity');}
@@ -58,11 +100,23 @@ function deviceLabel(ua:string){
   const browser=v.includes('edg/')?'Edge':v.includes('chrome/')&&!v.includes('edg/')?'Chrome':v.includes('firefox/')?'Firefox':v.includes('safari/')&&!v.includes('chrome/')?'Safari':'Browser';
   return browser+' on '+os;
 }
+function trustedDeviceKey(userId:string){return 'trusted-devices/'+clean(userId,160);}
+function cooldownKey(key:string){return 'alert-cooldowns/'+key;}
+function recent(timestamp:string,windowMs:number){
+  const value=Date.parse(timestamp);
+  return Number.isFinite(value)&&Date.now()-value>=0&&Date.now()-value<windowMs;
+}
+function legacyFailureSignal(reasons:string[]){
+  return reasons.some((reason)=>/\b([3-9]|\d{2,}) failed sign-in attempts in the last 30 minutes\b/i.test(String(reason||'')));
+}
+
 export async function requestSessionId(req:Request){
   const stable=cookie(req,'koa_sid');
   return stable||hash(cookie(req,'nf_jwt'));
 }
+export const requestDeviceFingerprint=requestSessionId;
 export function requestUserAgent(req:Request){return clean(req.headers.get('user-agent'),800);}
+
 export async function appendAuthEvent(context:Context,event:Omit<AuthEvent,'id'|'createdAt'>){
   const s=store();const current=((await s.get('auth-events/index',{type:'json'}))||[]) as AuthEvent[];
   const row:AuthEvent={id:id('AUTH'),createdAt:new Date().toISOString(),...event};
@@ -73,6 +127,17 @@ export async function readAuthEvents(limit=500){
   const rows=((await store().get('auth-events/index',{type:'json'}))||[]) as AuthEvent[];
   return rows.slice(0,Math.max(1,Math.min(2000,limit)));
 }
+
+export async function readTrustedDevices(userId:string){
+  const rows=((await store().get(trustedDeviceKey(userId),{type:'json'}))||[]) as TrustedDevice[];
+  return rows.filter((row)=>row&&row.fingerprint);
+}
+export async function isTrustedDevice(userId:string,deviceFingerprint:string){
+  if(!userId||!deviceFingerprint)return false;
+  const rows=await readTrustedDevices(userId);
+  return rows.some((row)=>row.fingerprint===deviceFingerprint);
+}
+
 export async function registerManagedSession(req:Request,user:any){
   const sessionId=await requestSessionId(req);if(!sessionId||!user?.id)return null;
   const s=store();const key='sessions/'+clean(user.id,160);
@@ -95,10 +160,98 @@ export async function managedSessionStatus(req:Request,userId:string){
 }
 export async function listManagedSessions(userId:string,currentReq?:Request){
   const rows=((await store().get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
+  const trusted=await readTrustedDevices(userId);
+  const trustedByFingerprint=new Map(trusted.map((row)=>[row.fingerprint,row]));
   const currentId=currentReq?await requestSessionId(currentReq):'';
   const now=Date.now();
-  return rows.map(row=>({...row,current:row.id===currentId,active:!row.revokedAt&&(!row.expiresAt||Date.parse(row.expiresAt)>now)})).sort((a,b)=>Date.parse(b.lastSeenAt)-Date.parse(a.lastSeenAt));
+  return rows.map(row=>{
+    const trustedRow=trustedByFingerprint.get(row.id);
+    return {
+      ...row,
+      current:row.id===currentId,
+      active:!row.revokedAt&&(!row.expiresAt||Date.parse(row.expiresAt)>now),
+      trusted:Boolean(trustedRow),
+      trustedAt:trustedRow?.trustedAt||'',
+      trustedBy:trustedRow?.trustedBy||'',
+    };
+  }).sort((a,b)=>Date.parse(b.lastSeenAt)-Date.parse(a.lastSeenAt));
 }
+
+async function knownDeviceSource(userId:string,deviceFingerprint:string){
+  const s=store();
+  const sessions=((await s.get('sessions/'+clean(userId,160),{type:'json'}))||[]) as ManagedSession[];
+  const session=sessions.find((row)=>row.id===deviceFingerprint);
+  if(session)return{device:session.device,userAgent:session.userAgent,email:session.email,lastSeenAt:session.lastSeenAt};
+  const events=await readAuthEvents(2000);
+  const event=events.find((row)=>row.userId===userId&&row.deviceFingerprint===deviceFingerprint);
+  if(event)return{device:event.device,userAgent:event.userAgent,email:event.email,lastSeenAt:event.createdAt};
+  return null;
+}
+
+export async function trustKnownDevice(userId:string,deviceFingerprint:string,actor:string,context:Context,email=''){
+  const fingerprint=clean(deviceFingerprint,160);
+  if(!userId||!fingerprint)throw new Error('Device fingerprint required.');
+  const source=await knownDeviceSource(userId,fingerprint);
+  if(!source)throw new Error('Tracked device not found.');
+  const current=await readTrustedDevices(userId);
+  const existing=current.find((row)=>row.fingerprint===fingerprint);
+  const now=new Date().toISOString();
+  const row:TrustedDevice={
+    fingerprint,
+    userId:clean(userId,160),
+    email:clean(email||source.email,240).toLowerCase(),
+    device:clean(source.device,160),
+    trustedAt:existing?.trustedAt||now,
+    trustedBy:existing?.trustedBy||clean(actor,240),
+    lastSeenAt:clean(source.lastSeenAt,80)||now,
+  };
+  await store().setJSON(trustedDeviceKey(userId),[row,...current.filter((item)=>item.fingerprint!==fingerprint)].slice(0,30));
+  if(!existing){
+    await appendAuthEvent(context,{
+      type:'device_trusted',
+      email:row.email,
+      userId:row.userId,
+      ipFingerprint:'',
+      userAgent:clean(source.userAgent,800),
+      device:row.device,
+      deviceFingerprint:fingerprint,
+      detail:'Marked this tracked device as trusted.',
+      suspicious:false,
+      reasons:[],
+      riskLevel:'normal',
+      alertSent:false,
+      alertSuppressed:false,
+      trustedDevice:true,
+    });
+  }
+  return row;
+}
+
+export async function untrustKnownDevice(userId:string,deviceFingerprint:string,actor:string,context:Context,email=''){
+  const fingerprint=clean(deviceFingerprint,160);
+  const current=await readTrustedDevices(userId);
+  const existing=current.find((row)=>row.fingerprint===fingerprint);
+  if(!existing)throw new Error('Trusted device not found.');
+  await store().setJSON(trustedDeviceKey(userId),current.filter((row)=>row.fingerprint!==fingerprint));
+  await appendAuthEvent(context,{
+    type:'device_untrusted',
+    email:clean(email||existing.email,240).toLowerCase(),
+    userId:clean(userId,160),
+    ipFingerprint:'',
+    userAgent:'',
+    device:existing.device,
+    deviceFingerprint:fingerprint,
+    detail:'Removed trust from this tracked device.',
+    suspicious:false,
+    reasons:[],
+    riskLevel:'normal',
+    alertSent:false,
+    alertSuppressed:false,
+    trustedDevice:false,
+  });
+  return existing;
+}
+
 export async function revokeManagedSession(userId:string,sessionId:string,actor:string,context:Context,email=''){
   const s=store();const key='sessions/'+clean(userId,160);const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];
   const now=new Date().toISOString();let found=false;
@@ -106,30 +259,92 @@ export async function revokeManagedSession(userId:string,sessionId:string,actor:
   if(!found)throw new Error('Session not found.');
   await s.setJSON(key,next);
   const row=next.find(x=>x.id===sessionId)!;
-  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,detail:'Revoked one active Koa’s session.',suspicious:false,reasons:[]});
+  await appendAuthEvent(context,{type:'session_revoked',email:clean(email||row.email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:row.ipFingerprint,userAgent:row.userAgent,device:row.device,deviceFingerprint:row.id,detail:'Revoked one active Koa’s session.',suspicious:false,reasons:[],riskLevel:'normal',alertSent:false,alertSuppressed:false,trustedDevice:await isTrustedDevice(userId,row.id)});
   return row;
 }
 export async function revokeAllManagedSessions(userId:string,actor:string,context:Context,email=''){
   const s=store();const key='sessions/'+clean(userId,160);const rows=((await s.get(key,{type:'json'}))||[]) as ManagedSession[];const now=new Date().toISOString();
   const next=rows.map(row=>row.revokedAt?row:{...row,revokedAt:now,revokedBy:clean(actor,240)});
   await s.setJSON(key,next);
-  await appendAuthEvent(context,{type:'sessions_revoked',email:clean(email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:'',userAgent:'',device:'',detail:'Revoked all tracked Koa’s sessions.',suspicious:false,reasons:[]});
+  await appendAuthEvent(context,{type:'sessions_revoked',email:clean(email,240).toLowerCase(),userId:clean(userId,160),ipFingerprint:'',userAgent:'',device:'',detail:'Revoked all tracked Koa’s sessions.',suspicious:false,reasons:[],riskLevel:'normal',alertSent:false,alertSuppressed:false,trustedDevice:false});
   return next;
 }
-export async function evaluateLoginRisk(email:string,ip:string,ua:string){
-  const events=await readAuthEvents(1000);const cutoff=Date.now()-30*60*1000;const normalized=clean(email,240).toLowerCase();
+
+export async function evaluateLoginRisk(
+  email:string,
+  ip:string,
+  ua:string,
+  options:{userId?:string;deviceFingerprint?:string}={},
+){
+  const events=await readAuthEvents(1000);
+  const cutoff=Date.now()-LOGIN_FAILURE_WINDOW_MS;
+  const normalized=clean(email,240).toLowerCase();
   const failures=events.filter(e=>e.type==='login_failed'&&e.email===normalized&&Date.parse(e.createdAt)>=cutoff);
-  const successes=events.filter(e=>e.type==='login_success'&&e.email===normalized);
-  const reasons:string[]=[];
-  if(failures.length>=3)reasons.push(failures.length+' failed sign-in attempts in the last 30 minutes');
-  if(ip&&successes.length&&!successes.some(e=>e.ipFingerprint===ip))reasons.push('new network fingerprint');
+  const successes=events.filter(e=>successfulAuthEventType(e.type)&&e.email===normalized);
   const device=deviceLabel(ua);
-  if(successes.length&&!successes.some(e=>e.device===device))reasons.push('new device/browser');
-  return{suspicious:reasons.length>0,reasons,device};
+  const trusted=Boolean(options.userId&&options.deviceFingerprint&&await isTrustedDevice(options.userId,options.deviceFingerprint));
+  const classified=classifyLoginRisk({
+    recentFailureCount:failures.length,
+    hasHistory:successes.length>0,
+    knownNetwork:!ip||successes.some((event)=>event.ipFingerprint===ip),
+    knownDevice:successes.some((event)=>event.device===device),
+    trustedDevice:trusted,
+  });
+  return{...classified,device};
 }
-export async function sendSuspiciousLoginAlert(input:{email:string;device:string;reasons:string[];createdAt:string;}){
+
+async function reserveLoginAlert(input:{email:string;userId?:string;device:string;deviceFingerprint?:string}){
+  const suppressionKey=await hash(loginAlertSuppressionKey(input));
+  const key=cooldownKey(suppressionKey);
+  const s=store();
+  const existing=((await s.get(key,{type:'json'}))||null) as LoginAlertState|null;
+  if(existing?.sentAt&&recent(existing.sentAt,LOGIN_ALERT_COOLDOWN_MS)){
+    return{suppressed:true,reason:'24-hour duplicate alert cooldown',lastSentAt:existing.sentAt,key,nonce:''};
+  }
+  if(existing?.reservedAt&&recent(existing.reservedAt,30_000)){
+    return{suppressed:true,reason:'duplicate alert already being processed',lastSentAt:existing.sentAt||'',key,nonce:''};
+  }
+
+  const nonce=id('ALERT');
+  const reservedAt=new Date().toISOString();
+  const reservation:LoginAlertState={
+    suppressionKey,
+    reservedAt,
+    sentAt:'',
+    nonce,
+    email:clean(input.email,240).toLowerCase(),
+    userId:clean(input.userId,160),
+    device:clean(input.device,160),
+    deviceFingerprint:clean(input.deviceFingerprint,160),
+  };
+  await s.setJSON(key,reservation);
+  await new Promise((resolve)=>setTimeout(resolve,80));
+  const winner=((await s.get(key,{type:'json'}))||null) as LoginAlertState|null;
+  if(!winner||winner.nonce!==nonce){
+    return{suppressed:true,reason:'duplicate alert already being processed',lastSentAt:winner?.sentAt||'',key,nonce:''};
+  }
+  return{suppressed:false,reason:'',lastSentAt:'',key,nonce};
+}
+
+async function finishLoginAlertReservation(key:string,nonce:string,sent:boolean){
+  if(!key||!nonce)return;
+  const s=store();
+  const current=((await s.get(key,{type:'json'}))||null) as LoginAlertState|null;
+  if(!current||current.nonce!==nonce)return;
+  if(!sent){await s.delete(key);return;}
+  await s.setJSON(key,{...current,sentAt:new Date().toISOString(),reservedAt:'',nonce:''});
+}
+
+export async function sendSuspiciousLoginAlert(input:{email:string;userId?:string;device:string;deviceFingerprint?:string;reasons:string[];createdAt:string;}){
+  const reservation=await reserveLoginAlert(input);
+  if(reservation.suppressed)return{sent:false,suppressed:true,error:'',reason:reservation.reason,lastSentAt:reservation.lastSentAt};
+
   const tenant=resolveTenant();
-  const key=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);if(!key)return{sent:false,error:'RESEND_API_KEY missing'};
+  const key=clean(tenantEnv(tenant,'RESEND_API_KEY'),500);
+  if(!key){
+    await finishLoginAlertReservation(reservation.key,reservation.nonce,false);
+    return{sent:false,suppressed:false,error:'RESEND_API_KEY missing',reason:'',lastSentAt:''};
+  }
   const recipients=clean(tenantEnv(tenant,'SECURITY_ALERT_EMAIL','KOA_SECURITY_ALERT_EMAIL'),500).split(',').map(x=>x.trim()).filter(Boolean);
   if(!recipients.length&&tenant.contact.email)recipients.push(tenant.contact.email);
   const from=clean(tenantEnv(tenant,'FROM_EMAIL','KOA_FROM_EMAIL'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
@@ -161,5 +376,50 @@ export async function sendSuspiciousLoginAlert(input:{email:string;device:string
   const r=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({
     from,to:recipients,subject:'Koa’s security alert: suspicious sign-in',html,text,attachments
   })});
-  return r.ok?{sent:true}:{sent:false,error:'Alert delivery failed'};
+  await finishLoginAlertReservation(reservation.key,reservation.nonce,r.ok);
+  return r.ok
+    ?{sent:true,suppressed:false,error:'',reason:'',lastSentAt:''}
+    :{sent:false,suppressed:false,error:'Alert delivery failed',reason:'',lastSentAt:''};
+}
+
+export function auditHistoricalLoginAlerts(events:AuthEvent[]){
+  const candidates=events
+    .filter((event)=>event.alertSent===true||(event.type==='suspicious_login'&&event.alertSent===undefined))
+    .slice()
+    .sort((a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt));
+  const sentByKey=new Map<string,number>();
+  let wouldSendBeforeCooldown=0;
+  let wouldSend=0;
+  let suppressedLowRisk=0;
+  let suppressedCooldown=0;
+  const reasons=new Map<string,number>();
+
+  for(const event of candidates){
+    for(const reason of event.reasons||[])reasons.set(reason,(reasons.get(reason)||0)+1);
+    if(!legacyFailureSignal(event.reasons||[])){
+      suppressedLowRisk+=1;
+      continue;
+    }
+    wouldSendBeforeCooldown+=1;
+    const key=loginAlertSuppressionKey({email:event.email,deviceFingerprint:event.deviceFingerprint,device:event.device});
+    const at=Date.parse(event.createdAt);
+    const last=sentByKey.get(key)||0;
+    if(last&&at-last<LOGIN_ALERT_COOLDOWN_MS){
+      suppressedCooldown+=1;
+      continue;
+    }
+    sentByKey.set(key,at);
+    wouldSend+=1;
+  }
+
+  return{
+    historicalAlertEvents:candidates.length,
+    wouldSendBeforeCooldown,
+    wouldSend,
+    wouldSuppress:candidates.length-wouldSend,
+    suppressedLowRisk,
+    suppressedCooldown,
+    reductionRate:candidates.length?Math.round(((candidates.length-wouldSend)/candidates.length)*1000)/10:0,
+    reasonBreakdown:[...reasons.entries()].map(([reason,count])=>({reason,count})).sort((a,b)=>b.count-a.count||a.reason.localeCompare(b.reason)),
+  };
 }

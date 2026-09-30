@@ -11,7 +11,7 @@
     "build:safety": "node scripts/build_safety_check.mjs",
     "audit:tenant": "node scripts/audit_tenant_hardcoding.mjs",
     "audit:tenant:strict": "node scripts/audit_tenant_hardcoding.mjs --strict-platform",
-    "prebuild": "npm run build:safety && npm run test:synthetic-health && npm run test:critical-integrations && npm run audit:tenant:strict && npm run audit:tenant:storage && npm run audit:tenant:integrations && npm run audit:tenant:schedules && npm run audit:tenant:requests && npm run test:tenant:isolation && npm run test:tenant-isolation && npm run test:accounting && npm run test:qbo-audit-display && npm run test:invoice-repair && npm run test:platform-admin",
+    "prebuild": "npm run build:safety && npm run test:synthetic-health && npm run test:critical-integrations && npm run audit:tenant:strict && npm run audit:tenant:storage && npm run audit:tenant:integrations && npm run audit:tenant:schedules && npm run audit:tenant:requests && npm run test:tenant:isolation && npm run test:tenant-isolation && npm run test:accounting && npm run test:qbo-audit-display && npm run test:invoice-repair && npm run test:platform-admin && npm run test:auth-security",
     "test:tenant:isolation": "node scripts/test_tenant_isolation.mjs",
     "test:tenant-isolation": "node scripts/tenant_isolation_qa.mjs",
     "test:accounting": "node scripts/test_quickbooks_accounting_regression.mjs",
@@ -23,7 +23,8 @@
     "test:platform-admin": "node scripts/test_platform_super_admin.mjs",
     "test:qbo-audit-display": "node scripts/test_quickbooks_audit_display.mjs",
     "test:synthetic-health": "node scripts/test_synthetic_health_protocol.mjs",
-    "test:critical-integrations": "node scripts/test_critical_integration_audit_filters.mjs"
+    "test:critical-integrations": "node scripts/test_critical_integration_audit_filters.mjs",
+    "test:auth-security": "node scripts/test_auth_security_risk.mjs"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

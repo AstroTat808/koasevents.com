@@ -183,7 +183,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div><p class="eyebrow text-[var(--koa-clay)]">Authentication security</p><h2 class="display mt-2 text-4xl">Login history + active sessions</h2><p class="mt-2 text-sm text-[var(--koa-ink)]/55">Successful and failed sign-ins, suspicious-login flags, tracked devices, and session revocation.</p></div>
             <button data-refresh-auth-security type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Refresh security</button>
           </div>
-          <div data-mfa-readiness class="mt-4 rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/60"></div>
+          <div data-mfa-readiness class="mt-4 rounded-xl bg-[var(--koa-sand)] p-4 text-sm text-[var(--koa-ink)]/60"></div>\n          <div data-login-alert-audit class="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950"></div>
           <div class="mt-5 grid gap-6 xl:grid-cols-[.8fr_1.2fr]">
             <div data-security-user-list class="grid gap-3"></div>
             <div><div data-active-session-detail class="rounded-xl border border-[var(--koa-line)] p-4 text-sm text-[var(--koa-ink)]/55">Select a user to inspect active sessions and login history.</div></div>
@@ -739,30 +739,119 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         authSecurityData=await authSecurityApi();
         const mfa=document.querySelector('[data-mfa-readiness]');
         if(mfa)mfa.textContent='MFA readiness: policy/UI hooks are prepared, but Netlify Identity in the current integration does not expose supported MFA enrollment/verification controls, so MFA is not being presented as enforced.';
+        const alertAudit=document.querySelector('[data-login-alert-audit]');
+        const audit=authSecurityData.policyAudit||{};
+        if(alertAudit){
+          alertAudit.textContent=audit.historicalAlertEvents
+            ?'Alert-noise audit: '+audit.wouldSuppress+' of '+audit.historicalAlertEvents+' historical suspicious-login email alert'+(audit.historicalAlertEvents===1?'':'s')+' would be suppressed by the quieter policy ('+audit.reductionRate+'% reduction).'
+            :'Alert-noise audit: no historical suspicious-login email alerts are recorded.';
+        }
         const list=document.querySelector('[data-security-user-list]');list.innerHTML='';
         (authSecurityData.users||[]).forEach((user)=>{
           const card=document.createElement('button');card.type='button';card.className='rounded-xl border border-[var(--koa-line)] p-4 text-left';
           card.innerHTML='<strong class="block text-sm text-[var(--koa-forest)]"></strong><span class="mt-1 block text-xs text-[var(--koa-ink)]/50"></span>';
-          card.querySelector('strong').textContent=user.name||user.email;card.querySelector('span').textContent=user.activeSessions+' active session'+(user.activeSessions===1?'':'s')+' · '+user.suspiciousEvents+' suspicious event'+(user.suspiciousEvents===1?'':'s');
+          card.querySelector('strong').textContent=user.name||user.email;card.querySelector('span').textContent=user.activeSessions+' active session'+(user.activeSessions===1?'':'s')+' · '+(user.trustedDevices||0)+' trusted device'+((user.trustedDevices||0)===1?'':'s')+' · '+user.suspiciousEvents+' suspicious event'+(user.suspiciousEvents===1?'':'s');
           card.onclick=()=>showSecurityUser(user.id);list.appendChild(card);
         });
       }catch(error){document.querySelector('[data-mfa-readiness]').textContent=error.message;}
     }
     async function showSecurityUser(userId){
-      const data=await authSecurityApi(null,userId);const box=document.querySelector('[data-active-session-detail]');box.innerHTML='';
-      const h=document.createElement('div');h.innerHTML='<h3 class="text-lg font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p>';h.querySelector('h3').textContent=data.user.name||data.user.email;h.querySelector('p').textContent=data.user.email;box.appendChild(h);
-      const sessionWrap=document.createElement('div');sessionWrap.className='mt-4 grid gap-2';
+      const data=await authSecurityApi(null,userId);
+      const box=document.querySelector('[data-active-session-detail]');
+      box.innerHTML='';
+
+      const h=document.createElement('div');
+      h.innerHTML='<h3 class="text-lg font-semibold text-[var(--koa-forest)]"></h3><p class="mt-1 text-xs text-[var(--koa-ink)]/45"></p>';
+      h.querySelector('h3').textContent=data.user.name||data.user.email;
+      h.querySelector('p').textContent=data.user.email;
+      box.appendChild(h);
+
+      const userAudit=data.policyAudit||{};
+      if(userAudit.historicalAlertEvents){
+        const audit=document.createElement('div');
+        audit.className='mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-950';
+        audit.textContent='Quieter-policy audit: '+userAudit.wouldSuppress+' of '+userAudit.historicalAlertEvents+' historical email alerts would have been suppressed.';
+        box.appendChild(audit);
+      }
+
+      const sessionWrap=document.createElement('div');
+      sessionWrap.className='mt-4 grid gap-2';
       (data.sessions||[]).forEach((session)=>{
-        const row=document.createElement('article');row.className='rounded-xl border border-[var(--koa-line)] p-3';
-        const info=document.createElement('div');info.innerHTML='<strong class="text-sm"></strong><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';info.querySelector('strong').textContent=session.device+(session.current?' · Current session':'');info.querySelector('p').textContent='Last seen '+new Date(session.lastSeenAt).toLocaleString()+(session.revokedAt?' · Revoked '+new Date(session.revokedAt).toLocaleString():'');
+        const row=document.createElement('article');
+        row.className='rounded-xl border border-[var(--koa-line)] p-3';
+        const info=document.createElement('div');
+        info.innerHTML='<div class="flex flex-wrap items-center gap-2"><strong class="text-sm"></strong><span data-trust-badge class="rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em]"></span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
+        info.querySelector('strong').textContent=session.device+(session.current?' · Current session':'');
+        const trustBadge=info.querySelector('[data-trust-badge]');
+        trustBadge.textContent=session.trusted?'Trusted device':'Not trusted';
+        trustBadge.className='rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+(session.trusted?'bg-emerald-100 text-emerald-800':'bg-[var(--koa-sand)] text-[var(--koa-clay)]');
+        info.querySelector('p').textContent='Last seen '+new Date(session.lastSeenAt).toLocaleString()
+          +(session.trustedAt?' · Trusted '+new Date(session.trustedAt).toLocaleString():'')
+          +(session.revokedAt?' · Revoked '+new Date(session.revokedAt).toLocaleString():'');
         row.appendChild(info);
-        if(session.active&&!session.current)row.appendChild(button('Revoke session','mt-2 rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700',async()=>{await authSecurityApi({action:'revoke-session',userId,sessionId:session.id});await showSecurityUser(userId);await loadAuthSecurity();}));
+
+        const controls=document.createElement('div');
+        controls.className='mt-2 flex flex-wrap gap-2';
+        if(!session.trusted){
+          controls.appendChild(button('This was me · Trust device','rounded-full border border-emerald-200 bg-emerald-50 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-emerald-800',async()=>{
+            if(!confirm('Trust '+session.device+' for '+data.user.email+'? Future network or browser changes on this tracked device will not trigger novelty alerts.'))return;
+            await authSecurityApi({action:'trust-device',userId,deviceFingerprint:session.id});
+            await showSecurityUser(userId);
+            await loadAuthSecurity();
+          }));
+        }else{
+          controls.appendChild(button('Remove trust','rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]',async()=>{
+            if(!confirm('Remove trusted-device status from '+session.device+'?'))return;
+            await authSecurityApi({action:'untrust-device',userId,deviceFingerprint:session.id});
+            await showSecurityUser(userId);
+            await loadAuthSecurity();
+          }));
+        }
+        if(session.active&&!session.current){
+          controls.appendChild(button('Revoke session','rounded-full border border-red-200 px-3 py-2 text-[.55rem] font-black uppercase tracking-[.06em] text-red-700',async()=>{
+            await authSecurityApi({action:'revoke-session',userId,sessionId:session.id});
+            await showSecurityUser(userId);
+            await loadAuthSecurity();
+          }));
+        }
+        if(controls.childNodes.length)row.appendChild(controls);
         sessionWrap.appendChild(row);
       });
       if(!(data.sessions||[]).length)sessionWrap.innerHTML='<p class="text-sm text-[var(--koa-ink)]/45">No tracked sessions yet.</p>';
       box.appendChild(sessionWrap);
-      const history=document.createElement('div');history.className='mt-5 grid gap-2';history.innerHTML='<h4 class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recent login history</h4>';
-      (data.events||[]).slice(0,20).forEach((event)=>{const row=document.createElement('div');row.className='rounded-lg bg-[var(--koa-sand)] p-3 text-xs';row.textContent=new Date(event.createdAt).toLocaleString()+' · '+event.type.replaceAll('_',' ')+(event.device?' · '+event.device:'')+(event.reasons?.length?' · '+event.reasons.join('; '):'');history.appendChild(row);});box.appendChild(history);
+
+      const history=document.createElement('div');
+      history.className='mt-5 grid gap-2';
+      history.innerHTML='<h4 class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Recent login history</h4>';
+      (data.events||[]).slice(0,20).forEach((event)=>{
+        const row=document.createElement('article');
+        row.className='rounded-lg bg-[var(--koa-sand)] p-3 text-xs';
+        const summary=document.createElement('p');
+        summary.className='font-semibold text-[var(--koa-forest)]';
+        summary.textContent=new Date(event.createdAt).toLocaleString()+' · '+event.type.replaceAll('_',' ')+(event.device?' · '+event.device:'');
+        const meta=document.createElement('p');
+        meta.className='mt-1 leading-5 text-[var(--koa-ink)]/55';
+        const details=[
+          event.riskLevel?'Risk: '+event.riskLevel:'',
+          event.reasons?.length?'Signals: '+event.reasons.join('; '):'',
+          event.alertSent?'Email alert sent':'',
+          event.alertSuppressed?'Duplicate email suppressed':'',
+          event.trustedDevice?'Trusted device':'',
+        ].filter(Boolean);
+        meta.textContent=details.join(' · ')||event.detail||'Recorded authentication activity.';
+        row.append(summary,meta);
+
+        if(event.deviceFingerprint&&!event.trustedDevice&&['login_success','suspicious_login'].includes(event.type)){
+          row.appendChild(button('This was me · Trust this device','mt-2 rounded-full border border-emerald-200 bg-white px-3 py-2 text-[.52rem] font-black uppercase tracking-[.06em] text-emerald-800',async()=>{
+            if(!confirm('Mark this sign-in device as trusted for '+data.user.email+'?'))return;
+            await authSecurityApi({action:'trust-device',userId,deviceFingerprint:event.deviceFingerprint});
+            await showSecurityUser(userId);
+            await loadAuthSecurity();
+          }));
+        }
+        history.appendChild(row);
+      });
+      box.appendChild(history);
     }
     document.querySelector('[data-refresh-auth-security]')?.addEventListener('click',loadAuthSecurity);
 
