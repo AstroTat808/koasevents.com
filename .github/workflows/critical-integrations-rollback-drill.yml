@@ -35,6 +35,10 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  EXPECTED_COMMIT: ${{ github.sha }}
+  PRODUCTION_BASE_URL: https://koasevents.com
+
 jobs:
   rollback-drill:
     name: Safe non-production rollback drill
