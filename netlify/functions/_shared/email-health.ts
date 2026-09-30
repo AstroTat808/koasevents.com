@@ -31,6 +31,7 @@ export type BrandedEmailProductionVerification = {
   checkedAt: string;
   required: boolean;
   status: 'success' | 'failure' | 'skipped';
+  failureCategory: '' | 'html_cid' | 'attachment_metadata' | 'delivery' | 'system_health';
   changedFiles: string[];
   messageId: string;
   resendStatus: string;
@@ -393,8 +394,16 @@ async function inspectSentBrandedEmail(messageId:string,monitoringKey:string) {
   }
   const htmlCidPresent=html.toLowerCase().includes(metadata.cid.toLowerCase());
   const failedStatus=['failed','bounced','complained','suppressed'].includes(resendStatus);
+  const failureCategory:BrandedEmailProductionVerification['failureCategory']=!htmlCidPresent
+    ? 'html_cid'
+    : !attachmentPresent
+      ? 'attachment_metadata'
+      : failedStatus
+        ? 'delivery'
+        : '';
   return {
     ok:htmlCidPresent&&attachmentPresent&&!failedStatus,
+    failureCategory,
     htmlCidPresent,
     attachmentPresent,
     attachmentContentId,
@@ -429,6 +438,7 @@ export async function runBrandedEmailProductionVerification(
       checkedAt:new Date().toISOString(),
       required:false,
       status:'skipped',
+      failureCategory:'',
       changedFiles:[],
       messageId:'',
       resendStatus:'',
@@ -447,12 +457,13 @@ export async function runBrandedEmailProductionVerification(
   const apiKey=clean(tenantSetting('RESEND_API_KEY'),500);
   const monitoringKey=clean(tenantSetting('RESEND_MONITORING_API_KEY'),500);
   const testTo=clean(tenantSetting('EMAIL_RENDER_TEST_TO','KOA_EMAIL_RENDER_TEST_TO'),240).toLowerCase();
-  const baseFailure=(detail:string):BrandedEmailProductionVerification=>({
+  const baseFailure=(detail:string,failureCategory:BrandedEmailProductionVerification['failureCategory']='system_health'):BrandedEmailProductionVerification=>({
     deployId,
     commit,
     checkedAt:new Date().toISOString(),
     required:true,
     status:'failure',
+    failureCategory,
     changedFiles:comparison.files,
     messageId:'',
     resendStatus:'',
@@ -466,17 +477,17 @@ export async function runBrandedEmailProductionVerification(
     lastSuccessfulMessageId:previousSuccess.messageId,
     detail,
   });
-  if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.'));
-  if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.'));
-  if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.'));
-  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.'));
+  if(!deployId||!commit) return saveBrandedEmailProductionVerification(context,baseFailure('Production deploy metadata is incomplete, so the branded email gate cannot run.','system_health'));
+  if(!apiKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_API_KEY is missing, so the branded production test cannot send.','system_health'));
+  if(!monitoringKey) return saveBrandedEmailProductionVerification(context,baseFailure('RESEND_MONITORING_API_KEY is missing, so the branded production test cannot verify the sent message.','system_health'));
+  if(!testTo.includes('@')) return saveBrandedEmailProductionVerification(context,baseFailure('EMAIL_RENDER_TEST_TO is not configured with a controlled internal test inbox.','system_health'));
 
   const rendered=syntheticBrandedEmail(commit);
   const attachments=[emailLogoAttachment()];
   try{
     assertEmailInlineAssets(rendered.html,attachments);
   }catch(error){
-    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Local inline logo validation failed.'));
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Local inline logo validation failed.','html_cid'));
   }
   const tenant=resolveTenant();
   const from=clean(tenantSetting('CLIENT_EMAIL_FROM','KOA_CLIENT_EMAIL_FROM'),240)||(tenant.displayName+' <'+tenant.contact.email+'>');
@@ -502,7 +513,7 @@ export async function runBrandedEmailProductionVerification(
     const messageId=clean(body?.id,180);
     if(!response.ok||!messageId){
       return saveBrandedEmailProductionVerification(context,{
-        ...baseFailure(clean(body?.message||'Resend rejected the branded production verification email.',600)),
+        ...baseFailure(clean(body?.message||'Resend rejected the branded production verification email.',600),'delivery'),
         messageId,
       });
     }
@@ -515,6 +526,7 @@ export async function runBrandedEmailProductionVerification(
       checkedAt,
       required:true,
       status:success?'success':'failure',
+      failureCategory:success?'':inspected.failureCategory||'system_health',
       changedFiles:comparison.files,
       messageId,
       resendStatus:clean(inspected.resendStatus,80),
@@ -531,7 +543,7 @@ export async function runBrandedEmailProductionVerification(
         : clean(inspected.detail||'Production branded email verification did not confirm both the CID HTML and inline PNG attachment.',800),
     });
   }catch(error){
-    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Production branded email verification failed.'));
+    return saveBrandedEmailProductionVerification(context,baseFailure(error instanceof Error?error.message:'Production branded email verification failed.','delivery'));
   }
 }
 
