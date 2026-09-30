@@ -2607,6 +2607,13 @@ export type ProductionRollbackProtection = {
   error:string;
 };
 
+export type ProductionAccountingVerification = {
+  checkedAt:string;
+  status:'passed'|'failed'|'unverified';
+  accountingVerified:boolean;
+  invariant:any;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2618,6 +2625,7 @@ export type ProductionRelease = {
   changedFiles:string[];
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
+  accountingVerification?:ProductionAccountingVerification|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -2671,13 +2679,25 @@ export async function rollbackReadySummary(context:Context,currentDeployId='') {
   const releases=await readProductionReleases(context,100);
   const current=clean(currentDeployId||context.deploy?.id,120);
   const target:any=selectRollbackTargetFromReleases(releases,current);
+  const targetPublishedAt=clean(target?.publishedAt,80);
+  const publishedMs=Date.parse(targetPublishedAt);
+  const ageSeconds=Number.isFinite(publishedMs)?Math.max(0,Math.floor((Date.now()-publishedMs)/1000)):null;
+  const accounting:any=target?.accountingVerification||null;
   return {
     ready:Boolean(target?.deployId),
     currentDeployId:current,
     targetDeployId:clean(target?.deployId,120),
     targetCommit:clean(target?.commit,120),
-    targetPublishedAt:clean(target?.publishedAt,80),
+    targetPublishedAt,
+    targetAgeSeconds:ageSeconds,
     targetVerifiedAt:clean(target?.syntheticProbeVerification?.checkedAt,80),
+    accountingStatus:accounting?.status==='passed'||accounting?.status==='failed'?accounting.status:'unverified',
+    accountingVerified:Boolean(accounting?.accountingVerified),
+    accountingCheckedAt:clean(accounting?.checkedAt,80),
+    accountingDetail:clean(accounting?.invariant?.detail,500),
+    accountingDynamicClientCount:Number(accounting?.invariant?.dynamicClientCount||0),
+    accountingDynamicClientFailedCount:Number(accounting?.invariant?.dynamicClientFailedCount||0),
+    accountingDynamicClientUnverifiedCount:Number(accounting?.invariant?.dynamicClientUnverifiedCount||0),
     source:target?.deployId?'production-release-audit':'unavailable',
     detail:target?.deployId
       ? 'If the current release fails a live Critical Integrations gate, rollback protection will restore this last-known-good production deploy.'
@@ -2982,6 +3002,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     changedFiles,
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
+    accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,
