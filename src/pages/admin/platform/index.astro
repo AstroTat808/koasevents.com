@@ -83,15 +83,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const pill=(label,good=true)=>'<span class="rounded-full px-2 py-1 text-[.62rem] font-black uppercase tracking-[.05em] '+(good?'bg-emerald-100 text-emerald-800':'bg-amber-100 text-amber-800')+'">'+esc(label)+'</span>';
     const statusPill=(status)=>'<span class="rounded-full px-2 py-1 text-[.62rem] font-black uppercase tracking-[.05em] '+(status==='green'?'bg-emerald-100 text-emerald-800':status==='red'?'bg-rose-100 text-rose-800':'bg-amber-100 text-amber-800')+'">'+esc(status)+'</span>';
 
-    async function api(path='',options={}
-
-    async function post(payload){
-      return api('',{method:'POST',body:JSON.stringify(payload)});
-    }){
+    async function api(path='',options={}){
       const response=await fetch('/api/admin/platform'+path,{cache:'no-store',...options,headers:{'Content-Type':'application/json',...(options.headers||{})}});
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw Object.assign(new Error(data.error||'Platform request failed.'),{data,status:response.status});
       return data;
+    }
+
+    async function post(payload){
+      return api('',{method:'POST',body:JSON.stringify(payload)});
     }
 
     function summaryCard(value,label){
