@@ -1590,3 +1590,28 @@ main p.text-sm {
     outline-width: 3px;
   }
 }
+
+
+/* System Health mobile viewport clearance */
+@media (max-width: 767px) {
+  html:has(body.koa-admin-page main[data-system-health-page]) {
+    scroll-padding-top: 1rem;
+    scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom));
+  }
+
+  body.koa-admin-page main[data-system-health-page] {
+    padding-top: 1.25rem !important;
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  body.koa-admin-page main[data-system-health-page] [data-app] > section,
+  body.koa-admin-page main[data-system-health-page] [data-health-run-warning],
+  body.koa-admin-page main[data-system-health-page] [data-health-coverage] {
+    scroll-margin-top: 1rem;
+    scroll-margin-bottom: calc(6.4rem + env(safe-area-inset-bottom));
+  }
+
+  body.koa-admin-page main[data-system-health-page] .health-warning-tools {
+    top: .65rem;
+  }
+}
