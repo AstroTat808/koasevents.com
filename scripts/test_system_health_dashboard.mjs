@@ -37,6 +37,10 @@ assert(
   'System Health must expose the page marker used by mobile viewport-clearance rules.',
 );
 assert(
+  health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
+  'Wide System Health tables must be converted into labeled mobile cards after each dashboard render.',
+);
+assert(
   nav.includes('position: relative !important;') && nav.includes('top: auto !important;'),
   'The mobile workspace utility header must remain in normal flow instead of covering page content.',
 );
