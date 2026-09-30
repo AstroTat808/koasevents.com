@@ -10,6 +10,7 @@ import { createSignWellContract, eventStoreFor, getCompletedPdf, signWellConfigu
 import { resolveTenant } from './_shared/tenant';
 import { tenantEnv } from './_shared/tenant-env';
 import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
+import { buildDuplicateMergePreview, duplicateBookingGroups, mergeDuplicateSalesRecord, relinkRecordIdRows } from './_shared/duplicate-bookings.mjs';
 
 type Task = { id:string; recordId:string; title:string; dueDate:string; assignee:string; status:'open'|'done'; priority:'low'|'normal'|'high'; createdAt:string; completedAt?:string; updatedAt?:string; updatedBy?:string; };
 type Appointment = { id:string; recordId:string; title:string; startsAt:string; durationMinutes:number; location:string; notes:string; status:'scheduled'|'completed'|'cancelled'; createdAt:string; updatedAt?:string; updatedBy?:string; };
@@ -444,7 +445,7 @@ export default async (req:Request, context:Context) => {
         capabilities:capabilitiesFor(auth.user),
         email:clean(auth.user?.email,240).toLowerCase(),
       },
-      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
+      projects,tasks,appointments,notes,workflows,enrollments,templates,activity,messages,trash,trashGroups:groups,duplicateBookingAudit:{groups:duplicateBookingGroups(salesRecords),generatedAt:new Date().toISOString()},cleanupAudit,cleanupAnalytics:analytics,cleanupSettings:{
         mode: normalizeCleanupMode(cleanupSettings.mode),
         updatedAt: cleanupSettings.updatedAt || '',
         updatedBy: cleanupSettings.updatedBy || '',
@@ -483,6 +484,8 @@ export default async (req:Request, context:Context) => {
     'save-template':'crm.templates',
     'create-signwell-agreement':'crm.manage',
     'retrieve-signwell-pdf':'crm.manage',
+    'duplicate-booking-preview':'crm.manage',
+    'merge-duplicate-booking':'crm.destructive',
     'report-startup-health':'crm.view',
   };
   const requiredCapability=capabilityByAction[action] || 'crm.manage';
@@ -499,6 +502,113 @@ export default async (req:Request, context:Context) => {
       commit:clean(body.commit,120),
     });
     return Response.json({ok:true,signal},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='duplicate-booking-preview' || action==='merge-duplicate-booking'){
+    const survivorId=clean(body.survivorId,120);
+    const sourceIds=[...new Set((Array.isArray(body.sourceIds)?body.sourceIds:[]).map((value:any)=>clean(value,120)).filter(Boolean))].filter((value)=>value!==survivorId).slice(0,50);
+    if(!survivorId||!sourceIds.length)return Response.json({error:'survivorId and at least one sourceId are required.'},{status:400});
+    const records=await readIndex<any>(sales,'records/index');
+    let preview:any;
+    try{preview=buildDuplicateMergePreview(records,survivorId,sourceIds);}catch(error){
+      return Response.json({error:error instanceof Error?error.message:'Unable to build duplicate merge preview.'},{status:409});
+    }
+    if(action==='duplicate-booking-preview')return Response.json({ok:true,preview},{headers:{'Cache-Control':'private, no-store'}});
+    if(!preview.canApply)return Response.json({error:'This merge is blocked until conflicting external links are resolved.',preview},{status:409});
+    if(body.approve!==true)return Response.json({error:'Explicit merge approval is required.',preview},{status:409});
+
+    const survivor=records.find((entry:any)=>entry?.id===survivorId);
+    const sources=sourceIds.map((sourceId)=>records.find((entry:any)=>entry?.id===sourceId)).filter(Boolean);
+    if(!survivor||sources.length!==sourceIds.length)return Response.json({error:'One or more selected CRM records no longer exist.'},{status:409});
+    const merged=mergeDuplicateSalesRecord(survivor,sources,actor);
+    const sourceSet=new Set(sourceIds);
+    const now=new Date().toISOString();
+    const eventOps=tenantStoreFor(context,tenant,'eventOps');
+    const eventFiles=tenantStoreFor(context,tenant,'eventFiles');
+
+    let survivorOps:any=await eventOps.get('events/'+survivorId,{type:'json'});
+    const survivorDocumentIds=new Set((Array.isArray(survivorOps?.documents)?survivorOps.documents:[]).map((doc:any)=>clean(doc?.id,100)).filter(Boolean));
+    for(const source of sources){
+      const sourceId=clean(source?.id,120);
+      const sourceOps:any=await eventOps.get('events/'+sourceId,{type:'json'});
+      if(sourceOps){
+        const sourceDocuments=Array.isArray(sourceOps.documents)?sourceOps.documents:[];
+        const migratedDocuments:any[]=[];
+        for(const document of sourceDocuments){
+          const originalId=clean(document?.id,100);
+          if(!originalId)continue;
+          let nextId=originalId;
+          if(survivorDocumentIds.has(nextId))nextId=clean(sourceId+'-'+originalId,100);
+          survivorDocumentIds.add(nextId);
+          const sourceKey='documents/'+sourceId+'/'+originalId;
+          const targetKey='documents/'+survivorId+'/'+nextId;
+          const bytes=await eventFiles.get(sourceKey,{type:'arrayBuffer'});
+          if(bytes!=null)await eventFiles.set(targetKey,bytes);
+          migratedDocuments.push({...document,id:nextId,mergedFromRecordId:sourceId});
+        }
+        if(!survivorOps){
+          survivorOps={...sourceOps,recordId:survivorId,id:sourceOps?.id===sourceId?survivorId:sourceOps?.id,documents:migratedDocuments,updatedAt:now};
+        }else if(migratedDocuments.length){
+          survivorOps={...survivorOps,documents:[...(Array.isArray(survivorOps.documents)?survivorOps.documents:[]),...migratedDocuments],updatedAt:now};
+        }
+        await eventOps.setJSON('merged/events/'+sourceId,{...sourceOps,mergedInto:survivorId,mergedAt:now,mergedBy:actor});
+        await eventOps.delete('events/'+sourceId);
+      }
+
+      const signedPdfKey=clean(source?.booking?.contract?.signwell?.signedPdfKey,500);
+      if(signedPdfKey){
+        const pdf=await eventFiles.get(signedPdfKey,{type:'arrayBuffer'});
+        if(pdf!=null){
+          const targetPdfKey='signed-contracts/'+survivorId+'/agreement.pdf';
+          const existingPdf=await eventFiles.get(targetPdfKey,{type:'arrayBuffer'});
+          if(existingPdf==null)await eventFiles.set(targetPdfKey,pdf);
+          const mergedSignwell=merged?.booking?.contract?.signwell;
+          if(mergedSignwell && clean(mergedSignwell.signedPdfKey,500)===signedPdfKey)mergedSignwell.signedPdfKey=targetPdfKey;
+        }
+      }
+    }
+    if(survivorOps)await eventOps.setJSON('events/'+survivorId,survivorOps);
+
+    const nextRecords=records.filter((entry:any)=>!sourceSet.has(clean(entry?.id,120))).map((entry:any)=>entry?.id===survivorId?merged:entry).slice(0,1500);
+
+    const [tasks,appointments,notes,enrollments,activity,messages,metas,aliases]=await Promise.all([
+      readIndex<Task>(crm,'tasks/index'),readIndex<Appointment>(crm,'appointments/index'),readIndex<Note>(crm,'notes/index'),readIndex<Enrollment>(crm,'enrollments/index'),readIndex<Activity>(crm,'activity/index'),readIndex<any>(crm,'client-messages/index'),readIndex<ProjectMeta>(crm,'projects/index'),readIndex<any>(sales,'merged/aliases'),
+    ]);
+    const relinkedTasks=relinkRecordIdRows(tasks,sourceIds,survivorId);
+    const relinkedAppointments=relinkRecordIdRows(appointments,sourceIds,survivorId);
+    const relinkedNotes=relinkRecordIdRows(notes,sourceIds,survivorId);
+    const relinkedEnrollments=relinkRecordIdRows(enrollments,sourceIds,survivorId);
+    const relinkedActivity=relinkRecordIdRows(activity,sourceIds,survivorId);
+    const relinkedMessages=relinkRecordIdRows(messages,sourceIds,survivorId);
+    const survivorMeta=metas.find((row)=>row.recordId===survivorId)||null;
+    const sourceMetas=metas.filter((row)=>sourceSet.has(row.recordId));
+    const mergedMeta:any=sourceMetas.reduce((acc:any,row:any)=>{
+      const next={...(acc||{})};
+      for(const [key,value] of Object.entries(row||{})){
+        if(['recordId','tags','customFields','updatedAt'].includes(key))continue;
+        if(next[key]===undefined||next[key]===null||next[key]==='')next[key]=value;
+      }
+      next.recordId=survivorId;
+      next.tags=[...new Set([...(acc?.tags||[]),...(row?.tags||[])])];
+      next.customFields={...(row?.customFields||{}),...(acc?.customFields||{})};
+      next.updatedAt=now;
+      return next;
+    },survivorMeta||{recordId:survivorId,tags:[],customFields:{}});
+    const nextMetas=[mergedMeta,...metas.filter((row)=>row.recordId!==survivorId&&!sourceSet.has(row.recordId))].slice(0,1500);
+    const nextAliases=[...sourceIds.map((sourceId)=>({sourceId,survivorId,mergedAt:now,mergedBy:actor})),...(aliases||[]).filter((row:any)=>!sourceSet.has(clean(row?.sourceId,120)))].slice(0,5000);
+
+    for(const source of sources){
+      await sales.setJSON('merged/records/'+source.id,{...source,mergedInto:survivorId,mergedAt:now,mergedBy:actor});
+      await sales.delete('records/'+source.id);
+    }
+    await Promise.all([
+      sales.setJSON('records/'+survivorId,merged),sales.setJSON('records/index',nextRecords),sales.setJSON('merged/aliases',nextAliases),
+      crm.setJSON('tasks/index',relinkedTasks),crm.setJSON('appointments/index',relinkedAppointments),crm.setJSON('notes/index',relinkedNotes),crm.setJSON('enrollments/index',relinkedEnrollments),crm.setJSON('activity/index',relinkedActivity),crm.setJSON('client-messages/index',relinkedMessages),crm.setJSON('projects/index',nextMetas),crm.setJSON('projects/'+survivorId,mergedMeta),
+    ]);
+    for(const sourceId of sourceIds)await crm.delete('projects/'+sourceId);
+    await appendActivity(crm,survivorId,'duplicate_booking_merged','Merged '+sourceIds.length+' duplicate booking record(s) into '+survivorId+' by '+actor+'.');
+    await appendStaffAudit(context,{actor,action:'crm_duplicate_booking_merged',detail:'Merged duplicate CRM booking records into '+survivorId+'.',metadata:{survivorId,sourceIds}});
+    return Response.json({ok:true,survivorId,mergedRecordIds:sourceIds,preview,duplicateBookingAudit:{groups:duplicateBookingGroups(nextRecords),generatedAt:now}},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='create-signwell-agreement'){

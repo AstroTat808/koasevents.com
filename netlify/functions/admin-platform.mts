@@ -1,21 +1,29 @@
 import type { Context, Config } from '@netlify/functions';
 import { getAccessContext } from './_shared/admin.ts';
 import {
+  appendPlatformAuditEvent,
   appendPlatformSandboxQaHistory,
+  cancelOrganizationDeletionRequest,
   clearSandboxMemberships,
   createOrganization,
+  createOrganizationDeletionRequest,
   createPlatformSupportSession,
+  deleteOrganizationControlPlane,
   deleteSandboxOrganizationControlPlane,
   endPlatformSupportSession,
+  listMemberships,
   listOrganizations,
+  listPlatformAuditEvents,
   listPlatformSandboxQaHistory,
   listPlatformSupportSessions,
+  markOrganizationDeletionCompleted,
   profileFromOrganization,
   readOrganizationById,
+  readOrganizationDeletionRequest,
   readPlatformSupportSession,
   saveOrganization,
 } from './_shared/organization.ts';
-import { tenantMigrationAudit, tenantStoreFor } from './_shared/tenant-storage.ts';
+import { purgeTenantData, TENANT_STORAGE_DOMAINS, tenantMigrationAudit, tenantStoreFor } from './_shared/tenant-storage.ts';
 import { runWithTenant } from './_shared/tenant.ts';
 import { runCrossTenantLeakageTest, runSandboxOnboardingJourney, runSandboxOnboardingStage, SANDBOX_ONBOARDING_STAGES } from './_shared/tenant-sandbox-qa.ts';
 import { tenantEnvConfigured } from './_shared/tenant-env.ts';
@@ -23,6 +31,12 @@ import { readGithubMainWorkflowSignal } from './_shared/system-health.ts';
 
 function clean(value:unknown,max=500){return String(value??'').trim().slice(0,max);}
 function email(value:unknown){return clean(value,240).toLowerCase();}
+function actor(access:any){return {userId:clean(access.user?.id,160),email:email(access.user?.email)};}
+
+const ENTITLEMENTS=[
+  'crm','sales','events','vendors','quickbooks','signwell','email','calendar','profitability',
+  'client_portal','vendor_portal','bartender','blog','gallery','local_seo','workspace_alerts',
+];
 
 function configuredSuperAdmins(tenant:any){
   const env=clean(Netlify.env.get('VENUELOOM_SUPER_ADMIN_EMAILS'),4000)
@@ -57,6 +71,32 @@ function providerCredentialState(profile:any,provider:string){
   return false;
 }
 
+function stripePriceId(plan:string,interval:'monthly'|'annual'){
+  const raw=clean(Netlify.env.get('VENUELOOM_STRIPE_PRICE_MAP'),20000);
+  if(!raw)return '';
+  try{
+    const parsed=JSON.parse(raw);
+    return clean(parsed?.[plan]?.[interval]||parsed?.[plan+':'+interval]||parsed?.[plan+'_'+interval]||'',200);
+  }catch{return '';}
+}
+
+async function stripeRequest(path:string,method:'GET'|'POST'='GET',body?:URLSearchParams){
+  const key=clean(Netlify.env.get('VENUELOOM_STRIPE_RESTRICTED_KEY'),4000);
+  if(!key)throw new Error('VenueLoom Stripe restricted key is not configured.');
+  const response=await fetch('https://api.stripe.com/v1/'+path.replace(/^\/+/,''),{
+    method,
+    headers:{
+      Authorization:'Bearer '+key,
+      ...(method==='POST'?{'Content-Type':'application/x-www-form-urlencoded'}:{}),
+    },
+    body:method==='POST'?body:undefined,
+    signal:AbortSignal.timeout(15000),
+  });
+  const data:any=await response.json().catch(()=>({}));
+  if(!response.ok)throw new Error(clean(data?.error?.message||'Stripe request failed.',500));
+  return data;
+}
+
 async function organizationSummary(context:Context,organization:any){
   const profile=profileFromOrganization(organization);
   return runWithTenant(profile,async()=>{
@@ -72,6 +112,7 @@ async function organizationSummary(context:Context,organization:any){
       remoteAccountName:row.remoteAccountName||'',
       lastVerifiedAt:row.lastVerifiedAt||'',
     }));
+    const deletionRequest=await readOrganizationDeletionRequest(context,organization.id).catch(()=>null);
     return {
       id:organization.id,
       slug:organization.slug,
@@ -88,6 +129,7 @@ async function organizationSummary(context:Context,organization:any){
       domains:organization.domains||[],
       domainSummary:{verified:activeDomains,total:(organization.domains||[]).length},
       integrations,
+      featureFlags:organization.featureFlags||{},
       health:{
         checkedAt:latest?.checkedAt||'',
         source:latest?.source||'',
@@ -96,6 +138,8 @@ async function organizationSummary(context:Context,organization:any){
         healthy:checks.length?failed===0:null,
       },
       migrationStatus:profile.storage.legacyDataBelongsToTenant?'audit-required':'tenant-native',
+      deletionRequest,
+      isSandbox:organization.slug.startsWith('vl-sandbox-'),
     };
   });
 }
@@ -275,22 +319,137 @@ async function platformSnapshot(context:Context){
       token:undefined,
       active:!row.endedAt && Date.parse(row.expiresAt)>now,
     })),
+    entitlements:ENTITLEMENTS,
     summary:{
       organizations:organizations.length,
       active:organizations.filter((row:any)=>row.status==='active').length,
       trial:organizations.filter((row:any)=>row.status==='trial').length,
+      suspended:organizations.filter((row:any)=>row.status==='suspended').length,
       attention:organizations.filter((row:any)=>row.health.failed>0 || ['past_due','suspended'].includes(row.status)).length,
       subscriptionsActive:organizations.filter((row:any)=>['active','trialing'].includes(row.subscription?.status)).length,
     },
   };
 }
 
+function csvCell(value:unknown){
+  const text=String(value??'');
+  return '"'+text.replaceAll('"','""')+'"';
+}
+
+async function supportAuditCsv(context:Context){
+  const sessions=await listPlatformSupportSessions(context,500);
+  const audit=await listPlatformAuditEvents(context,1000);
+  const rows=[
+    ['record_type','id','tenant_id','actor_email','event_type','reason_or_detail','created_at','expires_at','ended_at'],
+    ...sessions.map((row)=>['support_session',row.id,row.tenantId,row.adminEmail,'read_only_support',row.reason,row.createdAt,row.expiresAt,row.endedAt]),
+    ...audit.map((row)=>['platform_audit',row.id,row.tenantId,row.actorEmail,row.type,row.detail,row.createdAt,'','']),
+  ];
+  return rows.map((row)=>row.map(csvCell).join(',')).join('\n')+'\n';
+}
+
+async function platformUsage(context:Context){
+  const index=await listOrganizations(context);
+  const sessions=await listPlatformSupportSessions(context,1000);
+  const organizations:any[]=[];
+  const domainTotals=Object.fromEntries(TENANT_STORAGE_DOMAINS.map((domain)=>[domain,0]));
+  let totalObjects=0,totalMemberships=0,totalSeats=0,totalVerifiedDomains=0,totalConnectedIntegrations=0;
+  for(const row of index){
+    const organization=await readOrganizationById(context,row.id);
+    if(!organization)continue;
+    const profile=profileFromOrganization(organization);
+    const migration=await runWithTenant(profile,()=>tenantMigrationAudit(context,profile));
+    const memberships=await listMemberships(context,organization.id);
+    const domains=Object.fromEntries((migration.domains||[]).map((entry:any)=>[entry.domain,entry.canonicalCount]));
+    for(const [domain,count] of Object.entries(domains))domainTotals[domain]=(domainTotals[domain]||0)+Number(count||0);
+    const objects=Number(migration.summary?.canonicalObjects||0);
+    const verifiedDomains=(organization.domains||[]).filter((d:any)=>d.status==='verified').length;
+    const connectedIntegrations=(organization.integrations||[]).filter((i:any)=>i.status==='connected').length;
+    const supportSessions=sessions.filter((s)=>s.tenantId===organization.id).length;
+    totalObjects+=objects;
+    totalMemberships+=memberships.length;
+    totalSeats+=Number(organization.subscription?.seats||0);
+    totalVerifiedDomains+=verifiedDomains;
+    totalConnectedIntegrations+=connectedIntegrations;
+    organizations.push({
+      tenantId:organization.id,
+      displayName:organization.displayName,
+      status:organization.status,
+      canonicalObjects:objects,
+      memberships:memberships.length,
+      seats:Number(organization.subscription?.seats||0),
+      verifiedDomains,
+      connectedIntegrations,
+      supportSessions,
+      storageByDomain:domains,
+    });
+  }
+  return {
+    generatedAt:new Date().toISOString(),
+    organizations,
+    totals:{
+      organizations:organizations.length,
+      canonicalObjects:totalObjects,
+      memberships:totalMemberships,
+      seats:totalSeats,
+      verifiedDomains:totalVerifiedDomains,
+      connectedIntegrations:totalConnectedIntegrations,
+      supportSessions:sessions.length,
+      storageByDomain:domainTotals,
+    },
+  };
+}
+
+function deletionBlockers(organization:any){
+  const blockers:string[]=[];
+  if(organization.id==='koa-events')blockers.push('Koa Tenant #1 cannot be deleted from Super Admin.');
+  if(!['suspended','canceled'].includes(organization.status))blockers.push('Organization must be suspended or canceled.');
+  if(['active','trialing','past_due'].includes(organization.subscription?.status))blockers.push('Stripe subscription must be canceled or not configured.');
+  if((organization.domains||[]).some((row:any)=>row.status==='verified'))blockers.push('Verified domains must be removed first.');
+  if((organization.integrations||[]).some((row:any)=>row.status==='connected'))blockers.push('Connected integrations must be disconnected first.');
+  return blockers;
+}
+
+async function updateStripePlanIfNeeded(organization:any,plan:string,interval:'monthly'|'annual',seats:number){
+  const subscriptionId=clean(organization.subscription?.stripeSubscriptionId,180);
+  if(!subscriptionId)return {stripeUpdated:false,mode:'local-only'};
+  const priceId=stripePriceId(plan,interval);
+  if(!priceId)throw new Error('No Stripe price is configured for this plan and interval.');
+  const subscription=await stripeRequest('subscriptions/'+encodeURIComponent(subscriptionId));
+  const itemId=clean(subscription?.items?.data?.[0]?.id,180);
+  if(!itemId)throw new Error('Stripe subscription item could not be resolved.');
+  await stripeRequest('subscription_items/'+encodeURIComponent(itemId),'POST',new URLSearchParams({
+    price:priceId,
+    quantity:String(seats),
+    proration_behavior:'create_prorations',
+  }));
+  await stripeRequest('subscriptions/'+encodeURIComponent(subscriptionId),'POST',new URLSearchParams({
+    'metadata[tenant_id]':organization.id,
+    'metadata[venueloom_plan]':plan,
+  }));
+  return {stripeUpdated:true,mode:'stripe',priceId};
+}
+
 export default async(req:Request,context:Context)=>{
   const auth=await requirePlatformSuperAdmin(req,context);
   if(auth.response)return auth.response;
+  const who=actor(auth.access);
 
   const url=new URL(req.url);
   if(req.method==='GET'){
+    const view=clean(url.searchParams.get('view'),80);
+    if(view==='support-audit.csv'){
+      return new Response(await supportAuditCsv(context),{
+        headers:{
+          'Content-Type':'text/csv; charset=utf-8',
+          'Content-Disposition':'attachment; filename="venueloom-support-audit.csv"',
+          'Cache-Control':'private, no-store',
+        },
+      });
+    }
+    if(view==='usage'){
+      return Response.json(await platformUsage(context),{headers:{'Cache-Control':'private, no-store'}});
+    }
+
     const supportToken=clean(url.searchParams.get('support'),220);
     if(supportToken){
       const session=await readPlatformSupportSession(context,supportToken);
@@ -308,6 +467,7 @@ export default async(req:Request,context:Context)=>{
         migrationAudit,
         sandboxQa,
         readiness:await sandboxReadinessSnapshot(context,organization,migrationAudit,sandboxQa),
+        deletionBlockers:deletionBlockers(organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -324,6 +484,7 @@ export default async(req:Request,context:Context)=>{
         migrationAudit,
         sandboxQa,
         readiness:await sandboxReadinessSnapshot(context,organization,migrationAudit,sandboxQa),
+        deletionBlockers:deletionBlockers(organization),
         readOnly:true,
       },{headers:{'Cache-Control':'private, no-store'}});
     }
@@ -339,16 +500,18 @@ export default async(req:Request,context:Context)=>{
   if(action==='create-support-session'){
     const session=await createPlatformSupportSession(context,{
       tenantId:clean(body.tenantId,120),
-      adminUserId:clean(auth.access.user?.id,160),
-      adminEmail:email(auth.access.user?.email),
+      adminUserId:who.userId,
+      adminEmail:who.email,
       reason:clean(body.reason,500),
       ttlMinutes:Number(body.ttlMinutes||15),
     });
+    await appendPlatformAuditEvent(context,{type:'support_session_started',tenantId:session.tenantId,actorUserId:who.userId,actorEmail:who.email,detail:session.reason});
     return Response.json({ok:true,supportToken:session.token,session:{...session,token:undefined}},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='end-support-session'){
-    const ended=await endPlatformSupportSession(context,clean(body.supportToken,220),clean(auth.access.user?.id,160));
+    const ended=await endPlatformSupportSession(context,clean(body.supportToken,220),who.userId);
+    if(ended)await appendPlatformAuditEvent(context,{type:'support_session_ended',tenantId:ended.tenantId,actorUserId:who.userId,actorEmail:who.email,detail:'Read-only support session ended.'});
     return Response.json({ok:true,session:ended?{...ended,token:undefined}:null},{headers:{'Cache-Control':'private, no-store'}});
   }
 
@@ -391,6 +554,7 @@ export default async(req:Request,context:Context)=>{
       })).report;
     }
     const latestOrganization=await readOrganizationById(context,organization.id) || organization;
+    await appendPlatformAuditEvent(context,{type:'sandbox_created',tenantId:latestOrganization.id,actorUserId:who.userId,actorEmail:who.email,detail:'Created isolated VenueLoom sandbox tenant.'});
     return Response.json({ok:true,sandbox:true,organization:await organizationSummary(context,latestOrganization),safety:{
       legacyCompatibility:false,
       integrationsConnected:false,
@@ -469,6 +633,79 @@ export default async(req:Request,context:Context)=>{
     await appendPlatformSandboxQaHistory(context,tenantId,{kind:'delete',runId:'DELETE-'+Date.now().toString(36),generatedAt:deletedAt,summary:{clean:true},report:{removedData}});
     const controlPlane=await deleteSandboxOrganizationControlPlane(context,tenantId);
     return Response.json({ok:true,deletedTenantId:tenantId,removedData,controlPlane},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+
+  const tenantId=clean(body.tenantId,120);
+  const organization=tenantId?await readOrganizationById(context,tenantId):null;
+  if(['set-tenant-status','update-plan','save-entitlements','request-deletion','cancel-deletion','finalize-deletion'].includes(action)&&!organization){
+    return Response.json({error:'Organization not found.'},{status:404});
+  }
+
+  if(action==='set-tenant-status'){
+    if(tenantId==='koa-events')return Response.json({error:'Koa Tenant #1 suspension/reactivation is blocked from Super Admin.'},{status:409});
+    const nextStatus=clean(body.status,40);
+    if(!['suspended','active'].includes(nextStatus))return Response.json({error:'Status must be suspended or active.'},{status:400});
+    if(clean(body.confirmSlug,120)!==organization.slug)return Response.json({error:'Organization slug confirmation did not match.'},{status:409});
+    const reason=clean(body.reason,1000);
+    if(!reason)return Response.json({error:'Reason is required.'},{status:400});
+    if(nextStatus==='active'&&['past_due','canceled'].includes(organization.subscription?.status)){
+      return Response.json({error:'Resolve the subscription state before reactivating this organization.'},{status:409});
+    }
+    const previous=organization.status;
+    const updated=await saveOrganization(context,profileFromOrganization(organization),(current)=>({...current,status:nextStatus as any}));
+    await appendPlatformAuditEvent(context,{type:nextStatus==='suspended'?'tenant_suspended':'tenant_reactivated',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:reason,metadata:{previous,next:nextStatus}});
+    return Response.json({ok:true,organization:await organizationSummary(context,updated)},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='update-plan'){
+    if(clean(body.confirmSlug,120)!==organization.slug)return Response.json({error:'Organization slug confirmation did not match.'},{status:409});
+    const plan=clean(body.plan,100);
+    const interval=body.interval==='annual'?'annual':'monthly';
+    const seats=Math.max(1,Math.min(10000,Math.round(Number(body.seats||organization.subscription?.seats||1))));
+    if(!plan)return Response.json({error:'Plan key is required.'},{status:400});
+    const stripe=await updateStripePlanIfNeeded(organization,plan,interval,seats);
+    const updated=await saveOrganization(context,profileFromOrganization(organization),(current)=>({...current,subscription:{...current.subscription,plan,interval,seats}}));
+    await appendPlatformAuditEvent(context,{type:'subscription_plan_changed',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:'Plan changed to '+plan+' / '+interval+' with '+seats+' seat(s).',metadata:{stripeUpdated:stripe.stripeUpdated}});
+    return Response.json({ok:true,stripe,organization:await organizationSummary(context,updated)},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='save-entitlements'){
+    const incoming=body.featureFlags&&typeof body.featureFlags==='object'?body.featureFlags:{};
+    const flags=Object.fromEntries(ENTITLEMENTS.map((key)=>[key,incoming[key]===true]));
+    const updated=await saveOrganization(context,profileFromOrganization(organization),(current)=>({...current,featureFlags:{...current.featureFlags,...flags}}));
+    await appendPlatformAuditEvent(context,{type:'feature_entitlements_changed',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:'Updated organization feature entitlements.',metadata:{featureFlags:flags}});
+    return Response.json({ok:true,organization:await organizationSummary(context,updated)},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='request-deletion'){
+    const blockers=deletionBlockers(organization);
+    if(blockers.length)return Response.json({error:'Organization is not eligible for deletion.',blockers},{status:409});
+    const request=await createOrganizationDeletionRequest(context,{tenantId,slug:clean(body.confirmSlug,120),requestedByUserId:who.userId,requestedByEmail:who.email,reason:clean(body.reason,1000),holdHours:24});
+    await appendPlatformAuditEvent(context,{type:'organization_deletion_requested',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:request.reason,metadata:{eligibleAt:request.eligibleAt}});
+    return Response.json({ok:true,request},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='cancel-deletion'){
+    const request=await cancelOrganizationDeletionRequest(context,tenantId);
+    if(request)await appendPlatformAuditEvent(context,{type:'organization_deletion_canceled',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:'Organization deletion request canceled.'});
+    return Response.json({ok:true,request},{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(action==='finalize-deletion'){
+    const blockers=deletionBlockers(organization);
+    if(blockers.length)return Response.json({error:'Organization is not eligible for deletion.',blockers},{status:409});
+    const request=await readOrganizationDeletionRequest(context,tenantId);
+    if(!request||request.canceledAt||request.completedAt)return Response.json({error:'An active deletion request is required.'},{status:409});
+    if(Date.parse(request.eligibleAt)>Date.now())return Response.json({error:'Deletion cooling-off period has not ended.',eligibleAt:request.eligibleAt},{status:409});
+    if(clean(body.confirmSlug,120)!==organization.slug||clean(body.confirmText,220)!=='DELETE '+organization.slug)return Response.json({error:'Final deletion confirmation did not match.'},{status:409});
+    const profile=profileFromOrganization(organization);
+    if(profile.storage.legacyDataBelongsToTenant)return Response.json({error:'Legacy-compatible tenants cannot be deleted from Super Admin.'},{status:409});
+    const purge=await runWithTenant(profile,()=>purgeTenantData(context,profile));
+    await deleteOrganizationControlPlane(context,tenantId);
+    await markOrganizationDeletionCompleted(context,tenantId);
+    await appendPlatformAuditEvent(context,{type:'organization_deleted',tenantId,actorUserId:who.userId,actorEmail:who.email,detail:'Organization deleted after cooling-off and safety checks.',metadata:{deletedObjects:purge.deletedObjects}});
+    return Response.json({ok:true,deleted:true,tenantId,purge},{headers:{'Cache-Control':'private, no-store'}});
   }
 
   return Response.json({error:'Unknown platform action.'},{status:400});

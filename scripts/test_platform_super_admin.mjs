@@ -68,6 +68,22 @@ assert.match(health,/github\/main\/workflows\//,'signed workflow identities must
 assert.match(isolationWorkflow,/push:/,'tenant isolation CI must run on main after merge');
 assert.match(isolationWorkflow,/id-token: write/,'tenant isolation CI must be able to publish a signed OIDC result');
 assert.match(isolationWorkflow,/Publish signed isolation-CI identity/,'main isolation CI must publish signed production readiness evidence');
+assert.match(api,/action==='set-tenant-status'/,'tenant suspension and reactivation must be platform-managed');
+assert.match(api,/Koa Tenant #1 suspension\/reactivation is blocked/,'Tenant #1 suspension must have a hard safety block');
+assert.match(api,/action==='update-plan'/,'plan changes must be platform-managed');
+assert.match(api,/subscription_items/,'active Stripe subscriptions must be updated at Stripe, not only locally');
+assert.match(api,/action==='save-entitlements'/,'feature entitlements must be platform-managed');
+assert.match(api,/view==='support-audit\.csv'/,'support audit CSV export must exist');
+assert.match(api,/view==='usage'/,'platform usage metrics endpoint must exist');
+assert.match(api,/action==='request-deletion'/,'organization deletion must use a staged request');
+assert.match(api,/holdHours:24/,'organization deletion must have a minimum cooling-off period');
+assert.match(api,/action==='finalize-deletion'/,'organization deletion must require a separate finalization action');
+assert.match(api,/DELETE /,'final deletion must require destructive confirmation text');
+assert.match(org,/deletion-requests\/history/,'deletion requests must be retained in the control-plane audit history');
+assert.match(page,/Usage metrics/,'UI must expose platform-wide usage metrics');
+assert.match(page,/Feature entitlements/,'UI must expose per-tenant feature entitlements');
+assert.match(page,/Organization deletion safeguards/,'UI must explain deletion safeguards');
+
 assert.doesNotMatch(api,/@netlify\/blobs/,'platform function must not bypass the control-plane/storage abstractions');
 
 console.log('VenueLoom Super Admin regression test passed.');

@@ -6,6 +6,7 @@ import { tenantStoreFor } from './_shared/tenant-storage';
 import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { buildQuickBooksMilestoneInvoiceLine } from './_shared/quickbooks-accounting-invariant.mjs';
 import { evaluateInvoiceRepairCandidate, invoicePaymentProtection } from './_shared/quickbooks-accounting-repair-safety.mjs';
+import { quickBooksAccountingScope } from './_shared/quickbooks-accounting-scope.mjs';
 import {
   continueQuickBooksCrmTwoWaySyncJob,
   getCurrentQuickBooksCrmSyncJob,
@@ -603,6 +604,7 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
     .map((record: any) => {
       const proposal = record.proposal || {};
       const qbo = record?.accounting?.quickbooks || {};
+      const reconciliationScope = quickBooksAccountingScope(record);
       const schedule = scheduleFor(record);
       const activeInvoices = (Array.isArray(qbo.invoices) ? qbo.invoices : []).filter((entry: any) =>
         entry?.invoiceId && !['void','deleted'].includes(String(entry?.status || '').toLowerCase()),
@@ -668,6 +670,9 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         issues.push({ code:'stored_balance', label:'Stored QuickBooks balance', expected:openInvoiceBalance, actual:Math.round(Number(qbo.balanceDue || 0) * 100) / 100, delta:moneyDelta(qbo.balanceDue, openInvoiceBalance) });
       }
 
+      const observedIssues = issues;
+      const actionableIssues = reconciliationScope.actionable ? observedIssues : [];
+
       return {
         recordId: record.id,
         clientName: clean(record.customer?.name || record.id, 180),
@@ -683,6 +688,10 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         reconciliationOpen: Boolean(qbo.reconciliationState?.open),
         reconciliationCheckedAt: String(qbo.reconciliationState?.checkedAt || ''),
         reconciliationResolvedAt: String(qbo.reconciliationState?.resolvedAt || ''),
+        reconciliationMode: reconciliationScope.mode,
+        reconciliationActionable: reconciliationScope.actionable,
+        reconciliationScopeReason: reconciliationScope.reason,
+        observedIssues: reconciliationScope.actionable ? [] : observedIssues,
         invoiceCount: activeInvoices.length,
         issuedTotal,
         uninvoicedTotal,
@@ -690,8 +699,8 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
         openInvoiceBalance,
         remainingBalance,
         lastSyncedAt: String(qbo.lastSyncedAt || ''),
-        issues,
-        reconciled: issues.length === 0,
+        issues: actionableIssues,
+        reconciled: actionableIssues.length === 0,
       };
     })
     .filter((row: any) => row.estimateId || row.invoiceCount > 0 || ['accepted','booked'].includes(row.proposalStatus))
@@ -701,11 +710,20 @@ export function buildQuickBooksAccountingAudit(records: any[]) {
     });
 
   const flagged = rows.filter((row: any) => !row.reconciled);
+  const historicalRows = rows.filter((row: any) => row?.reconciliationMode === 'quickbooks-history');
+  const historicalObservedIssueCount = historicalRows.reduce(
+    (sum: number, row: any) => sum + (Array.isArray(row?.observedIssues) ? row.observedIssues.length : 0),
+    0,
+  );
   return {
     generatedAt: new Date().toISOString(),
     clientCount: rows.length,
     reconciledCount: rows.length - flagged.length,
     flaggedCount: flagged.length,
+    currentBookingFlaggedCount: flagged.filter((row: any) => row?.reconciliationMode !== 'quickbooks-history').length,
+    historicalCount: historicalRows.length,
+    historicalObservedIssueCount,
+    historicalRows,
     totalProposalValue: Math.round(rows.reduce((sum: number, row: any) => sum + row.proposalTotal, 0) * 100) / 100,
     totalPaymentsReceived: Math.round(rows.reduce((sum: number, row: any) => sum + row.paymentsReceived, 0) * 100) / 100,
     totalRemainingBalance: Math.round(rows.reduce((sum: number, row: any) => sum + row.remainingBalance, 0) * 100) / 100,
