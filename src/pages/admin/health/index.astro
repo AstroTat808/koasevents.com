@@ -81,8 +81,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             </div>
             <div class="flex flex-wrap items-center justify-end gap-2">
               <span data-critical-integrations-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
-              <a href="/api/admin/health?export=critical-integrations&format=csv" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</a>
-              <a href="/api/admin/health?export=critical-integrations&format=json" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export JSON</a>
+              <button data-critical-integrations-export="csv" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</button>
+              <button data-critical-integrations-export="json" type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export JSON</button>
             </div>
           </div>
           <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
@@ -106,7 +106,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Rollback Ready</p>
               <strong data-critical-integrations-rollback-status class="mt-2 block text-sm text-[var(--koa-forest)]">—</strong>
               <code data-critical-integrations-rollback-target class="mt-2 block break-all text-[.62rem] leading-5 text-[var(--koa-ink)]/55">—</code>
+              <p data-critical-integrations-rollback-age class="mt-2 text-[.62rem] leading-5 text-[var(--koa-ink)]/55">Age —</p>
+              <p data-critical-integrations-rollback-accounting class="mt-1 text-[.62rem] leading-5 text-[var(--koa-ink)]/55">QuickBooks invariants —</p>
             </article>
+          </div>
+          <div class="mt-4 rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <strong class="text-xs font-semibold text-[var(--koa-forest)]">Audit export filters</strong>
+              <span data-critical-integrations-export-summary class="text-[.6rem] text-[var(--koa-ink)]/50">All recorded production releases</span>
+            </div>
+            <div class="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <label class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">From
+                <input data-critical-integrations-export-from type="date" class="mt-1 block w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--koa-forest)]" />
+              </label>
+              <label class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">To
+                <input data-critical-integrations-export-to type="date" class="mt-1 block w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--koa-forest)]" />
+              </label>
+              <label class="text-[.58rem] font-black uppercase tracking-[.06em] text-[var(--koa-clay)]">Integration
+                <select data-critical-integrations-export-integration class="mt-1 block w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--koa-forest)]">
+                  <option value="all">All four integrations</option>
+                  <option value="synthetic-event-documents">Event Documents</option>
+                  <option value="synthetic-vendor-insurance-document">Vendor Insurance</option>
+                  <option value="synthetic-quickbooks-webhook">QuickBooks webhook</option>
+                  <option value="synthetic-signwell-webhook">SignWell webhook</option>
+                </select>
+              </label>
+              <label class="flex items-center gap-2 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]">
+                <input data-critical-integrations-export-failed type="checkbox" class="h-4 w-4" />
+                Failed releases only
+              </label>
+              <label class="flex items-center gap-2 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]">
+                <input data-critical-integrations-export-rollback type="checkbox" class="h-4 w-4" />
+                Rollback events only
+              </label>
+            </div>
           </div>
           <div class="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <p data-critical-integrations-detail class="text-xs leading-5 text-[var(--koa-ink)]/55">Waiting for the latest System Health snapshot.</p>
@@ -978,6 +1011,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const criticalIntegrationsOldestCache=document.querySelector('[data-critical-integrations-oldest-cache]');
     const criticalIntegrationsRollbackStatus=document.querySelector('[data-critical-integrations-rollback-status]');
     const criticalIntegrationsRollbackTarget=document.querySelector('[data-critical-integrations-rollback-target]');
+    const criticalIntegrationsRollbackAge=document.querySelector('[data-critical-integrations-rollback-age]');
+    const criticalIntegrationsRollbackAccounting=document.querySelector('[data-critical-integrations-rollback-accounting]');
+    const criticalIntegrationsExportButtons=[...document.querySelectorAll('[data-critical-integrations-export]')];
+    const criticalIntegrationsExportFrom=document.querySelector('[data-critical-integrations-export-from]');
+    const criticalIntegrationsExportTo=document.querySelector('[data-critical-integrations-export-to]');
+    const criticalIntegrationsExportIntegration=document.querySelector('[data-critical-integrations-export-integration]');
+    const criticalIntegrationsExportFailed=document.querySelector('[data-critical-integrations-export-failed]');
+    const criticalIntegrationsExportRollback=document.querySelector('[data-critical-integrations-export-rollback]');
+    const criticalIntegrationsExportSummary=document.querySelector('[data-critical-integrations-export-summary]');
     const criticalIntegrationsDrill=document.querySelector('[data-critical-integrations-drill]');
     const criticalIntegrationsDrillMessage=document.querySelector('[data-critical-integrations-drill-message]');
     const criticalIntegrationsDetail=document.querySelector('[data-critical-integrations-detail]');
@@ -4009,6 +4051,20 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function compactAge(seconds){
+      const value=Number(seconds);
+      if(!Number.isFinite(value)||value<0)return 'Age unavailable';
+      if(value<60)return Math.floor(value)+'s old';
+      const minutes=Math.floor(value/60);
+      if(minutes<60)return minutes+'m old';
+      const hours=Math.floor(minutes/60);
+      if(hours<48)return hours+'h '+(minutes%60)+'m old';
+      const days=Math.floor(hours/24);
+      if(days<90)return days+'d '+(hours%24)+'h old';
+      const months=Math.floor(days/30);
+      return months+'mo '+(days%30)+'d old';
+    }
+
     function renderCriticalIntegrations(summary,rollbackReady={},runtime={}){
       const data=summary||{};
       const healthyCount=Number(data.healthyCount||0);
@@ -4046,13 +4102,32 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Deploy '+String(rollback.targetDeployId)+' · Commit '+String(rollback.targetCommit)
           : String(rollback.detail||'No passing rollback target is recorded yet.');
       }
+      if(criticalIntegrationsRollbackAge){
+        criticalIntegrationsRollbackAge.textContent=ready
+          ? 'Known-good release · '+compactAge(rollback.targetAgeSeconds)+(rollback.targetPublishedAt?' · '+new Date(rollback.targetPublishedAt).toLocaleString():'')
+          : 'Known-good age · unavailable';
+      }
+      if(criticalIntegrationsRollbackAccounting){
+        const accountingStatus=String(rollback.accountingStatus||'unverified');
+        const counts=Number(rollback.accountingDynamicClientCount||0);
+        const failed=Number(rollback.accountingDynamicClientFailedCount||0);
+        const unverified=Number(rollback.accountingDynamicClientUnverifiedCount||0);
+        criticalIntegrationsRollbackAccounting.textContent=accountingStatus==='passed'
+          ? 'QuickBooks invariants · passed at release verification'+(counts?' · '+counts+' client'+(counts===1?'':'s')+' checked':'')
+          : accountingStatus==='failed'
+            ? 'QuickBooks invariants · failed at release verification · '+failed+' failed · '+unverified+' unverified'
+            : 'QuickBooks invariants · not recorded for this older release';
+        criticalIntegrationsRollbackAccounting.className='mt-1 text-[.62rem] leading-5 '+(
+          accountingStatus==='passed'?'text-emerald-800':accountingStatus==='failed'?'text-red-800':'text-amber-800'
+        );
+      }
       if(criticalIntegrationsDrill){
         const production=String(runtime?.deployContext||'')==='production';
         criticalIntegrationsDrill.disabled=production;
-        criticalIntegrationsDrill.textContent=production?'Safe drill · preview only':'Run safe rollback drill';
+        criticalIntegrationsDrill.textContent=production?'Preview simulation only':'Run safe rollback drill';
         if(criticalIntegrationsDrillMessage&&!criticalIntegrationsDrillMessage.dataset.result){
           criticalIntegrationsDrillMessage.textContent=production
-            ? 'Production mutation is blocked; run the drill from a deploy preview.'
+            ? 'Real infrastructure rollback drills run only against the isolated Netlify sandbox through signed CI.'
             : 'Non-production only · no Netlify production restore is attempted.';
         }
       }
@@ -5535,6 +5610,41 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     healthRunWarningDialog?.addEventListener('click',(event)=>{
       if(event.target===healthRunWarningDialog)healthRunWarningDialog.close();
     });
+
+    function criticalIntegrationsExportParams(format){
+      const params=new URLSearchParams({export:'critical-integrations',format});
+      const from=String(criticalIntegrationsExportFrom?.value||'').trim();
+      const to=String(criticalIntegrationsExportTo?.value||'').trim();
+      const integration=String(criticalIntegrationsExportIntegration?.value||'all').trim();
+      if(from)params.set('from',from);
+      if(to)params.set('to',to);
+      if(integration&&integration!=='all')params.set('integration',integration);
+      if(criticalIntegrationsExportFailed?.checked)params.set('failedOnly','1');
+      if(criticalIntegrationsExportRollback?.checked)params.set('rollbackOnly','1');
+      return params;
+    }
+
+    function updateCriticalIntegrationsExportSummary(){
+      if(!criticalIntegrationsExportSummary)return;
+      const parts=[];
+      const from=String(criticalIntegrationsExportFrom?.value||'').trim();
+      const to=String(criticalIntegrationsExportTo?.value||'').trim();
+      const integration=String(criticalIntegrationsExportIntegration?.selectedOptions?.[0]?.textContent||'All four integrations').trim();
+      if(from||to)parts.push('Date '+(from||'earliest')+' → '+(to||'latest'));
+      if(String(criticalIntegrationsExportIntegration?.value||'all')!=='all')parts.push(integration);
+      if(criticalIntegrationsExportFailed?.checked)parts.push('failed releases only');
+      if(criticalIntegrationsExportRollback?.checked)parts.push('rollback events only');
+      criticalIntegrationsExportSummary.textContent=parts.length?'Filters · '+parts.join(' · '):'All recorded production releases';
+    }
+
+    criticalIntegrationsExportButtons.forEach((button)=>button.addEventListener('click',()=>{
+      const format=String(button.dataset.criticalIntegrationsExport||'csv');
+      window.location.href='/api/admin/health?'+criticalIntegrationsExportParams(format).toString();
+    }));
+    [criticalIntegrationsExportFrom,criticalIntegrationsExportTo,criticalIntegrationsExportIntegration,criticalIntegrationsExportFailed,criticalIntegrationsExportRollback]
+      .filter(Boolean)
+      .forEach((control)=>control.addEventListener('change',updateCriticalIntegrationsExportSummary));
+    updateCriticalIntegrationsExportSummary();
 
     criticalIntegrationsDrill?.addEventListener('click',async()=>{
       if(criticalIntegrationsDrill.disabled)return;

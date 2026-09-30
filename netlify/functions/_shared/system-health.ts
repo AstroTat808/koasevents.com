@@ -305,6 +305,55 @@ export function syntheticProbeReleaseVerification(
   };
 }
 
+export function productionAccountingVerification(snapshot:HealthSnapshot):ProductionAccountingVerification {
+  const accountingCheck:any=(snapshot?.checks||[]).find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
+  const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
+  const liveClients=accountingCheck?.accountingDetails?.liveClientInvariants||null;
+  const invariant={
+    id:String(accountingCheck?.id||'quickbooks-tax-invariant'),
+    ok:Boolean(accountingCheck?.ok),
+    severity:String(accountingCheck?.severity||''),
+    status:Number(accountingCheck?.status||0),
+    expectedTotal:Number(accountingCheck?.accountingDetails?.expectedTotal||15706.80),
+    actualTotal:Number(accountingCheck?.accountingDetails?.actualTotal||0),
+    taxablePayload:Number(accountingCheck?.accountingDetails?.taxablePayload||0),
+    liveClientStatus:String(liveClient?.status||'unverified'),
+    liveClientEstimateTotal:liveClient?.estimateTotal==null?null:Number(liveClient.estimateTotal),
+    liveClientTaxableLineCount:liveClient?.taxableLineCount==null?null:Number(liveClient.taxableLineCount),
+    historicalTaxOnTaxDetected:Boolean(liveClient?.historicalTaxOnTaxDetected),
+    estimateId:String(liveClient?.estimateId||''),
+    estimateDocNumber:String(liveClient?.estimateDocNumber||''),
+    verifiedAt:String(liveClient?.verifiedAt||snapshot?.checkedAt||''),
+    dynamicClientStatus:String(liveClients?.status||'unverified'),
+    dynamicClientCount:Number(liveClients?.clientCount||0),
+    dynamicClientPassedCount:Number(liveClients?.passedCount||0),
+    dynamicClientFailedCount:Number(liveClients?.failedCount||0),
+    dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
+    detail:String(accountingCheck?.detail||''),
+  };
+  const accountingVerified=Boolean(
+    invariant.ok
+    && invariant.status===200
+    && invariant.expectedTotal===15706.80
+    && invariant.actualTotal===15706.80
+    && invariant.taxablePayload===0
+    && invariant.liveClientStatus==='passed'
+    && invariant.liveClientEstimateTotal===15706.80
+    && invariant.liveClientTaxableLineCount===0
+    && !invariant.historicalTaxOnTaxDetected
+    && invariant.dynamicClientStatus==='passed'
+    && invariant.dynamicClientFailedCount===0
+    && invariant.dynamicClientUnverifiedCount===0
+    && invariant.dynamicClientPassedCount===invariant.dynamicClientCount
+  );
+  return {
+    checkedAt:String(snapshot?.checkedAt||new Date().toISOString()),
+    status:accountingVerified?'passed':'failed',
+    accountingVerified,
+    invariant,
+  };
+}
+
 export function healthComponents() {
   return [
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
@@ -2607,6 +2656,13 @@ export type ProductionRollbackProtection = {
   error:string;
 };
 
+export type ProductionAccountingVerification = {
+  checkedAt:string;
+  status:'passed'|'failed'|'unverified';
+  accountingVerified:boolean;
+  invariant:any;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2618,6 +2674,7 @@ export type ProductionRelease = {
   changedFiles:string[];
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
+  accountingVerification?:ProductionAccountingVerification|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -2671,13 +2728,25 @@ export async function rollbackReadySummary(context:Context,currentDeployId='') {
   const releases=await readProductionReleases(context,100);
   const current=clean(currentDeployId||context.deploy?.id,120);
   const target:any=selectRollbackTargetFromReleases(releases,current);
+  const targetPublishedAt=clean(target?.publishedAt,80);
+  const publishedMs=Date.parse(targetPublishedAt);
+  const ageSeconds=Number.isFinite(publishedMs)?Math.max(0,Math.floor((Date.now()-publishedMs)/1000)):null;
+  const accounting:any=target?.accountingVerification||null;
   return {
     ready:Boolean(target?.deployId),
     currentDeployId:current,
     targetDeployId:clean(target?.deployId,120),
     targetCommit:clean(target?.commit,120),
-    targetPublishedAt:clean(target?.publishedAt,80),
+    targetPublishedAt,
+    targetAgeSeconds:ageSeconds,
     targetVerifiedAt:clean(target?.syntheticProbeVerification?.checkedAt,80),
+    accountingStatus:accounting?.status==='passed'||accounting?.status==='failed'?accounting.status:'unverified',
+    accountingVerified:Boolean(accounting?.accountingVerified),
+    accountingCheckedAt:clean(accounting?.checkedAt,80),
+    accountingDetail:clean(accounting?.invariant?.detail,500),
+    accountingDynamicClientCount:Number(accounting?.invariant?.dynamicClientCount||0),
+    accountingDynamicClientFailedCount:Number(accounting?.invariant?.dynamicClientFailedCount||0),
+    accountingDynamicClientUnverifiedCount:Number(accounting?.invariant?.dynamicClientUnverifiedCount||0),
     source:target?.deployId?'production-release-audit':'unavailable',
     detail:target?.deployId
       ? 'If the current release fails a live Critical Integrations gate, rollback protection will restore this last-known-good production deploy.'
@@ -2982,6 +3051,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     changedFiles,
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
+    accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,

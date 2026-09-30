@@ -42,6 +42,11 @@ import {
   readOffice365SyncAudit,
   readOffice365SyncState,
 } from './_shared/office365-calendar-sync';
+import {
+  criticalIntegrationAuditFilterSummary,
+  criticalIntegrationAuditFilters,
+  filterCriticalIntegrationAudits,
+} from './_shared/critical-integration-audit.mjs';
 
 function csvCell(value:any){
   const text=String(value??'');
@@ -52,18 +57,22 @@ function criticalIntegrationAuditCsv(releases:any[]){
   const headers=[
     'deploy_id','commit','commit_title','published_at','recorded_at',
     'release_verification_status','healthy_count','total_count','verification_checked_at',
+    'accounting_status','accounting_checked_at','accounting_dynamic_client_count','accounting_dynamic_failed_count','accounting_dynamic_unverified_count',
     'probe_id','probe_name','probe_ok','probe_http_status','probe_source','probe_marker','probe_expected_marker','probe_last_live_checked_at','probe_detail',
     'rollback_status','rollback_checked_at','rollback_from_deploy_id','rollback_from_commit','rollback_target_deploy_id','rollback_target_commit','rollback_reason','rollback_http_status','rollback_error'
   ];
   const rows=[headers];
   for(const release of releases||[]){
     const verification=release?.syntheticProbeVerification||null;
+    const accounting=release?.accountingVerification||null;
+    const invariant=accounting?.invariant||null;
     const probes=Array.isArray(verification?.probes)&&verification.probes.length?verification.probes:[null];
     for(const probe of probes){
       const rollback=release?.rollbackProtection||null;
       rows.push([
         release?.deployId||'',release?.commit||'',release?.commitTitle||'',release?.publishedAt||'',release?.recordedAt||'',
         verification?.status||'unrecorded',verification?.healthyCount??'',verification?.totalCount??'',verification?.checkedAt||'',
+        accounting?.status||'unverified',accounting?.checkedAt||'',invariant?.dynamicClientCount??'',invariant?.dynamicClientFailedCount??'',invariant?.dynamicClientUnverifiedCount??'',
         probe?.id||'',probe?.name||'',probe==null?'':Boolean(probe?.ok),probe?.status??'',probe?.source||'',probe?.marker||'',probe?.expectedMarker||'',probe?.lastLiveCheckedAt||'',probe?.detail||'',
         rollback?.status||'',rollback?.checkedAt||'',rollback?.fromDeployId||'',rollback?.fromCommit||'',rollback?.targetDeployId||'',rollback?.targetCommit||'',rollback?.reason||'',rollback?.httpStatus??'',rollback?.error||''
       ]);
@@ -774,19 +783,41 @@ export default async (req:Request,context:Context) => {
   const url=new URL(req.url);
   if(url.searchParams.get('export')==='critical-integrations'){
     if(!admin)return Response.json({error:'System Health management permission required.'},{status:403,headers:{'Cache-Control':'private, no-store'}});
-    const releases=await readAllProductionReleaseAudits(context);
-    const format=String(url.searchParams.get('format')||'csv').toLowerCase();
-    const date=new Date().toISOString().slice(0,10);
-    if(format==='json'){
-      return new Response(JSON.stringify({generatedAt:new Date().toISOString(),releaseCount:releases.length,releases},null,2),{
+    try{
+      const allReleases=await readAllProductionReleaseAudits(context);
+      const filters=criticalIntegrationAuditFilters(url.searchParams);
+      const releases=filterCriticalIntegrationAudits(allReleases,filters);
+      const filterSummary=criticalIntegrationAuditFilterSummary(filters,releases.length);
+      const format=String(url.searchParams.get('format')||'csv').toLowerCase();
+      if(!['csv','json'].includes(format)){
+        return Response.json({error:'Critical Integrations export format must be csv or json.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+      }
+      const date=new Date().toISOString().slice(0,10);
+      if(format==='json'){
+        return new Response(JSON.stringify({
+          generatedAt:new Date().toISOString(),
+          releaseCount:releases.length,
+          filters:filterSummary,
+          releases,
+        },null,2),{
+          status:200,
+          headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.json"','Cache-Control':'private, no-store'},
+        });
+      }
+      return new Response(criticalIntegrationAuditCsv(releases),{
         status:200,
-        headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.json"','Cache-Control':'private, no-store'},
+        headers:{
+          'Content-Type':'text/csv; charset=utf-8',
+          'Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.csv"',
+          'X-Koa-Audit-Release-Count':String(releases.length),
+          'Cache-Control':'private, no-store',
+        },
       });
+    }catch(error){
+      return Response.json({
+        error:error instanceof Error?error.message:'Unable to export Critical Integrations audit.',
+      },{status:400,headers:{'Cache-Control':'private, no-store'}});
     }
-    return new Response(criticalIntegrationAuditCsv(releases),{
-      status:200,
-      headers:{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="koa-critical-integrations-audit-'+date+'.csv"','Cache-Control':'private, no-store'},
-    });
   }
 
   const latest=await readLatestHealth(context);
