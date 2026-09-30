@@ -1,0 +1,8 @@
+{
+  "keep": [
+    "admin-live-smoke",
+    "qa/*",
+    "ops/*"
+  ],
+  "notes": "Keep patterns are conservative. Closed or similarly named branches are never assumed superseded without commit evidence."
+}
