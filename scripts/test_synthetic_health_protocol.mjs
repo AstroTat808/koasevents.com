@@ -281,8 +281,8 @@ mustMatch(
 );
 mustMatch(
   githubHealthSignal,
-  /auditRecorded=Boolean\(releaseRecord\?\.deployId\)/,
-  'Signed production QA must only report the release audit as recorded when a deploy-keyed record was actually written.',
+  /releaseRecord\?\.accountingVerification\?\.checkedAt===health\.checkedAt/,
+  'Signed production QA must only report the release audit as recorded when probe and accounting evidence came from the same health run.',
 );
 mustMatch(
   githubHealthSignal,
@@ -315,24 +315,43 @@ mustMatch(
   'Production QA must capture a failing verification response so rollback evidence remains visible before CI fails.',
 );
 mustMatch(systemHealth,/export async function rollbackReadySummary/,'System Health must expose the exact last-known-good rollback target.');
+mustMatch(systemHealth,/targetAgeSeconds/,'Rollback Ready must expose the age of the selected known-good release.');
+mustMatch(systemHealth,/accountingStatus/,'Rollback Ready must expose the selected release accounting invariant status.');
+mustMatch(systemHealth,/accountingVerification:input\?\.accountingVerification/,'Production release audits must persist same-release accounting evidence.');
 mustMatch(systemHealth,/PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments\/releases\/audit-index'/,'Critical Integrations must maintain an uncapped release-audit index for complete exports.');
 mustMatch(systemHealth,/export async function readAllProductionReleaseAudits/,'Critical Integrations must enumerate durable per-deploy audit records.');
 mustMatch(systemHealth,/selectRollbackTargetFromReleases\(releases,deployId\)/,'Production rollback and rollback readiness must share the same target-selection algorithm.');
+mustMatch(githubHealthSignal,/accountingVerification/,'Signed release verification must persist QuickBooks accounting evidence with the same production release audit.');
+mustMatch(githubHealthSignal,/run-real-sandbox-rollback-drill/,'GitHub OIDC health signal must expose the isolated real Netlify rollback drill.');
+mustMatch(githubHealthSignal,/KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID/,'Real rollback drills must target an explicitly configured sandbox site id.');
+mustMatch(githubHealthSignal,/sandboxSiteId===productionSiteId/,'Real rollback drills must block any attempt to target the production site.');
+mustMatch(githubHealthSignal,/koasevents-rollback-drill-sandbox/,'Real rollback drills must verify the dedicated sandbox site name.');
+mustMatch(githubHealthSignal,/\/restore'/,'Real sandbox drill must exercise Netlify restore infrastructure.');
 mustMatch(adminHealth,/searchParams\.get\('export'\)==='critical-integrations'/,'System Health API must expose a Critical Integrations audit export.');
+mustMatch(adminHealth,/criticalIntegrationAuditFilters/,'Critical Integrations export must parse date, integration, failure, and rollback filters.');
+mustMatch(adminHealth,/filterCriticalIntegrationAudits/,'Critical Integrations export must apply the selected filters before serialization.');
 mustMatch(adminHealth,/text\/csv; charset=utf-8/,'Critical Integrations audit export must support CSV.');
 mustMatch(adminHealth,/application\/json; charset=utf-8/,'Critical Integrations audit export must support JSON.');
 mustMatch(healthUi,/data-critical-integrations-rollback-status/,'Critical Integrations UI must show a Rollback Ready indicator.');
 mustMatch(healthUi,/data-critical-integrations-rollback-target/,'Critical Integrations UI must show the exact rollback deploy and commit.');
-mustMatch(healthUi,/format=csv/,'Critical Integrations UI must expose CSV export.');
-mustMatch(healthUi,/format=json/,'Critical Integrations UI must expose JSON export.');
+mustMatch(healthUi,/data-critical-integrations-rollback-age/,'Rollback Ready UI must show the known-good release age.');
+mustMatch(healthUi,/data-critical-integrations-rollback-accounting/,'Rollback Ready UI must show whether QuickBooks invariants passed at release verification.');
+mustMatch(healthUi,/data-critical-integrations-export-from/,'Critical Integrations UI must expose a start-date export filter.');
+mustMatch(healthUi,/data-critical-integrations-export-to/,'Critical Integrations UI must expose an end-date export filter.');
+mustMatch(healthUi,/data-critical-integrations-export-integration/,'Critical Integrations UI must expose an integration export filter.');
+mustMatch(healthUi,/data-critical-integrations-export-failed/,'Critical Integrations UI must expose failed-release filtering.');
+mustMatch(healthUi,/data-critical-integrations-export-rollback/,'Critical Integrations UI must expose rollback-event filtering.');
 mustMatch(releaseGuard,/environment === 'production'/,'Rollback drill state machine must refuse production.');
-mustMatch(systemHealth,/Critical Integrations rollback drill is blocked in production/,'Server-side rollback drill must be hard-blocked in production.');
-mustMatch(adminHealth,/run-critical-integrations-rollback-drill/,'System Health admin API must expose the safe non-production rollback drill.');
+mustMatch(systemHealth,/Critical Integrations rollback drill is blocked in production/,'Server-side preview rollback drill must be hard-blocked in production.');
+mustMatch(adminHealth,/run-critical-integrations-rollback-drill/,'System Health admin API must expose the safe non-production rollback simulation.');
 mustMatch(rollbackDrillScript,/\['detection','failed-audit','rollback','recovery'\]/,'Rollback drill regression must assert the complete detection-to-recovery sequence.');
 mustMatch(rollbackDrillScript,/productionMutationAttempted,false/,'Rollback drill regression must prove no production mutation was attempted.');
-mustMatch(rollbackDrillWorkflow,/pull_request:/,'Rollback drill workflow must run in PR/non-production CI.');
-mustMatch(rollbackDrillWorkflow,/DRILL_ENVIRONMENT: github-actions-non-production/,'Rollback drill workflow must explicitly mark its environment as non-production.');
-assert.doesNotMatch(rollbackDrillWorkflow,/^\s*push:/m,'Rollback drill workflow must not be a production push workflow.');
+mustMatch(rollbackDrillWorkflow,/pull_request:/,'Rollback drill workflow must run the simulated drill in PR CI.');
+mustMatch(rollbackDrillWorkflow,/push:/,'Rollback drill workflow must run the real isolated infrastructure drill after main changes.');
+mustMatch(rollbackDrillWorkflow,/id-token: write/,'Real sandbox rollback drill must use signed GitHub OIDC rather than a repository Netlify token.');
+mustMatch(rollbackDrillWorkflow,/run-real-sandbox-rollback-drill/,'Post-merge rollback drill must invoke the real isolated Netlify restore action.');
+mustMatch(rollbackDrillWorkflow,/productionMutationAttempted/,'Real sandbox rollback workflow must assert that production was not mutated.');
+mustMatch(rollbackDrillWorkflow,/sandboxSiteName/,'Real sandbox rollback workflow must assert the expected dedicated site identity.');
 
 // This gate intentionally validates the shared protocol contract rather than making network calls.
 console.log(
