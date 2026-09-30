@@ -1,4 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
+import { createHash } from 'node:crypto';
 import {
   applyHealthAlertPolicy,
   persistHealth,
@@ -26,6 +27,144 @@ function base64UrlBytes(value:string){
 
 function decodePart(value:string){
   return JSON.parse(new TextDecoder().decode(base64UrlBytes(value)));
+}
+
+function cleanText(value:unknown,max=500){
+  return String(value||'').trim().slice(0,max);
+}
+
+async function netlifyJson(token:string,path:string,options:RequestInit={}){
+  const response=await fetch('https://api.netlify.com/api/v1'+path,{
+    ...options,
+    headers:{
+      Authorization:'Bearer '+token,
+      Accept:'application/json',
+      ...(options.headers||{}),
+    },
+    signal:options.signal||AbortSignal.timeout(15_000),
+  });
+  const text=await response.text();
+  let body:any={};
+  try{body=text?JSON.parse(text):{};}catch{body={message:text};}
+  if(!response.ok){
+    throw new Error('Netlify API '+path+' returned HTTP '+response.status+(body?.message?' · '+cleanText(body.message,300):''));
+  }
+  return {response,body};
+}
+
+async function waitForSandboxDeploy(token:string,deployId:string,timeoutMs=20_000){
+  const started=Date.now();
+  let lastState='';
+  while(Date.now()-started<timeoutMs){
+    const {body}=await netlifyJson(token,'/deploys/'+encodeURIComponent(deployId));
+    lastState=String(body?.state||'');
+    if(lastState==='ready'||lastState==='current')return body;
+    if(lastState==='error')throw new Error('Sandbox deploy '+deployId+' entered the error state.');
+    await new Promise((resolve)=>setTimeout(resolve,500));
+  }
+  throw new Error('Sandbox deploy '+deployId+' did not become ready within '+Math.ceil(timeoutMs/1000)+' seconds. Last state: '+(lastState||'unknown')+'.');
+}
+
+async function createSandboxStaticDeploy(token:string,siteId:string,html:string,label:string){
+  const sha=createHash('sha1').update(html).digest('hex');
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({files:{'/index.html':sha}}),
+  });
+  const deployId=cleanText(body?.id,120);
+  if(!deployId)throw new Error('Netlify did not return a deploy id for '+label+'.');
+  const required=Array.isArray(body?.required)?body.required.map((value:any)=>String(value)):[];
+  if(required.includes(sha)){
+    const response=await fetch('https://api.netlify.com/api/v1/deploys/'+encodeURIComponent(deployId)+'/files/index.html',{
+      method:'PUT',
+      headers:{
+        Authorization:'Bearer '+token,
+        'Content-Type':'application/octet-stream',
+      },
+      body:html,
+      signal:AbortSignal.timeout(15_000),
+    });
+    if(!response.ok){
+      const detail=await response.text().catch(()=>'');
+      throw new Error('Unable to upload '+label+' index.html · HTTP '+response.status+(detail?' · '+cleanText(detail,300):''));
+    }
+  }
+  const ready=await waitForSandboxDeploy(token,deployId);
+  return {deployId,sha,state:String(ready?.state||''),label};
+}
+
+async function latestPublishedSandboxDeploy(token:string,siteId:string){
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?latest-published=true&per_page=1');
+  const row=Array.isArray(body)?body[0]:null;
+  return {
+    deployId:cleanText(row?.id,120),
+    state:cleanText(row?.state,40),
+    publishedAt:cleanText(row?.published_at,80),
+  };
+}
+
+async function runRealSandboxRollbackDrill(context:Context,claims:any){
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const sandboxSiteId=cleanText(Netlify.env.get('KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID'),120);
+  const expectedName=cleanText(Netlify.env.get('KOA_ROLLBACK_DRILL_SANDBOX_SITE_NAME')||'koasevents-rollback-drill-sandbox',160);
+  const productionSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to the sandbox rollback drill.');
+  if(!sandboxSiteId)throw new Error('KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID is not configured.');
+  if(sandboxSiteId===productionSiteId)throw new Error('Rollback drill sandbox site id matches production; drill blocked.');
+
+  const {body:site}=await netlifyJson(token,'/sites/'+encodeURIComponent(sandboxSiteId));
+  if(String(site?.id||'')!==sandboxSiteId)throw new Error('Netlify returned an unexpected sandbox site id.');
+  if(String(site?.name||'')!==expectedName)throw new Error('Rollback drill site name mismatch; expected '+expectedName+'.');
+  if(String(site?.custom_domain||'').trim())throw new Error('Rollback drill sandbox must not have a custom production domain.');
+
+  const runMarker=cleanText(String(claims?.run_id||Date.now())+'-'+String(claims?.sha||'').slice(0,12),80);
+  const knownGoodHtml='<!doctype html><html><body><main data-rollback-drill="known-good" data-run="'+runMarker+'">Known good rollback drill release</main></body></html>';
+  const candidateHtml='<!doctype html><html><body><main data-rollback-drill="candidate-failure" data-run="'+runMarker+'">Deliberate rollback drill candidate</main></body></html>';
+
+  const knownGood=await createSandboxStaticDeploy(token,sandboxSiteId,knownGoodHtml,'known-good sandbox release');
+  const afterKnownGood=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  if(afterKnownGood.deployId!==knownGood.deployId)throw new Error('Known-good sandbox deploy did not become the current published release.');
+
+  const candidate=await createSandboxStaticDeploy(token,sandboxSiteId,candidateHtml,'candidate sandbox release');
+  const beforeRestore=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  if(beforeRestore.deployId!==candidate.deployId)throw new Error('Candidate sandbox deploy did not become current before the restore drill.');
+
+  const {response:restoreResponse,body:restoreBody}=await netlifyJson(
+    token,
+    '/sites/'+encodeURIComponent(sandboxSiteId)+'/deploys/'+encodeURIComponent(knownGood.deployId)+'/restore',
+    {method:'POST'},
+  );
+  const restored=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  if(restored.deployId!==knownGood.deployId)throw new Error('Netlify restore completed but the known-good deploy is not current.');
+
+  return {
+    ok:true,
+    mode:'real-netlify-sandbox-restore',
+    isolationVerified:true,
+    sandboxSiteId,
+    sandboxSiteName:String(site?.name||''),
+    sandboxUrl:String(site?.ssl_url||site?.url||''),
+    productionSiteId,
+    productionMutationAttempted:false,
+    sandboxMutationAttempted:true,
+    runMarker,
+    knownGood,
+    candidate,
+    beforeRestore,
+    restore:{
+      httpStatus:restoreResponse.status,
+      restoredDeployId:cleanText(restoreBody?.id,120)||knownGood.deployId,
+      state:cleanText(restoreBody?.state,40),
+    },
+    afterRestore:restored,
+    phases:[
+      {phase:'known-good-deploy',ok:afterKnownGood.deployId===knownGood.deployId},
+      {phase:'candidate-deploy',ok:beforeRestore.deployId===candidate.deployId},
+      {phase:'real-restore',ok:restoreResponse.status===201||restoreResponse.status===200},
+      {phase:'recovery',ok:restored.deployId===knownGood.deployId},
+    ],
+  };
 }
 
 async function verifyGithubOidc(token:string){
@@ -90,6 +229,35 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='run-real-sandbox-rollback-drill'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production control plane is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const sandboxRollbackDrill=await runRealSandboxRollbackDrill(context,claims);
+        return Response.json({
+          ok:Boolean(sandboxRollbackDrill?.ok),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          sandboxRollbackDrill,
+        },{status:sandboxRollbackDrill?.ok?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'Real sandbox rollback drill failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='verify-synthetic-probes'||body?.action==='verify-production-health'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
@@ -120,29 +288,6 @@ export default async (req:Request,context:Context) => {
       const probesVerified=syntheticProbeVerification.status==='passed'
         && probes.length===4
         && probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
-
-      let auditRecorded=false;
-      let auditError='';
-      try{
-        const releaseRecord=await recordProductionRelease(context,{
-          deployId,
-          commit:String(claims.sha||''),
-          checkedAt:health.checkedAt,
-          syntheticProbeVerification,
-        });
-        auditRecorded=Boolean(releaseRecord?.deployId);
-        if(!auditRecorded)auditError='Production deploy id could not be resolved, so the per-release probe audit was not persisted.';
-      }catch(error){
-        auditError=error instanceof Error?error.message:'Unable to persist production synthetic-probe audit.';
-      }
-
-      const rollbackProtection=!probesVerified
-        ? await rollbackFailedProductionRelease(context,{
-            deployId,
-            commit:String(claims.sha||''),
-            syntheticProbeVerification,
-          })
-        : null;
 
       const accountingCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
       const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
@@ -184,6 +329,41 @@ export default async (req:Request,context:Context) => {
         && accountingInvariant.dynamicClientUnverifiedCount===0
         && accountingInvariant.dynamicClientPassedCount===accountingInvariant.dynamicClientCount
       );
+      const accountingVerification={
+        checkedAt:String(health.checkedAt||new Date().toISOString()),
+        status:accountingVerified?'passed':'failed',
+        accountingVerified,
+        invariant:accountingInvariant,
+      };
+
+      let auditRecorded=false;
+      let auditError='';
+      try{
+        const releaseRecord=await recordProductionRelease(context,{
+          deployId,
+          commit:String(claims.sha||''),
+          checkedAt:health.checkedAt,
+          syntheticProbeVerification,
+          accountingVerification,
+        });
+        auditRecorded=Boolean(
+          releaseRecord?.deployId
+          && releaseRecord?.syntheticProbeVerification?.checkedAt===health.checkedAt
+          && releaseRecord?.accountingVerification?.checkedAt===health.checkedAt
+        );
+        if(!auditRecorded)auditError='Production deploy id or same-run probe/accounting verification could not be persisted.';
+      }catch(error){
+        auditError=error instanceof Error?error.message:'Unable to persist production release verification audit.';
+      }
+
+      const rollbackProtection=!probesVerified
+        ? await rollbackFailedProductionRelease(context,{
+            deployId,
+            commit:String(claims.sha||''),
+            syntheticProbeVerification,
+          })
+        : null;
+
       const requireAccounting=body?.action==='verify-production-health';
       const verified=probesVerified&&(!requireAccounting||accountingVerified);
       const ok=verified&&auditRecorded;
@@ -199,6 +379,7 @@ export default async (req:Request,context:Context) => {
         checkedAt:health.checkedAt,
         probes,
         accountingInvariant,
+        accountingVerification,
         rollbackProtection,
       },{
         status:ok?200:503,
