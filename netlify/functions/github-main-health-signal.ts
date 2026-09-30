@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   applyHealthAlertPolicy,
   persistHealth,
+  productionAccountingVerification,
   readLatestHealth,
   readLatestHourlyHealth,
   recordGithubMainSignal,
@@ -297,52 +298,9 @@ export default async (req:Request,context:Context) => {
         && probes.length===4
         && probes.every((row:any)=>row.ok&&row.status===204&&row.source==='live'&&row.marker===row.expectedMarker);
 
-      const accountingCheck:any=health.checks.find((row:any)=>String(row?.id||'')==='quickbooks-tax-invariant')||null;
-      const liveClient=accountingCheck?.accountingDetails?.liveClientInvariant||null;
-      const liveClients=accountingCheck?.accountingDetails?.liveClientInvariants||null;
-      const accountingInvariant={
-        id:String(accountingCheck?.id||'quickbooks-tax-invariant'),
-        ok:Boolean(accountingCheck?.ok),
-        severity:String(accountingCheck?.severity||''),
-        status:Number(accountingCheck?.status||0),
-        expectedTotal:Number(accountingCheck?.accountingDetails?.expectedTotal||15706.80),
-        actualTotal:Number(accountingCheck?.accountingDetails?.actualTotal||0),
-        taxablePayload:Number(accountingCheck?.accountingDetails?.taxablePayload||0),
-        liveClientStatus:String(liveClient?.status||'unverified'),
-        liveClientEstimateTotal:liveClient?.estimateTotal==null?null:Number(liveClient.estimateTotal),
-        liveClientTaxableLineCount:liveClient?.taxableLineCount==null?null:Number(liveClient.taxableLineCount),
-        historicalTaxOnTaxDetected:Boolean(liveClient?.historicalTaxOnTaxDetected),
-        estimateId:String(liveClient?.estimateId||''),
-        estimateDocNumber:String(liveClient?.estimateDocNumber||''),
-        verifiedAt:String(liveClient?.verifiedAt||health.checkedAt||''),
-        dynamicClientStatus:String(liveClients?.status||'unverified'),
-        dynamicClientCount:Number(liveClients?.clientCount||0),
-        dynamicClientPassedCount:Number(liveClients?.passedCount||0),
-        dynamicClientFailedCount:Number(liveClients?.failedCount||0),
-        dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
-        detail:String(accountingCheck?.detail||''),
-      };
-      const accountingVerified=Boolean(
-        accountingInvariant.ok
-        && accountingInvariant.status===200
-        && accountingInvariant.expectedTotal===15706.80
-        && accountingInvariant.actualTotal===15706.80
-        && accountingInvariant.taxablePayload===0
-        && accountingInvariant.liveClientStatus==='passed'
-        && accountingInvariant.liveClientEstimateTotal===15706.80
-        && accountingInvariant.liveClientTaxableLineCount===0
-        && !accountingInvariant.historicalTaxOnTaxDetected
-        && accountingInvariant.dynamicClientStatus==='passed'
-        && accountingInvariant.dynamicClientFailedCount===0
-        && accountingInvariant.dynamicClientUnverifiedCount===0
-        && accountingInvariant.dynamicClientPassedCount===accountingInvariant.dynamicClientCount
-      );
-      const accountingVerification={
-        checkedAt:String(health.checkedAt||new Date().toISOString()),
-        status:accountingVerified?'passed':'failed',
-        accountingVerified,
-        invariant:accountingInvariant,
-      };
+      const accountingVerification=productionAccountingVerification(health);
+      const accountingInvariant=accountingVerification.invariant;
+      const accountingVerified=Boolean(accountingVerification.accountingVerified);
 
       let auditRecorded=false;
       let auditError='';
