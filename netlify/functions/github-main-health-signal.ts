@@ -18,6 +18,8 @@ const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
 const REPOSITORY='AstroTat808/koasevents.com';
 const MAIN_REF='refs/heads/main';
+const ROLLBACK_DRILL_SANDBOX_SITE_ID='fcc8fc59-68fb-46f3-bbd2-082a67718730';
+const ROLLBACK_DRILL_SANDBOX_SITE_NAME='koasevents-rollback-drill-sandbox';
 
 function base64UrlBytes(value:string){
   const normalized=value.replace(/-/g,'+').replace(/_/g,'/');
@@ -118,11 +120,10 @@ async function waitForPublishedSandboxDeploy(token:string,siteId:string,expected
 
 async function runRealSandboxRollbackDrill(context:Context,claims:any){
   const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
-  const sandboxSiteId=cleanText(Netlify.env.get('KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID'),120);
-  const expectedName=cleanText(Netlify.env.get('KOA_ROLLBACK_DRILL_SANDBOX_SITE_NAME')||'koasevents-rollback-drill-sandbox',160);
+  const sandboxSiteId=ROLLBACK_DRILL_SANDBOX_SITE_ID;
+  const expectedName=ROLLBACK_DRILL_SANDBOX_SITE_NAME;
   const productionSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
   if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to the sandbox rollback drill.');
-  if(!sandboxSiteId)throw new Error('KOA_ROLLBACK_DRILL_SANDBOX_SITE_ID is not configured.');
   if(sandboxSiteId===productionSiteId)throw new Error('Rollback drill sandbox site id matches production; drill blocked.');
 
   const {body:site}=await netlifyJson(token,'/sites/'+encodeURIComponent(sandboxSiteId));
