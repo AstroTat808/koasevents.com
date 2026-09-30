@@ -1748,36 +1748,50 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthChecks();
     }
 
-    function healthSectionDisplayName(section){
-      if(!(section instanceof HTMLElement))return '';
-      return String(section.querySelector('h2,h3')?.textContent||section.getAttribute('aria-label')||section.id||'System Health').trim();
+    function healthCheckSection(row){
+      const id=String(row?.id||'').toLowerCase();
+      const name=String(row?.name||'').toLowerCase();
+      const path=String(row?.path||'').toLowerCase();
+      const issueType=String(row?.issueType||'').toLowerCase();
+      const haystack=[id,name,path,issueType].join(' ');
+
+      if(row?.deploymentState||row?.deploymentDetails||issueType==='deployment problem'||/\\b(netlify|github|deploy(?:ment)?|release)\\b/.test(haystack)){
+        return {label:'Deployment',selector:'#health-deployment'};
+      }
+      if(/office[ -]?365|microsoft graph|calendar sync/.test(haystack)){
+        return {label:'Office 365 calendar sync',selector:'#health-office365'};
+      }
+      if(/\\b(email|resend|mailer|mail|renderer)\\b|inline logo/.test(haystack)){
+        return {label:'Email Health',selector:'#health-email'};
+      }
+      if(row?.syntheticDetails||/event[- ]?documents?|vendor[- ]?insurance|quickbooks[- ]?webhook|signwell/.test(haystack)){
+        return {label:'Critical Integrations',selector:'[data-critical-integrations-card]'};
+      }
+      if(/credential|oauth|api key|secret|permission|configuration/.test(haystack)){
+        return {label:'Credential Health',selector:'#credential-health'};
+      }
+      return {label:'Pages + APIs',selector:'#health-pages-apis'};
     }
 
-    function sectionsForSeverity(severity){
+    function sectionBreakdownForSeverity(severity){
       const normalized=String(severity||'');
-      if(normalized==='info'){
-        return latestHealthChecks.some((row)=>normalizedSeverity(row)==='info')?['Pages + APIs']:[];
-      }
-      const status=normalized==='critical'?'red':normalized==='warning'?'yellow':'';
-      if(!status)return [];
-      const selectors=[
-        '#health-pages-apis',
-        '#credential-health',
-        '#health-email',
-        '#health-office365',
-        '#health-deployment',
-        '#health-incidents',
-        '#health-uptime',
-        '[data-credit-panel]',
-      ];
-      const names=[];
-      selectors.forEach((selector)=>{
-        const section=document.querySelector(selector);
-        if(!(section instanceof HTMLElement)||String(section.dataset.healthSectionStatus||'')!==status)return;
-        const name=healthSectionDisplayName(section);
-        if(name&&!names.includes(name))names.push(name);
-      });
-      return names;
+      const counts=new Map();
+      latestHealthChecks
+        .filter((row)=>normalizedSeverity(row)===normalized)
+        .forEach((row)=>{
+          const section=healthCheckSection(row);
+          const key=section.selector;
+          const current=counts.get(key)||{...section,count:0};
+          current.count+=1;
+          counts.set(key,current);
+        });
+      return [...counts.values()].sort((a,b)=>b.count-a.count||a.label.localeCompare(b.label));
+    }
+
+    function severityCountWord(severity,count){
+      if(severity==='warning')return count===1?'warning':'warnings';
+      if(severity==='info')return count===1?'notice':'notices';
+      return 'critical';
     }
 
     function updateSeverityBadgeSectionHints(){
@@ -1786,23 +1800,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         {severity:'warning',node:warningCount,count:latestHealthChecks.filter((row)=>normalizedSeverity(row)==='warning').length,label:'Warnings'},
         {severity:'info',node:infoCount,count:latestHealthChecks.filter((row)=>normalizedSeverity(row)==='info').length,label:'Info'},
       ];
-      const hintLines=[];
+      if(severitySectionHints instanceof HTMLElement)severitySectionHints.innerHTML='';
+
+      let visibleGroups=0;
       rows.forEach(({severity,node,count,label})=>{
         if(!(node instanceof HTMLButtonElement)||!count)return;
-        const sections=sectionsForSeverity(severity);
-        const sectionText=sections.length?sections.join(', '):'Pages + APIs';
-        node.title=label+' found in: '+sectionText;
-        node.setAttribute('aria-label','Show '+count+' '+severity+' health check'+(count===1?'':'s')+'. Found in: '+sectionText+'.');
-        hintLines.push(label+' in: '+sectionText);
-      });
-      if(severitySectionHints instanceof HTMLElement){
-        severitySectionHints.innerHTML='';
-        hintLines.forEach((line)=>{
-          const row=document.createElement('p');
-          row.textContent=line;
-          severitySectionHints.appendChild(row);
+        const sections=sectionBreakdownForSeverity(severity);
+        const sectionText=sections.length
+          ? sections.map((section)=>section.label+' · '+section.count+' '+severityCountWord(severity,section.count)).join(', ')
+          : 'Pages + APIs · '+count+' '+severityCountWord(severity,count);
+        node.title=label+' by section: '+sectionText;
+        node.setAttribute('aria-label','Show '+count+' '+severity+' health check'+(count===1?'':'s')+'. By section: '+sectionText+'.');
+
+        if(!(severitySectionHints instanceof HTMLElement))return;
+        const group=document.createElement('div');
+        group.className='flex flex-wrap items-center gap-1.5';
+        const prefix=document.createElement('span');
+        prefix.className='mr-0.5 font-black text-[var(--koa-clay)]';
+        prefix.textContent=label+':';
+        group.appendChild(prefix);
+
+        (sections.length?sections:[{label:'Pages + APIs',selector:'#health-pages-apis',count}]).forEach((section)=>{
+          const button=document.createElement('button');
+          button.type='button';
+          button.className='rounded-full border border-[var(--koa-line)] bg-white px-2.5 py-1 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)] transition hover:border-[var(--koa-clay)] hover:bg-[var(--koa-ivory)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]';
+          button.textContent=section.label+' · '+section.count+' '+severityCountWord(severity,section.count);
+          button.title='Jump to '+section.label;
+          button.setAttribute('aria-label','Jump to '+section.label+' with '+section.count+' '+severityCountWord(severity,section.count));
+          button.addEventListener('click',(event)=>{
+            event.stopPropagation();
+            jumpToHealthSection(section.selector);
+          });
+          group.appendChild(button);
         });
-        severitySectionHints.classList.toggle('hidden',hintLines.length===0);
+        severitySectionHints.appendChild(group);
+        visibleGroups+=1;
+      });
+
+      if(severitySectionHints instanceof HTMLElement){
+        severitySectionHints.classList.toggle('hidden',visibleGroups===0);
       }
     }
 
