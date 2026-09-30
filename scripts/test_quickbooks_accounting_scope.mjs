@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { quickBooksAccountingScope } from '../netlify/functions/_shared/quickbooks-accounting-scope.mjs';
 
 const imported = quickBooksAccountingScope({
@@ -26,4 +27,7 @@ assert.equal(crmManaged.mode, 'crm-managed');
 assert.equal(crmManaged.actionable, true);
 assert.equal(crmManaged.historicalQuickBooksImport, false);
 
-console.log('QuickBooks accounting scope regression passed: historical imports stay informational while CRM-managed bookings remain actionable.');
+const systemHealthSource = fs.readFileSync('netlify/functions/_shared/system-health.ts', 'utf8');
+assert.match(systemHealthSource, /quickBooksAccountingScope\(record\)\.actionable/, 'System Health must exclude non-actionable historical QuickBooks imports from live accepted\/booked accounting invariants.');
+
+console.log('QuickBooks accounting scope regression passed: historical imports stay informational while CRM-managed bookings remain actionable, including System Health.');
