@@ -38,6 +38,13 @@ export type TenantStorageDomain =
   | 'localSeo'
   | 'workspaceAlerts';
 
+export const TENANT_STORAGE_DOMAINS: TenantStorageDomain[] = [
+  'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
+  'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit',
+  'staffAvailability','security','systemHealth','calendarSync','userPreferences','blog','gallery',
+  'localSeo','workspaceAlerts',
+];
+
 type GetOptions = { type?: 'text' | 'json' | 'stream' | 'blob' | 'arrayBuffer' };
 type ListOptions = { prefix?: string };
 
@@ -269,10 +276,7 @@ function aggregateManifestHash(rows:Array<{key:string;hash:string}>) {
 export async function tenantMigrationAudit(
   context: Context,
   tenant: TenantProfile,
-  domains: TenantStorageDomain[] = [
-    'sales','quotes','integrations','crm','eventOps','vendors','eventFiles','vendorFiles',
-    'emailAnalytics','emailRouting','authSecurity','staffDirectory','staffFiles','staffAudit','staffAvailability','security','systemHealth','calendarSync','userPreferences','blog','gallery','localSeo','workspaceAlerts',
-  ],
+  domains: TenantStorageDomain[] = TENANT_STORAGE_DOMAINS,
 ) {
   const canonical=canonicalStore(context);
   const results:any[]=[];
@@ -408,5 +412,32 @@ export async function tenantMigrationAudit(
       criticalMismatches:results.reduce((sum,row)=>sum+row.critical.filter((item:any)=>!item.matches).length,0),
       safeToRetireLegacy:results.every((row)=>row.safeToRetireLegacy),
     },
+  };
+}
+
+
+export async function purgeTenantData(
+  context:Context,
+  tenant:TenantProfile,
+  domains:TenantStorageDomain[]=TENANT_STORAGE_DOMAINS,
+) {
+  if(tenant.storage.legacyDataBelongsToTenant){
+    throw new Error('Legacy-compatible tenants cannot be purged through the VenueLoom tenant-data purge.');
+  }
+  const deletedByDomain:Record<string,number>={};
+  for(const domain of domains){
+    const store=tenantStoreFor(context,tenant,domain);
+    const listed=await store.list();
+    let deleted=0;
+    for(const blob of listed.blobs||[]){
+      await store.delete(String(blob.key||''));
+      deleted+=1;
+    }
+    deletedByDomain[domain]=deleted;
+  }
+  return {
+    tenantId:tenant.id,
+    deletedObjects:Object.values(deletedByDomain).reduce((sum,value)=>sum+value,0),
+    deletedByDomain,
   };
 }
