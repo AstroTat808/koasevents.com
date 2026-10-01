@@ -1366,6 +1366,31 @@ def health_mobile_mode(browser_name,health_payload_path):
     top_shot=root/f"system-health-{viewport_name}-top.png"
     page.screenshot(path=str(top_shot),full_page=False,animations="disabled",caret="hide")
 
+    # Exercise the same client interaction staff use. Both POST and follow-up GET
+    # receive the signed production dashboard payload captured for this run.
+    refresh_button=page.locator("[data-refresh]")
+    refresh_button.click()
+    page.wait_for_function(
+     """() => {
+       const button=document.querySelector('[data-refresh]');
+       return button && !button.disabled && String(button.textContent||'').trim()==='Run checks now';
+     }""",
+     timeout=10000,
+    )
+    refreshed=page.evaluate("""() => ({
+      overall:String(document.querySelector('[data-overall]')?.textContent||'').trim(),
+      passed:String(document.querySelector('[data-passed]')?.textContent||'').trim(),
+      failed:String(document.querySelector('[data-failed]')?.textContent||'').trim(),
+      checked:String(document.querySelector('[data-checked]')?.textContent||'').trim(),
+      dashboardRefresh:String(document.querySelector('[data-dashboard-refresh-status]')?.textContent||'').trim(),
+    })""")
+    metrics["afterRunChecksNow"]=refreshed
+    expected_refresh="Partial" if dashboard.get("enrichmentWarnings") else "Current"
+    if refreshed.get("passed")!=str(expected_passed) or refreshed.get("failed")!=str(expected_failed) or refreshed.get("checked") in {"","—"}:
+     detail=(detail+"; " if detail else "")+"Run checks now did not preserve the live summary totals"
+    if refreshed.get("dashboardRefresh")!=expected_refresh:
+     detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+str(refreshed.get("dashboardRefresh"))
+
     bottom_metrics=page.evaluate("""async () => {
       const main=document.querySelector('main[data-system-health-page]');
       const bottom=document.querySelector('[data-workspace-bottom-nav]');
@@ -1404,8 +1429,7 @@ def health_mobile_mode(browser_name,health_payload_path):
      detail=(detail+"; " if detail else "")+str(bottom_metrics.get("reason") or "Bottom-navigation geometry check failed")
     else:
      sentinel_clear=float(bottom_metrics.get("sentinelBottom") or 99999)<=float(bottom_metrics.get("bottomTop") or -1)-2
-     target_height=float(bottom_metrics.get("targetHeight") or 0)
-     target_clear=(target_height>float(bottom_metrics.get("viewportHeight") or 0)-float(bottom_metrics.get("freshBottomTop") or 0)) or float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
+     target_clear=float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
      if not sentinel_clear:
       detail=(detail+"; " if detail else "")+"Scroll targets can land behind the fixed bottom navigation"
      if not target_clear:
