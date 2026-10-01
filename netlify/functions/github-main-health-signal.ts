@@ -13,7 +13,7 @@ import {
   sendHealthTransitionAlerts,
   syntheticProbeReleaseVerification,
 } from './_shared/system-health';
-import { runHealthDashboardRefresh } from './admin-health.mts';
+import { runHealthDashboardRefresh } from './admin-health';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
