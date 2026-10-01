@@ -1228,6 +1228,232 @@ def admin_mode(browser_name):
  print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
  return 1 if failures else 0
 
+
+def health_mobile_mode(browser_name,health_payload_path):
+ try:from playwright.sync_api import sync_playwright
+ except ImportError:
+  print("Install Playwright: pip install playwright && python -m playwright install chromium",file=sys.stderr);return 2
+
+ payload_path=Path(health_payload_path)
+ if not payload_path.is_file():
+  print("System Health dashboard payload is missing: "+str(payload_path),file=sys.stderr);return 2
+ envelope=json.loads(payload_path.read_text(encoding="utf-8"))
+ dashboard=envelope.get("dashboard") if isinstance(envelope,dict) and isinstance(envelope.get("dashboard"),dict) else envelope
+ current=dashboard.get("current") if isinstance(dashboard,dict) else None
+ if not isinstance(current,dict):
+  print("System Health dashboard payload has no current snapshot.",file=sys.stderr);return 2
+
+ root=OUT/("health-mobile-"+browser_name);root.mkdir(parents=True,exist_ok=True)
+ session_fixture={
+  "email":"qa-system-health@koasevents.test",
+  "displayName":"System Health QA",
+  "jobTitle":"Release QA",
+  "pronouns":"",
+  "roleDescription":"Automated protected-workspace regression",
+  "photoUrl":"",
+  "signature":{"showTitle":True,"showTeamTitle":True,"showPronouns":False,"showRoleDescription":False},
+  "role":"admin","roles":["admin"],"isAdmin":True,
+  "permissions":["admin.dashboard.view","health.view","health.manage"],
+  "capabilities":["admin.dashboard.view","health.view","health.manage"],
+  "accessBlocked":False,"blockReason":"",
+  "security":{"forcePasswordChange":False,"passwordChangedAt":"","passwordExpiresAt":"","passwordExpired":False,"passwordExpiryDays":180,"sessionVersion":0,"tokenSessionVersion":0,"sessionRevoked":False},
+  "tenant":{"id":"koa","slug":"koa","displayName":"Koa's Events","locale":"en-US","currency":"USD","timezone":"Pacific/Honolulu"},
+  "organization":None,"membership":None,
+  "app_metadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
+  "appMetadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
+ }
+ viewports=[("phone-small",320,568,2),("phone",390,844,2)]
+ results=[];failures=[]
+ with sync_playwright() as p:
+  browser=getattr(p,browser_name).launch()
+  for viewport_name,width,height,dpr in viewports:
+   ctx=browser.new_context(
+    viewport={"width":width,"height":height},
+    device_scale_factor=dpr,
+    is_mobile=True,
+    has_touch=True,
+    reduced_motion="reduce",
+    color_scheme="light",
+   )
+   page=ctx.new_page();page_errors=[];console_errors=[];request_failed=[]
+   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+   page.on("requestfailed",lambda r,t=request_failed:t.append(r.url) if urlparse(r.url).netloc==urlparse(BASE).netloc else None)
+
+   # Load the real production document, CSS, and JavaScript while supplying an
+   # authorized admin session and the signed live dashboard snapshot produced
+   # immediately before this browser test. Background admin-shell APIs receive a
+   # harmless empty JSON response so no human session secret is stored in CI.
+   page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   page.route("**/api/admin/health**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(dashboard)))
+
+   detail=""
+   metrics={}
+   try:
+    response=page.goto(BASE+"/admin/health/",wait_until="domcontentloaded",timeout=45000)
+    if not response or response.status>=400:
+     raise RuntimeError("System Health document returned HTTP "+str(response.status if response else 0))
+    page.wait_for_selector("[data-app]:not(.hidden)",state="visible",timeout=10000)
+    page.wait_for_function(
+     """() => {
+       const overall=String(document.querySelector('[data-overall]')?.textContent||'').trim();
+       const checked=String(document.querySelector('[data-checked]')?.textContent||'').trim();
+       return overall && overall!=='—' && overall!=='No data' && overall!=='Check failed' && checked && checked!=='—';
+     }""",
+     timeout=10000,
+    )
+    page.wait_for_timeout(350)
+
+    expected_passed=int(current.get("passed") or 0)
+    expected_failed=int(current.get("failed") or 0)
+    metrics=page.evaluate("""() => {
+      const visible=(el)=>{
+        if(!el)return false;
+        const style=getComputedStyle(el),rect=el.getBoundingClientRect();
+        return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
+      };
+      const nav=document.querySelector('[data-workspace-nav]');
+      const bottom=document.querySelector('[data-workspace-bottom-nav]');
+      const main=document.querySelector('main[data-system-health-page]');
+      const title=main?.querySelector('h1');
+      const navRect=nav?.getBoundingClientRect();
+      const bottomRect=bottom?.getBoundingClientRect();
+      const titleRect=title?.getBoundingClientRect();
+      const mainRect=main?.getBoundingClientRect();
+      const tableCells=[...document.querySelectorAll('main[data-system-health-page] table.koa-mobile-card-table tbody td')];
+      return {
+        overall:String(document.querySelector('[data-overall]')?.textContent||'').trim(),
+        passed:String(document.querySelector('[data-passed]')?.textContent||'').trim(),
+        failed:String(document.querySelector('[data-failed]')?.textContent||'').trim(),
+        checked:String(document.querySelector('[data-checked]')?.textContent||'').trim(),
+        dashboardRefresh:String(document.querySelector('[data-dashboard-refresh-status]')?.textContent||'').trim(),
+        headerPosition:nav?getComputedStyle(nav).position:'',
+        headerVisible:visible(nav),
+        headerBottom:navRect?.bottom??null,
+        titleTop:titleRect?.top??null,
+        mainTop:mainRect?.top??null,
+        bottomPosition:bottom?getComputedStyle(bottom).position:'',
+        bottomVisible:visible(bottom),
+        bottomTop:bottomRect?.top??null,
+        bottomBottom:bottomRect?.bottom??null,
+        viewportHeight:innerHeight,
+        viewportWidth:innerWidth,
+        documentScrollWidth:document.documentElement.scrollWidth,
+        mobileTableCells:tableCells.length,
+        unlabeledMobileTableCells:tableCells.filter((cell)=>!String(cell.dataset.mobileLabel||'').trim()).length,
+      };
+    }""")
+
+    checks=[
+     (metrics.get("overall") not in {"","—","No data","Check failed"},"Overall is a real live health state"),
+     (metrics.get("passed")==str(expected_passed),"Passed total matches the live production snapshot"),
+     (metrics.get("failed")==str(expected_failed),"Failed total matches the live production snapshot"),
+     (metrics.get("checked") not in {"","—"},"Last Checked is populated"),
+     (metrics.get("headerVisible") is True,"Mobile workspace header is visible"),
+     (metrics.get("headerPosition") not in {"fixed","sticky"},"Mobile workspace header remains in document flow"),
+     (metrics.get("bottomVisible") is True,"Mobile bottom navigation is visible"),
+     (metrics.get("bottomPosition")=="fixed","Mobile bottom navigation remains fixed to the viewport"),
+     (float(metrics.get("titleTop") or -1)>=float(metrics.get("headerBottom") or 0)-1,"System Health title is not covered by the top header"),
+     (float(metrics.get("bottomBottom") or 0)<=float(metrics.get("viewportHeight") or 0)+1,"Bottom navigation stays inside the viewport"),
+     (float(metrics.get("documentScrollWidth") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"System Health has no horizontal page overflow"),
+     (int(metrics.get("unlabeledMobileTableCells") or 0)==0,"Converted mobile table cells retain labels"),
+    ]
+    failed_checks=[label for ok,label in checks if not ok]
+    if failed_checks:
+     detail="; ".join(failed_checks)
+
+    top_shot=root/f"system-health-{viewport_name}-top.png"
+    page.screenshot(path=str(top_shot),full_page=False,animations="disabled",caret="hide")
+
+    bottom_metrics=page.evaluate("""async () => {
+      const main=document.querySelector('main[data-system-health-page]');
+      const bottom=document.querySelector('[data-workspace-bottom-nav]');
+      if(!main||!bottom)return {ok:false,reason:'Missing System Health main or bottom navigation.'};
+      let sentinel=document.querySelector('[data-health-mobile-qa-sentinel]');
+      if(!sentinel){
+        sentinel=document.createElement('div');
+        sentinel.dataset.healthMobileQaSentinel='';
+        sentinel.style.cssText='height:2px;width:2px;pointer-events:none;';
+        main.appendChild(sentinel);
+      }
+      sentinel.scrollIntoView({block:'end'});
+      await new Promise((resolve)=>setTimeout(resolve,250));
+      const sentinelRect=sentinel.getBoundingClientRect();
+      const bottomRect=bottom.getBoundingClientRect();
+      const history=document.querySelector('[data-health-history]');
+      const lastHistory=history?.lastElementChild;
+      if(lastHistory instanceof HTMLElement){
+        lastHistory.scrollIntoView({block:'end'});
+        await new Promise((resolve)=>setTimeout(resolve,250));
+      }
+      const targetRect=(lastHistory instanceof HTMLElement?lastHistory:sentinel).getBoundingClientRect();
+      const freshBottom=bottom.getBoundingClientRect();
+      return {
+        ok:true,
+        sentinelBottom:sentinelRect.bottom,
+        bottomTop:bottomRect.top,
+        targetBottom:targetRect.bottom,
+        targetTop:targetRect.top,
+        freshBottomTop:freshBottom.top,
+        targetHeight:targetRect.height,
+        viewportHeight:innerHeight,
+      };
+    }""")
+    if not bottom_metrics.get("ok"):
+     detail=(detail+"; " if detail else "")+str(bottom_metrics.get("reason") or "Bottom-navigation geometry check failed")
+    else:
+     sentinel_clear=float(bottom_metrics.get("sentinelBottom") or 99999)<=float(bottom_metrics.get("bottomTop") or -1)-2
+     target_height=float(bottom_metrics.get("targetHeight") or 0)
+     target_clear=(target_height>float(bottom_metrics.get("viewportHeight") or 0)-float(bottom_metrics.get("freshBottomTop") or 0)) or float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
+     if not sentinel_clear:
+      detail=(detail+"; " if detail else "")+"Scroll targets can land behind the fixed bottom navigation"
+     if not target_clear:
+      detail=(detail+"; " if detail else "")+"Last Health history content is covered by the fixed bottom navigation"
+
+    bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
+    page.screenshot(path=str(bottom_shot),full_page=False,animations="disabled",caret="hide")
+    full_shot=root/f"system-health-{viewport_name}-full.png"
+    page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+
+    if page_errors:
+     detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(page_errors[:5])
+   except Exception as exc:
+    detail=(detail+"; " if detail else "")+str(exc)
+    top_shot=root/f"system-health-{viewport_name}-top.png"
+    bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
+    full_shot=root/f"system-health-{viewport_name}-full.png"
+    try:page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+    except Exception:pass
+
+   result={
+    "viewport":viewport_name,"width":width,"height":height,
+    "expected":{"passed":int(current.get("passed") or 0),"failed":int(current.get("failed") or 0),"checkedAt":current.get("checkedAt"),"overall":current.get("overall")},
+    "metrics":metrics,"failure":detail,
+    "pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"requestFailed":request_failed[:10],
+    "screenshots":{"top":str(top_shot),"bottom":str(bottom_shot),"full":str(full_shot)},
+   }
+   results.append(result)
+   if detail:failures.append({"viewport":viewport_name,"detail":detail,"metrics":metrics})
+   page.close();ctx.close()
+  browser.close()
+
+ report={
+  "mode":"health-mobile","baseUrl":BASE,"browser":browser_name,
+  "checkedAt":current.get("checkedAt"),"overall":current.get("overall"),
+  "passed":current.get("passed"),"failed":current.get("failed"),
+  "enrichmentWarnings":dashboard.get("enrichmentWarnings",[]) if isinstance(dashboard,dict) else [],
+  "results":results,"failures":failures,
+ }
+ (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+ print(json.dumps({
+  "baseUrl":BASE,"browser":browser_name,"checked":len(results),
+  "overall":current.get("overall"),"passed":current.get("passed"),"failed":current.get("failed"),"checkedAt":current.get("checkedAt"),
+  "dashboardRefreshWarnings":report["enrichmentWarnings"],"failures":failures,"report":str(root/"report.json")
+ },indent=2))
+ return 1 if failures else 0
+
+
 def browser_mode(browser_name):
  try:from playwright.sync_api import sync_playwright
  except ImportError:
@@ -1298,15 +1524,16 @@ def browser_mode(browser_name):
 
 def main():
  p=argparse.ArgumentParser(description="Koa's Events production visual QA")
- p.add_argument("--mode",choices=("source","wait","smoke","browser","admin"),required=True)
+ p.add_argument("--mode",choices=("source","wait","smoke","browser","admin","health-mobile"),required=True)
  p.add_argument("--browser",choices=("chromium","webkit"),default="chromium")
- p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);a=p.parse_args()
+ p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);p.add_argument("--health-payload",default="visual-results/system-health-dashboard.json");a=p.parse_args()
  global BASE
  if a.base_url:BASE=a.base_url.rstrip("/")
  if a.mode=="source":return source_mode()
  if a.mode=="wait":return wait_mode(a.wait_seconds)
  if a.mode=="smoke":return smoke_mode()
  if a.mode=="admin":return admin_mode(a.browser)
+ if a.mode=="health-mobile":return health_mobile_mode(a.browser,a.health_payload)
  return browser_mode(a.browser)
 
 if __name__=="__main__":sys.exit(main())
