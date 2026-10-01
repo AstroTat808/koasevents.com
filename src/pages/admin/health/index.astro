@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
 <BaseLayout noindex title="Koa’s Admin Health" description="System health, monitoring, and deployment history for Koa’s protected workspaces." canonical="https://koasevents.com/admin/health/">
-  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+  <main data-system-health-page class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell max-w-7xl">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -1302,6 +1302,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       setCompactStatus(dashboardRefreshStatus,'running','Rendering · '+currentDashboardRenderPanel);
     }
 
+    let latestDashboardRenderWarnings=[];
+
+    function renderDashboardPanel(label,renderPanel){
+      markDashboardRenderPanel(label);
+      try{
+        renderPanel();
+        return true;
+      }catch(error){
+        const warning={
+          section:'Dashboard rendering · '+String(label||'Dashboard'),
+          error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
+        };
+        latestDashboardRenderWarnings.push(warning);
+        console.error('[system-health] '+warning.section+':',error);
+        return false;
+      }
+    }
+
     function setCompactStatus(node,state,label){
       if(!(node instanceof HTMLElement))return;
       const states:Record<string,string>={
@@ -1441,41 +1459,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthRunWarningDialog();
     }
 
+    function prepareMobileHealthTables(){
+      document.querySelectorAll('main[data-system-health-page] table').forEach((table)=>{
+        if(!(table instanceof HTMLTableElement))return;
+        table.classList.add('koa-mobile-card-table');
+        const labels=[...table.querySelectorAll('thead th')].map((cell)=>String(cell.textContent||'').trim());
+        table.querySelectorAll('tbody tr').forEach((row)=>{
+          [...row.children].forEach((cell,index)=>{
+            if(cell instanceof HTMLElement)cell.dataset.mobileLabel=labels[index]||'';
+          });
+        });
+      });
+    }
+
     function renderHealthPayload(payload,source='System Health'){
       clearHealthRunWarning();
       updateCoreCheckStatus(payload?.current);
-      const warnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
+      const backendWarnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
+      latestDashboardRenderWarnings=[];
       updateDashboardRefreshStatus('running');
       currentDashboardRenderPanel='Starting';
+      let unexpectedRenderFailure=false;
       try{
         render(payload||{});
       }catch(error){
         console.error('[system-health] '+source+' detail rendering failed in '+currentDashboardRenderPanel+':',error);
-        if(payload?.current){
-          const renderWarnings=[...warnings,{
-            section:'Dashboard rendering · '+currentDashboardRenderPanel,
-            error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
-          }];
-          updateDashboardRefreshStatus('partial',renderWarnings.length);
-          showHealthRunWarning(
-            'Core checks completed; a detail panel could not refresh.',
-            '',
-            renderWarnings
-          );
-          return false;
-        }
-        throw error;
+        if(!payload?.current)throw error;
+        unexpectedRenderFailure=true;
+        latestDashboardRenderWarnings.push({
+          section:'Dashboard rendering · '+currentDashboardRenderPanel,
+          error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
+        });
       }
 
+      prepareMobileHealthTables();
+
+      const warnings=[...backendWarnings,...latestDashboardRenderWarnings];
       updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
       if(warnings.length){
         showHealthRunWarning(
-          'Core checks completed; supporting data needs attention.',
+          latestDashboardRenderWarnings.length
+            ? 'Core checks completed; a detail panel could not refresh.'
+            : 'Core checks completed; supporting data needs attention.',
           '',
           warnings
         );
       }
-      return true;
+      return !unexpectedRenderFailure&&latestDashboardRenderWarnings.length===0;
     }
 
     function normalizedSeverity(row){
@@ -4139,6 +4169,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function accountingMoney(value){
+      const amount=Number(value);
+      return Number.isFinite(amount)
+        ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(amount)
+        : '—';
+    }
+
     function accountingHistoryRow(title,detail,at,tone='slate'){
       const row=document.createElement('article');
       const tones={
@@ -4255,9 +4292,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function render(data){
       markDashboardRenderPanel('Core summary');
-      renderCoverage(data.coverage||{});
-      renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{});
-      renderAccountingHealth(data.accountingHealth||{});
       const current=data.current;
       if(current){
         const bad=current.overall==='unhealthy';
@@ -4360,6 +4394,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
 
+      // Hydrate the authoritative core summary first. Optional dashboard panels
+      // are isolated so one enrichment/rendering defect cannot leave Passed,
+      // Failed, Overall, or Last checked at their placeholder values.
+      renderDashboardPanel('Monitoring coverage',()=>renderCoverage(data.coverage||{}));
+      renderDashboardPanel('Critical Integrations',()=>renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{}));
+      renderDashboardPanel('Accounting Health',()=>renderAccountingHealth(data.accountingHealth||{}));
+
       markDashboardRenderPanel('Health history');
       historyEl.innerHTML='';
       (data.history||[]).slice(0,20).forEach(row=>{
@@ -4369,12 +4410,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         historyEl.appendChild(card);
       });
 
-      markDashboardRenderPanel('Email Health');
-      renderEmailHealth(data.emailHealth||{},data.current||null);
-      markDashboardRenderPanel('Credential Health');
-      renderCredentialHealth(data.credentialHealth||{});
-      markDashboardRenderPanel('Weekly executive summary');
-      renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
+      renderDashboardPanel('Email Health',()=>renderEmailHealth(data.emailHealth||{},data.current||null));
+      renderDashboardPanel('Credential Health',()=>renderCredentialHealth(data.credentialHealth||{}));
+      renderDashboardPanel('Weekly executive summary',()=>renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{}));
       markDashboardRenderPanel('Office 365');
       const office365=data.office365||{};
       if(office365Operational){
