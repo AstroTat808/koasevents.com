@@ -62,7 +62,7 @@ assert(
 );
 assert(
   healthSignal.includes("body?.action==='run-dashboard-refresh'")
-    && healthSignal.includes("import { runHealthDashboardRefresh } from './admin-health.mts';"),
+    && healthSignal.includes("import { runHealthDashboardRefresh } from './admin-health';"),
   'The signed GitHub OIDC control plane must expose the same full dashboard refresh for production verification.',
 );
 assert(
