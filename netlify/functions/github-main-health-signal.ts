@@ -13,6 +13,7 @@ import {
   sendHealthTransitionAlerts,
   syntheticProbeReleaseVerification,
 } from './_shared/system-health';
+import { runHealthDashboardRefresh } from './admin-health.mts';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -261,6 +262,42 @@ export default async (req:Request,context:Context) => {
       }catch(error){
         return Response.json({
           error:error instanceof Error?error.message:'Real sandbox rollback drill failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='run-dashboard-refresh'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const dashboard=await runHealthDashboardRefresh(context);
+        const current:any=dashboard?.current||null;
+        return Response.json({
+          ok:Boolean(current),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          source:'github-actions-oidc',
+          current,
+          coverage:dashboard?.coverage||{},
+          enrichmentWarnings:Array.isArray(dashboard?.enrichmentWarnings)?dashboard.enrichmentWarnings:[],
+          dashboard,
+        },{
+          status:current?200:503,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'System Health dashboard refresh failed.',
           accepted:result.accepted,
           sha:result.signal.sha,
           source:'github-actions-oidc',
