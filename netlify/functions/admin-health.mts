@@ -420,6 +420,62 @@ function accountingHealthSummary(latest:any,history:any[],persistentIncidents:an
   };
 }
 
+export async function runHealthDashboardRefresh(context:Context){
+  const runWarnings:Array<{section:string;error:string}>=[];
+  const [previous,previousHourly]=await Promise.all([
+    safeHealthSection(runWarnings,'Previous health snapshot',()=>readLatestHealth(context),null as any),
+    safeHealthSection(runWarnings,'Previous hourly snapshot',()=>readLatestHourlyHealth(context),null as any),
+  ]);
+
+  const current=await runSystemHealth(context,'manual');
+
+  await safeHealthSection(runWarnings,'Alert policy application',()=>applyHealthAlertPolicy(context,current,previousHourly),null as any);
+  await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
+  await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
+
+  const [uptimeHistory,healthHistory,accountingInvariantIncidents,policy,deployments,releases]=await Promise.all([
+    safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
+    safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
+    safeHealthSection(runWarnings,'Accounting invariant timeline',()=>readAccountingInvariantIncidents(context,500),[] as any),
+    safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
+    safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
+    safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
+  ]);
+  const enrichmentWarnings=runWarnings;
+  const [office365,emailHealth]=await Promise.all([
+    safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
+    safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
+  ]);
+  const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
+  const credentialHealth=await safeHealthSection(
+    enrichmentWarnings,
+    'Credential Health',
+    ()=>credentialHealthSummary(context,{emailHealth}),
+    cachedCredentialHealth||{},
+  );
+  const uptime=calculateUptime(uptimeHistory);
+  const incidents=calculateIncidents(uptimeHistory);
+  const hydratedReleases=await safeHealthSection(
+    enrichmentWarnings,
+    'Release metadata',
+    ()=>hydrateProductionReleaseMetadata(context,releases,12),
+    releases,
+  );
+  deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const weeklyExecutiveSummary=await safeHealthSection(
+    enrichmentWarnings,
+    'Weekly executive summary',
+    ()=>weeklySystemHealthExecutiveSummary(context),
+    {} as any,
+  );
+  return {
+    ok:true,
+    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+    accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
+    enrichmentWarnings,
+  };
+}
+
 export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
   if(auth.response) return auth.response;
@@ -720,62 +776,8 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 
-    const runWarnings:Array<{section:string;error:string}>=[];
-    const [previous,previousHourly]=await Promise.all([
-      safeHealthSection(runWarnings,'Previous health snapshot',()=>readLatestHealth(context),null as any),
-      safeHealthSection(runWarnings,'Previous hourly snapshot',()=>readLatestHourlyHealth(context),null as any),
-    ]);
-
-    // The manual check result is the authoritative outcome for this request.
-    // Everything after this point is bookkeeping or dashboard enrichment and must
-    // never turn a successful 41/41 health run into an HTTP failure.
-    const current=await runSystemHealth(context,'manual');
-
-    await safeHealthSection(runWarnings,'Alert policy application',()=>applyHealthAlertPolicy(context,current,previousHourly),null as any);
-    await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
-    await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
-
-    const [uptimeHistory,healthHistory,accountingInvariantIncidents,policy,deployments,releases]=await Promise.all([
-      safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
-      safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
-      safeHealthSection(runWarnings,'Accounting invariant timeline',()=>readAccountingInvariantIncidents(context,500),[] as any),
-      safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
-      safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
-      safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
-    ]);
-    const enrichmentWarnings=runWarnings;
-    const [office365,emailHealth]=await Promise.all([
-      safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
-      safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
-    ]);
-    const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
-    const credentialHealth=await safeHealthSection(
-      enrichmentWarnings,
-      'Credential Health',
-      ()=>credentialHealthSummary(context,{emailHealth}),
-      cachedCredentialHealth||{},
-    );
-    const uptime=calculateUptime(uptimeHistory);
-    const incidents=calculateIncidents(uptimeHistory);
-    const hydratedReleases=await safeHealthSection(
-      enrichmentWarnings,
-      'Release metadata',
-      ()=>hydrateProductionReleaseMetadata(context,releases,12),
-      releases,
-    );
-    deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    const weeklyExecutiveSummary=await safeHealthSection(
-      enrichmentWarnings,
-      'Weekly executive summary',
-      ()=>weeklySystemHealthExecutiveSummary(context),
-      {} as any,
-    );
-    return Response.json({
-      ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
-      accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
-      enrichmentWarnings,
-    },{headers:{'Cache-Control':'private, no-store'}});
+    const dashboard=await runHealthDashboardRefresh(context);
+    return Response.json(dashboard,{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
