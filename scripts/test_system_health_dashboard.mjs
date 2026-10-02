@@ -217,7 +217,8 @@ assert(
   health.includes('data-deploy-responsive-status')
     && health.includes('data-deploy-responsive-detail')
     && health.includes('System Health responsive release gate')
-    && health.includes('14/14 responsive')
+    && health.includes('data-release-responsive')
+    && health.includes('responsiveLabel')
     && health.includes('Horizontal overflow')
     && health.includes('Summary overflow')
     && health.includes('Screenshot'),
