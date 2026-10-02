@@ -1907,3 +1907,259 @@ html[data-theme="dark"] .calendar-item.office365 {
   background: color-mix(in srgb, var(--koa-amber-light) 16%, var(--koa-surface-2)) !important;
 }
 
+
+
+/* Dark-mode contrast hardening for admin controls, status surfaces, and legacy VenueLoom stone/slate utilities. */
+html[data-theme="dark"] .bg-stone-50,
+html[data-theme="dark"] .bg-stone-100,
+html[data-theme="dark"] .bg-stone-200,
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-slate-200,
+html[data-theme="dark"] .bg-gray-50,
+html[data-theme="dark"] .bg-gray-100,
+html[data-theme="dark"] .bg-gray-200 {
+  background-color: var(--koa-surface-2) !important;
+}
+
+html[data-theme="dark"] .border-stone-200,
+html[data-theme="dark"] .border-stone-300,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300,
+html[data-theme="dark"] .border-gray-200,
+html[data-theme="dark"] .border-gray-300 {
+  border-color: var(--koa-line) !important;
+}
+
+html[data-theme="dark"] .text-stone-900,
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-gray-900 {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] .text-stone-800,
+html[data-theme="dark"] .text-stone-700,
+html[data-theme="dark"] .text-stone-600,
+html[data-theme="dark"] .text-stone-500,
+html[data-theme="dark"] .text-stone-400,
+html[data-theme="dark"] .text-stone-300,
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .text-slate-300,
+html[data-theme="dark"] .text-gray-800,
+html[data-theme="dark"] .text-gray-700,
+html[data-theme="dark"] .text-gray-600,
+html[data-theme="dark"] .text-gray-500,
+html[data-theme="dark"] .text-gray-400,
+html[data-theme="dark"] .text-gray-300 {
+  color: var(--koa-text-muted) !important;
+}
+
+html[data-theme="dark"] .bg-blue-50,
+html[data-theme="dark"] .bg-blue-100 {
+  background-color: color-mix(in srgb, #1d4ed8 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-blue-200 {
+  border-color: color-mix(in srgb, #93c5fd 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-blue-700,
+html[data-theme="dark"] .text-blue-800,
+html[data-theme="dark"] .text-blue-900,
+html[data-theme="dark"] .text-blue-950 {
+  color: #bfdbfe !important;
+}
+
+html[data-theme="dark"] .bg-violet-50,
+html[data-theme="dark"] .bg-violet-100 {
+  background-color: color-mix(in srgb, #6d28d9 25%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-violet-200 {
+  border-color: color-mix(in srgb, #c4b5fd 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-violet-700,
+html[data-theme="dark"] .text-violet-800,
+html[data-theme="dark"] .text-violet-900,
+html[data-theme="dark"] .text-violet-950 {
+  color: #ddd6fe !important;
+}
+
+html[data-theme="dark"] .bg-rose-50,
+html[data-theme="dark"] .bg-rose-100 {
+  background-color: color-mix(in srgb, #9f1239 25%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-rose-200,
+html[data-theme="dark"] .border-rose-300 {
+  border-color: color-mix(in srgb, #fda4af 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-rose-700,
+html[data-theme="dark"] .text-rose-800,
+html[data-theme="dark"] .text-rose-900,
+html[data-theme="dark"] .text-rose-950 {
+  color: #fecdd3 !important;
+}
+
+html[data-theme="dark"] .bg-yellow-50,
+html[data-theme="dark"] .bg-yellow-100 {
+  background-color: color-mix(in srgb, #a16207 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-yellow-200,
+html[data-theme="dark"] .border-yellow-300 {
+  border-color: color-mix(in srgb, #fde047 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-yellow-700,
+html[data-theme="dark"] .text-yellow-800,
+html[data-theme="dark"] .text-yellow-900,
+html[data-theme="dark"] .text-yellow-950 {
+  color: #fef08a !important;
+}
+
+html[data-theme="dark"] .bg-orange-50,
+html[data-theme="dark"] .bg-orange-100 {
+  background-color: color-mix(in srgb, #c2410c 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-orange-200,
+html[data-theme="dark"] .border-orange-300 {
+  border-color: color-mix(in srgb, #fdba74 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-orange-700,
+html[data-theme="dark"] .text-orange-800,
+html[data-theme="dark"] .text-orange-900,
+html[data-theme="dark"] .text-orange-950 {
+  color: #fed7aa !important;
+}
+
+html[data-theme="dark"] .text-red-950 { color: #fecaca !important; }
+html[data-theme="dark"] .text-amber-950 { color: #fde68a !important; }
+html[data-theme="dark"] .text-emerald-950 { color: #a7f3d0 !important; }
+html[data-theme="dark"] .text-sky-950 { color: #bae6fd !important; }
+
+html[data-theme="dark"] [class~="hover:bg-red-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-red-100"]:hover {
+  background-color: color-mix(in srgb, #7f1d1d 38%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-amber-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-amber-100"]:hover {
+  background-color: color-mix(in srgb, #92400e 36%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-emerald-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-emerald-100"]:hover {
+  background-color: color-mix(in srgb, #065f46 35%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-sky-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-sky-100"]:hover,
+html[data-theme="dark"] [class~="hover:bg-blue-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-blue-100"]:hover {
+  background-color: color-mix(in srgb, #075985 35%, var(--koa-surface)) !important;
+}
+
+html[data-theme="dark"] .koa-admin-back-to-top,
+html[data-theme="dark"] body.koa-admin-page main .health-warning-tools {
+  border-color: var(--koa-line);
+  background: color-mix(in srgb, var(--koa-surface) 94%, transparent);
+  color: var(--koa-text-strong);
+  box-shadow: 0 12px 32px rgba(0,0,0,.34);
+}
+
+html[data-theme="dark"] body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="yellow"][data-mobile-collapsed="true"] {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface));
+}
+html[data-theme="dark"] body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="red"] {
+  border-color: color-mix(in srgb, #ef4444 38%, var(--koa-line));
+  background: color-mix(in srgb, #7f1d1d 22%, var(--koa-surface));
+}
+html[data-theme="dark"] body.koa-admin-page main .health-all-good-banner {
+  border-color: color-mix(in srgb, #34d399 34%, var(--koa-line));
+  background: color-mix(in srgb, #065f46 22%, var(--koa-surface));
+  color: #a7f3d0;
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] body.koa-admin-page main .health-expand-warnings-button {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 24%, var(--koa-surface));
+  color: #fde68a;
+}
+html[data-theme="dark"] body.koa-admin-page main .health-collapse-healthy-button {
+  border-color: color-mix(in srgb, #10b981 34%, var(--koa-line));
+  background: color-mix(in srgb, #065f46 24%, var(--koa-surface));
+  color: #a7f3d0;
+}
+html[data-theme="dark"] body.koa-admin-page main .health-section-mobile-summary {
+  color: var(--koa-text-muted);
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="red"] .health-section-mobile-summary {
+  color: #fecaca;
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="yellow"] .health-section-mobile-summary {
+  color: #fde68a;
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="green"] .health-section-mobile-summary {
+  color: #a7f3d0;
+}
+
+html[data-theme="dark"] .workspace-alert-row[data-severity="urgent"] {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--koa-line));
+  background:
+    linear-gradient(90deg, rgba(185,28,28,.17), transparent 28%),
+    color-mix(in srgb, #7f1d1d 20%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-row[data-severity="upcoming"] {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-row[data-severity="info"] {
+  border-color: color-mix(in srgb, #38bdf8 34%, var(--koa-line));
+  background: color-mix(in srgb, #075985 22%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-category-icon {
+  background: var(--koa-surface-2) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] .workspace-alert-action.is-snooze {
+  background: var(--koa-surface-2);
+  color: var(--koa-text-strong);
+}
+html[data-theme="dark"] .workspace-alert-action.is-dismiss {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--koa-line));
+  background: color-mix(in srgb, #7f1d1d 20%, var(--koa-surface));
+  color: #fecaca;
+}
+html[data-theme="dark"] .workspace-alert-action.is-seen {
+  border-color: color-mix(in srgb, #60a5fa 34%, var(--koa-line));
+  background: color-mix(in srgb, #1d4ed8 20%, var(--koa-surface));
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .calendar-item.staffing,
+html[data-theme="dark"] .calendar-item.office365,
+html[data-theme="dark"] .staff-schedule-pill.project,
+html[data-theme="dark"] .calendar-day:hover {
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] .staff-availability.available {
+  background: color-mix(in srgb, #065f46 32%, var(--koa-surface)) !important;
+  color: #a7f3d0 !important;
+}
+html[data-theme="dark"] .staff-availability.tentative,
+html[data-theme="dark"] .staff-overload-badge {
+  background: color-mix(in srgb, #92400e 32%, var(--koa-surface)) !important;
+  color: #fde68a !important;
+}
+html[data-theme="dark"] .staff-availability.unavailable,
+html[data-theme="dark"] .mobile-day-preview-conflict {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--koa-line)) !important;
+  background: color-mix(in srgb, #7f1d1d 24%, var(--koa-surface)) !important;
+  color: #fecaca !important;
+}
+html[data-theme="dark"] .staff-availability.pto {
+  background: color-mix(in srgb, #1d4ed8 28%, var(--koa-surface)) !important;
+  color: #bfdbfe !important;
+}
+html[data-theme="dark"] .staff-mobile-day.has-overload {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line)) !important;
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface)) !important;
+}
