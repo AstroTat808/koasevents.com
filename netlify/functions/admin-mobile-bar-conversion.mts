@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { requireCapability } from './_shared/admin';
 import { tenantStoreFor } from './_shared/tenant-storage';
+import { resolveTenant } from './_shared/tenant';
 
 const PACKAGE_IDS = ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
 const PACKAGE_LABELS: Record<string,string> = {
@@ -49,7 +50,8 @@ export default async (req: Request, context: Context) => {
   const days = [7,30,90].includes(requestedDays) ? requestedDays : 30;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
 
-  const store = tenantStoreFor(context, auth.tenant, 'sales');
+  const tenant = auth.tenant || resolveTenant(req);
+  const store = tenantStoreFor(context, tenant, 'sales');
   const [eventsRaw, recordsRaw] = await Promise.all([
     store.get('analytics/mobile-bar/events/index', { type: 'json' }),
     store.get('records/index', { type: 'json' }),
