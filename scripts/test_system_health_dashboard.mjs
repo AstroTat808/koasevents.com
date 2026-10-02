@@ -71,6 +71,27 @@ assert(
   'Mobile bottom-nav controls must not be queried through the workspace nav because the fixed bar intentionally lives outside it.',
 );
 assert(
+  nav.includes("const defaultMobileNav = ['home','crm','calendar','health'];")
+    && nav.includes("let currentMobileNav = [...defaultMobileNav];")
+    && nav.includes("...requested,...defaultMobileNav"),
+  'Mobile navigation must default to Home, CRM, Calendar, and Health while preserving saved per-user overrides.',
+);
+assert(
+  visualQa.includes('def admin_mobile_nav_mode(browser_name):')
+    && visualQa.includes('custom_nav=["events","quickbooks","gallery","staff"]')
+    && visualQa.includes('ADMIN_ROUTES')
+    && visualQa.includes('"iphone-390",390,844,3')
+    && visualQa.includes('"iphone-430",430,932,3'),
+  'Visual QA must exercise default and customized mobile navigation across every major admin route at iPhone sizes.',
+);
+assert(
+  visualWorkflow.includes('Wait for exact Netlify deploy preview')
+    && visualWorkflow.includes('--mode admin-mobile --browser chromium')
+    && visualWorkflow.includes('--mode admin-mobile --browser webkit')
+    && visualWorkflow.includes('deploy-preview-${{ github.event.pull_request.number }}--koasevents-website.netlify.app'),
+  'Pull requests must verify the mobile admin bottom navigation on the exact Netlify deploy preview in Chromium and WebKit.',
+);
+assert(
   css.includes('/* System Health mobile viewport clearance */')
     && css.includes('scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom))')
     && css.includes('padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important'),
