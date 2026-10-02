@@ -48,6 +48,12 @@ assert(
   nav.includes('position: relative !important;') && nav.includes('top: auto !important;'),
   'The mobile workspace utility header must remain in normal flow instead of covering page content.',
 );
+const workspaceNavClose = nav.indexOf('</nav>');
+const bottomNavMarkup = nav.indexOf('data-workspace-bottom-nav');
+assert(
+  workspaceNavClose >= 0 && bottomNavMarkup > workspaceNavClose,
+  'The fixed mobile workspace bottom navigation must live outside the sticky workspace navigation containing block.',
+);
 assert(
   css.includes('/* System Health mobile viewport clearance */')
     && css.includes('scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom))')
@@ -121,4 +127,4 @@ assert(
   'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
 );
 
-console.log('System Health dashboard hydration and mobile-clearance regression checks passed.');
+console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
