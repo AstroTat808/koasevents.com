@@ -108,20 +108,86 @@ def main():
         const root=document.documentElement;
         const body=getComputedStyle(document.body);
         const themeMeta=document.querySelector('meta[name="theme-color"]')?.getAttribute('content')||'';
+        const parseColor=(value)=>{
+          const text=String(value||'').trim();
+          let match=text.match(/rgba?\\(([^)]+)\\)/);
+          if(match){
+            const nums=match[1].split(/[ ,/]+/).filter(Boolean).map(Number);
+            if(nums.length>=3&&nums.slice(0,3).every(Number.isFinite)){
+              return [nums[0],nums[1],nums[2],Number.isFinite(nums[3])?nums[3]:1];
+            }
+          }
+          match=text.match(/color\\(srgb\\s+([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)(?:\\s*\\/\\s*([\\d.]+))?\\)/);
+          if(match){
+            return [Number(match[1])*255,Number(match[2])*255,Number(match[3])*255,match[4]?Number(match[4]):1];
+          }
+          return null;
+        };
+        const channel=(value)=>{
+          const v=Math.max(0,Math.min(255,value))/255;
+          return v<=.04045?v/12.92:Math.pow((v+.055)/1.055,2.4);
+        };
+        const relativeLum=(value)=>value?.length>=3
+          ? .2126*channel(value[0])+.7152*channel(value[1])+.0722*channel(value[2])
+          : null;
+        const contrast=(a,b)=>{
+          const la=relativeLum(a),lb=relativeLum(b);
+          if(la==null||lb==null)return null;
+          return (Math.max(la,lb)+.05)/(Math.min(la,lb)+.05);
+        };
+        const visible=(el)=>{
+          const s=getComputedStyle(el),r=el.getBoundingClientRect();
+          return s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>.35&&r.width>0&&r.height>0;
+        };
+        const nearestBackground=(el)=>{
+          let node=el;
+          while(node instanceof Element){
+            const bg=parseColor(getComputedStyle(node).backgroundColor);
+            if(bg&&bg[3]>.72)return bg;
+            node=node.parentElement;
+          }
+          return parseColor(getComputedStyle(document.body).backgroundColor);
+        };
+        const descriptor=(el)=>({
+          tag:el.tagName.toLowerCase(),
+          id:el.id||'',
+          cls:String(el.className||'').slice(0,140),
+        });
         const largeBright=[...document.querySelectorAll('body *')].filter((el)=>{
           if(el instanceof HTMLImageElement||el instanceof HTMLVideoElement||el instanceof HTMLCanvasElement||el instanceof HTMLIFrameElement)return false;
           const s=getComputedStyle(el),r=el.getBoundingClientRect();
           if(s.display==='none'||s.visibility==='hidden'||Number(s.opacity)===0||r.width*r.height<8000)return false;
-          const m=s.backgroundColor.match(/rgba?\\(([^)]+)\\)/);
-          if(!m)return false;
-          const nums=m[1].split(/[ ,/]+/).map(Number);
-          const alpha=nums.length>3?nums[3]:1;
-          return alpha>.45&&nums[0]>246&&nums[1]>246&&nums[2]>246;
-        }).slice(0,12).map((el)=>({
-          tag:el.tagName.toLowerCase(),
-          id:el.id||'',
-          cls:String(el.className||'').slice(0,120),
-        }));
+          const bg=parseColor(s.backgroundColor);
+          return bg&&bg[3]>.45&&relativeLum(bg)>.9;
+        }).slice(0,12).map(descriptor);
+        const isAdminDark=document.body.classList.contains('koa-admin-page')&&root.dataset.theme==='dark';
+        const adminBrightSurfaces=isAdminDark?[...document.querySelectorAll('main article,main section,main table,main [role="dialog"],main [class*="rounded"]')].filter((el)=>{
+          if(!visible(el))return false;
+          const r=el.getBoundingClientRect();
+          if(r.width*r.height<900)return false;
+          const bg=parseColor(getComputedStyle(el).backgroundColor);
+          return bg&&bg[3]>.55&&relativeLum(bg)>.58;
+        }).slice(0,16).map(descriptor):[];
+        const adminBrightControls=isAdminDark?[...document.querySelectorAll('main button,main input:not([type="checkbox"]):not([type="radio"]),main select,main textarea')].filter((el)=>{
+          if(!visible(el)||el.matches(':disabled'))return false;
+          const r=el.getBoundingClientRect();
+          if(r.width*r.height<180)return false;
+          const bg=parseColor(getComputedStyle(el).backgroundColor);
+          return bg&&bg[3]>.55&&relativeLum(bg)>.62;
+        }).slice(0,16).map(descriptor):[];
+        const adminLowContrast=isAdminDark?[...document.querySelectorAll('main p,main span,main label,main strong,main small,main button,main a,main th,main td')].filter((el)=>{
+          if(!visible(el)||el.matches(':disabled')||el.getAttribute('aria-disabled')==='true')return false;
+          const ownText=[...el.childNodes].filter((node)=>node.nodeType===Node.TEXT_NODE).map((node)=>node.textContent||'').join(' ').trim();
+          if(!ownText)return false;
+          const style=getComputedStyle(el);
+          if(Number(style.opacity)<.55)return false;
+          const fg=parseColor(style.color),bg=nearestBackground(el);
+          const ratio=contrast(fg,bg);
+          return ratio!=null&&ratio<3;
+        }).slice(0,16).map((el)=>({
+          ...descriptor(el),
+          text:String(el.textContent||'').trim().replace(/\\s+/g,' ').slice(0,90),
+        })):[];
         return {
           preference:root.dataset.themePreference||'',
           resolved:root.dataset.theme||'',
@@ -131,6 +197,9 @@ def main():
           scrollWidth:document.documentElement.scrollWidth,
           viewportWidth:innerWidth,
           largeBright,
+          adminBrightSurfaces,
+          adminBrightControls,
+          adminLowContrast,
         };
       }""")
       body_lum=luminance(rgb(metrics.get("bodyBackground")))
@@ -145,6 +214,9 @@ def main():
         (body_lum is not None and body_lum<.22,"dark canvas remained too bright"),
         (metrics.get("themeMeta")=="#0b1713","dark browser theme-color is incorrect"),
         (len(metrics.get("largeBright") or [])==0,"large near-white UI surfaces remain in dark mode"),
+        (len(metrics.get("adminBrightSurfaces") or [])==0,"admin cards/tables/modals remain too bright in dark mode"),
+        (len(metrics.get("adminBrightControls") or [])==0,"admin form controls/buttons remain too bright in dark mode"),
+        (len(metrics.get("adminLowContrast") or [])==0,"admin text contrast fell below the dark-mode floor"),
        ])
       else:
        checks.extend([
@@ -224,8 +296,17 @@ def main():
   for route,label,selector in toggle_cases:
    ctx=browser.new_context(viewport={"width":390,"height":844},device_scale_factor=2,is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light")
    ctx.add_init_script("localStorage.setItem('koa-theme-preference','light');")
+   account_sync=[]
+   def capture_account_profile(route):
+    try:
+     if route.request.method=="POST":
+      account_sync.append(json.loads(route.request.post_data or "{}"))
+    except Exception:
+     account_sync.append({})
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"appearancePreference":"dark"}))
    ctx.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
    ctx.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   ctx.route("**/api/account/profile**",capture_account_profile)
    page=ctx.new_page();detail=""
    try:
     response=page.goto(base+route,wait_until="domcontentloaded",timeout=30000)
@@ -237,6 +318,10 @@ def main():
     state=page.evaluate("() => ({preference:document.documentElement.dataset.themePreference,resolved:document.documentElement.dataset.theme,saved:localStorage.getItem('koa-theme-preference')})")
     if state.get("preference")!="dark" or state.get("resolved")!="dark" or state.get("saved")!="dark":
      detail=label+" navbar toggle did not persist Dark: "+json.dumps(state)
+    page.wait_for_timeout(350)
+    synced=any(item.get("action")=="save-appearance-preference" and item.get("appearancePreference")=="dark" for item in account_sync if isinstance(item,dict))
+    if not synced:
+     detail=(detail+"; " if detail else "")+label+" navbar toggle did not sync Dark to the account endpoint"
    except Exception as exc:detail=str(exc)
    row={"route":route,"preference":"navbar-toggle","resolved":"dark","viewport":"phone","surface":label,"failure":detail}
    results.append(row)
