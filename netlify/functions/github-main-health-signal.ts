@@ -401,6 +401,47 @@ export default async (req:Request,context:Context) => {
 
     const body:any=await req.json().catch(()=>({}));
 
+    if(body?.action==='read-production-accounting-audits'){
+      try{
+        const releases=await readProductionReleases(context,100);
+        const audits=(Array.isArray(releases)?releases:[])
+          .map((release:any)=>{
+            const verification:any=release?.accountingVerification||null;
+            const invariant:any=verification?.invariant||null;
+            if(!verification||!invariant)return null;
+            return {
+              deployId:cleanText(release?.deployId,120),
+              commit:cleanText(release?.commit,80),
+              checkedAt:cleanText(verification?.checkedAt||release?.recordedAt,80),
+              status:cleanText(verification?.status||'unverified',40),
+              accountingVerified:Boolean(verification?.accountingVerified),
+              clientCount:Number(invariant?.dynamicClientCount||0),
+              passedCount:Number(invariant?.dynamicClientPassedCount||0),
+              failedCount:Number(invariant?.dynamicClientFailedCount||0),
+              unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+              rows:Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[],
+              detail:cleanText(invariant?.detail,1200),
+            };
+          })
+          .filter(Boolean);
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          accountingAudits:audits,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read production accounting audits.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='read-production-accounting-audit'){
       try{
         const audit=await productionAccountingAuditForCommit(context,String(body?.commit||''));
