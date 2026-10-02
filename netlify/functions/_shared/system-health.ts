@@ -77,6 +77,20 @@ export type HealthCheck = {
         estimateDocNumber: string;
         proposalTotal: number;
         estimateTotal: number | null;
+        lineTotal?: number | null;
+        transactionAdjustment?: number | null;
+        adjustmentTotal?: number | null;
+        discountAmtField?: number | null;
+        discountLineAmount?: number | null;
+        totalTax?: number | null;
+        applyTaxAfterDiscount?: boolean | null;
+        nonSalesAdjustments?: Array<{
+          detailType: string;
+          amount: number;
+          discountPercent: number | null;
+          percentBased: boolean | null;
+          taxRateRef: string;
+        }>;
         taxableLineCount: number | null;
         failures: string[];
         detail: string;
@@ -352,6 +366,13 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
       crmTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
       qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
       lineTotal:row?.lineTotal==null?null:Math.round(Number(row.lineTotal||0)*100)/100,
+      transactionAdjustment:row?.transactionAdjustment==null?null:Math.round(Number(row.transactionAdjustment||0)*100)/100,
+      adjustmentTotal:row?.adjustmentTotal==null?null:Math.round(Number(row.adjustmentTotal||0)*100)/100,
+      discountAmtField:row?.discountAmtField==null?null:Math.round(Number(row.discountAmtField||0)*100)/100,
+      discountLineAmount:row?.discountLineAmount==null?null:Math.round(Number(row.discountLineAmount||0)*100)/100,
+      totalTax:row?.totalTax==null?null:Math.round(Number(row.totalTax||0)*100)/100,
+      applyTaxAfterDiscount:row?.applyTaxAfterDiscount==null?null:Boolean(row.applyTaxAfterDiscount),
+      nonSalesAdjustments:Array.isArray(row?.nonSalesAdjustments)?row.nonSalesAdjustments:[],
       estimateId:String(row?.estimateId||''),
       estimateDocNumber:String(row?.estimateDocNumber||''),
       taxableLines:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
@@ -1500,6 +1521,14 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
         estimateDocNumber:String(evaluation.estimateDocNumber||base.estimateDocNumber),
         proposalTotal:Number(evaluation.proposalTotal||0),
         estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        lineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
+        transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        adjustmentTotal:evaluation.adjustmentTotal==null?null:Number(evaluation.adjustmentTotal),
+        discountAmtField:evaluation.discountAmtField==null?null:Number(evaluation.discountAmtField),
+        discountLineAmount:evaluation.discountLineAmount==null?null:Number(evaluation.discountLineAmount),
+        totalTax:evaluation.totalTax==null?null:Number(evaluation.totalTax),
+        applyTaxAfterDiscount:evaluation.applyTaxAfterDiscount==null?null:Boolean(evaluation.applyTaxAfterDiscount),
+        nonSalesAdjustments:Array.isArray(evaluation.nonSalesAdjustments)?evaluation.nonSalesAdjustments:[],
         taxableLineCount:Number(evaluation.taxableLineCount||0),
         failures:Array.isArray(evaluation.failures)?evaluation.failures.map((value:any)=>String(value)):[],
         detail:evaluation.ok
