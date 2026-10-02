@@ -181,6 +181,20 @@ assert(
 );
 
 assert(
+  systemHealth.includes('responsiveVerification?:ProductionResponsiveVerification|null')
+    && systemHealth.includes('responsiveVerification:input?.responsiveVerification||previous?.responsiveVerification||null')
+    && healthSignal.includes("body?.action==='record-responsive-release-qa'")
+    && visualWorkflow.includes('system-health-responsive-evidence.json')
+    && visualWorkflow.includes("'horizontalOverflow'")
+    && visualWorkflow.includes("'screenshotMode'")
+    && health.includes('System Health responsive release gate')
+    && health.includes('data-responsive-rows')
+    && health.includes('horizontalOverflow')
+    && health.includes('screenshotMode'),
+  'Every production release must persist and display exact Chromium/WebKit viewport, overflow, commit, deploy, and screenshot-mode evidence.',
+);
+
+assert(
   systemHealth.includes("id:'login-alert-policy'")
     && systemHealth.includes("name:'Sign-in alert policy'")
     && systemHealth.includes('authenticationSecurityHealthSummary(context)')

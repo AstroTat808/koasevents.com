@@ -2746,6 +2746,31 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionResponsiveVerification = {
+  checkedAt:string;
+  status:'passed'|'failed';
+  commit:string;
+  deployId:string;
+  runId:string;
+  dashboardRefresh:string;
+  overall:string;
+  passed:number;
+  failed:number;
+  results:Array<{
+    browser:'chromium'|'webkit'|string;
+    viewport:string;
+    width:number;
+    height:number;
+    ok:boolean;
+    documentScrollWidth:number|null;
+    viewportWidth:number|null;
+    horizontalOverflow:number|null;
+    documentScrollHeight:number|null;
+    screenshotMode:string;
+    failure:string;
+  }>;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2758,6 +2783,7 @@ export type ProductionRelease = {
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
+  responsiveVerification?:ProductionResponsiveVerification|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -3135,6 +3161,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
+    responsiveVerification:input?.responsiveVerification||previous?.responsiveVerification||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,
