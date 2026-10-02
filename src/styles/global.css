@@ -1602,10 +1602,17 @@ body.koa-admin-page main[data-system-health-page] {
 }
 
 body.koa-admin-page main[data-system-health-page] > .container-shell {
-  width: min(calc(100vw - 2rem), 84rem);
-  max-width: min(calc(100vw - 2rem), 84rem);
+  width: calc(100vw - 2rem) !important;
+  max-width: 84rem !important;
   min-width: 0;
+  margin-inline: auto;
   box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] [data-app],
+body.koa-admin-page main[data-system-health-page] [data-app] > section {
+  min-width: 0;
+  max-width: 100%;
 }
 
 body.koa-admin-page main[data-system-health-page] .health-page-header-actions {
@@ -1663,11 +1670,13 @@ body.koa-admin-page main[data-system-health-page] .health-summary-support {
   }
 }
 
-@media (max-width: 639px) {
-  body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+@media (max-width: 359px) {
+  body.koa-admin-page main[data-system-health-page] [data-app] > section[data-health-summary-grid]:first-child {
     grid-template-columns: minmax(0, 1fr);
   }
+}
 
+@media (max-width: 639px) {
   body.koa-admin-page main[data-system-health-page] .health-summary-card,
   body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
     min-height: 0;
