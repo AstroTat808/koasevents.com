@@ -256,7 +256,7 @@ jobs:
 
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && always()
     needs: deployed-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 25
