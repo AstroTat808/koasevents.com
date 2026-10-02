@@ -27,6 +27,7 @@ const rel=(file)=>path.relative(ROOT,file).replaceAll(path.sep,'/');
 const baseLayout=await readFile(path.join(SRC,'layouts','BaseLayout.astro'),'utf8');
 const globalCss=await readFile(path.join(SRC,'styles','global.css'),'utf8');
 const workspaceNav=await readFile(path.join(SRC,'components','StaffUtilityNav.astro'),'utf8');
+const siteHeader=await readFile(path.join(SRC,'components','Header.astro'),'utf8');
 
 for(const needle of [
   "koa-theme-preference",
@@ -57,6 +58,17 @@ for(const preference of ['light','dark','system']){
 if(!workspaceNav.includes('data-workspace-theme-status')){
   failures.push('Account menu is missing the appearance status.');
 }
+for(const needle of [
+  'data-site-theme-toggle',
+  'data-site-theme-moon',
+  'data-site-theme-sun',
+  "dark ? 'light' : 'dark'",
+  "koa:theme-request",
+  "koa:theme-change",
+]){
+  if(!siteHeader.includes(needle))failures.push('Public navbar theme toggle missing '+needle);
+}
+
 for(const needle of [
   'data-workspace-theme-toggle',
   'data-workspace-theme-moon',
@@ -164,6 +176,7 @@ if(failures.length){
   process.exit(1);
 }
 console.log('PASS | Light / Dark / System bootstrap is wired through BaseLayout and the account menu');
+console.log('PASS | public and authenticated admin navbars expose sun/moon quick toggles');
 console.log('PASS | every Astro page inherits the shared theme entry');
 console.log('PASS | raw white CSS surfaces and raw black text are blocked outside the explicit email-preview exception');
 console.log('PASS | theme source audit: '+JSON.stringify({
