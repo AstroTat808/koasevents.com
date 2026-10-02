@@ -93,7 +93,17 @@ def main():
       response=page.goto(base+route,wait_until="domcontentloaded",timeout=30000)
       status=response.status if response else 0
       if status>=400:raise RuntimeError("document returned HTTP "+str(status))
-      page.wait_for_timeout(120)
+      # WebKit can expose the pre-theme body canvas briefly after DOMContentLoaded
+      # even when the root theme dataset, color-scheme and theme-color are already
+      # correct. Wait for the same body-luminance condition this gate enforces.
+      # This synchronizes on the settled canvas; it does not relax the threshold.
+      page.wait_for_function("""(expected) => {
+        const value=getComputedStyle(document.body).backgroundColor||'';
+        const nums=(value.match(/[\\d.]+/g)||[]).slice(0,3).map(Number);
+        if(nums.length!==3)return false;
+        const lum=.2126*(nums[0]/255)+.7152*(nums[1]/255)+.0722*(nums[2]/255);
+        return expected==='dark'?lum<.22:lum>.55;
+      }""",arg=expected,timeout=2000)
       metrics=page.evaluate("""() => {
         const root=document.documentElement;
         const body=getComputedStyle(document.body);

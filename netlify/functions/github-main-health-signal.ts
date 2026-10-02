@@ -1,6 +1,7 @@
 import type { Config, Context } from '@netlify/functions';
 import { createHash } from 'node:crypto';
 import {
+  accountingAdjustmentDiagnostics,
   applyHealthAlertPolicy,
   persistHealth,
   productionAccountingVerification,
@@ -411,6 +412,38 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='read-accounting-adjustment-diagnostics'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const recordIds=Array.isArray(body?.recordIds)?body.recordIds:[];
+        const diagnostics=await accountingAdjustmentDiagnostics(context,recordIds);
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          checkedAt:new Date().toISOString(),
+          source:'github-actions-oidc',
+          diagnostics,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read accounting adjustment diagnostics.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:400,headers:{'Cache-Control':'no-store'}});
+      }
+    }
 
     if(body?.action==='read-production-accounting-audits'){
       try{

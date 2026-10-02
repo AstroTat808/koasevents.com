@@ -251,13 +251,50 @@ jobs:
           echo "$verification"
           python -c 'import json,sys; data=json.load(sys.stdin); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==15706.8; assert accounting.get("actualTotal")==15706.8; assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientEstimateTotal")==15706.8; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' <<<"$verification"
           test "$http_status" = "200"
+      - name: Capture Jesse and Dion QBO adjustment diagnostics
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-results
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            -o visual-results/accounting-adjustment-diagnostics.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"read-accounting-adjustment-diagnostics","recordIds":["QBO-CUST-29","QBO-CUST-44"]}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat visual-results/accounting-adjustment-diagnostics.json
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('visual-results/accounting-adjustment-diagnostics.json').read_text())
+          assert data.get('ok') is True
+          rows=data.get('diagnostics') or []
+          by_id={row.get('recordId'):row for row in rows}
+          assert set(by_id)=={'QBO-CUST-29','QBO-CUST-44'}
+          for record_id in ('QBO-CUST-29','QBO-CUST-44'):
+              row=by_id[record_id]
+              assert row.get('status')=='verified'
+              assert row.get('historicalQuickBooksImport') is True
+              assert row.get('accountingScope')=='quickbooks-history'
+              assert row.get('estimateId')
+              assert isinstance(row.get('rawFields'),dict)
+          print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
+          PY
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-production-smoke-${{ github.run_id }}
-          path: visual-results/production-smoke.json
+          path: |
+            visual-results/production-smoke.json
+            visual-results/accounting-adjustment-diagnostics.json
           retention-days: 14
           if-no-files-found: error
 

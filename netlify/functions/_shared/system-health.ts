@@ -77,6 +77,20 @@ export type HealthCheck = {
         estimateDocNumber: string;
         proposalTotal: number;
         estimateTotal: number | null;
+        lineTotal?: number | null;
+        transactionAdjustment?: number | null;
+        adjustmentTotal?: number | null;
+        discountAmtField?: number | null;
+        discountLineAmount?: number | null;
+        totalTax?: number | null;
+        applyTaxAfterDiscount?: boolean | null;
+        nonSalesAdjustments?: Array<{
+          detailType: string;
+          amount: number;
+          discountPercent: number | null;
+          percentBased: boolean | null;
+          taxRateRef: string;
+        }>;
         taxableLineCount: number | null;
         failures: string[];
         detail: string;
@@ -352,6 +366,13 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
       crmTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
       qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
       lineTotal:row?.lineTotal==null?null:Math.round(Number(row.lineTotal||0)*100)/100,
+      transactionAdjustment:row?.transactionAdjustment==null?null:Math.round(Number(row.transactionAdjustment||0)*100)/100,
+      adjustmentTotal:row?.adjustmentTotal==null?null:Math.round(Number(row.adjustmentTotal||0)*100)/100,
+      discountAmtField:row?.discountAmtField==null?null:Math.round(Number(row.discountAmtField||0)*100)/100,
+      discountLineAmount:row?.discountLineAmount==null?null:Math.round(Number(row.discountLineAmount||0)*100)/100,
+      totalTax:row?.totalTax==null?null:Math.round(Number(row.totalTax||0)*100)/100,
+      applyTaxAfterDiscount:row?.applyTaxAfterDiscount==null?null:Boolean(row.applyTaxAfterDiscount),
+      nonSalesAdjustments:Array.isArray(row?.nonSalesAdjustments)?row.nonSalesAdjustments:[],
       estimateId:String(row?.estimateId||''),
       estimateDocNumber:String(row?.estimateDocNumber||''),
       taxableLines:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
@@ -1500,6 +1521,14 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
         estimateDocNumber:String(evaluation.estimateDocNumber||base.estimateDocNumber),
         proposalTotal:Number(evaluation.proposalTotal||0),
         estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        lineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
+        transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        adjustmentTotal:evaluation.adjustmentTotal==null?null:Number(evaluation.adjustmentTotal),
+        discountAmtField:evaluation.discountAmtField==null?null:Number(evaluation.discountAmtField),
+        discountLineAmount:evaluation.discountLineAmount==null?null:Number(evaluation.discountLineAmount),
+        totalTax:evaluation.totalTax==null?null:Number(evaluation.totalTax),
+        applyTaxAfterDiscount:evaluation.applyTaxAfterDiscount==null?null:Boolean(evaluation.applyTaxAfterDiscount),
+        nonSalesAdjustments:Array.isArray(evaluation.nonSalesAdjustments)?evaluation.nonSalesAdjustments:[],
         taxableLineCount:Number(evaluation.taxableLineCount||0),
         failures:Array.isArray(evaluation.failures)?evaluation.failures.map((value:any)=>String(value)):[],
         detail:evaluation.ok
@@ -1539,6 +1568,85 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
         ? passedCount+' of '+rows.length+' accepted/booked client invariants passed. '+problemRows.map((row:any)=>row.clientName+': '+row.detail).join(' ')
         : 'All '+rows.length+' CRM-managed accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines. '+historicalRows.length+' imported QuickBooks-history booking(s) are non-blocking.',
   };
+}
+
+export async function accountingAdjustmentDiagnostics(context:Context,requestedRecordIds:unknown[]=[]){
+  const tenant=resolveTenant();
+  const recordIds=[...new Set((Array.isArray(requestedRecordIds)?requestedRecordIds:[])
+    .map((value)=>clean(value,120))
+    .filter(Boolean))].slice(0,20);
+  if(!recordIds.length)throw new Error('At least one accounting record id is required.');
+  const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
+  return mapWithConcurrency(recordIds,4,async(recordId)=>{
+    const record=records.find((entry:any)=>String(entry?.id||'')===recordId&&entry?.kind==='proposal');
+    if(!record)return {recordId,status:'missing' as const,error:'Proposal record not found.'};
+    const qbo=record?.accounting?.quickbooks||{};
+    const estimateId=String(qbo?.estimateId||'').trim();
+    const base={
+      recordId,
+      clientName:clean(record?.customer?.name||recordId,180),
+      eventDate:String(record?.customer?.eventDate||'').slice(0,10),
+      proposalStatus:currentBookingStatus(record),
+      accountingScope:quickBooksAccountingScope(record).mode,
+      historicalQuickBooksImport:Boolean(quickBooksAccountingScope(record).historicalQuickBooksImport),
+      estimateId,
+      estimateDocNumber:clean(qbo?.estimateDocNumber,120),
+      proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
+    };
+    if(!estimateId)return {...base,status:'missing-estimate' as const,error:'No linked QuickBooks estimate.'};
+    try{
+      const data:any=await qboGet(context,'estimate',estimateId);
+      const estimate=data?.Estimate||null;
+      if(!estimate)return {...base,status:'missing-estimate' as const,error:'QuickBooks did not return the linked estimate.'};
+      const evaluation:any=evaluateLiveClientAccountingInvariant(record,estimate);
+      const lines=Array.isArray(estimate?.Line)?estimate.Line:[];
+      const salesLines=lines.filter((line:any)=>line?.DetailType==='SalesItemLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        itemId:clean(line?.SalesItemLineDetail?.ItemRef?.value,120),
+        itemName:clean(line?.SalesItemLineDetail?.ItemRef?.name,240),
+        taxCode:clean(line?.SalesItemLineDetail?.TaxCodeRef?.value,80),
+      }));
+      const discountLines=lines.filter((line:any)=>line?.DetailType==='DiscountLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        percentBased:line?.DiscountLineDetail?.PercentBased==null?null:Boolean(line.DiscountLineDetail.PercentBased),
+        discountPercent:line?.DiscountLineDetail?.DiscountPercent==null?null:Number(line.DiscountLineDetail.DiscountPercent),
+        discountAccountRef:clean(line?.DiscountLineDetail?.DiscountAccountRef?.value,120),
+      }));
+      const taxLines=lines.filter((line:any)=>line?.DetailType==='TaxLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        taxRateRef:clean(line?.TaxLineDetail?.TaxRateRef?.value,120),
+        percentBased:line?.TaxLineDetail?.PercentBased==null?null:Boolean(line.TaxLineDetail.PercentBased),
+        taxPercent:line?.TaxLineDetail?.TaxPercent==null?null:Number(line.TaxLineDetail.TaxPercent),
+        netAmountTaxable:line?.TaxLineDetail?.NetAmountTaxable==null?null:Math.round(Number(line.TaxLineDetail.NetAmountTaxable||0)*100)/100,
+      }));
+      const hasOwn=(key:string)=>Object.prototype.hasOwnProperty.call(estimate,key);
+      return {
+        ...base,
+        status:'verified' as const,
+        estimateDocNumber:clean(estimate?.DocNumber||base.estimateDocNumber,120),
+        estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        salesLineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
+        transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        taxableLineCount:Number(evaluation.taxableLineCount||0),
+        rawFields:{
+          discountAmtPresent:hasOwn('DiscountAmt'),
+          discountAmt:hasOwn('DiscountAmt')?Math.round(Number(estimate.DiscountAmt||0)*100)/100:null,
+          applyTaxAfterDiscountPresent:hasOwn('ApplyTaxAfterDiscount'),
+          applyTaxAfterDiscount:hasOwn('ApplyTaxAfterDiscount')?Boolean(estimate.ApplyTaxAfterDiscount):null,
+          txnTaxDetailPresent:Boolean(estimate?.TxnTaxDetail),
+          txnTaxDetailTotalTax:estimate?.TxnTaxDetail?.TotalTax==null?null:Math.round(Number(estimate.TxnTaxDetail.TotalTax||0)*100)/100,
+          discountLines,
+          taxLines,
+        },
+        salesLines,
+      };
+    }catch(error){
+      return {...base,status:'error' as const,error:error instanceof Error?clean(error.message,1000):'QuickBooks estimate read failed.'};
+    }
+  });
 }
 
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
