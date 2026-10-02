@@ -4,6 +4,7 @@ const health = await readFile(new URL('../src/pages/admin/health/index.astro', i
 const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
+const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
@@ -79,6 +80,25 @@ assert(
     && visualWorkflow.includes('--mode health-mobile --browser chromium')
     && visualWorkflow.includes('--mode health-mobile --browser webkit'),
   'Production visual QA must execute the signed System Health refresh and mobile screenshot gate in both browser engines.',
+);
+
+assert(
+  systemHealth.includes('dynamicClientRows:')
+    && systemHealth.includes('failureReason:')
+    && systemHealth.includes('currentBookingStatus(record)'),
+  'Signed production accounting verification must include every normalized client invariant row and select clients from authoritative booking lifecycle status.',
+);
+assert(
+  healthSignal.includes("body?.action==='self-heal-production-deploy'")
+    && healthSignal.includes("'/builds'")
+    && healthSignal.includes('currentGithubMainSha()'),
+  'The signed GitHub OIDC control plane must fail closed on current main SHA and expose Netlify production self-healing.',
+);
+assert(
+  visualWorkflow.includes('--wait-seconds 300')
+    && visualWorkflow.includes('self-heal-production-deploy')
+    && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
+  'Production QA must retrigger a missing exact-SHA deploy after the five-minute grace period and then verify the exact SHA.',
 );
 
 console.log('System Health dashboard hydration and mobile-clearance regression checks passed.');
