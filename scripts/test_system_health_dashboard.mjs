@@ -70,9 +70,10 @@ assert(
 );
 
 assert(
-  css.includes('width: min(calc(100vw - 2rem), 84rem);')
-    && css.includes('max-width: min(calc(100vw - 2rem), 84rem);'),
-  'System Health content width must be clamped to the viewport so intrinsic dashboard content cannot push cards off-screen.',
+  css.includes('width: calc(100vw - 2rem) !important;')
+    && css.includes('max-width: 84rem !important;')
+    && css.includes('section[data-health-summary-grid]:first-child'),
+  'System Health content width must be clamped to the viewport, with a one-column fallback for the narrowest phones.',
 );
 assert(
   visualQa.includes('("tablet",768,1024,1)')
