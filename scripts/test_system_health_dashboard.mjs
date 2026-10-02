@@ -68,6 +68,12 @@ assert(
     && css.includes('@media (max-width: 639px)'),
   'System Health summary cards must use zero-minimum responsive grid tracks with desktop, tablet, and phone breakpoints.',
 );
+
+assert(
+  css.includes('width: min(calc(100vw - 2rem), 84rem);')
+    && css.includes('max-width: min(calc(100vw - 2rem), 84rem);'),
+  'System Health content width must be clamped to the viewport so intrinsic dashboard content cannot push cards off-screen.',
+);
 assert(
   visualQa.includes('("tablet",768,1024,1)')
     && visualQa.includes('("desktop-small",1280,800,1)')
