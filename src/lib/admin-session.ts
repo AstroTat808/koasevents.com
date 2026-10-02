@@ -17,6 +17,7 @@ export type AdminSession = {
   jobTitle: string;
   pronouns: string;
   roleDescription: string;
+  appearancePreference: ''|'light'|'dark'|'system';
   photoUrl: string;
   signature: {
     showTitle: boolean;

@@ -1825,3 +1825,85 @@ html[data-theme="dark"] ::selection {
   color: #08130f;
 }
 
+/* Dark-mode visual polish from rendered admin QA. */
+html[data-theme="dark"] .bg-red-50,
+html[data-theme="dark"] .bg-red-100 {
+  background-color: color-mix(in srgb, #7f1d1d 30%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-red-200 {
+  border-color: color-mix(in srgb, #fca5a5 32%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-red-700,
+html[data-theme="dark"] .text-red-800,
+html[data-theme="dark"] .text-red-900 {
+  color: #fecaca !important;
+}
+
+html[data-theme="dark"] .bg-amber-50,
+html[data-theme="dark"] .bg-amber-100 {
+  background-color: color-mix(in srgb, #92400e 28%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-amber-200 {
+  border-color: color-mix(in srgb, #fcd34d 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-amber-700,
+html[data-theme="dark"] .text-amber-800,
+html[data-theme="dark"] .text-amber-900 {
+  color: #fde68a !important;
+}
+
+html[data-theme="dark"] .bg-sky-50,
+html[data-theme="dark"] .bg-sky-100 {
+  background-color: color-mix(in srgb, #075985 27%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-sky-200 {
+  border-color: color-mix(in srgb, #7dd3fc 28%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-sky-700,
+html[data-theme="dark"] .text-sky-800,
+html[data-theme="dark"] .text-sky-900 {
+  color: #bae6fd !important;
+}
+
+html[data-theme="dark"] .bg-emerald-50,
+html[data-theme="dark"] .bg-emerald-100 {
+  background-color: color-mix(in srgb, #065f46 27%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-emerald-200 {
+  border-color: color-mix(in srgb, #6ee7b7 28%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-emerald-700,
+html[data-theme="dark"] .text-emerald-800,
+html[data-theme="dark"] .text-emerald-900 {
+  color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .week-day-head,
+html[data-theme="dark"] .staff-schedule-head {
+  background: var(--koa-surface-2) !important;
+}
+html[data-theme="dark"] .calendar-day.is-weekend:not(.is-other),
+html[data-theme="dark"] .staff-schedule-cell.is-weekend {
+  background: color-mix(in srgb, var(--koa-surface-2) 72%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .calendar-day.is-other {
+  background: color-mix(in srgb, var(--koa-surface-muted) 52%, var(--koa-surface)) !important;
+  color: var(--koa-text-muted) !important;
+}
+html[data-theme="dark"] .calendar-day.is-today {
+  background: color-mix(in srgb, var(--koa-amber) 13%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .staff-schedule-cell.has-overload {
+  background: color-mix(in srgb, #f59e0b 13%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .calendar-options-toggle[aria-expanded="true"],
+html[data-theme="dark"] .legend-staff,
+html[data-theme="dark"] .calendar-item.staffing {
+  background: color-mix(in srgb, var(--koa-forest) 28%, var(--koa-surface-2)) !important;
+}
+html[data-theme="dark"] .legend-office,
+html[data-theme="dark"] .calendar-item.office365 {
+  background: color-mix(in srgb, var(--koa-amber-light) 16%, var(--koa-surface-2)) !important;
+}
+

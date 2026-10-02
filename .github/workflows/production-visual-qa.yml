@@ -261,6 +261,46 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  production-theme-audit:
+    name: Live Light / Dark / System audit
+    if: github.event_name == 'push'
+    needs: source-build-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build route inventory
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install browser QA dependencies
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Wait for exact Netlify production SHA
+        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
+      - name: Verify live Light / Dark / System in Chromium
+        run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
+      - name: Verify live Light / Dark / System in WebKit
+        run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-live-theme-${{ github.run_id }}
+          path: |
+            visual-results/theme-chromium
+            visual-results/theme-webkit
+          retention-days: 30
+          if-no-files-found: error
+
   admin-startup-audit:
     name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
@@ -487,7 +527,7 @@ jobs:
   qa-summary:
     name: Visual QA summary
     if: always()
-    needs: [source-build-audit, deployed-smoke, admin-startup-audit, system-health-mobile-audit, visual-audit]
+    needs: [source-build-audit, deployed-smoke, production-theme-audit, admin-startup-audit, system-health-mobile-audit, visual-audit]
     runs-on: ubuntu-latest
     steps:
       - name: Publish run summary
@@ -499,6 +539,7 @@ jobs:
             echo '| --- | --- |'
             echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
             echo '| Live production route smoke | ${{ needs.deployed-smoke.result }} |'
+            echo '| Live Light / Dark / System audit | ${{ needs.production-theme-audit.result }} |'
             echo '| Protected admin post-deploy audit | ${{ needs.admin-startup-audit.result }} |'
             echo '| Authenticated System Health mobile screenshots | ${{ needs.system-health-mobile-audit.result }} |'
             echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
