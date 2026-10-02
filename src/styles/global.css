@@ -1592,6 +1592,88 @@ main p.text-sm {
 }
 
 
+/* System Health responsive summary layout */
+body.koa-admin-page main[data-system-health-page] {
+  overflow-x: clip;
+}
+
+body.koa-admin-page main[data-system-health-page] > .container-shell {
+  width: min(calc(100% - 2rem), 84rem);
+  max-width: 84rem;
+  min-width: 0;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-page-header-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-page-header-actions > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  min-width: 0;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card {
+  display: flex;
+  min-width: 0;
+  min-height: 11.5rem;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
+  min-height: 11.5rem;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card--checked {
+  justify-content: flex-start;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-summary],
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-section-hints] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-summary] > *,
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-section-hints] > * {
+  max-width: 100%;
+  white-space: normal;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-support {
+  margin-top: auto;
+  padding-top: .75rem;
+}
+
+@media (max-width: 1099px) {
+  body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  body.koa-admin-page main[data-system-health-page] .health-summary-card,
+  body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
+    min-height: 0;
+  }
+
+  body.koa-admin-page main[data-system-health-page] .health-summary-support {
+    margin-top: .5rem;
+    padding-top: 0;
+  }
+}
+
 /* System Health mobile viewport clearance */
 @media (max-width: 767px) {
   html:has(body.koa-admin-page main[data-system-health-page]) {
