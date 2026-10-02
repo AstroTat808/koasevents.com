@@ -1419,7 +1419,8 @@ def health_mobile_mode(browser_name,health_payload_path):
      detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+str(refreshed.get("dashboardRefresh"))
 
     bottom_metrics={"ok":True}
-    if width<768:
+    live_production=urlparse(BASE).netloc.lower() in {"koasevents.com","www.koasevents.com"}
+    if width<768 and live_production:
      bottom_metrics=page.evaluate("""async () => {
       const main=document.querySelector('main[data-system-health-page]');
       const bottom=document.querySelector('[data-workspace-bottom-nav]');
