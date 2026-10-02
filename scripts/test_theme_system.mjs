@@ -57,6 +57,22 @@ for(const preference of ['light','dark','system']){
 if(!workspaceNav.includes('data-workspace-theme-status')){
   failures.push('Account menu is missing the appearance status.');
 }
+for(const needle of [
+  "save-appearance-preference",
+  "appearancePreference",
+  "applyAccountThemePreference",
+  "/api/account/profile",
+]){
+  if(!workspaceNav.includes(needle))failures.push('Account-synced theme UI missing '+needle);
+}
+const accountProfile=await readFile(path.join(ROOT,'netlify','functions','account-profile.mts'),'utf8');
+const adminSession=await readFile(path.join(ROOT,'netlify','functions','admin-session.mts'),'utf8');
+for(const needle of ['save-appearance-preference','appearance_preference','appearancePreference']){
+  if(!accountProfile.includes(needle))failures.push('Account profile theme sync missing '+needle);
+}
+for(const needle of ['appearance_preference','appearancePreference']){
+  if(!adminSession.includes(needle))failures.push('Admin session theme sync missing '+needle);
+}
 
 const intentionalLightSurfaceFiles=new Set([
   'src/pages/admin/email-preview/index.astro',
