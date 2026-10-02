@@ -1240,6 +1240,17 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       min-width: 2.75rem;
     }
 
+    @media (max-width: 360px) {
+      [data-workspace-nav] > .container-shell > div:first-child > div:last-child {
+        gap: .3rem;
+      }
+
+      .workspace-account-toggle {
+        padding-left: .58rem;
+        padding-right: .58rem;
+      }
+    }
+
     .workspace-menu-button {
       padding: .75rem .9rem;
       font-size: .64rem;
