@@ -58,6 +58,14 @@ if(!workspaceNav.includes('data-workspace-theme-status')){
   failures.push('Account menu is missing the appearance status.');
 }
 for(const needle of [
+  'data-workspace-theme-toggle',
+  'data-workspace-theme-moon',
+  'data-workspace-theme-sun',
+  "resolved==='dark'?'light':'dark'",
+]){
+  if(!workspaceNav.includes(needle))failures.push('Visible workspace theme toggle missing '+needle);
+}
+for(const needle of [
   "save-appearance-preference",
   "appearancePreference",
   "applyAccountThemePreference",
