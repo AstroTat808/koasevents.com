@@ -170,6 +170,28 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+      - name: Verify iPhone admin bottom navigation in built PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4175 --directory dist > /tmp/koa-admin-mobile-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4175/admin/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-admin-mobile-preview.log
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode admin-mobile --browser chromium --base-url http://127.0.0.1:4175
+          python scripts/production_visual_qa.py --mode admin-mobile --browser webkit --base-url http://127.0.0.1:4175
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && always()
         with:
@@ -178,6 +200,8 @@ jobs:
             visual-results/system-health-dashboard.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
+            visual-results/admin-mobile-chromium
+            visual-results/admin-mobile-webkit
           retention-days: 30
           if-no-files-found: error
       - uses: actions/upload-artifact@v4

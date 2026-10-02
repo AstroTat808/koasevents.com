@@ -1411,6 +1411,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   import { getAdminSession } from '../lib/admin-session';
 
   const nav = document.querySelector('[data-workspace-nav]');
+  const bottomNav = document.querySelector('[data-workspace-bottom-nav]');
   const links = nav?.querySelector('[data-workspace-links]');
   const toggle = nav?.querySelector('[data-workspace-toggle]');
 
@@ -1450,7 +1451,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     if (!(links instanceof HTMLElement) || !(toggle instanceof HTMLElement)) return;
     links.dataset.open = open ? 'true' : 'false';
     toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    nav?.querySelector('[data-workspace-more-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    bottomNav?.querySelector('[data-workspace-more-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
     const chevron = toggle.querySelector('[data-workspace-chevron]');
     if (chevron) chevron.textContent = '⌄';
     if (persist) {
@@ -1675,7 +1676,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     center.dataset.open = open ? 'true' : 'false';
     nav?.querySelector('[data-workspace-alert-toggle]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
     nav?.querySelector('[data-workspace-alert-toggle-mobile]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
-    nav?.querySelector('[data-workspace-alert-toggle-bottom]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    bottomNav?.querySelector('[data-workspace-alert-toggle-bottom]')?.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
 
   function initializeMenuState() {
@@ -1696,7 +1697,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   let alertPayload = null;
   let alertTab = 'active';
   let deployWarningPoll = null;
-  let currentMobileNav = ['home','crm','calendar','health'];
+  const defaultMobileNav = ['home','crm','calendar','health'];
+  let currentMobileNav = [...defaultMobileNav];
   let currentCapabilities = new Set();
 
   const mobileNavDefinitions = {
@@ -1724,7 +1726,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const requested=Array.isArray(items)?items.map(String):[];
     const allowedIds=new Set(allowedMobileNavDefinitions().map(([id])=>id));
     const out=[];
-    for(const id of [...requested,'home','crm','calendar','health','actions','sales','events','quickbooks','staff','vendors','insurance','profitability','gallery']){
+    for(const id of [...requested,...defaultMobileNav,'actions','sales','events','quickbooks','staff','vendors','insurance','profitability','gallery']){
       if(!allowedIds.has(id)||out.includes(id))continue;
       out.push(id);
       if(out.length===4)break;
@@ -1735,7 +1737,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   function applyMobileNav(items){
     currentMobileNav=normalizeMobileNav(items);
     const currentPath=normalizedPath(window.location.pathname);
-    nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot,index)=>{
+    bottomNav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot,index)=>{
       if(!(slot instanceof HTMLAnchorElement))return;
       const id=currentMobileNav[index];
       const definition=mobileNavDefinitions[id];
@@ -1805,7 +1807,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   function renderMobileSlotBadges(payload){
-    nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
+    bottomNav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
       if(!(slot instanceof HTMLAnchorElement))return;
       const id=String(slot.dataset.mobileSlotId||'');
       const badge=slot.querySelector('[data-mobile-slot-badge]');
@@ -2370,7 +2372,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }catch{}
   }
 
-  nav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
+  bottomNav?.querySelectorAll('[data-workspace-bottom-slot]').forEach((slot)=>{
     slot.addEventListener('click',async(event)=>{
       if(!(slot instanceof HTMLAnchorElement))return;
       const id=String(slot.dataset.mobileSlotId||'');
@@ -2393,7 +2395,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   nav?.querySelector('[data-mobile-nav-save]')?.addEventListener('click',()=>{void saveMobileNavPreferences();});
 
-  nav?.querySelector('[data-workspace-more-toggle]')?.addEventListener('click', () => {
+  bottomNav?.querySelector('[data-workspace-more-toggle]')?.addEventListener('click', () => {
     const opening = toggle?.getAttribute('aria-expanded') !== 'true';
     setAlertCenter(false);
     setMenu(opening);
@@ -2545,7 +2547,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     updateGroupVisibility();
 
 
-    const moreButton = nav.querySelector('[data-workspace-more-toggle]');
+    const moreButton = bottomNav?.querySelector('[data-workspace-more-toggle]');
     if (moreButton instanceof HTMLElement) {
       moreButton.removeAttribute('aria-current');
     }
@@ -2559,7 +2561,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     initializeMenuState();
     nav.classList.remove('hidden');
     await loadMobileNavPreferences();
-    const bottomMatch=[...nav.querySelectorAll('[data-workspace-bottom-slot]')].some((slot)=>slot instanceof HTMLAnchorElement&&normalizedPath(slot.getAttribute('href'))===currentPath);
+    const bottomMatch=[...(bottomNav?.querySelectorAll('[data-workspace-bottom-slot]') || [])].some((slot)=>slot instanceof HTMLAnchorElement&&normalizedPath(slot.getAttribute('href'))===currentPath);
     if(moreButton instanceof HTMLElement){
       if(!bottomMatch)moreButton.setAttribute('aria-current','page');
       else moreButton.removeAttribute('aria-current');
