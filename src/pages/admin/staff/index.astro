@@ -843,6 +843,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         trustBadge.className='rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+(session.trusted?'bg-emerald-100 text-emerald-800':'bg-[var(--koa-sand)] text-[var(--koa-clay)]');
         info.querySelector('p').textContent='Last seen '+new Date(session.lastSeenAt).toLocaleString()
           +(session.trustedAt?' · Trusted '+new Date(session.trustedAt).toLocaleString():'')
+          +(session.trustedLastUsedAt?' · Trusted last used '+new Date(session.trustedLastUsedAt).toLocaleString():'')
+          +(session.trustedExpiresAt?' · Trust auto-revokes '+new Date(session.trustedExpiresAt).toLocaleString():'')
           +(session.revokedAt?' · Revoked '+new Date(session.revokedAt).toLocaleString():'');
         row.appendChild(info);
 
