@@ -21,7 +21,8 @@ export type AuthEventType =
   | 'sessions_revoked'
   | 'device_trusted'
   | 'device_untrusted'
-  | 'device_renamed';
+  | 'device_renamed'
+  | 'device_auto_revoked';
 
 export type AuthEvent = {
   id:string;
@@ -65,7 +66,19 @@ export type TrustedDevice = {
   trustedAt:string;
   trustedBy:string;
   lastSeenAt:string;
+  lastUsedAt:string;
+  expiresAt:string;
 };
+
+export type TrustedDeviceExpiryDays = 0 | 30 | 60 | 90;
+
+export type TrustedDeviceSettings = {
+  expiryDays:TrustedDeviceExpiryDays;
+  updatedAt:string;
+  updatedBy:string;
+};
+
+export const TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS=365*24*60*60;
 
 type LoginAlertState = {
   suppressionKey:string;
@@ -103,6 +116,19 @@ function deviceLabel(ua:string){
   return browser+' on '+os;
 }
 function trustedDeviceKey(userId:string){return 'trusted-devices/'+clean(userId,160);}
+function trustedDeviceSettingsKey(userId:string){return 'trusted-device-settings/'+clean(userId,160);}
+function normalizeTrustedDeviceExpiryDays(value:unknown):TrustedDeviceExpiryDays{
+  const days=Number(value);
+  return days===30||days===60||days===90?days:0;
+}
+function trustedDeviceLastUsedAt(row:Partial<TrustedDevice>){
+  return clean(row.lastUsedAt||row.lastSeenAt||row.trustedAt,80);
+}
+function trustedDeviceExpiresAt(row:Partial<TrustedDevice>,days:TrustedDeviceExpiryDays){
+  if(!days)return'';
+  const base=Date.parse(trustedDeviceLastUsedAt(row));
+  return Number.isFinite(base)?new Date(base+days*24*60*60*1000).toISOString():'';
+}
 function failureSignalPrefix(accountHash:string){return 'login-failures/'+clean(accountHash,80)+'/';}
 function cooldownKey(key:string){return 'alert-cooldowns/'+key;}
 function recent(timestamp:string,windowMs:number){
@@ -161,11 +187,60 @@ export async function readAuthEvents(limit=500){
   return rows.slice(0,Math.max(1,Math.min(2000,limit)));
 }
 
+export async function readTrustedDeviceSettings(userId:string):Promise<TrustedDeviceSettings>{
+  const row=((await store().get(trustedDeviceSettingsKey(userId),{type:'json'}))||null) as Partial<TrustedDeviceSettings>|null;
+  return {
+    expiryDays:normalizeTrustedDeviceExpiryDays(row?.expiryDays),
+    updatedAt:clean(row?.updatedAt,80),
+    updatedBy:clean(row?.updatedBy,240),
+  };
+}
+
+export async function saveTrustedDeviceSettings(userId:string,expiryDays:unknown,actor:string){
+  const row:TrustedDeviceSettings={
+    expiryDays:normalizeTrustedDeviceExpiryDays(expiryDays),
+    updatedAt:new Date().toISOString(),
+    updatedBy:clean(actor,240),
+  };
+  await store().setJSON(trustedDeviceSettingsKey(userId),row);
+  await readTrustedDevices(userId);
+  return row;
+}
+
 export async function readTrustedDevices(userId:string){
-  const rows=((await store().get(trustedDeviceKey(userId),{type:'json'}))||[]) as TrustedDevice[];
-  return rows
-    .filter((row)=>row&&row.fingerprint)
-    .map((row)=>({...row,name:clean(row.name||row.device||'Trusted device',120)}));
+  const s=store();
+  const [raw,settings]=await Promise.all([
+    s.get(trustedDeviceKey(userId),{type:'json'}),
+    readTrustedDeviceSettings(userId),
+  ]);
+  const rows=(raw||[]) as TrustedDevice[];
+  const now=Date.now();
+  let changed=false;
+  const active:TrustedDevice[]=[];
+  for(const source of rows){
+    if(!source?.fingerprint){changed=true;continue;}
+    const lastUsedAt=trustedDeviceLastUsedAt(source);
+    const expiresAt=trustedDeviceExpiresAt({...source,lastUsedAt},settings.expiryDays);
+    const row:TrustedDevice={
+      ...source,
+      name:clean(source.name||source.device||'Trusted device',120),
+      lastUsedAt,
+      expiresAt,
+    };
+    if(
+      row.name!==source.name
+      || row.lastUsedAt!==source.lastUsedAt
+      || row.expiresAt!==source.expiresAt
+    )changed=true;
+    const expiresMs=Date.parse(expiresAt);
+    if(settings.expiryDays&&Number.isFinite(expiresMs)&&expiresMs<=now){
+      changed=true;
+      continue;
+    }
+    active.push(row);
+  }
+  if(changed)await s.setJSON(trustedDeviceKey(userId),active);
+  return active;
 }
 
 export async function trustedDeviceHandle(deviceFingerprint:string){
@@ -183,10 +258,30 @@ export async function resolveTrustedDeviceHandle(userId:string,deviceId:string){
   }
   return null;
 }
-export async function isTrustedDevice(userId:string,deviceFingerprint:string){
+export async function isTrustedDevice(
+  userId:string,
+  deviceFingerprint:string,
+  options:{touch?:boolean}={},
+){
   if(!userId||!deviceFingerprint)return false;
   const rows=await readTrustedDevices(userId);
-  return rows.some((row)=>row.fingerprint===deviceFingerprint);
+  const existing=rows.find((row)=>row.fingerprint===deviceFingerprint);
+  if(!existing)return false;
+  if(options.touch){
+    const settings=await readTrustedDeviceSettings(userId);
+    const now=new Date().toISOString();
+    const updated:TrustedDevice={
+      ...existing,
+      lastSeenAt:now,
+      lastUsedAt:now,
+      expiresAt:trustedDeviceExpiresAt({...existing,lastUsedAt:now},settings.expiryDays),
+    };
+    await store().setJSON(
+      trustedDeviceKey(userId),
+      [updated,...rows.filter((row)=>row.fingerprint!==deviceFingerprint)].slice(0,30),
+    );
+  }
+  return true;
 }
 
 export async function registerManagedSession(req:Request,user:any){
@@ -225,6 +320,8 @@ export async function listManagedSessions(userId:string,currentReq?:Request){
       trustedName:trustedRow?.name||'',
       trustedAt:trustedRow?.trustedAt||'',
       trustedBy:trustedRow?.trustedBy||'',
+      trustedLastUsedAt:trustedRow?.lastUsedAt||trustedRow?.lastSeenAt||'',
+      trustedExpiresAt:trustedRow?.expiresAt||'',
     };
   }).sort((a,b)=>Date.parse(b.lastSeenAt)-Date.parse(a.lastSeenAt));
 }
@@ -247,6 +344,7 @@ export async function trustKnownDevice(userId:string,deviceFingerprint:string,ac
   if(!source)throw new Error('Tracked device not found.');
   const current=await readTrustedDevices(userId);
   const existing=current.find((row)=>row.fingerprint===fingerprint);
+  const settings=await readTrustedDeviceSettings(userId);
   const now=new Date().toISOString();
   const row:TrustedDevice={
     fingerprint,
@@ -256,7 +354,9 @@ export async function trustKnownDevice(userId:string,deviceFingerprint:string,ac
     name:clean(friendlyName||existing?.name||source.device||'Trusted device',120),
     trustedAt:existing?.trustedAt||now,
     trustedBy:existing?.trustedBy||clean(actor,240),
-    lastSeenAt:clean(source.lastSeenAt,80)||now,
+    lastSeenAt:now,
+    lastUsedAt:now,
+    expiresAt:trustedDeviceExpiresAt({lastUsedAt:now},settings.expiryDays),
   };
   await store().setJSON(trustedDeviceKey(userId),[row,...current.filter((item)=>item.fingerprint!==fingerprint)].slice(0,30));
   if(!existing){
@@ -365,7 +465,11 @@ export async function evaluateLoginRisk(
   const failureCount=Math.max(legacyFailures.length,durableFailureCount);
   const successes=events.filter(e=>successfulAuthEventType(e.type)&&e.email===normalized);
   const device=deviceLabel(ua);
-  const trusted=Boolean(options.userId&&options.deviceFingerprint&&await isTrustedDevice(options.userId,options.deviceFingerprint));
+  const trusted=Boolean(options.userId&&options.deviceFingerprint&&await isTrustedDevice(
+    options.userId,
+    options.deviceFingerprint,
+    {touch:true},
+  ));
   const classified=classifyLoginRisk({
     recentFailureCount:failureCount,
     hasHistory:successes.length>0,
@@ -489,6 +593,8 @@ export async function authenticationSecurityHealthSummary(context:Context){
       trustedAt:new Date().toISOString(),
       trustedBy:'system-health',
       lastSeenAt:new Date().toISOString(),
+      lastUsedAt:new Date().toISOString(),
+      expiresAt:'',
     }]);
     const trustedProbe=((await s.get(trustedProbeKey,{type:'json'}))||[]) as any[];
     trustedDeviceStorageOk=Array.isArray(trustedProbe)&&trustedProbe.some((row)=>String(row?.fingerprint||'')==='health-'+nonce);

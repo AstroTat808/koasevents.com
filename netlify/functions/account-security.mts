@@ -4,13 +4,16 @@ import { readAuthSecurityPolicy } from './_shared/admin';
 import {
   isTrustedDevice,
   managedSessionStatus,
+  readTrustedDeviceSettings,
   readTrustedDevices,
   registerManagedSession,
   renameTrustedDevice,
   requestDeviceFingerprint,
   resolveTrustedDeviceHandle,
+  saveTrustedDeviceSettings,
   trustKnownDevice,
   trustedDeviceHandle,
+  TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
   untrustKnownDevice,
 } from './_shared/auth-security';
 import { appendStaffAudit } from './_shared/staff-audit';
@@ -61,6 +64,8 @@ async function deviceView(row:any,currentFingerprint:string) {
     trustedAt:clean(row?.trustedAt,80),
     trustedBy:clean(row?.trustedBy,240),
     lastSeenAt:clean(row?.lastSeenAt,80),
+    lastUsedAt:clean(row?.lastUsedAt||row?.lastSeenAt,80),
+    expiresAt:clean(row?.expiresAt,80),
     current:Boolean(currentFingerprint&&row?.fingerprint===currentFingerprint),
   };
 }
@@ -79,8 +84,9 @@ export default async (req:Request, context:Context) => {
   const actor=clean(current.email,240).toLowerCase();
 
   if(req.method==='GET'){
-    const [policy,trustedDevices,currentFingerprint,currentStatus]=await Promise.all([
+    const [policy,trustedDeviceSettings,trustedDevices,currentFingerprint,currentStatus]=await Promise.all([
       readAuthSecurityPolicy(),
+      readTrustedDeviceSettings(current.id),
       readTrustedDevices(current.id),
       requestDeviceFingerprint(req),
       managedSessionStatus(req,current.id),
@@ -94,6 +100,7 @@ export default async (req:Request, context:Context) => {
       passwordChangedAt:clean(meta?.passwordChangedAt,80),
       sessionVersion:sessionVersion(current),
       passwordExpiryDays:policy.passwordExpiryDays,
+      trustedDeviceExpiryDays:trustedDeviceSettings.expiryDays,
       currentDevice:{
         trusted:currentTrusted,
         name:clean(currentTrustedRow?.name,120),
@@ -135,8 +142,34 @@ export default async (req:Request, context:Context) => {
       message:trusted.name+' is now trusted.',
       device:await deviceView(trusted,session.id),
     },{headers:{'Cache-Control':'private, no-store'}});
-    response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
+    response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
     return response;
+  }
+
+  if(action==='save-trusted-device-expiry'){
+    const days=Number(body.expiryDays);
+    if(![0,30,60,90].includes(days)){
+      return Response.json({error:'Trusted-device expiration must be Never, 30, 60, or 90 days.'},{status:400});
+    }
+    const settings=await saveTrustedDeviceSettings(current.id,days,actor);
+    const trustedDevices=await readTrustedDevices(current.id);
+    await appendStaffAudit(context,{
+      actor,
+      action:'self_trusted_device_expiry_changed',
+      subjectId:clean(current.id,120),
+      subjectEmail:actor,
+      detail:settings.expiryDays
+        ?'Trusted devices will auto-revoke after '+settings.expiryDays+' days without use.'
+        :'Trusted-device automatic expiration was disabled.',
+      metadata:{expiryDays:settings.expiryDays,activeTrustedDevices:trustedDevices.length},
+    });
+    return Response.json({
+      ok:true,
+      message:settings.expiryDays
+        ?'Trusted browsers will auto-revoke after '+settings.expiryDays+' days without use.'
+        :'Trusted-browser automatic expiration is off.',
+      trustedDeviceExpiryDays:settings.expiryDays,
+    },{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(action==='rename-trusted-device'){
