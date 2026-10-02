@@ -1553,7 +1553,22 @@ def health_mobile_mode(browser_name,health_payload_path):
     bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
     page.screenshot(path=str(bottom_shot),full_page=False,animations="disabled",caret="hide")
     full_shot=root/f"system-health-{viewport_name}-full.png"
-    page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+    document_height=int(page.evaluate("() => Math.max(document.documentElement.scrollHeight,document.body?.scrollHeight||0)"))
+    metrics["documentScrollHeight"]=document_height
+    # WebKit cannot capture a single image larger than 32767 px on either
+    # dimension. Very data-heavy System Health snapshots can exceed that limit
+    # even when layout geometry is valid. Keep geometry as the release gate and
+    # fall back to a viewport artifact instead of treating the browser's image
+    # encoder limit as a responsive-layout failure.
+    max_full_page_css_height=max(1,int(15000/max(1,dpr)))
+    if document_height<=max_full_page_css_height:
+     metrics["fullScreenshotMode"]="full"
+     page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+    else:
+     metrics["fullScreenshotMode"]="viewport-fallback"
+     page.evaluate("window.scrollTo(0,0)")
+     page.wait_for_timeout(100)
+     page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
 
     if page_errors:
      detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(page_errors[:5])
@@ -1562,7 +1577,9 @@ def health_mobile_mode(browser_name,health_payload_path):
     top_shot=root/f"system-health-{viewport_name}-top.png"
     bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
     full_shot=root/f"system-health-{viewport_name}-full.png"
-    try:page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+    try:
+     page.evaluate("window.scrollTo(0,0)")
+     page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
     except Exception:pass
 
    result={
