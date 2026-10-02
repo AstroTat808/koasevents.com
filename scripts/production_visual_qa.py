@@ -681,8 +681,8 @@ def admin_mode(browser_name):
    page.locator("[data-workspace-account-toggle]").click()
    page.wait_for_selector("[data-workspace-account-panel][data-open='true']",state="visible",timeout=5000)
    heading=page.locator("[data-workspace-account-panel] h2").inner_text().strip()
-   if heading!="Trusted browsers":
-    detail="Account panel heading was not Trusted browsers: "+heading
+   if heading!="Account settings":
+    detail="Account panel heading was not Account settings: "+heading
    else:
     page.locator("[data-workspace-trust-current]").click()
     page.wait_for_function("() => document.querySelector('[data-workspace-current-device]')?.textContent?.includes('QA’s iPhone')",timeout=5000)
