@@ -13,6 +13,7 @@ import { currentBookingStatus } from './quickbooks-accounting-scope.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
+import { authenticationSecurityHealthSummary } from './auth-security';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -109,6 +110,20 @@ export type HealthCheck = {
     expectedMarker: string;
     expectedStatus: 204;
   };
+  authSecurityDetails?: {
+    failureThresholdOk: boolean;
+    failureThreshold: number;
+    failureWindowMinutes: number;
+    trustedDeviceStorageOk: boolean;
+    cooldownStorageOk: boolean;
+    cooldownHours: number;
+    lastHighRiskAlert: {
+      sentAt: string;
+      device: string;
+      reasons: string[];
+    } | null;
+    lastDuplicateSuppressedAt: string;
+  };
 };
 
 export type HealthSnapshot = {
@@ -193,6 +208,7 @@ const PAGE_CHECKS = [
 const API_CHECKS = [
   ['admin-session','Admin session API','/api/admin/session'],
   ['account-profile-api','Account Profile API','/api/account/profile'],
+  ['account-security-api','Account Security API','/api/account/security'],
   ['workspace-alerts-api','Action Center API','/api/admin/workspace-alerts'],
   ['business-crm-api','Business CRM API','/api/admin/crm'],
   ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
@@ -374,6 +390,7 @@ export function healthComponents() {
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
     {id:'quickbooks-tax-invariant',name:'QuickBooks tax-on-tax invariant',path:'$15,000.00 + $706.80 tax = $15,706.80',kind:'api' as const},
+    {id:'login-alert-policy',name:'Sign-in alert policy',path:'3 failures / 30 min · trusted devices · 24h cooldown',kind:'api' as const},
     {id:'credential-quickbooks',name:'QuickBooks credential',path:'Credential Health · QuickBooks',kind:'api' as const},
     {id:'credential-microsoft-graph',name:'Microsoft Graph credential',path:'Credential Health · Microsoft Graph',kind:'api' as const},
     {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
@@ -425,11 +442,11 @@ export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=nul
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
-    'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
+    'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
     'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
-    'quickbooks-tax-invariant',
+    'quickbooks-tax-invariant','login-alert-policy',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
     'synthetic-event-documents','synthetic-vendor-insurance-document','synthetic-quickbooks-webhook','synthetic-signwell-webhook',
   ]);
@@ -1693,7 +1710,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   );
   const syntheticChecksPromise=syntheticIntegrationChecks(context,origin,source!=='hourly');
   const accountingInvariantPromise=quickBooksTaxInvariantHealthCheck(context);
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck]=await Promise.all([
+  const authSecurityHealthPromise=authenticationSecurityHealthSummary(context);
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
@@ -1701,6 +1719,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     credentialHealthPromise,
     syntheticChecksPromise,
     accountingInvariantPromise,
+    authSecurityHealthPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -1724,6 +1743,45 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
         ? 'Logged-in staff browser confirmed the CRM interface initialized successfully'
         : 'No logged-in browser startup failure has been reported for the current deploy',
   };
+  const authLastHighRisk=authSecurityHealth.lastHighRiskAlert;
+  const authSecurityCheck:HealthCheck={
+    id:'login-alert-policy',
+    name:'Sign-in alert policy',
+    kind:'api',
+    path:'3 failures / 30 min · trusted devices · 24h cooldown',
+    ok:Boolean(authSecurityHealth.ok),
+    status:authSecurityHealth.ok?200:503,
+    ms:Number(authSecurityHealth.ms||0),
+    severity:authSecurityHealth.ok?'green':'red',
+    detail:clean(
+      'Alert threshold '+(authSecurityHealth.failureThresholdOk?'passed':'failed')
+      +' · email only after '+authSecurityHealth.failureThreshold+' failed sign-ins within '+authSecurityHealth.failureWindowMinutes+' minutes'
+      +' · trusted-device storage '+(authSecurityHealth.trustedDeviceStorageOk?'healthy':'failed')
+      +' · duplicate-alert cooldown storage '+(authSecurityHealth.cooldownStorageOk?'healthy':'failed')
+      +' · cooldown '+authSecurityHealth.cooldownHours+'h'
+      +' · last high-risk email '+(authLastHighRisk?.sentAt
+        ? authLastHighRisk.sentAt+(authLastHighRisk.device?' · '+authLastHighRisk.device:'')
+        : 'none recorded under the current policy')
+      +(authSecurityHealth.lastDuplicateSuppressedAt?' · last duplicate suppressed '+authSecurityHealth.lastDuplicateSuppressedAt:'')
+      +(authSecurityHealth.errors?.length?' · '+authSecurityHealth.errors.join(' · '):''),
+      1400,
+    ),
+    authSecurityDetails:{
+      failureThresholdOk:Boolean(authSecurityHealth.failureThresholdOk),
+      failureThreshold:Number(authSecurityHealth.failureThreshold||3),
+      failureWindowMinutes:Number(authSecurityHealth.failureWindowMinutes||30),
+      trustedDeviceStorageOk:Boolean(authSecurityHealth.trustedDeviceStorageOk),
+      cooldownStorageOk:Boolean(authSecurityHealth.cooldownStorageOk),
+      cooldownHours:Number(authSecurityHealth.cooldownHours||24),
+      lastHighRiskAlert:authLastHighRisk?{
+        sentAt:clean(authLastHighRisk.sentAt,80),
+        device:clean(authLastHighRisk.device,160),
+        reasons:Array.isArray(authLastHighRisk.reasons)?authLastHighRisk.reasons.map((reason)=>clean(reason,300)).slice(0,10):[],
+      }:null,
+      lastDuplicateSuppressedAt:clean(authSecurityHealth.lastDuplicateSuppressedAt,80),
+    },
+  };
+
   const deploymentSyncCheck:HealthCheck={
     id:'netlify-github-sync',
     name:'Netlify ↔ GitHub deployment',
@@ -2158,7 +2216,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {

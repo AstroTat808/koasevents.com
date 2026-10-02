@@ -835,7 +835,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         row.className='rounded-xl border border-[var(--koa-line)] p-3';
         const info=document.createElement('div');
         info.innerHTML='<div class="flex flex-wrap items-center gap-2"><strong class="text-sm"></strong><span data-trust-badge class="rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em]"></span></div><p class="mt-1 text-xs text-[var(--koa-ink)]/48"></p>';
-        info.querySelector('strong').textContent=session.device+(session.current?' · Current session':'');
+        info.querySelector('strong').textContent=(session.trustedName||session.device)
+          +(session.trustedName&&session.trustedName!==session.device?' · '+session.device:'')
+          +(session.current?' · Current session':'');
         const trustBadge=info.querySelector('[data-trust-badge]');
         trustBadge.textContent=session.trusted?'Trusted device':'Not trusted';
         trustBadge.className='rounded-full px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em] '+(session.trusted?'bg-emerald-100 text-emerald-800':'bg-[var(--koa-sand)] text-[var(--koa-clay)]');
