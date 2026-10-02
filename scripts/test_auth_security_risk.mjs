@@ -61,6 +61,7 @@ const accountSecurity = await readFile(new URL('../netlify/functions/account-sec
 const authSecurity = await readFile(new URL('../netlify/functions/_shared/auth-security.ts', import.meta.url), 'utf8');
 const workspaceNav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
 const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
+const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 
 assert(
   accountSecurity.includes("action==='trust-current-browser'")
@@ -119,6 +120,15 @@ assert(
     && workspaceNav.includes('Last used ')
     && workspaceNav.includes('Auto-revokes '),
   'The account device panel must show last-used/expiry information and 30/60/90-day automatic revocation choices.',
+);
+assert(
+  visualQa.includes('trusted-browser-account-menu')
+    && visualQa.includes("[data-workspace-account-toggle]")
+    && visualQa.includes("[data-workspace-trust-current]")
+    && visualQa.includes("[data-workspace-trusted-expiry]")
+    && visualQa.includes("Last used")
+    && visualQa.includes("Auto-revokes"),
+  'Production admin QA must exercise the deployed Account → Trusted browsers flow with non-destructive API mocks.',
 );
 
 console.log('PASS | trusted-device expiry supports Never / 30 / 60 / 90 days');
