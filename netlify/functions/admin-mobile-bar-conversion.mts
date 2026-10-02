@@ -1,6 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { requireCapability } from './_shared/admin';
-import { tenantStoreFor } from './_shared/tenant-storage';
+import { readTenantIndex, tenantStoreFor } from './_shared/tenant-storage';
 import { resolveTenant } from './_shared/tenant';
 
 const PACKAGE_IDS = ['mobile-oahu','mobile-maui','mobile-big-island','mobile-custom'];
@@ -52,15 +52,15 @@ export default async (req: Request, context: Context) => {
 
   const tenant = auth.tenant || resolveTenant(req);
   const store = tenantStoreFor(context, tenant, 'sales');
-  const [eventsRaw, recordsRaw] = await Promise.all([
+  const [eventsRaw, recordIndex] = await Promise.all([
     store.get('analytics/mobile-bar/events/index', { type: 'json' }),
-    store.get('records/index', { type: 'json' }),
+    readTenantIndex<any>(store, tenant, 'records/index'),
   ]);
 
   const events = (Array.isArray(eventsRaw) ? eventsRaw : [])
     .filter((row: any) => eventTime(row) >= cutoff)
     .sort((a: any, b: any) => eventTime(a) - eventTime(b));
-  const records = (Array.isArray(recordsRaw) ? recordsRaw : [])
+  const records = (Array.isArray(recordIndex?.rows) ? recordIndex.rows : [])
     .filter((row: any) => isMobileRecord(row) && Date.parse(clean(row?.createdAt, 80)) >= cutoff);
 
   const sessions = uniqueSessions(events);
