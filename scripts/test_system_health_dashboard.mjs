@@ -114,6 +114,14 @@ assert(
     && visualQa.includes("system-health-{viewport_name}-bottom.png"),
   'Authenticated mobile System Health QA must capture screenshots and fail on header/bottom-nav geometry regressions.',
 );
+
+assert(
+  visualQa.includes('documentScrollHeight')
+    && visualQa.includes('fullScreenshotMode')
+    && visualQa.includes('viewport-fallback')
+    && visualQa.includes('15000/max(1,dpr)'),
+  'Tall live System Health pages must fall back to bounded viewport screenshots so WebKit image-size limits cannot create false responsive failures.',
+);
 assert(
   visualWorkflow.includes('system-health-mobile-audit:')
     && visualWorkflow.includes('{"action":"run-dashboard-refresh"}')
