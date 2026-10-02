@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { quickBooksAccountingScope } from '../netlify/functions/_shared/quickbooks-accounting-scope.mjs';
+import { currentBookingStatus, quickBooksAccountingScope } from '../netlify/functions/_shared/quickbooks-accounting-scope.mjs';
 
 const imported = quickBooksAccountingScope({
   source: 'quickbooks-import',
@@ -18,16 +18,27 @@ const importedByProposal = quickBooksAccountingScope({
 });
 assert.equal(importedByProposal.actionable, false);
 
-const crmManaged = quickBooksAccountingScope({
+const crmManagedWithQboOrigin = quickBooksAccountingScope({
   source: 'website',
-  proposal: { source: 'crm' },
-  accounting: { quickbooks: { origin: 'crm' } },
+  stage: 'booked',
+  proposal: { source: 'crm', status: 'sent' },
+  accounting: { quickbooks: { origin: 'quickbooks' } },
 });
-assert.equal(crmManaged.mode, 'crm-managed');
-assert.equal(crmManaged.actionable, true);
-assert.equal(crmManaged.historicalQuickBooksImport, false);
+assert.equal(crmManagedWithQboOrigin.mode, 'crm-managed');
+assert.equal(crmManagedWithQboOrigin.actionable, true);
+assert.equal(crmManagedWithQboOrigin.historicalQuickBooksImport, false);
+assert.equal(crmManagedWithQboOrigin.qboOrigin, 'quickbooks');
+
+assert.equal(currentBookingStatus({ stage:'booked', proposal:{ status:'sent' } }), 'booked');
+assert.equal(currentBookingStatus({ stage:'proposal', proposal:{ status:'accepted' } }), 'accepted');
+assert.equal(
+  currentBookingStatus({ stage:'proposal', status:'booked', proposal:{ status:'sent' } }),
+  '',
+  'Legacy record.status must not override the authoritative stage/proposal lifecycle.',
+);
 
 const systemHealthSource = fs.readFileSync('netlify/functions/_shared/system-health.ts', 'utf8');
-assert.match(systemHealthSource, /quickBooksAccountingScope\(record\)\.actionable/, 'System Health must exclude non-actionable historical QuickBooks imports from live accepted\/booked accounting invariants.');
+assert.match(systemHealthSource, /currentBookingStatus\(record\)/, 'System Health must select current bookings from the authoritative lifecycle helper.');
+assert.match(systemHealthSource, /quickBooksAccountingScope\(record\)\.actionable/, 'System Health must still exclude explicit historical QuickBooks imports.');
 
-console.log('QuickBooks accounting scope regression passed: historical imports stay informational while CRM-managed bookings remain actionable, including System Health.');
+console.log('QuickBooks accounting scope regression passed: authoritative accepted/booked lifecycle wins, CRM-managed QBO-linked bookings remain actionable, and explicit historical imports stay informational.');
