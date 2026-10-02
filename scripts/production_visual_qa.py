@@ -28,12 +28,17 @@ VIEWPORTS=[
 ]
 ADMIN_ROUTES=[
  ("admin-home","/admin/"),
+ ("admin-actions","/admin/actions/"),
  ("admin-business-crm","/admin/crm/"),
+ ("admin-clients","/admin/clients/"),
  ("admin-sales-crm","/admin/quotes/"),
  ("admin-catalog-manager","/admin/catalog/"),
+ ("admin-email","/admin/email/"),
+ ("admin-email-preview","/admin/email-preview/"),
  ("admin-wedding-profitability","/admin/profitability/"),
  ("admin-events","/admin/events/"),
  ("admin-calendar","/admin/calendar/"),
+ ("admin-mobile-bar-workforce","/admin/mobile-bar-workforce/"),
  ("admin-blog","/admin/blog/"),
  ("admin-staff","/admin/staff/"),
  ("admin-quickbooks","/admin/quickbooks/"),
@@ -41,6 +46,8 @@ ADMIN_ROUTES=[
  ("admin-security","/admin/security/"),
  ("admin-seo","/admin/seo/"),
  ("admin-health","/admin/health/"),
+ ("admin-organization","/admin/organization/"),
+ ("admin-payroll","/admin/payroll/"),
  ("admin-platform","/admin/platform/"),
  ("admin-insurance","/admin/insurance/"),
  ("admin-vendors","/admin/vendors/")
