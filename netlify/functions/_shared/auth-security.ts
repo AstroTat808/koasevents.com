@@ -382,6 +382,41 @@ export async function sendSuspiciousLoginAlert(input:{email:string;userId?:strin
     :{sent:false,suppressed:false,error:'Alert delivery failed',reason:'',lastSentAt:''};
 }
 
+export function summarizeSecurityActivity(events:AuthEvent[],trustedDeviceCount:number,days:number){
+  const safeDays=Math.max(1,Math.min(365,Math.round(Number(days)||30)));
+  const cutoff=Date.now()-safeDays*24*60*60*1000;
+  const rows=events.filter((event)=>{
+    const at=Date.parse(event.createdAt);
+    return Number.isFinite(at)&&at>=cutoff;
+  });
+
+  const emailsPrevented=rows.filter((event)=>
+    ['login_success','suspicious_login'].includes(event.type)
+    && event.alertSent===false
+    && event.alertSuppressed!==true
+    && event.riskLevel!=='high'
+    && Array.isArray(event.reasons)
+    && event.reasons.length>0
+  ).length;
+
+  const highRiskAlertsSent=rows.filter((event)=>
+    event.alertSent===true
+    && event.riskLevel==='high'
+  ).length;
+
+  const duplicateAlertsSuppressed=rows.filter((event)=>event.alertSuppressed===true).length;
+  const trustedDevicesAdded=rows.filter((event)=>event.type==='device_trusted').length;
+
+  return{
+    days:safeDays,
+    emailsPrevented,
+    trustedDevices:Math.max(0,Number(trustedDeviceCount)||0),
+    trustedDevicesAdded,
+    highRiskAlertsSent,
+    duplicateAlertsSuppressed,
+  };
+}
+
 export function auditHistoricalLoginAlerts(events:AuthEvent[]){
   const candidates=events
     .filter((event)=>event.alertSent===true||(event.type==='suspicious_login'&&event.alertSent===undefined))
