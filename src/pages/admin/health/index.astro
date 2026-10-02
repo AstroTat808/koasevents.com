@@ -205,7 +205,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div class="mt-4 overflow-x-auto">
               <table class="w-full min-w-[1460px] border-collapse text-xs">
                 <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">
-                  <th class="py-3 pr-4">Client</th><th class="py-3 pr-4">CRM total</th><th class="py-3 pr-4">Sales lines</th><th class="py-3 pr-4">QBO estimate</th><th class="py-3 pr-4">Estimate</th><th class="py-3 pr-4">Taxable lines</th><th class="py-3 pr-4">Queue</th><th class="py-3 pr-4">Status</th><th class="py-3 pr-4">Failure reason</th><th class="py-3">Action</th>
+                  <th class="py-3 pr-4">Client</th><th class="py-3 pr-4">CRM total</th><th class="py-3 pr-4">Sales lines</th><th class="py-3 pr-4">QBO adjustment</th><th class="py-3 pr-4">QBO estimate</th><th class="py-3 pr-4">Estimate</th><th class="py-3 pr-4">Taxable lines</th><th class="py-3 pr-4">Queue</th><th class="py-3 pr-4">Status</th><th class="py-3 pr-4">Failure reason</th><th class="py-3">Action</th>
                 </tr></thead>
                 <tbody data-accounting-invariant-table-body></tbody>
               </table>
@@ -4372,6 +4372,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           String(row?.client||row?.recordId||'—'),
           accountingMoney(row?.crmTotal),
           row?.lineTotal==null?'—':accountingMoney(row.lineTotal),
+          row?.lineTotal==null||row?.qboEstimate==null?'—':accountingMoney(Number(row.qboEstimate)-Number(row.lineTotal)),
           row?.qboEstimate==null?'—':accountingMoney(row.qboEstimate),
           row?.estimateDocNumber?'#'+String(row.estimateDocNumber):(row?.estimateId?String(row.estimateId):'—'),
           row?.taxableLines==null?'—':String(row.taxableLines),
@@ -4381,9 +4382,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         ];
         cells.forEach((value,index)=>{
           const td=document.createElement('td');
-          td.className='py-3 pr-4 '+(index===7?statusClass+' font-semibold':'text-[var(--koa-ink)]/70')+(index===8?' max-w-[360px] leading-5':'');
+          td.className='py-3 pr-4 '+(index===8?statusClass+' font-semibold':'text-[var(--koa-ink)]/70')+(index===9?' max-w-[360px] leading-5':'');
           td.textContent=value||'—';
-          if(index===6&&['missing-estimate','taxable-lines','sales-line-mismatch','unverified'].includes(category)){
+          if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','unverified'].includes(category)){
             td.classList.add('cursor-pointer','underline','underline-offset-2');
             td.title='Filter the repair queue to '+accountingQueueLabel(category);
             td.addEventListener('click',()=>{accountingQueueFilter=category;renderAccountingInvariantTable();});
