@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import {
   LOGIN_ALERT_COOLDOWN_MS,
   classifyLoginRisk,
@@ -54,3 +55,48 @@ console.log('PASS | trusted device suppresses novelty alerts');
 console.log('PASS | trusted device still alerts after repeated failures');
 console.log('PASS | suspicious successes contribute to baseline history');
 console.log('PASS | duplicate-alert cooldown is 24 hours');
+
+
+const accountSecurity = await readFile(new URL('../netlify/functions/account-security.mts', import.meta.url), 'utf8');
+const authSecurity = await readFile(new URL('../netlify/functions/_shared/auth-security.ts', import.meta.url), 'utf8');
+const workspaceNav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
+const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
+
+assert(
+  accountSecurity.includes("action==='trust-current-browser'")
+    && accountSecurity.includes("action==='rename-trusted-device'")
+    && accountSecurity.includes("action==='revoke-trusted-device'")
+    && accountSecurity.includes("Set-Cookie','koa_sid="),
+  'Account Security must support secure current-browser trust plus rename/revoke device actions.',
+);
+assert(
+  accountSecurity.includes("trustedDeviceHandle")
+    && accountSecurity.includes("resolveTrustedDeviceHandle")
+    && !accountSecurity.includes("fingerprint:row.fingerprint"),
+  'Self-service device management must use opaque device handles instead of returning the raw browser fingerprint.',
+);
+assert(
+  authSecurity.includes("name:clean(friendlyName||existing?.name||source.device||'Trusted device',120)")
+    && authSecurity.includes("export async function renameTrustedDevice")
+    && authSecurity.includes("export async function authenticationSecurityHealthSummary"),
+  'Trusted-device storage must retain friendly names and expose the authentication health probe.',
+);
+assert(
+  workspaceNav.includes('data-workspace-account-toggle')
+    && workspaceNav.includes('data-workspace-trust-current')
+    && workspaceNav.includes('data-workspace-trusted-devices')
+    && workspaceNav.includes("accountSecurityAction('rename-trusted-device'")
+    && workspaceNav.includes("accountSecurityAction('revoke-trusted-device'"),
+  'The workspace account menu must expose trust-this-browser and the dedicated friendly-name/revoke device panel.',
+);
+assert(
+  systemHealth.includes("id:'login-alert-policy'")
+    && systemHealth.includes('authenticationSecurityHealthSummary(context)')
+    && systemHealth.includes('trusted-device storage')
+    && systemHealth.includes('last high-risk email'),
+  'System Health must verify the sign-in threshold, trusted-device storage, cooldown storage, and last high-risk email.',
+);
+
+console.log('PASS | account menu can trust the exact current browser');
+console.log('PASS | trusted devices support friendly names and revocation');
+console.log('PASS | System Health verifies sign-in alert policy state');
