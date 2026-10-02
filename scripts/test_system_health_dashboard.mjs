@@ -179,7 +179,7 @@ assert(
     && visualWorkflow.includes('scripts/system_health_release_audit.py prepare')
     && visualWorkflow.includes('scripts/system_health_release_audit.py enforce')
     && visualWorkflow.includes('system-health-responsive-release.json')
-    && visualWorkflow.includes('record-responsive-release-verification'),
+    && releaseAudit.includes('"action": "record-responsive-release-verification"'),
   'Live production System Health QA must persist the exact 14-view responsive audit, publish its commit status, and fail the workflow unless every viewport passes.',
 );
 assert(
