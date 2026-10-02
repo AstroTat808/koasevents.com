@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
+import { resolveTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
   beginCreditSaverMeasurement,

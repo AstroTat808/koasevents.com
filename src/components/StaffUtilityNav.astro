@@ -159,24 +159,25 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     </div>
   </div>
 
-  {isAdminWorkspace && (
-    <div data-workspace-bottom-nav class="workspace-bottom-nav" aria-label="Mobile admin navigation">
-      {[0,1,2,3].map((slot)=>(
-        <a data-workspace-bottom-slot={slot} href="/admin/" class="workspace-bottom-item" aria-label="Admin module">
-          <span class="workspace-bottom-icon-wrap">
-            <svg data-mobile-slot-icon viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z"/></svg>
-            <span data-mobile-slot-badge class="workspace-bottom-badge hidden"></span>
-          </span>
-          <span data-mobile-slot-label>Home</span>
-        </a>
-      ))}
-      <button data-workspace-more-toggle type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-links" aria-label="More admin modules">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h.01M12 7h.01M19 7h.01M5 12h.01M12 12h.01M19 12h.01M5 17h.01M12 17h.01M19 17h.01"/></svg>
-        <span>More</span>
-      </button>
-    </div>
-  )}
 </nav>
+
+{isAdminWorkspace && (
+  <div data-workspace-bottom-nav class="workspace-bottom-nav" aria-label="Mobile admin navigation">
+    {[0,1,2,3].map((slot)=>(
+      <a data-workspace-bottom-slot={slot} href="/admin/" class="workspace-bottom-item" aria-label="Admin module">
+        <span class="workspace-bottom-icon-wrap">
+          <svg data-mobile-slot-icon viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.75 12 3l9 7.75v9.5a.75.75 0 0 1-.75.75h-5.5v-6.5h-5.5V21h-5.5a.75.75 0 0 1-.75-.75z"/></svg>
+          <span data-mobile-slot-badge class="workspace-bottom-badge hidden"></span>
+        </span>
+        <span data-mobile-slot-label>Home</span>
+      </a>
+    ))}
+    <button data-workspace-more-toggle type="button" class="workspace-bottom-item" aria-expanded="false" aria-controls="koa-workspace-links" aria-label="More admin modules">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h.01M12 7h.01M19 7h.01M5 12h.01M12 12h.01M19 12h.01M5 17h.01M12 17h.01M19 17h.01"/></svg>
+      <span>More</span>
+    </button>
+  </div>
+)}
 
 <style>
   .workspace-menu-button,

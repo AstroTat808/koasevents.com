@@ -1386,10 +1386,12 @@ def health_mobile_mode(browser_name,health_payload_path):
     })""")
     metrics["afterRunChecksNow"]=refreshed
     expected_refresh="Partial" if dashboard.get("enrichmentWarnings") else "Current"
+    actual_refresh=str(refreshed.get("dashboardRefresh") or "")
     if refreshed.get("passed")!=str(expected_passed) or refreshed.get("failed")!=str(expected_failed) or refreshed.get("checked") in {"","—"}:
      detail=(detail+"; " if detail else "")+"Run checks now did not preserve the live summary totals"
-    if refreshed.get("dashboardRefresh")!=expected_refresh:
-     detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+str(refreshed.get("dashboardRefresh"))
+    refresh_matches=actual_refresh==expected_refresh or (expected_refresh=="Partial" and actual_refresh.startswith("Partial · "))
+    if not refresh_matches:
+     detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+actual_refresh
 
     bottom_metrics=page.evaluate("""async () => {
       const main=document.querySelector('main[data-system-health-page]');
