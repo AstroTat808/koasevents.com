@@ -1620,6 +1620,167 @@ def health_mobile_mode(browser_name,health_payload_path):
  return 1 if failures else 0
 
 
+
+def admin_mobile_nav_mode(browser_name):
+ try:from playwright.sync_api import sync_playwright
+ except ImportError:
+  print("Install Playwright: pip install playwright && python -m playwright install chromium webkit",file=sys.stderr);return 2
+
+ root=OUT/("admin-mobile-"+browser_name);root.mkdir(parents=True,exist_ok=True)
+ all_capabilities=[
+  "admin.dashboard.view","crm.view","sales.view","email.view","sales.profit_settings",
+  "events.view","calendar.view","vendors.view","insurance.view","quickbooks.view",
+  "security.view","health.view","health.manage","users.manage","gallery.view",
+  "blog.view","blog.manage","seo.view","seo.manage","organization.view","organization.manage",
+  "payroll.view","platform.view",
+ ]
+ session_fixture={
+  "email":"qa-mobile-nav@koasevents.test","displayName":"Mobile Nav QA","jobTitle":"Release QA",
+  "pronouns":"","roleDescription":"","appearancePreference":"light","photoUrl":"",
+  "signature":{"showTitle":True,"showTeamTitle":True,"showPronouns":False,"showRoleDescription":False},
+  "role":"admin","roles":["admin"],"isAdmin":True,
+  "permissions":all_capabilities,"capabilities":all_capabilities,
+  "accessBlocked":False,"blockReason":"",
+  "security":{"forcePasswordChange":False,"passwordChangedAt":"","passwordExpiresAt":"","passwordExpired":False,"passwordExpiryDays":180,"sessionVersion":0,"tokenSessionVersion":0,"sessionRevoked":False},
+  "tenant":{"id":"koa","slug":"koa","displayName":"Koa's Events","locale":"en-US","currency":"USD","timezone":"Pacific/Honolulu"},
+  "organization":None,"membership":None,
+  "app_metadata":{"roles":["admin"],"permissions":all_capabilities,"tenantId":"koa","membershipId":"qa"},
+  "appMetadata":{"roles":["admin"],"permissions":all_capabilities,"tenantId":"koa","membershipId":"qa"},
+ }
+ expected_default=[
+  {"id":"home","label":"Home","href":"/admin/"},
+  {"id":"crm","label":"CRM","href":"/admin/crm/"},
+  {"id":"calendar","label":"Calendar","href":"/admin/calendar/"},
+  {"id":"health","label":"Health","href":"/admin/health/"},
+ ]
+ custom_nav=["events","quickbooks","gallery","staff"]
+ custom_labels=["Events","Books","Gallery","Staff"]
+ viewports=[("iphone-390",390,844,3),("iphone-430",430,932,3)]
+ results=[];failures=[]
+
+ def normalize(path):
+  value=str(path or "/").split("?")[0].split("#")[0]
+  return value if value.endswith("/") else value+"/"
+
+ def expected_active(path,items):
+  current=normalize(path)
+  for item in items:
+   if normalize(item["href"])==current:return item["label"]
+  return "More"
+
+ with sync_playwright() as p:
+  browser=getattr(p,browser_name).launch()
+  for viewport_name,width,height,dpr in viewports:
+   ctx=browser.new_context(
+    viewport={"width":width,"height":height},device_scale_factor=dpr,
+    is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light",
+   )
+   for name,path in ADMIN_ROUTES:
+    page=ctx.new_page();page_errors=[];console_errors=[]
+    page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+    page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+    page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+    page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+    page.route("**/api/account/profile**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"mobileNav":[]})))
+    detail="";metrics={}
+    try:
+     response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
+     if response and response.status>=400:detail="Document returned HTTP "+str(response.status)
+     page.wait_for_function(
+      "() => document.querySelectorAll('[data-workspace-bottom-slot][data-mobile-slot-id]').length===4",
+      timeout=8000,
+     )
+     metrics=page.evaluate("""() => {
+       const visible=(el)=>{
+        if(!el)return false;
+        const s=getComputedStyle(el),r=el.getBoundingClientRect();
+        return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
+       };
+       const bottom=document.querySelector('[data-workspace-bottom-nav]');
+       const slots=[...document.querySelectorAll('[data-workspace-bottom-slot]')];
+       const more=document.querySelector('[data-workspace-more-toggle]');
+       return {
+        bottomVisible:visible(bottom),
+        labels:slots.map((slot)=>String(slot.querySelector('[data-mobile-slot-label]')?.textContent||'').trim()),
+        ids:slots.map((slot)=>String(slot.dataset.mobileSlotId||'')),
+        hrefs:slots.map((slot)=>new URL(slot.href,location.href).pathname),
+        iconPaths:slots.map((slot)=>String(slot.querySelector('[data-mobile-slot-icon] path')?.getAttribute('d')||'')),
+        active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>String(node.textContent||'').trim()),
+        moreVisible:visible(more),
+        moreExpanded:String(more?.getAttribute('aria-expanded')||''),
+       };
+     }""")
+     expected_labels=[item["label"] for item in expected_default]
+     expected_ids=[item["id"] for item in expected_default]
+     expected_hrefs=[item["href"] for item in expected_default]
+     active_expected=expected_active(path,expected_default)
+     checks=[
+      (metrics.get("bottomVisible") is True,"Bottom navigation is not visible"),
+      (metrics.get("labels")==expected_labels,"Default labels were not Home, CRM, Calendar, Health: "+repr(metrics.get("labels"))),
+      (metrics.get("ids")==expected_ids,"Default slot ids were not home, crm, calendar, health: "+repr(metrics.get("ids"))),
+      (metrics.get("hrefs")==expected_hrefs,"Default hrefs did not match expected modules: "+repr(metrics.get("hrefs"))),
+      (len(set(metrics.get("iconPaths") or []))==4 and all(metrics.get("iconPaths") or []),"Default module icons were not four distinct hydrated icons"),
+      (metrics.get("moreVisible") is True,"More button is not visible"),
+      (metrics.get("active")==[active_expected],"Active bottom-navigation control expected "+active_expected+", got "+repr(metrics.get("active"))),
+     ]
+     failed=[message for ok,message in checks if not ok]
+     if failed:detail=("; ".join(failed) if not detail else detail+"; "+"; ".join(failed))
+     if not detail:
+      page.locator("[data-workspace-more-toggle]").click()
+      page.wait_for_function("() => document.querySelector('[data-workspace-links]')?.dataset.open==='true'",timeout=3000)
+      opened=page.get_attribute("[data-workspace-more-toggle]","aria-expanded")
+      metrics["moreAfterClick"]=opened
+      if opened!="true":detail="More button did not open the workspace menu"
+      page.locator("[data-workspace-more-toggle]").click()
+    except Exception as exc:
+     detail=(detail+"; " if detail else "")+str(exc)
+
+    shot=root/f"{name}-{viewport_name}.png"
+    try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
+    except Exception:pass
+    result={"name":name,"path":path,"viewport":viewport_name,"metrics":metrics,"failure":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"screenshot":str(shot)}
+    results.append(result)
+    if detail:failures.append({"route":path,"viewport":viewport_name,"detail":detail,"metrics":metrics})
+    page.close()
+
+   # Prove that a saved per-user customization still overrides the default.
+   page=ctx.new_page();page_errors=[];console_errors=[]
+   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+   page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   page.route("**/api/account/profile**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"mobileNav":custom_nav})))
+   detail="";metrics={}
+   try:
+    page.goto(BASE+"/admin/events/",wait_until="domcontentloaded",timeout=45000)
+    page.wait_for_function(
+     "() => document.querySelectorAll('[data-workspace-bottom-slot][data-mobile-slot-id]').length===4",
+     timeout=8000,
+    )
+    metrics=page.evaluate("""() => ({
+      labels:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.querySelector('[data-mobile-slot-label]')?.textContent||'').trim()),
+      ids:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.dataset.mobileSlotId||'')),
+      active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>String(node.textContent||'').trim()),
+    })""")
+    if metrics.get("labels")!=custom_labels or metrics.get("ids")!=custom_nav or metrics.get("active")!=["Events"]:
+     detail="Saved user customization did not override defaults correctly: "+repr(metrics)
+   except Exception as exc:
+    detail=str(exc)
+   shot=root/f"customized-events-{viewport_name}.png"
+   try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
+   except Exception:pass
+   result={"name":"customized-events","path":"/admin/events/","viewport":viewport_name,"metrics":metrics,"failure":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"screenshot":str(shot)}
+   results.append(result)
+   if detail:failures.append({"route":"/admin/events/","viewport":viewport_name,"detail":detail,"metrics":metrics})
+   page.close();ctx.close()
+  browser.close()
+
+ report={"mode":"admin-mobile","baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"results":results}
+ (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+ print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
+ return 1 if failures else 0
+
+
 def browser_mode(browser_name):
  try:from playwright.sync_api import sync_playwright
  except ImportError:
@@ -1690,7 +1851,7 @@ def browser_mode(browser_name):
 
 def main():
  p=argparse.ArgumentParser(description="Koa's Events production visual QA")
- p.add_argument("--mode",choices=("source","wait","smoke","browser","admin","health-mobile"),required=True)
+ p.add_argument("--mode",choices=("source","wait","smoke","browser","admin","admin-mobile","health-mobile"),required=True)
  p.add_argument("--browser",choices=("chromium","webkit"),default="chromium")
  p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);p.add_argument("--health-payload",default="visual-results/system-health-dashboard.json");a=p.parse_args()
  global BASE
@@ -1699,6 +1860,7 @@ def main():
  if a.mode=="wait":return wait_mode(a.wait_seconds)
  if a.mode=="smoke":return smoke_mode()
  if a.mode=="admin":return admin_mode(a.browser)
+ if a.mode=="admin-mobile":return admin_mobile_nav_mode(a.browser)
  if a.mode=="health-mobile":return health_mobile_mode(a.browser,a.health_payload)
  return browser_mode(a.browser)
 
