@@ -101,7 +101,7 @@ function deviceLabel(ua:string){
   return browser+' on '+os;
 }
 function trustedDeviceKey(userId:string){return 'trusted-devices/'+clean(userId,160);}
-function failureSignalPrefix(email:string){return 'login-failures/'+clean(email,240).toLowerCase().replace(/[^a-z0-9@._+-]/g,'_')+'/';}
+function failureSignalPrefix(accountHash:string){return 'login-failures/'+clean(accountHash,80)+'/';}
 function cooldownKey(key:string){return 'alert-cooldowns/'+key;}
 function recent(timestamp:string,windowMs:number){
   const value=Date.parse(timestamp);
@@ -121,8 +121,9 @@ export function requestUserAgent(req:Request){return clean(req.headers.get('user
 export async function recordLoginFailureSignal(email:string){
   const normalized=clean(email,240).toLowerCase();
   if(!normalized.includes('@'))return null;
+  const accountHash=await hash(normalized);
   const createdAt=new Date().toISOString();
-  const key=failureSignalPrefix(normalized)+createdAt.replace(/[:.]/g,'-')+'-'+crypto.randomUUID().slice(0,12);
+  const key=failureSignalPrefix(accountHash)+createdAt.replace(/[:.]/g,'-')+'-'+crypto.randomUUID().slice(0,12);
   await store().setJSON(key,{email:normalized,createdAt});
   return{key,createdAt};
 }
@@ -130,8 +131,9 @@ export async function recordLoginFailureSignal(email:string){
 export async function recentLoginFailureCount(email:string,windowMs=LOGIN_FAILURE_WINDOW_MS){
   const normalized=clean(email,240).toLowerCase();
   if(!normalized.includes('@'))return 0;
+  const accountHash=await hash(normalized);
   const s=store();
-  const listed=await s.list({prefix:failureSignalPrefix(normalized)});
+  const listed=await s.list({prefix:failureSignalPrefix(accountHash)});
   const cutoff=Date.now()-Math.max(1,windowMs);
   let count=0;
   const stale:string[]=[];
