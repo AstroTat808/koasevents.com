@@ -158,6 +158,16 @@ const dynamicTaxable = evaluateLiveClientAccountingInvariant(dynamicBookedRecord
 assert.equal(dynamicTaxable.ok, false, 'A taxable live QuickBooks line must fail the dynamic client invariant.');
 assert.ok(dynamicTaxable.failures.some((failure) => failure.includes('taxable sales lines')));
 
+const dynamicAdjusted = evaluateLiveClientAccountingInvariant(dynamicBookedRecord, {
+  ...dynamicHealthyEstimate,
+  Line: [{
+    ...dynamicHealthyEstimate.Line[0],
+    Amount: 9700,
+  }],
+});
+assert.equal(dynamicAdjusted.ok, true, 'A legitimate transaction-level QuickBooks adjustment must not fail when TotalAmt still equals CRM.');
+assert.equal(dynamicAdjusted.transactionAdjustment, -500);
+
 const dynamicMismatch = evaluateLiveClientAccountingInvariant(dynamicBookedRecord, {
   ...dynamicHealthyEstimate,
   TotalAmt: 9300,
@@ -169,4 +179,4 @@ const dynamicMismatch = evaluateLiveClientAccountingInvariant(dynamicBookedRecor
 assert.equal(dynamicMismatch.ok, false, 'A live QuickBooks total that differs from CRM must fail the dynamic client invariant.');
 assert.ok(dynamicMismatch.failures.some((failure) => failure.includes('estimate total')));
 
-console.log('Dynamic client accounting invariant regression passed: booked clients must match live QuickBooks totals with zero taxable lines.');
+console.log('Dynamic client accounting invariant regression passed: booked CRM-managed clients must match live QuickBooks TotalAmt with zero taxable lines; transaction-level adjustments are diagnostic.');
