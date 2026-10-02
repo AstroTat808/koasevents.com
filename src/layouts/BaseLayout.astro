@@ -297,6 +297,9 @@ const seoSchema = {
     <meta name="twitter:image:alt" content={socialImageAlt} />
 
     <meta id="koa-theme-color" name="theme-color" content="#173d30" />
+    <script type="application/ld+json" set:html={JSON.stringify(seoSchema)} />
+  </head>
+  <body class={isAdminPage ? 'koa-admin-page' : undefined}>
     <script is:inline>
       (() => {
         const key = 'koa-theme-preference';
@@ -350,11 +353,7 @@ const seoSchema = {
           if (event.key === key) apply(read(), true);
         });
       })();
-    </script>
-    <script type="application/ld+json" set:html={JSON.stringify(seoSchema)} />
-  </head>
-  <body class={isAdminPage ? 'koa-admin-page' : undefined}>
-    <script is:inline>
+
       (() => {
         const hash = window.location.hash || '';
         const isIdentityCallback = /^#(?:invite_token|recovery_token|confirmation_token|access_token|error=)/.test(hash);
