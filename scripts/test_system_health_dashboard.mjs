@@ -174,7 +174,7 @@ assert(
 );
 assert(
   visualWorkflow.includes('statuses: write')
-    && visualWorkflow.includes('System Health production release gate')
+    && releaseAudit.includes('"context": "System Health production release gate"')
     && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
     && visualWorkflow.includes('scripts/system_health_release_audit.py prepare')
     && visualWorkflow.includes('scripts/system_health_release_audit.py enforce')
