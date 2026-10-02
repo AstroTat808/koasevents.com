@@ -136,6 +136,16 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+      - name: Verify live Account trusted-browser flow
+        if: github.event_name == 'pull_request'
+        run: python scripts/production_visual_qa.py --mode admin --browser chromium
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && always()
+        with:
+          name: koa-live-trusted-browser-pr-${{ github.run_id }}
+          path: visual-results/admin-chromium
+          retention-days: 14
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && always()
         with:
