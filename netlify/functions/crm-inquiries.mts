@@ -2,6 +2,7 @@ import type { Context, Config } from '@netlify/functions';
 import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tenant.ts';
 import { tenantStoreFor } from './_shared/tenant-storage.ts';
 import { tenantEnv } from './_shared/tenant-env.ts';
+import { isSyntheticHealthRequest } from './_shared/synthetic-health.ts';
 import { sendClientConfirmation, sendLeadNotification } from './_shared/lead-email.ts';
 import { assignmentFor, leastLoadedStaff, listOperationalStaff } from './_shared/staff-directory';
 import {
@@ -432,6 +433,19 @@ export default async (req: Request, context: Context) => {
     'koa-stay-inquiry': 'stay_inquiry',
   };
   const expectedTurnstileAction = protectedActions[formName] || '';
+  const turnstileHealthProbe =
+    req.headers.get('x-koa-turnstile-health-probe') === '1' &&
+    isSyntheticHealthRequest(req);
+
+  // Synthetic health probes must never fall through into CRM persistence. If a
+  // protected form is accidentally removed from the server-side action map,
+  // return an explicit failure instead of allowing the probe to create data.
+  if (turnstileHealthProbe && !expectedTurnstileAction) {
+    return json(req, {
+      error: 'Server-side Turnstile protection is missing for this form.',
+      code: 'turnstile_protection_missing',
+    }, 500);
+  }
 
   if (expectedTurnstileAction) {
     const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
@@ -446,28 +460,30 @@ export default async (req: Request, context: Context) => {
     };
 
     if (!turnstile.ok) {
-      context.waitUntil((async () => {
-        try {
-          const sourceFingerprint = wildOnesSource.fingerprint || mobileSource.fingerprint || await ipFingerprint(req);
-          const identity = await securityIdentity(payload);
-          await recordTurnstileValidation(context, validationRecord);
-          const securityEvent = await recordSecurityEvent(context, req, {
-            disposition: 'blocked',
-            category: 'turnstile_failed',
-            formName,
-            reasons: ['Cloudflare Turnstile verification failed'],
-            reasonCodes: ['turnstile_failed', ...((turnstile.codes || []).slice(0, 4))],
-            riskScore: 100,
-            ipFingerprint: sourceFingerprint,
-            ...identity,
-            detail: 'Rejected before CRM storage.',
-          });
-          const turnstileHistory = await getSecurityEvents(context);
-          await applyAutomaticBlocks(context, securityEvent, turnstileHistory);
-        } catch (error) {
-          console.error('Turnstile rejection telemetry failed', error);
-        }
-      })());
+      if (!isSyntheticHealthRequest(req)) {
+        context.waitUntil((async () => {
+          try {
+            const sourceFingerprint = wildOnesSource.fingerprint || mobileSource.fingerprint || await ipFingerprint(req);
+            const identity = await securityIdentity(payload);
+            await recordTurnstileValidation(context, validationRecord);
+            const securityEvent = await recordSecurityEvent(context, req, {
+              disposition: 'blocked',
+              category: 'turnstile_failed',
+              formName,
+              reasons: ['Cloudflare Turnstile verification failed'],
+              reasonCodes: ['turnstile_failed', ...((turnstile.codes || []).slice(0, 4))],
+              riskScore: 100,
+              ipFingerprint: sourceFingerprint,
+              ...identity,
+              detail: 'Rejected before CRM storage.',
+            });
+            const turnstileHistory = await getSecurityEvents(context);
+            await applyAutomaticBlocks(context, securityEvent, turnstileHistory);
+          } catch (error) {
+            console.error('Turnstile rejection telemetry failed', error);
+          }
+        })());
+      }
       return json(req, {
         error: turnstile.error || 'Security verification failed.',
         code: 'turnstile_failed',

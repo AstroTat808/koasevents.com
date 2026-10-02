@@ -1,6 +1,7 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant.ts';
 import { tenantStoreFor } from './tenant-storage.ts';
+import { syntheticHealthToken } from './synthetic-health.ts';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
@@ -240,10 +241,10 @@ export async function recordTurnstileValidation(
 }
 
 const TURNSTILE_WIDGET_EXPECTATIONS = [
-  { path: '/inquire/', action: 'event_inquiry' },
-  { path: '/wedding-inquiry/', action: 'wedding_inquiry' },
-  { path: '/wedding-inquiry-thank-you/', action: 'discovery_call' },
-  { path: '/stay/', action: 'stay_inquiry' },
+  { path: '/inquire/', formName: 'koa-event-inquiry', action: 'event_inquiry' },
+  { path: '/wedding-inquiry/', formName: 'koa-wedding-inquiry', action: 'wedding_inquiry' },
+  { path: '/wedding-inquiry-thank-you/', formName: 'koa-discovery-call-request', action: 'discovery_call' },
+  { path: '/stay/', formName: 'koa-stay-inquiry', action: 'stay_inquiry' },
 ] as const;
 
 async function inspectTurnstileWidgets(context: Context, siteKey: string) {
@@ -303,6 +304,80 @@ async function inspectTurnstileWidgets(context: Context, siteKey: string) {
       };
     }
   }));
+}
+
+async function probeTurnstileServerEnforcement(context: Context) {
+  const origin = String(context.site?.url || 'https://koasevents.com').replace(/\/$/, '');
+  const syntheticToken = syntheticHealthToken();
+  if (!syntheticToken) {
+    return {
+      ok: false,
+      healthy: 0,
+      total: TURNSTILE_WIDGET_EXPECTATIONS.length,
+      detail: 'Synthetic health authentication is unavailable, so server-side Turnstile enforcement could not be verified.',
+      probes: [],
+    };
+  }
+
+  const probes = await Promise.all(TURNSTILE_WIDGET_EXPECTATIONS.map(async (expectation) => {
+    const started = Date.now();
+    try {
+      const response = await fetch(origin + '/api/crm/inquiries', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Koa-Inquiry-Capture': '1',
+          'X-Koa-Synthetic-Token': syntheticToken,
+          'X-Koa-Turnstile-Health-Probe': '1',
+          'User-Agent': 'KoaEvents-Turnstile-Server-Enforcement-Health/1.0',
+        },
+        body: JSON.stringify({
+          formName: expectation.formName,
+          turnstileToken: 'koa-system-health-intentionally-invalid-turnstile-token',
+          customer: { email: 'qa+turnstile-health@example.com' },
+          inquiry: { service: 'qa', eventType: 'Turnstile health probe' },
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+      const payload: any = await response.json().catch(() => null);
+      const ok = response.status === 403 && payload?.code === 'turnstile_failed';
+      return {
+        path: expectation.path,
+        formName: expectation.formName,
+        action: expectation.action,
+        ok,
+        status: response.status,
+        code: clean(payload?.code, 80),
+        ms: Date.now() - started,
+        detail: ok
+          ? 'Production CRM endpoint rejected the intentionally invalid Turnstile token server-side.'
+          : 'Expected HTTP 403 with turnstile_failed; received HTTP ' + response.status + (payload?.code ? ' / ' + clean(payload.code, 80) : '') + '.',
+      };
+    } catch (error) {
+      return {
+        path: expectation.path,
+        formName: expectation.formName,
+        action: expectation.action,
+        ok: false,
+        status: 0,
+        code: '',
+        ms: Date.now() - started,
+        detail: error instanceof Error ? clean(error.message, 300) : 'Server-side Turnstile enforcement probe failed.',
+      };
+    }
+  }));
+
+  const healthy = probes.filter((row) => row.ok).length;
+  const ok = healthy === probes.length && probes.length === TURNSTILE_WIDGET_EXPECTATIONS.length;
+  return {
+    ok,
+    healthy,
+    total: probes.length,
+    detail: ok
+      ? String(healthy) + '/' + String(probes.length) + ' protected inquiry flows reject invalid Turnstile tokens server-side.'
+      : String(healthy) + '/' + String(probes.length) + ' protected inquiry flows proved server-side Turnstile rejection.',
+    probes,
+  };
 }
 
 async function probeTurnstileSiteverify(secret: string) {
@@ -387,9 +462,10 @@ export async function getTurnstileStatus(context: Context, days = 30) {
   ).trim();
   const secret = securitySecret();
 
-  const [widgets, siteverify] = await Promise.all([
+  const [widgets, siteverify, serverEnforcement] = await Promise.all([
     inspectTurnstileWidgets(context, siteKey),
     probeTurnstileSiteverify(secret),
+    probeTurnstileServerEnforcement(context),
   ]);
 
   const mismatchRows = inRange.filter((row) =>
@@ -420,6 +496,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       widgets,
     },
     siteverify,
+    serverEnforcement,
     windowDays,
     totals: {
       validations: inRange.length,
