@@ -9,7 +9,7 @@ import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
-import { currentBookingStatus, quickBooksAccountingScope } from './quickbooks-accounting-scope.mjs';
+import { currentBookingStatus } from './quickbooks-accounting-scope.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
@@ -1431,7 +1431,6 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
   const candidates=records
     .filter((record:any)=>record?.kind==='proposal'&&record?.proposal&&record?.archived!==true)
     .filter((record:any)=>Boolean(currentBookingStatus(record)))
-    .filter((record:any)=>quickBooksAccountingScope(record).actionable)
     .sort((a:any,b:any)=>String(a?.customer?.eventDate||'9999').localeCompare(String(b?.customer?.eventDate||'9999'))||String(a?.id||'').localeCompare(String(b?.id||'')));
 
   const rows=await mapWithConcurrency(candidates,4,async(record:any)=>{
