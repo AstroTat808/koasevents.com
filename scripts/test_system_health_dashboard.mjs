@@ -85,11 +85,11 @@ assert(
   'Visual QA must exercise default and customized mobile navigation across every major admin route at iPhone sizes.',
 );
 assert(
-  visualWorkflow.includes('Wait for exact Netlify deploy preview')
+  visualWorkflow.includes('Verify iPhone admin bottom navigation in built PR')
     && visualWorkflow.includes('--mode admin-mobile --browser chromium')
     && visualWorkflow.includes('--mode admin-mobile --browser webkit')
-    && visualWorkflow.includes('deploy-preview-${{ github.event.pull_request.number }}--koasevents-website.netlify.app'),
-  'Pull requests must verify the mobile admin bottom navigation on the exact Netlify deploy preview in Chromium and WebKit.',
+    && visualWorkflow.includes('http://127.0.0.1:4175'),
+  'Pull requests must verify the built mobile admin bottom navigation in Chromium and WebKit without weakening Netlify preview SSO.',
 );
 assert(
   css.includes('/* System Health mobile viewport clearance */')
