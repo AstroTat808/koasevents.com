@@ -162,7 +162,33 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Wait for Netlify staging deploy
+      - name: Wait five minutes for exact Netlify production SHA
+        id: initial-netlify-wait
+        continue-on-error: true
+        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 300
+      - name: Self-heal missing Netlify production deploy
+        if: steps.initial-netlify-wait.outcome == 'failure'
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          recovery_file="$(mktemp)"
+          http_status="$(curl -sS \
+            -o "$recovery_file" \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"self-heal-production-deploy"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          recovery="$(cat "$recovery_file")"
+          rm -f "$recovery_file"
+          echo "$recovery"
+          python -c 'import json,os,sys; data=json.load(sys.stdin); assert data.get("ok") is True; assert data.get("expectedSha")==os.environ["EXPECTED_COMMIT"]; assert data.get("triggered") is True or data.get("exactShaPresent") is True' <<<"$recovery"
+          test "$http_status" = "200"
+      - name: Wait for exact Netlify production SHA after fallback
+        if: steps.initial-netlify-wait.outcome == 'failure'
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
       - name: Verify production health and guard the release
         shell: bash
