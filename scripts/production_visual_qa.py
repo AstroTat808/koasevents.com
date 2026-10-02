@@ -688,7 +688,10 @@ def admin_mode(browser_name):
     page.wait_for_function("() => document.querySelector('[data-workspace-current-device]')?.textContent?.includes('QA’s iPhone')",timeout=5000)
     page.locator("[data-workspace-trusted-expiry]").select_option("30")
     page.locator("[data-workspace-save-trusted-expiry]").click()
-    page.wait_for_function("() => document.querySelector('[data-workspace-trusted-expiry]')?.value==='30'",timeout=5000)
+    page.wait_for_function(
+     "() => document.querySelector('[data-workspace-trusted-devices]')?.innerText?.includes('Auto-revokes')",
+     timeout=5000,
+    )
     device_text=page.locator("[data-workspace-trusted-devices]").inner_text()
     if "Last used" not in device_text or "Auto-revokes" not in device_text:
      detail="Trusted-device panel did not render last-used and auto-revoke timestamps. Text: "+device_text[:500]
