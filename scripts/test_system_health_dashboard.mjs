@@ -324,7 +324,9 @@ assert(
 assert(
   adminQuickBooks.includes('accountingScope:scope.mode')
     && adminQuickBooks.includes('accountingActionable:Boolean(scope.actionable)')
-    && adminQuickBooks.includes("'The approved repair is invalid and no QuickBooks write was attempted.'"),
+    && adminQuickBooks.includes('const lifecycle=currentBookingStatus(record);')
+    && adminQuickBooks.includes('const scope=quickBooksAccountingScope(record);')
+    && adminQuickBooks.includes('no QuickBooks write was attempted.'),
   'Accounting repair fingerprints and final apply must both revalidate lifecycle and writable accounting scope before any QuickBooks mutation.',
 );
 
