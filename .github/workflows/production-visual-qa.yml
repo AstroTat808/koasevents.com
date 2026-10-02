@@ -170,6 +170,36 @@ jobs:
           fi
           python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
           python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+      - name: Wait for exact Netlify deploy preview
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PREVIEW_BASE_URL: https://deploy-preview-${{ github.event.pull_request.number }}--koasevents-website.netlify.app
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in {1..120}; do
+            status="$(curl -sS -o /tmp/koa-admin-mobile-preview.html -w "%{http_code}" "$PREVIEW_BASE_URL/admin/" || true)"
+            if [ "$status" = "200" ]; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" != "1" ]; then
+            echo "Netlify deploy preview did not become ready: $PREVIEW_BASE_URL"
+            cat /tmp/koa-admin-mobile-preview.html 2>/dev/null || true
+            exit 1
+          fi
+      - name: Verify iPhone admin bottom navigation on Netlify preview
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          PREVIEW_BASE_URL: https://deploy-preview-${{ github.event.pull_request.number }}--koasevents-website.netlify.app
+        run: |
+          set -euo pipefail
+          python scripts/production_visual_qa.py --mode admin-mobile --browser chromium --base-url "$PREVIEW_BASE_URL"
+          python scripts/production_visual_qa.py --mode admin-mobile --browser webkit --base-url "$PREVIEW_BASE_URL"
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && always()
         with:
@@ -178,6 +208,8 @@ jobs:
             visual-results/system-health-dashboard.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
+            visual-results/admin-mobile-chromium
+            visual-results/admin-mobile-webkit
           retention-days: 30
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
