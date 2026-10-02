@@ -38,7 +38,17 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       </div>
 
       <div class="flex min-w-0 items-center gap-2">
-        <span data-workspace-user class="truncate text-xs font-semibold text-[var(--koa-ink)]/65"></span>
+        <button
+          data-workspace-account-toggle
+          type="button"
+          class="workspace-account-toggle"
+          aria-expanded="false"
+          aria-controls="koa-workspace-account-panel"
+        >
+          <span data-workspace-user class="hidden max-w-[10rem] truncate sm:inline"></span>
+          <span class="sm:hidden">Account</span>
+          <span data-workspace-account-chevron aria-hidden="true">⌄</span>
+        </button>
         <a data-workspace-action-summary href="/admin/actions/" class="hidden workspace-desktop-actions md:inline-flex" aria-label="Open Action Center">
           <span class="workspace-desktop-actions-label">Actions</span>
           <span data-action-critical class="workspace-desktop-action-chip" data-severity="urgent">C 0</span>
@@ -49,6 +59,40 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
         <button data-workspace-logout type="button" class="workspace-signout">Sign out</button>
       </div>
     </div>
+
+    <section
+      id="koa-workspace-account-panel"
+      data-workspace-account-panel
+      data-open="false"
+      class="workspace-account-panel"
+      aria-label="My account and trusted devices"
+    >
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <p class="workspace-group-title">My account</p>
+          <h2 class="display text-2xl text-[var(--koa-forest)]">Trusted browsers</h2>
+          <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">Trust this exact browser, give trusted devices friendly names, or revoke trust without opening User Management.</p>
+        </div>
+        <button data-workspace-account-close type="button" class="workspace-alert-close">Close</button>
+      </div>
+
+      <div class="mt-4 rounded-xl bg-[var(--koa-sand)] p-3">
+        <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">This browser</p>
+        <p data-workspace-current-device class="mt-1 text-sm font-semibold text-[var(--koa-forest)]">Checking…</p>
+        <p data-workspace-current-device-detail class="mt-1 text-xs text-[var(--koa-ink)]/55"></p>
+        <button data-workspace-trust-current type="button" class="workspace-account-primary mt-3">Trust this browser</button>
+      </div>
+
+      <div class="mt-4">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Trusted devices</p>
+          <span data-workspace-trusted-count class="text-xs font-semibold text-[var(--koa-ink)]/45">0</span>
+        </div>
+        <div data-workspace-trusted-devices class="mt-2 grid gap-2"></div>
+      </div>
+      <p data-workspace-account-message class="mt-3 min-h-[1.1rem] text-xs text-[var(--koa-ink)]/55"></p>
+      <button data-workspace-account-logout type="button" class="workspace-account-signout mt-2">Sign out</button>
+    </section>
 
     <section id="koa-workspace-alert-center" data-workspace-alert-center data-open="false" class="workspace-alert-center" aria-label="Workspace alerts">
       <div class="flex items-start justify-between gap-4">
@@ -182,6 +226,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 <style>
   .workspace-menu-button,
   .workspace-mobile-alert,
+  .workspace-account-toggle,
   .workspace-signout,
   .workspace-nav-link {
     border: 1px solid var(--koa-line);
@@ -220,6 +265,124 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     background: white;
     color: var(--koa-clay);
     padding: .55rem .75rem;
+  }
+
+  .workspace-account-toggle {
+    display: inline-flex;
+    min-height: 2.2rem;
+    max-width: 13rem;
+    align-items: center;
+    gap: .42rem;
+    background: white;
+    color: var(--koa-forest);
+    padding: .55rem .72rem;
+  }
+
+  .workspace-account-toggle[aria-expanded="true"] {
+    border-color: var(--koa-forest);
+    background: var(--koa-sand);
+  }
+
+  .workspace-account-toggle [data-workspace-account-chevron] {
+    display: inline-block;
+    transition: transform 180ms ease;
+  }
+
+  .workspace-account-toggle[aria-expanded="true"] [data-workspace-account-chevron] {
+    transform: rotate(180deg);
+  }
+
+  [data-workspace-nav] > .container-shell {
+    position: relative;
+  }
+
+  .workspace-account-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + .35rem);
+    right: .5rem;
+    z-index: 85;
+    width: min(34rem, calc(100vw - 2rem));
+    max-height: min(72vh, 42rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border: 1px solid var(--koa-line);
+    border-radius: 1rem;
+    background: white;
+    padding: 1rem;
+    box-shadow: 0 20px 60px rgba(7,30,23,.24);
+  }
+
+  .workspace-account-panel[data-open="true"] {
+    display: block;
+  }
+
+  .workspace-account-primary {
+    min-height: 2.55rem;
+    border: 1px solid var(--koa-forest);
+    border-radius: .72rem;
+    background: var(--koa-forest);
+    padding: .62rem .85rem;
+    color: white;
+    font-size: .58rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .workspace-account-primary:disabled {
+    cursor: default;
+    opacity: .6;
+  }
+
+  .workspace-account-signout {
+    min-height: 2.55rem;
+    border: 1px solid color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
+    border-radius: .72rem;
+    background: white;
+    padding: .62rem .85rem;
+    color: var(--koa-clay);
+    font-size: .58rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .workspace-account-device {
+    border: 1px solid var(--koa-line);
+    border-radius: .8rem;
+    background: white;
+    padding: .75rem;
+  }
+
+  .workspace-account-device input {
+    min-height: 2.5rem;
+    width: 100%;
+    border: 1px solid var(--koa-line);
+    border-radius: .65rem;
+    background: white;
+    padding: .55rem .65rem;
+    color: var(--koa-forest);
+    font-size: .78rem;
+    font-weight: 700;
+  }
+
+  .workspace-account-device-action {
+    min-height: 2.35rem;
+    border: 1px solid var(--koa-line);
+    border-radius: 999px;
+    background: white;
+    padding: .5rem .7rem;
+    color: var(--koa-forest);
+    font-size: .52rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .workspace-account-device-action[data-danger="true"] {
+    border-color: rgb(254 202 202);
+    color: rgb(185 28 28);
   }
 
   .workspace-links {
@@ -894,7 +1057,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
 
     .workspace-links[data-open="true"],
-    .workspace-alert-center[data-open="true"] {
+    .workspace-alert-center[data-open="true"],
+    .workspace-account-panel[data-open="true"] {
       position: fixed;
       left: .5rem;
       right: .5rem;
@@ -918,6 +1082,12 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       padding: .85rem;
     }
 
+    .workspace-account-panel[data-open="true"] {
+      top: auto;
+      width: auto;
+      padding: .85rem;
+    }
+
     [data-workspace-nav] > .container-shell {
       width: calc(100% - .65rem);
       padding-top: .35rem;
@@ -934,6 +1104,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
     .workspace-menu-button,
     .workspace-mobile-alert,
+    .workspace-account-toggle,
     .workspace-signout {
       min-height: 2.75rem;
     }
@@ -950,8 +1121,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     }
 
     .workspace-signout {
-      padding: .7rem .8rem;
-      font-size: .58rem;
+      display: none;
     }
 
     .workspace-links[data-open="true"] {
@@ -1143,6 +1313,141 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     if (chevron) chevron.textContent = '⌄';
     if (persist) {
       try { window.localStorage.setItem('koa-workspace-nav-open', open ? '1' : '0'); } catch {}
+    }
+  }
+
+  let accountSecurityLoaded=false;
+
+  function setAccountPanel(open) {
+    const panel=nav?.querySelector('[data-workspace-account-panel]');
+    const button=nav?.querySelector('[data-workspace-account-toggle]');
+    if(!(panel instanceof HTMLElement)||!(button instanceof HTMLElement))return;
+    panel.dataset.open=open?'true':'false';
+    button.setAttribute('aria-expanded',open?'true':'false');
+    if(open){
+      setMenu(false);
+      setAlertCenter(false);
+      void loadAccountSecurity();
+    }
+  }
+
+  async function accountSecurityAction(action,payload={}) {
+    const response=await fetch('/api/account/security',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action,...payload}),
+    });
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok)throw new Error(data.error||'Account security update failed.');
+    return data;
+  }
+
+  function renderTrustedDevices(data) {
+    const list=nav?.querySelector('[data-workspace-trusted-devices]');
+    const count=nav?.querySelector('[data-workspace-trusted-count]');
+    const current=nav?.querySelector('[data-workspace-current-device]');
+    const currentDetail=nav?.querySelector('[data-workspace-current-device-detail]');
+    const trustButton=nav?.querySelector('[data-workspace-trust-current]');
+    if(count)count.textContent=String((data?.trustedDevices||[]).length);
+    if(current)current.textContent=data?.currentDevice?.trusted
+      ?(data.currentDevice.name||'This browser')+' · Trusted'
+      :'Not trusted';
+    if(currentDetail)currentDetail.textContent=data?.currentDevice?.device||'Current browser';
+    if(trustButton instanceof HTMLButtonElement){
+      trustButton.disabled=Boolean(data?.currentDevice?.trusted);
+      trustButton.textContent=data?.currentDevice?.trusted?'Browser trusted':'Trust this browser';
+    }
+    if(!(list instanceof HTMLElement))return;
+    list.innerHTML='';
+    const devices=Array.isArray(data?.trustedDevices)?data.trustedDevices:[];
+    devices.forEach((device)=>{
+      const row=document.createElement('article');
+      row.className='workspace-account-device';
+
+      const header=document.createElement('div');
+      header.className='flex items-start justify-between gap-3';
+      const meta=document.createElement('div');
+      meta.className='min-w-0';
+      const title=document.createElement('p');
+      title.className='text-xs font-semibold text-[var(--koa-forest)]';
+      title.textContent=(device.device||'Browser')+(device.current?' · This browser':'');
+      const detail=document.createElement('p');
+      detail.className='mt-1 text-[.66rem] leading-4 text-[var(--koa-ink)]/45';
+      detail.textContent=device.trustedAt?'Trusted '+new Date(device.trustedAt).toLocaleString():'Trusted device';
+      meta.append(title,detail);
+      header.appendChild(meta);
+      row.appendChild(header);
+
+      const input=document.createElement('input');
+      input.type='text';
+      input.maxLength=120;
+      input.value=String(device.name||device.device||'Trusted device');
+      input.setAttribute('aria-label','Friendly name for '+String(device.device||'trusted device'));
+      input.className='mt-3';
+      row.appendChild(input);
+
+      const actions=document.createElement('div');
+      actions.className='mt-2 flex flex-wrap gap-2';
+      const save=document.createElement('button');
+      save.type='button';
+      save.className='workspace-account-device-action';
+      save.textContent='Save name';
+      save.addEventListener('click',async()=>{
+        const message=nav?.querySelector('[data-workspace-account-message]');
+        if(message)message.textContent='Saving device name…';
+        try{
+          await accountSecurityAction('rename-trusted-device',{deviceId:device.id,name:input.value});
+          accountSecurityLoaded=false;
+          await loadAccountSecurity();
+          if(message)message.textContent='Device name saved.';
+        }catch(error){
+          if(message)message.textContent=error instanceof Error?error.message:'Unable to rename device.';
+        }
+      });
+
+      const revoke=document.createElement('button');
+      revoke.type='button';
+      revoke.className='workspace-account-device-action';
+      revoke.dataset.danger='true';
+      revoke.textContent='Revoke trust';
+      revoke.addEventListener('click',async()=>{
+        if(!confirm('Revoke trusted-device status from '+String(device.name||device.device||'this device')+'?'))return;
+        const message=nav?.querySelector('[data-workspace-account-message]');
+        if(message)message.textContent='Revoking trust…';
+        try{
+          await accountSecurityAction('revoke-trusted-device',{deviceId:device.id});
+          accountSecurityLoaded=false;
+          await loadAccountSecurity();
+          if(message)message.textContent='Trusted-device status revoked.';
+        }catch(error){
+          if(message)message.textContent=error instanceof Error?error.message:'Unable to revoke trust.';
+        }
+      });
+      actions.append(save,revoke);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
+    if(!devices.length){
+      const empty=document.createElement('p');
+      empty.className='rounded-xl border border-dashed border-[var(--koa-line)] p-3 text-xs text-[var(--koa-ink)]/45';
+      empty.textContent='No trusted browsers yet.';
+      list.appendChild(empty);
+    }
+  }
+
+  async function loadAccountSecurity() {
+    if(accountSecurityLoaded)return;
+    const message=nav?.querySelector('[data-workspace-account-message]');
+    if(message)message.textContent='Loading trusted devices…';
+    try{
+      const response=await fetch('/api/account/security',{cache:'no-store'});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||'Unable to load account security.');
+      renderTrustedDevices(data);
+      accountSecurityLoaded=true;
+      if(message)message.textContent='';
+    }catch(error){
+      if(message)message.textContent=error instanceof Error?error.message:'Unable to load account security.';
     }
   }
 
@@ -1901,8 +2206,14 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   document.addEventListener('pointerdown', (event) => {
     if (!(nav instanceof HTMLElement) || !(links instanceof HTMLElement)) return;
+    const target=event.target;
+    const accountPanel=nav.querySelector('[data-workspace-account-panel]');
+    const accountToggle=nav.querySelector('[data-workspace-account-toggle]');
+    if(accountPanel instanceof HTMLElement&&accountPanel.dataset.open==='true'){
+      const insideAccount=target instanceof Node&&(accountPanel.contains(target)||accountToggle?.contains(target));
+      if(!insideAccount)setAccountPanel(false);
+    }
     if (links.dataset.open !== 'true') return;
-    const target = event.target;
     if (target instanceof Node && nav.contains(target)) return;
     setMenu(false);
   });
@@ -1921,7 +2232,33 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     loadAlerts();
   });
 
+  nav?.querySelector('[data-workspace-account-toggle]')?.addEventListener('click',()=>{
+    const panel=nav?.querySelector('[data-workspace-account-panel]');
+    if(!(panel instanceof HTMLElement))return;
+    setAccountPanel(panel.dataset.open!=='true');
+  });
+  nav?.querySelector('[data-workspace-account-close]')?.addEventListener('click',()=>setAccountPanel(false));
+  nav?.querySelector('[data-workspace-trust-current]')?.addEventListener('click',async()=>{
+    const button=nav?.querySelector('[data-workspace-trust-current]');
+    const message=nav?.querySelector('[data-workspace-account-message]');
+    if(button instanceof HTMLButtonElement)button.disabled=true;
+    if(message)message.textContent='Trusting this exact browser…';
+    try{
+      const result=await accountSecurityAction('trust-current-browser');
+      accountSecurityLoaded=false;
+      await loadAccountSecurity();
+      if(message)message.textContent=result.message||'This browser is trusted.';
+    }catch(error){
+      if(message)message.textContent=error instanceof Error?error.message:'Unable to trust this browser.';
+      if(button instanceof HTMLButtonElement)button.disabled=false;
+    }
+  });
+
   nav?.querySelector('[data-workspace-logout]')?.addEventListener('click', async () => {
+    await logout();
+    window.location.assign('/staff/');
+  });
+  nav?.querySelector('[data-workspace-account-logout]')?.addEventListener('click', async () => {
     await logout();
     window.location.assign('/staff/');
   });
