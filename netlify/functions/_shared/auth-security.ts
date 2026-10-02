@@ -101,6 +101,7 @@ function deviceLabel(ua:string){
   return browser+' on '+os;
 }
 function trustedDeviceKey(userId:string){return 'trusted-devices/'+clean(userId,160);}
+function failureSignalPrefix(email:string){return 'login-failures/'+clean(email,240).toLowerCase().replace(/[^a-z0-9@._+-]/g,'_')+'/';}
 function cooldownKey(key:string){return 'alert-cooldowns/'+key;}
 function recent(timestamp:string,windowMs:number){
   const value=Date.parse(timestamp);
@@ -116,6 +117,34 @@ export async function requestSessionId(req:Request){
 }
 export const requestDeviceFingerprint=requestSessionId;
 export function requestUserAgent(req:Request){return clean(req.headers.get('user-agent'),800);}
+
+export async function recordLoginFailureSignal(email:string){
+  const normalized=clean(email,240).toLowerCase();
+  if(!normalized.includes('@'))return null;
+  const createdAt=new Date().toISOString();
+  const key=failureSignalPrefix(normalized)+createdAt.replace(/[:.]/g,'-')+'-'+crypto.randomUUID().slice(0,12);
+  await store().setJSON(key,{email:normalized,createdAt});
+  return{key,createdAt};
+}
+
+export async function recentLoginFailureCount(email:string,windowMs=LOGIN_FAILURE_WINDOW_MS){
+  const normalized=clean(email,240).toLowerCase();
+  if(!normalized.includes('@'))return 0;
+  const s=store();
+  const listed=await s.list({prefix:failureSignalPrefix(normalized)});
+  const cutoff=Date.now()-Math.max(1,windowMs);
+  let count=0;
+  const stale:string[]=[];
+  for(const blob of listed.blobs||[]){
+    const key=String(blob.key||'');
+    const row=((await s.get(key,{type:'json'}))||null) as {createdAt?:string}|null;
+    const at=Date.parse(String(row?.createdAt||''));
+    if(Number.isFinite(at)&&at>=cutoff)count+=1;
+    else if(Number.isFinite(at)&&at<cutoff-24*60*60*1000)stale.push(key);
+  }
+  await Promise.all(stale.slice(0,100).map((key)=>s.delete(key)));
+  return count;
+}
 
 export async function appendAuthEvent(context:Context,event:Omit<AuthEvent,'id'|'createdAt'>){
   const s=store();const current=((await s.get('auth-events/index',{type:'json'}))||[]) as AuthEvent[];
@@ -279,12 +308,14 @@ export async function evaluateLoginRisk(
   const events=await readAuthEvents(1000);
   const cutoff=Date.now()-LOGIN_FAILURE_WINDOW_MS;
   const normalized=clean(email,240).toLowerCase();
-  const failures=events.filter(e=>e.type==='login_failed'&&e.email===normalized&&Date.parse(e.createdAt)>=cutoff);
+  const legacyFailures=events.filter(e=>e.type==='login_failed'&&e.email===normalized&&Date.parse(e.createdAt)>=cutoff);
+  const durableFailureCount=await recentLoginFailureCount(normalized,LOGIN_FAILURE_WINDOW_MS);
+  const failureCount=Math.max(legacyFailures.length,durableFailureCount);
   const successes=events.filter(e=>successfulAuthEventType(e.type)&&e.email===normalized);
   const device=deviceLabel(ua);
   const trusted=Boolean(options.userId&&options.deviceFingerprint&&await isTrustedDevice(options.userId,options.deviceFingerprint));
   const classified=classifyLoginRisk({
-    recentFailureCount:failures.length,
+    recentFailureCount:failureCount,
     hasHistory:successes.length>0,
     knownNetwork:!ip||successes.some((event)=>event.ipFingerprint===ip),
     knownDevice:successes.some((event)=>event.device===device),
