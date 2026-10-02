@@ -1697,7 +1697,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   let alertPayload = null;
   let alertTab = 'active';
   let deployWarningPoll = null;
-  let currentMobileNav = ['home','crm','calendar','health'];
+  const defaultMobileNav = ['home','crm','calendar','health'];
+  let currentMobileNav = [...defaultMobileNav];
   let currentCapabilities = new Set();
 
   const mobileNavDefinitions = {
@@ -1725,7 +1726,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const requested=Array.isArray(items)?items.map(String):[];
     const allowedIds=new Set(allowedMobileNavDefinitions().map(([id])=>id));
     const out=[];
-    for(const id of [...requested,'home','crm','calendar','health','actions','sales','events','quickbooks','staff','vendors','insurance','profitability','gallery']){
+    for(const id of [...requested,...defaultMobileNav,'actions','sales','events','quickbooks','staff','vendors','insurance','profitability','gallery']){
       if(!allowedIds.has(id)||out.includes(id))continue;
       out.push(id);
       if(out.length===4)break;
