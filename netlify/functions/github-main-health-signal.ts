@@ -96,7 +96,13 @@ async function createSandboxStaticDeploy(token:string,siteId:string,html:string,
     }
   }
   const ready=await waitForSandboxDeploy(token,deployId);
-  return {deployId,sha,state:String(ready?.state||''),label};
+  return {
+    deployId,
+    sha,
+    state:String(ready?.state||''),
+    label,
+    deployUrl:cleanText(ready?.deploy_ssl_url||ready?.deploy_url,500),
+  };
 }
 
 async function latestPublishedSandboxDeploy(token:string,siteId:string){
@@ -203,7 +209,8 @@ async function runSandboxSelfHealDrill(context:Context,claims:any){
   if(exactShaPresent)throw new Error('Sandbox self-heal drill setup expected the release marker to be absent.');
   const retrigger=await createSandboxStaticDeploy(token,sandboxSiteId,html,'self-heal sandbox retrigger');
   const after=await waitForPublishedSandboxDeploy(token,sandboxSiteId,retrigger.deployId);
-  const fetched=await fetch(String(site?.ssl_url||site?.url||''),{signal:AbortSignal.timeout(12_000)});
+  const verificationUrl=String(retrigger?.deployUrl||site?.ssl_url||site?.url||'');
+  const fetched=await fetch(verificationUrl,{signal:AbortSignal.timeout(12_000),headers:{'Cache-Control':'no-cache'}});
   const body=await fetched.text();
   const markerVerified=fetched.ok&&body.includes('data-self-heal-drill="'+marker+'"')&&body.includes('data-expected-sha="'+expectedSha+'"');
 
@@ -226,6 +233,7 @@ async function runSandboxSelfHealDrill(context:Context,claims:any){
     retrigger,
     after,
     marker,
+    verificationUrl,
     markerVerified,
     phases:[
       {phase:'five-minute-grace-elapsed',ok:true},
