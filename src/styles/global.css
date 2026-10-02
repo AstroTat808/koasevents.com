@@ -2285,3 +2285,54 @@ html[data-theme="dark"] [class*="bg-[var(--koa-amber-light)]"][class*="text-[var
 html[data-theme="dark"] [class*="bg-[var(--koa-amber-light)]"][class*="text-[var(--koa-ink)]"] {
   color: #08130f !important;
 }
+
+
+/* Follow-up fixes from the strict 69-route Chromium dark audit. */
+html[data-theme="dark"] .hero-detail-card,
+html[data-theme="dark"] .catalog-filter-bar {
+  border-color: var(--koa-line) !important;
+  background: color-mix(in srgb, var(--koa-surface) 95%, transparent) !important;
+  color: var(--koa-text) !important;
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme="dark"] body.koa-admin-page .calendar-view-button,
+html[data-theme="dark"] body.koa-admin-page .calendar-view-label-mobile,
+html[data-theme="dark"] body.koa-admin-page .calendar-view-label-desktop {
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .calendar-view-button.is-active {
+  background: color-mix(in srgb, var(--koa-clay) 72%, var(--koa-surface)) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] body.koa-admin-page .mobile-today-schedule-empty {
+  border: 1px solid var(--koa-line);
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-muted) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .legend-vendor,
+html[data-theme="dark"] body.koa-admin-page .legend-staff,
+html[data-theme="dark"] body.koa-admin-page .legend-office {
+  border-color: var(--koa-line) !important;
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle,
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button *,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle * {
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle {
+  border-color: var(--koa-line) !important;
+  background: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .kpi span {
+  color: var(--koa-accent-text) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .kpi strong {
+  color: var(--koa-text-strong) !important;
+}
