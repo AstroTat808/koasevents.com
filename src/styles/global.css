@@ -1922,6 +1922,15 @@ html[data-theme="dark"] .bg-gray-200 {
   background-color: var(--koa-surface-2) !important;
 }
 
+html[data-theme="dark"] [class*="bg-stone-50/"],
+html[data-theme="dark"] [class*="bg-stone-100/"],
+html[data-theme="dark"] [class*="bg-slate-50/"],
+html[data-theme="dark"] [class*="bg-slate-100/"],
+html[data-theme="dark"] [class*="bg-gray-50/"],
+html[data-theme="dark"] [class*="bg-gray-100/"] {
+  background-color: color-mix(in srgb, var(--koa-surface-2) 88%, transparent) !important;
+}
+
 html[data-theme="dark"] .border-stone-200,
 html[data-theme="dark"] .border-stone-300,
 html[data-theme="dark"] .border-slate-200,
@@ -2029,6 +2038,44 @@ html[data-theme="dark"] .text-orange-800,
 html[data-theme="dark"] .text-orange-900,
 html[data-theme="dark"] .text-orange-950 {
   color: #fed7aa !important;
+}
+
+
+html[data-theme="dark"] [class*="bg-red-50/"],
+html[data-theme="dark"] [class*="bg-red-100/"] {
+  background-color: color-mix(in srgb, #7f1d1d 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-amber-50/"],
+html[data-theme="dark"] [class*="bg-amber-100/"] {
+  background-color: color-mix(in srgb, #92400e 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-emerald-50/"],
+html[data-theme="dark"] [class*="bg-emerald-100/"] {
+  background-color: color-mix(in srgb, #065f46 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-sky-50/"],
+html[data-theme="dark"] [class*="bg-sky-100/"] {
+  background-color: color-mix(in srgb, #075985 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-blue-50/"],
+html[data-theme="dark"] [class*="bg-blue-100/"] {
+  background-color: color-mix(in srgb, #1d4ed8 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-violet-50/"],
+html[data-theme="dark"] [class*="bg-violet-100/"] {
+  background-color: color-mix(in srgb, #6d28d9 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-rose-50/"],
+html[data-theme="dark"] [class*="bg-rose-100/"] {
+  background-color: color-mix(in srgb, #9f1239 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-yellow-50/"],
+html[data-theme="dark"] [class*="bg-yellow-100/"] {
+  background-color: color-mix(in srgb, #a16207 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-orange-50/"],
+html[data-theme="dark"] [class*="bg-orange-100/"] {
+  background-color: color-mix(in srgb, #c2410c 24%, var(--koa-surface)) !important;
 }
 
 html[data-theme="dark"] .text-red-950 { color: #fecaca !important; }
