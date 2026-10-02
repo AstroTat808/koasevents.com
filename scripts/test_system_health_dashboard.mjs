@@ -5,6 +5,7 @@ const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', im
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
+const systemHealthCore = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
 
@@ -125,6 +126,14 @@ assert(
     && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
     && visualWorkflow.includes('koa-system-health-responsive-pr-'),
   'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
+);
+
+assert(
+  systemHealthCore.includes("id:'login-alert-policy'")
+    && systemHealthCore.includes("name:'Sign-in alert policy'")
+    && systemHealthCore.includes('authenticationSecurityHealthSummary(context)')
+    && systemHealthCore.includes('authSecurityDetails'),
+  'System Health must include the structured sign-in alert policy check and authentication storage probes.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
