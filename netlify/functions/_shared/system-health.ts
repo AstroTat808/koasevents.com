@@ -2746,6 +2746,40 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionResponsiveViewportResult = {
+  browser:'chromium'|'webkit';
+  viewport:string;
+  width:number;
+  height:number;
+  ok:boolean;
+  documentScrollWidth:number|null;
+  viewportWidth:number|null;
+  horizontalOverflowPx:number|null;
+  summaryGridLeft:number|null;
+  summaryGridRight:number|null;
+  summaryLeftOverflowPx:number|null;
+  summaryRightOverflowPx:number|null;
+  documentScrollHeight:number|null;
+  screenshotMode:string;
+  dashboardRefresh:string;
+  failure:string;
+};
+
+export type ProductionResponsiveVerification = {
+  checkedAt:string;
+  status:'passed'|'failed'|'unverified';
+  totalCount:number;
+  passedCount:number;
+  failedCount:number;
+  workflowRunId:string;
+  workflowUrl:string;
+  dashboardOverall:string;
+  dashboardPassed:number|null;
+  dashboardFailed:number|null;
+  dashboardRefresh:string;
+  rows:ProductionResponsiveViewportResult[];
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2758,6 +2792,7 @@ export type ProductionRelease = {
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
+  responsiveVerification?:ProductionResponsiveVerification|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -3135,6 +3170,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
+    responsiveVerification:input?.responsiveVerification||previous?.responsiveVerification||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,

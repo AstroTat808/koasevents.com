@@ -10,6 +10,7 @@ const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
+const releaseAudit = await readFile(new URL('./system_health_release_audit.py', import.meta.url), 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -173,11 +174,55 @@ assert(
 );
 assert(
   visualWorkflow.includes('statuses: write')
-    && visualWorkflow.includes('System Health production release gate')
+    && releaseAudit.includes('"context": "System Health production release gate"')
     && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
-    && visualWorkflow.includes("len(report.get('results'))==7")
-    && visualWorkflow.includes('len(refresh_checks)==14'),
-  'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
+    && visualWorkflow.includes('scripts/system_health_release_audit.py prepare')
+    && visualWorkflow.includes('scripts/system_health_release_audit.py enforce')
+    && visualWorkflow.includes('system-health-responsive-release.json')
+    && releaseAudit.includes('"action": "record-responsive-release-verification"'),
+  'Live production System Health QA must persist the exact 14-view responsive audit, publish its commit status, and fail the workflow unless every viewport passes.',
+);
+assert(
+  visualWorkflow.includes("group: koa-production-visual-qa-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}")
+    && visualWorkflow.includes("cancel-in-progress: ${{ github.event_name == 'pull_request' }}")
+    && visualWorkflow.includes('id: health-chromium')
+    && visualWorkflow.includes('id: health-webkit')
+    && visualWorkflow.includes('continue-on-error: true'),
+  'Production responsive evidence must not be cancelled by a newer main release, and both browser engines must report before the final gate is enforced.',
+);
+assert(
+  releaseAudit.includes('("phone-small", 320, 568)')
+    && releaseAudit.includes('("phone", 390, 844)')
+    && releaseAudit.includes('("tablet", 768, 1024)')
+    && releaseAudit.includes('("tablet-wide", 1024, 768)')
+    && releaseAudit.includes('("desktop-small", 1280, 800)')
+    && releaseAudit.includes('("desktop", 1440, 900)')
+    && releaseAudit.includes('("desktop-wide", 1920, 1080)')
+    && releaseAudit.includes('BROWSERS = ("chromium", "webkit")')
+    && releaseAudit.includes('"horizontalOverflowPx"')
+    && releaseAudit.includes('"summaryRightOverflowPx"')
+    && releaseAudit.includes('"screenshotMode"')
+    && releaseAudit.includes('verification.get("passedCount") != 14'),
+  'The durable responsive release audit must contain the exact seven breakpoints in Chromium and WebKit, overflow measurements, screenshot mode, and a strict 14/14 enforcement rule.',
+);
+assert(
+  systemHealth.includes('export type ProductionResponsiveVerification')
+    && systemHealth.includes('responsiveVerification?:ProductionResponsiveVerification|null')
+    && systemHealth.includes('responsiveVerification:input?.responsiveVerification||previous?.responsiveVerification||null')
+    && healthSignal.includes("body?.action==='record-responsive-release-verification'")
+    && healthSignal.includes('normalizeResponsiveReleaseVerification(body?.verification||{},claims)'),
+  'Every production release record must retain normalized responsive verification evidence under its durable per-deploy audit record.',
+);
+assert(
+  health.includes('data-deploy-responsive-status')
+    && health.includes('data-deploy-responsive-detail')
+    && health.includes('System Health responsive release gate')
+    && health.includes('data-release-responsive')
+    && health.includes('responsiveLabel')
+    && health.includes('Horizontal overflow')
+    && health.includes('Summary overflow')
+    && health.includes('Screenshot'),
+  'System Health must surface current and historical exact responsive release results with browser, dimensions, overflow, commit/deploy identity, and screenshot mode.',
 );
 
 assert(

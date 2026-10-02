@@ -38,6 +38,87 @@ function cleanText(value:unknown,max=500){
   return String(value||'').trim().slice(0,max);
 }
 
+
+const RESPONSIVE_RELEASE_VIEWPORTS=[
+  {viewport:'phone-small',width:320,height:568},
+  {viewport:'phone',width:390,height:844},
+  {viewport:'tablet',width:768,height:1024},
+  {viewport:'tablet-wide',width:1024,height:768},
+  {viewport:'desktop-small',width:1280,height:800},
+  {viewport:'desktop',width:1440,height:900},
+  {viewport:'desktop-wide',width:1920,height:1080},
+] as const;
+
+function finiteNumberOrNull(value:unknown){
+  const parsed=Number(value);
+  return Number.isFinite(parsed)?parsed:null;
+}
+
+function normalizeResponsiveReleaseVerification(raw:any,claims:any){
+  const inputRows=Array.isArray(raw?.rows)?raw.rows:[];
+  const rows:any[]=[];
+  for(const browser of ['chromium','webkit'] as const){
+    for(const expected of RESPONSIVE_RELEASE_VIEWPORTS){
+      const source=inputRows.find((row:any)=>
+        cleanText(row?.browser,40)===browser
+        && cleanText(row?.viewport,80)===expected.viewport
+      )||null;
+      const viewportWidth=finiteNumberOrNull(source?.viewportWidth)??expected.width;
+      const documentScrollWidth=finiteNumberOrNull(source?.documentScrollWidth);
+      const summaryGridLeft=finiteNumberOrNull(source?.summaryGridLeft);
+      const summaryGridRight=finiteNumberOrNull(source?.summaryGridRight);
+      const horizontalOverflowPx=finiteNumberOrNull(source?.horizontalOverflowPx)
+        ?? (documentScrollWidth==null?null:Math.max(0,documentScrollWidth-viewportWidth));
+      const summaryLeftOverflowPx=finiteNumberOrNull(source?.summaryLeftOverflowPx)
+        ?? (summaryGridLeft==null?null:Math.max(0,-summaryGridLeft));
+      const summaryRightOverflowPx=finiteNumberOrNull(source?.summaryRightOverflowPx)
+        ?? (summaryGridRight==null?null:Math.max(0,summaryGridRight-viewportWidth));
+      const failure=cleanText(source?.failure,1200);
+      const geometryOk=Boolean(
+        documentScrollWidth!=null
+        && horizontalOverflowPx!=null
+        && horizontalOverflowPx<=1
+        && (summaryLeftOverflowPx==null||summaryLeftOverflowPx<=1)
+        && (summaryRightOverflowPx==null||summaryRightOverflowPx<=1)
+      );
+      rows.push({
+        browser,
+        viewport:expected.viewport,
+        width:expected.width,
+        height:expected.height,
+        ok:Boolean(source?.ok)&&!failure&&geometryOk,
+        documentScrollWidth,
+        viewportWidth,
+        horizontalOverflowPx,
+        summaryGridLeft,
+        summaryGridRight,
+        summaryLeftOverflowPx,
+        summaryRightOverflowPx,
+        documentScrollHeight:finiteNumberOrNull(source?.documentScrollHeight),
+        screenshotMode:cleanText(source?.screenshotMode,80)||'unavailable',
+        dashboardRefresh:cleanText(source?.dashboardRefresh,120),
+        failure:failure||(!source?'QA result was not recorded.':geometryOk?'':'Responsive overflow geometry did not pass.'),
+      });
+    }
+  }
+  const passedCount=rows.filter((row)=>row.ok).length;
+  const runId=cleanText(claims?.run_id||claims?.run_number,120);
+  return {
+    checkedAt:cleanText(raw?.checkedAt,80)||new Date().toISOString(),
+    status:passedCount===rows.length?'passed':'failed',
+    totalCount:rows.length,
+    passedCount,
+    failedCount:rows.length-passedCount,
+    workflowRunId:runId,
+    workflowUrl:runId?'https://github.com/'+REPOSITORY+'/actions/runs/'+runId:'',
+    dashboardOverall:cleanText(raw?.dashboardOverall,40),
+    dashboardPassed:finiteNumberOrNull(raw?.dashboardPassed),
+    dashboardFailed:finiteNumberOrNull(raw?.dashboardFailed),
+    dashboardRefresh:cleanText(raw?.dashboardRefresh,120),
+    rows,
+  };
+}
+
 async function netlifyJson(token:string,path:string,options:RequestInit={}){
   const response=await fetch('https://api.netlify.com/api/v1'+path,{
     ...options,
@@ -546,6 +627,64 @@ export default async (req:Request,context:Context) => {
           sha:result.signal.sha,
           source:'github-actions-oidc',
         },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='record-responsive-release-verification'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const currentDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        const requestedDeployId=cleanText(body?.deployId,120);
+        if(currentDeployId&&requestedDeployId&&currentDeployId!==requestedDeployId){
+          return Response.json({
+            error:'Responsive verification deploy id does not match the live production deploy.',
+            expected:currentDeployId,
+            received:requestedDeployId,
+          },{status:409,headers:{'Cache-Control':'no-store'}});
+        }
+        const deployId=currentDeployId||requestedDeployId;
+        if(!deployId)throw new Error('Production deploy id is unavailable for responsive verification.');
+        const responsiveVerification=normalizeResponsiveReleaseVerification(body?.verification||{},claims);
+        const releaseRecord=await recordProductionRelease(context,{
+          deployId,
+          commit:String(claims.sha||''),
+          checkedAt:responsiveVerification.checkedAt,
+          responsiveVerification,
+        });
+        const auditRecorded=Boolean(
+          releaseRecord?.deployId===deployId
+          && releaseRecord?.responsiveVerification?.checkedAt===responsiveVerification.checkedAt
+          && releaseRecord?.responsiveVerification?.rows?.length===14
+        );
+        return Response.json({
+          ok:auditRecorded,
+          verificationPassed:responsiveVerification.status==='passed',
+          auditRecorded,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId,
+          source:'github-actions-oidc',
+          responsiveVerification,
+        },{
+          status:auditRecorded?200:503,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          auditRecorded:false,
+          error:error instanceof Error?error.message:'Unable to persist responsive release verification.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
       }
     }
 
