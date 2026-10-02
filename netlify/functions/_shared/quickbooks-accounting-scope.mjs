@@ -16,15 +16,15 @@ export function quickBooksAccountingScope(record) {
   const qboOrigin = clean(record?.accounting?.quickbooks?.origin);
   const historicalQuickBooksImport =
     recordSource === 'quickbooks-import'
-    || proposalSource === 'quickbooks-import';
+    || proposalSource === 'quickbooks-import'
+    || qboOrigin === 'quickbooks';
 
   return {
     mode: historicalQuickBooksImport ? 'quickbooks-history' : 'crm-managed',
     actionable: !historicalQuickBooksImport,
     historicalQuickBooksImport,
-    qboOrigin,
     reason: historicalQuickBooksImport
       ? 'Imported QuickBooks history is read-only accounting context, not a CRM-managed booking workflow.'
-      : 'CRM-managed booking accounting remains actionable regardless of whether its linked accounting data originated in QuickBooks.',
+      : 'CRM-managed booking accounting is subject to estimate, milestone, invoice, and balance reconciliation.',
   };
 }
