@@ -281,7 +281,7 @@ jobs:
               row=by_id[record_id]
               assert row.get('status')=='verified'
               assert row.get('historicalQuickBooksImport') is True
-              assert row.get('accountingScope')=='historical_qbo_import'
+              assert row.get('accountingScope')=='quickbooks-history'
               assert row.get('estimateId')
               assert isinstance(row.get('rawFields'),dict)
           print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
