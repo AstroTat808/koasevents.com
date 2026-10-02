@@ -257,7 +257,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .legend-event{background:var(--koa-forest);color:white;border-color:var(--koa-forest)}
     .legend-payment{background:var(--koa-clay);color:white;border-color:var(--koa-clay)}
     .legend-deadline{background:var(--koa-sand);color:var(--koa-forest)}
-    .legend-vendor{background:white;color:var(--koa-clay)}
+    .legend-vendor{background:var(--koa-surface);color:var(--koa-clay)}
     .legend-task{background:var(--koa-ink);color:white;border-color:var(--koa-ink)}
     .legend-staff{background:color-mix(in srgb,var(--koa-forest) 12%,white);color:var(--koa-forest);border-color:color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
     .legend-office{background:color-mix(in srgb,var(--koa-amber-light) 24%,white);color:var(--koa-ink);border-color:color-mix(in srgb,var(--koa-amber-light) 45%,var(--koa-line))}
@@ -284,12 +284,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-options-hint{margin-top:.45rem;color:color-mix(in srgb,var(--koa-ink) 48%,transparent);font-size:.56rem;line-height:1.35}
     .calendar-density-button{border-radius:9999px;padding:.42rem .62rem;font-size:.54rem;font-weight:900;text-transform:uppercase;letter-spacing:.055em;color:color-mix(in srgb,var(--koa-ink) 56%,transparent)}
     .calendar-density-button.is-active{background:var(--koa-forest);color:white}
-    .calendar-utility-button{display:inline-flex;min-height:2rem;align-items:center;justify-content:center;gap:.32rem;border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.4rem .58rem;color:var(--koa-forest);font-size:.5rem;font-weight:900;letter-spacing:.055em;text-transform:uppercase}
+    .calendar-utility-button{display:inline-flex;min-height:2rem;align-items:center;justify-content:center;gap:.32rem;border:1px solid var(--koa-line);border-radius:9999px;background:var(--koa-surface);padding:.4rem .58rem;color:var(--koa-forest);font-size:.5rem;font-weight:900;letter-spacing:.055em;text-transform:uppercase}
     .calendar-options-toggle[aria-expanded="true"]{border-color:var(--koa-forest);background:color-mix(in srgb,var(--koa-forest) 8%,white)}
-    .calendar-filter{border:1px solid var(--koa-line);border-radius:9999px;background:white;padding:.5rem .72rem;font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:color-mix(in srgb,var(--koa-ink) 58%,transparent)}
+    .calendar-filter{border:1px solid var(--koa-line);border-radius:9999px;background:var(--koa-surface);padding:.5rem .72rem;font-size:.6rem;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:color-mix(in srgb,var(--koa-ink) 58%,transparent)}
     .calendar-filter:hover{background:var(--koa-ivory)}
     .calendar-filter.is-active{background:var(--koa-forest);border-color:var(--koa-forest);color:white}
-    .calendar-nav{display:grid;height:3rem;width:3rem;place-items:center;border-radius:9999px;border:1px solid var(--koa-line);background:white;font-size:1.2rem;color:var(--koa-forest);transition:transform .16s ease,background .16s ease}
+    .calendar-nav{display:grid;height:3rem;width:3rem;place-items:center;border-radius:9999px;border:1px solid var(--koa-line);background:var(--koa-surface);font-size:1.2rem;color:var(--koa-forest);transition:transform .16s ease,background .16s ease}
     .calendar-nav:hover{background:var(--koa-ivory);transform:translateY(-1px)}
     .calendar-today{border-radius:9999px;background:var(--koa-sand);padding:.72rem 1rem;font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--koa-forest)}
     .calendar-grid-wrap{width:100%;min-width:0;max-width:100%}
@@ -297,7 +297,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-weekdays>div{border-right:1px solid var(--koa-line);padding:.8rem .5rem}
     .calendar-weekdays>div:last-child{border-right:0}
     .calendar-grid{border-top:1px solid var(--koa-line)}
-    .calendar-day{position:relative;min-height:12.5rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line);padding:.7rem;background:white;transition:background .16s ease}
+    .calendar-day{position:relative;min-height:12.5rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line);padding:.7rem;background:var(--koa-surface);transition:background .16s ease}
     .calendar-day:nth-child(7n){border-right:0}
     .calendar-day:nth-last-child(-n+7){border-bottom:0}
     .calendar-day.is-weekend:not(.is-other){background:color-mix(in srgb,var(--koa-ivory) 72%,white)}
@@ -315,7 +315,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .calendar-item.event{background:var(--koa-forest);color:white}
     .calendar-item.payment{background:var(--koa-clay);color:white}
     .calendar-item.deadline{background:var(--koa-sand);color:var(--koa-forest)}
-    .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:white}
+    .calendar-item.vendor{border:1px solid var(--koa-line);color:var(--koa-clay);background:var(--koa-surface)}
     .calendar-item.task,.calendar-item.timeline{background:var(--koa-ink);color:white}
     .calendar-item.staffing{background:color-mix(in srgb,var(--koa-forest) 14%,white);color:var(--koa-forest);border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line))}
     .calendar-item.office365{background:color-mix(in srgb,var(--koa-amber-light) 20%,white);color:var(--koa-forest);border:1px dashed color-mix(in srgb,var(--koa-clay) 45%,var(--koa-line))}
@@ -331,9 +331,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .staff-schedule-grid{display:grid;min-width:max-content}
     .staff-schedule-head,.staff-schedule-name,.staff-schedule-cell{border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line)}
     .staff-schedule-head{position:sticky;top:0;z-index:8;background:color-mix(in srgb,var(--koa-sand) 58%,white);padding:.65rem .5rem;text-align:center}
-    .staff-schedule-name{position:sticky;left:0;z-index:7;background:white;padding:.65rem .75rem;min-width:15rem}
+    .staff-schedule-name{position:sticky;left:0;z-index:7;background:var(--koa-surface);padding:.65rem .75rem;min-width:15rem}
     .staff-schedule-corner{position:sticky;left:0;top:0;z-index:10;background:var(--koa-forest);color:white;padding:.75rem;min-width:15rem;border-right:1px solid var(--koa-line);border-bottom:1px solid var(--koa-line)}
-    .staff-schedule-cell{min-height:5.7rem;background:white;padding:.42rem;min-width:9rem}
+    .staff-schedule-cell{min-height:5.7rem;background:var(--koa-surface);padding:.42rem;min-width:9rem}
     .staff-schedule-cell.is-weekend{background:color-mix(in srgb,var(--koa-ivory) 72%,white)}
     .staff-schedule-cell.is-today{box-shadow:inset 0 0 0 2px var(--koa-forest)}
     .staff-schedule-cell.has-overload{background:color-mix(in srgb,#f59e0b 10%,white)}
@@ -348,12 +348,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     .day-panel{position:fixed;inset:0;z-index:80;pointer-events:none;opacity:0;transition:opacity .16s ease}
     .day-panel.is-open{pointer-events:auto;opacity:1}
     .day-panel-backdrop{position:absolute;inset:0;background:rgb(6 24 19/.34);backdrop-filter:blur(2px)}
-    .day-panel-card{position:absolute;right:0;top:0;height:100%;width:min(34rem,94vw);transform:translateX(100%);background:white;box-shadow:-18px 0 50px rgb(0 0 0/.16);transition:transform .2s ease;display:flex;flex-direction:column}
+    .day-panel-card{position:absolute;right:0;top:0;height:100%;width:min(34rem,94vw);transform:translateX(100%);background:var(--koa-surface);box-shadow:-18px 0 50px rgb(0 0 0/.16);transition:transform .2s ease;display:flex;flex-direction:column}
     .day-panel.is-open .day-panel-card{transform:translateX(0)}
     .calendar-preview{position:fixed;inset:0;z-index:90;pointer-events:none;opacity:0;transition:opacity .16s ease}
     .calendar-preview.is-open{pointer-events:auto;opacity:1}
     .calendar-preview-backdrop{position:absolute;inset:0;background:rgb(6 24 19/.38);backdrop-filter:blur(3px)}
-    .calendar-preview-card{position:absolute;left:50%;top:50%;width:min(34rem,92vw);transform:translate(-50%,-46%) scale(.98);border-radius:1.4rem;background:white;box-shadow:0 24px 70px rgb(0 0 0/.22);transition:transform .18s ease;overflow:hidden}
+    .calendar-preview-card{position:absolute;left:50%;top:50%;width:min(34rem,92vw);transform:translate(-50%,-46%) scale(.98);border-radius:1.4rem;background:var(--koa-surface);box-shadow:0 24px 70px rgb(0 0 0/.22);transition:transform .18s ease;overflow:hidden}
     .calendar-preview.is-open .calendar-preview-card{transform:translate(-50%,-50%) scale(1)}
     .day-detail-item{border:1px solid var(--koa-line);border-radius:1rem;background:var(--koa-ivory);padding:1rem}
     .calendar-day{cursor:pointer}
@@ -405,7 +405,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         gap:.32rem;
         border:1px solid color-mix(in srgb,var(--koa-line) 78%,transparent);
         border-radius:.9rem;
-        background:rgba(255,255,255,.97);
+        background:color-mix(in srgb,var(--koa-surface) 97%,transparent);
         padding:.34rem;
         box-shadow:0 8px 22px rgba(7,30,23,.08);
         backdrop-filter:blur(12px);
@@ -728,7 +728,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         overflow:hidden;
         border:1px solid color-mix(in srgb,var(--koa-forest) 20%,var(--koa-line));
         border-radius:1.1rem;
-        background:white;
+        background:var(--koa-surface);
         box-shadow:0 12px 32px rgba(7,30,23,.08);
       }
 
@@ -793,7 +793,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         width:100%;
         border:1px solid color-mix(in srgb,var(--koa-line) 82%,transparent);
         border-radius:.75rem;
-        background:white;
+        background:var(--koa-surface);
         padding:.6rem .65rem;
         text-align:left;
       }
@@ -871,7 +871,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         overflow:hidden;
         border:1px solid var(--koa-line);
         border-radius:1rem;
-        background:white;
+        background:var(--koa-surface);
         box-shadow:0 12px 34px rgba(7,30,23,.08);
       }
 
@@ -939,7 +939,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         overflow:hidden;
         border:1px solid var(--koa-line)!important;
         border-radius:.9rem;
-        background:white;
+        background:var(--koa-surface);
       }
 
       .week-day-head{
@@ -984,7 +984,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         overflow:hidden;
         border:1px solid var(--koa-line);
         border-radius:1rem;
-        background:white;
+        background:var(--koa-surface);
       }
 
       .staff-mobile-card-head{
@@ -1005,7 +1005,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         width:100%;
         border:1px solid color-mix(in srgb,var(--koa-line) 82%,transparent);
         border-radius:.8rem;
-        background:white;
+        background:var(--koa-surface);
         padding:.65rem;
         text-align:left;
       }
@@ -1030,7 +1030,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       .staff-mobile-set-availability{
         border:1px solid var(--koa-line);
         border-radius:9999px;
-        background:white;
+        background:var(--koa-surface);
         padding:.55rem .75rem;
         color:var(--koa-forest);
         font-size:.55rem;

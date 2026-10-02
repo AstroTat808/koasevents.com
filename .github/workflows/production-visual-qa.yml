@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
+      - 'scripts/theme_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
@@ -22,6 +23,7 @@ on:
     paths:
       - '.github/workflows/production-visual-qa.yml'
       - 'scripts/production_visual_qa.py'
+      - 'scripts/theme_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
@@ -88,6 +90,38 @@ jobs:
         run: |
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
+      - name: Verify site-wide Light / Dark / System themes in Chromium and WebKit
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4174 --directory dist > /tmp/koa-theme-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-theme-preview.log
+            exit 1
+          fi
+          python scripts/theme_visual_qa.py --browser chromium --base-url http://127.0.0.1:4174
+          python scripts/theme_visual_qa.py --browser webkit --base-url http://127.0.0.1:4174
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && always()
+        with:
+          name: koa-theme-responsive-pr-${{ github.run_id }}
+          path: |
+            visual-results/theme-source-audit.json
+            visual-results/theme-chromium
+            visual-results/theme-webkit
+          retention-days: 30
+          if-no-files-found: error
       - name: Create local System Health QA snapshot
         if: github.event_name == 'pull_request'
         run: |
@@ -150,7 +184,9 @@ jobs:
         if: always()
         with:
           name: koa-source-audit-${{ github.run_id }}
-          path: visual-results/source-audit.json
+          path: |
+            visual-results/source-audit.json
+            visual-results/theme-source-audit.json
           retention-days: 14
           if-no-files-found: error
 

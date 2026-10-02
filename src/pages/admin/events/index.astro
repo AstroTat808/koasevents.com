@@ -595,7 +595,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     searchForm?.addEventListener('submit',(e)=>{e.preventDefault();load(String(search.value||'').trim());});
 
-    const style=document.createElement('style');style.textContent='.field{min-height:2.7rem;border:1px solid var(--koa-line);border-radius:.65rem;background:white;padding:.65rem .75rem;font-size:.82rem;width:100%}';document.head.appendChild(style);
+    const style=document.createElement('style');style.textContent='.field{min-height:2.7rem;border:1px solid var(--koa-line);border-radius:.65rem;background:var(--koa-surface);padding:.65rem .75rem;font-size:.82rem;width:100%}';document.head.appendChild(style);
     showTab('overview');load();
   </script>
 </BaseLayout>

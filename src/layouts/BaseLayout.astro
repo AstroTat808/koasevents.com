@@ -296,11 +296,64 @@ const seoSchema = {
     <meta name="twitter:image" content={socialImageUrl} />
     <meta name="twitter:image:alt" content={socialImageAlt} />
 
-    <meta name="theme-color" content="#173d30" />
+    <meta id="koa-theme-color" name="theme-color" content="#173d30" />
     <script type="application/ld+json" set:html={JSON.stringify(seoSchema)} />
   </head>
   <body class={isAdminPage ? 'koa-admin-page' : undefined}>
     <script is:inline>
+      (() => {
+        const key = 'koa-theme-preference';
+        const allowed = new Set(['light', 'dark', 'system']);
+        const root = document.documentElement;
+        const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+        const read = () => {
+          try {
+            const value = window.localStorage.getItem(key) || 'light';
+            return allowed.has(value) ? value : 'light';
+          } catch {
+            return 'light';
+          }
+        };
+        const resolve = (preference) =>
+          preference === 'dark' || (preference === 'system' && Boolean(media?.matches))
+            ? 'dark'
+            : 'light';
+        const apply = (preference, announce = false) => {
+          const safePreference = allowed.has(preference) ? preference : 'light';
+          const resolved = resolve(safePreference);
+          root.dataset.themePreference = safePreference;
+          root.dataset.theme = resolved;
+          root.style.colorScheme = resolved;
+          const meta = document.querySelector('#koa-theme-color');
+          if (meta) meta.setAttribute('content', resolved === 'dark' ? '#0b1713' : '#173d30');
+          if (announce) {
+            window.dispatchEvent(new CustomEvent('koa:theme-change', {
+              detail: { preference: safePreference, resolved },
+            }));
+          }
+        };
+        const persist = (preference) => {
+          try { window.localStorage.setItem(key, preference); } catch {}
+        };
+
+        apply(read());
+
+        window.addEventListener('koa:theme-request', (event) => {
+          const requested = event instanceof CustomEvent ? String(event.detail?.preference || '') : '';
+          const preference = allowed.has(requested) ? requested : 'light';
+          persist(preference);
+          apply(preference, true);
+        });
+
+        media?.addEventListener?.('change', () => {
+          if ((root.dataset.themePreference || read()) === 'system') apply('system', true);
+        });
+
+        window.addEventListener('storage', (event) => {
+          if (event.key === key) apply(read(), true);
+        });
+      })();
+
       (() => {
         const hash = window.location.hash || '';
         const isIdentityCallback = /^#(?:invite_token|recovery_token|confirmation_token|access_token|error=)/.test(hash);
