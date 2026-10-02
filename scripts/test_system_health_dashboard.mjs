@@ -5,6 +5,7 @@ const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', im
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
 const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
+const adminQuickBooks = await readFile(new URL('../netlify/functions/admin-quickbooks.mts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
@@ -243,6 +244,53 @@ assert(
   health.includes("if(statusValue==='unverified'){action.textContent='Recheck'")
     && health.includes("if(statusValue==='passed'){action.textContent='Clean'"),
   'Unverified accounting rows must recheck instead of attempting a write, while passing rows remain non-actionable.',
+);
+
+
+assert(
+  systemHealth.includes('discountAmtField')
+    && systemHealth.includes('discountLineAmount')
+    && systemHealth.includes('totalTax')
+    && systemHealth.includes('nonSalesAdjustments')
+    && adminHealth.includes('discountAmtField:row?.discountAmtField')
+    && adminHealth.includes('totalTax:row?.totalTax'),
+  'Signed accounting audits must retain raw QuickBooks discount, tax, and non-sales adjustment diagnostics.',
+);
+assert(
+  adminQuickBooks.includes("action === 'preview-all-safe-accounting-repairs'")
+    && adminQuickBooks.includes("action === 'preview-accounting-repair-write'")
+    && adminQuickBooks.includes("approvalMode:'individual-write-only'")
+    && adminQuickBooks.includes("approvalMode:'single-write'")
+    && !adminQuickBooks.includes("action === 'apply-all-safe-accounting-repairs'"),
+  'Bulk accounting repair must remain preview-only and require a fresh single-write preview before each QuickBooks mutation.',
+);
+assert(
+  adminQuickBooks.includes('await integrationStore.delete(repairPreviewKey(preview.previewId))')
+    && adminQuickBooks.includes('changes:[change]'),
+  'The consolidated bulk preview must discard bulk approval tokens and narrow individual approvals to one exact write.',
+);
+assert(
+  health.includes('data-accounting-preview-all-safe')
+    && health.includes('data-accounting-bulk-preview-dialog')
+    && health.includes('Preview exact write')
+    && health.includes("action:'preview-all-safe-accounting-repairs'")
+    && health.includes("action:'preview-accounting-repair-write'"),
+  'System Health must expose a consolidated read-only repair report with per-write preview actions and no bulk approval control.',
+);
+
+
+assert(
+  adminQuickBooks.includes("const scope = quickBooksAccountingScope(record)")
+    && adminQuickBooks.includes("if (!lifecycle || !scope.actionable)")
+    && adminQuickBooks.includes("if (!parent?.canApply)"),
+  'Both row and bulk accounting repair previews must fail closed when the record is outside the current CRM-managed repair scope or the live preview is blocked.',
+);
+
+
+assert(
+  adminQuickBooks.includes("Math.min(4, recordIds.length)")
+    && adminQuickBooks.includes("await Promise.all(workers)"),
+  'Bulk QuickBooks repair previews must use bounded concurrency rather than serial or unbounded live QBO requests.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
