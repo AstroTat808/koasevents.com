@@ -348,13 +348,15 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
   const secretConfigured = Boolean(turnstile?.secretConfigured);
   const widget = turnstile?.widgetRendering || {};
   const siteverify = turnstile?.siteverify || {};
+  const serverEnforcement = turnstile?.serverEnforcement || {};
   const mismatches = turnstile?.mismatches || {};
   const validations = turnstile?.totals || {};
   const configured = siteKeyConfigured && secretConfigured;
   const widgetOk = Boolean(widget?.ok);
   const siteverifyOk = Boolean(siteverify?.ok);
+  const serverEnforcementOk = Boolean(serverEnforcement?.ok);
   const mismatchCount = Number(mismatches?.total || 0);
-  const ok = Boolean(configured && widgetOk && siteverifyOk && mismatchCount === 0);
+  const ok = Boolean(configured && widgetOk && siteverifyOk && serverEnforcementOk && mismatchCount === 0);
   const status = Number(siteverify?.status || 0);
   const issueType = ok ? null : classifyCredentialFailure({
     configured,
@@ -367,7 +369,9 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
           ? 'One or more protected forms are not rendering the configured Turnstile widget correctly.'
           : !siteverifyOk
             ? clean(siteverify?.detail || 'Cloudflare Siteverify verification failed.', 800)
-            : 'Turnstile hostname or action mismatch detected.',
+            : !serverEnforcementOk
+              ? clean(serverEnforcement?.detail || 'Production server-side Turnstile enforcement failed.', 800)
+              : 'Turnstile hostname or action mismatch detected.',
   });
   const severity: CredentialHealthRow['severity'] = ok
     ? 'green'
@@ -381,6 +385,7 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
     secretConfigured ? 'Secret configured' : 'Secret missing',
     String(Number(widget?.healthy || 0)) + '/' + String(Number(widget?.total || 0)) + ' protected forms rendering correctly',
     siteverifyOk ? 'Siteverify reachable + secret accepted' : clean(siteverify?.detail || 'Siteverify not healthy', 260),
+    String(Number(serverEnforcement?.healthy || 0)) + '/' + String(Number(serverEnforcement?.total || 0)) + ' protected flows reject invalid tokens server-side',
     String(Number(validations?.successful || 0)) + ' successful validations / ' + String(Number(validations?.failed || 0)) + ' failures in ' + String(Number(turnstile?.windowDays || 30)) + 'd',
     mismatchCount ? String(mismatchCount) + ' hostname/action mismatches' : 'No hostname/action mismatches',
     lastSuccess?.createdAt ? 'Last success ' + lastSuccess.createdAt : 'No successful validation recorded yet',
@@ -391,12 +396,13 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
   if (secretConfigured) verifiedPermissions.push('Server-side secret configured');
   if (widgetOk) verifiedPermissions.push('All protected widgets rendering');
   if (siteverifyOk) verifiedPermissions.push('Cloudflare Siteverify reachable');
+  if (serverEnforcementOk) verifiedPermissions.push('Production endpoints enforce Turnstile server-side');
   if (mismatchCount === 0) verifiedPermissions.push('Hostname + action match');
 
   const row: CredentialHealthRow = {
     id: 'turnstile',
     provider: 'Cloudflare Turnstile',
-    credential: 'Site key + server-side secret + widget/Siteverify validation',
+    credential: 'Site key + server-side secret + widget/Siteverify/server-enforcement validation',
     ok,
     configured,
     status,
@@ -406,6 +412,7 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
     verificationHttp: [
       siteverify?.status ? 'Siteverify HTTP ' + siteverify.status : '',
       widget?.total ? 'Widgets ' + Number(widget.healthy || 0) + '/' + Number(widget.total || 0) : '',
+      serverEnforcement?.total ? 'Server enforcement ' + Number(serverEnforcement.healthy || 0) + '/' + Number(serverEnforcement.total || 0) : '',
     ].filter(Boolean).join(' · '),
     verifiedPermissions,
     diagnostics: turnstile,

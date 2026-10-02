@@ -30,6 +30,36 @@ const emailTemplateFiles = [
   'netlify/functions/admin-email-preview.mts',
 ];
 
+
+function checkTurnstileSecretExposure() {
+  const clientExtensions = new Set(['.ts','.mts','.tsx','.js','.mjs','.jsx','.astro','.html','.css','.json']);
+  const walkClient = (dir) => {
+    if (!fs.existsSync(dir)) return [];
+    return fs.readdirSync(dir, { withFileTypes:true }).flatMap((entry) => {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) return walkClient(full);
+      return clientExtensions.has(path.extname(entry.name)) ? [full] : [];
+    });
+  };
+
+  for (const file of ['src','public'].flatMap(walkClient)) {
+    const text = fs.readFileSync(file, 'utf8');
+    if (/(?:import\.meta\.env|process\.env|Netlify\.env\.get\s*\()\s*(?:\[\s*['"])?TURNSTILE_SECRET(?:_KEY)?\b/.test(text)) {
+      failures.push(file + ': Turnstile server secret environment variable is accessed from client/public source');
+    }
+  }
+
+  for (const file of ['netlify/functions','netlify/edge-functions'].flatMap(walk)) {
+    const text = fs.readFileSync(file, 'utf8');
+    const rows = text.split(/\r?\n/);
+    rows.forEach((row, index) => {
+      if (/console\.(?:log|info|warn|error|debug)\s*\([^\n]*(?:TURNSTILE_SECRET(?:_KEY)?|turnstileSecret\s*\()/i.test(row)) {
+        failures.push(file + ':' + String(index + 1) + ': Turnstile secret must never be written to logs');
+      }
+    });
+  }
+}
+
 function checkEmailCompatibility() {
   const brandPath = 'netlify/functions/_shared/email-brand.ts';
   if (!fs.existsSync(brandPath)) {
@@ -148,6 +178,8 @@ function checkEmailFeatureContracts() {
       ['Email Health summary integration', 'emailHealthSummary'],
       ['Credential Health scheduled integration', 'credentialHealthPromise'],
       ['health issue classification', 'export function classifyHealthIssue'],
+      ['Turnstile server-enforcement health component', "id:'turnstile-server-enforcement'"],
+      ['Turnstile server-enforcement live check', 'turnstileServerEnforcementCheck'],
       ['email logo component', "id:'email-logo'"],
       ['email send access component', "id:'email-send-access'"],
       ['email monitoring access component', "id:'email-monitoring-access'"],
@@ -437,6 +469,7 @@ checkEmailCompatibility();
 checkEmailFeatureContracts();
 checkCatalogFeatureContracts();
 checkAccountingSafetyContracts();
+checkTurnstileSecretExposure();
 
 if (failures.length) {
   console.error('\nBuild-safety audit failed:\n');
@@ -449,8 +482,9 @@ if (failures.length) {
     /email|Email|Resend|Outlook|logo|branded/.test(first) ? 23 :
     /Catalog|catalog|XLSX|CSV/.test(first) ? 24 :
     /selector|script blocks|triple-dollar/.test(first) ? 25 :
+    /Turnstile|turnstile/.test(first) ? 27 :
     26;
   process.exit(diagnosticExit);
 }
 
-console.log('Build-safety audit passed: no malformed syntax, duplicate default/config exports, or duplicate top-level function bodies detected.');
+console.log('Build-safety audit passed: structural checks and Turnstile secret-exposure guards passed.');
