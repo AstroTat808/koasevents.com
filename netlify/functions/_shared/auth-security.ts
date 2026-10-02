@@ -20,7 +20,8 @@ export type AuthEventType =
   | 'session_revoked'
   | 'sessions_revoked'
   | 'device_trusted'
-  | 'device_untrusted';
+  | 'device_untrusted'
+  | 'device_renamed';
 
 export type AuthEvent = {
   id:string;
@@ -60,6 +61,7 @@ export type TrustedDevice = {
   userId:string;
   email:string;
   device:string;
+  name:string;
   trustedAt:string;
   trustedBy:string;
   lastSeenAt:string;
@@ -76,7 +78,7 @@ type LoginAlertState = {
   deviceFingerprint:string;
 };
 
-function store(){return tenantStoreFor(undefined,resolveTenant(),'authSecurity');}
+function store(context?:Context){return tenantStoreFor(context,resolveTenant(),'authSecurity');}
 function clean(v:unknown,max=800){return String(v||'').trim().slice(0,max);}
 function id(prefix:string){return prefix+'-'+crypto.randomUUID().replaceAll('-','').slice(0,18).toUpperCase();}
 function cookie(req:Request,name:string){
@@ -161,7 +163,25 @@ export async function readAuthEvents(limit=500){
 
 export async function readTrustedDevices(userId:string){
   const rows=((await store().get(trustedDeviceKey(userId),{type:'json'}))||[]) as TrustedDevice[];
-  return rows.filter((row)=>row&&row.fingerprint);
+  return rows
+    .filter((row)=>row&&row.fingerprint)
+    .map((row)=>({...row,name:clean(row.name||row.device||'Trusted device',120)}));
+}
+
+export async function trustedDeviceHandle(deviceFingerprint:string){
+  const fingerprint=clean(deviceFingerprint,160);
+  if(!fingerprint)return'';
+  return hash('trusted-device:'+fingerprint);
+}
+
+export async function resolveTrustedDeviceHandle(userId:string,deviceId:string){
+  const handle=clean(deviceId,80);
+  if(!userId||!handle)return null;
+  const rows=await readTrustedDevices(userId);
+  for(const row of rows){
+    if(await trustedDeviceHandle(row.fingerprint)===handle)return row;
+  }
+  return null;
 }
 export async function isTrustedDevice(userId:string,deviceFingerprint:string){
   if(!userId||!deviceFingerprint)return false;
@@ -202,6 +222,7 @@ export async function listManagedSessions(userId:string,currentReq?:Request){
       current:row.id===currentId,
       active:!row.revokedAt&&(!row.expiresAt||Date.parse(row.expiresAt)>now),
       trusted:Boolean(trustedRow),
+      trustedName:trustedRow?.name||'',
       trustedAt:trustedRow?.trustedAt||'',
       trustedBy:trustedRow?.trustedBy||'',
     };
@@ -219,7 +240,7 @@ async function knownDeviceSource(userId:string,deviceFingerprint:string){
   return null;
 }
 
-export async function trustKnownDevice(userId:string,deviceFingerprint:string,actor:string,context:Context,email=''){
+export async function trustKnownDevice(userId:string,deviceFingerprint:string,actor:string,context:Context,email='',friendlyName=''){
   const fingerprint=clean(deviceFingerprint,160);
   if(!userId||!fingerprint)throw new Error('Device fingerprint required.');
   const source=await knownDeviceSource(userId,fingerprint);
@@ -232,6 +253,7 @@ export async function trustKnownDevice(userId:string,deviceFingerprint:string,ac
     userId:clean(userId,160),
     email:clean(email||source.email,240).toLowerCase(),
     device:clean(source.device,160),
+    name:clean(friendlyName||existing?.name||source.device||'Trusted device',120),
     trustedAt:existing?.trustedAt||now,
     trustedBy:existing?.trustedBy||clean(actor,240),
     lastSeenAt:clean(source.lastSeenAt,80)||now,
@@ -246,7 +268,7 @@ export async function trustKnownDevice(userId:string,deviceFingerprint:string,ac
       userAgent:clean(source.userAgent,800),
       device:row.device,
       deviceFingerprint:fingerprint,
-      detail:'Marked this tracked device as trusted.',
+      detail:'Marked '+row.name+' as a trusted device.',
       suspicious:false,
       reasons:[],
       riskLevel:'normal',
@@ -256,6 +278,34 @@ export async function trustKnownDevice(userId:string,deviceFingerprint:string,ac
     });
   }
   return row;
+}
+
+export async function renameTrustedDevice(userId:string,deviceFingerprint:string,name:string,actor:string,context:Context,email=''){
+  const fingerprint=clean(deviceFingerprint,160);
+  const nextName=clean(name,120);
+  if(!nextName)throw new Error('Device name is required.');
+  const current=await readTrustedDevices(userId);
+  const existing=current.find((row)=>row.fingerprint===fingerprint);
+  if(!existing)throw new Error('Trusted device not found.');
+  const updated:TrustedDevice={...existing,name:nextName};
+  await store().setJSON(trustedDeviceKey(userId),[updated,...current.filter((row)=>row.fingerprint!==fingerprint)]);
+  await appendAuthEvent(context,{
+    type:'device_renamed',
+    email:clean(email||existing.email,240).toLowerCase(),
+    userId:clean(userId,160),
+    ipFingerprint:'',
+    userAgent:'',
+    device:existing.device,
+    deviceFingerprint:fingerprint,
+    detail:'Renamed trusted device to '+nextName+'.',
+    suspicious:false,
+    reasons:[],
+    riskLevel:'normal',
+    alertSent:false,
+    alertSuppressed:false,
+    trustedDevice:true,
+  });
+  return updated;
 }
 
 export async function untrustKnownDevice(userId:string,deviceFingerprint:string,actor:string,context:Context,email=''){
@@ -413,6 +463,82 @@ export async function sendSuspiciousLoginAlert(input:{email:string;userId?:strin
   return r.ok
     ?{sent:true,suppressed:false,error:'',reason:'',lastSentAt:''}
     :{sent:false,suppressed:false,error:'Alert delivery failed',reason:'',lastSentAt:''};
+}
+
+export async function authenticationSecurityHealthSummary(context:Context){
+  const started=Date.now();
+  const twoFailures=classifyLoginRisk({recentFailureCount:2,hasHistory:true,knownNetwork:false,knownDevice:false,trustedDevice:false});
+  const threeFailures=classifyLoginRisk({recentFailureCount:3,hasHistory:true,knownNetwork:true,knownDevice:true,trustedDevice:false});
+  const failureThresholdOk=!twoFailures.shouldAlert&&threeFailures.shouldAlert&&LOGIN_FAILURE_WINDOW_MS===30*60*1000;
+
+  const s=store(context);
+  const nonce=crypto.randomUUID().replaceAll('-','').slice(0,18);
+  const trustedProbeKey='trusted-devices/__health__-'+nonce;
+  const cooldownProbeKey='alert-cooldowns/__health__-'+nonce;
+  let trustedDeviceStorageOk=false;
+  let cooldownStorageOk=false;
+  const storageErrors:string[]=[];
+
+  try{
+    await s.setJSON(trustedProbeKey,[{
+      fingerprint:'health-'+nonce,
+      userId:'__health__',
+      email:'health@local.invalid',
+      device:'Health probe',
+      name:'Health probe',
+      trustedAt:new Date().toISOString(),
+      trustedBy:'system-health',
+      lastSeenAt:new Date().toISOString(),
+    }]);
+    const trustedProbe=((await s.get(trustedProbeKey,{type:'json'}))||[]) as any[];
+    trustedDeviceStorageOk=Array.isArray(trustedProbe)&&trustedProbe.some((row)=>String(row?.fingerprint||'')==='health-'+nonce);
+  }catch(error){
+    storageErrors.push('trusted-device storage: '+(error instanceof Error?error.message:'probe failed'));
+  }finally{
+    await s.delete(trustedProbeKey).catch(()=>{});
+  }
+
+  try{
+    await s.setJSON(cooldownProbeKey,{
+      suppressionKey:'health-'+nonce,
+      reservedAt:'',
+      sentAt:new Date().toISOString(),
+      nonce:'',
+      email:'health@local.invalid',
+      userId:'__health__',
+      device:'Health probe',
+      deviceFingerprint:'health-'+nonce,
+    });
+    const cooldownProbe=((await s.get(cooldownProbeKey,{type:'json'}))||null) as any;
+    cooldownStorageOk=String(cooldownProbe?.suppressionKey||'')==='health-'+nonce;
+  }catch(error){
+    storageErrors.push('cooldown storage: '+(error instanceof Error?error.message:'probe failed'));
+  }finally{
+    await s.delete(cooldownProbeKey).catch(()=>{});
+  }
+
+  const events=await readAuthEvents(2000);
+  const lastHighRisk=events.find((event)=>event.riskLevel==='high'&&event.alertSent===true)||null;
+  const lastDuplicateSuppressed=events.find((event)=>event.alertSuppressed===true)||null;
+  const ok=failureThresholdOk&&trustedDeviceStorageOk&&cooldownStorageOk;
+
+  return{
+    ok,
+    ms:Date.now()-started,
+    failureThresholdOk,
+    failureThreshold:3,
+    failureWindowMinutes:30,
+    trustedDeviceStorageOk,
+    cooldownStorageOk,
+    cooldownHours:Math.round(LOGIN_ALERT_COOLDOWN_MS/(60*60*1000)),
+    lastHighRiskAlert:lastHighRisk?{
+      sentAt:lastHighRisk.createdAt,
+      device:lastHighRisk.device,
+      reasons:lastHighRisk.reasons||[],
+    }:null,
+    lastDuplicateSuppressedAt:lastDuplicateSuppressed?.createdAt||'',
+    errors:storageErrors,
+  };
 }
 
 export function summarizeSecurityActivity(events:AuthEvent[],trustedDeviceCount:number,days:number){
