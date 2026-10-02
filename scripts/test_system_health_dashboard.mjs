@@ -70,10 +70,13 @@ assert(
 );
 
 assert(
-  css.includes('width: calc(100vw - 2rem) !important;')
+  css.includes('width: calc(100% - 2rem) !important;')
     && css.includes('max-width: 84rem !important;')
-    && css.includes('section[data-health-summary-grid]:first-child'),
-  'System Health content width must be clamped to the viewport, with a one-column fallback for the narrowest phones.',
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] {')
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] > section {')
+    && css.includes('section[data-health-summary-grid]:first-child')
+    && css.includes('grid-template-columns: minmax(0, 1fr) !important;'),
+  'System Health content and section widths must stay bounded at every breakpoint, with a one-column phone fallback.',
 );
 assert(
   visualQa.includes('("tablet",768,1024,1)')
