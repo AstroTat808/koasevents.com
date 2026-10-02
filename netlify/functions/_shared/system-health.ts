@@ -2746,6 +2746,40 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionResponsiveViewportResult = {
+  browser:'chromium'|'webkit';
+  viewport:string;
+  width:number;
+  height:number;
+  ok:boolean;
+  documentScrollWidth:number|null;
+  viewportWidth:number|null;
+  horizontalOverflowPx:number|null;
+  summaryGridLeft:number|null;
+  summaryGridRight:number|null;
+  summaryLeftOverflowPx:number|null;
+  summaryRightOverflowPx:number|null;
+  documentScrollHeight:number|null;
+  screenshotMode:string;
+  dashboardRefresh:string;
+  failure:string;
+};
+
+export type ProductionResponsiveVerification = {
+  checkedAt:string;
+  status:'passed'|'failed'|'unverified';
+  totalCount:number;
+  passedCount:number;
+  failedCount:number;
+  workflowRunId:string;
+  workflowUrl:string;
+  dashboardOverall:string;
+  dashboardPassed:number|null;
+  dashboardFailed:number|null;
+  dashboardRefresh:string;
+  rows:ProductionResponsiveViewportResult[];
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2758,6 +2792,7 @@ export type ProductionRelease = {
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
+  responsiveVerification?:ProductionResponsiveVerification|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -3135,6 +3170,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
+    responsiveVerification:input?.responsiveVerification||previous?.responsiveVerification||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,
@@ -3152,8 +3188,8 @@ export async function recordProductionRelease(context:Context,input:any) {
     store.setJSON('deployments/releases',next),
     store.setJSON(PRODUCTION_RELEASE_AUDIT_INDEX_KEY,nextAuditIndex),
     // Durable per-deploy audit records are never trimmed when the dashboard's rolling
-    // release list is capped. This preserves the exact synthetic probe evidence for
-    // every production deploy by its immutable Netlify deploy id.
+    // release list is capped. This preserves the exact synthetic probe, accounting,
+    // and responsive viewport evidence for every production deploy by immutable id.
     store.setJSON('deployments/releases/by-id/'+deployId,record),
   ]);
   return record;
