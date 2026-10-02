@@ -8,6 +8,8 @@ on:
       - 'scripts/production_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
       - 'scripts/build_safety_check.mjs'
+      - 'scripts/test_system_health_dashboard.mjs'
+      - 'scripts/verify_netlify_release_gate.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -22,6 +24,8 @@ on:
       - 'scripts/production_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
       - 'scripts/build_safety_check.mjs'
+      - 'scripts/test_system_health_dashboard.mjs'
+      - 'scripts/verify_netlify_release_gate.mjs'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -44,6 +48,7 @@ concurrency:
 
 permissions:
   contents: read
+  statuses: write
   id-token: write
 
 env:
@@ -306,6 +311,102 @@ jobs:
         run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.json
       - name: Verify authenticated mobile System Health in WebKit
         run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.json
+      - name: Publish System Health production release status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load(path):
+              p=Path(path)
+              if not p.is_file():
+                  return None
+              try:
+                  return json.loads(p.read_text())
+              except Exception:
+                  return None
+
+          dashboard=load('visual-results/system-health-dashboard.json') or {}
+          chromium=load('visual-results/health-mobile-chromium/report.json') or {}
+          webkit=load('visual-results/health-mobile-webkit/report.json') or {}
+          current=dashboard.get('current') or {}
+          warnings=dashboard.get('enrichmentWarnings') or []
+          expected_refresh='Partial' if warnings else 'Current'
+
+          reports=[chromium,webkit]
+          reports_complete=all(
+              isinstance(report.get('results'),list)
+              and len(report.get('results'))==7
+              and not (report.get('failures') or [])
+              for report in reports
+          )
+          refresh_checks=[]
+          for report in reports:
+              for row in report.get('results') or []:
+                  after=(row.get('metrics') or {}).get('afterRunChecksNow') or {}
+                  refresh_checks.append(
+                      after.get('passed')==str(current.get('passed'))
+                      and after.get('failed')==str(current.get('failed'))
+                      and bool(after.get('checked'))
+                      and after.get('dashboardRefresh')==expected_refresh
+                  )
+
+          ok=bool(
+              dashboard.get('ok') is True
+              and current.get('checkedAt')
+              and isinstance(current.get('passed'),int)
+              and isinstance(current.get('failed'),int)
+              and current.get('overall') in {'healthy','unhealthy'}
+              and reports_complete
+              and len(refresh_checks)==14
+              and all(refresh_checks)
+          )
+
+          overall=str(current.get('overall') or 'unknown').title()
+          passed=current.get('passed','?')
+          failed=current.get('failed','?')
+          description=f'{overall} · {passed} passed · {failed} failed · Refresh {expected_refresh} · 14 responsive checks'
+          payload={
+              'state':'success' if ok else 'failure',
+              'context':'System Health production release gate',
+              'description':description[:140],
+          }
+          Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
+          print(json.dumps({
+              'ok':ok,
+              'overall':current.get('overall'),
+              'passed':current.get('passed'),
+              'failed':current.get('failed'),
+              'checkedAt':current.get('checkedAt'),
+              'dashboardRefresh':expected_refresh,
+              'enrichmentWarnings':warnings,
+              'chromiumViewports':len(chromium.get('results') or []),
+              'webkitViewports':len(webkit.get('results') or []),
+              'chromiumFailures':chromium.get('failures') or [],
+              'webkitFailures':webkit.get('failures') or [],
+          },separators=(',',':')))
+          PY
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path('/tmp/system-health-commit-status.json')
+          data=json.loads(p.read_text())
+          data['target_url']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          p.write_text(json.dumps(data,separators=(',',':')))
+          PY
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/system-health-commit-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
