@@ -421,6 +421,46 @@ function accountingHealthSummary(latest:any,history:any[],persistentIncidents:an
   };
 }
 
+
+function accountingReleaseAudits(releases:any[]){
+  return (Array.isArray(releases)?releases:[])
+    .map((release:any)=>{
+      const verification=release?.accountingVerification||null;
+      const invariant=verification?.invariant||null;
+      if(!verification||!invariant)return null;
+      const rows=Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[];
+      return {
+        deployId:String(release?.deployId||''),
+        commit:String(release?.commit||''),
+        checkedAt:String(verification?.checkedAt||release?.recordedAt||''),
+        status:String(verification?.status||'unverified'),
+        accountingVerified:Boolean(verification?.accountingVerified),
+        clientCount:Number(invariant?.dynamicClientCount||rows.length||0),
+        passedCount:Number(invariant?.dynamicClientPassedCount||0),
+        failedCount:Number(invariant?.dynamicClientFailedCount||0),
+        unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+        rows:rows.map((row:any)=>({
+          recordId:String(row?.recordId||''),
+          client:String(row?.client||row?.clientName||row?.recordId||''),
+          crmTotal:Number(row?.crmTotal??row?.proposalTotal??0),
+          qboEstimate:row?.qboEstimate==null?(row?.estimateTotal==null?null:Number(row.estimateTotal)):Number(row.qboEstimate),
+          estimateId:String(row?.estimateId||''),
+          estimateDocNumber:String(row?.estimateDocNumber||''),
+          taxableLines:row?.taxableLines==null?(row?.taxableLineCount==null?null:Number(row.taxableLineCount)):Number(row.taxableLines),
+          status:String(row?.status||'unverified'),
+          failureReason:String(
+            row?.failureReason
+            || (Array.isArray(row?.failures)&&row.failures.length?row.failures.join('; '):'')
+            || row?.detail
+            || ''
+          ),
+        })),
+      };
+    })
+    .filter(Boolean)
+    .slice(0,20);
+}
+
 export async function runHealthDashboardRefresh(context:Context){
   const runWarnings:Array<{section:string;error:string}>=[];
   const [previous,previousHourly]=await Promise.all([
@@ -473,6 +513,7 @@ export async function runHealthDashboardRefresh(context:Context){
     ok:true,
     current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
     accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
+    accountingReleaseAudits:accountingReleaseAudits(hydratedReleases),
     enrichmentWarnings,
   };
 }
