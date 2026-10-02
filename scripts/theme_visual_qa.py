@@ -180,6 +180,31 @@ def main():
     if detail:failures.append(row)
     page.close()
    ctx.close()
+
+  # Cross-device sync: an authenticated account preference must replace a stale
+  # browser-local fallback while still keeping localStorage warm for pre-paint use.
+  sync_route=next((route for route in routes if route.startswith("/admin/")),None)
+  if sync_route:
+   ctx=browser.new_context(viewport={"width":390,"height":844},device_scale_factor=2,is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light")
+   ctx.add_init_script("localStorage.setItem('koa-theme-preference','light');")
+   sync_session=dict(session_fixture)
+   sync_session["appearancePreference"]="dark"
+   ctx.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   ctx.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(sync_session)))
+   page=ctx.new_page();detail=""
+   try:
+    response=page.goto(base+sync_route,wait_until="domcontentloaded",timeout=30000)
+    if response and response.status>=400:raise RuntimeError("document returned HTTP "+str(response.status))
+    page.wait_for_timeout(450)
+    state=page.evaluate("() => ({preference:document.documentElement.dataset.themePreference,resolved:document.documentElement.dataset.theme,saved:localStorage.getItem('koa-theme-preference')})")
+    if state.get("preference")!="dark" or state.get("resolved")!="dark" or state.get("saved")!="dark":
+     detail="Account preference did not override stale local Light preference: "+json.dumps(state)
+   except Exception as exc:detail=str(exc)
+   row={"route":sync_route,"preference":"account-dark","resolved":"dark","viewport":"phone","failure":detail}
+   results.append(row)
+   if detail:failures.append(row)
+   page.close();ctx.close()
+
   browser.close()
 
  report={
