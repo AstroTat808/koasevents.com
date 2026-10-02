@@ -4,6 +4,7 @@ import {
   appendAuthEvent,
   evaluateLoginRisk,
   registerManagedSession,
+  recordLoginFailureSignal,
   requestDeviceFingerprint,
   requestUserAgent,
   sendSuspiciousLoginAlert,
@@ -27,6 +28,7 @@ export default async(req:Request,context:Context)=>{
 
   if(action==='failure'){
     if(!email.includes('@'))return Response.json({ok:true});
+    await recordLoginFailureSignal(email);
     const risk=await evaluateLoginRisk(email,ip,ua);
     await appendAuthEvent(context,{
       type:'login_failed',
