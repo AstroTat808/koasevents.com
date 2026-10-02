@@ -11,6 +11,14 @@ import Footer from '../../components/Footer.astro';
 <section data-error class="hidden rounded-[1.6rem] bg-white p-8 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Client portal</p><h1 class="display mt-3 text-5xl">This portal link is unavailable.</h1><p data-error-copy class="mt-4 text-sm text-[var(--koa-ink)]/60"></p></section>
 <div data-app class="hidden grid gap-5">
 <header class="rounded-[1.8rem] bg-[var(--koa-forest)] p-7 text-white shadow-[var(--shadow-soft)] sm:p-9"><p class="eyebrow text-[var(--koa-amber-light)]">Your Koa’s Client Portal</p><h1 data-title class="display mt-3 text-5xl"></h1><p data-meta class="mt-3 text-sm text-white/65"></p></header>
+<section data-appearance-panel class="flex flex-wrap items-center justify-between gap-3 rounded-[1.3rem] bg-white p-3 shadow-[var(--shadow-soft)]">
+  <div><p class="text-xs font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Appearance</p><p class="mt-1 text-xs text-[var(--koa-ink)]/50">Saved to this secure client portal.</p></div>
+  <div class="flex gap-2">
+    <button type="button" data-portal-theme="light" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Light</button>
+    <button type="button" data-portal-theme="dark" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">Dark</button>
+    <button type="button" data-portal-theme="system" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-xs font-bold">System</button>
+  </div>
+</section>
 <nav class="flex flex-wrap gap-2 rounded-[1.3rem] bg-white p-3 shadow-[var(--shadow-soft)]">
 <button data-tab="dashboard" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">dashboard</button><button data-tab="proposal" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">proposal</button><button data-tab="contract" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">contract</button><button data-tab="payments" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">payments</button><button data-tab="planning" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">planning</button><button data-tab="documents" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">documents</button><button data-tab="appointments" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">appointments</button><button data-tab="messages" class="rounded-full px-4 py-2 text-[.62rem] font-black uppercase tracking-[.09em] text-[var(--koa-forest)]">messages</button>
 </nav>
@@ -25,6 +33,15 @@ import Footer from '../../components/Footer.astro';
 </div></div></main><Footer/>
 <script>
 const token=new URLSearchParams(location.search).get('token')||'',loading=document.querySelector('[data-loading]'),error=document.querySelector('[data-error]'),app=document.querySelector('[data-app]');let project=null;
+const themePrefs=new Set(['light','dark','system']),portalThemeKey='koa-client-portal-theme:'+token;
+function applyPortalTheme(preference){
+  const safe=themePrefs.has(preference)?preference:'light';
+  try{if(token)localStorage.setItem(portalThemeKey,safe)}catch{}
+  window.dispatchEvent(new CustomEvent('koa:theme-request',{detail:{preference:safe,persist:false}}));
+  document.querySelectorAll('[data-portal-theme]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.portalTheme===safe?'true':'false'));
+}
+try{const cached=token&&localStorage.getItem(portalThemeKey);if(cached&&themePrefs.has(cached))applyPortalTheme(cached)}catch{}
+
 const esc=s=>String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n)||0);
 const date=v=>v?new Intl.DateTimeFormat('en-US',{dateStyle:'medium'}).format(new Date(v.length===10?v+'T12:00:00':v)):'—';
@@ -32,6 +49,7 @@ function card(label,value,copy=''){return '<article class="rounded-[1.3rem] bg-w
 function tab(name){document.querySelectorAll('[data-panel]').forEach(x=>x.classList.toggle('hidden',x.dataset.panel!==name));document.querySelectorAll('[data-tab]').forEach(x=>x.classList.toggle('bg-[var(--koa-forest)]',x.dataset.tab===name)||x.classList.toggle('text-white',x.dataset.tab===name));}
 async function post(body){const r=await fetch('/api/client-portal/'+encodeURIComponent(token),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Unable to save.');return j;}
 function render(){
+applyPortalTheme(project.appearancePreference||'light');
 document.querySelector('[data-title]').textContent=project.customerName||'Your event';document.querySelector('[data-meta]').textContent=[date(project.eventDate),project.packageId,String(project.stage||'').replaceAll('_',' ')].filter(Boolean).join(' · ');
 document.querySelector('[data-panel="dashboard"]').innerHTML=card('Proposal',project.proposal.status,money(project.proposal.total))+card('Contract',project.contract?.status||'Not started',project.contract?.signwell?.status||'')+card('Payments',project.payments.filter(x=>x.status==='paid').length+' / '+project.payments.length+' paid')+card('Planning',project.planningAvailable?'Open':'Unlocks when booked');
 document.querySelector('[data-panel="proposal"]').innerHTML='<p class="eyebrow text-[var(--koa-clay)]">Proposal</p><h2 class="display mt-2 text-4xl">'+money(project.proposal.total)+'</h2><p class="mt-3 text-sm text-[var(--koa-ink)]/60">Status: '+esc(project.proposal.status)+'</p><a class="mt-5 inline-flex rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white" href="'+project.proposal.url+'">Open proposal</a>';
@@ -46,6 +64,8 @@ document.querySelector('[data-appointment-form]')?.addEventListener('submit',asy
 document.querySelector('[data-message-form]')?.addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget;await post({action:'send-message',message:f.message.value});await load();tab('messages');});
 }
 async function load(){if(!token){loading.classList.add('hidden');error.classList.remove('hidden');document.querySelector('[data-error-copy]').textContent='This link is missing its secure project token.';return;}const r=await fetch('/api/client-portal/'+encodeURIComponent(token),{cache:'no-store'});const j=await r.json().catch(()=>({}));loading.classList.add('hidden');if(!r.ok){error.classList.remove('hidden');document.querySelector('[data-error-copy]').textContent=j.error||'Unable to load portal.';return;}project=j.project;app.classList.remove('hidden');render();}
-document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));load();tab('dashboard');
+document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>tab(b.dataset.tab)));
+document.querySelectorAll('[data-portal-theme]').forEach(b=>b.addEventListener('click',async()=>{const preference=String(b.dataset.portalTheme||'light');applyPortalTheme(preference);try{const saved=await post({action:'save-appearance-preference',appearancePreference:preference});project.appearancePreference=saved.appearancePreference||preference}catch{}}));
+load();tab('dashboard');
 </script>
 </BaseLayout>

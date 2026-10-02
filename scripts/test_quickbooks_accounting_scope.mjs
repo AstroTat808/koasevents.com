@@ -29,10 +29,10 @@ assert.equal(
 
 const systemHealthSource = fs.readFileSync('netlify/functions/_shared/system-health.ts', 'utf8');
 assert.match(systemHealthSource, /Boolean\(currentBookingStatus\(record\)\)/, 'System Health must select current clients from authoritative booking lifecycle status.');
-assert.doesNotMatch(
+assert.match(
   systemHealthSource.slice(systemHealthSource.indexOf('async function acceptedBookedLiveAccountingInvariants'), systemHealthSource.indexOf('async function quickBooksTaxInvariantHealthCheck')),
-  /quickBooksAccountingScope\(record\)/,
-  'Current accepted/booked invariant population must not be reduced by historical provenance classification.',
+  /quickBooksAccountingScope\(record\)\.actionable/,
+  'Release-blocking accounting invariants must apply only to CRM-managed bookings while QuickBooks-import history remains non-blocking.',
 );
 
 console.log('QuickBooks accounting selector regression passed: accepted/booked lifecycle is authoritative while historical scope remains available for non-live accounting views.');

@@ -9,7 +9,7 @@ import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
-import { currentBookingStatus } from './quickbooks-accounting-scope.mjs';
+import { currentBookingStatus, quickBooksAccountingScope } from './quickbooks-accounting-scope.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
@@ -1446,9 +1446,12 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
   const tenant=resolveTenant();
   const now=new Date().toISOString();
   const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
-  const candidates=records
+  const acceptedBooked=records
     .filter((record:any)=>record?.kind==='proposal'&&record?.proposal&&record?.archived!==true)
-    .filter((record:any)=>Boolean(currentBookingStatus(record)))
+    .filter((record:any)=>Boolean(currentBookingStatus(record)));
+  const historicalRows=acceptedBooked.filter((record:any)=>quickBooksAccountingScope(record).historicalQuickBooksImport);
+  const candidates=acceptedBooked
+    .filter((record:any)=>quickBooksAccountingScope(record).actionable)
     .sort((a:any,b:any)=>String(a?.customer?.eventDate||'9999').localeCompare(String(b?.customer?.eventDate||'9999'))||String(a?.id||'').localeCompare(String(b?.id||'')));
 
   const rows=await mapWithConcurrency(candidates,4,async(record:any)=>{
@@ -1463,6 +1466,7 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
       estimateId,
       estimateDocNumber:String(qbo?.estimateDocNumber||''),
       proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
+      accountingScope:quickBooksAccountingScope(record).mode,
     };
     if(!estimateId){
       return {
@@ -1528,11 +1532,12 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
     failedCount,
     unverifiedCount,
     rows,
+    historicalClientCount:historicalRows.length,
     detail:rows.length===0
-      ? 'No accepted/booked proposals currently require a live CRM ↔ QuickBooks invariant.'
+      ? 'No CRM-managed accepted/booked proposals currently require a live CRM ↔ QuickBooks invariant. '+historicalRows.length+' imported QuickBooks-history booking(s) remain visible as non-blocking accounting context.'
       : failedCount||unverifiedCount
         ? passedCount+' of '+rows.length+' accepted/booked client invariants passed. '+problemRows.map((row:any)=>row.clientName+': '+row.detail).join(' ')
-        : 'All '+rows.length+' accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines.',
+        : 'All '+rows.length+' CRM-managed accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines. '+historicalRows.length+' imported QuickBooks-history booking(s) are non-blocking.',
   };
 }
 

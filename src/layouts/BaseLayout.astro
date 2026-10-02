@@ -341,7 +341,8 @@ const seoSchema = {
         window.addEventListener('koa:theme-request', (event) => {
           const requested = event instanceof CustomEvent ? String(event.detail?.preference || '') : '';
           const preference = allowed.has(requested) ? requested : 'light';
-          persist(preference);
+          const shouldPersist = !(event instanceof CustomEvent) || event.detail?.persist !== false;
+          if (shouldPersist) persist(preference);
           apply(preference, true);
         });
 

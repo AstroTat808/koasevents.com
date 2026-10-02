@@ -6,6 +6,7 @@ function sales(context:Context,tenant:any){return tenantStoreFor(context,tenant,
 function crm(context:Context,tenant:any){return tenantStoreFor(context,tenant,'crm');}
 function ops(context:Context,tenant:any){return tenantStoreFor(context,tenant,'eventOps');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
+function appearance(v:unknown){const x=clean(v,20).toLowerCase();return ['light','dark','system'].includes(x)?x:'light';}
 function id(p='MSG'){return p+'-'+crypto.randomUUID().replaceAll('-','').slice(0,12).toUpperCase();}
 async function idx<T>(store:any,key:string):Promise<T[]>{return ((await store.get(key,{type:'json'}))||[]) as T[];}
 function paymentSummary(record:any){
@@ -29,7 +30,7 @@ export default async(req:Request,context:Context)=>{
     const eventOps:any=record.stage==='booked'?await ops(context,tenant).get('events/'+record.id,{type:'json'}):null;
     const contract=record.booking?.contract||null;
     return Response.json({project:{
-      id:record.id,stage:record.stage,status:record.status,customerName:record.customer?.name||'',eventDate:record.customer?.eventDate||'',packageId:record.packageId||'',
+      id:record.id,stage:record.stage,status:record.status,customerName:record.customer?.name||'',eventDate:record.customer?.eventDate||'',packageId:record.packageId||'',appearancePreference:appearance(record?.portalPreferences?.appearancePreference),
       proposal:{status:record.proposal?.status||'',total:Number(record.proposal?.total||0),depositAmount:Number(record.proposal?.depositAmount||0),acceptedAt:record.proposal?.acceptance?.acceptedAt||'',url:'/proposal/?token='+token},
       contract:contract?{status:contract.status||'pending',title:contract.title||'',signwell:contract.signwell||{},signedPdfAvailable:Boolean(contract.signwell?.signedPdfStored),url:'/booking/?token='+token}:null,
       payments:paymentSummary(record),
@@ -41,7 +42,13 @@ export default async(req:Request,context:Context)=>{
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);const action=clean(body?.action,50);
-  if(action==='send-message'){
+  if(action==='save-appearance-preference'){
+    const appearancePreference=appearance(body?.appearancePreference);
+    record.portalPreferences={...(record.portalPreferences||{}),appearancePreference,updatedAt:new Date().toISOString()};
+    await ss.setJSON('records/index',records);
+    return Response.json({ok:true,appearancePreference});
+  }
+    if(action==='send-message'){
     const text=clean(body?.message,5000);if(!text)return Response.json({error:'Message required.'},{status:400});
     const current=await idx<any>(cs,'client-messages/index');const row={id:id(),recordId:record.id,sender:'client',senderName:record.customer?.name||'Client',message:text,createdAt:new Date().toISOString(),readByTeam:false};
     await cs.setJSON('client-messages/index',[...current,row].slice(-5000));return Response.json({ok:true,message:row});
