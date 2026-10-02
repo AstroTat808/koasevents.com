@@ -1594,13 +1594,18 @@ main p.text-sm {
 
 /* System Health responsive summary layout */
 body.koa-admin-page main[data-system-health-page] {
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
   overflow-x: clip;
+  box-sizing: border-box;
 }
 
 body.koa-admin-page main[data-system-health-page] > .container-shell {
-  width: min(calc(100% - 2rem), 84rem);
-  max-width: 84rem;
+  width: min(calc(100vw - 2rem), 84rem);
+  max-width: min(calc(100vw - 2rem), 84rem);
   min-width: 0;
+  box-sizing: border-box;
 }
 
 body.koa-admin-page main[data-system-health-page] .health-page-header-actions {
