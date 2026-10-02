@@ -31,9 +31,95 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
         <details class="group relative"><summary class="site-nav-link cursor-pointer list-none">More</summary><div class="site-menu-panel absolute right-0 top-8 w-60 rounded-[1rem] p-2">{more.map((item) => <a class="block rounded-lg px-4 py-3 text-sm font-semibold text-[var(--koa-ink)]/72 hover:bg-[var(--koa-sand)]" href={item.href}>{item.label}</a>)}</div></details>
       </nav>
       <div class="flex items-center gap-2">
+        <button
+          data-site-theme-toggle
+          type="button"
+          class="site-theme-toggle"
+          aria-label="Switch to dark mode"
+          title="Switch to dark mode"
+          aria-pressed="false"
+        >
+          <span data-site-theme-moon aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
+            </svg>
+          </span>
+          <span data-site-theme-sun class="hidden" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+              <circle cx="12" cy="12" r="3.5"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
+            </svg>
+          </span>
+        </button>
         <a href="/inquire/" class="site-nav-cta hidden sm:inline-flex">Check availability</a>
         <details class="group relative xl:hidden"><summary class="site-menu-trigger"><span class="site-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></summary><div class="site-menu-panel fixed inset-x-3 top-[5.45rem] z-[70] max-h-[calc(100svh-7rem)] overflow-auto rounded-[1.35rem] p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-80"><div class="mb-3 flex items-center gap-3 border-b border-[var(--koa-line)] pb-4"><span class="brand-medallion !h-12 !w-12"><img src="/brand/koa-mark.png" width="42" height="42" alt="" /></span><div><p class="display text-2xl text-[var(--koa-forest)]">Koa’s Events</p><p class="mt-1 text-[0.58rem] font-bold uppercase tracking-[.17em] text-[var(--koa-clay)]">Gather beautifully.</p></div></div>{[...primary, ...more].map((item) => <a class="block rounded-xl px-4 py-3 text-base font-semibold text-[var(--koa-ink)]/78 hover:bg-[var(--koa-sand)] hover:text-[var(--koa-forest)]" href={item.href}>{item.label}</a>)}<div class="mt-3 grid gap-2 border-t border-[var(--koa-line)] pt-4"><a class="site-nav-cta flex w-full" href="/inquire/">Check availability</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="/wedding-inquiry/">Wedding inquiry</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="/inquire/">Other event inquiry</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="tel:+18448085627">844-808-KOAS</a></div></div></details>
       </div>
     </div>
   </div>
 </header>
+
+<style>
+  .site-theme-toggle {
+    display: inline-flex;
+    width: 2.65rem;
+    min-width: 2.65rem;
+    min-height: 2.65rem;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid color-mix(in srgb, var(--koa-line) 78%, transparent);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--koa-surface) 88%, transparent);
+    color: var(--koa-text-strong);
+    box-shadow: 0 8px 24px rgba(7,30,23,.12);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
+  }
+
+  .site-theme-toggle:hover {
+    border-color: color-mix(in srgb, var(--koa-accent-text) 55%, var(--koa-line));
+    background: var(--koa-surface);
+  }
+
+  .site-theme-toggle:active {
+    transform: scale(.95);
+  }
+
+  .site-theme-toggle:focus-visible {
+    outline: 2px solid var(--koa-clay);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 380px) {
+    .site-theme-toggle {
+      width: 2.45rem;
+      min-width: 2.45rem;
+      min-height: 2.45rem;
+    }
+  }
+</style>
+
+<script>
+  const siteThemeToggle = document.querySelector('[data-site-theme-toggle]');
+
+  function syncSiteThemeToggle() {
+    if (!(siteThemeToggle instanceof HTMLButtonElement)) return;
+    const dark = String(document.documentElement.dataset.theme || 'light') === 'dark';
+    const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    siteThemeToggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
+    siteThemeToggle.setAttribute('aria-label', label);
+    siteThemeToggle.setAttribute('title', label);
+    siteThemeToggle.querySelector('[data-site-theme-moon]')?.classList.toggle('hidden', dark);
+    siteThemeToggle.querySelector('[data-site-theme-sun]')?.classList.toggle('hidden', !dark);
+  }
+
+  siteThemeToggle?.addEventListener('click', () => {
+    const dark = String(document.documentElement.dataset.theme || 'light') === 'dark';
+    window.dispatchEvent(new CustomEvent('koa:theme-request', {
+      detail: { preference: dark ? 'light' : 'dark' },
+    }));
+  });
+
+  window.addEventListener('koa:theme-change', syncSiteThemeToggle);
+  syncSiteThemeToggle();
+</script>

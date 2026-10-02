@@ -215,6 +215,34 @@ def main():
    if detail:failures.append(row)
    page.close();ctx.close()
 
+  # Navbar quick-toggle interaction: the public sun/moon control and the authenticated
+  # workspace control must both switch the same shared root theme state.
+  toggle_cases=[
+   ("/","public","[data-site-theme-toggle]"),
+  ]
+  if sync_route:toggle_cases.append((sync_route,"admin","[data-workspace-theme-toggle]"))
+  for route,label,selector in toggle_cases:
+   ctx=browser.new_context(viewport={"width":390,"height":844},device_scale_factor=2,is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light")
+   ctx.add_init_script("localStorage.setItem('koa-theme-preference','light');")
+   ctx.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   ctx.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   page=ctx.new_page();detail=""
+   try:
+    response=page.goto(base+route,wait_until="domcontentloaded",timeout=30000)
+    if response and response.status>=400:raise RuntimeError("document returned HTTP "+str(response.status))
+    button=page.locator(selector)
+    button.wait_for(state="visible",timeout=4000)
+    button.click()
+    page.wait_for_function("() => document.documentElement.dataset.theme === 'dark' && document.documentElement.dataset.themePreference === 'dark'",timeout=3000)
+    state=page.evaluate("() => ({preference:document.documentElement.dataset.themePreference,resolved:document.documentElement.dataset.theme,saved:localStorage.getItem('koa-theme-preference')})")
+    if state.get("preference")!="dark" or state.get("resolved")!="dark" or state.get("saved")!="dark":
+     detail=label+" navbar toggle did not persist Dark: "+json.dumps(state)
+   except Exception as exc:detail=str(exc)
+   row={"route":route,"preference":"navbar-toggle","resolved":"dark","viewport":"phone","surface":label,"failure":detail}
+   results.append(row)
+   if detail:failures.append(row)
+   page.close();ctx.close()
+
   browser.close()
 
  report={
