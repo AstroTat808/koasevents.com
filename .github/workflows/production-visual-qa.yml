@@ -109,25 +109,28 @@ jobs:
             "enrichmentWarnings": []
           }
           JSON
-      - name: Serve built pull-request site
+      - name: Verify System Health responsive layout in Chromium and WebKit
         if: github.event_name == 'pull_request'
+        shell: bash
         run: |
+          set -euo pipefail
           python -m http.server 4173 --directory dist > /tmp/koa-health-preview.log 2>&1 &
-          echo $! > /tmp/koa-health-preview.pid
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:4173/admin/health/ >/dev/null; then
-              exit 0
+              ready=1
+              break
             fi
             sleep 1
           done
-          cat /tmp/koa-health-preview.log
-          exit 1
-      - name: Verify System Health responsive layout in Chromium
-        if: github.event_name == 'pull_request'
-        run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
-      - name: Verify System Health responsive layout in WebKit
-        if: github.event_name == 'pull_request'
-        run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-health-preview.log
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
       - uses: actions/upload-artifact@v4
         if: github.event_name == 'pull_request' && always()
         with:
