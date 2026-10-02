@@ -180,4 +180,33 @@ assert(
   'System Health must include the structured sign-in alert policy check and authentication storage probes.',
 );
 
+
+assert(
+  health.includes('data-accounting-invariant-table-body')
+    && health.includes('data-accounting-filter-status')
+    && health.includes('data-accounting-filter-taxable')
+    && health.includes('data-accounting-filter-missing-estimate')
+    && health.includes('data-accounting-release-select')
+    && health.includes('function renderAccountingInvariantTable()'),
+  'System Health must expose a filterable full client accounting invariant table with status, taxable-line, missing-estimate, and release filters.',
+);
+assert(
+  adminHealth.includes('function accountingReleaseAudits(releases:any[])')
+    && adminHealth.includes('accountingReleaseAudits:accountingReleaseAudits(hydratedReleases)'),
+  'Authorized System Health dashboard data must include retained production accounting release audits for historical row inspection.',
+);
+assert(
+  healthSignal.includes("body?.action==='read-production-accounting-audits'")
+    && healthSignal.includes("body?.action==='read-production-accounting-audit'")
+    && healthSignal.includes("body?.action==='run-sandbox-self-heal-drill'")
+    && healthSignal.includes("productionMutationAttempted:false")
+    && healthSignal.includes("gracePeriodSeconds:300"),
+  'Signed production control plane must expose read-only accounting audit retrieval and an isolated five-minute sandbox self-heal drill.',
+);
+assert(
+  visualWorkflow.includes('--wait-seconds 300')
+    && visualWorkflow.includes('self-heal-production-deploy'),
+  'Production visual QA must retain the exact-SHA five-minute Netlify self-healing gate.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
