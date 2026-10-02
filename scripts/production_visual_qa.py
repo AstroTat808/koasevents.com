@@ -1313,6 +1313,10 @@ def health_mobile_mode(browser_name,health_payload_path):
         const style=getComputedStyle(el),rect=el.getBoundingClientRect();
         return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
       };
+      const rect=(el)=>{
+        const box=el.getBoundingClientRect();
+        return {x:box.x,y:box.y,w:box.width,h:box.height};
+      };
       const nav=document.querySelector('[data-workspace-nav]');
       const bottom=document.querySelector('[data-workspace-bottom-nav]');
       const main=document.querySelector('main[data-system-health-page]');
