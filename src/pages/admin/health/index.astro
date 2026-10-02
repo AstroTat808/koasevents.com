@@ -4303,12 +4303,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           changes.forEach((change)=>{
             const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
             const before=change?.before||{},after=change?.after||{};
-            card.innerHTML='<strong class="text-sm text-[var(--koa-forest)]">'+String(change?.target||change?.type||'QuickBooks change')+'</strong><p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/60">Type: '+String(change?.type||'')+' · Before total: '+accountingMoney(before?.total)+' · After total: '+accountingMoney(after?.total)+'. '+String(after?.taxHandling||'')+'</p>';
+            const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=String(change?.target||change?.type||'QuickBooks change');
+            const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='Type: '+String(change?.type||'')+' · Before total: '+accountingMoney(before?.total)+' · After total: '+accountingMoney(after?.total)+'. '+String(after?.taxHandling||'');
+            card.append(title,detail);
             accountingRepairBody.appendChild(card);
           });
           blocked.forEach((issue)=>{
             const card=document.createElement('article');card.className='rounded-xl border border-amber-200 bg-amber-50 p-4';
-            card.innerHTML='<strong class="text-sm text-amber-950">Protected / blocked</strong><p class="mt-2 text-xs leading-5 text-amber-900/75">'+String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'This item is not eligible for an automatic write.')+'</p>';
+            const title=document.createElement('strong');title.className='text-sm text-amber-950';title.textContent='Protected / blocked';
+            const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-amber-900/75';detail.textContent=String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'This item is not eligible for an automatic write.');
+            card.append(title,detail);
             accountingRepairBody.appendChild(card);
           });
         }
