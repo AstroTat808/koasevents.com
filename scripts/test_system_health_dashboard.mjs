@@ -320,4 +320,12 @@ assert(
   'The production release must archive signed raw-field evidence for Jesse Gibson and Dion Pohaku after the exact SHA is live.',
 );
 
+
+assert(
+  adminQuickBooks.includes('accountingScope:scope.mode')
+    && adminQuickBooks.includes('accountingActionable:Boolean(scope.actionable)')
+    && adminQuickBooks.includes("'The approved repair is invalid and no QuickBooks write was attempted.'"),
+  'Accounting repair fingerprints and final apply must both revalidate lifecycle and writable accounting scope before any QuickBooks mutation.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
