@@ -96,6 +96,34 @@ assert(
     && systemHealth.includes('last high-risk email'),
   'System Health must verify the sign-in threshold, trusted-device storage, cooldown storage, and last high-risk email.',
 );
+assert(
+  authSecurity.includes('export type TrustedDeviceExpiryDays = 0 | 30 | 60 | 90')
+    && authSecurity.includes('lastUsedAt:string;')
+    && authSecurity.includes('expiresAt:string;')
+    && authSecurity.includes('options:{touch?:boolean}={}')
+    && authSecurity.includes('{touch:true}')
+    && authSecurity.includes('TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS=365*24*60*60'),
+  'Trusted devices must track last use, support 30/60/90-day inactivity expiry, refresh on successful use, and keep a stable non-auth device cookie long enough for the policy.',
+);
+assert(
+  accountSecurity.includes("action==='save-trusted-device-expiry'")
+    && accountSecurity.includes('[0,30,60,90].includes(days)')
+    && accountSecurity.includes('trustedDeviceExpiryDays:trustedDeviceSettings.expiryDays'),
+  'Account Security must expose and validate self-service trusted-device expiry policy controls.',
+);
+assert(
+  workspaceNav.includes('data-workspace-trusted-expiry')
+    && workspaceNav.includes('After 30 days without use')
+    && workspaceNav.includes('After 60 days without use')
+    && workspaceNav.includes('After 90 days without use')
+    && workspaceNav.includes('Last used ')
+    && workspaceNav.includes('Auto-revokes '),
+  'The account device panel must show last-used/expiry information and 30/60/90-day automatic revocation choices.',
+);
+
+console.log('PASS | trusted-device expiry supports Never / 30 / 60 / 90 days');
+console.log('PASS | trusted-device last-used timestamps refresh on successful trusted sign-in');
+console.log('PASS | account device panel exposes last-used and auto-revoke policy controls');
 
 console.log('PASS | account menu can trust the exact current browser');
 console.log('PASS | trusted devices support friendly names and revocation');
