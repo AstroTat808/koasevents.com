@@ -60,6 +60,17 @@ assert(
   'The fixed mobile workspace bottom navigation must live outside the sticky workspace navigation containing block.',
 );
 assert(
+  nav.includes("const bottomNav = document.querySelector('[data-workspace-bottom-nav]');")
+    && nav.includes("bottomNav?.querySelectorAll('[data-workspace-bottom-slot]')")
+    && nav.includes("bottomNav?.querySelector('[data-workspace-more-toggle]')"),
+  'Mobile bottom-nav hydration and More interactions must query the bottom-nav root instead of the separate workspace nav.',
+);
+assert(
+  !nav.includes("nav?.querySelectorAll('[data-workspace-bottom-slot]')")
+    && !nav.includes("nav?.querySelector('[data-workspace-more-toggle]')"),
+  'Mobile bottom-nav controls must not be queried through the workspace nav because the fixed bar intentionally lives outside it.',
+);
+assert(
   css.includes('/* System Health mobile viewport clearance */')
     && css.includes('scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom))')
     && css.includes('padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important'),
