@@ -351,6 +351,7 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
       client:String(row?.clientName||row?.recordId||''),
       crmTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
       qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
+      lineTotal:row?.lineTotal==null?null:Math.round(Number(row.lineTotal||0)*100)/100,
       estimateId:String(row?.estimateId||''),
       estimateDocNumber:String(row?.estimateDocNumber||''),
       taxableLines:row?.taxableLineCount==null?null:Number(row.taxableLineCount),

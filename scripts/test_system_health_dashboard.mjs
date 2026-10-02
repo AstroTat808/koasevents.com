@@ -217,4 +217,32 @@ assert(
   'Production visual QA must retain the exact-SHA five-minute Netlify self-healing gate.',
 );
 
+
+assert(
+  systemHealth.includes('lineTotal:row?.lineTotal')
+    && adminHealth.includes('function accountingRepairCategory(row:any)')
+    && adminHealth.includes("return 'missing-estimate'")
+    && adminHealth.includes("return 'taxable-lines'")
+    && adminHealth.includes("return 'sales-line-mismatch'")
+    && adminHealth.includes("return 'unverified'"),
+  'Accounting release audits must retain sales-line totals and classify every repair-queue failure without changing QuickBooks.',
+);
+assert(
+  health.includes('data-accounting-repair-queue')
+    && health.includes('data-accounting-queue-filter="missing-estimate"')
+    && health.includes('data-accounting-queue-filter="taxable-lines"')
+    && health.includes('data-accounting-queue-filter="sales-line-mismatch"')
+    && health.includes('data-accounting-queue-filter="unverified"')
+    && health.includes('Preview repair')
+    && health.includes("action:'preview-accounting-repair'")
+    && health.includes("action:'apply-accounting-repair'")
+    && health.includes('Approve exact preview'),
+  'System Health must provide grouped one-click accounting repair filters and enforce preview-before-approval for row repairs.',
+);
+assert(
+  health.includes("if(statusValue==='unverified'){action.textContent='Recheck'")
+    && health.includes("if(statusValue==='passed'){action.textContent='Clean'"),
+  'Unverified accounting rows must recheck instead of attempting a write, while passing rows remain non-actionable.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');

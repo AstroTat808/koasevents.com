@@ -187,16 +187,45 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 </label>
               </div>
             </div>
+            <div class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-4" data-accounting-repair-queue>
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <strong class="text-sm text-[var(--koa-forest)]">Safe repair queue</strong>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Every QuickBooks write requires a fresh live preview, explicit approval, and a fingerprint recheck before anything changes.</p>
+                </div>
+                <button data-accounting-filter-clear type="button" class="w-fit rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear queue filter</button>
+              </div>
+              <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button data-accounting-queue-filter="missing-estimate" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Missing QBO estimate</span><strong data-accounting-queue-count="missing-estimate" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="taxable-lines" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Taxable lines</span><strong data-accounting-queue-count="taxable-lines" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="sales-line-mismatch" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Sales-line mismatch</span><strong data-accounting-queue-count="sales-line-mismatch" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="unverified" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unverified</span><strong data-accounting-queue-count="unverified" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+              </div>
+            </div>
             <div class="mt-4 overflow-x-auto">
-              <table class="w-full min-w-[1180px] border-collapse text-xs">
+              <table class="w-full min-w-[1460px] border-collapse text-xs">
                 <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">
-                  <th class="py-3 pr-4">Client</th><th class="py-3 pr-4">CRM total</th><th class="py-3 pr-4">QBO estimate</th><th class="py-3 pr-4">Estimate</th><th class="py-3 pr-4">Taxable lines</th><th class="py-3 pr-4">Status</th><th class="py-3">Failure reason</th>
+                  <th class="py-3 pr-4">Client</th><th class="py-3 pr-4">CRM total</th><th class="py-3 pr-4">Sales lines</th><th class="py-3 pr-4">QBO adjustment</th><th class="py-3 pr-4">QBO estimate</th><th class="py-3 pr-4">Estimate</th><th class="py-3 pr-4">Taxable lines</th><th class="py-3 pr-4">Queue</th><th class="py-3 pr-4">Status</th><th class="py-3 pr-4">Failure reason</th><th class="py-3">Action</th>
                 </tr></thead>
                 <tbody data-accounting-invariant-table-body></tbody>
               </table>
             </div>
             <p data-accounting-invariant-table-empty class="mt-3 hidden text-xs text-[var(--koa-ink)]/50">No client invariant rows match these filters.</p>
           </div>
+          <dialog data-accounting-repair-dialog class="w-[min(94vw,900px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+            <div class="p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div><p class="eyebrow text-[var(--koa-clay)]">Preview before change</p><h3 data-accounting-repair-title class="display mt-2 text-3xl text-[var(--koa-forest)]">Accounting repair preview</h3><p data-accounting-repair-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55"></p></div>
+                <button data-accounting-repair-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close repair preview">×</button>
+              </div>
+              <div data-accounting-repair-body class="mt-5 grid gap-3"></div>
+              <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
+                <button data-accounting-repair-cancel type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Cancel</button>
+                <button data-accounting-repair-approve type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white disabled:opacity-40">Approve exact preview</button>
+              </div>
+              <p data-accounting-repair-message class="mt-3 text-xs font-semibold text-[var(--koa-ink)]/55"></p>
+            </div>
+          </dialog>
           <div class="mt-5 grid gap-4 lg:grid-cols-2">
             <div class="rounded-xl border border-[var(--koa-line)] p-4">
               <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Recent failures</strong><span data-accounting-failure-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
@@ -1076,6 +1105,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingFilterTaxable=document.querySelector('[data-accounting-filter-taxable]');
     const accountingFilterMissingEstimate=document.querySelector('[data-accounting-filter-missing-estimate]');
     const accountingReleaseSelect=document.querySelector('[data-accounting-release-select]');
+    const accountingQueueButtons=[...document.querySelectorAll('[data-accounting-queue-filter]')];
+    const accountingQueueCounts=[...document.querySelectorAll('[data-accounting-queue-count]')];
+    const accountingFilterClear=document.querySelector('[data-accounting-filter-clear]');
+    const accountingRepairDialog=document.querySelector('[data-accounting-repair-dialog]');
+    const accountingRepairTitle=document.querySelector('[data-accounting-repair-title]');
+    const accountingRepairMeta=document.querySelector('[data-accounting-repair-meta]');
+    const accountingRepairBody=document.querySelector('[data-accounting-repair-body]');
+    const accountingRepairApprove=document.querySelector('[data-accounting-repair-approve]');
+    const accountingRepairMessage=document.querySelector('[data-accounting-repair-message]');
+    let accountingRepairPreview=null;
+    let accountingQueueFilter='all';
     let accountingReleaseAudits=[];
     const healthRunWarning=document.querySelector('[data-health-run-warning]');
     const healthRunWarningTitle=document.querySelector('[data-health-run-warning-title]');
@@ -4233,6 +4273,80 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return row;
     }
 
+    function accountingQueueLabel(category){
+      return ({'missing-estimate':'Missing estimate','taxable-lines':'Taxable lines','sales-line-mismatch':'Sales-line mismatch','unverified':'Unverified','other-failure':'Other failure','passed':'Passed'})[String(category||'')]||'Other';
+    }
+
+    function closeAccountingRepairDialog(){
+      accountingRepairPreview=null;
+      if(accountingRepairMessage)accountingRepairMessage.textContent='';
+      accountingRepairDialog?.close();
+    }
+
+    async function previewAccountingRepair(row){
+      if(!row?.recordId)return;
+      if(accountingRepairMessage)accountingRepairMessage.textContent='Loading a fresh live QuickBooks preview…';
+      if(accountingRepairBody)accountingRepairBody.innerHTML='';
+      accountingRepairApprove?.setAttribute('disabled','');
+      accountingRepairDialog?.showModal();
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-accounting-repair',recordId:String(row.recordId)})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to preview this repair.');
+        accountingRepairPreview=data?.preview||null;
+        if(accountingRepairTitle)accountingRepairTitle.textContent='Repair preview · '+String(data?.preview?.clientName||row.client||row.recordId);
+        if(accountingRepairMeta)accountingRepairMeta.textContent='Preview '+String(data?.preview?.previewId||'')+' · expires '+(data?.preview?.expiresAt?new Date(data.preview.expiresAt).toLocaleString():'soon')+' · no changes have been made.';
+        if(accountingRepairBody){
+          const changes=Array.isArray(data?.preview?.changes)?data.preview.changes:[];
+          const blocked=Array.isArray(data?.preview?.blockedIssues)?data.preview.blockedIssues:[];
+          if(!changes.length&&!blocked.length)accountingRepairBody.innerHTML='<p class="rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900">No repair changes are needed for the current live state.</p>';
+          changes.forEach((change)=>{
+            const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+            const before=change?.before||{},after=change?.after||{};
+            const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=String(change?.target||change?.type||'QuickBooks change');
+            const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='Type: '+String(change?.type||'')+' · Before total: '+accountingMoney(before?.total)+' · After total: '+accountingMoney(after?.total)+'. '+String(after?.taxHandling||'');
+            card.append(title,detail);
+            accountingRepairBody.appendChild(card);
+          });
+          blocked.forEach((issue)=>{
+            const card=document.createElement('article');card.className='rounded-xl border border-amber-200 bg-amber-50 p-4';
+            const title=document.createElement('strong');title.className='text-sm text-amber-950';title.textContent='Protected / blocked';
+            const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-amber-900/75';detail.textContent=String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'This item is not eligible for an automatic write.');
+            card.append(title,detail);
+            accountingRepairBody.appendChild(card);
+          });
+        }
+        if(accountingRepairMessage)accountingRepairMessage.textContent=data?.preview?.canApply?'Review the exact before/after changes above. Approval is the second, separate step.':'This preview has no eligible automatic write.';
+        if(data?.preview?.canApply)accountingRepairApprove?.removeAttribute('disabled');
+      }catch(error){
+        if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to preview this repair.';
+      }
+    }
+
+    async function approveAccountingRepair(){
+      const previewId=String(accountingRepairPreview?.previewId||'');
+      if(!previewId)return;
+      accountingRepairApprove?.setAttribute('disabled','');
+      if(accountingRepairMessage)accountingRepairMessage.textContent='Rechecking the live fingerprint and applying only the approved preview…';
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'apply-accounting-repair',previewId,approved:true})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to apply this repair.');
+        if(accountingRepairMessage)accountingRepairMessage.textContent=data?.resolved?'Repair applied and reconciliation is clean.':'Repair applied; remaining accounting issues still require review.';
+        setTimeout(()=>{closeAccountingRepairDialog();document.querySelector('[data-refresh]')?.click();},800);
+      }catch(error){
+        if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to apply this repair.';
+        accountingRepairApprove?.removeAttribute('disabled');
+      }
+    }
+
+    accountingQueueButtons.forEach((button)=>button.addEventListener('click',()=>{accountingQueueFilter=String(button.dataset.accountingQueueFilter||'all');renderAccountingInvariantTable();}));
+    accountingFilterClear?.addEventListener('click',()=>{accountingQueueFilter='all';if(accountingFilterStatus)accountingFilterStatus.value='all';if(accountingFilterTaxable)accountingFilterTaxable.checked=false;if(accountingFilterMissingEstimate)accountingFilterMissingEstimate.checked=false;renderAccountingInvariantTable();});
+    document.querySelector('[data-accounting-repair-close]')?.addEventListener('click',closeAccountingRepairDialog);
+    document.querySelector('[data-accounting-repair-cancel]')?.addEventListener('click',closeAccountingRepairDialog);
+    accountingRepairApprove?.addEventListener('click',approveAccountingRepair);
+    accountingRepairDialog?.addEventListener('click',(event)=>{if(event.target===accountingRepairDialog)closeAccountingRepairDialog();});
+
     function renderAccountingInvariantTable(){
       if(!accountingInvariantTableBody)return;
       const release=accountingReleaseAudits.find((row)=>String(row.commit||'')===String(accountingReleaseSelect?.value||''))||accountingReleaseAudits[0]||null;
@@ -4240,10 +4354,15 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const status=String(accountingFilterStatus?.value||'all');
       const taxableOnly=Boolean(accountingFilterTaxable?.checked);
       const missingEstimateOnly=Boolean(accountingFilterMissingEstimate?.checked);
+      accountingQueueCounts.forEach((node)=>{
+        const category=String(node.dataset.accountingQueueCount||'');
+        node.textContent=String(rows.filter((row)=>String(row?.repairCategory||'')===category).length);
+      });
       const filtered=rows.filter((row)=>{
         if(status!=='all'&&String(row?.status||'unverified')!==status)return false;
         if(taxableOnly&&!(Number(row?.taxableLines||0)>0))return false;
         if(missingEstimateOnly&&row?.qboEstimate!=null&&String(row?.estimateId||''))return false;
+        if(accountingQueueFilter!=='all'&&String(row?.repairCategory||'')!==accountingQueueFilter)return false;
         return true;
       });
       accountingInvariantTableBody.innerHTML='';
@@ -4252,21 +4371,36 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         tr.className='border-b border-[var(--koa-line)]/70 align-top';
         const statusValue=String(row?.status||'unverified');
         const statusClass=statusValue==='passed'?'text-emerald-800':statusValue==='failed'?'text-red-800':'text-amber-800';
+        const category=String(row?.repairCategory||'');
         const cells=[
           String(row?.client||row?.recordId||'—'),
           accountingMoney(row?.crmTotal),
+          row?.lineTotal==null?'—':accountingMoney(row.lineTotal),
+          row?.lineTotal==null||row?.qboEstimate==null?'—':accountingMoney(Number(row.qboEstimate)-Number(row.lineTotal)),
           row?.qboEstimate==null?'—':accountingMoney(row.qboEstimate),
           row?.estimateDocNumber?'#'+String(row.estimateDocNumber):(row?.estimateId?String(row.estimateId):'—'),
           row?.taxableLines==null?'—':String(row.taxableLines),
+          accountingQueueLabel(category),
           statusValue,
           String(row?.failureReason||''),
         ];
         cells.forEach((value,index)=>{
           const td=document.createElement('td');
-          td.className='py-3 pr-4 '+(index===5?statusClass+' font-semibold':'text-[var(--koa-ink)]/70')+(index===6?' max-w-[360px] leading-5':'');
+          td.className='py-3 pr-4 '+(index===8?statusClass+' font-semibold':'text-[var(--koa-ink)]/70')+(index===9?' max-w-[360px] leading-5':'');
           td.textContent=value||'—';
+          if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','unverified'].includes(category)){
+            td.classList.add('cursor-pointer','underline','underline-offset-2');
+            td.title='Filter the repair queue to '+accountingQueueLabel(category);
+            td.addEventListener('click',()=>{accountingQueueFilter=category;renderAccountingInvariantTable();});
+          }
           tr.appendChild(td);
         });
+        const actionTd=document.createElement('td');actionTd.className='py-3';
+        const action=document.createElement('button');action.type='button';action.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';
+        if(statusValue==='passed'){action.textContent='Clean';action.disabled=true;action.classList.add('opacity-40');}
+        else if(statusValue==='unverified'){action.textContent='Recheck';action.addEventListener('click',()=>document.querySelector('[data-refresh]')?.click());}
+        else{action.textContent='Preview repair';action.addEventListener('click',()=>previewAccountingRepair(row));}
+        actionTd.appendChild(action);tr.appendChild(actionTd);
         accountingInvariantTableBody.appendChild(tr);
       }
       if(accountingInvariantTableEmpty)accountingInvariantTableEmpty.classList.toggle('hidden',filtered.length>0);
