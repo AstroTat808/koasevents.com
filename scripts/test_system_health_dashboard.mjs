@@ -123,6 +123,12 @@ assert(
 );
 
 assert(
+  visualWorkflow.includes("if: github.event_name != 'pull_request' && always()")
+    && visualWorkflow.includes('needs: deployed-smoke'),
+  'Live System Health diagnostics must still run after an unrelated deployed-smoke failure so production health values and responsive evidence are captured.',
+);
+
+assert(
   visualWorkflow.includes("if: github.event_name == 'pull_request'")
     && visualWorkflow.includes('python -m http.server 4173 --directory dist')
     && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
