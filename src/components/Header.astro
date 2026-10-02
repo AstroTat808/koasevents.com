@@ -136,13 +136,12 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
     siteThemeToggle.querySelector('[data-site-theme-sun]')?.classList.toggle('hidden', !dark);
   }
 
-  let accountThemeSyncTimer = 0;
-
   async function syncThemePreferenceToAccount(preference) {
     try {
       const response = await fetch('/api/account/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
         body: JSON.stringify({
           action: 'save-appearance-preference',
           appearancePreference: preference,
@@ -155,20 +154,13 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
     } catch {}
   }
 
-  function scheduleAccountThemeSync(preference) {
-    window.clearTimeout(accountThemeSyncTimer);
-    accountThemeSyncTimer = window.setTimeout(() => {
-      void syncThemePreferenceToAccount(preference);
-    }, 180);
-  }
-
   siteThemeToggle?.addEventListener('click', () => {
     const dark = String(document.documentElement.dataset.theme || 'light') === 'dark';
     const preference = dark ? 'light' : 'dark';
     window.dispatchEvent(new CustomEvent('koa:theme-request', {
       detail: { preference },
     }));
-    scheduleAccountThemeSync(preference);
+    void syncThemePreferenceToAccount(preference);
   });
 
   window.addEventListener('koa:theme-change', syncSiteThemeToggle);
