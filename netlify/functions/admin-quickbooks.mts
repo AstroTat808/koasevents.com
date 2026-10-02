@@ -775,7 +775,12 @@ function accountingRepairState(record: any, itemId: string) {
     dueDate: isoDate(entry.dueDate),
     label: clean(entry.label, 180),
   }));
+  const lifecycle=currentBookingStatus(record);
+  const scope=quickBooksAccountingScope(record);
   return {
+    lifecycle,
+    accountingScope:scope.mode,
+    accountingActionable:Boolean(scope.actionable),
     proposalTotal: roundMoney(record?.proposal?.total || 0),
     proposalDiscount: roundMoney(record?.proposal?.discountAmount || 0),
     expectedLines: quickBooksEstimateLineFingerprint(expectedLines),
@@ -1231,6 +1236,13 @@ async function applyAccountingRepair(
   let records = await readQuickBooksSalesRecords(context);
   const record = records.find((entry: any) => entry.id === clean(preview.recordId, 100) && entry.kind === 'proposal');
   if (!record) throw new Error('Proposal record not found.');
+  const lifecycle=currentBookingStatus(record);
+  const scope=quickBooksAccountingScope(record);
+  if(!lifecycle||!scope.actionable){
+    throw new Error(!lifecycle
+      ? 'This record is no longer accepted/booked. The approved repair is invalid and no QuickBooks write was attempted.'
+      : scope.reason+' The approved repair is invalid and no QuickBooks write was attempted.');
+  }
   const settings = await getQuickBooksSettings(context);
   const itemId = clean(settings?.serviceItemId, 80);
 
