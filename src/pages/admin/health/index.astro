@@ -3561,7 +3561,6 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderWeeklyExecutiveSummary(summary){
       const data=summary||{};
-      setAccountingReleaseAudits(releaseAudits);
       const uptime=data.uptime||{};
       const credential=data.credentialReliability||{};
       const incidents=data.incidents||{};
@@ -4298,6 +4297,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     function renderAccountingHealth(summary,releaseAudits=[]){
       const data=summary||{};
+      setAccountingReleaseAudits(releaseAudits);
       const latest=data.latest||null;
       const healthy=Boolean(latest?.ok)&&String(latest?.severity||'')!=='red';
       const warning=Boolean(latest?.ok)&&String(latest?.severity||'')==='yellow';
