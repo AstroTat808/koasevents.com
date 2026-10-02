@@ -422,6 +422,16 @@ function accountingHealthSummary(latest:any,history:any[],persistentIncidents:an
 }
 
 
+function accountingRepairCategory(row:any){
+  const status=String(row?.status||'unverified');
+  const reason=String(row?.failureReason||row?.detail||'').toLowerCase();
+  if(status==='unverified')return 'unverified';
+  if(!String(row?.estimateId||'')||reason.includes('no linked quickbooks estimate')||reason.includes('estimate is missing'))return 'missing-estimate';
+  if(Number(row?.taxableLines??row?.taxableLineCount??0)>0||reason.includes('taxable sales lines'))return 'taxable-lines';
+  if(reason.includes('sales lines do not equal'))return 'sales-line-mismatch';
+  return status==='failed'?'other-failure':'passed';
+}
+
 function accountingReleaseAudits(releases:any[]){
   return (Array.isArray(releases)?releases:[])
     .map((release:any)=>{
@@ -444,6 +454,7 @@ function accountingReleaseAudits(releases:any[]){
           client:String(row?.client||row?.clientName||row?.recordId||''),
           crmTotal:Number(row?.crmTotal??row?.proposalTotal??0),
           qboEstimate:row?.qboEstimate==null?(row?.estimateTotal==null?null:Number(row.estimateTotal)):Number(row.qboEstimate),
+          lineTotal:row?.lineTotal==null?null:Number(row.lineTotal),
           estimateId:String(row?.estimateId||''),
           estimateDocNumber:String(row?.estimateDocNumber||''),
           taxableLines:row?.taxableLines==null?(row?.taxableLineCount==null?null:Number(row.taxableLineCount)):Number(row.taxableLines),
@@ -454,6 +465,7 @@ function accountingReleaseAudits(releases:any[]){
             || row?.detail
             || ''
           ),
+          repairCategory:accountingRepairCategory(row),
         })),
       };
     })
