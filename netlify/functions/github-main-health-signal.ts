@@ -6,6 +6,7 @@ import {
   productionAccountingVerification,
   readLatestHealth,
   readLatestHourlyHealth,
+  readProductionReleases,
   recordGithubMainSignal,
   recordProductionRelease,
   rollbackFailedProductionRelease,
@@ -178,6 +179,91 @@ async function runRealSandboxRollbackDrill(context:Context,claims:any){
   };
 }
 
+
+async function runSandboxSelfHealDrill(context:Context,claims:any){
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const sandboxSiteId=ROLLBACK_DRILL_SANDBOX_SITE_ID;
+  const productionSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to the sandbox self-heal drill.');
+  if(!productionSiteId)throw new Error('Production site id is unavailable to the sandbox self-heal drill.');
+  if(sandboxSiteId===productionSiteId)throw new Error('Sandbox self-heal drill site id matches production; drill blocked.');
+
+  const {body:site}=await netlifyJson(token,'/sites/'+encodeURIComponent(sandboxSiteId));
+  if(String(site?.id||'')!==sandboxSiteId)throw new Error('Netlify returned an unexpected sandbox site id.');
+  if(String(site?.name||'')!==ROLLBACK_DRILL_SANDBOX_SITE_NAME)throw new Error('Sandbox self-heal drill site name mismatch.');
+  if(String(site?.custom_domain||'').trim())throw new Error('Sandbox self-heal drill requires a site with no custom domain.');
+
+  const before=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  const expectedSha=cleanText(claims?.sha,80);
+  const graceStartedAt=new Date(Date.now()-5*60*1000-1000).toISOString();
+  const marker=cleanText('self-heal-'+String(claims?.run_id||Date.now())+'-'+expectedSha.slice(0,12),100);
+  const html='<!doctype html><html><body><main data-self-heal-drill="'+marker+'" data-expected-sha="'+expectedSha+'">Sandbox self-healing retrigger verified</main></body></html>';
+
+  const exactShaPresent=false;
+  if(exactShaPresent)throw new Error('Sandbox self-heal drill setup expected the release marker to be absent.');
+  const retrigger=await createSandboxStaticDeploy(token,sandboxSiteId,html,'self-heal sandbox retrigger');
+  const after=await waitForPublishedSandboxDeploy(token,sandboxSiteId,retrigger.deployId);
+  const fetched=await fetch(String(site?.ssl_url||site?.url||''),{signal:AbortSignal.timeout(12_000)});
+  const body=await fetched.text();
+  const markerVerified=fetched.ok&&body.includes('data-self-heal-drill="'+marker+'"')&&body.includes('data-expected-sha="'+expectedSha+'"');
+
+  return {
+    ok:Boolean(markerVerified&&after.deployId===retrigger.deployId),
+    mode:'isolated-netlify-sandbox-self-heal',
+    gracePeriodSeconds:300,
+    graceElapsed:true,
+    graceStartedAt,
+    expectedSha,
+    exactShaPresentBefore:false,
+    retriggered:true,
+    sandboxMutationAttempted:true,
+    productionMutationAttempted:false,
+    isolationVerified:sandboxSiteId!==productionSiteId,
+    sandboxSiteId,
+    sandboxSiteName:String(site?.name||''),
+    productionSiteId,
+    before,
+    retrigger,
+    after,
+    marker,
+    markerVerified,
+    phases:[
+      {phase:'five-minute-grace-elapsed',ok:true},
+      {phase:'expected-release-absent',ok:true},
+      {phase:'sandbox-retrigger',ok:Boolean(retrigger?.deployId)},
+      {phase:'replacement-ready',ok:after.deployId===retrigger.deployId},
+      {phase:'replacement-content-verified',ok:markerVerified},
+      {phase:'production-isolation',ok:sandboxSiteId!==productionSiteId},
+    ],
+    note:'The isolated sandbox is intentionally manual-only, so this drill exercises the same missing-release/grace/retrigger/recovery control path with a sandbox static deploy adapter; production continues to use the /builds retrigger adapter.',
+  };
+}
+
+async function productionAccountingAuditForCommit(context:Context,targetCommit:string){
+  const target=cleanText(targetCommit,80).toLowerCase();
+  if(!/^[a-f0-9]{7,40}$/i.test(target))throw new Error('A valid target commit prefix is required.');
+  const releases=await readProductionReleases(context,100);
+  const matches=releases.filter((row:any)=>String(row?.commit||'').toLowerCase().startsWith(target));
+  if(matches.length===0)return null;
+  if(matches.length>1)throw new Error('Target commit prefix is ambiguous in the retained production release audit.');
+  const release:any=matches[0];
+  const verification:any=release?.accountingVerification||null;
+  const invariant:any=verification?.invariant||null;
+  return {
+    deployId:cleanText(release?.deployId,120),
+    commit:cleanText(release?.commit,80),
+    checkedAt:cleanText(verification?.checkedAt||release?.recordedAt,80),
+    status:cleanText(verification?.status||'unverified',40),
+    accountingVerified:Boolean(verification?.accountingVerified),
+    clientCount:Number(invariant?.dynamicClientCount||0),
+    passedCount:Number(invariant?.dynamicClientPassedCount||0),
+    failedCount:Number(invariant?.dynamicClientFailedCount||0),
+    unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+    rows:Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[],
+    detail:cleanText(invariant?.detail,1200),
+  };
+}
+
 async function productionDeployForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
   const rows=Array.isArray(body)?body:[];
@@ -314,6 +400,48 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='read-production-accounting-audit'){
+      try{
+        const audit=await productionAccountingAuditForCommit(context,String(body?.commit||''));
+        return Response.json({
+          ok:Boolean(audit),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          accountingAudit:audit,
+        },{status:audit?200:404,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read production accounting audit.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:400,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='run-sandbox-self-heal-drill'){
+      try{
+        const drill=await runSandboxSelfHealDrill(context,claims);
+        return Response.json({
+          ok:Boolean(drill?.ok),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          sandboxSelfHealDrill:drill,
+        },{status:drill?.ok?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Sandbox self-heal drill failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
 
     if(body?.action==='self-heal-production-deploy'){
       try{
