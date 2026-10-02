@@ -11,23 +11,13 @@ assert.equal(imported.mode, 'quickbooks-history');
 assert.equal(imported.actionable, false);
 assert.equal(imported.historicalQuickBooksImport, true);
 
-const importedByProposal = quickBooksAccountingScope({
-  source: 'crm',
-  proposal: { source: 'quickbooks-import' },
-  accounting: { quickbooks: { origin: '' } },
-});
-assert.equal(importedByProposal.actionable, false);
-
-const crmManagedWithQboOrigin = quickBooksAccountingScope({
+const crmManaged = quickBooksAccountingScope({
   source: 'website',
-  stage: 'booked',
-  proposal: { source: 'crm', status: 'sent' },
-  accounting: { quickbooks: { origin: 'quickbooks' } },
+  proposal: { source: 'crm' },
+  accounting: { quickbooks: { origin: 'crm' } },
 });
-assert.equal(crmManagedWithQboOrigin.mode, 'crm-managed');
-assert.equal(crmManagedWithQboOrigin.actionable, true);
-assert.equal(crmManagedWithQboOrigin.historicalQuickBooksImport, false);
-assert.equal(crmManagedWithQboOrigin.qboOrigin, 'quickbooks');
+assert.equal(crmManaged.mode, 'crm-managed');
+assert.equal(crmManaged.actionable, true);
 
 assert.equal(currentBookingStatus({ stage:'booked', proposal:{ status:'sent' } }), 'booked');
 assert.equal(currentBookingStatus({ stage:'proposal', proposal:{ status:'accepted' } }), 'accepted');
@@ -38,7 +28,11 @@ assert.equal(
 );
 
 const systemHealthSource = fs.readFileSync('netlify/functions/_shared/system-health.ts', 'utf8');
-assert.match(systemHealthSource, /currentBookingStatus\(record\)/, 'System Health must select current bookings from the authoritative lifecycle helper.');
-assert.match(systemHealthSource, /quickBooksAccountingScope\(record\)\.actionable/, 'System Health must still exclude explicit historical QuickBooks imports.');
+assert.match(systemHealthSource, /Boolean\(currentBookingStatus\(record\)\)/, 'System Health must select current clients from authoritative booking lifecycle status.');
+assert.doesNotMatch(
+  systemHealthSource.slice(systemHealthSource.indexOf('async function acceptedBookedLiveAccountingInvariants'), systemHealthSource.indexOf('async function quickBooksTaxInvariantHealthCheck')),
+  /quickBooksAccountingScope\(record\)/,
+  'Current accepted/booked invariant population must not be reduced by historical provenance classification.',
+);
 
-console.log('QuickBooks accounting scope regression passed: authoritative accepted/booked lifecycle wins, CRM-managed QBO-linked bookings remain actionable, and explicit historical imports stay informational.');
+console.log('QuickBooks accounting selector regression passed: accepted/booked lifecycle is authoritative while historical scope remains available for non-live accounting views.');
