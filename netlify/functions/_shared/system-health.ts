@@ -208,6 +208,7 @@ const PAGE_CHECKS = [
 const API_CHECKS = [
   ['admin-session','Admin session API','/api/admin/session'],
   ['account-profile-api','Account Profile API','/api/account/profile'],
+  ['account-security-api','Account Security API','/api/account/security'],
   ['workspace-alerts-api','Action Center API','/api/admin/workspace-alerts'],
   ['business-crm-api','Business CRM API','/api/admin/crm'],
   ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
@@ -428,7 +429,7 @@ export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=nul
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
-    'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
+    'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
     'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
