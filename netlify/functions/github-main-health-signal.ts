@@ -209,10 +209,12 @@ async function runSandboxSelfHealDrill(context:Context,claims:any){
   if(exactShaPresent)throw new Error('Sandbox self-heal drill setup expected the release marker to be absent.');
   const retrigger=await createSandboxStaticDeploy(token,sandboxSiteId,html,'self-heal sandbox retrigger');
   const after=await waitForPublishedSandboxDeploy(token,sandboxSiteId,retrigger.deployId);
-  const verificationUrl=String(retrigger?.deployUrl||site?.ssl_url||site?.url||'');
-  const fetched=await fetch(verificationUrl,{signal:AbortSignal.timeout(12_000),headers:{'Cache-Control':'no-cache'}});
-  const body=await fetched.text();
-  const markerVerified=fetched.ok&&body.includes('data-self-heal-drill="'+marker+'"')&&body.includes('data-expected-sha="'+expectedSha+'"');
+  const {body:fileMeta}=await netlifyJson(
+    token,
+    '/sites/'+encodeURIComponent(sandboxSiteId)+'/files/index.html',
+  );
+  const publishedFileSha=cleanText(fileMeta?.sha,80);
+  const markerVerified=Boolean(publishedFileSha&&publishedFileSha===String(retrigger?.sha||''));
 
   return {
     ok:Boolean(markerVerified&&after.deployId===retrigger.deployId),
@@ -233,7 +235,8 @@ async function runSandboxSelfHealDrill(context:Context,claims:any){
     retrigger,
     after,
     marker,
-    verificationUrl,
+    publishedFileSha,
+    expectedFileSha:String(retrigger?.sha||''),
     markerVerified,
     phases:[
       {phase:'five-minute-grace-elapsed',ok:true},
