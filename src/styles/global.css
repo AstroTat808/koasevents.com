@@ -1602,17 +1602,25 @@ body.koa-admin-page main[data-system-health-page] {
 }
 
 body.koa-admin-page main[data-system-health-page] > .container-shell {
-  width: calc(100vw - 2rem) !important;
+  width: calc(100% - 2rem) !important;
   max-width: 84rem !important;
   min-width: 0;
   margin-inline: auto;
   box-sizing: border-box;
 }
 
-body.koa-admin-page main[data-system-health-page] [data-app],
-body.koa-admin-page main[data-system-health-page] [data-app] > section {
+body.koa-admin-page main[data-system-health-page] [data-app] {
+  width: 100% !important;
+  max-width: 100% !important;
   min-width: 0;
-  max-width: 100%;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] [data-app] > section {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 body.koa-admin-page main[data-system-health-page] .health-page-header-actions {
@@ -1626,9 +1634,12 @@ body.koa-admin-page main[data-system-health-page] .health-page-header-actions > 
 }
 
 body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+  width: 100% !important;
+  max-width: 100% !important;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   align-items: stretch;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 body.koa-admin-page main[data-system-health-page] .health-summary-card {
@@ -1670,13 +1681,12 @@ body.koa-admin-page main[data-system-health-page] .health-summary-support {
   }
 }
 
-@media (max-width: 359px) {
-  body.koa-admin-page main[data-system-health-page] [data-app] > section[data-health-summary-grid]:first-child {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 @media (max-width: 639px) {
+  body.koa-admin-page main[data-system-health-page] [data-app] > section[data-health-summary-grid]:first-child {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+
   body.koa-admin-page main[data-system-health-page] .health-summary-card,
   body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
     min-height: 0;
