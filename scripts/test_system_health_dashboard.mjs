@@ -56,6 +56,28 @@ assert(
 );
 
 assert(
+  health.includes('data-health-summary-grid')
+    && health.includes('health-summary-card--overall')
+    && health.includes('health-summary-card--checked'),
+  'System Health must expose the responsive summary grid and balanced summary-card hooks.',
+);
+assert(
+  css.includes('/* System Health responsive summary layout */')
+    && css.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    && css.includes('@media (max-width: 1099px)')
+    && css.includes('@media (max-width: 639px)'),
+  'System Health summary cards must use zero-minimum responsive grid tracks with desktop, tablet, and phone breakpoints.',
+);
+assert(
+  visualQa.includes('("tablet",768,1024,1)')
+    && visualQa.includes('("desktop-small",1280,800,1)')
+    && visualQa.includes('("desktop-wide",1920,1080,1)')
+    && visualQa.includes('summaryHeightSpread')
+    && visualQa.includes('All four summary cards remain inside the viewport'),
+  'Authenticated System Health visual QA must cover phone, tablet, and desktop widths and enforce summary-card geometry.',
+);
+
+assert(
   adminHealth.includes('export async function runHealthDashboardRefresh(context:Context)')
     && adminHealth.includes('const dashboard=await runHealthDashboardRefresh(context);'),
   'Manual System Health checks must reuse the exported dashboard-refresh implementation used by signed production QA.',
