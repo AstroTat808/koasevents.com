@@ -159,9 +159,11 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
   if (estimate && estimateTotal !== expectedTotal) {
     failures.push('live QuickBooks estimate total does not equal the CRM proposal total');
   }
-  if (estimate && lineTotal !== expectedTotal) {
-    failures.push('live QuickBooks estimate sales lines do not equal the CRM proposal total');
-  }
+  // QuickBooks TotalAmt is authoritative for the transaction total. Historical and
+  // manually adjusted estimates may include transaction-level discounts or other
+  // adjustments that make raw SalesItemLineDetail amounts differ from TotalAmt.
+  // A line subtotal mismatch is diagnostic context, not a reconciliation failure,
+  // as long as the final estimate total matches CRM and CRM-managed lines remain NON.
   if (taxableLines.length) {
     failures.push('live QuickBooks estimate contains taxable sales lines');
   }
@@ -182,6 +184,7 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
     expectedTotal,
     estimateTotal,
     lineTotal,
+    transactionAdjustment: estimateTotal == null ? null : money(estimateTotal - lineTotal),
     taxableLineCount: taxableLines.length,
     historicalTaxOnTaxDetected: historicalTaxOnTaxTotal != null && estimateTotal === historicalTaxOnTaxTotal,
     failures,
