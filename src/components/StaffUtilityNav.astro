@@ -83,6 +83,20 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
         <button data-workspace-trust-current type="button" class="workspace-account-primary mt-3">Trust this browser</button>
       </div>
 
+      <div class="workspace-account-expiry mt-4 rounded-xl border border-[var(--koa-line)] bg-white p-3">
+        <label for="koa-trusted-device-expiry" class="block text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Auto-revoke stale browsers</label>
+        <div class="mt-2 flex flex-col gap-2 sm:flex-row">
+          <select id="koa-trusted-device-expiry" data-workspace-trusted-expiry class="min-w-0 flex-1">
+            <option value="0">Never</option>
+            <option value="30">After 30 days without use</option>
+            <option value="60">After 60 days without use</option>
+            <option value="90">After 90 days without use</option>
+          </select>
+          <button data-workspace-save-trusted-expiry type="button" class="workspace-account-device-action">Save policy</button>
+        </div>
+        <p class="mt-2 text-[.66rem] leading-4 text-[var(--koa-ink)]/45">The timer resets after a successful sign-in from that trusted browser.</p>
+      </div>
+
       <div class="mt-4">
         <div class="flex items-center justify-between gap-3">
           <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Trusted devices</p>
@@ -364,6 +378,19 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     padding: .55rem .65rem;
     color: var(--koa-forest);
     font-size: .78rem;
+    font-weight: 700;
+  }
+
+  .workspace-account-expiry select {
+    min-height: 2.5rem;
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid var(--koa-line);
+    border-radius: .65rem;
+    background: white;
+    padding: .55rem .65rem;
+    color: var(--koa-forest);
+    font-size: .72rem;
     font-weight: 700;
   }
 
@@ -1348,6 +1375,10 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     const current=nav?.querySelector('[data-workspace-current-device]');
     const currentDetail=nav?.querySelector('[data-workspace-current-device-detail]');
     const trustButton=nav?.querySelector('[data-workspace-trust-current]');
+    const expirySelect=nav?.querySelector('[data-workspace-trusted-expiry]');
+    if(expirySelect instanceof HTMLSelectElement){
+      expirySelect.value=String([30,60,90].includes(Number(data?.trustedDeviceExpiryDays))?Number(data.trustedDeviceExpiryDays):0);
+    }
     if(count)count.textContent=String((data?.trustedDevices||[]).length);
     if(current)current.textContent=data?.currentDevice?.trusted
       ?(data.currentDevice.name||'This browser')+' · Trusted'
@@ -1373,7 +1404,10 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       title.textContent=(device.device||'Browser')+(device.current?' · This browser':'');
       const detail=document.createElement('p');
       detail.className='mt-1 text-[.66rem] leading-4 text-[var(--koa-ink)]/45';
-      detail.textContent=device.trustedAt?'Trusted '+new Date(device.trustedAt).toLocaleString():'Trusted device';
+      const trustedText=device.trustedAt?'Trusted '+new Date(device.trustedAt).toLocaleString():'Trusted device';
+      const lastUsedText=device.lastUsedAt?'Last used '+new Date(device.lastUsedAt).toLocaleString():'Last used not recorded';
+      const expiryText=device.expiresAt?'Auto-revokes '+new Date(device.expiresAt).toLocaleString():'No auto-expiration';
+      detail.textContent=trustedText+' · '+lastUsedText+' · '+expiryText;
       meta.append(title,detail);
       header.appendChild(meta);
       row.appendChild(header);
@@ -2250,6 +2284,24 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       if(message)message.textContent=result.message||'This browser is trusted.';
     }catch(error){
       if(message)message.textContent=error instanceof Error?error.message:'Unable to trust this browser.';
+      if(button instanceof HTMLButtonElement)button.disabled=false;
+    }
+  });
+  nav?.querySelector('[data-workspace-save-trusted-expiry]')?.addEventListener('click',async()=>{
+    const select=nav?.querySelector('[data-workspace-trusted-expiry]');
+    const button=nav?.querySelector('[data-workspace-save-trusted-expiry]');
+    const message=nav?.querySelector('[data-workspace-account-message]');
+    if(!(select instanceof HTMLSelectElement))return;
+    if(button instanceof HTMLButtonElement)button.disabled=true;
+    if(message)message.textContent='Saving trusted-browser expiration…';
+    try{
+      const result=await accountSecurityAction('save-trusted-device-expiry',{expiryDays:Number(select.value)});
+      accountSecurityLoaded=false;
+      await loadAccountSecurity();
+      if(message)message.textContent=result.message||'Trusted-browser expiration saved.';
+    }catch(error){
+      if(message)message.textContent=error instanceof Error?error.message:'Unable to save trusted-browser expiration.';
+    }finally{
       if(button instanceof HTMLButtonElement)button.disabled=false;
     }
   });
