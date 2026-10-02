@@ -63,22 +63,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <iframe data-preview-frame="iphone" title="iPhone Apple Mail email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
               </div>
             </article>
-            <article class="rounded-[1.2rem] bg-[#f1f3f4] p-4">
+            <article class="email-preview-client-shell email-preview-client-shell-gmail rounded-[1.2rem] bg-[#f1f3f4] p-4">
               <div class="mb-3 flex items-center justify-between gap-3">
                 <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[#5f6368]">Gmail</p><p class="mt-1 text-xs text-[#5f6368]">Web-style reading pane</p></div>
-                <span class="rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#5f6368] shadow-sm">Web</span>
+                <span class="email-preview-client-badge rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#5f6368] shadow-sm">Web</span>
               </div>
-              <div class="overflow-hidden rounded-xl border border-[#dadce0] bg-white shadow-lg">
-                <div class="flex items-center gap-3 border-b border-[#dadce0] px-4 py-3 text-xs text-[#5f6368]"><span class="font-black text-[#d93025]">M</span><span>Inbox</span><span class="ml-auto">⋮</span></div>
+              <div class="email-preview-client-chrome overflow-hidden rounded-xl border border-[#dadce0] bg-white shadow-lg">
+                <div class="email-preview-client-toolbar flex items-center gap-3 border-b border-[#dadce0] px-4 py-3 text-xs text-[#5f6368]"><span class="font-black text-[#d93025]">M</span><span>Inbox</span><span class="ml-auto">⋮</span></div>
                 <iframe data-preview-frame="gmail" title="Gmail-style email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
               </div>
             </article>
-            <article class="rounded-[1.2rem] bg-[#f3f6fb] p-4">
+            <article class="email-preview-client-shell email-preview-client-shell-outlook rounded-[1.2rem] bg-[#f3f6fb] p-4">
               <div class="mb-3 flex items-center justify-between gap-3">
                 <div><p class="text-[.58rem] font-black uppercase tracking-[.1em] text-[#0f6cbd]">Microsoft Outlook</p><p class="mt-1 text-xs text-[#4b5563]">Desktop-style reading pane</p></div>
-                <span class="rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#0f6cbd] shadow-sm">Desktop</span>
+                <span class="email-preview-client-badge rounded-full bg-white px-2.5 py-1 text-[.55rem] font-black uppercase tracking-[.08em] text-[#0f6cbd] shadow-sm">Desktop</span>
               </div>
-              <div class="overflow-hidden rounded-xl border border-[#d5dbe5] bg-white shadow-lg">
+              <div class="email-preview-client-chrome overflow-hidden rounded-xl border border-[#d5dbe5] bg-white shadow-lg">
                 <div class="flex items-center gap-3 bg-[#0f6cbd] px-4 py-3 text-xs text-white"><span class="font-black">O</span><span>Outlook</span><span class="ml-auto">•••</span></div>
                 <iframe data-preview-frame="outlook" title="Outlook-style email preview" class="h-[760px] w-full border-0 bg-white"></iframe>
               </div>
@@ -95,6 +95,29 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </section>
     </div>
   </main>
+
+  <style>
+    :global(html[data-theme="dark"]) .email-preview-client-shell {
+      background: var(--koa-surface-2) !important;
+      color: var(--koa-text);
+    }
+    :global(html[data-theme="dark"]) .email-preview-client-chrome {
+      border-color: var(--koa-line) !important;
+      background: var(--koa-surface) !important;
+    }
+    :global(html[data-theme="dark"]) .email-preview-client-toolbar,
+    :global(html[data-theme="dark"]) .email-preview-client-badge,
+    :global(html[data-theme="dark"]) .email-preview-client-shell-gmail [class*="text-[#5f6368]"],
+    :global(html[data-theme="dark"]) .email-preview-client-shell-outlook [class*="text-[#4b5563]"] {
+      color: var(--koa-text-muted) !important;
+    }
+    :global(html[data-theme="dark"]) .email-preview-client-badge {
+      background: var(--koa-surface) !important;
+    }
+    :global(html[data-theme="dark"]) .email-preview-client-shell-outlook [class*="text-[#0f6cbd]"] {
+      color: #93c5fd !important;
+    }
+  </style>
 
   <script>
     import { getAdminSession } from '../../../lib/admin-session';
