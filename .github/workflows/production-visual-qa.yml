@@ -11,6 +11,7 @@ on:
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
       - 'scripts/verify_netlify_release_gate.mjs'
+      - 'scripts/system_health_release_audit.py'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -28,6 +29,7 @@ on:
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
       - 'scripts/verify_netlify_release_gate.mjs'
+      - 'scripts/system_health_release_audit.py'
       - 'src/**'
       - 'netlify/**'
       - 'public/**'
@@ -45,8 +47,8 @@ on:
         default: 'https://koasevents.com'
 
 concurrency:
-  group: koa-production-visual-qa-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: koa-production-visual-qa-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -308,6 +310,8 @@ jobs:
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
       - name: Run signed live System Health dashboard refresh
+        id: live-dashboard-refresh
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
@@ -344,97 +348,56 @@ jobs:
           },separators=(',',':')))
           PY
       - name: Verify authenticated mobile System Health in Chromium
+        id: health-chromium
+        if: always()
+        continue-on-error: true
         run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.json
       - name: Verify authenticated mobile System Health in WebKit
+        id: health-webkit
+        if: always()
+        continue-on-error: true
         run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.json
-      - name: Publish System Health production release status
+      - name: Publish and persist System Health production release status
         if: always()
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          mkdir -p visual-results
+          python scripts/system_health_release_audit.py prepare \
+            --dashboard visual-results/system-health-dashboard.json \
+            --chromium visual-results/health-mobile-chromium/report.json \
+            --webkit visual-results/health-mobile-webkit/report.json \
+            --audit-output visual-results/system-health-responsive-release.json \
+            --status-output /tmp/system-health-commit-status.json \
+            --record-output visual-results/system-health-responsive-release-request.json
+
+          cat visual-results/system-health-responsive-release.json
+
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            -o visual-results/system-health-responsive-release-record.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data-binary @visual-results/system-health-responsive-release-request.json \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat visual-results/system-health-responsive-release-record.json
+          test "$http_status" = "200"
           python - <<'PY'
           import json
           from pathlib import Path
-
-          def load(path):
-              p=Path(path)
-              if not p.is_file():
-                  return None
-              try:
-                  return json.loads(p.read_text())
-              except Exception:
-                  return None
-
-          dashboard=load('visual-results/system-health-dashboard.json') or {}
-          chromium=load('visual-results/health-mobile-chromium/report.json') or {}
-          webkit=load('visual-results/health-mobile-webkit/report.json') or {}
-          current=dashboard.get('current') or {}
-          warnings=dashboard.get('enrichmentWarnings') or []
-          expected_refresh='Partial' if warnings else 'Current'
-
-          reports=[chromium,webkit]
-          reports_complete=all(
-              isinstance(report.get('results'),list)
-              and len(report.get('results'))==7
-              and not (report.get('failures') or [])
-              for report in reports
-          )
-          refresh_checks=[]
-          for report in reports:
-              for row in report.get('results') or []:
-                  after=(row.get('metrics') or {}).get('afterRunChecksNow') or {}
-                  refresh_checks.append(
-                      after.get('passed')==str(current.get('passed'))
-                      and after.get('failed')==str(current.get('failed'))
-                      and bool(after.get('checked'))
-                      and after.get('dashboardRefresh')==expected_refresh
-                  )
-
-          ok=bool(
-              dashboard.get('ok') is True
-              and current.get('checkedAt')
-              and isinstance(current.get('passed'),int)
-              and isinstance(current.get('failed'),int)
-              and current.get('overall') in {'healthy','unhealthy'}
-              and reports_complete
-              and len(refresh_checks)==14
-              and all(refresh_checks)
-          )
-
-          overall=str(current.get('overall') or 'unknown').title()
-          passed=current.get('passed','?')
-          failed=current.get('failed','?')
-          description=f'{overall} · {passed} passed · {failed} failed · Refresh {expected_refresh} · 14 responsive checks'
-          payload={
-              'state':'success' if ok else 'failure',
-              'context':'System Health production release gate',
-              'description':description[:140],
-          }
-          Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
-          print(json.dumps({
-              'ok':ok,
-              'overall':current.get('overall'),
-              'passed':current.get('passed'),
-              'failed':current.get('failed'),
-              'checkedAt':current.get('checkedAt'),
-              'dashboardRefresh':expected_refresh,
-              'enrichmentWarnings':warnings,
-              'chromiumViewports':len(chromium.get('results') or []),
-              'webkitViewports':len(webkit.get('results') or []),
-              'chromiumFailures':chromium.get('failures') or [],
-              'webkitFailures':webkit.get('failures') or [],
-          },separators=(',',':')))
+          data=json.loads(Path('visual-results/system-health-responsive-release-record.json').read_text())
+          verification=data.get('responsiveVerification') or {}
+          assert data.get('ok') is True
+          assert data.get('auditRecorded') is True
+          assert verification.get('totalCount') == 14
+          assert len(verification.get('rows') or []) == 14
           PY
-          python - <<'PY'
-          import json,os
-          from pathlib import Path
-          p=Path('/tmp/system-health-commit-status.json')
-          data=json.loads(p.read_text())
-          data['target_url']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
-          p.write_text(json.dumps(data,separators=(',',':')))
-          PY
+
           curl -fsS \
             -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -443,12 +406,18 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/system-health-commit-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+      - name: Enforce System Health responsive release gate
+        if: always()
+        run: python scripts/system_health_release_audit.py enforce --audit-output visual-results/system-health-responsive-release.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-system-health-mobile-${{ github.run_id }}
           path: |
             visual-results/system-health-dashboard.json
+            visual-results/system-health-responsive-release.json
+            visual-results/system-health-responsive-release-request.json
+            visual-results/system-health-responsive-release-record.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
           retention-days: 30
