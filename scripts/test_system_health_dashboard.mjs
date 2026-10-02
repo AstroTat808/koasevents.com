@@ -8,6 +8,8 @@ const systemHealth = await readFile(new URL('../netlify/functions/_shared/system
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
+const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
+const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -146,6 +148,22 @@ assert(
     && visualWorkflow.includes('self-heal-production-deploy')
     && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
   'Production QA must retrigger a missing exact-SHA deploy after the five-minute grace period and then verify the exact SHA.',
+);
+
+assert(
+  netlifyConfig.includes('node scripts/verify_netlify_release_gate.mjs')
+    && releaseGate.includes("const REQUIRED_WORKFLOW='Production visual QA'")
+    && releaseGate.includes('&event=pull_request&per_page=50')
+    && releaseGate.includes("String(latest?.conclusion||'')!=='success'"),
+  'Netlify production builds must fail closed unless the exact merged PR head passed Production visual QA.',
+);
+assert(
+  visualWorkflow.includes('statuses: write')
+    && visualWorkflow.includes('System Health production release gate')
+    && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
+    && visualWorkflow.includes("len(report.get('results'))==7")
+    && visualWorkflow.includes('len(refresh_checks)==14'),
+  'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
