@@ -149,6 +149,21 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
     String(line?.SalesItemLineDetail?.TaxCodeRef?.value || '').trim().toUpperCase() !== 'NON'
   );
   const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const allLines = Array.isArray(estimate?.Line) ? estimate.Line : [];
+  const discountLines = allLines.filter((line) => line?.DetailType === 'DiscountLineDetail');
+  const discountLineAmount = money(discountLines.reduce((sum, line) => sum + Math.abs(Number(line?.Amount || 0)), 0));
+  const discountAmtField = estimate?.DiscountAmt == null ? null : money(estimate.DiscountAmt);
+  const totalTax = estimate ? money(estimate?.TxnTaxDetail?.TotalTax || 0) : null;
+  const adjustmentTotal = estimateTotal == null ? null : money(estimateTotal - lineTotal);
+  const nonSalesAdjustments = allLines
+    .filter((line) => line?.DetailType && line.DetailType !== 'SalesItemLineDetail' && line.DetailType !== 'SubTotalLineDetail')
+    .map((line) => ({
+      detailType: String(line?.DetailType || ''),
+      amount: money(line?.Amount || 0),
+      discountPercent: line?.DiscountLineDetail?.DiscountPercent == null ? null : Number(line.DiscountLineDetail.DiscountPercent),
+      percentBased: line?.DiscountLineDetail?.PercentBased == null ? null : Boolean(line.DiscountLineDetail.PercentBased),
+      taxRateRef: String(line?.TaxLineDetail?.TaxRateRef?.value || ''),
+    }));
   const failures = [];
 
   if (!record) failures.push('CRM proposal record is missing');
@@ -185,6 +200,12 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
     estimateTotal,
     lineTotal,
     transactionAdjustment: estimateTotal == null ? null : money(estimateTotal - lineTotal),
+    adjustmentTotal,
+    discountAmtField,
+    discountLineAmount,
+    totalTax,
+    applyTaxAfterDiscount: estimate?.ApplyTaxAfterDiscount == null ? null : Boolean(estimate.ApplyTaxAfterDiscount),
+    nonSalesAdjustments,
     taxableLineCount: taxableLines.length,
     historicalTaxOnTaxDetected: historicalTaxOnTaxTotal != null && estimateTotal === historicalTaxOnTaxTotal,
     failures,
