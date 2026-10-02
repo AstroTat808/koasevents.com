@@ -201,7 +201,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 <button data-accounting-queue-filter="missing-estimate" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Missing QBO estimate</span><strong data-accounting-queue-count="missing-estimate" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
                 <button data-accounting-queue-filter="taxable-lines" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Taxable lines</span><strong data-accounting-queue-count="taxable-lines" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
-                <button data-accounting-queue-filter="sales-line-mismatch" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Sales-line mismatch</span><strong data-accounting-queue-count="sales-line-mismatch" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="adjustment" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">QBO adjustments</span><strong data-accounting-queue-count="adjustment" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
                 <button data-accounting-queue-filter="unverified" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unverified</span><strong data-accounting-queue-count="unverified" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
               </div>
             </div>
@@ -4298,7 +4298,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     }
 
     function accountingQueueLabel(category){
-      return ({'missing-estimate':'Missing estimate','taxable-lines':'Taxable lines','sales-line-mismatch':'Sales-line mismatch','unverified':'Unverified','other-failure':'Other failure','passed':'Passed'})[String(category||'')]||'Other';
+      return ({'missing-estimate':'Missing estimate','taxable-lines':'Taxable lines','sales-line-mismatch':'Legacy line mismatch','adjustment':'QBO adjustment','unverified':'Unverified','other-failure':'Other failure','passed':'Passed'})[String(category||'')]||'Other';
     }
 
     function closeAccountingRepairDialog(){
@@ -4473,7 +4473,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const missingEstimateOnly=Boolean(accountingFilterMissingEstimate?.checked);
       accountingQueueCounts.forEach((node)=>{
         const category=String(node.dataset.accountingQueueCount||'');
-        node.textContent=String(rows.filter((row)=>String(row?.repairCategory||'')===category).length);
+        const count=category==='adjustment'
+          ? rows.filter((row)=>Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01).length
+          : rows.filter((row)=>String(row?.repairCategory||'')===category).length;
+        node.textContent=String(count);
       });
       if(accountingPreviewAllSafe){
         const latestRows=Array.isArray(accountingReleaseAudits[0]?.rows)?accountingReleaseAudits[0].rows:[];
@@ -4485,7 +4488,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         if(status!=='all'&&String(row?.status||'unverified')!==status)return false;
         if(taxableOnly&&!(Number(row?.taxableLines||0)>0))return false;
         if(missingEstimateOnly&&row?.qboEstimate!=null&&String(row?.estimateId||''))return false;
-        if(accountingQueueFilter!=='all'&&String(row?.repairCategory||'')!==accountingQueueFilter)return false;
+        if(accountingQueueFilter==='adjustment'&&Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))<0.01)return false;
+        if(accountingQueueFilter!=='all'&&accountingQueueFilter!=='adjustment'&&String(row?.repairCategory||'')!==accountingQueueFilter)return false;
         return true;
       });
       accountingInvariantTableBody.innerHTML='';
@@ -4494,7 +4498,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         tr.className='border-b border-[var(--koa-line)]/70 align-top';
         const statusValue=String(row?.status||'unverified');
         const statusClass=statusValue==='passed'?'text-emerald-800':statusValue==='failed'?'text-red-800':'text-amber-800';
-        const category=String(row?.repairCategory||'');
+        const rawCategory=String(row?.repairCategory||'');
+        const hasAdjustment=Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01;
+        const category=rawCategory==='passed'&&hasAdjustment?'adjustment':rawCategory;
         const cells=[
           String(row?.client||row?.recordId||'—'),
           accountingMoney(row?.crmTotal),
@@ -4520,7 +4526,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             ].filter(Boolean);
             if(parts.length)td.title=parts.join(' · ');
           }
-          if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','unverified'].includes(category)){
+          if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','adjustment','unverified'].includes(category)){
             td.classList.add('cursor-pointer','underline','underline-offset-2');
             td.title='Filter the repair queue to '+accountingQueueLabel(category);
             td.addEventListener('click',()=>{accountingQueueFilter=category;renderAccountingInvariantTable();});
