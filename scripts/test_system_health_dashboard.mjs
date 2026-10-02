@@ -48,11 +48,49 @@ assert(
   nav.includes('position: relative !important;') && nav.includes('top: auto !important;'),
   'The mobile workspace utility header must remain in normal flow instead of covering page content.',
 );
+const workspaceNavClose = nav.indexOf('</nav>');
+const bottomNavMarkup = nav.indexOf('data-workspace-bottom-nav');
+assert(
+  workspaceNavClose >= 0 && bottomNavMarkup > workspaceNavClose,
+  'The fixed mobile workspace bottom navigation must live outside the sticky workspace navigation containing block.',
+);
 assert(
   css.includes('/* System Health mobile viewport clearance */')
     && css.includes('scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom))')
     && css.includes('padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important'),
   'System Health must preserve bottom-navigation clearance and anchor/focus scroll padding on mobile.',
+);
+
+assert(
+  health.includes('data-health-summary-grid')
+    && health.includes('health-summary-card--overall')
+    && health.includes('health-summary-card--checked'),
+  'System Health must expose the responsive summary grid and balanced summary-card hooks.',
+);
+assert(
+  css.includes('/* System Health responsive summary layout */')
+    && css.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    && css.includes('@media (max-width: 1099px)')
+    && css.includes('@media (max-width: 639px)'),
+  'System Health summary cards must use zero-minimum responsive grid tracks with desktop, tablet, and phone breakpoints.',
+);
+
+assert(
+  css.includes('width: calc(100% - 2rem) !important;')
+    && css.includes('max-width: 84rem !important;')
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] {')
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] > section {')
+    && css.includes('section[data-health-summary-grid]:first-child')
+    && css.includes('grid-template-columns: minmax(0, 1fr) !important;'),
+  'System Health content and section widths must stay bounded at every breakpoint, with a one-column phone fallback.',
+);
+assert(
+  visualQa.includes('("tablet",768,1024,1)')
+    && visualQa.includes('("desktop-small",1280,800,1)')
+    && visualQa.includes('("desktop-wide",1920,1080,1)')
+    && visualQa.includes('summaryHeightSpread')
+    && visualQa.includes('All four summary cards remain inside the viewport'),
+  'Authenticated System Health visual QA must cover phone, tablet, and desktop widths and enforce summary-card geometry.',
 );
 
 assert(
@@ -81,4 +119,12 @@ assert(
   'Production visual QA must execute the signed System Health refresh and mobile screenshot gate in both browser engines.',
 );
 
-console.log('System Health dashboard hydration and mobile-clearance regression checks passed.');
+assert(
+  visualWorkflow.includes("if: github.event_name == 'pull_request'")
+    && visualWorkflow.includes('python -m http.server 4173 --directory dist')
+    && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
+    && visualWorkflow.includes('koa-system-health-responsive-pr-'),
+  'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
+);
+
+console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');

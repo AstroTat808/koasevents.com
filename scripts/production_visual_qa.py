@@ -1262,7 +1262,7 @@ def health_mobile_mode(browser_name,health_payload_path):
   "app_metadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
   "appMetadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
  }
- viewports=[("phone-small",320,568,2),("phone",390,844,2)]
+ viewports=[("phone-small",320,568,2),("phone",390,844,2),("tablet",768,1024,1),("tablet-wide",1024,768,1),("desktop-small",1280,800,1),("desktop",1440,900,1),("desktop-wide",1920,1080,1)]
  results=[];failures=[]
  with sync_playwright() as p:
   browser=getattr(p,browser_name).launch()
@@ -1270,8 +1270,8 @@ def health_mobile_mode(browser_name,health_payload_path):
    ctx=browser.new_context(
     viewport={"width":width,"height":height},
     device_scale_factor=dpr,
-    is_mobile=True,
-    has_touch=True,
+    is_mobile=width<768,
+    has_touch=width<768,
     reduced_motion="reduce",
     color_scheme="light",
    )
@@ -1313,6 +1313,10 @@ def health_mobile_mode(browser_name,health_payload_path):
         const style=getComputedStyle(el),rect=el.getBoundingClientRect();
         return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
       };
+      const rect=(el)=>{
+        const box=el.getBoundingClientRect();
+        return {x:box.x,y:box.y,w:box.width,h:box.height};
+      };
       const nav=document.querySelector('[data-workspace-nav]');
       const bottom=document.querySelector('[data-workspace-bottom-nav]');
       const main=document.querySelector('main[data-system-health-page]');
@@ -1322,6 +1326,10 @@ def health_mobile_mode(browser_name,health_payload_path):
       const titleRect=title?.getBoundingClientRect();
       const mainRect=main?.getBoundingClientRect();
       const tableCells=[...document.querySelectorAll('main[data-system-health-page] table.koa-mobile-card-table tbody td')];
+      const summary=[...document.querySelectorAll('[data-health-summary-grid] > *')].filter(visible);
+      const summaryRects=summary.map((el)=>rect(el));
+      const summaryGrid=document.querySelector('[data-health-summary-grid]');
+      const summaryGridRect=summaryGrid?.getBoundingClientRect();
       return {
         overall:String(document.querySelector('[data-overall]')?.textContent||'').trim(),
         passed:String(document.querySelector('[data-passed]')?.textContent||'').trim(),
@@ -1340,25 +1348,44 @@ def health_mobile_mode(browser_name,health_payload_path):
         viewportHeight:innerHeight,
         viewportWidth:innerWidth,
         documentScrollWidth:document.documentElement.scrollWidth,
+        summaryGridLeft:summaryGridRect?.left??null,
+        summaryGridRight:summaryGridRect?.right??null,
+        summaryRects,
+        summaryCardCount:summaryRects.length,
+        summaryHeightSpread:summaryRects.length?Math.max(...summaryRects.map((r)=>r.h))-Math.min(...summaryRects.map((r)=>r.h)):null,
         mobileTableCells:tableCells.length,
         unlabeledMobileTableCells:tableCells.filter((cell)=>!String(cell.dataset.mobileLabel||'').trim()).length,
       };
     }""")
 
+    summary_rects=metrics.get("summaryRects") or []
+    summary_in_view=all(
+     float(rect.get("x") or 0)>=-1
+     and float(rect.get("x") or 0)+float(rect.get("w") or 0)<=float(metrics.get("viewportWidth") or 0)+1
+     for rect in summary_rects
+    )
     checks=[
      (metrics.get("overall") not in {"","—","No data","Check failed"},"Overall is a real live health state"),
      (metrics.get("passed")==str(expected_passed),"Passed total matches the live production snapshot"),
      (metrics.get("failed")==str(expected_failed),"Failed total matches the live production snapshot"),
      (metrics.get("checked") not in {"","—"},"Last Checked is populated"),
-     (metrics.get("headerVisible") is True,"Mobile workspace header is visible"),
-     (metrics.get("headerPosition") not in {"fixed","sticky"},"Mobile workspace header remains in document flow"),
-     (metrics.get("bottomVisible") is True,"Mobile bottom navigation is visible"),
-     (metrics.get("bottomPosition")=="fixed","Mobile bottom navigation remains fixed to the viewport"),
-     (float(metrics.get("titleTop") or -1)>=float(metrics.get("headerBottom") or 0)-1,"System Health title is not covered by the top header"),
-     (float(metrics.get("bottomBottom") or 0)<=float(metrics.get("viewportHeight") or 0)+1,"Bottom navigation stays inside the viewport"),
      (float(metrics.get("documentScrollWidth") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"System Health has no horizontal page overflow"),
+     (int(metrics.get("summaryCardCount") or 0)==4,"System Health renders all four summary cards"),
+     (summary_in_view,"All four summary cards remain inside the viewport"),
+     (float(metrics.get("summaryGridRight") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"Summary grid right edge stays inside the viewport"),
      (int(metrics.get("unlabeledMobileTableCells") or 0)==0,"Converted mobile table cells retain labels"),
     ]
+    if width>=1100:
+     checks.append((float(metrics.get("summaryHeightSpread") or 0)<=2,"Desktop summary cards have consistent height"))
+    if width<768:
+     checks.extend([
+      (metrics.get("headerVisible") is True,"Mobile workspace header is visible"),
+      (metrics.get("headerPosition") not in {"fixed","sticky"},"Mobile workspace header remains in document flow"),
+      (metrics.get("bottomVisible") is True,"Mobile bottom navigation is visible"),
+      (metrics.get("bottomPosition")=="fixed","Mobile bottom navigation remains fixed to the viewport"),
+      (float(metrics.get("titleTop") or -1)>=float(metrics.get("headerBottom") or 0)-1,"System Health title is not covered by the top header"),
+      (float(metrics.get("bottomBottom") or 0)<=float(metrics.get("viewportHeight") or 0)+1,"Bottom navigation stays inside the viewport"),
+     ])
     failed_checks=[label for ok,label in checks if not ok]
     if failed_checks:
      detail="; ".join(failed_checks)
@@ -1393,7 +1420,10 @@ def health_mobile_mode(browser_name,health_payload_path):
     if not refresh_matches:
      detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+actual_refresh
 
-    bottom_metrics=page.evaluate("""async () => {
+    bottom_metrics={"ok":True}
+    live_production=urlparse(BASE).netloc.lower() in {"koasevents.com","www.koasevents.com"}
+    if width<768 and live_production:
+     bottom_metrics=page.evaluate("""async () => {
       const main=document.querySelector('main[data-system-health-page]');
       const bottom=document.querySelector('[data-workspace-bottom-nav]');
       if(!main||!bottom)return {ok:false,reason:'Missing System Health main or bottom navigation.'};
@@ -1426,16 +1456,16 @@ def health_mobile_mode(browser_name,health_payload_path):
         targetHeight:targetRect.height,
         viewportHeight:innerHeight,
       };
-    }""")
-    if not bottom_metrics.get("ok"):
-     detail=(detail+"; " if detail else "")+str(bottom_metrics.get("reason") or "Bottom-navigation geometry check failed")
-    else:
-     sentinel_clear=float(bottom_metrics.get("sentinelBottom") or 99999)<=float(bottom_metrics.get("bottomTop") or -1)-2
-     target_clear=float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
-     if not sentinel_clear:
-      detail=(detail+"; " if detail else "")+"Scroll targets can land behind the fixed bottom navigation"
-     if not target_clear:
-      detail=(detail+"; " if detail else "")+"Last Health history content is covered by the fixed bottom navigation"
+     }""")
+     if not bottom_metrics.get("ok"):
+      detail=(detail+"; " if detail else "")+str(bottom_metrics.get("reason") or "Bottom-navigation geometry check failed")
+     else:
+      sentinel_clear=float(bottom_metrics.get("sentinelBottom") or 99999)<=float(bottom_metrics.get("bottomTop") or -1)-2
+      target_clear=float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
+      if not sentinel_clear:
+       detail=(detail+"; " if detail else "")+"Scroll targets can land behind the fixed bottom navigation"
+      if not target_clear:
+       detail=(detail+"; " if detail else "")+"Last Health history content is covered by the fixed bottom navigation"
 
     bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
     page.screenshot(path=str(bottom_shot),full_page=False,animations="disabled",caret="hide")
