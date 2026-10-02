@@ -549,6 +549,59 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='record-responsive-release-qa'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      const rawResults=Array.isArray(body?.responsiveVerification?.results)?body.responsiveVerification.results:[];
+      const results=rawResults.slice(0,14).map((row:any)=>({
+        browser:cleanText(row?.browser,40),
+        viewport:cleanText(row?.viewport,80),
+        width:Number(row?.width||0),
+        height:Number(row?.height||0),
+        ok:Boolean(row?.ok),
+        documentScrollWidth:row?.documentScrollWidth==null?null:Number(row.documentScrollWidth),
+        viewportWidth:row?.viewportWidth==null?null:Number(row.viewportWidth),
+        horizontalOverflow:row?.horizontalOverflow==null?null:Number(row.horizontalOverflow),
+        documentScrollHeight:row?.documentScrollHeight==null?null:Number(row.documentScrollHeight),
+        screenshotMode:cleanText(row?.screenshotMode,80),
+        failure:cleanText(row?.failure,500),
+      }));
+      const responsiveVerification={
+        checkedAt:cleanText(body?.responsiveVerification?.checkedAt,80)||new Date().toISOString(),
+        status:results.length===14&&results.every((row:any)=>row.ok)?'passed':'failed',
+        commit:String(claims.sha||''),
+        deployId:cleanText(body?.responsiveVerification?.deployId||context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120),
+        runId:cleanText(body?.responsiveVerification?.runId||claims?.run_id||'',120),
+        dashboardRefresh:cleanText(body?.responsiveVerification?.dashboardRefresh,80),
+        overall:cleanText(body?.responsiveVerification?.overall,80),
+        passed:Number(body?.responsiveVerification?.passed||0),
+        failed:Number(body?.responsiveVerification?.failed||0),
+        results,
+      };
+      if(!responsiveVerification.deployId||results.length!==14){
+        return Response.json({ok:false,error:'Responsive release evidence requires a deploy id and exactly 14 viewport results.'},{status:400,headers:{'Cache-Control':'no-store'}});
+      }
+      const release=await recordProductionRelease(context,{
+        deployId:responsiveVerification.deployId,
+        commit:String(claims.sha||''),
+        checkedAt:responsiveVerification.checkedAt,
+        responsiveVerification,
+      });
+      return Response.json({
+        ok:Boolean(release?.responsiveVerification&&release.responsiveVerification.results?.length===14),
+        accepted:result.accepted,
+        sha:result.signal.sha,
+        source:'github-actions-oidc',
+        responsiveVerification:release?.responsiveVerification||responsiveVerification,
+      },{status:release?.responsiveVerification?.results?.length===14?200:503,headers:{'Cache-Control':'no-store'}});
+    }
+
     if(body?.action==='run-dashboard-refresh'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
