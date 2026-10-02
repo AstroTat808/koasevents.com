@@ -74,6 +74,21 @@ for(const needle of ['appearance_preference','appearancePreference']){
   if(!adminSession.includes(needle))failures.push('Admin session theme sync missing '+needle);
 }
 
+const clientPortal=await readFile(path.join(ROOT,'src','pages','portal','index.astro'),'utf8');
+const vendorPortal=await readFile(path.join(ROOT,'src','pages','vendor-portal','index.astro'),'utf8');
+const clientPortalApi=await readFile(path.join(ROOT,'netlify','functions','public-client-portal.mts'),'utf8');
+const vendorPortalApi=await readFile(path.join(ROOT,'netlify','functions','vendor-portal.mts'),'utf8');
+for(const [label,source] of [['client portal',clientPortal],['vendor portal',vendorPortal]]){
+  for(const needle of ['data-portal-theme','save-appearance-preference','persist:false']){
+    if(!source.includes(needle))failures.push(label+' appearance sync missing '+needle);
+  }
+}
+for(const [label,source] of [['client portal API',clientPortalApi],['vendor portal API',vendorPortalApi]]){
+  for(const needle of ['save-appearance-preference','appearancePreference','portalPreferences']){
+    if(!source.includes(needle))failures.push(label+' appearance persistence missing '+needle);
+  }
+}
+
 const intentionalLightSurfaceFiles=new Set([
   'src/pages/admin/email-preview/index.astro',
 ]);
