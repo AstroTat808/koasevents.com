@@ -103,4 +103,12 @@ assert(
   'Production visual QA must execute the signed System Health refresh and mobile screenshot gate in both browser engines.',
 );
 
+assert(
+  visualWorkflow.includes("if: github.event_name == 'pull_request'")
+    && visualWorkflow.includes('python -m http.server 4173 --directory dist')
+    && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
+    && visualWorkflow.includes('koa-system-health-responsive-pr-'),
+  'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
+);
+
 console.log('System Health dashboard hydration and mobile-clearance regression checks passed.');
