@@ -2,6 +2,14 @@ function clean(value) {
   return String(value ?? '').trim().toLowerCase();
 }
 
+export function currentBookingStatus(record) {
+  const stage = clean(record?.stage);
+  const proposalStatus = clean(record?.proposal?.status);
+  if (stage === 'booked') return 'booked';
+  if (proposalStatus === 'accepted') return 'accepted';
+  return '';
+}
+
 export function quickBooksAccountingScope(record) {
   const recordSource = clean(record?.source);
   const proposalSource = clean(record?.proposal?.source);

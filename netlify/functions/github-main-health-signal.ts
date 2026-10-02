@@ -178,6 +178,80 @@ async function runRealSandboxRollbackDrill(context:Context,claims:any){
   };
 }
 
+async function productionDeployForCommit(token:string,siteId:string,sha:string){
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
+  const rows=Array.isArray(body)?body:[];
+  return rows.find((row:any)=>{
+    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
+    const context=cleanText(row?.context,80);
+    return commit===sha && (!context||context==='production');
+  })||null;
+}
+
+async function currentGithubMainSha(){
+  const token=cleanText(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  if(!token)throw new Error('KOA_GITHUB_READ_TOKEN is required to confirm the exact GitHub main SHA before deployment recovery.');
+  const response=await fetch('https://api.github.com/repos/'+REPOSITORY+'/commits/main',{
+    headers:{
+      Authorization:'Bearer '+token,
+      Accept:'application/vnd.github+json',
+      'User-Agent':'KoaEvents-Deploy-Recovery/1.0',
+    },
+    signal:AbortSignal.timeout(12_000),
+  });
+  if(!response.ok)throw new Error('GitHub main verification returned HTTP '+response.status+'.');
+  const body:any=await response.json();
+  const sha=cleanText(body?.sha,80);
+  if(!/^[a-f0-9]{40}$/i.test(sha))throw new Error('GitHub main verification did not return a valid SHA.');
+  return sha;
+}
+
+async function selfHealProductionDeploy(context:Context,claims:any){
+  const expectedSha=cleanText(claims?.sha,80);
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to production deployment recovery.');
+  if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
+
+  const existing=await productionDeployForCommit(token,siteId,expectedSha);
+  if(existing){
+    return {
+      ok:true,
+      triggered:false,
+      exactShaPresent:true,
+      expectedSha,
+      deployId:cleanText(existing?.id,120),
+      deployState:cleanText(existing?.state,80),
+      deployContext:cleanText(existing?.context,80),
+      reason:'The exact approved main SHA already exists in Netlify; no recovery build was triggered.',
+    };
+  }
+
+  const mainSha=await currentGithubMainSha();
+  if(mainSha!==expectedSha){
+    return {
+      ok:false,
+      triggered:false,
+      exactShaPresent:false,
+      expectedSha,
+      currentMainSha:mainSha,
+      reason:'GitHub main advanced before recovery; the older SHA will not be retriggered.',
+    };
+  }
+
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/builds',{method:'POST'});
+  return {
+    ok:true,
+    triggered:true,
+    exactShaPresent:false,
+    expectedSha,
+    currentMainSha:mainSha,
+    buildId:cleanText(body?.id,120),
+    buildState:cleanText(body?.state||body?.status,80),
+    reason:'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+  };
+}
+
 async function verifyGithubOidc(token:string){
   const parts=token.split('.');
   if(parts.length!==3)throw new Error('Malformed OIDC token.');
@@ -240,6 +314,32 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='self-heal-production-deploy'){
+      try{
+        const recovery=await selfHealProductionDeploy(context,claims);
+        return Response.json({
+          ...recovery,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{
+          status:recovery?.ok?200:409,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          triggered:false,
+          exactShaPresent:false,
+          expectedSha:String(claims.sha||''),
+          error:error instanceof Error?error.message:'Production deployment recovery failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
 
     if(body?.action==='run-real-sandbox-rollback-drill'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();

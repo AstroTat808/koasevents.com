@@ -9,7 +9,7 @@ import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
-import { quickBooksAccountingScope } from './quickbooks-accounting-scope.mjs';
+import { currentBookingStatus } from './quickbooks-accounting-scope.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
@@ -330,6 +330,19 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
     dynamicClientPassedCount:Number(liveClients?.passedCount||0),
     dynamicClientFailedCount:Number(liveClients?.failedCount||0),
     dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
+    dynamicClientRows:(Array.isArray(liveClients?.rows)?liveClients.rows:[]).map((row:any)=>({
+      recordId:String(row?.recordId||''),
+      client:String(row?.clientName||row?.recordId||''),
+      crmTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
+      qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
+      estimateId:String(row?.estimateId||''),
+      estimateDocNumber:String(row?.estimateDocNumber||''),
+      taxableLines:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
+      status:String(row?.status||'unverified'),
+      failureReason:Array.isArray(row?.failures)&&row.failures.length
+        ? row.failures.map((value:any)=>String(value)).join('; ')
+        : (String(row?.status||'')==='passed'?'':String(row?.detail||'')),
+    })),
     detail:String(accountingCheck?.detail||''),
   };
   const accountingVerified=Boolean(
@@ -1417,8 +1430,7 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
   const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
   const candidates=records
     .filter((record:any)=>record?.kind==='proposal'&&record?.proposal&&record?.archived!==true)
-    .filter((record:any)=>['accepted','booked'].includes(String(record?.proposal?.status||record?.status||'').trim().toLowerCase()))
-    .filter((record:any)=>quickBooksAccountingScope(record).actionable)
+    .filter((record:any)=>Boolean(currentBookingStatus(record)))
     .sort((a:any,b:any)=>String(a?.customer?.eventDate||'9999').localeCompare(String(b?.customer?.eventDate||'9999'))||String(a?.id||'').localeCompare(String(b?.id||'')));
 
   const rows=await mapWithConcurrency(candidates,4,async(record:any)=>{
@@ -1429,7 +1441,7 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
       recordId:String(record?.id||''),
       clientName:String(record?.customer?.name||record?.id||''),
       eventDate:String(record?.customer?.eventDate||'').slice(0,10),
-      proposalStatus:String(record?.proposal?.status||record?.status||''),
+      proposalStatus:currentBookingStatus(record),
       estimateId,
       estimateDocNumber:String(qbo?.estimateDocNumber||''),
       proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
