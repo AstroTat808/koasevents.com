@@ -6,6 +6,7 @@ const css = await readFile(new URL('../src/styles/global.css', import.meta.url),
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
 const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
 const adminQuickBooks = await readFile(new URL('../netlify/functions/admin-quickbooks.mts', import.meta.url), 'utf8');
+const githubHealthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
@@ -297,6 +298,26 @@ assert(
     && health.includes("accountingQueueFilter==='adjustment'")
     && health.includes("rawCategory==='passed'&&hasAdjustment?'adjustment':rawCategory"),
   'System Health must treat transaction-level QBO adjustments as diagnostic context rather than an automatic repair failure.',
+);
+
+
+assert(
+  systemHealth.includes('export async function accountingAdjustmentDiagnostics')
+    && systemHealth.includes("discountAmtPresent")
+    && systemHealth.includes("applyTaxAfterDiscountPresent")
+    && systemHealth.includes("txnTaxDetailPresent")
+    && githubHealthSignal.includes("read-accounting-adjustment-diagnostics")
+    && githubHealthSignal.includes("accountingAdjustmentDiagnostics(context,recordIds)"),
+  'Historical QuickBooks adjustments must be inspectable through a signed read-only exact-field diagnostic without entering the repair scope.',
+);
+assert(
+  visualWorkflow.includes('Capture Jesse and Dion QBO adjustment diagnostics')
+    && visualWorkflow.includes('QBO-CUST-29')
+    && visualWorkflow.includes('QBO-CUST-44')
+    && visualWorkflow.includes('accounting-adjustment-diagnostics.json')
+    && visualWorkflow.includes("historicalQuickBooksImport")
+    && visualWorkflow.includes("quickbooks-history"),
+  'The production release must archive signed raw-field evidence for Jesse Gibson and Dion Pohaku after the exact SHA is live.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
