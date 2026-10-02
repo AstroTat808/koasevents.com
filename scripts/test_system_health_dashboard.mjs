@@ -166,4 +166,12 @@ assert(
   'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
 );
 
+assert(
+  systemHealth.includes("id:'login-alert-policy'")
+    && systemHealth.includes("name:'Sign-in alert policy'")
+    && systemHealth.includes('authenticationSecurityHealthSummary(context)')
+    && systemHealth.includes('authSecurityDetails'),
+  'System Health must include the structured sign-in alert policy check and authentication storage probes.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
