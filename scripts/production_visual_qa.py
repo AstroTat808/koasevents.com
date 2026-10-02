@@ -1705,7 +1705,10 @@ def admin_mobile_nav_mode(browser_name):
         ids:slots.map((slot)=>String(slot.dataset.mobileSlotId||'')),
         hrefs:slots.map((slot)=>new URL(slot.href,location.href).pathname),
         iconPaths:slots.map((slot)=>String(slot.querySelector('[data-mobile-slot-icon] path')?.getAttribute('d')||'')),
-        active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>String(node.textContent||'').trim()),
+        active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>{
+          const label=node.querySelector('[data-mobile-slot-label]')||node.querySelector(':scope > span:last-child');
+          return String(label?.textContent||'').trim();
+        }),
         moreVisible:visible(more),
         moreExpanded:String(more?.getAttribute('aria-expanded')||''),
        };
@@ -1760,7 +1763,10 @@ def admin_mobile_nav_mode(browser_name):
     metrics=page.evaluate("""() => ({
       labels:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.querySelector('[data-mobile-slot-label]')?.textContent||'').trim()),
       ids:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.dataset.mobileSlotId||'')),
-      active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>String(node.textContent||'').trim()),
+      active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>{
+        const label=node.querySelector('[data-mobile-slot-label]')||node.querySelector(':scope > span:last-child');
+        return String(label?.textContent||'').trim();
+      }),
     })""")
     if metrics.get("labels")!=custom_labels or metrics.get("ids")!=custom_nav or metrics.get("active")!=["Events"]:
      detail="Saved user customization did not override defaults correctly: "+repr(metrics)
