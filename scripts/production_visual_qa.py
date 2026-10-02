@@ -620,6 +620,89 @@ def admin_mode(browser_name):
   if detail:failures.append({"route":"/admin/platform/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
+  # Live trusted-browser account-menu regression. This loads the deployed workspace
+  # navigation JavaScript, but mocks account APIs so CI can exercise trust / expiry UI
+  # without creating or changing any production Identity or device records.
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
+  account_session_fixture={
+   "email":"qa-admin@koasevents.test","displayName":"QA Admin","role":"admin","roles":["admin"],"isAdmin":True,
+   "permissions":["admin.dashboard.view","health.view"],"capabilities":["admin.dashboard.view","health.view"],
+   "accessBlocked":False,
+   "app_metadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view"]},
+   "appMetadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view"]}
+  }
+  account_state={"trusted":False,"expiryDays":0}
+  def account_security_fixture():
+   now="2026-10-02T06:00:00.000Z"
+   expires="2026-11-01T06:00:00.000Z" if account_state["expiryDays"]==30 else ""
+   devices=[] if not account_state["trusted"] else [{
+    "id":"qa-opaque-device-handle","name":"QA’s iPhone","device":"Safari on iPhone",
+    "trustedAt":now,"trustedBy":"qa-admin@koasevents.test","lastSeenAt":now,
+    "lastUsedAt":now,"expiresAt":expires,"current":True
+   }]
+   return {
+    "forcePasswordChange":False,"passwordChangedAt":"","sessionVersion":0,"passwordExpiryDays":180,
+    "trustedDeviceExpiryDays":account_state["expiryDays"],
+    "currentDevice":{
+     "trusted":account_state["trusted"],
+     "name":"QA’s iPhone" if account_state["trusted"] else "",
+     "device":"Safari on iPhone","tracked":True
+    },
+    "trustedDevices":devices,
+   }
+  def account_security_handler(route):
+   req=route.request
+   if req.method=="GET":
+    route.fulfill(status=200,content_type="application/json",body=json.dumps(account_security_fixture()))
+    return
+   try: body=json.loads(req.post_data or "{}")
+   except Exception: body={}
+   action=str(body.get("action") or "")
+   if action=="trust-current-browser":
+    account_state["trusted"]=True
+    device=account_security_fixture()["trustedDevices"][0]
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"message":"QA’s iPhone is now trusted.","device":device}))
+   elif action=="save-trusted-device-expiry":
+    days=int(body.get("expiryDays") or 0)
+    account_state["expiryDays"]=days if days in (0,30,60,90) else 0
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"message":"Trusted browsers will auto-revoke after 30 days without use.","trustedDeviceExpiryDays":account_state["expiryDays"]}))
+   else:
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True}))
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(account_session_fixture)))
+  page.route("**/api/account/security**",account_security_handler)
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/health/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-workspace-account-toggle]",state="visible",timeout=8000)
+   page.locator("[data-workspace-account-toggle]").click()
+   page.wait_for_selector("[data-workspace-account-panel][data-open='true']",state="visible",timeout=5000)
+   heading=page.locator("[data-workspace-account-panel] h2").inner_text().strip()
+   if heading!="Trusted browsers":
+    detail="Account panel heading was not Trusted browsers: "+heading
+   else:
+    page.locator("[data-workspace-trust-current]").click()
+    page.wait_for_function("() => document.querySelector('[data-workspace-current-device]')?.textContent?.includes('QA’s iPhone')",timeout=5000)
+    page.locator("[data-workspace-trusted-expiry]").select_option("30")
+    page.locator("[data-workspace-save-trusted-expiry]").click()
+    page.wait_for_function("() => document.querySelector('[data-workspace-trusted-expiry]')?.value==='30'",timeout=5000)
+    device_text=page.locator("[data-workspace-trusted-devices]").inner_text()
+    if "Last used" not in device_text or "Auto-revokes" not in device_text:
+     detail="Trusted-device panel did not render last-used and auto-revoke timestamps. Text: "+device_text[:500]
+    elif page_errors:
+     detail="Trusted-browser account-menu JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Trusted-browser live account-menu regression: "+str(exc)
+  shot=root/"trusted-browser-account-menu.png"
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"trusted-browser-account-menu","path":"/admin/health/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail),"trusted":account_state["trusted"],"expiryDays":account_state["expiryDays"]},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/health/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
   # Authorized-style Business CRM boot regression test. The protected API is mocked
   # so this catches client startup failures without storing production credentials in CI.
   page=ctx.new_page()
