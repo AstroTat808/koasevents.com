@@ -15,23 +15,52 @@
   --koa-champagne: #c5a36d;
   --koa-line: rgba(20, 58, 45, 0.15);
   --koa-line-warm: rgba(184, 117, 63, 0.22);
+  --koa-canvas: #fbf8f1;
+  --koa-surface: #ffffff;
+  --koa-surface-2: #f6f0e4;
+  --koa-surface-muted: #eee5d4;
+  --koa-text: #0a211a;
+  --koa-text-strong: #143a2d;
+  --koa-text-muted: #52645b;
+  --koa-accent-text: #93502d;
+  --koa-theme-color: #173d30;
   --shadow-soft: 0 24px 70px rgba(10, 33, 26, 0.10);
   --shadow-nav: 0 18px 55px rgba(7, 30, 23, 0.16);
   --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --font-sans: Inter, "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --koa-canvas: #08130f;
+  --koa-surface: #0e1d17;
+  --koa-surface-2: #13261e;
+  --koa-surface-muted: #183127;
+  --koa-text: #edf4f0;
+  --koa-text-strong: #f7fbf8;
+  --koa-text-muted: #b1c0b8;
+  --koa-accent-text: #e3aa78;
+  --koa-line: rgba(226, 238, 232, 0.16);
+  --koa-line-warm: rgba(227, 170, 120, 0.28);
+  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.36);
+  --shadow-nav: 0 18px 55px rgba(0, 0, 0, 0.46);
+  color-scheme: dark;
+}
+
 html {
   scroll-behavior: smooth;
-  background: var(--koa-ivory);
+  background: var(--koa-canvas);
 }
 
 body {
   margin: 0;
-  color: var(--koa-ink);
+  color: var(--koa-text);
   background:
     radial-gradient(circle at 85% 6%, rgba(210,160,95,.07), transparent 24rem),
-    var(--koa-ivory);
+    var(--koa-canvas);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -498,20 +527,20 @@ main p.text-sm {
 /* Quote builder item-state system */
 .quote-item-included {
   border-color: rgba(20, 58, 45, .24) !important;
-  background: linear-gradient(180deg, rgba(239, 229, 210, .72), rgba(255,255,255,.96)) !important;
+  background: linear-gradient(180deg, rgba(239, 229, 210, .72), color-mix(in srgb, var(--koa-surface) 96%, transparent)) !important;
   box-shadow: inset 4px 0 0 rgba(20,58,45,.78);
 }
 
 .quote-item-suggested {
   border-color: rgba(197, 163, 109, .64) !important;
-  background: linear-gradient(180deg, rgba(244, 224, 181, .28), rgba(255,255,255,.98)) !important;
+  background: linear-gradient(180deg, rgba(244, 224, 181, .28), color-mix(in srgb, var(--koa-surface) 98%, transparent)) !important;
   box-shadow: 0 14px 38px rgba(10,33,26,.08), inset 4px 0 0 rgba(197,163,109,.95);
 }
 
 .quote-item-customer,
 .quote-item-selected {
   border-color: rgba(147, 80, 45, .46) !important;
-  background: linear-gradient(180deg, rgba(184,117,63,.08), rgba(255,255,255,.98)) !important;
+  background: linear-gradient(180deg, rgba(184,117,63,.08), color-mix(in srgb, var(--koa-surface) 98%, transparent)) !important;
   box-shadow: 0 14px 38px rgba(10,33,26,.10), inset 4px 0 0 rgba(147,80,45,.82);
 }
 
@@ -742,7 +771,7 @@ main p.text-sm {
     overflow: hidden;
     border: 1px solid var(--koa-line);
     border-radius: .95rem;
-    background: white;
+    background: var(--koa-surface);
     box-shadow: 0 8px 24px rgba(10,33,26,.055);
   }
 
@@ -821,7 +850,7 @@ main p.text-sm {
     margin-top: .7rem;
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .55rem .8rem;
     color: var(--koa-forest);
     font-size: .56rem;
@@ -910,7 +939,7 @@ main p.text-sm {
     margin-top: .65rem;
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .52rem .78rem;
     color: var(--koa-forest);
     font-size: .55rem;
@@ -998,7 +1027,7 @@ main p.text-sm {
   }
 
   body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="green"][data-mobile-collapsed="true"] {
-    background: white;
+    background: var(--koa-surface);
   }
 }
 
@@ -1059,7 +1088,7 @@ main p.text-sm {
   }
 
   body.koa-admin-page main .health-section-mobile-summary:active {
-    background: rgba(255,255,255,.48);
+    background: color-mix(in srgb, var(--koa-surface) 48%, transparent);
   }
 
   body.koa-admin-page main .health-all-good-banner {
@@ -1174,7 +1203,7 @@ main p.text-sm {
 
   body.koa-admin-page main .health-collapse-all-button {
     border: 1px solid color-mix(in srgb, var(--koa-line) 82%, var(--koa-forest));
-    background: white;
+    background: var(--koa-surface);
     color: var(--koa-forest);
   }
 
@@ -1237,7 +1266,7 @@ main p.text-sm {
   body.koa-admin-page main .health-all-good-detail > div {
     min-width: 0;
     border-radius: .65rem;
-    background: rgba(255,255,255,.58);
+    background: color-mix(in srgb, var(--koa-surface) 58%, transparent);
     padding: .55rem .5rem;
   }
 
@@ -1270,7 +1299,7 @@ main p.text-sm {
   display: block;
   border: 1px solid var(--koa-line);
   border-radius: .85rem;
-  background: white;
+  background: var(--koa-surface);
   padding: .75rem;
 }
 
@@ -1346,7 +1375,7 @@ main p.text-sm {
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--koa-line) 82%, transparent);
   border-radius: .55rem;
-  background: white;
+  background: var(--koa-surface);
   color: var(--koa-forest);
   box-shadow: 0 2px 8px rgba(7,30,23,.05);
 }
@@ -1404,7 +1433,7 @@ main p.text-sm {
   gap: .38rem;
   border: 1px solid var(--koa-line);
   border-radius: 9999px;
-  background: white;
+  background: var(--koa-surface);
   padding: .45rem .65rem;
   color: var(--koa-forest);
   font-size: .52rem;
@@ -1721,3 +1750,78 @@ body.koa-admin-page main[data-system-health-page] .health-summary-support {
     top: .65rem;
   }
 }
+
+/* Site-wide appearance system.
+   Utility compatibility lives here so existing and future pages inherit Dark Mode
+   without duplicating page-level theme selectors. Intentional media overlays using
+   bg-black, text-white, and border-white remain untouched. */
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background-color: var(--koa-canvas);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] body.koa-admin-page {
+  background: var(--koa-canvas);
+}
+
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] [class*="bg-white/"] {
+  background-color: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] [class*="bg-[var(--koa-ivory)]"] {
+  background-color: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] [class*="bg-[var(--koa-sand)]"] {
+  background-color: var(--koa-surface-2) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-ink)]/"],
+html[data-theme="dark"] [class*="text-[var(--koa-moss)]"],
+html[data-theme="dark"] [class*="text-[var(--koa-sage)]"] {
+  color: var(--koa-text-muted) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-ink)]"]:not([class*="text-[var(--koa-ink)]/"]) {
+  color: var(--koa-text) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-forest)]"] {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-clay)]"] {
+  color: var(--koa-accent-text) !important;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] [contenteditable="true"] {
+  border-color: var(--koa-line);
+  background-color: var(--koa-surface);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--koa-text-muted);
+  opacity: .72;
+}
+
+html[data-theme="dark"] select option {
+  background: var(--koa-surface);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] table {
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] ::selection {
+  background: var(--koa-amber);
+  color: #08130f;
+}
+

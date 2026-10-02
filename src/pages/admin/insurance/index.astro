@@ -19,7 +19,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)]"><div class="flex flex-wrap gap-3"><input data-search class="field flex-1" placeholder="Search vendor, category, client, or event date…"><button data-filter-affected class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Affected events only</button></div></section>
 <section data-rows class="grid gap-4"></section>
 </div></div></main>
-<style>.field{min-height:2.8rem;border:1px solid var(--koa-line);border-radius:.7rem;background:white;padding:.7rem .8rem;font-size:.82rem}.kpi{border-radius:1rem;background:white;padding:1rem;text-align:left;box-shadow:var(--shadow-soft)}.kpi span{display:block;font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--koa-clay)}.kpi strong{display:block;margin-top:.35rem;font-family:var(--font-display);font-size:2rem;color:var(--koa-forest)}</style>
+<style>.field{min-height:2.8rem;border:1px solid var(--koa-line);border-radius:.7rem;background:var(--koa-surface);padding:.7rem .8rem;font-size:.82rem}.kpi{border-radius:1rem;background:var(--koa-surface);padding:1rem;text-align:left;box-shadow:var(--shadow-soft)}.kpi span{display:block;font-size:.58rem;font-weight:900;text-transform:uppercase;letter-spacing:.08em;color:var(--koa-clay)}.kpi strong{display:block;margin-top:.35rem;font-family:var(--font-display);font-size:2rem;color:var(--koa-forest)}</style>
 <script>
 import { getAdminSession } from '../../../lib/admin-session';
 let data={summary:{},rows:[]},filter='all',affectedOnly=false;

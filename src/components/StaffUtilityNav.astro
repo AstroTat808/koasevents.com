@@ -4,7 +4,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
 <nav
   data-workspace-nav
-  class="hidden sticky top-0 z-50 border-b border-[var(--koa-line)] bg-white/95 shadow-sm backdrop-blur"
+  class="hidden sticky top-0 z-50 border-b border-[var(--koa-line)] shadow-sm backdrop-blur"
   aria-label="Koa’s workspace navigation"
 >
   <div class="container-shell py-2.5">
@@ -70,8 +70,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       <div class="flex items-start justify-between gap-4">
         <div>
           <p class="workspace-group-title">My account</p>
-          <h2 class="display text-2xl text-[var(--koa-forest)]">Trusted browsers</h2>
-          <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">Trust this exact browser, give trusted devices friendly names, or revoke trust without opening User Management.</p>
+          <h2 class="display text-2xl text-[var(--koa-forest)]">Account settings</h2>
+          <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">Choose your appearance and manage trusted browsers without leaving the workspace.</p>
         </div>
         <button data-workspace-account-close type="button" class="workspace-alert-close">Close</button>
       </div>
@@ -104,6 +104,22 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
         </div>
         <div data-workspace-trusted-devices class="mt-2 grid gap-2"></div>
       </div>
+
+      <div data-workspace-appearance class="mt-4 border-t border-[var(--koa-line)] pt-4">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Appearance</p>
+            <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/55">Light stays as the default. System follows this device automatically.</p>
+          </div>
+          <span data-workspace-theme-status class="shrink-0 text-xs font-semibold text-[var(--koa-ink)]/45">Light</span>
+        </div>
+        <div data-workspace-theme-options class="workspace-theme-options mt-3" role="group" aria-label="Appearance">
+          <button data-theme-preference="light" type="button" class="workspace-theme-option" aria-pressed="false">Light</button>
+          <button data-theme-preference="dark" type="button" class="workspace-theme-option" aria-pressed="false">Dark</button>
+          <button data-theme-preference="system" type="button" class="workspace-theme-option" aria-pressed="false">System</button>
+        </div>
+      </div>
+
       <p data-workspace-account-message class="mt-3 min-h-[1.1rem] text-xs text-[var(--koa-ink)]/55"></p>
       <button data-workspace-account-logout type="button" class="workspace-account-signout mt-2">Sign out</button>
     </section>
@@ -238,6 +254,10 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 )}
 
 <style>
+  [data-workspace-nav] {
+    background: color-mix(in srgb, var(--koa-surface) 94%, transparent);
+    color: var(--koa-text);
+  }
   .workspace-menu-button,
   .workspace-mobile-alert,
   .workspace-account-toggle,
@@ -258,7 +278,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     align-items: center;
     gap: .45rem;
     background: var(--koa-forest);
-    border-color: var(--koa-forest);
+    border-color: var(--koa-text-strong);
     color: white;
     padding: .7rem .9rem;
   }
@@ -269,15 +289,15 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     min-width: 2.35rem;
     min-height: 2.35rem;
     border-color: color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
-    background: white;
-    color: var(--koa-clay);
+    background: var(--koa-surface);
+    color: var(--koa-accent-text);
     padding: .45rem;
   }
 
   .workspace-signout {
     flex: 0 0 auto;
-    background: white;
-    color: var(--koa-clay);
+    background: var(--koa-surface);
+    color: var(--koa-accent-text);
     padding: .55rem .75rem;
   }
 
@@ -287,13 +307,13 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     max-width: 13rem;
     align-items: center;
     gap: .42rem;
-    background: white;
-    color: var(--koa-forest);
+    background: var(--koa-surface);
+    color: var(--koa-text-strong);
     padding: .55rem .72rem;
   }
 
   .workspace-account-toggle[aria-expanded="true"] {
-    border-color: var(--koa-forest);
+    border-color: var(--koa-text-strong);
     background: var(--koa-sand);
   }
 
@@ -322,7 +342,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     overscroll-behavior: contain;
     border: 1px solid var(--koa-line);
     border-radius: 1rem;
-    background: white;
+    background: var(--koa-surface);
     padding: 1rem;
     box-shadow: 0 20px 60px rgba(7,30,23,.24);
   }
@@ -353,9 +373,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     min-height: 2.55rem;
     border: 1px solid color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
     border-radius: .72rem;
-    background: white;
+    background: var(--koa-surface);
     padding: .62rem .85rem;
-    color: var(--koa-clay);
+    color: var(--koa-accent-text);
     font-size: .58rem;
     font-weight: 900;
     letter-spacing: .06em;
@@ -365,7 +385,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-account-device {
     border: 1px solid var(--koa-line);
     border-radius: .8rem;
-    background: white;
+    background: var(--koa-surface);
     padding: .75rem;
   }
 
@@ -374,9 +394,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     width: 100%;
     border: 1px solid var(--koa-line);
     border-radius: .65rem;
-    background: white;
+    background: var(--koa-surface);
     padding: .55rem .65rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
     font-size: .78rem;
     font-weight: 700;
   }
@@ -387,9 +407,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     max-width: 100%;
     border: 1px solid var(--koa-line);
     border-radius: .65rem;
-    background: white;
+    background: var(--koa-surface);
     padding: .55rem .65rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
     font-size: .72rem;
     font-weight: 700;
   }
@@ -398,9 +418,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     min-height: 2.35rem;
     border: 1px solid var(--koa-line);
     border-radius: 999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .5rem .7rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
     font-size: .52rem;
     font-weight: 900;
     letter-spacing: .06em;
@@ -410,6 +430,36 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-account-device-action[data-danger="true"] {
     border-color: rgb(254 202 202);
     color: rgb(185 28 28);
+  }
+
+  .workspace-theme-options {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: .45rem;
+  }
+
+  .workspace-theme-option {
+    min-height: 2.55rem;
+    border: 1px solid var(--koa-line);
+    border-radius: .72rem;
+    background: var(--koa-surface);
+    padding: .58rem .45rem;
+    color: var(--koa-text-strong);
+    font-size: .56rem;
+    font-weight: 900;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+
+  .workspace-theme-option:hover {
+    border-color: color-mix(in srgb, var(--koa-accent-text) 55%, var(--koa-line));
+    background: var(--koa-surface-2);
+  }
+
+  .workspace-theme-option[aria-pressed="true"] {
+    border-color: var(--koa-clay);
+    background: var(--koa-clay);
+    color: white;
   }
 
   .workspace-links {
@@ -471,7 +521,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-group {
     min-width: 0;
     border-radius: .85rem;
-    background: color-mix(in srgb, var(--koa-sand) 42%, white);
+    background: color-mix(in srgb, var(--koa-sand) 42%, var(--koa-surface));
     padding: .65rem;
     opacity: 0;
     transform: translateY(-.2rem);
@@ -494,7 +544,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   .workspace-group-title {
     padding: 0 .3rem .45rem;
-    color: var(--koa-clay);
+    color: var(--koa-accent-text);
     font-size: .52rem;
     font-weight: 900;
     letter-spacing: .12em;
@@ -511,9 +561,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
-    background: white;
+    background: var(--koa-surface);
     padding: .68rem .75rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
   }
 
   .workspace-nav-link:hover,
@@ -524,13 +574,13 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   .workspace-nav-home {
     background: var(--koa-forest);
-    border-color: var(--koa-forest);
+    border-color: var(--koa-text-strong);
     color: white;
   }
 
   .workspace-nav-link[aria-current="page"] {
     background: var(--koa-clay);
-    border-color: var(--koa-clay);
+    border-color: var(--koa-accent-text);
     color: white;
   }
 
@@ -547,8 +597,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-total-badge {
     min-width: 1.15rem;
     height: 1.15rem;
-    background: white;
-    color: var(--koa-clay);
+    background: var(--koa-surface);
+    color: var(--koa-accent-text);
     padding: 0 .3rem;
     font-size: .58rem;
   }
@@ -581,8 +631,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-nav-link[aria-current="page"] .workspace-link-badge {
-    background: white;
-    color: var(--koa-clay);
+    background: var(--koa-surface);
+    color: var(--koa-accent-text);
   }
 
   .workspace-desktop-actions {
@@ -591,15 +641,15 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     gap: .3rem;
     border: 1px solid color-mix(in srgb, var(--koa-forest) 24%, var(--koa-line));
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .32rem .42rem .32rem .62rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
     text-decoration: none;
   }
 
   .workspace-desktop-actions[aria-current="page"] {
-    border-color: var(--koa-forest);
-    background: color-mix(in srgb, var(--koa-forest) 8%, white);
+    border-color: var(--koa-text-strong);
+    background: color-mix(in srgb, var(--koa-forest) 8%, var(--koa-surface));
   }
 
   .workspace-desktop-actions-label {
@@ -628,8 +678,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   .workspace-desktop-alert {
     border: 1px solid color-mix(in srgb, var(--koa-clay) 35%, var(--koa-line));
-    background: color-mix(in srgb, var(--koa-clay) 10%, white);
-    color: var(--koa-clay);
+    background: color-mix(in srgb, var(--koa-clay) 10%, var(--koa-surface));
+    color: var(--koa-accent-text);
     padding: .52rem .7rem;
     font-size: .58rem;
     text-transform: uppercase;
@@ -641,7 +691,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     overflow: hidden;
     border: 0 solid var(--koa-line);
     border-radius: 1rem;
-    background: white;
+    background: var(--koa-surface);
     padding: 0 1rem;
     opacity: 0;
     visibility: hidden;
@@ -686,7 +736,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
     padding: .5rem .7rem;
-    color: var(--koa-clay);
+    color: var(--koa-accent-text);
     font-size: .55rem;
     font-weight: 900;
     letter-spacing: .08em;
@@ -697,9 +747,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-alert-action {
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .45rem .65rem;
-    color: var(--koa-forest);
+    color: var(--koa-text-strong);
     font-size: .52rem;
     font-weight: 900;
     letter-spacing: .07em;
@@ -707,7 +757,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-alert-tab[aria-pressed="true"] {
-    border-color: var(--koa-forest);
+    border-color: var(--koa-text-strong);
     background: var(--koa-forest);
     color: white;
   }
@@ -732,8 +782,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     place-items: center;
     border: 1px solid color-mix(in srgb, var(--koa-line) 82%, transparent);
     border-radius: .55rem;
-    background: white;
-    color: var(--koa-forest);
+    background: var(--koa-surface);
+    color: var(--koa-text-strong);
     box-shadow: 0 2px 8px rgba(7,30,23,.05);
   }
 
@@ -792,7 +842,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-alert-action.is-primary {
-    border-color: var(--koa-forest);
+    border-color: var(--koa-text-strong);
     background: var(--koa-forest);
     color: white;
   }
@@ -820,8 +870,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
   .workspace-alert-action.is-snooze {
     border-color: color-mix(in srgb, var(--koa-champagne) 72%, var(--koa-line));
-    background: color-mix(in srgb, var(--koa-ivory) 72%, white);
-    color: var(--koa-forest);
+    background: color-mix(in srgb, var(--koa-ivory) 72%, var(--koa-surface));
+    color: var(--koa-text-strong);
   }
 
   .workspace-alert-action.is-dismiss {
@@ -868,7 +918,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     border: 1px solid var(--koa-line);
     border-radius: .85rem;
     padding: .75rem;
-    background: white;
+    background: var(--koa-surface);
   }
 
   .workspace-alert-row[data-severity="urgent"] {
@@ -941,7 +991,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     min-width: 0;
     border: 0;
     background: transparent;
-    color: color-mix(in srgb, var(--koa-forest) 72%, white);
+    color: color-mix(in srgb, var(--koa-forest) 72%, var(--koa-surface));
     font: inherit;
     text-decoration: none;
   }
@@ -999,7 +1049,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     [data-workspace-nav] {
       position: relative !important;
       top: auto !important;
-      background: rgba(255,255,255,.98);
+      background: color-mix(in srgb, var(--koa-surface) 98%, transparent);
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
@@ -1008,7 +1058,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       display: block;
       border: 1px solid color-mix(in srgb, var(--koa-line) 72%, transparent);
       border-radius: .8rem;
-      background: color-mix(in srgb, var(--koa-sand) 42%, white);
+      background: color-mix(in srgb, var(--koa-sand) 42%, var(--koa-surface));
       padding: .55rem;
     }
 
@@ -1017,9 +1067,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       width: 100%;
       border: 1px solid var(--koa-line);
       border-radius: .72rem;
-      background: white;
+      background: var(--koa-surface);
       padding: .6rem .7rem;
-      color: var(--koa-forest);
+      color: var(--koa-text-strong);
       font-size: .78rem;
       font-weight: 700;
     }
@@ -1064,8 +1114,8 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
 
     .workspace-bottom-item[aria-current="page"],
     .workspace-bottom-item[aria-expanded="true"] {
-      background: color-mix(in srgb, var(--koa-forest) 10%, white);
-      color: var(--koa-forest);
+      background: color-mix(in srgb, var(--koa-forest) 10%, var(--koa-surface));
+      color: var(--koa-text-strong);
     }
 
     .workspace-bottom-item[aria-current="page"]::before,
@@ -1097,7 +1147,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       overscroll-behavior: contain;
       border-width: 1px;
       border-radius: 1.15rem;
-      background: white;
+      background: var(--koa-surface);
       box-shadow: 0 20px 60px rgba(7,30,23,.28);
     }
 
@@ -1344,6 +1394,40 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   let accountSecurityLoaded=false;
+  const themePreferences=new Set(['light','dark','system']);
+
+  function currentThemePreference(){
+    const fromDom=String(document.documentElement.dataset.themePreference||'');
+    if(themePreferences.has(fromDom))return fromDom;
+    try{
+      const saved=String(window.localStorage.getItem('koa-theme-preference')||'');
+      if(themePreferences.has(saved))return saved;
+    }catch{}
+    return 'light';
+  }
+
+  function syncThemeControls(){
+    const preference=currentThemePreference();
+    const resolved=String(document.documentElement.dataset.theme||'light');
+    nav?.querySelectorAll('[data-theme-preference]').forEach((button)=>{
+      if(!(button instanceof HTMLButtonElement))return;
+      button.setAttribute('aria-pressed',button.dataset.themePreference===preference?'true':'false');
+    });
+    const status=nav?.querySelector('[data-workspace-theme-status]');
+    if(status){
+      status.textContent=preference==='system'
+        ? 'System · '+(resolved==='dark'?'Dark':'Light')
+        : preference.charAt(0).toUpperCase()+preference.slice(1);
+    }
+  }
+
+  function requestThemePreference(preference){
+    const safe=themePreferences.has(preference)?preference:'light';
+    window.dispatchEvent(new CustomEvent('koa:theme-request',{detail:{preference:safe}}));
+    syncThemeControls();
+  }
+
+  window.addEventListener('koa:theme-change',()=>syncThemeControls());
 
   function setAccountPanel(open) {
     const panel=nav?.querySelector('[data-workspace-account-panel]');
@@ -1354,6 +1438,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
     if(open){
       setMenu(false);
       setAlertCenter(false);
+      syncThemeControls();
       void loadAccountSecurity();
     }
   }
@@ -2265,6 +2350,14 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   window.addEventListener('koa:workspace-alerts-refresh', () => {
     loadAlerts();
   });
+
+  nav?.querySelectorAll('[data-theme-preference]').forEach((button)=>{
+    button.addEventListener('click',()=>{
+      if(!(button instanceof HTMLButtonElement))return;
+      requestThemePreference(String(button.dataset.themePreference||'light'));
+    });
+  });
+  syncThemeControls();
 
   nav?.querySelector('[data-workspace-account-toggle]')?.addEventListener('click',()=>{
     const panel=nav?.querySelector('[data-workspace-account-panel]');
