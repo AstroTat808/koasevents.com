@@ -232,13 +232,13 @@ assert(
   health.includes('data-accounting-repair-queue')
     && health.includes('data-accounting-queue-filter="missing-estimate"')
     && health.includes('data-accounting-queue-filter="taxable-lines"')
-    && health.includes('data-accounting-queue-filter="sales-line-mismatch"')
+    && health.includes('data-accounting-queue-filter="adjustment"')
     && health.includes('data-accounting-queue-filter="unverified"')
     && health.includes('Preview repair')
     && health.includes("action:'preview-accounting-repair'")
     && health.includes("action:'apply-accounting-repair'")
     && health.includes('Approve exact preview'),
-  'System Health must provide grouped one-click accounting repair filters and enforce preview-before-approval for row repairs.',
+  'System Health must provide grouped one-click accounting repair filters plus transaction-adjustment diagnostics and enforce preview-before-approval for row repairs.',
 );
 assert(
   health.includes("if(statusValue==='unverified'){action.textContent='Recheck'")
@@ -291,6 +291,12 @@ assert(
   adminQuickBooks.includes("Math.min(4, recordIds.length)")
     && adminQuickBooks.includes("await Promise.all(workers)"),
   'Bulk QuickBooks repair previews must use bounded concurrency rather than serial or unbounded live QBO requests.',
+);
+assert(
+  health.includes('QBO adjustments')
+    && health.includes("accountingQueueFilter==='adjustment'")
+    && health.includes("rawCategory==='passed'&&hasAdjustment?'adjustment':rawCategory"),
+  'System Health must treat transaction-level QBO adjustments as diagnostic context rather than an automatic repair failure.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
