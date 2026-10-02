@@ -453,6 +453,41 @@ jobs:
               'description':description[:140],
           }
           Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
+
+          responsive_results=[]
+          for report in reports:
+              browser=str(report.get('browser') or '')
+              for row in report.get('results') or []:
+                  metrics=row.get('metrics') or {}
+                  scroll_width=metrics.get('documentScrollWidth')
+                  viewport_width=metrics.get('viewportWidth')
+                  responsive_results.append({
+                      'browser':browser,
+                      'viewport':str(row.get('viewport') or ''),
+                      'width':int(row.get('width') or 0),
+                      'height':int(row.get('height') or 0),
+                      'ok':not bool(row.get('failure')),
+                      'documentScrollWidth':scroll_width,
+                      'viewportWidth':viewport_width,
+                      'horizontalOverflow':(None if scroll_width is None or viewport_width is None else max(0,float(scroll_width)-float(viewport_width))),
+                      'documentScrollHeight':metrics.get('documentScrollHeight'),
+                      'screenshotMode':str(metrics.get('fullScreenshotMode') or ''),
+                      'failure':str(row.get('failure') or ''),
+                  })
+          evidence={
+              'action':'record-responsive-release-qa',
+              'responsiveVerification':{
+                  'checkedAt':str(current.get('checkedAt') or ''),
+                  'deployId':str(dashboard.get('deployId') or ''),
+                  'runId':'${{ github.run_id }}',
+                  'dashboardRefresh':expected_refresh,
+                  'overall':str(current.get('overall') or ''),
+                  'passed':int(current.get('passed') or 0),
+                  'failed':int(current.get('failed') or 0),
+                  'results':responsive_results,
+              },
+          }
+          Path('/tmp/system-health-responsive-evidence.json').write_text(json.dumps(evidence,separators=(',',':')))
           print(json.dumps({
               'ok':ok,
               'overall':current.get('overall'),
@@ -475,6 +510,14 @@ jobs:
           data['target_url']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
           p.write_text(json.dumps(data,separators=(',',':')))
           PY
+          oidc_response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          oidc_token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$oidc_response")"
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $oidc_token" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/system-health-responsive-evidence.json \
+            https://koasevents.com/api/system-health/github-main-signal
           curl -fsS \
             -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
