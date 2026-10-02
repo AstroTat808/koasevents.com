@@ -7,6 +7,8 @@ const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mt
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
+const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
+const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -125,6 +127,22 @@ assert(
     && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
     && visualWorkflow.includes('koa-system-health-responsive-pr-'),
   'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
+);
+
+assert(
+  netlifyConfig.includes('node scripts/verify_netlify_release_gate.mjs')
+    && releaseGate.includes("const REQUIRED_WORKFLOW='Production visual QA'")
+    && releaseGate.includes('&event=pull_request&per_page=50')
+    && releaseGate.includes("String(latest?.conclusion||'')!=='success'"),
+  'Netlify production builds must fail closed unless the exact merged PR head passed Production visual QA.',
+);
+assert(
+  visualWorkflow.includes('statuses: write')
+    && visualWorkflow.includes('System Health production release gate')
+    && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
+    && visualWorkflow.includes("len(report.get('results'))==7")
+    && visualWorkflow.includes('len(refresh_checks)==14'),
+  'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
