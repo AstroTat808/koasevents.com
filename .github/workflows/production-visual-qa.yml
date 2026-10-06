@@ -145,6 +145,17 @@ jobs:
             "credentialHealth": {},
             "weeklyExecutiveSummary": {},
             "accountingHealth": {},
+            "visualQuality": {
+              "status": "passed",
+              "checkedAt": "2026-10-01T19:13:41-10:00",
+              "source": "production-visual-qa",
+              "runId": "pr-preview",
+              "commit": "preview",
+              "deployId": "preview",
+              "chromium": {"browser":"chromium","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
+              "webkit": {"browser":"webkit","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
+              "detail": "Preview visual-quality fixture."
+            },
             "enrichmentWarnings": []
           }
           JSON
@@ -392,6 +403,56 @@ jobs:
         run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
       - name: Verify live Light / Dark / System in WebKit
         run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
+      - name: Publish Dark Mode visual-quality result to System Health
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def summarize(browser):
+              path=Path(f'visual-results/theme-{browser}/report.json')
+              if not path.is_file():
+                  return {
+                      'browser':browser,
+                      'routes':0,
+                      'cases':0,
+                      'failureCount':1,
+                      'reportMissing':True,
+                  }
+              try:
+                  report=json.loads(path.read_text())
+              except Exception:
+                  return {
+                      'browser':browser,
+                      'routes':0,
+                      'cases':0,
+                      'failureCount':1,
+                      'reportMissing':True,
+                  }
+              return {
+                  'browser':browser,
+                  'routes':int(report.get('routes') or 0),
+                  'cases':int(report.get('cases') or 0),
+                  'failureCount':len(report.get('failures') or []),
+                  'reportMissing':False,
+              }
+
+          payload={
+              'action':'record-dark-mode-visual-quality',
+              'checkedAt':datetime.now(timezone.utc).isoformat(),
+              'chromium':summarize('chromium'),
+              'webkit':summarize('webkit'),
+          }
+          Path('/tmp/dark-mode-visual-quality.json').write_text(json.dumps(payload,separators=(',',':')))
+          print(json.dumps(payload,separators=(',',':')))
+          PY
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          curl -fsS             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data-binary @/tmp/dark-mode-visual-quality.json             https://koasevents.com/api/system-health/github-main-signal
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -434,7 +495,7 @@ jobs:
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
-    needs: deployed-smoke
+    needs: [deployed-smoke, production-theme-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
