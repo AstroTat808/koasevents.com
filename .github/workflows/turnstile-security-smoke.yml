@@ -12,7 +12,11 @@ on:
       - 'netlify/functions/crm-inquiries.mts'
       - 'netlify/functions/_shared/lead-email.ts'
       - 'netlify/functions/_shared/security.ts'
+      - 'netlify/functions/_shared/credential-health.ts'
+      - 'netlify/functions/_shared/system-health.ts'
+      - 'netlify/functions/_shared/synthetic-health.ts'
       - 'netlify/edge-functions/verify-form-turnstile.mts'
+      - 'scripts/build_safety_check.mjs'
   workflow_dispatch:
 
 permissions:

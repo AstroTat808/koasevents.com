@@ -434,6 +434,7 @@ export function healthComponents() {
     {id:'turnstile-secret',name:'Turnstile server secret',path:'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET',kind:'api' as const},
     {id:'turnstile-widgets',name:'Turnstile widget rendering',path:'4 protected public forms',kind:'api' as const},
     {id:'turnstile-siteverify',name:'Turnstile Siteverify',path:'Cloudflare /siteverify',kind:'api' as const},
+    {id:'turnstile-server-enforcement',name:'Turnstile server enforcement',path:'/api/crm/inquiries rejects invalid tokens',kind:'api' as const},
     {id:'turnstile-validation-history',name:'Turnstile validation history',path:'Recent successful + failed validations',kind:'api' as const},
     {id:'turnstile-hostname-action',name:'Turnstile hostname + action matching',path:'Recent validation mismatches',kind:'api' as const},
     {id:'signwell-webhook-registration',name:'SignWell webhook registration',path:'SignWell GET /hooks',kind:'api' as const},
@@ -477,7 +478,7 @@ function defaultAlertAfter(id:string):1|2 {
     'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
-    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
+    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-server-enforcement','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
     'quickbooks-tax-invariant','login-alert-policy',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
@@ -2109,6 +2110,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const turnstileDiag=turnstileCredential?.diagnostics||{};
   const turnstileWidgets=turnstileDiag?.widgetRendering||{};
   const turnstileSiteverify=turnstileDiag?.siteverify||{};
+  const turnstileServerEnforcement=turnstileDiag?.serverEnforcement||{};
   const turnstileTotals=turnstileDiag?.totals||{};
   const turnstileMismatches=turnstileDiag?.mismatches||{};
   const turnstileLastSuccess=turnstileDiag?.lastSuccess||null;
@@ -2175,6 +2177,22 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
         ? 'yellow'
         : 'red',
     detail:clean(turnstileSiteverify?.detail||'Cloudflare Siteverify status is unavailable.',1200),
+  };
+
+  const turnstileServerEnforcementCheck:HealthCheck={
+    id:'turnstile-server-enforcement',
+    name:'Turnstile server enforcement',
+    kind:'api',
+    path:'/api/crm/inquiries rejects invalid tokens',
+    ok:Boolean(turnstileServerEnforcement?.ok),
+    status:turnstileServerEnforcement?.ok?200:503,
+    ms:0,
+    severity:turnstileServerEnforcement?.ok?'green':'red',
+    detail:clean(
+      turnstileServerEnforcement?.detail
+        || 'Production server-side Turnstile enforcement verification is unavailable.',
+      1200,
+    ),
   };
 
   const turnstileValidationHistoryCheck:HealthCheck={
@@ -2342,7 +2360,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileServerEnforcementCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
