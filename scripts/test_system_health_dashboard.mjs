@@ -186,8 +186,12 @@ assert(
     && visualQa.includes("headerPosition")
     && visualQa.includes("bottomPosition")
     && visualQa.includes("system-health-{viewport_name}-top.png")
-    && visualQa.includes("system-health-{viewport_name}-bottom.png"),
-  'Authenticated mobile System Health QA must capture screenshots and fail on header/bottom-nav geometry regressions.',
+    && visualQa.includes("system-health-{viewport_name}-bottom.png")
+    && visualQa.includes("action=dark-mode-qa-screenshot")
+    && visualQa.includes("[data-theme-qa-card]")
+    && visualQa.includes("Dark Mode QA renders every retained route result")
+    && visualQa.includes("Dark Mode QA screenshot thumbnails load successfully"),
+  'Authenticated System Health QA must capture responsive evidence and exercise the clickable Dark Mode QA drilldown and retained thumbnails.',
 );
 
 assert(
