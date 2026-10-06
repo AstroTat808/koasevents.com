@@ -1491,9 +1491,9 @@ def health_mobile_mode(browser_name,health_payload_path):
      checks.extend([
       (metrics.get("themeQaStatus") in {"Passed","Failed"},"Dark Mode QA status is populated"),
       (metrics.get("themeQaChromiumRoutes")==str(int(chromium.get("routes") or 0))+" routes","Chromium Dark Mode route count matches the release audit"),
-      (str(int(chromium.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
+      (str(int(chromium.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
       (metrics.get("themeQaWebkitRoutes")==str(int(webkit.get("routes") or 0))+" routes","WebKit Dark Mode route count matches the release audit"),
-      (str(int(webkit.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
+      (str(int(webkit.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
       (metrics.get("themeQaCommit")==str(visual_quality.get("commit") or ""),"Dark Mode QA commit matches the retained release audit"),
       (metrics.get("themeQaDeploy")==str(visual_quality.get("deployId") or ""),"Dark Mode QA deploy id matches the retained release audit"),
      ])
