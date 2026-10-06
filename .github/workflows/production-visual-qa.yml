@@ -310,6 +310,45 @@ jobs:
               assert isinstance(row.get('rawFields'),dict)
           print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
           PY
+      - name: Capture current safe accounting repair bulk preview
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-results
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            -o visual-results/accounting-repair-bulk-preview.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"read-current-accounting-repair-bulk-preview"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat visual-results/accounting-repair-bulk-preview.json
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('visual-results/accounting-repair-bulk-preview.json').read_text())
+          assert data.get('ok') is True
+          preview=data.get('bulkPreview') or {}
+          assert preview.get('bulkPreviewId')
+          assert preview.get('approvalMode') == 'individual-write-only'
+          assert isinstance(preview.get('rows'),list)
+          assert all(row.get('status') in {'repairable','blocked','clean','error','unavailable','ineligible'} for row in preview['rows'])
+          print('Production safe repair preview:',json.dumps({
+              'bulkPreviewId':preview.get('bulkPreviewId'),
+              'requestedCount':preview.get('requestedCount'),
+              'repairableClientCount':preview.get('repairableClientCount'),
+              'writeCount':preview.get('writeCount'),
+              'blockedClientCount':preview.get('blockedClientCount'),
+              'cleanClientCount':preview.get('cleanClientCount'),
+              'errorClientCount':preview.get('errorClientCount'),
+              'rows':preview.get('rows'),
+          },separators=(',',':')))
+          PY
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
@@ -319,6 +358,7 @@ jobs:
           path: |
             visual-results/production-smoke.json
             visual-results/accounting-adjustment-diagnostics.json
+            visual-results/accounting-repair-bulk-preview.json
           retention-days: 14
           if-no-files-found: error
 

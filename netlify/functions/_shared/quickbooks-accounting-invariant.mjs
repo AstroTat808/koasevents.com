@@ -139,6 +139,74 @@ export const CHRIS_SIBEL_ACCOUNTING_INVARIANT = Object.freeze({
   historicalTaxOnTaxTotal: 16446.90,
 });
 
+
+function qboMoneyText(value) {
+  const n = money(value);
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toFixed(2);
+}
+
+export function explainQuickBooksTransactionAdjustment(input = {}) {
+  const lineTotal = input?.lineTotal == null ? null : money(input.lineTotal);
+  const estimateTotal = input?.estimateTotal == null ? null : money(input.estimateTotal);
+  if (lineTotal == null || estimateTotal == null) return '';
+  const adjustment = input?.transactionAdjustment == null
+    ? money(estimateTotal - lineTotal)
+    : money(input.transactionAdjustment);
+  if (Math.abs(adjustment) < 0.01) return '';
+
+  const discountLineAmount = money(input?.discountLineAmount || 0);
+  const discountAmtField = input?.discountAmtField == null ? null : money(input.discountAmtField);
+  const discountUsed = Math.abs(discountLineAmount) >= 0.01
+    ? Math.abs(discountLineAmount)
+    : Math.abs(discountAmtField || 0);
+  const totalTax = money(input?.totalTax || 0);
+  const otherAdjustments = (Array.isArray(input?.nonSalesAdjustments) ? input.nonSalesAdjustments : [])
+    .filter((row) => !['DiscountLineDetail','TaxLineDetail'].includes(String(row?.detailType || '')))
+    .filter((row) => Math.abs(Number(row?.amount || 0)) >= 0.01);
+  const otherTotal = money(otherAdjustments.reduce((sum, row) => sum + Number(row?.amount || 0), 0));
+  const explained = money(-discountUsed + totalTax + otherTotal);
+  const remainder = money(adjustment - explained);
+  const salesLineDetails = Array.isArray(input?.salesLineDetails) ? input.salesLineDetails : [];
+  const itemSummary = salesLineDetails.length
+    ? ' (' + salesLineDetails.slice(0, 4).map((row) =>
+        String(row?.itemName || row?.description || 'line item') + ' ' + qboMoneyText(row?.amount || 0)
+      ).join('; ') + (salesLineDetails.length > 4 ? '; +' + (salesLineDetails.length - 4) + ' more' : '') + ')'
+    : '';
+
+  const parts = ['Sales lines total ' + qboMoneyText(lineTotal) + itemSummary + '.'];
+  if (discountUsed >= 0.01) {
+    parts.push(
+      'QuickBooks subtracts ' + qboMoneyText(discountUsed)
+      + (Math.abs(discountLineAmount) >= 0.01 ? ' through DiscountLineDetail' : ' through DiscountAmt')
+      + '.'
+    );
+  }
+  if (Math.abs(totalTax) >= 0.01) {
+    parts.push(
+      'It adds ' + qboMoneyText(totalTax) + ' through TxnTaxDetail.TotalTax'
+      + (input?.applyTaxAfterDiscount == null ? '' : (input.applyTaxAfterDiscount ? ' after the discount' : ' before the discount'))
+      + (input?.applyTaxAfterDiscount == null ? '' : ' (ApplyTaxAfterDiscount=' + String(Boolean(input.applyTaxAfterDiscount)) + ')')
+      + '.'
+    );
+  } else if (input?.totalTax != null) {
+    parts.push('TxnTaxDetail.TotalTax is $0.00.');
+  }
+  if (otherAdjustments.length) {
+    parts.push(
+      'Other non-sales transaction lines contribute '
+      + qboMoneyText(otherTotal)
+      + ': '
+      + otherAdjustments.map((row) => String(row?.detailType || 'adjustment') + ' ' + qboMoneyText(row?.amount || 0)).join(', ')
+      + '.'
+    );
+  }
+  parts.push('QuickBooks total is ' + qboMoneyText(estimateTotal) + ', so the net transaction adjustment is ' + qboMoneyText(adjustment) + '.');
+  if (Math.abs(remainder) >= 0.01) {
+    parts.push('The listed QBO fields explain ' + qboMoneyText(explained) + ' of that adjustment; ' + qboMoneyText(remainder) + ' remains in QuickBooks transaction-level calculation behavior not exposed as a standalone sales line.');
+  }
+  return parts.join(' ');
+}
+
 export function evaluateLiveClientAccountingInvariant(record, estimate, options = {}) {
   const proposalTotal = money(record?.proposal?.total);
   const expectedTotal = options.expectedTotal == null ? proposalTotal : money(options.expectedTotal);
@@ -149,6 +217,14 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
     String(line?.SalesItemLineDetail?.TaxCodeRef?.value || '').trim().toUpperCase() !== 'NON'
   );
   const lineTotal = money(salesLines.reduce((sum, line) => sum + Number(line?.Amount || 0), 0));
+  const salesLineDetails = salesLines.map((line) => ({
+    id: String(line?.Id || ''),
+    description: String(line?.Description || ''),
+    amount: money(line?.Amount || 0),
+    itemId: String(line?.SalesItemLineDetail?.ItemRef?.value || ''),
+    itemName: String(line?.SalesItemLineDetail?.ItemRef?.name || line?.Description || ''),
+    taxCode: String(line?.SalesItemLineDetail?.TaxCodeRef?.value || ''),
+  }));
   const allLines = Array.isArray(estimate?.Line) ? estimate.Line : [];
   const discountLines = allLines.filter((line) => line?.DetailType === 'DiscountLineDetail');
   const discountLineAmount = money(discountLines.reduce((sum, line) => sum + Math.abs(Number(line?.Amount || 0)), 0));
@@ -186,6 +262,18 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
   const historicalTaxOnTaxTotal = options.historicalTaxOnTaxTotal == null
     ? null
     : money(options.historicalTaxOnTaxTotal);
+  const transactionAdjustment = estimateTotal == null ? null : money(estimateTotal - lineTotal);
+  const adjustmentExplanation = explainQuickBooksTransactionAdjustment({
+    lineTotal,
+    estimateTotal,
+    transactionAdjustment,
+    discountAmtField,
+    discountLineAmount,
+    totalTax,
+    applyTaxAfterDiscount: estimate?.ApplyTaxAfterDiscount == null ? null : Boolean(estimate.ApplyTaxAfterDiscount),
+    nonSalesAdjustments,
+    salesLineDetails,
+  });
 
   return {
     ok: failures.length === 0,
@@ -199,7 +287,9 @@ export function evaluateLiveClientAccountingInvariant(record, estimate, options 
     expectedTotal,
     estimateTotal,
     lineTotal,
-    transactionAdjustment: estimateTotal == null ? null : money(estimateTotal - lineTotal),
+    salesLineDetails,
+    transactionAdjustment,
+    adjustmentExplanation,
     adjustmentTotal,
     discountAmtField,
     discountLineAmount,

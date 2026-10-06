@@ -79,6 +79,15 @@ export type HealthCheck = {
         estimateTotal: number | null;
         lineTotal?: number | null;
         transactionAdjustment?: number | null;
+        adjustmentExplanation?: string;
+        salesLineDetails?: Array<{
+          id: string;
+          description: string;
+          amount: number;
+          itemId: string;
+          itemName: string;
+          taxCode: string;
+        }>;
         adjustmentTotal?: number | null;
         discountAmtField?: number | null;
         discountLineAmount?: number | null;
@@ -367,6 +376,8 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
       qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
       lineTotal:row?.lineTotal==null?null:Math.round(Number(row.lineTotal||0)*100)/100,
       transactionAdjustment:row?.transactionAdjustment==null?null:Math.round(Number(row.transactionAdjustment||0)*100)/100,
+      adjustmentExplanation:String(row?.adjustmentExplanation||''),
+      salesLineDetails:Array.isArray(row?.salesLineDetails)?row.salesLineDetails:[],
       adjustmentTotal:row?.adjustmentTotal==null?null:Math.round(Number(row.adjustmentTotal||0)*100)/100,
       discountAmtField:row?.discountAmtField==null?null:Math.round(Number(row.discountAmtField||0)*100)/100,
       discountLineAmount:row?.discountLineAmount==null?null:Math.round(Number(row.discountLineAmount||0)*100)/100,
@@ -1630,6 +1641,7 @@ export async function accountingAdjustmentDiagnostics(context:Context,requestedR
         estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
         salesLineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
         transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        adjustmentExplanation:String(evaluation.adjustmentExplanation||''),
         taxableLineCount:Number(evaluation.taxableLineCount||0),
         rawFields:{
           discountAmtPresent:hasOwn('DiscountAmt'),

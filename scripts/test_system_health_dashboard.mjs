@@ -6,6 +6,9 @@ const css = await readFile(new URL('../src/styles/global.css', import.meta.url),
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
 const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
 const adminQuickBooks = await readFile(new URL('../netlify/functions/admin-quickbooks.mts', import.meta.url), 'utf8');
+const accountingInvariantSource = await readFile(new URL('../netlify/functions/_shared/quickbooks-accounting-invariant.mjs', import.meta.url), 'utf8');
+const accountingRepairExport = await readFile(new URL('../netlify/functions/_shared/quickbooks-accounting-repair-export.ts', import.meta.url), 'utf8');
+const { explainQuickBooksTransactionAdjustment } = await import(new URL('../netlify/functions/_shared/quickbooks-accounting-invariant.mjs', import.meta.url));
 const githubHealthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
@@ -360,6 +363,64 @@ assert(
     && adminQuickBooks.includes('const scope=quickBooksAccountingScope(record);')
     && adminQuickBooks.includes('no QuickBooks write was attempted.'),
   'Accounting repair fingerprints and final apply must both revalidate lifecycle and writable accounting scope before any QuickBooks mutation.',
+);
+
+
+const jesseAdjustmentExplanation = explainQuickBooksTransactionAdjustment({
+  lineTotal:3500,
+  estimateTotal:3141.36,
+  transactionAdjustment:-358.64,
+  discountLineAmount:500,
+  discountAmtField:null,
+  totalTax:141.36,
+  applyTaxAfterDiscount:true,
+  nonSalesAdjustments:[{detailType:'DiscountLineDetail',amount:500}],
+  salesLineDetails:[
+    {itemName:'Inactive:Inactive1',amount:2500},
+    {itemName:'Mirror X Photo Booth',amount:1000},
+  ],
+});
+assert(
+  jesseAdjustmentExplanation.includes('Sales lines total $3500.00')
+    && jesseAdjustmentExplanation.includes('DiscountLineDetail')
+    && jesseAdjustmentExplanation.includes('TxnTaxDetail.TotalTax')
+    && jesseAdjustmentExplanation.includes('ApplyTaxAfterDiscount=true')
+    && jesseAdjustmentExplanation.includes('net transaction adjustment is -$358.64'),
+  'Adjustment explanations must reconcile exact sales-line, discount, tax, and transaction-adjustment fields in plain English.',
+);
+assert(
+  accountingInvariantSource.includes('adjustmentExplanation')
+    && systemHealth.includes('adjustmentExplanation:String(row?.adjustmentExplanation')
+    && health.includes("String(row?.adjustmentExplanation||'')"),
+  'Plain-English QBO adjustment explanations must flow from the live invariant into signed System Health rows and the visible repair queue.',
+);
+assert(
+  adminQuickBooks.includes("bulkRepairPreviewAuditKey")
+    && adminQuickBooks.includes("decision:'approved'")
+    && adminQuickBooks.includes("action === 'reject-accounting-repair-write'")
+    && adminQuickBooks.includes("view === 'accounting-repair-bulk-export'")
+    && accountingRepairExport.includes('buildAccountingRepairBulkPreviewCsv')
+    && accountingRepairExport.includes('buildAccountingRepairBulkPreviewPdf'),
+  'Bulk repair previews must persist an immutable audit identity with individual approval/rejection history and CSV/PDF exports.',
+);
+assert(
+  githubHealthSignal.includes("body?.action==='read-current-accounting-repair-bulk-preview'")
+    && githubHealthSignal.includes('buildBulkAccountingRepairPreview(')
+    && githubHealthSignal.includes("'github-actions:'+cleanText(claims.actor"),
+  'GitHub OIDC must expose the current production repair population through the same read-only bulk preview logic used by System Health.',
+);
+assert(
+  health.includes('data-accounting-bulk-preview-csv')
+    && health.includes('data-accounting-bulk-preview-pdf')
+    && health.includes('Reject write')
+    && health.includes("action:'reject-accounting-repair-write'")
+    && health.includes('accounting-repair-bulk-export'),
+  'System Health must expose CSV/PDF audit exports and per-write rejection without adding any bulk apply control.',
+);
+assert(
+  !adminQuickBooks.includes("action === 'apply-all-safe-accounting-repairs'")
+    && !health.includes('Approve all repairs'),
+  'The repair workflow must continue to have no bulk QuickBooks mutation path.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');

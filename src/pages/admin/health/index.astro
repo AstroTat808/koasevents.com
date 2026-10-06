@@ -226,6 +226,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
                 <button data-accounting-bulk-preview-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close consolidated repair preview">×</button>
               </div>
               <div data-accounting-bulk-preview-summary class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"></div>
+              <div data-accounting-bulk-preview-exports class="mt-4 hidden flex-wrap items-center gap-2">
+                <button data-accounting-bulk-preview-csv type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</button>
+                <button data-accounting-bulk-preview-pdf type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export PDF</button>
+                <span class="text-[.62rem] leading-5 text-[var(--koa-ink)]/50">Exports always read the latest approval/rejection audit for this preview ID.</span>
+              </div>
               <div data-accounting-bulk-preview-body class="mt-5 grid gap-3"></div>
               <p data-accounting-bulk-preview-message class="mt-4 text-xs font-semibold text-[var(--koa-ink)]/55"></p>
             </div>
@@ -1132,6 +1137,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingBulkPreviewSummary=document.querySelector('[data-accounting-bulk-preview-summary]');
     const accountingBulkPreviewBody=document.querySelector('[data-accounting-bulk-preview-body]');
     const accountingBulkPreviewMessage=document.querySelector('[data-accounting-bulk-preview-message]');
+    const accountingBulkPreviewExports=document.querySelector('[data-accounting-bulk-preview-exports]');
+    const accountingBulkPreviewCsv=document.querySelector('[data-accounting-bulk-preview-csv]');
+    const accountingBulkPreviewPdf=document.querySelector('[data-accounting-bulk-preview-pdf]');
     const accountingRepairDialog=document.querySelector('[data-accounting-repair-dialog]');
     const accountingRepairTitle=document.querySelector('[data-accounting-repair-title]');
     const accountingRepairMeta=document.querySelector('[data-accounting-repair-meta]');
@@ -1139,6 +1147,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingRepairApprove=document.querySelector('[data-accounting-repair-approve]');
     const accountingRepairMessage=document.querySelector('[data-accounting-repair-message]');
     let accountingRepairPreview=null;
+    let accountingBulkPreviewReport=null;
     let accountingQueueFilter='all';
     let accountingReleaseAudits=[];
     const healthRunWarning=document.querySelector('[data-health-run-warning]');
@@ -4337,19 +4346,47 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       else accountingRepairApprove?.setAttribute('disabled','');
     }
 
-    async function previewAccountingRepairWrite(recordId,changeId,clientName){
+    async function previewAccountingRepairWrite(recordId,changeId,clientName,bulkPreviewId=''){
       if(!recordId||!changeId)return;
       if(accountingRepairMessage)accountingRepairMessage.textContent='Loading a fresh single-write QuickBooks preview…';
       if(accountingRepairBody)accountingRepairBody.innerHTML='';
       accountingRepairApprove?.setAttribute('disabled','');
       accountingRepairDialog?.showModal();
       try{
-        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-accounting-repair-write',recordId:String(recordId),changeId:String(changeId)})});
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-accounting-repair-write',recordId:String(recordId),changeId:String(changeId),bulkPreviewId:String(bulkPreviewId||'')})});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data?.error||'Unable to preview this QuickBooks write.');
         setAccountingRepairDialogPreview(data,{recordId,clientName});
       }catch(error){
         if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to preview this QuickBooks write.';
+      }
+    }
+
+    function exportAccountingBulkPreview(format){
+      const id=String(accountingBulkPreviewReport?.bulkPreviewId||'');
+      if(!id)return;
+      window.location.assign('/api/admin/quickbooks?view=accounting-repair-bulk-export&bulkPreviewId='+encodeURIComponent(id)+'&format='+encodeURIComponent(format));
+    }
+
+    async function rejectAccountingRepairWrite(bulkPreviewId,recordId,changeId,button){
+      if(!bulkPreviewId||!recordId||!changeId)return;
+      button?.setAttribute('disabled','');
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          action:'reject-accounting-repair-write',
+          bulkPreviewId:String(bulkPreviewId),
+          recordId:String(recordId),
+          changeId:String(changeId),
+          reason:'Rejected from the consolidated repair preview.',
+        })});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to record this rejection.');
+        accountingBulkPreviewReport=data?.bulkPreviewAudit||accountingBulkPreviewReport;
+        if(button){button.textContent='Rejected';button.classList.add('opacity-50');}
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent='Rejection recorded in the preview audit. No QuickBooks write occurred. CSV/PDF exports now include this decision.';
+      }catch(error){
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent=error instanceof Error?error.message:'Unable to record this rejection.';
+        button?.removeAttribute('disabled');
       }
     }
 
@@ -4369,8 +4406,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         return;
       }
       accountingPreviewAllSafe?.setAttribute('disabled','');
+      accountingBulkPreviewReport=null;
       if(accountingBulkPreviewBody)accountingBulkPreviewBody.innerHTML='';
       if(accountingBulkPreviewSummary)accountingBulkPreviewSummary.innerHTML='';
+      accountingBulkPreviewExports?.classList.add('hidden');
       if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent='Running fresh live, read-only QuickBooks previews for '+recordIds.length+' failed clients…';
       accountingBulkPreviewDialog?.showModal();
       try{
@@ -4378,7 +4417,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data?.error||'Unable to build the consolidated repair preview.');
         const report=data?.bulkPreview||{};
-        if(accountingBulkPreviewMeta)accountingBulkPreviewMeta.textContent='Generated '+(report?.generatedAt?new Date(report.generatedAt).toLocaleString():'now')+' · preview only · no bulk approval token exists.';
+        accountingBulkPreviewReport=report;
+        if(report?.bulkPreviewId)accountingBulkPreviewExports?.classList.remove('hidden');
+        if(accountingBulkPreviewMeta)accountingBulkPreviewMeta.textContent='Preview '+String(report?.bulkPreviewId||'')+' · generated '+(report?.generatedAt?new Date(report.generatedAt).toLocaleString():'now')+' · preview only · no bulk approval token exists.';
         if(accountingBulkPreviewSummary){
           accountingBulkPreviewSummary.innerHTML='';
           accountingBulkPreviewSummary.append(
@@ -4405,8 +4446,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               const item=document.createElement('div');item.className='mt-3 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
               const label=document.createElement('strong');label.className='text-xs text-[var(--koa-forest)]';label.textContent=String(change?.target||change?.type||'QuickBooks write');
               const detail=document.createElement('p');detail.className='mt-1 text-[.64rem] leading-5 text-[var(--koa-ink)]/60';detail.textContent='Before '+accountingMoney(change?.before?.total)+' → after '+accountingMoney(change?.after?.total)+' · '+String(change?.after?.taxHandling||'');
-              const button=document.createElement('button');button.type='button';button.className='mt-2 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';button.textContent='Preview exact write';button.addEventListener('click',()=>previewAccountingRepairWrite(String(row?.recordId||''),String(change?.id||''),String(row?.clientName||'')));
-              item.append(label,detail,button);card.appendChild(item);
+              const actions=document.createElement('div');actions.className='mt-2 flex flex-wrap gap-2';
+              const button=document.createElement('button');button.type='button';button.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';button.textContent='Preview exact write';button.addEventListener('click',()=>previewAccountingRepairWrite(String(row?.recordId||''),String(change?.id||''),String(row?.clientName||''),String(report?.bulkPreviewId||'')));
+              const reject=document.createElement('button');reject.type='button';reject.className='rounded-full border border-rose-200 bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-rose-800';reject.textContent='Reject write';reject.addEventListener('click',()=>rejectAccountingRepairWrite(String(report?.bulkPreviewId||''),String(row?.recordId||''),String(change?.id||''),reject));
+              actions.append(button,reject);item.append(label,detail,actions);card.appendChild(item);
             });
             const blocked=Array.isArray(row?.blockedIssues)?row.blockedIssues:[];
             blocked.forEach((issue)=>{const p=document.createElement('p');p.className='mt-2 text-xs leading-5 text-amber-900/75';p.textContent='Blocked: '+String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'Not eligible for automatic repair.');card.appendChild(p);});
@@ -4446,7 +4489,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'apply-accounting-repair',previewId,approved:true})});
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data?.error||'Unable to apply this repair.');
-        if(accountingRepairMessage)accountingRepairMessage.textContent=data?.resolved?'Repair applied and reconciliation is clean.':'Repair applied; remaining accounting issues still require review.';
+        if(data?.bulkPreviewAudit)accountingBulkPreviewReport=data.bulkPreviewAudit;
+        if(accountingRepairMessage)accountingRepairMessage.textContent=data?.resolved?'Repair applied and reconciliation is clean. Approval was added to the bulk-preview audit.':'Repair applied; remaining accounting issues still require review. Approval was added to the bulk-preview audit.';
         setTimeout(()=>{closeAccountingRepairDialog();document.querySelector('[data-refresh]')?.click();},800);
       }catch(error){
         if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to apply this repair.';
@@ -4457,6 +4501,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     accountingQueueButtons.forEach((button)=>button.addEventListener('click',()=>{accountingQueueFilter=String(button.dataset.accountingQueueFilter||'all');renderAccountingInvariantTable();}));
     accountingFilterClear?.addEventListener('click',()=>{accountingQueueFilter='all';if(accountingFilterStatus)accountingFilterStatus.value='all';if(accountingFilterTaxable)accountingFilterTaxable.checked=false;if(accountingFilterMissingEstimate)accountingFilterMissingEstimate.checked=false;renderAccountingInvariantTable();});
     accountingPreviewAllSafe?.addEventListener('click',previewAllSafeAccountingRepairs);
+    accountingBulkPreviewCsv?.addEventListener('click',()=>exportAccountingBulkPreview('csv'));
+    accountingBulkPreviewPdf?.addEventListener('click',()=>exportAccountingBulkPreview('pdf'));
     document.querySelector('[data-accounting-bulk-preview-close]')?.addEventListener('click',()=>accountingBulkPreviewDialog?.close());
     accountingBulkPreviewDialog?.addEventListener('click',(event)=>{if(event.target===accountingBulkPreviewDialog)accountingBulkPreviewDialog.close();});
     document.querySelector('[data-accounting-repair-close]')?.addEventListener('click',closeAccountingRepairDialog);
@@ -4525,6 +4571,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
               row?.applyTaxAfterDiscount!=null?'ApplyTaxAfterDiscount '+String(row.applyTaxAfterDiscount):'',
             ].filter(Boolean);
             if(parts.length)td.title=parts.join(' · ');
+            const explanation=String(row?.adjustmentExplanation||'');
+            if(explanation&&Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01){
+              const note=document.createElement('p');
+              note.className='mt-1 max-w-[340px] text-[.6rem] leading-4 text-[var(--koa-ink)]/50';
+              note.textContent=explanation;
+              td.appendChild(note);
+            }
           }
           if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','adjustment','unverified'].includes(category)){
             td.classList.add('cursor-pointer','underline','underline-offset-2');
