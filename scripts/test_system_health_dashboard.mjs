@@ -148,13 +148,18 @@ assert(
 assert(
   health.includes('data-dark-mode-visual-quality')
     && health.includes('data-theme-qa-card')
+    && health.includes('data-theme-qa-toggle')
     && health.includes('data-theme-qa-chromium-routes')
     && health.includes('data-theme-qa-webkit-routes')
     && health.includes('data-theme-qa-commit')
     && health.includes('data-theme-qa-deploy')
     && health.includes('data-theme-qa-route-results')
     && health.includes('data-theme-qa-screenshots')
+    && health.includes('data-theme-qa-screenshot-dialog')
+    && health.includes('data-theme-qa-screenshot-dialog-image')
+    && health.includes('data-theme-qa-screenshot-open')
     && health.includes('function renderDarkModeVisualQuality(visualQuality)')
+    && health.includes('function openThemeQaScreenshot(shot,label)')
     && health.includes('function setThemeQaExpanded(expanded)')
     && adminHealth.includes('darkModeVisualQualitySummary')
     && adminHealth.includes("action')==='dark-mode-qa-screenshot")
@@ -173,9 +178,16 @@ assert(
     && healthSignal.includes("body?.action==='record-dark-mode-visual-quality'")
     && healthSignal.includes('recordProductionVisualThumbnail')
     && healthSignal.includes('routeResults')
+    && healthSignal.includes('failedCases')
+    && systemHealth.includes('visualQaDetails?:')
+    && systemHealth.includes('darkModeQaAlertLines(current')
+    && systemHealth.includes('Production commit: ')
+    && systemHealth.includes('Recorded QA commit: ')
+    && systemHealth.includes('Failed routes · ')
     && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health')
     && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'")
     && visualWorkflow.includes("'failedRouteCount'")
+    && visualWorkflow.includes("'failedCases'")
     && visualWorkflow.includes("'screenshots':screenshots()")
     && themeVisualQa.includes('thumbnail_route="/admin/health/"')
     && themeVisualQa.includes('thumbnail-{preference}-{viewport}.jpg'),
@@ -189,8 +201,11 @@ assert(
     && visualQa.includes("system-health-{viewport_name}-bottom.png")
     && visualQa.includes("action=dark-mode-qa-screenshot")
     && visualQa.includes("[data-theme-qa-card]")
+    && visualQa.includes("[data-theme-qa-toggle]")
     && visualQa.includes("Dark Mode QA renders every retained route result")
-    && visualQa.includes("Dark Mode QA screenshot thumbnails load successfully"),
+    && visualQa.includes("Dark Mode QA screenshot thumbnails load successfully")
+    && visualQa.includes("Dark Mode QA screenshot opens in an in-page modal")
+    && visualQa.includes("Dark Mode QA modal uses the protected native-dimension screenshot asset"),
   'Authenticated System Health QA must capture responsive evidence and exercise the clickable Dark Mode QA drilldown and retained thumbnails.',
 );
 

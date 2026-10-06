@@ -147,6 +147,22 @@ export type HealthCheck = {
     } | null;
     lastDuplicateSuppressedAt: string;
   };
+  visualQaDetails?: {
+    productionCommit: string;
+    productionDeployId: string;
+    recordedQaCommit: string;
+    recordedQaDeployId: string;
+    commitMismatch: boolean;
+    deployMismatch: boolean;
+    reportMissing: boolean;
+    failures: Array<{
+      route: string;
+      browser: 'chromium' | 'webkit';
+      viewport: string;
+      theme: string;
+      detail: string;
+    }>;
+  };
 };
 
 export type HealthSnapshot = {
@@ -2714,6 +2730,62 @@ function esc(value:unknown){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
+function darkModeQaAlertDiagnostics(current:HealthSnapshot){
+  if(!(current.alertFailedIds||[]).includes('dark-mode-qa'))return null;
+  const check=current.checks.find((row)=>row.id==='dark-mode-qa');
+  const details=check?.visualQaDetails;
+  if(!details)return null;
+  const failures=(Array.isArray(details.failures)?details.failures:[]).map((row)=>({
+    route:clean(row?.route,300)||'unknown route',
+    browser:row?.browser==='webkit'?'webkit' as const:'chromium' as const,
+    viewport:clean(row?.viewport,80)||'unknown',
+    theme:clean(row?.theme,120)||'unknown',
+    detail:clean(row?.detail,500),
+  }));
+  return {
+    productionCommit:clean(details.productionCommit,120)||'unknown',
+    recordedQaCommit:clean(details.recordedQaCommit,120)||'unknown',
+    productionDeployId:clean(details.productionDeployId,120)||'unknown',
+    recordedQaDeployId:clean(details.recordedQaDeployId,120)||'unknown',
+    commitMismatch:Boolean(details.commitMismatch),
+    deployMismatch:Boolean(details.deployMismatch),
+    reportMissing:Boolean(details.reportMissing),
+    failures,
+  };
+}
+
+function darkModeQaAlertLines(current:HealthSnapshot){
+  const diagnostic=darkModeQaAlertDiagnostics(current);
+  if(!diagnostic)return [] as string[];
+  const lines=[
+    'Production commit: '+diagnostic.productionCommit,
+    'Recorded QA commit: '+diagnostic.recordedQaCommit,
+    'Production deploy: '+diagnostic.productionDeployId,
+    'Recorded QA deploy: '+diagnostic.recordedQaDeployId,
+  ];
+  if(diagnostic.commitMismatch)lines.push('Commit mismatch: yes');
+  if(diagnostic.deployMismatch)lines.push('Deploy mismatch: yes');
+  if(diagnostic.reportMissing)lines.push('Browser report missing: yes');
+  if(diagnostic.failures.length){
+    const groups=new Map<string,{browser:string;viewport:string;theme:string;routes:Set<string>;details:Set<string>}>();
+    for(const row of diagnostic.failures){
+      const key=[row.browser,row.viewport,row.theme].join('|');
+      const group=groups.get(key)||{browser:row.browser,viewport:row.viewport,theme:row.theme,routes:new Set<string>(),details:new Set<string>()};
+      group.routes.add(row.route);
+      if(row.detail)group.details.add(row.detail);
+      groups.set(key,group);
+    }
+    for(const group of groups.values()){
+      const routes=[...group.routes].sort().join(', ');
+      const details=[...group.details].slice(0,3).join(' / ');
+      lines.push('Failed routes · '+group.browser+' · '+group.viewport+' · '+group.theme+' · '+routes+(details?' · '+details:''));
+    }
+  }else{
+    lines.push('Failed routes: none recorded; the alert is caused by release mismatch or missing browser evidence.');
+  }
+  return lines;
+}
+
 async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
   const apiKey=clean(tenantEnv(resolveTenant(),'RESEND_API_KEY'),500);
   if(!apiKey) return {channel:'email',sent:false,reason:'resend-not-configured'};
@@ -2734,6 +2806,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
   const summary=fullyRecovered
     ? 'All monitored Koa’s admin/staff services are healthy again.'
     : 'The health monitor detected a change in system health.';
+  const darkModeLines=darkModeQaAlertLines(current);
   const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Koa’s System Health alert</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
     +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
@@ -2744,6 +2817,12 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     +(brokenNames.length?'<p><strong>Newly failing:</strong> '+brokenNames.map(esc).join(', ')+'</p>':'')
     +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
     +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
+    +(darkModeLines.length
+      ? '<div style="margin-top:18px;padding:14px;border:1px solid #e7dfd0;border-radius:14px;background:#fbf8f2">'
+        +'<p style="margin-top:0"><strong>Dark Mode QA diagnostics</strong></p>'
+        +'<ul style="margin-bottom:0;padding-left:20px">'+darkModeLines.map((line)=>'<li style="margin:6px 0;line-height:1.45">'+esc(line)+'</li>').join('')+'</ul>'
+        +'</div>'
+      : '')
     +'<p style="font-size:12px;color:#66736d">Checked '+esc(current.checkedAt)+' · '+failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s')+'</p>'
     +emailButton({href:'https://koasevents.com/admin/health/',label:'Open System Health',marginTop:20})
     +emailSignature()
@@ -2754,6 +2833,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
     failedNames.length?'Still failing: '+failedNames.join(', '):'',
+    ...(darkModeLines.length?['Dark Mode QA diagnostics:',...darkModeLines]:[]),
     'Checked: '+current.checkedAt,
     'System Health: https://koasevents.com/admin/health/','',
     emailSignatureText(),
@@ -2779,11 +2859,13 @@ async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recov
   const webhook=clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(!webhook) return {channel:'slack',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
+  const darkModeLines=darkModeQaAlertLines(current);
   const lines=[
     recovered?'✅ *Koa’s System Health recovered*':'🚨 *Koa’s System Health changed*',
     brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
     recoveredNames.length?'*Recovered:* '+recoveredNames.join(', '):'',
     failedNames.length?'*Still failing:* '+failedNames.join(', '):'',
+    ...(darkModeLines.length?['*Dark Mode QA diagnostics:*',...darkModeLines.map((line)=>'• '+line)]:[]),
     failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s'),
     '<https://koasevents.com/admin/health/|Open System Health>',
   ].filter(Boolean);
@@ -2807,11 +2889,13 @@ async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recover
   const recipients=clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
   if(!sid||!token||!from||!recipients.length) return {channel:'sms',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
+  const darkModeLines=darkModeQaAlertLines(current);
   const parts=[
     recovered?'Koa’s System Health recovered.':'Koa’s System Health alert.',
     brokenNames.length?'New failing: '+brokenNames.join(', ')+'.':'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', ')+'.':'',
     failedNames.length?'Still failing: '+failedNames.join(', ')+'.':'',
+    darkModeLines.length?'Dark Mode QA: '+darkModeLines.join(' | ')+'.':'',
     'https://koasevents.com/admin/health/',
   ].filter(Boolean);
   const body=parts.join(' ').slice(0,1200);
@@ -2881,6 +2965,11 @@ export type ProductionVisualQualityRouteResult = {
   cases:number;
   failureCount:number;
   failures:string[];
+  failedCases?:Array<{
+    theme:string;
+    viewport:string;
+    detail:string;
+  }>;
 };
 
 export type ProductionVisualQualityBrowser = {
@@ -3041,6 +3130,28 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
   const deployMismatch=Boolean(productionDeployId&&qaDeployId&&productionDeployId!==qaDeployId);
   const mismatch=commitMismatch||deployMismatch;
   const failed=String(visual.status||'')==='failed'||reportMissing||failureCount>0||failedRouteCount>0;
+  const collectFailedCases=(browser:'chromium'|'webkit',rows:any[])=>rows.flatMap((row:any)=>{
+    const route=clean(row?.route,300);
+    if(!route||String(row?.status||'')!=='failed')return [];
+    const cases=Array.isArray(row?.failedCases)?row.failedCases:[];
+    if(cases.length){
+      return cases.map((item:any)=>({
+        route,
+        browser,
+        viewport:clean(item?.viewport,80)||'unknown',
+        theme:clean(item?.theme,120)||'unknown',
+        detail:clean(item?.detail,500)||'Dark Mode QA browser case failed.',
+      }));
+    }
+    const fallback=(Array.isArray(row?.failures)?row.failures:[]).slice(0,12);
+    return fallback.length
+      ? fallback.map((message:any)=>({route,browser,viewport:'unknown',theme:'unknown',detail:clean(message,500)}))
+      : [{route,browser,viewport:'unknown',theme:'unknown',detail:'Dark Mode QA browser case failed.'}];
+  });
+  const failedCases=[
+    ...collectFailedCases('chromium',Array.isArray(chromium.routeResults)?chromium.routeResults:[]),
+    ...collectFailedCases('webkit',Array.isArray(webkit.routeResults)?webkit.routeResults:[]),
+  ].slice(0,240);
   const ok=!failed&&!mismatch;
   let detail='';
   if(failed){
@@ -3070,6 +3181,16 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
     ms:Date.now()-started,
     severity:ok?'green':'red',
     detail:clean(detail,1400),
+    visualQaDetails:{
+      productionCommit,
+      productionDeployId,
+      recordedQaCommit:qaCommit,
+      recordedQaDeployId:qaDeployId,
+      commitMismatch,
+      deployMismatch,
+      reportMissing,
+      failures:failedCases,
+    },
   };
 }
 

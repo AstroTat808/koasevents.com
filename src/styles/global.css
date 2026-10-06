@@ -2336,3 +2336,24 @@ html[data-theme="dark"] body.koa-admin-page .kpi span {
 html[data-theme="dark"] body.koa-admin-page .kpi strong {
   color: var(--koa-text-strong) !important;
 }
+
+/* Safari/WebKit dark-mode inherited-color hardening for neutral admin controls. */
+html[data-theme="dark"] body.koa-admin-page main label[class*="font-semibold"] {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-[var(--koa-line)]"]:not([class*="bg-"]):not([class*="text-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-[var(--koa-line)]"]:not([class*="bg-"]):not([class*="text-"]),
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-stone-300"]:not([class*="bg-"]):not([class*="text-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-stone-300"]:not([class*="bg-"]):not([class*="text-"]) {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main .link-arrow {
+  color: var(--koa-accent-text) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main .display.mt-2.text-4xl {
+  color: var(--koa-text-strong) !important;
+}
+

@@ -651,13 +651,22 @@ export default async (req:Request,context:Context) => {
               .map((item:any)=>cleanText(item,500))
               .filter(Boolean)
               .slice(0,12);
-            const rowFailureCount=Math.max(0,Math.floor(Number(row?.failureCount||rowFailures.length||0)));
+            const failedCases=(Array.isArray(row?.failedCases)?row.failedCases:[])
+              .map((item:any)=>({
+                theme:cleanText(item?.theme,120)||'unknown',
+                viewport:cleanText(item?.viewport,80)||'unknown',
+                detail:cleanText(item?.detail,500),
+              }))
+              .filter((item:any)=>item.detail)
+              .slice(0,24);
+            const rowFailureCount=Math.max(0,Math.floor(Number(row?.failureCount||failedCases.length||rowFailures.length||0)));
             return {
               route,
               status:rowFailureCount>0?'failed' as const:'passed' as const,
               cases:Math.max(0,Math.floor(Number(row?.cases||0))),
               failureCount:rowFailureCount,
               failures:rowFailures,
+              failedCases,
             };
           })
           .filter((row:any)=>row.route)

@@ -460,15 +460,32 @@ jobs:
                   route=str(row.get('route') or '').strip()
                   if not route:
                       continue
-                  target=by_route.setdefault(route,{'route':route,'cases':0,'failureCount':0,'failures':[]})
+                  target=by_route.setdefault(route,{'route':route,'cases':0,'failureCount':0,'failures':[],'failedCases':[]})
                   target['cases']+=1
                   failure=str(row.get('failure') or '').strip()
                   if failure:
                       target['failureCount']+=1
-                      label=' / '.join(str(row.get(key) or '').strip() for key in ('preference','viewport','osScheme','surface') if str(row.get(key) or '').strip())
+                      preference=str(row.get('preference') or '').strip()
+                      resolved=str(row.get('resolved') or '').strip()
+                      os_scheme=str(row.get('osScheme') or '').strip()
+                      surface=str(row.get('surface') or '').strip()
+                      viewport=str(row.get('viewport') or '').strip()
+                      theme=preference or resolved or 'unknown'
+                      if preference=='system' and os_scheme:
+                          theme='system → '+resolved+' (OS '+os_scheme+')'
+                      elif preference in {'account-dark','navbar-toggle'}:
+                          theme=preference+' → '+resolved
+                      label=' / '.join(value for value in (theme,viewport,surface) if value)
                       message=(label+': ' if label else '')+failure
                       if message not in target['failures'] and len(target['failures'])<12:
                           target['failures'].append(message[:500])
+                      failed_case={
+                          'theme':theme[:120],
+                          'viewport':viewport[:80] or 'unknown',
+                          'detail':failure[:500],
+                      }
+                      if failed_case not in target['failedCases'] and len(target['failedCases'])<24:
+                          target['failedCases'].append(failed_case)
               route_results=[]
               for route in sorted(by_route):
                   row=by_route[route]
@@ -478,6 +495,7 @@ jobs:
                       'cases':row['cases'],
                       'failureCount':row['failureCount'],
                       'failures':row['failures'],
+                      'failedCases':row['failedCases'],
                   })
               return {
                   'browser':browser,
