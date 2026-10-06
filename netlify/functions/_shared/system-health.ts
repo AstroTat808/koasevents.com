@@ -2872,6 +2872,25 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionVisualQualityBrowser = {
+  browser:'chromium'|'webkit';
+  routes:number;
+  cases:number;
+  failureCount:number;
+  reportMissing:boolean;
+};
+
+export type ProductionVisualQuality = {
+  checkedAt:string;
+  status:'passed'|'failed';
+  source:'production-visual-qa';
+  runId:string;
+  commit:string;
+  deployId:string;
+  chromium:ProductionVisualQualityBrowser;
+  webkit:ProductionVisualQualityBrowser;
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2884,6 +2903,7 @@ export type ProductionRelease = {
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
+  visualQuality?:ProductionVisualQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -3261,6 +3281,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
+    visualQuality:input?.visualQuality||previous?.visualQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,
