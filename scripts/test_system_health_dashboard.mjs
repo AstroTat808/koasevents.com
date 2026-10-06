@@ -182,7 +182,7 @@ assert(
     && systemHealth.includes('darkModeQaAlertLines(current')
     && systemHealth.includes('Production commit: ')
     && systemHealth.includes('Recorded QA commit: ')
-    && systemHealth.includes('Failed route ')
+    && systemHealth.includes('Failed routes · ')
     && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health')
     && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'")
     && visualWorkflow.includes("'failedRouteCount'")
