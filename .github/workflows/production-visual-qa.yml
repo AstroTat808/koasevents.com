@@ -152,8 +152,26 @@ jobs:
               "runId": "pr-preview",
               "commit": "preview",
               "deployId": "preview",
-              "chromium": {"browser":"chromium","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
-              "webkit": {"browser":"webkit","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
+              "chromium": {
+                "browser":"chromium","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "webkit": {
+                "browser":"webkit","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "screenshots":[
+                {"key":"light-phone","theme":"light","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-phone"},
+                {"key":"dark-phone","theme":"dark","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-phone"},
+                {"key":"light-desktop","theme":"light","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-desktop"},
+                {"key":"dark-desktop","theme":"dark","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-desktop"}
+              ],
               "detail": "Preview visual-quality fixture."
             },
             "enrichmentWarnings": []
