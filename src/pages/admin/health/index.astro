@@ -131,6 +131,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
         </section>
 
+        <dialog data-theme-qa-screenshot-dialog class="w-[min(96vw,1500px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/60">
+          <div class="flex max-h-[94vh] flex-col p-4 sm:p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Dark Mode QA screenshot</p>
+                <h3 data-theme-qa-screenshot-dialog-title class="display mt-2 text-3xl text-[var(--koa-forest)]">Production render</h3>
+                <p data-theme-qa-screenshot-dialog-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Protected production QA evidence.</p>
+              </div>
+              <button data-theme-qa-screenshot-dialog-close type="button" class="rounded-full px-3 py-1 text-3xl leading-none text-[var(--koa-ink)]/45 transition hover:bg-[var(--koa-ivory)] hover:text-[var(--koa-forest)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]" aria-label="Close Dark Mode QA screenshot">×</button>
+            </div>
+            <div class="mt-4 min-h-0 overflow-auto rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-2 sm:p-4">
+              <img data-theme-qa-screenshot-dialog-image alt="" class="mx-auto block h-auto max-h-[78vh] max-w-full object-contain shadow-sm" />
+            </div>
+          </div>
+        </dialog>
+
         <section data-critical-integrations-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -1160,6 +1176,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const themeQaDetails=document.querySelector('[data-theme-qa-details]');
     const themeQaRouteSummary=document.querySelector('[data-theme-qa-route-summary]');
     const themeQaRouteResults=document.querySelector('[data-theme-qa-route-results]');
+    const themeQaScreenshotDialog=document.querySelector('[data-theme-qa-screenshot-dialog]');
+    const themeQaScreenshotDialogTitle=document.querySelector('[data-theme-qa-screenshot-dialog-title]');
+    const themeQaScreenshotDialogMeta=document.querySelector('[data-theme-qa-screenshot-dialog-meta]');
+    const themeQaScreenshotDialogImage=document.querySelector('[data-theme-qa-screenshot-dialog-image]');
+    const themeQaScreenshotDialogClose=document.querySelector('[data-theme-qa-screenshot-dialog-close]');
     const criticalIntegrationsStatus=document.querySelector('[data-critical-integrations-status]');
     const criticalIntegrationsCount=document.querySelector('[data-critical-integrations-count]');
     const criticalIntegrationsLastLive=document.querySelector('[data-critical-integrations-last-live]');
@@ -4844,12 +4865,22 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           const card=document.createElement('article');
           card.className='overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)]';
           if(shot?.url){
+            const opener=document.createElement('button');
+            opener.type='button';
+            opener.dataset.themeQaScreenshotOpen=String(key);
+            opener.className='group block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--koa-clay)]';
+            opener.setAttribute('aria-label','Open full-resolution Dark Mode QA screenshot · '+label);
             const image=document.createElement('img');
             image.src=String(shot.url);
             image.alt='Dark Mode QA screenshot · '+label+' · '+String(shot.route||'/admin/health/');
             image.loading='lazy';
-            image.className='aspect-[16/10] w-full object-cover object-top';
-            card.appendChild(image);
+            image.className='aspect-[16/10] w-full object-cover object-top transition group-hover:scale-[1.01]';
+            opener.appendChild(image);
+            opener.addEventListener('click',(event)=>{
+              event.stopPropagation();
+              openThemeQaScreenshot(shot,label);
+            });
+            card.appendChild(opener);
           }else{
             const placeholder=document.createElement('div');
             placeholder.className='flex aspect-[16/10] items-center justify-center px-3 text-center text-xs font-semibold text-[var(--koa-ink)]/45';
@@ -6211,6 +6242,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(document.visibilityState==='visible')void maybeRetestPendingCredential();
     });
 
+    function openThemeQaScreenshot(shot,label){
+      if(!themeQaScreenshotDialog||!themeQaScreenshotDialogImage||!shot?.url)return;
+      const title=String(label||'Production render');
+      themeQaScreenshotDialogTitle.textContent=title;
+      themeQaScreenshotDialogMeta.textContent=[
+        String(shot.browser||'browser'),
+        String(shot.width||'—')+'×'+String(shot.height||'—'),
+        String(shot.route||'/admin/health/'),
+      ].join(' · ');
+      themeQaScreenshotDialogImage.src=String(shot.url);
+      themeQaScreenshotDialogImage.alt='Full-resolution Dark Mode QA screenshot · '+title+' · '+String(shot.route||'/admin/health/');
+      themeQaScreenshotDialog.showModal();
+    }
+
+    function closeThemeQaScreenshot(){
+      if(themeQaScreenshotDialog?.open)themeQaScreenshotDialog.close();
+    }
+
     function setThemeQaExpanded(expanded){
       if(!themeQaCard||!themeQaDetails)return;
       themeQaCard.setAttribute('aria-expanded',expanded?'true':'false');
@@ -6220,6 +6269,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
 
     themeQaCard?.addEventListener('click',(event)=>{
       const target=event.target;
+      if(target instanceof Element&&target.closest('[data-theme-qa-screenshot-open]'))return;
       if(target instanceof Node&&themeQaDetails?.contains(target))return;
       setThemeQaExpanded(themeQaCard.getAttribute('aria-expanded')!=='true');
     });
@@ -6227,6 +6277,11 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(event.key!=='Enter'&&event.key!==' ')return;
       event.preventDefault();
       setThemeQaExpanded(themeQaCard.getAttribute('aria-expanded')!=='true');
+    });
+
+    themeQaScreenshotDialogClose?.addEventListener('click',closeThemeQaScreenshot);
+    themeQaScreenshotDialog?.addEventListener('click',(event)=>{
+      if(event.target===themeQaScreenshotDialog)closeThemeQaScreenshot();
     });
 
     async function load(){
