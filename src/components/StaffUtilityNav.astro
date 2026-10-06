@@ -1594,9 +1594,9 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Unable to sync appearance.');
-      const successMessage=data.message||'Synced to your account';
+      const successMessage=data.message||'Appearance synced to your account.';
       if(message)message.textContent=successMessage;
-      showWorkspaceThemeSyncToast(successMessage);
+      showWorkspaceThemeSyncToast('Synced to your account');
     }catch(error){
       if(message)message.textContent=(error instanceof Error?error.message:'Unable to sync appearance.')+' This browser will keep the selected appearance.';
     }
