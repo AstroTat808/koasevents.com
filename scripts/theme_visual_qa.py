@@ -52,6 +52,7 @@ def main():
  routes=discover_routes()
  if not routes:
   print("No built HTML pages found.",file=sys.stderr);return 2
+ thumbnail_route="/admin/health/" if "/admin/health/" in routes else "/"
 
  try:
   from playwright.sync_api import sync_playwright
@@ -231,7 +232,14 @@ def main():
      shot=root/f"{preference}-{viewport}-{safe}.png"
      try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
      except Exception:shot=Path("")
-     row={"route":route,"preference":preference,"resolved":expected,"viewport":viewport,"width":width,"height":height,"metrics":metrics,"failure":detail,"screenshot":str(shot)}
+     thumbnail=Path("")
+     if route==thumbnail_route:
+      thumbnail=root/f"thumbnail-{preference}-{viewport}.jpg"
+      try:
+       page.screenshot(path=str(thumbnail),type="jpeg",quality=58,full_page=False,animations="disabled",caret="hide")
+      except Exception:
+       thumbnail=Path("")
+     row={"route":route,"preference":preference,"resolved":expected,"viewport":viewport,"width":width,"height":height,"metrics":metrics,"failure":detail,"screenshot":str(shot),"thumbnail":str(thumbnail)}
      results.append(row)
      if detail:failures.append(row)
      page.close()
@@ -351,6 +359,7 @@ def main():
  report={
   "mode":"theme","browser":a.browser,"baseUrl":base,"routes":len(routes),
   "viewports":[row[0] for row in VIEWPORTS],"cases":len(results),
+  "thumbnailRoute":thumbnail_route,
   "failures":failures,"results":results,
  }
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
