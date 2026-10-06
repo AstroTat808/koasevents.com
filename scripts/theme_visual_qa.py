@@ -284,7 +284,23 @@ def main():
      shot=root/f"{preference}-{viewport}-{safe}.png"
      try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
      except Exception:shot=Path("")
-     row={"route":route,"preference":preference,"resolved":expected,"viewport":viewport,"width":width,"height":height,"metrics":metrics,"failure":detail,"screenshot":str(shot)}
+     finding_shots=[]
+     if expected=="dark":
+      finding_dir=root/"contrast-findings"
+      finding_dir.mkdir(parents=True,exist_ok=True)
+      for index,finding in enumerate(metrics.get("darkContrastFindings") or []):
+       selector=str(finding.get("selector") or "")
+       if not selector:continue
+       element_shot=finding_dir/f"{viewport}-{safe}-{index+1:02d}.png"
+       try:
+        locator=page.locator(selector).first
+        locator.scroll_into_view_if_needed(timeout=1500)
+        locator.screenshot(path=str(element_shot),animations="disabled",caret="hide",timeout=2000)
+        finding["screenshot"]=str(element_shot)
+        finding_shots.append(str(element_shot))
+       except Exception:
+        finding["screenshot"]=str(shot)
+     row={"route":route,"preference":preference,"resolved":expected,"viewport":viewport,"width":width,"height":height,"metrics":metrics,"failure":detail,"screenshot":str(shot),"contrastFindingScreenshots":finding_shots}
      results.append(row)
      if detail:failures.append(row)
      page.close()
@@ -401,9 +417,22 @@ def main():
 
   browser.close()
 
+ contrast_findings=[]
+ for row in results:
+  if row.get("preference")!="dark":continue
+  for finding in (row.get("metrics") or {}).get("darkContrastFindings") or []:
+   contrast_findings.append({
+    "route":row.get("route"),
+    "viewport":row.get("viewport"),
+    "width":row.get("width"),
+    "height":row.get("height"),
+    **finding,
+   })
  report={
   "mode":"theme","browser":a.browser,"baseUrl":base,"routes":len(routes),
   "viewports":[row[0] for row in VIEWPORTS],"cases":len(results),
+  "contrastFindingCount":len(contrast_findings),
+  "contrastFindings":contrast_findings,
   "failures":failures,"results":results,
  }
  (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
