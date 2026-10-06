@@ -2767,8 +2767,18 @@ function darkModeQaAlertLines(current:HealthSnapshot){
   if(diagnostic.deployMismatch)lines.push('Deploy mismatch: yes');
   if(diagnostic.reportMissing)lines.push('Browser report missing: yes');
   if(diagnostic.failures.length){
+    const groups=new Map<string,{browser:string;viewport:string;theme:string;routes:Set<string>;details:Set<string>}>();
     for(const row of diagnostic.failures){
-      lines.push('Failed route '+row.route+' · '+row.browser+' · '+row.viewport+' · '+row.theme+(row.detail?' · '+row.detail:''));
+      const key=[row.browser,row.viewport,row.theme].join('|');
+      const group=groups.get(key)||{browser:row.browser,viewport:row.viewport,theme:row.theme,routes:new Set<string>(),details:new Set<string>()};
+      group.routes.add(row.route);
+      if(row.detail)group.details.add(row.detail);
+      groups.set(key,group);
+    }
+    for(const group of groups.values()){
+      const routes=[...group.routes].sort().join(', ');
+      const details=[...group.details].slice(0,3).join(' / ');
+      lines.push('Failed routes · '+group.browser+' · '+group.viewport+' · '+group.theme+' · '+routes+(details?' · '+details:''));
     }
   }else{
     lines.push('Failed routes: none recorded; the alert is caused by release mismatch or missing browser evidence.');
