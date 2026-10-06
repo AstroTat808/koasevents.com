@@ -1557,6 +1557,27 @@ def health_mobile_mode(browser_name,health_payload_path):
        (int(theme_detail.get("screenshotCount") or 0)==expected_screenshots,"Dark Mode QA renders every retained screenshot thumbnail"),
        (int(theme_detail.get("loadedScreenshotCount") or 0)==expected_screenshots,"Dark Mode QA screenshot thumbnails load successfully"),
       ])
+      first_opener=page.locator("[data-theme-qa-screenshot-open]").first
+      thumbnail_src=first_opener.locator("img").get_attribute("src") or ""
+      first_opener.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-screenshot-dialog]')?.open === true && document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.complete === true && document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.naturalWidth > 0",
+       timeout=5000,
+      )
+      modal_metrics=page.evaluate("""() => ({
+       open:document.querySelector('[data-theme-qa-screenshot-dialog]')?.open===true,
+       src:document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.getAttribute('src')||'',
+       title:String(document.querySelector('[data-theme-qa-screenshot-dialog-title]')?.textContent||'').trim(),
+       meta:String(document.querySelector('[data-theme-qa-screenshot-dialog-meta]')?.textContent||'').trim(),
+      })""")
+      metrics["themeQaScreenshotModal"]=modal_metrics
+      detail_checks.extend([
+       (modal_metrics.get("open") is True,"Dark Mode QA screenshot opens in an in-page modal"),
+       (modal_metrics.get("src")==thumbnail_src and bool(thumbnail_src),"Dark Mode QA modal uses the protected native-dimension screenshot asset"),
+       (bool(modal_metrics.get("title")) and bool(modal_metrics.get("meta")),"Dark Mode QA screenshot modal labels the render"),
+      ])
+      page.locator("[data-theme-qa-screenshot-dialog-close]").click()
+      page.wait_for_function("() => document.querySelector('[data-theme-qa-screenshot-dialog]')?.open === false",timeout=5000)
      failed_detail_checks=[label for ok,label in detail_checks if not ok]
      if failed_detail_checks:
       detail=(detail+"; " if detail else "")+"; ".join(failed_detail_checks)
