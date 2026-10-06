@@ -37,7 +37,7 @@ assert(
   'Authoritative Passed/Failed/Last checked hydration must occur before optional Accounting Health rendering.',
 );
 
-for (const panel of ['Monitoring coverage', 'Critical Integrations', 'Accounting Health', 'Email Health', 'Credential Health', 'Weekly executive summary']) {
+for (const panel of ['Monitoring coverage', 'Dark Mode visual quality', 'Critical Integrations', 'Accounting Health', 'Email Health', 'Credential Health', 'Weekly executive summary']) {
   assert(
     renderBody.includes("renderDashboardPanel('" + panel + "'"),
     panel + ' must be isolated so a secondary rendering failure cannot blank the core summary.',
@@ -143,6 +143,27 @@ assert(
     && healthSignal.includes("import { runHealthDashboardRefresh } from './admin-health.mts';"),
   'The signed GitHub OIDC control plane must expose the same full dashboard refresh for production verification.',
 );
+
+assert(
+  health.includes('data-dark-mode-visual-quality')
+    && health.includes('data-theme-qa-chromium-routes')
+    && health.includes('data-theme-qa-webkit-routes')
+    && health.includes('data-theme-qa-commit')
+    && health.includes('data-theme-qa-deploy')
+    && health.includes('function renderDarkModeVisualQuality(visualQuality)')
+    && adminHealth.includes('darkModeVisualQualitySummary')
+    && adminHealth.includes('visualQuality,'),
+  'System Health must display the retained production Dark Mode QA browser counts, failures, commit, and deploy id.',
+);
+assert(
+  systemHealth.includes('ProductionVisualQuality')
+    && systemHealth.includes('visualQuality?:ProductionVisualQuality|null')
+    && systemHealth.includes('visualQuality:input?.visualQuality||previous?.visualQuality||null')
+    && healthSignal.includes("body?.action==='record-dark-mode-visual-quality'")
+    && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health')
+    && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'"),
+  'Production theme QA must persist its exact Chromium/WebKit result into the signed production release audit.',
+);
 assert(
   visualQa.includes('def health_mobile_mode(browser_name,health_payload_path):')
     && visualQa.includes("headerPosition")
@@ -169,7 +190,7 @@ assert(
 
 assert(
   visualWorkflow.includes("if: github.event_name != 'pull_request' && always()")
-    && visualWorkflow.includes('needs: deployed-smoke'),
+    && visualWorkflow.includes('needs: [deployed-smoke, production-theme-audit]'),
   'Live System Health diagnostics must still run after an unrelated deployed-smoke failure so production health values and responsive evidence are captured.',
 );
 
