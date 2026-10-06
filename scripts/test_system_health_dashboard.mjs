@@ -148,6 +148,7 @@ assert(
 assert(
   health.includes('data-dark-mode-visual-quality')
     && health.includes('data-theme-qa-card')
+    && health.includes('data-theme-qa-toggle')
     && health.includes('data-theme-qa-chromium-routes')
     && health.includes('data-theme-qa-webkit-routes')
     && health.includes('data-theme-qa-commit')
@@ -200,6 +201,7 @@ assert(
     && visualQa.includes("system-health-{viewport_name}-bottom.png")
     && visualQa.includes("action=dark-mode-qa-screenshot")
     && visualQa.includes("[data-theme-qa-card]")
+    && visualQa.includes("[data-theme-qa-toggle]")
     && visualQa.includes("Dark Mode QA renders every retained route result")
     && visualQa.includes("Dark Mode QA screenshot thumbnails load successfully")
     && visualQa.includes("Dark Mode QA screenshot opens in an in-page modal")
