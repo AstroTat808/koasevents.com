@@ -76,15 +76,56 @@ function newestRun(runs){
   })[0]||null;
 }
 
+async function verifyDeployPreviewHead(commit){
+  const reviewId=String(process.env.REVIEW_ID||'').trim();
+  if(!/^\d+$/.test(reviewId)){
+    fail('Deploy Preview is missing a valid REVIEW_ID; exact PR-head verification cannot run.');
+  }
+  if(!/^[a-f0-9]{40}$/i.test(commit)){
+    fail('Deploy Preview COMMIT_REF is not a full commit SHA: '+commit+'.');
+  }
+
+  let pull;
+  try{
+    pull=await githubJson('/pulls/'+encodeURIComponent(reviewId));
+  }catch(error){
+    fail(error instanceof Error?error.message:String(error));
+  }
+
+  const headSha=String(pull?.head?.sha||'').trim();
+  if(!/^[a-f0-9]{40}$/i.test(headSha)){
+    fail('Unable to resolve the current head SHA for PR #'+reviewId+'.');
+  }
+  if(String(pull?.state||'')!=='open'){
+    fail('PR #'+reviewId+' is not open; Deploy Preview blocked.');
+  }
+  if(commit.toLowerCase()!==headSha.toLowerCase()){
+    fail(
+      'Deploy Preview commit '+commit+
+      ' does not exactly match current PR #'+reviewId+' head '+headSha+
+      '. Stale preview blocked.'
+    );
+  }
+
+  console.log(
+    '[koa release gate] PASS · Deploy Preview commit '+commit+
+    ' exactly matches current PR #'+reviewId+' head.'
+  );
+}
+
 async function main(){
   const context=String(process.env.CONTEXT||'').trim().toLowerCase();
+  const commit=String(process.env.COMMIT_REF||'HEAD').trim()||'HEAD';
+
+  if(context==='deploy-preview'){
+    await verifyDeployPreviewHead(commit);
+    return;
+  }
 
   if(context!=='production'){
     console.log('[koa release gate] Non-production context; remote production gate not required.');
     return;
   }
-
-  const commit=String(process.env.COMMIT_REF||'HEAD').trim()||'HEAD';
   let resolved;
   try{
     resolved=await resolvePullRequestHead(commit);
