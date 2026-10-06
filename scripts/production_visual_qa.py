@@ -1335,6 +1335,7 @@ def health_mobile_mode(browser_name,health_payload_path):
  current=dashboard.get("current") if isinstance(dashboard,dict) else None
  if not isinstance(current,dict):
   print("System Health dashboard payload has no current snapshot.",file=sys.stderr);return 2
+ visual_quality=dashboard.get("visualQuality") if isinstance(dashboard,dict) and isinstance(dashboard.get("visualQuality"),dict) else {}
 
  root=OUT/("health-mobile-"+browser_name);root.mkdir(parents=True,exist_ok=True)
  session_fixture={
@@ -1429,6 +1430,13 @@ def health_mobile_mode(browser_name,health_payload_path):
         failed:String(document.querySelector('[data-failed]')?.textContent||'').trim(),
         checked:String(document.querySelector('[data-checked]')?.textContent||'').trim(),
         dashboardRefresh:String(document.querySelector('[data-dashboard-refresh-status]')?.textContent||'').trim(),
+        themeQaStatus:String(document.querySelector('[data-theme-qa-status]')?.textContent||'').trim(),
+        themeQaChromiumRoutes:String(document.querySelector('[data-theme-qa-chromium-routes]')?.textContent||'').trim(),
+        themeQaChromiumFailures:String(document.querySelector('[data-theme-qa-chromium-failures]')?.textContent||'').trim(),
+        themeQaWebkitRoutes:String(document.querySelector('[data-theme-qa-webkit-routes]')?.textContent||'').trim(),
+        themeQaWebkitFailures:String(document.querySelector('[data-theme-qa-webkit-failures]')?.textContent||'').trim(),
+        themeQaCommit:String(document.querySelector('[data-theme-qa-commit]')?.textContent||'').trim(),
+        themeQaDeploy:String(document.querySelector('[data-theme-qa-deploy]')?.textContent||'').trim(),
         headerPosition:nav?getComputedStyle(nav).position:'',
         headerVisible:visible(nav),
         headerBottom:navRect?.bottom??null,
@@ -1468,6 +1476,19 @@ def health_mobile_mode(browser_name,health_payload_path):
      (float(metrics.get("summaryGridRight") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"Summary grid right edge stays inside the viewport"),
      (int(metrics.get("unlabeledMobileTableCells") or 0)==0,"Converted mobile table cells retain labels"),
     ]
+    if visual_quality and str(visual_quality.get("status") or "")!="unavailable":
+     chromium=visual_quality.get("chromium") or {}
+     webkit=visual_quality.get("webkit") or {}
+     checks.extend([
+      (metrics.get("themeQaStatus") in {"Passed","Failed"},"Dark Mode QA status is populated"),
+      (metrics.get("themeQaChromiumRoutes")==str(int(chromium.get("routes") or 0))+" routes","Chromium Dark Mode route count matches the release audit"),
+      (str(int(chromium.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
+      (metrics.get("themeQaWebkitRoutes")==str(int(webkit.get("routes") or 0))+" routes","WebKit Dark Mode route count matches the release audit"),
+      (str(int(webkit.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
+      (metrics.get("themeQaCommit")==str(visual_quality.get("commit") or ""),"Dark Mode QA commit matches the retained release audit"),
+      (metrics.get("themeQaDeploy")==str(visual_quality.get("deployId") or ""),"Dark Mode QA deploy id matches the retained release audit"),
+     ])
+
     if width>=1100:
      checks.append((float(metrics.get("summaryHeightSpread") or 0)<=2,"Desktop summary cards have consistent height"))
     if width<768:
