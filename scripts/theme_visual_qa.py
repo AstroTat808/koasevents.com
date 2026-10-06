@@ -148,10 +148,32 @@ def main():
           }
           return parseColor(getComputedStyle(document.body).backgroundColor);
         };
+        const selectorFor=(el)=>{
+          if(el.id)return '#'+CSS.escape(el.id);
+          const parts=[];
+          let node=el;
+          while(node instanceof Element&&node!==document.body&&parts.length<6){
+            let part=node.tagName.toLowerCase();
+            const classes=[...node.classList].filter(Boolean).slice(0,2);
+            if(classes.length)part+='.'+classes.map((v)=>CSS.escape(v)).join('.');
+            const parent=node.parentElement;
+            if(parent){
+              const same=[...parent.children].filter((child)=>child.tagName===node.tagName);
+              if(same.length>1)part+=':nth-of-type('+(same.indexOf(node)+1)+')';
+            }
+            parts.unshift(part);
+            node=parent;
+          }
+          return parts.join(' > ');
+        };
         const descriptor=(el)=>({
           tag:el.tagName.toLowerCase(),
           id:el.id||'',
           cls:String(el.className||'').slice(0,140),
+          selector:selectorFor(el),
+          component:el.closest('header,nav,main,aside,footer,[role="dialog"],[data-component]')?.getAttribute('data-component')
+            ||el.closest('header,nav,main,aside,footer,[role="dialog"]')?.tagName?.toLowerCase()
+            ||'body',
         });
         const largeBright=[...document.querySelectorAll('body *')].filter((el)=>{
           if(el instanceof HTMLImageElement||el instanceof HTMLVideoElement||el instanceof HTMLCanvasElement||el instanceof HTMLIFrameElement)return false;
@@ -175,6 +197,36 @@ def main():
           const bg=parseColor(getComputedStyle(el).backgroundColor);
           return bg&&bg[3]>.55&&relativeLum(bg)>.62;
         }).slice(0,16).map(descriptor):[];
+        const darkContrastFindings=root.dataset.theme==='dark'?[...document.querySelectorAll('body p,body span,body label,body strong,body small,body button,body a,body th,body td,body li,body summary,body h1,body h2,body h3,body h4,body h5,body h6')].filter((el)=>{
+          if(!visible(el)||el.matches(':disabled')||el.getAttribute('aria-disabled')==='true')return false;
+          const ownText=[...el.childNodes].filter((node)=>node.nodeType===Node.TEXT_NODE).map((node)=>node.textContent||'').join(' ').trim();
+          if(!ownText)return false;
+          const style=getComputedStyle(el);
+          if(Number(style.opacity)<.55)return false;
+          const fg=parseColor(style.color),bg=nearestBackground(el);
+          const ratio=contrast(fg,bg);
+          const size=parseFloat(style.fontSize)||16;
+          const weight=parseInt(style.fontWeight,10)||400;
+          const threshold=(size>=24||(size>=18.66&&weight>=700))?3:4.5;
+          return ratio!=null&&ratio<threshold;
+        }).slice(0,80).map((el)=>{
+          const style=getComputedStyle(el);
+          const fg=parseColor(style.color),bg=nearestBackground(el);
+          const ratio=contrast(fg,bg);
+          const size=parseFloat(style.fontSize)||16;
+          const weight=parseInt(style.fontWeight,10)||400;
+          const threshold=(size>=24||(size>=18.66&&weight>=700))?3:4.5;
+          return {
+            ...descriptor(el),
+            text:String(el.textContent||'').trim().replace(/\s+/g,' ').slice(0,120),
+            foreground:style.color,
+            background:bg?('rgb('+bg.slice(0,3).map((v)=>Math.round(v)).join(', ')+')'):'',
+            ratio:ratio==null?null:Number(ratio.toFixed(2)),
+            threshold,
+            fontSize:Number(size.toFixed(2)),
+            fontWeight:weight,
+          };
+        }):[];
         const adminLowContrast=isAdminDark?[...document.querySelectorAll('main p,main span,main label,main strong,main small,main button,main a,main th,main td')].filter((el)=>{
           if(!visible(el)||el.matches(':disabled')||el.getAttribute('aria-disabled')==='true')return false;
           const ownText=[...el.childNodes].filter((node)=>node.nodeType===Node.TEXT_NODE).map((node)=>node.textContent||'').join(' ').trim();
@@ -200,6 +252,7 @@ def main():
           adminBrightSurfaces,
           adminBrightControls,
           adminLowContrast,
+          darkContrastFindings,
         };
       }""")
       body_lum=luminance(rgb(metrics.get("bodyBackground")))
