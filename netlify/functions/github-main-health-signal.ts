@@ -16,6 +16,9 @@ import {
   syntheticProbeReleaseVerification,
 } from './_shared/system-health';
 import { runHealthDashboardRefresh } from './admin-health.mts';
+import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
+import { getQuickBooksSettings } from './_shared/quickbooks';
+import { resolveTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -412,6 +415,47 @@ export default async (req:Request,context:Context) => {
     });
 
     const body:any=await req.json().catch(()=>({}));
+
+    if(body?.action==='read-current-accounting-repair-bulk-preview'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const tenant=resolveTenant();
+        const records=await readQuickBooksSalesRecords(context);
+        const settings=await getQuickBooksSettings(context);
+        const bulkPreview=await buildBulkAccountingRepairPreview(
+          context,
+          tenant,
+          records,
+          cleanText(settings?.serviceItemId,80),
+          'github-actions:'+cleanText(claims.actor||'system',120),
+          [],
+        );
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          checkedAt:new Date().toISOString(),
+          source:'github-actions-oidc',
+          bulkPreview,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to build the current production accounting repair preview.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
 
     if(body?.action==='read-accounting-adjustment-diagnostics'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
