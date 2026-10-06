@@ -12,6 +12,7 @@ const { explainQuickBooksTransactionAdjustment } = await import(new URL('../netl
 const githubHealthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
 const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
+const themeVisualQa = await readFile(new URL('./theme_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
@@ -146,23 +147,39 @@ assert(
 
 assert(
   health.includes('data-dark-mode-visual-quality')
+    && health.includes('data-theme-qa-card')
     && health.includes('data-theme-qa-chromium-routes')
     && health.includes('data-theme-qa-webkit-routes')
     && health.includes('data-theme-qa-commit')
     && health.includes('data-theme-qa-deploy')
+    && health.includes('data-theme-qa-route-results')
+    && health.includes('data-theme-qa-screenshots')
     && health.includes('function renderDarkModeVisualQuality(visualQuality)')
+    && health.includes('function setThemeQaExpanded(expanded)')
     && adminHealth.includes('darkModeVisualQualitySummary')
+    && adminHealth.includes("action')==='dark-mode-qa-screenshot")
     && adminHealth.includes('visualQuality,'),
-  'System Health must display the retained production Dark Mode QA browser counts, failures, commit, and deploy id.',
+  'System Health must display a clickable Dark Mode QA card with retained browser counts, route results, screenshots, commit, and deploy id.',
 );
 assert(
-  systemHealth.includes('ProductionVisualQuality')
+  systemHealth.includes('ProductionVisualQualityRouteResult')
+    && systemHealth.includes('ProductionVisualQualityScreenshot')
+    && systemHealth.includes('recordProductionVisualThumbnail')
+    && systemHealth.includes('darkModeQaHealthCheck')
+    && systemHealth.includes("id:'dark-mode-qa'")
+    && systemHealth.includes("'netlify-github-sync','dark-mode-qa'")
     && systemHealth.includes('visualQuality?:ProductionVisualQuality|null')
     && systemHealth.includes('visualQuality:input?.visualQuality||previous?.visualQuality||null')
     && healthSignal.includes("body?.action==='record-dark-mode-visual-quality'")
+    && healthSignal.includes('recordProductionVisualThumbnail')
+    && healthSignal.includes('routeResults')
     && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health')
-    && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'"),
-  'Production theme QA must persist its exact Chromium/WebKit result into the signed production release audit.',
+    && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'")
+    && visualWorkflow.includes("'failedRouteCount'")
+    && visualWorkflow.includes("'screenshots':screenshots()")
+    && themeVisualQa.includes('thumbnail_route="/admin/health/"')
+    && themeVisualQa.includes('thumbnail-{preference}-{viewport}.jpg'),
+  'Production theme QA must persist route-level Chromium/WebKit evidence and four protected screenshots, and Dark Mode QA must be an immediate System Health alert check.',
 );
 assert(
   visualQa.includes('def health_mobile_mode(browser_name,health_payload_path):')
