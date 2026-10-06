@@ -38,19 +38,21 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
           aria-label="Switch to dark mode"
           title="Switch to dark mode"
           aria-pressed="false"
+          data-theme-resolved="light"
         >
-          <span data-site-theme-moon aria-hidden="true">
+          <span data-site-theme-moon class="site-theme-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
             </svg>
           </span>
-          <span data-site-theme-sun class="hidden" aria-hidden="true">
+          <span data-site-theme-sun class="site-theme-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
               <circle cx="12" cy="12" r="3.5"></circle>
               <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
             </svg>
           </span>
         </button>
+        <span data-site-theme-sync class="theme-sync-toast" role="status" aria-live="polite" aria-atomic="true"></span>
         <a href="/inquire/" class="site-nav-cta hidden sm:inline-flex">Check availability</a>
         <details class="group relative xl:hidden"><summary class="site-menu-trigger"><span class="site-menu-lines" aria-hidden="true"><span></span><span></span><span></span></span><span>Menu</span></summary><div class="site-menu-panel fixed inset-x-3 top-[5.45rem] z-[70] max-h-[calc(100svh-7rem)] overflow-auto rounded-[1.35rem] p-4 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-3 sm:w-80"><div class="mb-3 flex items-center gap-3 border-b border-[var(--koa-line)] pb-4"><span class="brand-medallion !h-12 !w-12"><img src="/brand/koa-mark.png" width="42" height="42" alt="" /></span><div><p class="display text-2xl text-[var(--koa-forest)]">Koa’s Events</p><p class="mt-1 text-[0.58rem] font-bold uppercase tracking-[.17em] text-[var(--koa-clay)]">Gather beautifully.</p></div></div>{[...primary, ...more].map((item) => <a class="block rounded-xl px-4 py-3 text-base font-semibold text-[var(--koa-ink)]/78 hover:bg-[var(--koa-sand)] hover:text-[var(--koa-forest)]" href={item.href}>{item.label}</a>)}<div class="mt-3 grid gap-2 border-t border-[var(--koa-line)] pt-4"><a class="site-nav-cta flex w-full" href="/inquire/">Check availability</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="/wedding-inquiry/">Wedding inquiry</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="/inquire/">Other event inquiry</a><a class="rounded-full border border-[var(--koa-line)] px-4 py-3 text-center text-sm font-semibold text-[var(--koa-forest)]" href="tel:+18448085627">844-808-KOAS</a></div></div></details>
       </div>
@@ -60,6 +62,7 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
 
 <style>
   .site-theme-toggle {
+    position: relative;
     display: inline-flex;
     width: 2.65rem;
     min-width: 2.65rem;
@@ -93,6 +96,70 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
   .site-theme-toggle svg {
     width: 1.35rem;
     height: 1.35rem;
+  }
+
+  .site-theme-toggle .site-theme-icon {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transform-origin: 50% 50%;
+    transition: opacity 170ms ease, transform 240ms cubic-bezier(.2,.75,.25,1);
+    will-change: opacity, transform;
+  }
+
+  .site-theme-toggle[data-theme-resolved="light"] [data-site-theme-moon] {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .site-theme-toggle[data-theme-resolved="light"] [data-site-theme-sun] {
+    opacity: 0;
+    transform: rotate(-38deg) scale(.68);
+  }
+
+  .site-theme-toggle[data-theme-resolved="dark"] [data-site-theme-moon] {
+    opacity: 0;
+    transform: rotate(38deg) scale(.68);
+  }
+
+  .site-theme-toggle[data-theme-resolved="dark"] [data-site-theme-sun] {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .theme-sync-toast {
+    position: fixed;
+    top: calc(4.4rem + env(safe-area-inset-top));
+    right: max(1rem, env(safe-area-inset-right));
+    z-index: 95;
+    pointer-events: none;
+    max-width: min(18rem, calc(100vw - 2rem));
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--koa-surface) 96%, transparent);
+    color: var(--koa-text-strong);
+    box-shadow: 0 12px 32px rgba(7,30,23,.18);
+    padding: .55rem .8rem;
+    font-size: .68rem;
+    font-weight: 800;
+    line-height: 1.2;
+    opacity: 0;
+    transform: translateY(-.35rem) scale(.98);
+    transition: opacity 160ms ease, transform 180ms ease;
+  }
+
+  .theme-sync-toast[data-visible="true"] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .site-theme-toggle,
+    .site-theme-toggle .site-theme-icon,
+    .theme-sync-toast {
+      transition-duration: 0s !important;
+    }
   }
 
   @media (max-width: 767px) {
@@ -132,8 +199,20 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
     siteThemeToggle.setAttribute('aria-pressed', dark ? 'true' : 'false');
     siteThemeToggle.setAttribute('aria-label', label);
     siteThemeToggle.setAttribute('title', label);
-    siteThemeToggle.querySelector('[data-site-theme-moon]')?.classList.toggle('hidden', dark);
-    siteThemeToggle.querySelector('[data-site-theme-sun]')?.classList.toggle('hidden', !dark);
+    siteThemeToggle.dataset.themeResolved = dark ? 'dark' : 'light';
+  }
+
+  let themeSyncToastTimer = 0;
+
+  function showThemeSyncToast(message = 'Synced to your account') {
+    const toast = document.querySelector('[data-site-theme-sync]');
+    if (!(toast instanceof HTMLElement)) return;
+    toast.textContent = message;
+    toast.dataset.visible = 'true';
+    window.clearTimeout(themeSyncToastTimer);
+    themeSyncToastTimer = window.setTimeout(() => {
+      toast.dataset.visible = 'false';
+    }, 1900);
   }
 
   async function syncThemePreferenceToAccount(preference) {
@@ -149,9 +228,14 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
       });
       // Signed-out public visitors should keep the browser-local theme without noise.
       // Authenticated staff get the same preference written to their account.
-      if (response.status === 401 || response.status === 403) return;
-      await response.json().catch(() => ({}));
-    } catch {}
+      if (response.status === 401 || response.status === 403) return false;
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return false;
+      showThemeSyncToast(data?.message || 'Synced to your account');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   siteThemeToggle?.addEventListener('click', () => {
