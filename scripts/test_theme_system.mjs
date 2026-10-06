@@ -55,6 +55,10 @@ for(const needle of [
   '.bg-yellow-50',
   '.workspace-alert-row[data-severity="urgent"]',
   '.staff-availability.available',
+  'Safari/WebKit dark-mode inherited-color hardening',
+  'main label[class*="font-semibold"]',
+  '.display.mt-2.text-4xl',
+  'main .link-arrow',
 ]){
   if(!globalCss.includes(needle))failures.push('Global dark theme layer missing '+needle);
 }
