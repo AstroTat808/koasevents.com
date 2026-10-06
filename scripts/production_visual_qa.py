@@ -1380,7 +1380,16 @@ def health_mobile_mode(browser_name,health_payload_path):
    # harmless empty JSON response so no human session secret is stored in CI.
    page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
    page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
-   page.route("**/api/admin/health**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(dashboard)))
+   def fulfill_health(route):
+    if "action=dark-mode-qa-screenshot" in route.request.url:
+     route.fulfill(
+      status=200,
+      content_type="image/svg+xml",
+      body='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="#173d30"/></svg>',
+     )
+     return
+    route.fulfill(status=200,content_type="application/json",body=json.dumps(dashboard))
+   page.route("**/api/admin/health**",fulfill_health)
 
    detail=""
    metrics={}
@@ -1482,9 +1491,9 @@ def health_mobile_mode(browser_name,health_payload_path):
      checks.extend([
       (metrics.get("themeQaStatus") in {"Passed","Failed"},"Dark Mode QA status is populated"),
       (metrics.get("themeQaChromiumRoutes")==str(int(chromium.get("routes") or 0))+" routes","Chromium Dark Mode route count matches the release audit"),
-      (str(int(chromium.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
+      (str(int(chromium.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
       (metrics.get("themeQaWebkitRoutes")==str(int(webkit.get("routes") or 0))+" routes","WebKit Dark Mode route count matches the release audit"),
-      (str(int(webkit.get("failureCount") or 0))+" failure" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
+      (str(int(webkit.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
       (metrics.get("themeQaCommit")==str(visual_quality.get("commit") or ""),"Dark Mode QA commit matches the retained release audit"),
       (metrics.get("themeQaDeploy")==str(visual_quality.get("deployId") or ""),"Dark Mode QA deploy id matches the retained release audit"),
      ])
@@ -1506,6 +1515,57 @@ def health_mobile_mode(browser_name,health_payload_path):
 
     top_shot=root/f"system-health-{viewport_name}-top.png"
     page.screenshot(path=str(top_shot),full_page=False,animations="disabled",caret="hide")
+
+    if visual_quality and str(visual_quality.get("status") or "")!="unavailable":
+     chromium=visual_quality.get("chromium") or {}
+     webkit=visual_quality.get("webkit") or {}
+     expected_routes=sorted(set(
+      [str(row.get("route") or "") for row in (chromium.get("routeResults") or []) if isinstance(row,dict) and str(row.get("route") or "")]
+      +[str(row.get("route") or "") for row in (webkit.get("routeResults") or []) if isinstance(row,dict) and str(row.get("route") or "")]
+     ))
+     expected_screenshots=len(visual_quality.get("screenshots") or [])
+     card=page.locator("[data-theme-qa-card]")
+     if expected_routes:
+      card.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded') === 'true' && !document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')",
+       timeout=5000,
+      )
+     if expected_screenshots:
+      page.wait_for_function(
+       "(count) => [...document.querySelectorAll('[data-theme-qa-screenshots] img')].filter((img)=>img.complete&&img.naturalWidth>0).length === count",
+       arg=expected_screenshots,
+       timeout=5000,
+      )
+     theme_detail=page.evaluate("""() => ({
+       expanded:document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded')||'',
+       detailsHidden:document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')??true,
+       routeResultCount:document.querySelector('[data-theme-qa-route-results]')?.children.length||0,
+       screenshotCount:document.querySelectorAll('[data-theme-qa-screenshots] img').length,
+       loadedScreenshotCount:[...document.querySelectorAll('[data-theme-qa-screenshots] img')].filter((img)=>img.complete&&img.naturalWidth>0).length,
+     })""")
+     metrics["themeQaDetail"]=theme_detail
+     detail_checks=[]
+     if expected_routes:
+      detail_checks.extend([
+       (theme_detail.get("expanded")=="true","Dark Mode QA card expands on click"),
+       (theme_detail.get("detailsHidden") is False,"Dark Mode QA route detail becomes visible"),
+       (int(theme_detail.get("routeResultCount") or 0)==len(expected_routes),"Dark Mode QA renders every retained route result"),
+      ])
+     if expected_screenshots:
+      detail_checks.extend([
+       (int(theme_detail.get("screenshotCount") or 0)==expected_screenshots,"Dark Mode QA renders every retained screenshot thumbnail"),
+       (int(theme_detail.get("loadedScreenshotCount") or 0)==expected_screenshots,"Dark Mode QA screenshot thumbnails load successfully"),
+      ])
+     failed_detail_checks=[label for ok,label in detail_checks if not ok]
+     if failed_detail_checks:
+      detail=(detail+"; " if detail else "")+"; ".join(failed_detail_checks)
+     if expected_routes:
+      card.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded') === 'false'",
+       timeout=5000,
+      )
 
     # Exercise the same client interaction staff use. Both POST and follow-up GET
     # receive the signed production dashboard payload captured for this run.

@@ -152,8 +152,26 @@ jobs:
               "runId": "pr-preview",
               "commit": "preview",
               "deployId": "preview",
-              "chromium": {"browser":"chromium","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
-              "webkit": {"browser":"webkit","routes":69,"cases":283,"failureCount":0,"reportMissing":false},
+              "chromium": {
+                "browser":"chromium","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "webkit": {
+                "browser":"webkit","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "screenshots":[
+                {"key":"light-phone","theme":"light","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-phone"},
+                {"key":"dark-phone","theme":"dark","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-phone"},
+                {"key":"light-desktop","theme":"light","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-desktop"},
+                {"key":"dark-desktop","theme":"dark","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-desktop"}
+              ],
               "detail": "Preview visual-quality fixture."
             },
             "enrichmentWarnings": []
@@ -409,46 +427,105 @@ jobs:
         run: |
           set -euo pipefail
           python - <<'PY'
-          import json
+          import base64, json
           from datetime import datetime, timezone
           from pathlib import Path
 
-          def summarize(browser):
+          def load_report(browser):
               path=Path(f'visual-results/theme-{browser}/report.json')
               if not path.is_file():
-                  return {
-                      'browser':browser,
-                      'routes':0,
-                      'cases':0,
-                      'failureCount':1,
-                      'reportMissing':True,
-                  }
+                  return None
               try:
-                  report=json.loads(path.read_text())
+                  value=json.loads(path.read_text())
+                  return value if isinstance(value,dict) else None
               except Exception:
+                  return None
+
+          def summarize(browser):
+              report=load_report(browser)
+              if report is None:
                   return {
                       'browser':browser,
                       'routes':0,
                       'cases':0,
                       'failureCount':1,
+                      'failedRouteCount':0,
                       'reportMissing':True,
+                      'routeResults':[],
                   }
+              by_route={}
+              for row in report.get('results') or []:
+                  if not isinstance(row,dict):
+                      continue
+                  route=str(row.get('route') or '').strip()
+                  if not route:
+                      continue
+                  target=by_route.setdefault(route,{'route':route,'cases':0,'failureCount':0,'failures':[]})
+                  target['cases']+=1
+                  failure=str(row.get('failure') or '').strip()
+                  if failure:
+                      target['failureCount']+=1
+                      label=' / '.join(str(row.get(key) or '').strip() for key in ('preference','viewport','osScheme','surface') if str(row.get(key) or '').strip())
+                      message=(label+': ' if label else '')+failure
+                      if message not in target['failures'] and len(target['failures'])<12:
+                          target['failures'].append(message[:500])
+              route_results=[]
+              for route in sorted(by_route):
+                  row=by_route[route]
+                  route_results.append({
+                      'route':route,
+                      'status':'failed' if row['failureCount'] else 'passed',
+                      'cases':row['cases'],
+                      'failureCount':row['failureCount'],
+                      'failures':row['failures'],
+                  })
               return {
                   'browser':browser,
                   'routes':int(report.get('routes') or 0),
                   'cases':int(report.get('cases') or 0),
                   'failureCount':len(report.get('failures') or []),
+                  'failedRouteCount':sum(1 for row in route_results if row['status']=='failed'),
                   'reportMissing':False,
+                  'routeResults':route_results,
               }
+
+          def screenshots():
+              rows=[]
+              sizes={'phone':(390,844),'desktop':(1440,900)}
+              for theme in ('light','dark'):
+                  for viewport in ('phone','desktop'):
+                      for browser in ('chromium','webkit'):
+                          report=load_report(browser)
+                          path=Path(f'visual-results/theme-{browser}/thumbnail-{theme}-{viewport}.jpg')
+                          if report is None or not path.is_file():
+                              continue
+                          width,height=sizes[viewport]
+                          rows.append({
+                              'key':f'{theme}-{viewport}',
+                              'theme':theme,
+                              'viewport':viewport,
+                              'browser':browser,
+                              'route':str(report.get('thumbnailRoute') or '/admin/health/'),
+                              'width':width,
+                              'height':height,
+                              'dataBase64':base64.b64encode(path.read_bytes()).decode('ascii'),
+                          })
+                          break
+              return rows
 
           payload={
               'action':'record-dark-mode-visual-quality',
               'checkedAt':datetime.now(timezone.utc).isoformat(),
               'chromium':summarize('chromium'),
               'webkit':summarize('webkit'),
+              'screenshots':screenshots(),
           }
           Path('/tmp/dark-mode-visual-quality.json').write_text(json.dumps(payload,separators=(',',':')))
-          print(json.dumps(payload,separators=(',',':')))
+          print(json.dumps({
+              'chromium':payload['chromium'],
+              'webkit':payload['webkit'],
+              'screenshots':[{key:value for key,value in row.items() if key!='dataBase64'} for row in payload['screenshots']],
+          },separators=(',',':')))
           PY
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"

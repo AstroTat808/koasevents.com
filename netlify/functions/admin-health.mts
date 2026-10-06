@@ -20,6 +20,7 @@ import {
   readLatestHourlyHealth,
   readProductionReleases,
   readAllProductionReleaseAudits,
+  readProductionVisualThumbnail,
   rollbackReadySummary,
   runSafeCriticalIntegrationRollbackDrill,
   readUptimeHistory,
@@ -480,10 +481,10 @@ function accountingReleaseAudits(releases:any[]){
     .slice(0,20);
 }
 
-function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId=''){
+function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId='',runtimeCommit=''){
   const rows=Array.isArray(releases)?releases:[];
-  const deployId=String(current?.deployId||runtimeDeployId||'').trim();
-  const commit=String(current?.commit||'').trim();
+  const deployId=String(runtimeDeployId||current?.deployId||'').trim();
+  const commit=String(runtimeCommit||current?.commit||'').trim();
   const release=rows.find((row:any)=>row?.visualQuality&&deployId&&String(row?.deployId||'')===deployId)
     || rows.find((row:any)=>row?.visualQuality&&commit&&String(row?.commit||'')===commit)
     || rows.find((row:any)=>row?.visualQuality);
@@ -494,23 +495,55 @@ function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId
       checkedAt:'',
       source:'production-visual-qa',
       runId:'',
-      commit:commit||String(release?.commit||''),
-      deployId:deployId||String(release?.deployId||''),
-      chromium:{browser:'chromium',routes:0,cases:0,failureCount:0,reportMissing:true},
-      webkit:{browser:'webkit',routes:0,cases:0,failureCount:0,reportMissing:true},
+      commit:'',
+      deployId:'',
+      productionCommit:commit,
+      productionDeployId:deployId,
+      commitMatchesProduction:false,
+      deployMatchesProduction:false,
+      mismatch:false,
+      chromium:{browser:'chromium',routes:0,cases:0,failureCount:0,failedRouteCount:0,reportMissing:true,routeResults:[]},
+      webkit:{browser:'webkit',routes:0,cases:0,failureCount:0,failedRouteCount:0,reportMissing:true,routeResults:[]},
+      screenshots:[],
       detail:'No production Dark Mode visual-quality result has been recorded yet.',
     };
   }
   const chromium=visual?.chromium||{};
   const webkit=visual?.webkit||{};
   const failures=Number(chromium?.failureCount||0)+Number(webkit?.failureCount||0);
+  const failedRoutes=Number(chromium?.failedRouteCount||0)+Number(webkit?.failedRouteCount||0);
+  const qaCommit=String(visual?.commit||release?.commit||'').trim();
+  const qaDeployId=String(visual?.deployId||release?.deployId||'').trim();
+  const commitMatchesProduction=Boolean(commit&&qaCommit&&commit===qaCommit);
+  const deployMatchesProduction=Boolean(deployId&&qaDeployId&&deployId===qaDeployId);
+  const mismatch=Boolean(
+    (commit&&qaCommit&&!commitMatchesProduction)
+    || (deployId&&qaDeployId&&!deployMatchesProduction)
+  );
+  const failed=String(visual?.status||'')==='failed'
+    || Boolean(chromium?.reportMissing||webkit?.reportMissing)
+    || failures>0
+    || failedRoutes>0;
+  const screenshots=(Array.isArray(visual?.screenshots)?visual.screenshots:[]).map((shot:any)=>({
+    ...shot,
+    url:'/api/admin/health?action=dark-mode-qa-screenshot&deployId='+encodeURIComponent(qaDeployId)+'&key='+encodeURIComponent(String(shot?.key||'')),
+  }));
   return {
     ...visual,
-    commit:String(visual?.commit||release?.commit||commit||''),
-    deployId:String(visual?.deployId||release?.deployId||deployId||''),
-    detail:failures
-      ? failures+' visual regression failure'+(failures===1?'':'s')+' recorded in the latest production theme audit.'
-      : 'Latest production Light / Dark / System audit passed in Chromium and WebKit.',
+    status:failed||mismatch?'failed':'passed',
+    commit:qaCommit,
+    deployId:qaDeployId,
+    productionCommit:commit,
+    productionDeployId:deployId,
+    commitMatchesProduction,
+    deployMatchesProduction,
+    mismatch,
+    screenshots,
+    detail:failed
+      ? (failedRoutes||failures)+' Dark Mode QA failure'+((failedRoutes||failures)===1?'':'s')+' recorded in the latest production theme audit.'
+      : mismatch
+        ? 'Dark Mode QA evidence does not match the current production commit or deploy.'
+        : 'Latest production Light / Dark / System audit passed in Chromium and WebKit and matches the current production release.',
   };
 }
 
@@ -556,7 +589,7 @@ export async function runHealthDashboardRefresh(context:Context){
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''));
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
   const weeklyExecutiveSummary=await safeHealthSection(
     enrichmentWarnings,
     'Weekly executive summary',
@@ -576,6 +609,25 @@ export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
   if(auth.response) return auth.response;
   const admin=hasCapability(auth.user,'health.manage');
+  const requestUrl=new URL(req.url);
+
+  if(req.method==='GET'&&requestUrl.searchParams.get('action')==='dark-mode-qa-screenshot'){
+    const deployId=String(requestUrl.searchParams.get('deployId')||'').trim();
+    const key=String(requestUrl.searchParams.get('key')||'').trim();
+    if(!deployId||!key)return Response.json({error:'Dark Mode QA screenshot id is required.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+    const shot=await readProductionVisualThumbnail(context,deployId,key);
+    if(!shot)return Response.json({error:'Dark Mode QA screenshot was not found.'},{status:404,headers:{'Cache-Control':'private, no-store'}});
+    const bytes=Uint8Array.from(atob(String(shot.dataBase64||'')),(char)=>char.charCodeAt(0));
+    return new Response(bytes,{
+      status:200,
+      headers:{
+        'Content-Type':'image/jpeg',
+        'Content-Disposition':'inline; filename="koa-dark-mode-qa-'+key+'.jpg"',
+        'Cache-Control':'private, max-age=300',
+        'X-Content-Type-Options':'nosniff',
+      },
+    });
+  }
 
   if(req.method==='POST'){
     if(!admin) return Response.json({error:'System Health management permission required.'},{status:403});
@@ -967,7 +1019,7 @@ export default async (req:Request,context:Context) => {
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,latest,String(context.deploy?.id||''));
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,latest,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
   return Response.json({
     current:latest,
     history,

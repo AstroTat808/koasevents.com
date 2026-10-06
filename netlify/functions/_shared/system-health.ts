@@ -422,6 +422,7 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'dark-mode-qa',name:'Dark Mode QA',path:'Light / Dark / System · Chromium + WebKit',kind:'api' as const},
     {id:'quickbooks-tax-invariant',name:'QuickBooks tax-on-tax invariant',path:'$15,000.00 + $706.80 tax = $15,706.80',kind:'api' as const},
     {id:'login-alert-policy',name:'Sign-in alert policy',path:'3 failures / 30 min · trusted devices · 24h cooldown',kind:'api' as const},
     {id:'credential-quickbooks',name:'QuickBooks credential',path:'Credential Health · QuickBooks',kind:'api' as const},
@@ -474,7 +475,7 @@ export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=nul
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
+    'action-center','business-crm','business-crm-startup','netlify-github-sync','dark-mode-qa','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
     'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
@@ -1837,7 +1838,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const syntheticChecksPromise=syntheticIntegrationChecks(context,origin,source!=='hourly');
   const accountingInvariantPromise=quickBooksTaxInvariantHealthCheck(context);
   const authSecurityHealthPromise=authenticationSecurityHealthSummary(context);
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth]=await Promise.all([
+  const darkModeQaHealthPromise=darkModeQaHealthCheck(context);
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth,darkModeQaCheck]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
@@ -1846,6 +1848,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     syntheticChecksPromise,
     accountingInvariantPromise,
     authSecurityHealthPromise,
+    darkModeQaHealthPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -2342,7 +2345,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
@@ -2872,12 +2875,33 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionVisualQualityRouteResult = {
+  route:string;
+  status:'passed'|'failed';
+  cases:number;
+  failureCount:number;
+  failures:string[];
+};
+
 export type ProductionVisualQualityBrowser = {
   browser:'chromium'|'webkit';
   routes:number;
   cases:number;
   failureCount:number;
+  failedRouteCount:number;
   reportMissing:boolean;
+  routeResults:ProductionVisualQualityRouteResult[];
+};
+
+export type ProductionVisualQualityScreenshot = {
+  key:string;
+  theme:'light'|'dark';
+  viewport:'phone'|'desktop';
+  browser:'chromium'|'webkit';
+  route:string;
+  width:number;
+  height:number;
+  contentType:'image/jpeg';
 };
 
 export type ProductionVisualQuality = {
@@ -2889,6 +2913,7 @@ export type ProductionVisualQuality = {
   deployId:string;
   chromium:ProductionVisualQualityBrowser;
   webkit:ProductionVisualQualityBrowser;
+  screenshots?:ProductionVisualQualityScreenshot[];
 };
 
 export type ProductionRelease = {
@@ -2918,6 +2943,134 @@ const PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments/releases/audit-index';
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
   const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
   return rows.slice(0,Math.max(1,Math.min(100,limit)));
+}
+
+function productionVisualThumbnailStorageKey(deployId:string,key:string){
+  const cleanDeploy=clean(deployId,120);
+  const cleanKey=clean(key,64);
+  if(!cleanDeploy||!/^(light|dark)-(phone|desktop)$/.test(cleanKey)) throw new Error('Invalid Dark Mode QA screenshot key.');
+  return 'deployments/visual-quality/screenshots/'+cleanDeploy+'/'+cleanKey;
+}
+
+export async function recordProductionVisualThumbnail(context:Context,deployId:string,input:any):Promise<ProductionVisualQualityScreenshot>{
+  const key=clean(input?.key,64);
+  const theme=input?.theme==='dark'?'dark':'light';
+  const viewport=input?.viewport==='desktop'?'desktop':'phone';
+  const browser=input?.browser==='webkit'?'webkit':'chromium';
+  const route=clean(input?.route,300)||'/admin/health/';
+  const width=Math.max(1,Math.min(1600,Math.floor(Number(input?.width||0)||1)));
+  const height=Math.max(1,Math.min(1200,Math.floor(Number(input?.height||0)||1)));
+  const dataBase64=String(input?.dataBase64||'').replace(/\s+/g,'');
+  if(key!==theme+'-'+viewport) throw new Error('Dark Mode QA screenshot key does not match its theme and viewport.');
+  if(!dataBase64||dataBase64.length>900000||!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64)){
+    throw new Error('Dark Mode QA screenshot payload is invalid or too large.');
+  }
+  const contentType:'image/jpeg'='image/jpeg';
+  await healthStore(context).setJSON(productionVisualThumbnailStorageKey(deployId,key),{
+    key,theme,viewport,browser,route,width,height,contentType,dataBase64,recordedAt:new Date().toISOString(),
+  });
+  return {key,theme,viewport,browser,route,width,height,contentType};
+}
+
+export async function readProductionVisualThumbnail(context:Context,deployId:string,key:string){
+  try{
+    const value:any=await healthStore(context).get(productionVisualThumbnailStorageKey(deployId,key),{type:'json'});
+    if(!value?.dataBase64)return null;
+    return {
+      key:clean(value.key,64),
+      theme:value.theme==='dark'?'dark':'light',
+      viewport:value.viewport==='desktop'?'desktop':'phone',
+      browser:value.browser==='webkit'?'webkit':'chromium',
+      route:clean(value.route,300),
+      width:Number(value.width||0),
+      height:Number(value.height||0),
+      contentType:'image/jpeg',
+      dataBase64:String(value.dataBase64||''),
+    };
+  }catch{
+    return null;
+  }
+}
+
+export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck>{
+  const started=Date.now();
+  const productionDeployId=clean(Netlify.env.get('DEPLOY_ID'),120);
+  const productionCommit=clean(Netlify.env.get('COMMIT_REF'),120);
+  let releases:ProductionRelease[]=[];
+  try{
+    releases=await readProductionReleases(context,50);
+  }catch(error){
+    return {
+      id:'dark-mode-qa',
+      name:'Dark Mode QA',
+      kind:'api',
+      path:'Light / Dark / System · Chromium + WebKit',
+      ok:true,
+      status:0,
+      ms:Date.now()-started,
+      severity:'yellow',
+      detail:'Dark Mode QA release evidence could not be read: '+clean(error instanceof Error?error.message:'unknown storage error',600),
+    };
+  }
+  const release=releases.find((row)=>row?.visualQuality&&productionDeployId&&clean(row?.deployId,120)===productionDeployId)
+    || releases.find((row)=>row?.visualQuality&&productionCommit&&clean(row?.commit,120)===productionCommit)
+    || releases.find((row)=>row?.visualQuality)
+    || null;
+  const visual=release?.visualQuality||null;
+  if(!visual){
+    return {
+      id:'dark-mode-qa',
+      name:'Dark Mode QA',
+      kind:'api',
+      path:'Light / Dark / System · Chromium + WebKit',
+      ok:true,
+      status:204,
+      ms:Date.now()-started,
+      severity:'yellow',
+      detail:'No production Dark Mode QA result has been recorded yet. The next production visual audit will populate route-by-route Chromium/WebKit evidence.',
+    };
+  }
+  const chromium:any=visual.chromium||{};
+  const webkit:any=visual.webkit||{};
+  const failureCount=Math.max(0,Number(chromium.failureCount||0))+Math.max(0,Number(webkit.failureCount||0));
+  const failedRouteCount=Math.max(0,Number(chromium.failedRouteCount||0))+Math.max(0,Number(webkit.failedRouteCount||0));
+  const reportMissing=Boolean(chromium.reportMissing||webkit.reportMissing);
+  const qaCommit=clean(visual.commit||release?.commit,120);
+  const qaDeployId=clean(visual.deployId||release?.deployId,120);
+  const commitMismatch=Boolean(productionCommit&&qaCommit&&productionCommit!==qaCommit);
+  const deployMismatch=Boolean(productionDeployId&&qaDeployId&&productionDeployId!==qaDeployId);
+  const mismatch=commitMismatch||deployMismatch;
+  const failed=String(visual.status||'')==='failed'||reportMissing||failureCount>0||failedRouteCount>0;
+  const ok=!failed&&!mismatch;
+  let detail='';
+  if(failed){
+    detail='Dark Mode QA failed: '+failedRouteCount+' failed route result'+(failedRouteCount===1?'':'s')
+      +' · '+failureCount+' failed browser case'+(failureCount===1?'':'s')
+      +' · Chromium '+Math.max(0,Number(chromium.failedRouteCount||0))+' failed routes'
+      +' · WebKit '+Math.max(0,Number(webkit.failedRouteCount||0))+' failed routes'
+      +(reportMissing?' · one or more browser reports are missing':'')+'.';
+  }else if(mismatch){
+    detail='Dark Mode QA evidence is stale for production: recorded commit '+(qaCommit||'unknown')
+      +' / deploy '+(qaDeployId||'unknown')+' does not match current production commit '+(productionCommit||'unknown')
+      +' / deploy '+(productionDeployId||'unknown')+'.';
+  }else{
+    detail='Dark Mode QA passed for current production · Chromium '+Number(chromium.routes||0)+' routes'
+      +' · WebKit '+Number(webkit.routes||0)+' routes · commit '+(qaCommit||'unknown')+' · deploy '+(qaDeployId||'unknown')+'.';
+  }
+  if(failed&&mismatch){
+    detail+=' Recorded QA commit/deploy also does not match current production.';
+  }
+  return {
+    id:'dark-mode-qa',
+    name:'Dark Mode QA',
+    kind:'api',
+    path:'Light / Dark / System · Chromium + WebKit',
+    ok,
+    status:ok?200:mismatch?409:503,
+    ms:Date.now()-started,
+    severity:ok?'green':'red',
+    detail:clean(detail,1400),
+  };
 }
 
 export async function readAllProductionReleaseAudits(context:Context):Promise<ProductionRelease[]> {
