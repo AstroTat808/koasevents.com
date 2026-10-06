@@ -231,7 +231,7 @@ const position = overlay ? 'absolute inset-x-0 top-0 z-50' : 'relative z-50 bg-[
       if (response.status === 401 || response.status === 403) return false;
       const data = await response.json().catch(() => ({}));
       if (!response.ok) return false;
-      showThemeSyncToast(data?.message || 'Synced to your account');
+      showThemeSyncToast('Synced to your account');
       return true;
     } catch {
       return false;
