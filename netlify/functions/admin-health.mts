@@ -480,6 +480,40 @@ function accountingReleaseAudits(releases:any[]){
     .slice(0,20);
 }
 
+function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId=''){
+  const rows=Array.isArray(releases)?releases:[];
+  const deployId=String(current?.deployId||runtimeDeployId||'').trim();
+  const commit=String(current?.commit||'').trim();
+  const release=rows.find((row:any)=>row?.visualQuality&&deployId&&String(row?.deployId||'')===deployId)
+    || rows.find((row:any)=>row?.visualQuality&&commit&&String(row?.commit||'')===commit)
+    || rows.find((row:any)=>row?.visualQuality);
+  const visual:any=release?.visualQuality||null;
+  if(!visual){
+    return {
+      status:'unavailable',
+      checkedAt:'',
+      source:'production-visual-qa',
+      runId:'',
+      commit:commit||String(release?.commit||''),
+      deployId:deployId||String(release?.deployId||''),
+      chromium:{browser:'chromium',routes:0,cases:0,failureCount:0,reportMissing:true},
+      webkit:{browser:'webkit',routes:0,cases:0,failureCount:0,reportMissing:true},
+      detail:'No production Dark Mode visual-quality result has been recorded yet.',
+    };
+  }
+  const chromium=visual?.chromium||{};
+  const webkit=visual?.webkit||{};
+  const failures=Number(chromium?.failureCount||0)+Number(webkit?.failureCount||0);
+  return {
+    ...visual,
+    commit:String(visual?.commit||release?.commit||commit||''),
+    deployId:String(visual?.deployId||release?.deployId||deployId||''),
+    detail:failures
+      ? failures+' visual regression failure'+(failures===1?'':'s')+' recorded in the latest production theme audit.'
+      : 'Latest production Light / Dark / System audit passed in Chromium and WebKit.',
+  };
+}
+
 export async function runHealthDashboardRefresh(context:Context){
   const runWarnings:Array<{section:string;error:string}>=[];
   const [previous,previousHourly]=await Promise.all([
@@ -522,6 +556,7 @@ export async function runHealthDashboardRefresh(context:Context){
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''));
   const weeklyExecutiveSummary=await safeHealthSection(
     enrichmentWarnings,
     'Weekly executive summary',
@@ -530,7 +565,7 @@ export async function runHealthDashboardRefresh(context:Context){
   );
   return {
     ok:true,
-    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
+    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,visualQuality,
     accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
     accountingReleaseAudits:accountingReleaseAudits(hydratedReleases),
     enrichmentWarnings,
@@ -932,6 +967,7 @@ export default async (req:Request,context:Context) => {
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,latest,String(context.deploy?.id||''));
   return Response.json({
     current:latest,
     history,
@@ -948,6 +984,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
+    visualQuality,
     accountingHealth:accountingHealthSummary(latest,history,accountingInvariantIncidents),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});

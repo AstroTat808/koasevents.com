@@ -290,10 +290,10 @@ def main():
   # Navbar quick-toggle interaction: the public sun/moon control and the authenticated
   # workspace control must both switch the same shared root theme state.
   toggle_cases=[
-   ("/","public","[data-site-theme-toggle]"),
+   ("/","public","[data-site-theme-toggle]","[data-site-theme-moon]","[data-site-theme-sync]"),
   ]
-  if sync_route:toggle_cases.append((sync_route,"admin","[data-workspace-theme-toggle]"))
-  for route,label,selector in toggle_cases:
+  if sync_route:toggle_cases.append((sync_route,"admin","[data-workspace-theme-toggle]","[data-workspace-theme-moon]","[data-workspace-theme-sync]"))
+  for route,label,selector,icon_selector,toast_selector in toggle_cases:
    ctx=browser.new_context(viewport={"width":390,"height":844},device_scale_factor=2,is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light")
    ctx.add_init_script("localStorage.setItem('koa-theme-preference','light');")
    account_sync=[]
@@ -303,7 +303,7 @@ def main():
       account_sync.append(json.loads(route.request.post_data or "{}"))
     except Exception:
      account_sync.append({})
-    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"appearancePreference":"dark"}))
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"appearancePreference":"dark","message":"Synced to your account"}))
    ctx.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
    ctx.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
    ctx.route("**/api/account/profile**",capture_account_profile)
@@ -322,6 +322,24 @@ def main():
     synced=any(item.get("action")=="save-appearance-preference" and item.get("appearancePreference")=="dark" for item in account_sync if isinstance(item,dict))
     if not synced:
      detail=(detail+"; " if detail else "")+label+" navbar toggle did not sync Dark to the account endpoint"
+    feedback=page.evaluate("""([buttonSelector,iconSelector,toastSelector])=>{
+      const button=document.querySelector(buttonSelector);
+      const icon=button?.querySelector(iconSelector);
+      const toast=document.querySelector(toastSelector);
+      return {
+        resolved:button?.dataset?.themeResolved||'',
+        iconDuration:icon?getComputedStyle(icon).transitionDuration:'',
+        toastText:String(toast?.textContent||'').trim(),
+        toastVisible:toast?.getAttribute('data-visible')||'',
+      };
+    }""",[selector,icon_selector,toast_selector])
+    if feedback.get("resolved")!="dark":
+     detail=(detail+"; " if detail else "")+label+" navbar icon state did not resolve to Dark"
+    durations=[part.strip() for part in str(feedback.get("iconDuration") or "").split(",") if part.strip()]
+    if any(part not in ("0s","0ms") for part in durations):
+     detail=(detail+"; " if detail else "")+label+" icon animation ignored prefers-reduced-motion: "+str(feedback.get("iconDuration"))
+    if feedback.get("toastText")!="Synced to your account" or feedback.get("toastVisible")!="true":
+     detail=(detail+"; " if detail else "")+label+" theme sync confirmation was not announced after the successful account write"
    except Exception as exc:detail=str(exc)
    row={"route":route,"preference":"navbar-toggle","resolved":"dark","viewport":"phone","surface":label,"failure":detail}
    results.append(row)

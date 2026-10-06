@@ -45,19 +45,21 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
           aria-label="Switch to dark mode"
           title="Switch to dark mode"
           aria-pressed="false"
+          data-theme-resolved="light"
         >
-          <span data-workspace-theme-moon aria-hidden="true">
+          <span data-workspace-theme-moon class="workspace-theme-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"></path>
             </svg>
           </span>
-          <span data-workspace-theme-sun class="hidden" aria-hidden="true">
+          <span data-workspace-theme-sun class="workspace-theme-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
               <circle cx="12" cy="12" r="3.5"></circle>
               <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.65 17.65l1.42 1.42M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.65 6.35l1.42-1.42"></path>
             </svg>
           </span>
         </button>
+        <span data-workspace-theme-sync class="workspace-theme-sync-toast" role="status" aria-live="polite" aria-atomic="true"></span>
         <button
           data-workspace-account-toggle
           type="button"
@@ -322,6 +324,7 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   }
 
   .workspace-theme-toggle {
+    position: relative;
     display: inline-flex;
     width: 2.2rem;
     min-width: 2.2rem;
@@ -347,6 +350,70 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
   .workspace-theme-toggle:focus-visible {
     outline: 2px solid var(--koa-clay);
     outline-offset: 2px;
+  }
+
+  .workspace-theme-toggle .workspace-theme-icon {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    transform-origin: 50% 50%;
+    transition: opacity 170ms ease, transform 240ms cubic-bezier(.2,.75,.25,1);
+    will-change: opacity, transform;
+  }
+
+  .workspace-theme-toggle[data-theme-resolved="light"] [data-workspace-theme-moon] {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .workspace-theme-toggle[data-theme-resolved="light"] [data-workspace-theme-sun] {
+    opacity: 0;
+    transform: rotate(-38deg) scale(.68);
+  }
+
+  .workspace-theme-toggle[data-theme-resolved="dark"] [data-workspace-theme-moon] {
+    opacity: 0;
+    transform: rotate(38deg) scale(.68);
+  }
+
+  .workspace-theme-toggle[data-theme-resolved="dark"] [data-workspace-theme-sun] {
+    opacity: 1;
+    transform: rotate(0deg) scale(1);
+  }
+
+  .workspace-theme-sync-toast {
+    position: fixed;
+    top: calc(4.25rem + env(safe-area-inset-top));
+    right: max(1rem, env(safe-area-inset-right));
+    z-index: 100;
+    pointer-events: none;
+    max-width: min(18rem, calc(100vw - 2rem));
+    border: 1px solid var(--koa-line);
+    border-radius: 9999px;
+    background: color-mix(in srgb, var(--koa-surface) 96%, transparent);
+    color: var(--koa-text-strong);
+    box-shadow: 0 12px 32px rgba(7,30,23,.2);
+    padding: .55rem .8rem;
+    font-size: .68rem;
+    font-weight: 800;
+    line-height: 1.2;
+    opacity: 0;
+    transform: translateY(-.35rem) scale(.98);
+    transition: opacity 160ms ease, transform 180ms ease;
+  }
+
+  .workspace-theme-sync-toast[data-visible="true"] {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .workspace-theme-toggle,
+    .workspace-theme-toggle .workspace-theme-icon,
+    .workspace-theme-sync-toast {
+      transition-duration: 0s !important;
+    }
   }
 
   .workspace-account-toggle {
@@ -1492,9 +1559,20 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       quickToggle.setAttribute('aria-pressed',dark?'true':'false');
       quickToggle.setAttribute('aria-label',label);
       quickToggle.setAttribute('title',label);
-      quickToggle.querySelector('[data-workspace-theme-moon]')?.classList.toggle('hidden',dark);
-      quickToggle.querySelector('[data-workspace-theme-sun]')?.classList.toggle('hidden',!dark);
+      quickToggle.dataset.themeResolved=dark?'dark':'light';
     }
+  }
+
+  let workspaceThemeSyncToastTimer=0;
+  function showWorkspaceThemeSyncToast(message='Synced to your account'){
+    const toast=nav?.querySelector('[data-workspace-theme-sync]');
+    if(!(toast instanceof HTMLElement))return;
+    toast.textContent=message;
+    toast.dataset.visible='true';
+    window.clearTimeout(workspaceThemeSyncToastTimer);
+    workspaceThemeSyncToastTimer=window.setTimeout(()=>{
+      toast.dataset.visible='false';
+    },1900);
   }
 
   function applyThemePreference(preference){
@@ -1511,11 +1589,14 @@ const isAdminWorkspace = Astro.url.pathname.startsWith('/admin/');
       const response=await fetch('/api/account/profile',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
+        keepalive:true,
         body:JSON.stringify({action:'save-appearance-preference',appearancePreference:safe}),
       });
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||'Unable to sync appearance.');
-      if(message)message.textContent=data.message||'Appearance synced to your account.';
+      const successMessage=data.message||'Appearance synced to your account.';
+      if(message)message.textContent=successMessage;
+      showWorkspaceThemeSyncToast('Synced to your account');
     }catch(error){
       if(message)message.textContent=(error instanceof Error?error.message:'Unable to sync appearance.')+' This browser will keep the selected appearance.';
     }

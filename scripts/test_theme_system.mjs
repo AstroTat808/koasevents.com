@@ -76,6 +76,11 @@ for(const needle of [
   "syncThemePreferenceToAccount",
   "save-appearance-preference",
   "/api/account/profile",
+  "data-site-theme-sync",
+  "data-theme-resolved",
+  "site-theme-icon",
+  "showThemeSyncToast",
+  "prefers-reduced-motion: reduce",
 ]){
   if(!siteHeader.includes(needle))failures.push('Public navbar theme toggle/account sync missing '+needle);
 }
@@ -85,6 +90,11 @@ for(const needle of [
   'data-workspace-theme-moon',
   'data-workspace-theme-sun',
   "resolved==='dark'?'light':'dark'",
+  "data-workspace-theme-sync",
+  "data-theme-resolved",
+  "workspace-theme-icon",
+  "showWorkspaceThemeSyncToast",
+  "prefers-reduced-motion: reduce",
 ]){
   if(!workspaceNav.includes(needle))failures.push('Visible workspace theme toggle missing '+needle);
 }
@@ -189,6 +199,7 @@ if(failures.length){
 console.log('PASS | Light / Dark / System bootstrap is wired through BaseLayout and the account menu');
 console.log('PASS | public and authenticated admin navbars expose sun/moon quick toggles');
 console.log('PASS | public navbar theme clicks sync to the authenticated account when authorized');
+console.log('PASS | theme icons animate with a reduced-motion escape hatch and show account-sync confirmation');
 console.log('PASS | admin dark compatibility covers legacy stone/slate palettes and hard-coded status surfaces');
 console.log('PASS | every Astro page inherits the shared theme entry');
 console.log('PASS | raw white CSS surfaces and raw black text are blocked outside the explicit email-preview exception');

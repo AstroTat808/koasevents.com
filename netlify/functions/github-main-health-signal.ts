@@ -628,6 +628,70 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='record-dark-mode-visual-quality'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+
+      const normalizeBrowser=(value:any,browser:'chromium'|'webkit')=>{
+        const routes=Math.max(0,Math.floor(Number(value?.routes||0)));
+        const cases=Math.max(0,Math.floor(Number(value?.cases||0)));
+        const failureCount=Math.max(0,Math.floor(Number(value?.failureCount||0)));
+        const reportMissing=Boolean(value?.reportMissing);
+        return {browser,routes,cases,failureCount,reportMissing};
+      };
+
+      try{
+        const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'').trim();
+        if(!deployId)throw new Error('Production deploy id is unavailable.');
+        const chromium=normalizeBrowser(body?.chromium,'chromium');
+        const webkit=normalizeBrowser(body?.webkit,'webkit');
+        const checkedAt=cleanText(body?.checkedAt,80)||new Date().toISOString();
+        const failed=chromium.reportMissing||webkit.reportMissing||chromium.failureCount>0||webkit.failureCount>0;
+        const visualQuality={
+          checkedAt,
+          status:failed?'failed' as const:'passed' as const,
+          source:'production-visual-qa' as const,
+          runId:cleanText(claims?.run_id||claims?.run_number,80),
+          commit:String(claims.sha||''),
+          deployId,
+          chromium,
+          webkit,
+        };
+        const release=await recordProductionRelease(context,{
+          deployId,
+          commit:String(claims.sha||''),
+          checkedAt,
+          visualQuality,
+        });
+        const recorded=Boolean(release?.deployId===deployId&&release?.visualQuality?.checkedAt===checkedAt);
+        return Response.json({
+          ok:recorded,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId,
+          source:'github-actions-oidc',
+          visualQuality:release?.visualQuality||visualQuality,
+        },{
+          status:recorded?200:503,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to persist Dark Mode visual-quality results.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-dashboard-refresh'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
