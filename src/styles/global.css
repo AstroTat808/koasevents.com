@@ -2229,9 +2229,15 @@ html[data-theme="dark"] .site-brand-meta {
   color: var(--koa-text-muted);
 }
 html[data-theme="dark"] .brand-medallion {
-  border-color: color-mix(in srgb, var(--koa-champagne) 28%, var(--koa-line));
-  background: linear-gradient(145deg, var(--koa-surface-2), var(--koa-surface));
-  box-shadow: inset 0 0 0 4px rgba(255,255,255,.035);
+  /* Keep the public brand mark visually identical across themes. The warm,
+     light medallion preserves the logo artwork's intended contrast while a
+     restrained champagne ring separates it from the dark navbar. */
+  border-color: rgba(197,163,109,.52);
+  background: linear-gradient(145deg, #fffdf8, #efe5d2);
+  box-shadow:
+    inset 0 0 0 4px rgba(255,255,255,.55),
+    0 0 0 1px rgba(197,163,109,.14),
+    0 5px 18px rgba(0,0,0,.18);
 }
 
 @media (max-width: 767px) {
