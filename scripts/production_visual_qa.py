@@ -1525,10 +1525,11 @@ def health_mobile_mode(browser_name,health_payload_path):
      ))
      expected_screenshots=len(visual_quality.get("screenshots") or [])
      card=page.locator("[data-theme-qa-card]")
+     toggle=page.locator("[data-theme-qa-toggle]")
      if expected_routes:
-      card.click()
+      toggle.click()
       page.wait_for_function(
-       "() => document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded') === 'true' && !document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')",
+       "() => document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded') === 'true' && !document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')",
        timeout=5000,
       )
      if expected_screenshots:
@@ -1538,7 +1539,7 @@ def health_mobile_mode(browser_name,health_payload_path):
        timeout=5000,
       )
      theme_detail=page.evaluate("""() => ({
-       expanded:document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded')||'',
+       expanded:document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded')||'',
        detailsHidden:document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')??true,
        routeResultCount:document.querySelector('[data-theme-qa-route-results]')?.children.length||0,
        screenshotCount:document.querySelectorAll('[data-theme-qa-screenshots] img').length,
@@ -1582,9 +1583,9 @@ def health_mobile_mode(browser_name,health_payload_path):
      if failed_detail_checks:
       detail=(detail+"; " if detail else "")+"; ".join(failed_detail_checks)
      if expected_routes:
-      card.click()
+      toggle.click()
       page.wait_for_function(
-       "() => document.querySelector('[data-theme-qa-card]')?.getAttribute('aria-expanded') === 'false'",
+       "() => document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded') === 'false'",
        timeout=5000,
       )
 
