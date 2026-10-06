@@ -47,6 +47,14 @@ for(const needle of [
   '[class*="bg-white/"]',
   '[class*="text-[var(--koa-ink)]/"]',
   'background-color: var(--koa-surface)',
+  '.bg-stone-100',
+  '.text-stone-900',
+  '.bg-slate-100',
+  '.bg-blue-50',
+  '.bg-violet-100',
+  '.bg-yellow-50',
+  '.workspace-alert-row[data-severity="urgent"]',
+  '.staff-availability.available',
 ]){
   if(!globalCss.includes(needle))failures.push('Global dark theme layer missing '+needle);
 }
@@ -65,8 +73,11 @@ for(const needle of [
   "dark ? 'light' : 'dark'",
   "koa:theme-request",
   "koa:theme-change",
+  "syncThemePreferenceToAccount",
+  "save-appearance-preference",
+  "/api/account/profile",
 ]){
-  if(!siteHeader.includes(needle))failures.push('Public navbar theme toggle missing '+needle);
+  if(!siteHeader.includes(needle))failures.push('Public navbar theme toggle/account sync missing '+needle);
 }
 
 for(const needle of [
@@ -177,6 +188,8 @@ if(failures.length){
 }
 console.log('PASS | Light / Dark / System bootstrap is wired through BaseLayout and the account menu');
 console.log('PASS | public and authenticated admin navbars expose sun/moon quick toggles');
+console.log('PASS | public navbar theme clicks sync to the authenticated account when authorized');
+console.log('PASS | admin dark compatibility covers legacy stone/slate palettes and hard-coded status surfaces');
 console.log('PASS | every Astro page inherits the shared theme entry');
 console.log('PASS | raw white CSS surfaces and raw black text are blocked outside the explicit email-preview exception');
 console.log('PASS | theme source audit: '+JSON.stringify({
