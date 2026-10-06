@@ -18,7 +18,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
-import { resolveTenant } from './_shared/tenant';
+import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -426,17 +426,19 @@ export default async (req:Request,context:Context) => {
         },{status:409,headers:{'Cache-Control':'no-store'}});
       }
       try{
-        const tenant=resolveTenant();
-        const records=await readQuickBooksSalesRecords(context);
-        const settings=await getQuickBooksSettings(context);
-        const bulkPreview=await buildBulkAccountingRepairPreview(
-          context,
-          tenant,
-          records,
-          cleanText(settings?.serviceItemId,80),
-          'github-actions:'+cleanText(claims.actor||'system',120),
-          [],
-        );
+        const tenant=await resolveTenantAsync(req,context);
+        const bulkPreview=await runWithTenant(tenant,async()=>{
+          const records=await readQuickBooksSalesRecords(context);
+          const settings=await getQuickBooksSettings(context);
+          return buildBulkAccountingRepairPreview(
+            context,
+            tenant,
+            records,
+            cleanText(settings?.serviceItemId,80),
+            'github-actions:'+cleanText(claims.actor||'system',120),
+            [],
+          );
+        });
         return Response.json({
           ok:true,
           accepted:result.accepted,
