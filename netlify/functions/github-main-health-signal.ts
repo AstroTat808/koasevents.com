@@ -10,6 +10,7 @@ import {
   readProductionReleases,
   recordGithubMainSignal,
   recordProductionRelease,
+  recordProductionVisualThumbnail,
   rollbackFailedProductionRelease,
   runSystemHealth,
   sendHealthTransitionAlerts,
@@ -643,7 +644,35 @@ export default async (req:Request,context:Context) => {
         const cases=Math.max(0,Math.floor(Number(value?.cases||0)));
         const failureCount=Math.max(0,Math.floor(Number(value?.failureCount||0)));
         const reportMissing=Boolean(value?.reportMissing);
-        return {browser,routes,cases,failureCount,reportMissing};
+        const routeResults=(Array.isArray(value?.routeResults)?value.routeResults:[])
+          .map((row:any)=>{
+            const route=cleanText(row?.route,300);
+            const rowFailures=(Array.isArray(row?.failures)?row.failures:[])
+              .map((item:any)=>cleanText(item,500))
+              .filter(Boolean)
+              .slice(0,12);
+            const failedCases=(Array.isArray(row?.failedCases)?row.failedCases:[])
+              .map((item:any)=>({
+                theme:cleanText(item?.theme,120)||'unknown',
+                viewport:cleanText(item?.viewport,80)||'unknown',
+                detail:cleanText(item?.detail,500),
+              }))
+              .filter((item:any)=>item.detail)
+              .slice(0,24);
+            const rowFailureCount=Math.max(0,Math.floor(Number(row?.failureCount||failedCases.length||rowFailures.length||0)));
+            return {
+              route,
+              status:rowFailureCount>0?'failed' as const:'passed' as const,
+              cases:Math.max(0,Math.floor(Number(row?.cases||0))),
+              failureCount:rowFailureCount,
+              failures:rowFailures,
+              failedCases,
+            };
+          })
+          .filter((row:any)=>row.route)
+          .slice(0,250);
+        const failedRouteCount=routeResults.filter((row:any)=>row.status==='failed').length;
+        return {browser,routes,cases,failureCount,failedRouteCount,reportMissing,routeResults};
       };
 
       try{
@@ -653,6 +682,14 @@ export default async (req:Request,context:Context) => {
         const webkit=normalizeBrowser(body?.webkit,'webkit');
         const checkedAt=cleanText(body?.checkedAt,80)||new Date().toISOString();
         const failed=chromium.reportMissing||webkit.reportMissing||chromium.failureCount>0||webkit.failureCount>0;
+        const screenshots=[] as any[];
+        for(const shot of Array.isArray(body?.screenshots)?body.screenshots.slice(0,4):[]){
+          try{
+            screenshots.push(await recordProductionVisualThumbnail(context,deployId,shot));
+          }catch(error){
+            console.warn('Dark Mode QA thumbnail skipped',cleanText(error instanceof Error?error.message:'invalid screenshot',300));
+          }
+        }
         const visualQuality={
           checkedAt,
           status:failed?'failed' as const:'passed' as const,
@@ -662,6 +699,7 @@ export default async (req:Request,context:Context) => {
           deployId,
           chromium,
           webkit,
+          screenshots,
         };
         const release=await recordProductionRelease(context,{
           deployId,

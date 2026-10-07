@@ -73,14 +73,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
 
-        <section data-dark-mode-visual-quality class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
+        <section data-dark-mode-visual-quality data-theme-qa-card class="cursor-pointer rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p class="eyebrow text-[var(--koa-clay)]">Release visual quality</p>
               <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Dark Mode QA</h2>
               <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Latest production Light / Dark / System release audit across Chromium and WebKit. Counts come from the same browser gate that can block deployment.</p>
             </div>
-            <span data-theme-qa-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+            <div class="flex flex-wrap items-center gap-2">
+              <button data-theme-qa-toggle type="button" aria-expanded="false" aria-controls="dark-mode-qa-details" class="rounded-full px-2 py-1 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">View route results ↓</button>
+              <span data-theme-qa-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+            </div>
           </div>
           <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
@@ -106,7 +109,43 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <p data-theme-qa-detail>Waiting for the latest production visual audit.</p>
             <p data-theme-qa-checked class="shrink-0">Last visual audit —</p>
           </div>
+          <div class="mt-5 border-t border-[var(--koa-line)] pt-5">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Latest screenshot evidence</p>
+                <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Light and Dark · iPhone 390×844 and desktop 1440×900.</p>
+              </div>
+              <span data-theme-qa-screenshot-summary class="text-[.58rem] font-bold text-[var(--koa-ink)]/45">Waiting for screenshots</span>
+            </div>
+            <div data-theme-qa-screenshots class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+          </div>
+          <div id="dark-mode-qa-details" data-theme-qa-details class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Route detail</p>
+                <h3 class="display mt-1 text-2xl text-[var(--koa-forest)]">Every tested route</h3>
+              </div>
+              <span data-theme-qa-route-summary class="text-[.58rem] font-bold text-[var(--koa-ink)]/45">—</span>
+            </div>
+            <div data-theme-qa-route-results class="mt-3 grid gap-2"></div>
+          </div>
         </section>
+
+        <dialog id="dark-mode-qa-screenshot-dialog" data-theme-qa-screenshot-dialog class="w-[min(96vw,1500px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/60">
+          <div class="flex max-h-[94vh] flex-col p-4 sm:p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Dark Mode QA screenshot</p>
+                <h3 data-theme-qa-screenshot-dialog-title class="display mt-2 text-3xl text-[var(--koa-forest)]">Production render</h3>
+                <p data-theme-qa-screenshot-dialog-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Protected production QA evidence.</p>
+              </div>
+              <button data-theme-qa-screenshot-dialog-close type="button" class="rounded-full px-3 py-1 text-3xl leading-none text-[var(--koa-ink)]/45 transition hover:bg-[var(--koa-ivory)] hover:text-[var(--koa-forest)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]" aria-label="Close Dark Mode QA screenshot">×</button>
+            </div>
+            <div class="mt-4 min-h-0 overflow-auto rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-2 sm:p-4">
+              <img data-theme-qa-screenshot-dialog-image alt="" class="mx-auto block h-auto max-h-[78vh] max-w-full object-contain shadow-sm" />
+            </div>
+          </div>
+        </dialog>
 
         <section data-critical-integrations-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1121,6 +1160,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const coverageIntegrations=document.querySelector('[data-coverage-integrations]');
     const coveragePercent=document.querySelector('[data-coverage-percent]');
     const coverageDetail=document.querySelector('[data-coverage-detail]');
+    const themeQaCard=document.querySelector('[data-theme-qa-card]');
+    const themeQaToggle=document.querySelector('[data-theme-qa-toggle]');
     const themeQaStatus=document.querySelector('[data-theme-qa-status]');
     const themeQaChromiumRoutes=document.querySelector('[data-theme-qa-chromium-routes]');
     const themeQaChromiumFailures=document.querySelector('[data-theme-qa-chromium-failures]');
@@ -1130,6 +1171,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const themeQaDeploy=document.querySelector('[data-theme-qa-deploy]');
     const themeQaDetail=document.querySelector('[data-theme-qa-detail]');
     const themeQaChecked=document.querySelector('[data-theme-qa-checked]');
+    const themeQaScreenshots=document.querySelector('[data-theme-qa-screenshots]');
+    const themeQaScreenshotSummary=document.querySelector('[data-theme-qa-screenshot-summary]');
+    const themeQaDetails=document.querySelector('[data-theme-qa-details]');
+    const themeQaRouteSummary=document.querySelector('[data-theme-qa-route-summary]');
+    const themeQaRouteResults=document.querySelector('[data-theme-qa-route-results]');
+    const themeQaScreenshotDialog=document.querySelector('[data-theme-qa-screenshot-dialog]');
+    const themeQaScreenshotDialogTitle=document.querySelector('[data-theme-qa-screenshot-dialog-title]');
+    const themeQaScreenshotDialogMeta=document.querySelector('[data-theme-qa-screenshot-dialog-meta]');
+    const themeQaScreenshotDialogImage=document.querySelector('[data-theme-qa-screenshot-dialog-image]');
+    const themeQaScreenshotDialogClose=document.querySelector('[data-theme-qa-screenshot-dialog-close]');
     const criticalIntegrationsStatus=document.querySelector('[data-critical-integrations-status]');
     const criticalIntegrationsCount=document.querySelector('[data-critical-integrations-count]');
     const criticalIntegrationsLastLive=document.querySelector('[data-critical-integrations-last-live]');
@@ -4768,8 +4819,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const webkit=value.webkit||{};
       const browserText=(row)=>{
         const failures=Math.max(0,Number(row?.failureCount||0));
+        const failedRoutes=Math.max(0,Number(row?.failedRouteCount||0));
         const cases=Math.max(0,Number(row?.cases||0));
-        return failures+' failure'+(failures===1?'':'s')+' · '+cases+' cases';
+        return failedRoutes+' failed route'+(failedRoutes===1?'':'s')+' · '+failures+' failed case'+(failures===1?'':'s')+' · '+cases+' cases';
       };
       if(themeQaStatus){
         themeQaStatus.textContent=!available?'Not recorded':failed?'Failed':'Passed';
@@ -4794,9 +4846,137 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       if(themeQaDetail)themeQaDetail.textContent=String(value.detail||(!available
         ? 'No production Dark Mode visual-quality result has been recorded yet.'
         : failed
-          ? 'The latest production theme audit recorded one or more browser failures.'
-          : 'Latest production Light / Dark / System audit passed in Chromium and WebKit.'));
+          ? 'The latest production theme audit recorded one or more browser failures or does not match the current production release.'
+          : 'Latest production Light / Dark / System audit passed in Chromium and WebKit and matches current production.'));
       if(themeQaChecked)themeQaChecked.textContent='Last visual audit '+(value.checkedAt?new Date(value.checkedAt).toLocaleString():'—');
+
+      const screenshots=Array.isArray(value.screenshots)?value.screenshots:[];
+      const shotByKey=new Map(screenshots.map((row)=>[String(row?.key||''),row]));
+      const expectedShots=[
+        ['light-phone','Light · iPhone'],
+        ['dark-phone','Dark · iPhone'],
+        ['light-desktop','Light · desktop'],
+        ['dark-desktop','Dark · desktop'],
+      ];
+      if(themeQaScreenshots){
+        themeQaScreenshots.innerHTML='';
+        expectedShots.forEach(([key,label])=>{
+          const shot=shotByKey.get(key);
+          const card=document.createElement('article');
+          card.className='overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)]';
+          if(shot?.url){
+            const opener=document.createElement('button');
+            opener.type='button';
+            opener.dataset.themeQaScreenshotOpen=String(key);
+            opener.className='group block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--koa-clay)]';
+            opener.setAttribute('aria-label','Open full-resolution Dark Mode QA screenshot · '+label);
+            opener.setAttribute('aria-haspopup','dialog');
+            opener.setAttribute('aria-controls','dark-mode-qa-screenshot-dialog');
+            const image=document.createElement('img');
+            image.src=String(shot.url);
+            image.alt='Dark Mode QA screenshot · '+label+' · '+String(shot.route||'/admin/health/');
+            image.loading='lazy';
+            image.className='aspect-[16/10] w-full object-cover object-top transition group-hover:scale-[1.01]';
+            opener.appendChild(image);
+            opener.addEventListener('click',(event)=>{
+              event.stopPropagation();
+              openThemeQaScreenshot(shot,label);
+            });
+            card.appendChild(opener);
+          }else{
+            const placeholder=document.createElement('div');
+            placeholder.className='flex aspect-[16/10] items-center justify-center px-3 text-center text-xs font-semibold text-[var(--koa-ink)]/45';
+            placeholder.textContent=available?'Screenshot not recorded':'Waiting for production QA';
+            card.appendChild(placeholder);
+          }
+          const caption=document.createElement('div');
+          caption.className='p-3';
+          const title=document.createElement('strong');
+          title.className='block text-xs text-[var(--koa-forest)]';
+          title.textContent=label;
+          const meta=document.createElement('p');
+          meta.className='mt-1 text-[.62rem] leading-4 text-[var(--koa-ink)]/48';
+          meta.textContent=shot
+            ? String(shot.browser||'browser')+' · '+String(shot.width||'—')+'×'+String(shot.height||'—')+' · '+String(shot.route||'')
+            : 'Protected release evidence';
+          caption.append(title,meta);
+          card.appendChild(caption);
+          themeQaScreenshots.appendChild(card);
+        });
+      }
+      if(themeQaScreenshotSummary){
+        themeQaScreenshotSummary.textContent=screenshots.length
+          ? screenshots.length+'/4 screenshots retained'
+          : available?'No screenshots retained':'Waiting for screenshots';
+      }
+
+      const chromiumRows=Array.isArray(chromium.routeResults)?chromium.routeResults:[];
+      const webkitRows=Array.isArray(webkit.routeResults)?webkit.routeResults:[];
+      const routeMap=new Map();
+      for(const row of chromiumRows){
+        const route=String(row?.route||'');
+        if(route)routeMap.set(route,{...(routeMap.get(route)||{}),route,chromium:row});
+      }
+      for(const row of webkitRows){
+        const route=String(row?.route||'');
+        if(route)routeMap.set(route,{...(routeMap.get(route)||{}),route,webkit:row});
+      }
+      const routeRows=[...routeMap.values()].sort((a,b)=>a.route.localeCompare(b.route));
+      if(themeQaRouteSummary){
+        const failedRoutes=routeRows.filter((row)=>row.chromium?.status==='failed'||row.webkit?.status==='failed').length;
+        themeQaRouteSummary.textContent=routeRows.length+' routes · '+failedRoutes+' failed';
+      }
+      if(themeQaRouteResults){
+        themeQaRouteResults.innerHTML='';
+        if(!routeRows.length){
+          const empty=document.createElement('p');
+          empty.className='rounded-xl bg-[var(--koa-ivory)] p-4 text-xs leading-5 text-[var(--koa-ink)]/50';
+          empty.textContent=available?'Route-level evidence was not retained for this release.':'No Dark Mode QA route evidence has been recorded yet.';
+          themeQaRouteResults.appendChild(empty);
+        }else{
+          routeRows.forEach((row)=>{
+            const item=document.createElement('article');
+            const failedRoute=row.chromium?.status==='failed'||row.webkit?.status==='failed';
+            item.className='rounded-xl border p-3 '+(failedRoute?'border-red-200 bg-red-50/60':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+            const top=document.createElement('div');
+            top.className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between';
+            const route=document.createElement('code');
+            route.className='break-all text-[.68rem] font-bold text-[var(--koa-forest)]';
+            route.textContent=row.route;
+            const badges=document.createElement('div');
+            badges.className='flex flex-wrap gap-2 text-[.56rem] font-black uppercase tracking-[.06em]';
+            const badge=(browser,result)=>{
+              const el=document.createElement('span');
+              const state=String(result?.status||'missing');
+              el.className='rounded-full px-2.5 py-1 '+(state==='passed'?'bg-emerald-100 text-emerald-800':state==='failed'?'bg-red-100 text-red-800':'bg-slate-100 text-slate-600');
+              el.textContent=browser+' · '+(state==='passed'?'Passed':state==='failed'?'Failed':'Missing');
+              return el;
+            };
+            badges.append(badge('Chromium',row.chromium),badge('WebKit',row.webkit));
+            top.append(route,badges);
+            item.appendChild(top);
+            const detail=document.createElement('p');
+            detail.className='mt-2 text-[.62rem] leading-5 text-[var(--koa-ink)]/50';
+            detail.textContent='Chromium '+Number(row.chromium?.cases||0)+' cases · WebKit '+Number(row.webkit?.cases||0)+' cases';
+            item.appendChild(detail);
+            const failures=[
+              ...(Array.isArray(row.chromium?.failures)?row.chromium.failures.map((text)=>'Chromium · '+String(text)):[]),
+              ...(Array.isArray(row.webkit?.failures)?row.webkit.failures.map((text)=>'WebKit · '+String(text)):[]),
+            ];
+            if(failures.length){
+              const failureList=document.createElement('div');
+              failureList.className='mt-2 grid gap-1 text-[.62rem] leading-5 text-red-800';
+              failures.slice(0,24).forEach((text)=>{
+                const line=document.createElement('p');
+                line.textContent=text;
+                failureList.appendChild(line);
+              });
+              item.appendChild(failureList);
+            }
+            themeQaRouteResults.appendChild(item);
+          });
+        }
+      }
     }
 
     function render(data){
@@ -6062,6 +6242,50 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     window.addEventListener('focus',()=>{void maybeRetestPendingCredential();});
     document.addEventListener('visibilitychange',()=>{
       if(document.visibilityState==='visible')void maybeRetestPendingCredential();
+    });
+
+    function openThemeQaScreenshot(shot,label){
+      if(!themeQaScreenshotDialog||!themeQaScreenshotDialogImage||!shot?.url)return;
+      const title=String(label||'Production render');
+      themeQaScreenshotDialogTitle.textContent=title;
+      themeQaScreenshotDialogMeta.textContent=[
+        String(shot.browser||'browser'),
+        String(shot.width||'—')+'×'+String(shot.height||'—'),
+        String(shot.route||'/admin/health/'),
+      ].join(' · ');
+      themeQaScreenshotDialogImage.src=String(shot.url);
+      themeQaScreenshotDialogImage.alt='Full-resolution Dark Mode QA screenshot · '+title+' · '+String(shot.route||'/admin/health/');
+      themeQaScreenshotDialog.showModal();
+    }
+
+    function closeThemeQaScreenshot(){
+      if(themeQaScreenshotDialog?.open)themeQaScreenshotDialog.close();
+    }
+
+    function setThemeQaExpanded(expanded){
+      if(!themeQaCard||!themeQaDetails)return;
+      themeQaCard.dataset.expanded=expanded?'true':'false';
+      themeQaDetails.classList.toggle('hidden',!expanded);
+      if(themeQaToggle){
+        themeQaToggle.setAttribute('aria-expanded',expanded?'true':'false');
+        themeQaToggle.textContent=expanded?'Hide route results ↑':'View route results ↓';
+      }
+    }
+
+    themeQaToggle?.addEventListener('click',(event)=>{
+      event.stopPropagation();
+      setThemeQaExpanded(themeQaToggle.getAttribute('aria-expanded')!=='true');
+    });
+    themeQaCard?.addEventListener('click',(event)=>{
+      const target=event.target;
+      if(target instanceof Element&&target.closest('[data-theme-qa-screenshot-open],[data-theme-qa-toggle]'))return;
+      if(target instanceof Node&&themeQaDetails?.contains(target))return;
+      setThemeQaExpanded(themeQaCard.dataset.expanded!=='true');
+    });
+
+    themeQaScreenshotDialogClose?.addEventListener('click',closeThemeQaScreenshot);
+    themeQaScreenshotDialog?.addEventListener('click',(event)=>{
+      if(event.target===themeQaScreenshotDialog)closeThemeQaScreenshot();
     });
 
     async function load(){
