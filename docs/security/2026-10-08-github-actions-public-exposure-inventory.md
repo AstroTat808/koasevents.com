@@ -89,3 +89,23 @@ GitHub's artifact API supplies an exact `expires_at` timestamp for each artifact
 | [36886165249](https://github.com/AstroTat808/koasevents.com/actions/runs/36886165249) | `2026-10-01T15:40:54Z` | ROLLBACK-RAW | `11174832137` `critical-integrations-real-netlify-rollback-36886165249` — expires `2026-12-30T15:40:54Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
 | [36882365759](https://github.com/AstroTat808/koasevents.com/actions/runs/36882365759) | `2026-10-01T15:11:57Z` | ROLLBACK-RAW | `11172925332` `critical-integrations-real-netlify-rollback-36882365759` — expires `2026-12-30T15:11:58Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
 | [36701257813](https://github.com/AstroTat808/koasevents.com/actions/runs/36701257813) | `2026-09-30T10:15:05Z` | ROLLBACK-RAW | `11090291048` `critical-integrations-real-netlify-rollback-36701257813` — expires `2026-12-29T10:15:05Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36700075703](https://github.com/AstroTat808/koasevents.com/actions/runs/36700075703) | `2026-09-30T10:03:46Z` | ROLLBACK-RAW | `11089283335` `critical-integrations-real-netlify-rollback-36700075703` — expires `2026-12-29T10:03:47Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36698487704](https://github.com/AstroTat808/koasevents.com/actions/runs/36698487704) | `2026-09-30T09:48:46Z` | ROLLBACK-RAW | `11088358792` `critical-integrations-real-netlify-rollback-36698487704` — expires `2026-12-29T09:48:46Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36667130606](https://github.com/AstroTat808/koasevents.com/actions/runs/36667130606) | `2026-09-30T04:03:04Z` | ROLLBACK-RAW | `11076690608` `critical-integrations-real-netlify-rollback-36667130606` — expires `2026-12-29T04:03:04Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36652075669](https://github.com/AstroTat808/koasevents.com/actions/runs/36652075669) | `2026-09-30T00:48:15Z` | ROLLBACK-RAW | `11070254751` `critical-integrations-real-netlify-rollback-36652075669` — expires `2026-12-29T00:48:15Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36651709260](https://github.com/AstroTat808/koasevents.com/actions/runs/36651709260) | `2026-09-30T00:43:31Z` | ROLLBACK-RAW | `11070269297` `critical-integrations-real-netlify-rollback-36651709260` — expires `2026-12-29T00:43:31Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+| [36651490159](https://github.com/AstroTat808/koasevents.com/actions/runs/36651490159) | `2026-09-30T00:40:47Z` | ROLLBACK-RAW | `11070513000` `critical-integrations-real-netlify-rollback-36651490159` — expires `2026-12-29T00:40:47Z`<br>`11070234247` `critical-integrations-real-netlify-rollback-36651490159` — expires `2026-12-29T00:44:42Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R5 + R6 |
+
+## Required remediation order
+
+1. Merge the workflow hardening in this branch before allowing another production/scheduled run.
+2. Delete every affected workflow run listed above to remove public job logs. Deleting only the artifacts is insufficient because the raw responses were also printed to logs.
+3. Delete every listed affected artifact immediately, including duplicate artifacts created by reruns.
+4. Preserve a private incident record containing only run IDs, artifact IDs, timestamps, data categories, and remediation actions; do not copy customer payloads into GitHub issues, PRs, or repository files.
+5. Review privacy, contractual, and accounting-data notification obligations for SH-RAW, QBO-DIAG, REPAIR-PREVIEW, and ACCOUNTING-AUDIT exposures.
+6. Review ROLLBACK-RAW/SELF-HEAL-RAW infrastructure identifiers and retire stale identifiers/endpoints where practical. No raw credential value was confirmed by this audit.
+7. After cleanup, rerun both workflows and verify the sensitive-data regression guard passes and newly created artifacts contain only allowlisted summaries/screenshots generated from the sanitized System Health fixture.
+
+## Validation boundary
+
+This inventory covers the production-output paths verified during the 2026-10-08 audit: Production Visual QA raw System Health output, client-specific QBO diagnostics, accounting repair previews, real rollback responses, production accounting-audit responses, and sandbox self-heal responses. It intentionally excludes ordinary source/build artifacts and PR-only fixture artifacts that did not contain production data. The inventory does not reproduce customer PII.
