@@ -34,7 +34,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-3xl bg-white p-6 shadow-sm">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Organizations</p><h2 class="mt-2 text-2xl font-black">Tenant fleet</h2></div>
-            <div class="flex flex-wrap gap-2"><input data-search placeholder="Search organization…" class="min-w-64 rounded-full border border-stone-300 px-4 py-2.5 text-sm"><button data-refresh class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Refresh</button><button data-usage-button class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Usage metrics</button><a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em]">Export audit CSV</a><button data-create-sandbox class="rounded-full bg-stone-900 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Create safe sandbox tenant</button></div>
+            <div class="flex flex-wrap gap-2"><input data-search placeholder="Search organization…" class="min-w-64 rounded-full border border-stone-300 px-4 py-2.5 text-sm"><button data-refresh class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-stone-900">Refresh</button><button data-usage-button class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-stone-900">Usage metrics</button><a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-stone-900">Export audit CSV</a><button data-create-sandbox class="rounded-full bg-stone-900 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Create safe sandbox tenant</button></div>
           </div>
           <p data-message class="mt-3 text-sm text-stone-600"></p>
           <div data-organizations class="mt-5 grid gap-3"></div>
@@ -43,7 +43,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section data-usage class="hidden rounded-3xl bg-white p-6 shadow-sm">
           <div class="flex items-end justify-between gap-3">
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Platform usage</p><h2 class="mt-2 text-2xl font-black">Tenant footprint</h2></div>
-            <button data-close-usage class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Close</button>
+            <button data-close-usage class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-stone-900">Close</button>
           </div>
           <div data-usage-summary class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-6"></div>
           <div data-usage-rows class="mt-5 grid gap-2"></div>
@@ -52,7 +52,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section data-detail class="hidden rounded-3xl bg-white p-6 shadow-sm">
           <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Tenant detail</p><h2 data-detail-title class="mt-2 text-2xl font-black"></h2></div>
-            <button data-close-detail class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Close</button>
+            <button data-close-detail class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-stone-900">Close</button>
           </div>
           <p data-detail-message class="mt-3 text-sm text-stone-600"></p>
           <div data-detail-grid class="mt-5 grid gap-4 xl:grid-cols-2"></div>
@@ -61,7 +61,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         <section class="rounded-3xl bg-white p-6 shadow-sm">
           <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div><p class="text-xs font-black uppercase tracking-[.14em] text-stone-500">Support audit</p><h2 class="mt-2 text-2xl font-black">Recent read-only support sessions</h2></div>
-            <a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em]">Download full audit</a>
+            <a href="/api/admin/platform?view=support-audit.csv" class="rounded-full border border-stone-300 px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-stone-900">Download full audit</a>
           </div>
           <div data-support-history class="mt-5 grid gap-2"></div>
         </section>
