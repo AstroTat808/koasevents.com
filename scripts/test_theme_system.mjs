@@ -28,6 +28,7 @@ const baseLayout=await readFile(path.join(SRC,'layouts','BaseLayout.astro'),'utf
 const globalCss=await readFile(path.join(SRC,'styles','global.css'),'utf8');
 const workspaceNav=await readFile(path.join(SRC,'components','StaffUtilityNav.astro'),'utf8');
 const siteHeader=await readFile(path.join(SRC,'components','Header.astro'),'utf8');
+const platformAdmin=await readFile(path.join(ROOT,'src','pages','admin','platform','index.astro'),'utf8');
 
 for(const needle of [
   "koa-theme-preference",
@@ -39,6 +40,15 @@ for(const needle of [
 ]){
   if(!baseLayout.includes(needle))failures.push('BaseLayout theme bootstrap missing '+needle);
 }
+
+for(const needle of [
+  'data-refresh class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-stone-900"',
+  'data-usage-button class="rounded-full border border-stone-300 px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-stone-900"',
+  'Download full audit</a>',
+]){
+  if(!platformAdmin.includes(needle))failures.push('Platform admin Dark Mode contrast hardening missing '+needle);
+}
+
 for(const needle of [
   '--koa-canvas:',
   '--koa-surface:',
