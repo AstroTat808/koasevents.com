@@ -172,6 +172,8 @@ assert(
     && systemHealth.includes('recordProductionVisualThumbnail')
     && systemHealth.includes('darkModeQaHealthCheck')
     && systemHealth.includes("id:'dark-mode-qa'")
+    && systemHealth.includes("id==='dark-mode-qa'")
+    && systemHealth.includes('status:ok?200:mismatch?409:422')
     && systemHealth.includes("'netlify-github-sync','dark-mode-qa'")
     && systemHealth.includes('visualQuality?:ProductionVisualQuality|null')
     && systemHealth.includes('visualQuality:input?.visualQuality||previous?.visualQuality||null')
