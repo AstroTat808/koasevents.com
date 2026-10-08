@@ -64,3 +64,10 @@ GitHub's artifact API supplies an exact `expires_at` timestamp for each artifact
 | [36973093841](https://github.com/AstroTat808/koasevents.com/actions/runs/36973093841) | `2026-10-02T06:20:41Z` | SH-RAW | `11212660920` `koa-system-health-mobile-36973093841` — expires `2026-11-01T06:25:42Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R4 + R6 |
 | [36972444710](https://github.com/AstroTat808/koasevents.com/actions/runs/36972444710) | `2026-10-02T06:12:26Z` | SH-RAW | `11211489577` `koa-system-health-mobile-36972444710` — expires `2026-11-01T06:21:26Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R4 + R6 |
 | [36970137725](https://github.com/AstroTat808/koasevents.com/actions/runs/36970137725) | `2026-10-02T05:42:23Z` | SH-RAW | `11211227390` `koa-system-health-mobile-36970137725` — expires `2026-11-01T05:46:39Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R4 + R6 |
+| [36921258705](https://github.com/AstroTat808/koasevents.com/actions/runs/36921258705) | `2026-10-01T20:23:51Z` | SH-RAW | `11192451055` `koa-system-health-mobile-36921258705` — expires `2026-10-31T20:27:43Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R4 + R6 |
+| [36886165049](https://github.com/AstroTat808/koasevents.com/actions/runs/36886165049) | `2026-10-01T15:40:54Z` | SH-RAW | `11175077925` `koa-system-health-mobile-36886165049` — expires `2026-10-31T15:46:50Z` | API does not expose exact expiry — delete run now | R1 + R2 + R3 + R4 + R6 |
+
+## Critical Integrations rollback-drill affected runs
+
+| Run | Exposure date (UTC) | Exposed data categories | Affected artifacts and exact artifact expiry | Log retention | Required remediation |
+| --- | --- | --- | --- | --- | --- |
