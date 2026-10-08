@@ -275,7 +275,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const routeCounts=c&&w?c.routes+' + '+w.routes+' routes · '+c.cases+' / '+w.cases+' cases':'No retained route/case totals';
       four.append(dataTile('Browser failures',counts,routeCounts));
       const deployStatus=row.deployStatus==='live'?'Live production':row.deployStatus==='awaiting-production'?'Publishing':row.deployStatus==='superseded'?'Superseded':'Not in production';
-      four.append(dataTile('Deployment',deployStatus,row.mergeSha?'Merge '+short(row.mergeSha):'Not merged'));
+      const healthState=row.healthStatus==='healthy'?'Health 0 failed':row.healthStatus==='unhealthy'?'Unhealthy · '+row.healthFailed+' failed':row.healthStatus==='stale'?'Health evidence stale':row.healthStatus==='pending-deploy'?'Health after deploy':row.healthStatus==='historical'?'Historical release':'Not yet deployed';
+      four.append(dataTile('Deployment / Health',deployStatus,healthState+(row.mergeSha?' · Merge '+short(row.mergeSha):'')));
       article.append(four);
 
       const bottom=el('div','release-pr-footer');
@@ -293,6 +294,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         dataTile('Preview SHA',preview.sha||'Unavailable',preview.exact?'Exact match':'Not verified'),
         dataTile('Chromium',c?c.routes+' routes · '+c.cases+' cases · '+c.failures+' failures':'Unknown',c?'Phone '+c.phone+' · Desktop '+c.desktop:'No attestation'),
         dataTile('WebKit',w?w.routes+' routes · '+w.cases+' cases · '+w.failures+' failures':'Unknown',w?'Phone '+w.phone+' · Desktop '+w.desktop:'No attestation'),
+        dataTile('Release health',healthState,row.healthCheckedAt?'Signed '+since(row.healthCheckedAt)+' · '+row.healthPassed+' pass / '+row.healthFailed+' fail':'No current signed health attestation for this release'),
       );
       body.append(evidence);
       if(row.certError)body.append(el('p','release-evidence-error','Evidence limitation: '+row.certError));
