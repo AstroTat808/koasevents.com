@@ -19,18 +19,27 @@ const forbiddenLiterals = [
 const forbiddenPatterns = [
   { label: 'hard-coded QuickBooks customer record ID', pattern: /\bQBO-CUST-\d+\b/g },
   {
-    label: 'raw sensitive response printed with cat',
-    pattern: /\bcat\s+[^\n]*(?:system-health|accounting|verification_file|recovery_file|audit_file|report_file|raw_[A-Za-z0-9_]*file)/gi,
+    label: 'raw response body printed with cat',
+    pattern: /\bcat\s+["']?\$(?:raw_file|verification_file|recovery_file|audit_file|report_file|dark_mode_response)\b/gi,
   },
   {
     label: 'raw authenticated response echoed',
-    pattern: /\becho\s+["']?\$(?:verification|recovery|response|audit|report|raw_[A-Za-z0-9_]*)\b/gi,
+    pattern: /\becho\s+["']?\$(?:verification|recovery|response|audit|report|raw_file|verification_file|recovery_file|audit_file|report_file|dark_mode_response)\b/gi,
   },
   {
     label: 'repair preview rows emitted to CI',
     pattern: /['"]rows['"]\s*:\s*preview\.get\(['"]rows['"]\)/g,
   },
 ];
+
+const rawFileVariables = new Set([
+  'raw_file',
+  'verification_file',
+  'recovery_file',
+  'audit_file',
+  'report_file',
+  'dark_mode_response',
+]);
 
 const violations = [];
 
@@ -52,15 +61,37 @@ for (const workflow of workflows) {
   }
 
   for (let index = 0; index < lines.length; index += 1) {
+    const assignment = lines[index].match(/^\s*([A-Za-z_][A-Za-z0-9_]*)=["']([^"']+)["']\s*$/);
+    if (assignment && rawFileVariables.has(assignment[1]) && !assignment[2].startsWith('/tmp/')) {
+      violations.push(
+        `${workflow}:${index + 1}: raw response variable ${assignment[1]} must point into /tmp, found ${assignment[2]}`,
+      );
+    }
+
     if (!lines[index].includes('github-main-signal')) continue;
-    const start = Math.max(0, index - 14);
-    const window = lines.slice(start, index + 1);
-    const outputLine = [...window].reverse().find((line) => /-o\s+/.test(line));
-    if (!outputLine) continue;
-    const match = outputLine.match(/-o\s+["']?([^"'\\\s]+)/);
-    if (!match) continue;
-    const destination = match[1];
-    if (!destination.startsWith('/tmp/')) {
+    const start = Math.max(0, index - 16);
+    const windowText = lines.slice(start, index + 1).join('\n');
+    const outputMatch = windowText.match(/-o\s+(?:"([^"]+)"|'([^']+)'|([^\s\\]+))/);
+    if (!outputMatch) {
+      violations.push(
+        `${workflow}:${index + 1}: authenticated github-main-signal call must capture its response body instead of writing it to stdout`,
+      );
+      continue;
+    }
+    const destination = outputMatch[1] || outputMatch[2] || outputMatch[3] || '';
+    if (destination.startsWith('visual-results/')) {
+      violations.push(
+        `${workflow}:${index + 1}: authenticated github-main-signal response cannot be written directly to an artifact path`,
+      );
+    }
+    if (destination.startsWith('$')) {
+      const variableName=destination.slice(1).replace(/[{}]/g,'');
+      if (!rawFileVariables.has(variableName)) {
+        violations.push(
+          `${workflow}:${index + 1}: authenticated response uses unapproved output variable ${destination}`,
+        );
+      }
+    } else if (!destination.startsWith('/tmp/')) {
       violations.push(
         `${workflow}:${index + 1}: authenticated github-main-signal response must be written only to /tmp, found ${destination}`,
       );
@@ -74,4 +105,4 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log('Sensitive CI data guard passed: production responses are temporary and public artifacts are allowlisted summaries only.');
+console.log('Sensitive CI data guard passed: authenticated production responses stay in /tmp and uploaded artifacts exclude raw client/accounting/System Health payloads.');
