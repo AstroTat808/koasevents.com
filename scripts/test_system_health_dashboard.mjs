@@ -223,9 +223,11 @@ assert(
     && visualWorkflow.includes('--connect-timeout 15')
     && visualWorkflow.includes('--max-time 55')
     && visualWorkflow.includes('Signed System Health refresh attempt')
+    && visualWorkflow.includes("python -c 'import json,sys; from pathlib import Path;")
+    && !visualWorkflow.includes("&& python - <<'PY'")
     && visualWorkflow.includes('--mode health-mobile --browser chromium')
     && visualWorkflow.includes('--mode health-mobile --browser webkit'),
-  'Production visual QA must retry transient signed System Health refresh timeouts and execute the mobile screenshot gate in both browser engines.',
+  'Production visual QA must retry transient signed System Health refresh timeouts without a shell-heredoc syntax trap and execute the mobile screenshot gate in both browser engines.',
 );
 
 assert(
