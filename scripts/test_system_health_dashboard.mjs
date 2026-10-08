@@ -221,15 +221,29 @@ assert(
 assert(
   visualWorkflow.includes('system-health-mobile-audit:')
     && visualWorkflow.includes('{"action":"run-dashboard-refresh"}')
+    && visualWorkflow.includes('for attempt in 1 2 3; do')
+    && visualWorkflow.includes('--connect-timeout 15')
+    && visualWorkflow.includes('--max-time 55')
+    && visualWorkflow.includes('Signed System Health refresh attempt')
+    && visualWorkflow.includes("python -c 'import json,sys; from pathlib import Path;")
+    && !visualWorkflow.includes("&& python - <<'PY'")
     && visualWorkflow.includes('--mode health-mobile --browser chromium')
     && visualWorkflow.includes('--mode health-mobile --browser webkit'),
-  'Production visual QA must execute the signed System Health refresh and mobile screenshot gate in both browser engines.',
+  'Production visual QA must retry transient signed System Health refresh timeouts without a shell-heredoc syntax trap and execute the mobile screenshot gate in both browser engines.',
 );
 
 assert(
   visualWorkflow.includes("if: github.event_name != 'pull_request' && always()")
     && visualWorkflow.includes('needs: [deployed-smoke, production-theme-audit]'),
   'Live System Health diagnostics must still run after an unrelated deployed-smoke failure so production health values and responsive evidence are captured.',
+);
+
+assert(
+  visualWorkflow.includes('production-theme-audit:')
+    && visualWorkflow.includes("name: Live Light / Dark / System audit")
+    && visualWorkflow.includes("if: github.event_name != 'pull_request'")
+    && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health'),
+  'Every non-PR production QA run, including scheduled runs, must refresh the persisted Dark Mode QA evidence in System Health.',
 );
 
 assert(
