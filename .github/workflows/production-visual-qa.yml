@@ -1,40 +1,13 @@
 name: Production visual QA
 
+# Full release evidence is required on every PR, including docs/config-only PRs.
+# This workflow also performs the authenticated System Health audit on every
+# production main push, with no path-based blind spots.
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/production-visual-qa.yml'
-      - 'scripts/production_visual_qa.py'
-      - 'scripts/theme_visual_qa.py'
-      - 'scripts/security_logic_qa.mjs'
-      - 'scripts/build_safety_check.mjs'
-      - 'scripts/test_system_health_dashboard.mjs'
-      - 'scripts/verify_netlify_release_gate.mjs'
-      - 'src/**'
-      - 'netlify/**'
-      - 'public/**'
-      - 'astro.config.mjs'
-      - 'netlify.toml'
-      - 'package.json'
-      - 'package-lock.json'
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/production-visual-qa.yml'
-      - 'scripts/production_visual_qa.py'
-      - 'scripts/theme_visual_qa.py'
-      - 'scripts/security_logic_qa.mjs'
-      - 'scripts/build_safety_check.mjs'
-      - 'scripts/test_system_health_dashboard.mjs'
-      - 'scripts/verify_netlify_release_gate.mjs'
-      - 'src/**'
-      - 'netlify/**'
-      - 'public/**'
-      - 'astro.config.mjs'
-      - 'netlify.toml'
-      - 'package.json'
-      - 'package-lock.json'
   schedule:
     - cron: '23 15 * * *'
   workflow_dispatch:
