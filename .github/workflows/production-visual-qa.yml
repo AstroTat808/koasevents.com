@@ -243,6 +243,77 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  pr-mobile-copy-audit:
+    name: PR mobile copy audit · ${{ matrix.browser }}
+    if: github.event_name == 'pull_request'
+    needs: source-build-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, webkit]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build local preview
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install browser
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps ${{ matrix.browser }}
+      - name: Serve built pages
+        run: |
+          python -m http.server 4173 --directory dist > /tmp/koa-preview.log 2>&1 &
+          echo $! > /tmp/koa-preview.pid
+          python - <<'PY'
+          import time, urllib.request
+          for _ in range(30):
+              try:
+                  if urllib.request.urlopen('http://127.0.0.1:4173/',timeout=2).status==200: break
+              except Exception: time.sleep(1)
+          else: raise SystemExit('Local Astro preview did not become ready.')
+          PY
+      - name: Verify density advisories are gone
+        env:
+          PRODUCTION_BASE_URL: http://127.0.0.1:4173
+          VISUAL_RESULTS: visual-results
+          VISUAL_ROUTE_FILTER: /,/weddings/,/signature-wedding/,/venue/,/venue/packages/,/private-events/,/corporate-events/
+        run: |
+          # The local static server cannot emulate Netlify's /_image transformer,
+          # so this focused PR gate intentionally evaluates the density signal only.
+          python scripts/production_visual_qa.py --mode browser --browser ${{ matrix.browser }} || true
+          python - <<'PY'
+          import json, pathlib
+          browser='${{ matrix.browser }}'
+          report=json.loads(pathlib.Path('visual-results/browser-'+browser+'/report.json').read_text())
+          if report.get('cases') != 35:
+              raise SystemExit('Expected 35 route/viewport browser cases, got '+str(report.get('cases')))
+          navigation=[item for item in report.get('critical',[]) if item.get('finding',{}).get('code')=='navigation-failed']
+          if navigation:
+              raise SystemExit('Browser navigation failed: '+json.dumps(navigation,indent=2))
+          density=[item for item in report.get('topDesignRecommendations',[]) if item.get('finding',{}).get('code')=='mobile-copy-density']
+          if density:
+              raise SystemExit('mobile-copy-density remains: '+json.dumps(density,indent=2))
+          print('Verified 35 cases with zero mobile-copy-density advisories in '+browser+'.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-pr-mobile-copy-${{ matrix.browser }}-${{ github.run_id }}
+          path: visual-results/browser-${{ matrix.browser }}
+          retention-days: 14
+          if-no-files-found: error
+
   deployed-smoke:
     name: Deploy route + asset smoke
     if: github.event_name != 'pull_request'
