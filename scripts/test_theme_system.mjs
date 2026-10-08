@@ -54,6 +54,9 @@ for(const needle of [
   '--koa-surface:',
   '--koa-text:',
   'html[data-theme="dark"]',
+  'html[data-theme="dark"] .brand-medallion',
+  'background: linear-gradient(145deg, #fffdf8, #efe5d2)',
+  'border-color: rgba(197,163,109,.52)',
   '[class*="bg-white/"]',
   '[class*="text-[var(--koa-ink)]/"]',
   'background-color: var(--koa-surface)',
@@ -67,10 +70,14 @@ for(const needle of [
   '.staff-availability.available',
   'Safari/WebKit dark-mode inherited-color hardening',
   'main label[class*="font-semibold"]',
+  'main button[class*="border-stone-300"]:not([class*="bg-"])',
   '.display.mt-2.text-4xl',
   'main .link-arrow',
 ]){
   if(!globalCss.includes(needle))failures.push('Global dark theme layer missing '+needle);
+}
+if(globalCss.includes('border-stone-300"]:not([class*="bg-"]):not([class*="text-"])')){
+  failures.push('WebKit neutral-control hardening must not mistake text-size utilities such as text-xs for explicit text colors.');
 }
 for(const preference of ['light','dark','system']){
   if(!workspaceNav.includes('data-theme-preference="'+preference+'"')){

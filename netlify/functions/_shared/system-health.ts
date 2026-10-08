@@ -609,6 +609,11 @@ export function classifyHealthIssue(row: HealthCheck): HealthIssueType | null {
   ) return 'Permission Problem';
 
   if(
+    id==='dark-mode-qa'
+    && (row?.severity==='red'||!row?.ok)
+  ) return 'Service Failure';
+
+  if(
     status===408
     || status===429
     || status>=500
@@ -3177,7 +3182,8 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
     kind:'api',
     path:'Light / Dark / System · Chromium + WebKit',
     ok,
-    status:ok?200:mismatch?409:503,
+    // A failed visual regression is an application QA assertion failure, not an upstream outage.
+    status:ok?200:mismatch?409:422,
     ms:Date.now()-started,
     severity:ok?'green':'red',
     detail:clean(detail,1400),
