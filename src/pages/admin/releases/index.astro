@@ -1,0 +1,429 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Koa’s Events · Release Command Center" description="Protected executive release certification, visual QA, deploy preview, and production health oversight." canonical="https://koasevents.com/admin/releases/">
+  <main data-release-dashboard class="min-h-screen bg-[var(--koa-sand)] pb-20 pt-7 sm:pt-10">
+    <div class="container-shell max-w-[92rem]">
+      <section class="release-hero overflow-hidden rounded-[1.7rem] px-6 py-8 sm:px-9 sm:py-10 lg:px-11">
+        <div class="release-hero-glow" aria-hidden="true"></div>
+        <div class="relative z-10 flex flex-col justify-between gap-9 lg:flex-row lg:items-end">
+          <div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="release-mark">KOA / OPS</span>
+              <span class="release-eyebrow">Engineering intelligence</span>
+            </div>
+            <h1 class="release-headline mt-5">Release <span>Command Center</span></h1>
+            <p class="mt-4 max-w-[48rem] text-sm leading-7 text-white/70 sm:text-base">One operational picture of pull requests, exact-head certification, browser evidence, Netlify deployment, and live System Health.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <a href="/admin/health/" class="release-hero-link">System Health <span aria-hidden="true">↗</span></a>
+            <button data-dashboard-refresh type="button" class="release-hero-action">↻ <span>Refresh evidence</span></button>
+          </div>
+        </div>
+        <div class="relative z-10 mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-white/15 pt-5">
+          <span class="release-hero-meta">REPOSITORY · <strong>AstroTat808/koasevents.com</strong></span>
+          <span class="release-hero-meta">SCOPE · <strong>Current page of pull requests</strong></span>
+          <span data-snapshot-at class="release-hero-meta" aria-live="polite">Evidence timestamp · Loading</span>
+        </div>
+      </section>
+
+      <div data-release-denied class="mt-7 hidden rounded-3xl border border-[var(--koa-line)] bg-[var(--koa-surface)] p-8">
+        <p class="eyebrow text-[var(--koa-clay)]">Protected workspace</p>
+        <h2 class="display mt-3 text-3xl text-[var(--koa-forest)]">System Health access is required.</h2>
+        <p class="mt-3 text-sm text-[var(--koa-text)]/65">Sign in with an administrator or a role granted <code>health.view</code> to inspect release certification.</p>
+        <a href="/admin/" class="mt-5 inline-block text-sm font-bold text-[var(--koa-clay)]">Return to Admin Home →</a>
+      </div>
+
+      <div data-release-error class="mt-7 hidden rounded-2xl border border-rose-400/40 bg-[var(--koa-surface)] p-5" role="alert">
+        <strong class="text-sm text-rose-600">Release evidence unavailable</strong>
+        <p data-error-detail class="mt-2 text-sm leading-6 text-[var(--koa-text)]/70"></p>
+        <button data-error-retry type="button" class="mt-4 text-xs font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Retry evidence fetch →</button>
+      </div>
+
+      <div data-release-loading class="mt-7 rounded-3xl border border-[var(--koa-line)] bg-[var(--koa-surface)] p-8 text-sm text-[var(--koa-text)]/60" role="status">
+        Reading GitHub, Netlify, and authenticated System Health evidence…
+      </div>
+
+      <div data-release-app class="mt-7 hidden grid gap-6">
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Current page release scorecard">
+          <article class="release-kpi">
+            <p class="release-kpi-label">Pull requests shown</p>
+            <p data-kpi-shown class="release-kpi-value">—</p>
+            <p class="release-kpi-note">Paginated, newest activity first</p>
+          </article>
+          <article class="release-kpi">
+            <p class="release-kpi-label">Certified candidates</p>
+            <p data-kpi-certified class="release-kpi-value release-kpi-good">—</p>
+            <p class="release-kpi-note">All exact-head release gates met</p>
+          </article>
+          <article class="release-kpi">
+            <p class="release-kpi-label">Blocked releases</p>
+            <p data-kpi-blocked class="release-kpi-value">—</p>
+            <p class="release-kpi-note">Known failing browser or CI gate</p>
+          </article>
+          <article class="release-kpi release-kpi-accent">
+            <p class="release-kpi-label">Production alignment</p>
+            <p data-kpi-production class="mt-4 text-xl font-semibold tracking-tight">—</p>
+            <p data-kpi-production-detail class="release-kpi-note">Latest published production state</p>
+          </article>
+        </section>
+
+        <section class="release-panel" aria-labelledby="release-production-title">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Deployment control plane</p>
+              <h2 id="release-production-title" class="display mt-2 text-3xl text-[var(--koa-forest)]">Main → Production</h2>
+              <p class="mt-2 text-sm text-[var(--koa-text)]/60">GitHub HEAD, live Netlify release, signed health attestation, and native branch protection are evaluated independently.</p>
+            </div>
+            <span data-production-pill class="release-status-pill" role="status">Awaiting evidence</span>
+          </div>
+
+          <div class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div class="release-detail-tile">
+              <span class="release-tile-label">Current GitHub main</span>
+              <code data-current-main class="release-mono">—</code>
+              <span class="release-tile-foot">Authoritative branch HEAD</span>
+            </div>
+            <div class="release-detail-tile">
+              <span class="release-tile-label">Published Netlify commit</span>
+              <code data-current-netlify class="release-mono">—</code>
+              <span data-live-deploy class="release-tile-foot">Deploy —</span>
+            </div>
+            <div class="release-detail-tile">
+              <span class="release-tile-label">Signed System Health</span>
+              <strong data-current-health class="mt-2 block text-lg font-semibold text-[var(--koa-forest)]">—</strong>
+              <span data-health-checked class="release-tile-foot">Checked —</span>
+            </div>
+            <div class="release-detail-tile">
+              <span class="release-tile-label">Native GitHub protection</span>
+              <strong data-current-protection class="mt-2 block text-lg font-semibold text-[var(--koa-forest)]">—</strong>
+              <a data-ruleset-link href="https://github.com/AstroTat808/koasevents.com/rules/23722583" target="_blank" rel="noopener noreferrer" class="release-tile-foot underline underline-offset-2">Open repository ruleset ↗</a>
+            </div>
+          </div>
+          <p data-production-warning class="mt-4 hidden text-sm leading-6 text-amber-700" role="status"></p>
+        </section>
+
+        <section class="release-panel" aria-labelledby="release-history-title">
+          <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Release pipeline</p>
+              <h2 id="release-history-title" class="display mt-2 text-3xl text-[var(--koa-forest)]">Pull request fleet</h2>
+              <p class="mt-2 text-sm text-[var(--koa-text)]/60">A missing certificate or expired artifact remains unverified. Use the page controls to browse historical requests.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-3">
+              <span data-page-label class="release-pages-label">Page 1</span>
+              <button data-prev-page class="release-page-button" type="button" aria-label="Previous page">← Previous</button>
+              <button data-next-page class="release-page-button" type="button" aria-label="Next page">Next →</button>
+            </div>
+          </div>
+
+          <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <label class="min-w-0 flex-1">
+              <span class="sr-only">Search pull requests on this page</span>
+              <input data-release-search type="search" placeholder="Search PR number, title, branch or commit…" autocomplete="off" class="w-full rounded-xl border border-[var(--koa-line)] bg-[var(--koa-surface)] px-4 py-3 text-sm text-[var(--koa-forest)] outline-offset-2 focus:outline-[var(--koa-clay)]"/>
+            </label>
+            <label class="min-w-[11rem]">
+              <span class="sr-only">Filter pull request status</span>
+              <select data-release-filter class="w-full rounded-xl border border-[var(--koa-line)] bg-[var(--koa-surface)] px-4 py-3 text-sm text-[var(--koa-forest)]">
+                <option value="all">All statuses</option>
+                <option value="open">Open</option>
+                <option value="merged">Merged</option>
+                <option value="ready">Release ready</option>
+                <option value="blocked">Blocked</option>
+                <option value="pending">Pending evidence</option>
+              </select>
+            </label>
+          </div>
+
+          <div data-release-results class="mt-5 grid gap-4" aria-live="polite"></div>
+          <div data-release-empty class="mt-6 hidden rounded-xl border border-dashed border-[var(--koa-line)] p-8 text-center text-sm text-[var(--koa-text)]/60">No pull requests match this page’s filters.</div>
+
+          <div class="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--koa-line)] pt-4">
+            <span data-row-count class="text-xs text-[var(--koa-text)]/50">No results</span>
+            <a href="https://github.com/AstroTat808/koasevents.com/pulls?q=is%3Apr" target="_blank" rel="noopener noreferrer" class="text-xs font-bold text-[var(--koa-clay)] underline underline-offset-4">All GitHub pull requests ↗</a>
+          </div>
+        </section>
+
+        <section data-release-warnings class="release-panel hidden" aria-labelledby="release-warning-title">
+          <p class="eyebrow text-[var(--koa-clay)]">Evidence quality</p>
+          <h2 id="release-warning-title" class="display mt-2 text-2xl text-[var(--koa-forest)]">Retrieval warnings</h2>
+          <ul data-warning-items class="mt-3 grid gap-2 text-sm text-[var(--koa-text)]/65"></ul>
+        </section>
+      </div>
+    </div>
+  </main>
+  <script>
+    import { getAdminSession } from '../../../lib/admin-session';
+
+    const q=(selector)=>document.querySelector(selector);
+    const root=q('[data-release-dashboard]');
+    const app=q('[data-release-app]');
+    const loading=q('[data-release-loading]');
+    const errorBox=q('[data-release-error]');
+    const denied=q('[data-release-denied]');
+    const search=q('[data-release-search]');
+    const filter=q('[data-release-filter]');
+    const results=q('[data-release-results]');
+    const empty=q('[data-release-empty]');
+    const warningsBox=q('[data-release-warnings]');
+    const prev=q('[data-prev-page]');
+    const next=q('[data-next-page]');
+    let page=1,hasMore=false,lastData=null,busy=false;
+
+    const short=(value)=>String(value||'').slice(0,12)||'Unavailable';
+    const el=(tag,classes='',label='')=>{
+      const node=document.createElement(tag);
+      if(classes)node.className=classes;
+      if(label!==undefined&&label!==null)node.textContent=String(label);
+      return node;
+    };
+    function put(selector,value){const node=q(selector);if(node)node.textContent=String(value??'—');}
+    function since(iso){
+      if(!iso)return 'No timestamp';
+      const d=new Date(iso);
+      return Number.isNaN(d.getTime())?'No timestamp':d.toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+    }
+    function safeUrl(value,host){
+      try{
+        const url=new URL(String(value||''),window.location.origin);
+        if(url.protocol!=='https:'||!(url.hostname===host||url.hostname.endsWith('.'+host)))return '';
+        return url.href;
+      }catch{return '';}
+    }
+    function pill(label,status){
+      const x=el('span','release-status-pill',label);
+      x.dataset.state=String(status||'unknown');
+      return x;
+    }
+    function dataTile(title,value,subtitle=''){
+      const tile=el('div','release-data-point');
+      tile.append(el('span','release-data-point-label',title),el('strong','release-data-point-value',value));
+      if(subtitle)tile.append(el('small','release-data-point-caption',subtitle));
+      return tile;
+    }
+    function external(label,url,host){
+      const safe=safeUrl(url,host);
+      if(!safe)return el('span','release-external-disabled',label+' unavailable');
+      const link=el('a','release-external',label+' ↗');
+      link.href=safe;link.target='_blank';link.rel='noopener noreferrer';
+      return link;
+    }
+    function renderProduction(data){
+      const p=data.production||{};
+      put('[data-current-main]',short(data.mainSha));
+      put('[data-current-netlify]',short(p.sha));
+      put('[data-live-deploy]','Deploy '+short(p.deployId)+' · '+since(p.publishedAt));
+      const synced=p.status==='synced';
+      put('[data-kpi-production]',p.status==='synced'?'Synced':p.status==='behind'?'Deploy pending':'Unverified');
+      put('[data-kpi-production-detail]',synced?'Netlify matches current main':'No exact published main match');
+      const status=q('[data-production-pill]');
+      status.textContent=synced?'Production · exact SHA':'Production · not synchronized';
+      status.dataset.state=synced?'passed':'pending';
+      const h=p.health||{};
+      const healthLabel=h.status==='healthy'?'Healthy · '+h.passed+' passed':h.status==='unhealthy'?'Unhealthy · '+h.failed+' failed':h.status==='stale'?'Stale health evidence':'Health unavailable';
+      put('[data-current-health]',healthLabel);
+      put('[data-health-checked]',since(h.checkedAt));
+      const protectedMain=Boolean(data.protection?.nativeRequired&&data.protection?.strict);
+      put('[data-current-protection]',protectedMain?'Strict + required':'Setup needed');
+      if(q('[data-current-protection]'))q('[data-current-protection]').style.color=protectedMain?'var(--koa-forest)':'#b77730';
+      const issues=[];
+      if(!protectedMain)issues.push('GitHub main ruleset must require “Exact-head release gate” with strict up-to-date checks.');
+      if(!synced)issues.push('The published deployment does not yet match current main; do not call this release live.');
+      if(h.status==='stale')issues.push('Signed System Health evidence predates the current deployment.');
+      if(h.status==='unhealthy')issues.push('System Health reports '+h.failed+' failing components.');
+      const warning=q('[data-production-warning]');
+      warning.classList.toggle('hidden',!issues.length);
+      warning.textContent=issues.join(' ');
+    }
+    function renderGateList(row){
+      const grid=el('div','release-check-list');
+      for(const [name,check] of Object.entries(row.checks||{})){
+        const item=el('div','release-check-item');
+        item.append(pill(check.status==='passed'?'PASS':check.status==='failed'?'FAIL':check.status==='pending'?'RUNNING':'UNKNOWN',check.status));
+        const title=el('span','release-check-title',name);
+        item.append(title);
+        if(check.url)item.append(external('Run',check.url,'github.com'));
+        grid.append(item);
+      }
+      return grid;
+    }
+    function renderPR(row){
+      const article=el('article','release-pr-card');
+      const header=el('div','release-pr-header');
+      const info=el('div','min-w-0');
+      const eyebrow=el('div','release-pr-eyebrow');
+      eyebrow.append(el('span','','PR #'+row.number),el('span','','·'),el('span','',row.state),el('span','','·'),el('span','',row.author||'Koa Engineering'));
+      const name=el('h3','release-pr-title');
+      const gh=external(row.title,row.url,'github.com');
+      gh.className='release-pr-title-link';
+      name.append(gh);
+      const desc=el('p','release-pr-subtitle',row.branch+' · '+short(row.head)+' · Updated '+since(row.updatedAt));
+      info.append(eyebrow,name,desc);
+      header.append(info,pill(row.releaseStatus==='ready'?'Release ready':row.releaseStatus==='merged'?'Merged':row.releaseStatus==='blocked'?'Blocked':'Evidence pending',row.releaseStatus==='ready'||row.releaseStatus==='merged'?'passed':row.releaseStatus));
+      article.append(header);
+
+      const four=el('div','release-pr-quad');
+      const cert=row.certified?'Certified at exact HEAD':row.certificationStatus==='passed'?'Historical certificate':'Unverified';
+      const ciSummary=Object.values(row.checks||{}).filter(x=>x.status==='passed').length+' / '+Object.keys(row.checks||{}).length+' workflow gates';
+      four.append(dataTile('Certification',cert,ciSummary));
+      const preview=row.preview||{};
+      four.append(dataTile('Deploy Preview',preview.status==='ready'?'Ready · exact':preview.status==='stale'?'SHA mismatch':preview.status==='unavailable'?'Unavailable':'Not verified',
+        preview.id?short(preview.id)+' · '+short(preview.sha):'No matching deploy metadata'));
+      const qa=row.qa||{};
+      const c=qa.chromium,w=qa.webkit;
+      const counts=c&&w?'Chrome '+c.failures+' / WebKit '+w.failures+' fails':'Browser evidence unknown';
+      const routeCounts=c&&w?c.routes+' + '+w.routes+' routes · '+c.cases+' / '+w.cases+' cases':'No retained route/case totals';
+      four.append(dataTile('Browser failures',counts,routeCounts));
+      const deployStatus=row.deployStatus==='live'?'Live production':row.deployStatus==='awaiting-production'?'Publishing':row.deployStatus==='superseded'?'Superseded':'Not in production';
+      four.append(dataTile('Deployment',deployStatus,row.mergeSha?'Merge '+short(row.mergeSha):'Not merged'));
+      article.append(four);
+
+      const bottom=el('div','release-pr-footer');
+      bottom.append(pill('Platform · '+(qa.platform==='passed'?'390 + 1440 pass':qa.platform==='not-attested'?'Not viewport-attested':qa.platform==='failed'?'Failure':'Not verified'),qa.platform==='passed'?'passed':qa.platform==='failed'?'failed':'pending'));
+      if(row.behind!=null)bottom.append(pill(row.behind===0?'Up to date':row.behind+' commits behind',row.behind===0?'passed':'failed'));
+      if(preview.id)bottom.append(external('Netlify preview', 'https://app.netlify.com/projects/koasevents-website/deploys/'+preview.id,'netlify.com'));
+      const details=el('details','release-pr-details');
+      const summary=el('summary','release-pr-details-summary','Full evidence & workflow diagnostics');
+      details.append(summary);
+      const body=el('div','release-evidence-body');
+      body.append(renderGateList(row));
+      const evidence=el('div','release-evidence-grid');
+      evidence.append(
+        dataTile('Head SHA',row.head,''),
+        dataTile('Preview SHA',preview.sha||'Unavailable',preview.exact?'Exact match':'Not verified'),
+        dataTile('Chromium',c?c.routes+' routes · '+c.cases+' cases · '+c.failures+' failures':'Unknown',c?'Phone '+c.phone+' · Desktop '+c.desktop:'No attestation'),
+        dataTile('WebKit',w?w.routes+' routes · '+w.cases+' cases · '+w.failures+' failures':'Unknown',w?'Phone '+w.phone+' · Desktop '+w.desktop:'No attestation'),
+      );
+      body.append(evidence);
+      if(row.certError)body.append(el('p','release-evidence-error','Evidence limitation: '+row.certError));
+      details.append(body);
+      bottom.append(details);
+      article.append(bottom);
+      return article;
+    }
+    function renderRows(){
+      if(!lastData)return;
+      const term=String(search?.value||'').trim().toLowerCase();
+      const status=String(filter?.value||'all');
+      const rows=(lastData.pullRequests||[]).filter(row=>{
+        const matchingStatus=status==='all'||(status==='open'&&row.state==='open')
+          ||(status==='merged'&&row.state==='merged')
+          ||(status==='ready'&&row.releaseStatus==='ready')
+          ||(status==='blocked'&&row.releaseStatus==='blocked')
+          ||(status==='pending'&&row.releaseStatus==='pending');
+        const hay=[row.number,row.title,row.branch,row.head,row.author].join(' ').toLowerCase();
+        return matchingStatus&&(!term||hay.includes(term));
+      });
+      results.replaceChildren(...rows.map(renderPR));
+      empty.classList.toggle('hidden',rows.length>0);
+      put('[data-row-count]',rows.length+' of '+lastData.pullRequests.length+' pull requests on page '+lastData.page);
+    }
+    function render(data){
+      lastData=data;
+      hasMore=Boolean(data.hasMore);
+      put('[data-snapshot-at]','Evidence timestamp · '+since(data.updatedAt));
+      put('[data-kpi-shown]',data.totals.shown);
+      put('[data-kpi-certified]',data.totals.certified);
+      put('[data-kpi-blocked]',data.totals.blocked);
+      put('[data-page-label]','Page '+data.page);
+      prev.disabled=page<=1;
+      next.disabled=!hasMore;
+      renderProduction(data);
+      const warnings=Array.isArray(data.warnings)?data.warnings:[];
+      warningsBox.classList.toggle('hidden',warnings.length===0);
+      const ul=q('[data-warning-items]');
+      ul.replaceChildren(...warnings.map(x=>el('li','','• '+String(x))));
+      renderRows();
+    }
+    async function load(){
+      if(busy)return;
+      busy=true;
+      loading.classList.remove('hidden');
+      errorBox.classList.add('hidden');
+      q('[data-dashboard-refresh]').disabled=true;
+      try{
+        const response=await fetch('/api/admin/release-dashboard?page='+page,{credentials:'same-origin',cache:'no-store'});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok||data.ok!==true)throw new Error(data.error||'The release feed did not return verified evidence.');
+        render(data);
+        app.classList.remove('hidden');
+      }catch(error){
+        const message=error instanceof Error?error.message:'Unable to retrieve the release dashboard.';
+        put('[data-error-detail]',message);
+        errorBox.classList.remove('hidden');
+      }finally{
+        busy=false;
+        loading.classList.add('hidden');
+        q('[data-dashboard-refresh]').disabled=false;
+      }
+    }
+    q('[data-dashboard-refresh]')?.addEventListener('click',load);
+    q('[data-error-retry]')?.addEventListener('click',load);
+    prev?.addEventListener('click',()=>{if(page>1&&!busy){page--;load();}});
+    next?.addEventListener('click',()=>{if(hasMore&&!busy){page++;load();}});
+    search?.addEventListener('input',renderRows);
+    filter?.addEventListener('change',renderRows);
+    const session=await getAdminSession();
+    const caps=new Set(session?.capabilities||session?.permissions||[]);
+    const authorized=Boolean(session&&!session.accessBlocked&&(session.isAdmin||caps.has('health.view')));
+    denied.classList.toggle('hidden',authorized);
+    loading.classList.add('hidden');
+    if(authorized)await load();
+  </script>
+  <style>
+    [data-release-dashboard] { color:var(--koa-text); }
+    .release-hero {background:radial-gradient(ellipse at 96% 2%,rgba(216,182,112,.15),transparent 32%),linear-gradient(125deg,#0a201b,#183c32 72%,#18332e);color:#f9f4e8;position:relative}
+    .release-hero-glow{position:absolute;width:19rem;height:19rem;right:-6rem;top:-8rem;border:1px solid rgba(225,196,137,.25);border-radius:50%;pointer-events:none;box-shadow:0 0 0 3rem rgba(225,196,137,.025),0 0 0 6rem rgba(225,196,137,.025)}
+    .release-mark{padding:.45rem .75rem;border:1px solid rgba(224,195,143,.45);border-radius:.45rem;color:#f5e0b1;font-size:.6rem;font-weight:900;letter-spacing:.2em}
+    .release-eyebrow,.release-hero-meta{color:rgba(255,255,255,.60);font-size:.59rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    .release-hero-meta strong{color:rgba(255,255,255,.85);font-weight:800}
+    .release-headline{font-family:Georgia,serif;font-weight:500;font-size:clamp(2.5rem,5vw,4.8rem);line-height:1.03;letter-spacing:-.035em}
+    .release-headline span{color:#e1c690;font-style:italic}
+    .release-hero-link,.release-hero-action{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:.8rem 1.1rem;border-radius:999px;font-size:.67rem;font-weight:900;letter-spacing:.075em;text-transform:uppercase;transition:transform .2s,border-color .2s}
+    .release-hero-link{border:1px solid rgba(242,232,211,.4);color:#faf4e8}
+    .release-hero-action{border:1px solid #d5b77c;background:#d5b77c;color:#18352c}
+    .release-hero-link:hover,.release-hero-action:hover{transform:translateY(-2px)}
+    .release-kpi,.release-panel{background:var(--koa-surface);border:1px solid var(--koa-line);border-radius:1.35rem;box-shadow:var(--shadow-soft)}
+    .release-kpi{padding:1.35rem 1.55rem;min-height:10.4rem}
+    .release-kpi-accent{background:color-mix(in srgb,var(--koa-forest) 7%,var(--koa-surface))}
+    .release-kpi-label,.release-tile-label,.release-data-point-label{display:block;color:var(--koa-clay);font-size:.62rem;font-weight:900;text-transform:uppercase;letter-spacing:.105em}
+    .release-kpi-value{font-family:Georgia,serif;font-size:3.25rem;line-height:1.1;color:var(--koa-forest);margin-top:1rem}
+    .release-kpi-good{color:#24875e}
+    .release-kpi-note{font-size:.68rem;color:color-mix(in srgb,var(--koa-text) 56%,transparent);margin-top:.72rem;line-height:1.4}
+    .release-panel{padding:clamp(1.25rem,3vw,2rem)}
+    .release-detail-tile{min-width:0;border:1px solid var(--koa-line);border-radius:1rem;background:var(--koa-ivory);padding:1.2rem}
+    .release-mono{font:700 clamp(.72rem,1.7vw,.9rem)/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;overflow-wrap:anywhere;display:block;color:var(--koa-forest);margin-top:.65rem}
+    .release-tile-foot{display:block;color:color-mix(in srgb,var(--koa-text) 55%,transparent);font-size:.71rem;margin-top:.72rem;line-height:1.5}
+    .release-status-pill{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:999px;padding:.46rem .85rem;background:var(--koa-ivory);border:1px solid var(--koa-line);color:var(--koa-text);font-size:.6rem;font-weight:900;letter-spacing:.06em;text-transform:uppercase}
+    .release-status-pill[data-state=passed]{background:color-mix(in srgb,#239169 12%,var(--koa-surface));border-color:rgba(35,145,105,.35);color:#1c8659}
+    .release-status-pill[data-state=failed],.release-status-pill[data-state=blocked]{background:color-mix(in srgb,#bf4b51 10%,var(--koa-surface));border-color:rgba(191,75,81,.4);color:#b43742}
+    .release-status-pill[data-state=pending]{background:color-mix(in srgb,#daa65c 12%,var(--koa-surface));border-color:rgba(196,140,65,.34);color:#986f2f}
+    .release-pages-label{font-size:.72rem;font-weight:800;color:var(--koa-clay)}
+    .release-page-button{border:1px solid var(--koa-line);border-radius:999px;padding:.7rem 1rem;font-size:.67rem;font-weight:900;color:var(--koa-forest);background:var(--koa-surface)}
+    .release-page-button:disabled{opacity:.35;cursor:not-allowed}
+    .release-pr-card{background:var(--koa-surface);border:1px solid var(--koa-line);border-radius:1.25rem;padding:1.25rem;min-width:0;transition:border-color .2s,transform .2s}
+    .release-pr-card:hover{border-color:color-mix(in srgb,var(--koa-clay) 44%,var(--koa-line))}
+    .release-pr-header{display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-start;justify-content:space-between}
+    .release-pr-eyebrow{display:flex;flex-wrap:wrap;gap:.55rem;color:var(--koa-clay);font-size:.65rem;letter-spacing:.09em;font-weight:900;text-transform:uppercase}
+    .release-pr-title{font-weight:700;font-size:clamp(1rem,2vw,1.25rem);color:var(--koa-forest);letter-spacing:-.025em;line-height:1.3;margin-top:.5rem}
+    .release-pr-title-link:hover{text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:4px}
+    .release-pr-subtitle{margin-top:.55rem;font:600 .68rem/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;color:color-mix(in srgb,var(--koa-text) 53%,transparent);overflow-wrap:anywhere}
+    .release-pr-quad,.release-evidence-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.65rem;margin-top:1rem}
+    .release-data-point{min-width:0;border-radius:.78rem;border:1px solid var(--koa-line);background:var(--koa-ivory);padding:1rem}
+    .release-data-point-value{display:block;font-size:.9rem;font-weight:850;color:var(--koa-forest);margin-top:.55rem;line-height:1.5;overflow-wrap:anywhere}
+    .release-data-point-caption{display:block;font-size:.67rem;color:color-mix(in srgb,var(--koa-text) 58%,transparent);margin-top:.35rem;line-height:1.5;overflow-wrap:anywhere}
+    .release-pr-footer{display:flex;flex-wrap:wrap;align-items:center;gap:.55rem;margin-top:1rem}
+    .release-external{color:var(--koa-clay);font-size:.68rem;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+    .release-external-disabled{color:var(--koa-text);opacity:.4;font-size:.68rem}
+    .release-pr-details{width:100%;margin-top:.55rem;border-top:1px solid var(--koa-line);padding-top:.8rem}
+    .release-pr-details-summary{font-size:.68rem;font-weight:900;text-transform:uppercase;letter-spacing:.09em;color:var(--koa-clay);cursor:pointer}
+    .release-evidence-body{padding-top:1rem}
+    .release-check-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.5rem}
+    .release-check-item{display:flex;flex-wrap:wrap;align-items:center;gap:.6rem;min-width:0;padding:.65rem;border:1px solid var(--koa-line);border-radius:.75rem}
+    .release-check-title{font-size:.72rem;font-weight:700;color:var(--koa-forest)}
+    .release-evidence-error{margin-top:.6rem;font-size:.72rem;color:#b54b4b}
+    @media(max-width:900px){.release-pr-quad,.release-evidence-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:600px){.release-check-list,.release-pr-quad,.release-evidence-grid{grid-template-columns:1fr}.release-hero{border-radius:1.25rem}.release-pr-card{padding:1rem}.release-pr-header{gap:.7rem}}
+    @media(prefers-reduced-motion:reduce){.release-hero-link,.release-hero-action,.release-pr-card{transition:none}}
+  </style>
+</BaseLayout>
