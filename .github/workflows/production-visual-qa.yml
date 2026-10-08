@@ -623,18 +623,7 @@ jobs:
               -H "Content-Type: application/json" \
               --data '{"action":"run-dashboard-refresh"}' \
               https://koasevents.com/api/system-health/github-main-signal || true)"
-            if [ "$http_status" = "200" ] && python - <<'PY'
-            import json
-            from pathlib import Path
-            path=Path('visual-results/system-health-dashboard.json')
-            try:
-                data=json.loads(path.read_text())
-            except Exception:
-                raise SystemExit(1)
-            current=data.get('current') or {}
-            raise SystemExit(0 if data.get('ok') is True and current.get('checkedAt') else 1)
-            PY
-            then
+            if [ "$http_status" = "200" ] && python -c 'import json,sys; from pathlib import Path; p=Path("visual-results/system-health-dashboard.json"); data=json.loads(p.read_text()); current=data.get("current") or {}; sys.exit(0 if data.get("ok") is True and current.get("checkedAt") else 1)'; then
               break
             fi
             echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
