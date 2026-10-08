@@ -155,6 +155,12 @@ export default async(req:Request,context:Context)=>{
         catch(error){certError='Certificate unreadable: '+errorText(error);}
       }
       const row=releaseRow({pr,runs,deploys,comparison,attestation,prod:production,certError});
+      row.healthStatus=(row.deployStatus==='live'?production.health?.status
+        :row.deployStatus==='awaiting-production'?'pending-deploy'
+        :row.deployStatus==='superseded'?'historical':'not-applicable')||'unavailable';
+      row.healthCheckedAt=row.deployStatus==='live'?(production.health?.checkedAt||''):'';
+      row.healthPassed=row.deployStatus==='live'?Number(production.health?.passed||0):null;
+      row.healthFailed=row.deployStatus==='live'?Number(production.health?.failed||0):null;
       if(row.qa.status==='unknown'&&row.state==='merged'){
         const history=healthContext.releases.find((release:any)=>
           release?.commit===row.mergeSha&&release?.visualQuality?.commit===row.mergeSha);
