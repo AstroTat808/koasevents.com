@@ -219,9 +219,13 @@ assert(
 assert(
   visualWorkflow.includes('system-health-mobile-audit:')
     && visualWorkflow.includes('{"action":"run-dashboard-refresh"}')
+    && visualWorkflow.includes('for attempt in 1 2 3; do')
+    && visualWorkflow.includes('--connect-timeout 15')
+    && visualWorkflow.includes('--max-time 55')
+    && visualWorkflow.includes('Signed System Health refresh attempt')
     && visualWorkflow.includes('--mode health-mobile --browser chromium')
     && visualWorkflow.includes('--mode health-mobile --browser webkit'),
-  'Production visual QA must execute the signed System Health refresh and mobile screenshot gate in both browser engines.',
+  'Production visual QA must retry transient signed System Health refresh timeouts and execute the mobile screenshot gate in both browser engines.',
 );
 
 assert(
