@@ -14,6 +14,7 @@ on:
       - 'scripts/test_critical_integration_rollback_drill.mjs'
       - 'scripts/test_critical_integration_audit_filters.mjs'
       - 'scripts/test_synthetic_health_protocol.mjs'
+      - 'scripts/test_ci_sensitive_data_guard.mjs'
       - 'package.json'
   push:
     branches: [main]
@@ -28,6 +29,7 @@ on:
       - 'scripts/test_critical_integration_rollback_drill.mjs'
       - 'scripts/test_critical_integration_audit_filters.mjs'
       - 'scripts/test_synthetic_health_protocol.mjs'
+      - 'scripts/test_ci_sensitive_data_guard.mjs'
       - 'package.json'
   workflow_dispatch:
 
@@ -55,6 +57,8 @@ jobs:
           node-version: '22'
       - name: Test audit filters
         run: node scripts/test_critical_integration_audit_filters.mjs
+      - name: Prevent sensitive production data in CI logs and artifacts
+        run: node scripts/test_ci_sensitive_data_guard.mjs
       - name: Deliberately fail one synthetic probe and prove simulated recovery
         run: node scripts/test_critical_integration_rollback_drill.mjs
       - uses: actions/upload-artifact@v4
@@ -87,29 +91,78 @@ jobs:
           mkdir -p visual-results
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          report_file="visual-results/critical-integration-real-rollback-drill.json"
-          http_status="$(curl -sS             -o "$report_file"             -w "%{http_code}"             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data '{"action":"run-real-sandbox-rollback-drill"}'             https://koasevents.com/api/system-health/github-main-signal)"
-          cat "$report_file"
-          python -c 'import json,sys; data=json.load(open(sys.argv[1])); drill=data.get("sandboxRollbackDrill") or {}; assert data.get("ok") is True; assert drill.get("ok") is True; assert drill.get("mode")=="real-netlify-sandbox-restore"; assert drill.get("isolationVerified") is True; assert drill.get("productionMutationAttempted") is False; assert drill.get("sandboxMutationAttempted") is True; assert drill.get("sandboxSiteId") != drill.get("productionSiteId"); assert drill.get("sandboxSiteName")=="koasevents-rollback-drill-sandbox"; assert drill.get("beforeRestore",{}).get("deployId")==drill.get("candidate",{}).get("deployId"); assert drill.get("afterRestore",{}).get("deployId")==drill.get("knownGood",{}).get("deployId"); assert drill.get("restore",{}).get("httpStatus") in (200,201); assert all(p.get("ok") for p in drill.get("phases",[]))' "$report_file"
+          raw_file="/tmp/koa-critical-integration-real-rollback.raw.json"
+          summary_file="visual-results/critical-integration-real-rollback-summary.json"
+          trap 'rm -f "$raw_file"' EXIT
+          http_status="$(curl -sS -o "$raw_file" -w "%{http_code}" -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '{"action":"run-real-sandbox-rollback-drill"}' https://koasevents.com/api/system-health/github-main-signal)"
           test "$http_status" = "200"
+          python - "$raw_file" "$summary_file" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          drill=data.get('sandboxRollbackDrill') or {}
+          assert data.get('ok') is True
+          assert drill.get('ok') is True
+          assert drill.get('mode') == 'real-netlify-sandbox-restore'
+          assert drill.get('isolationVerified') is True
+          assert drill.get('productionMutationAttempted') is False
+          assert drill.get('sandboxMutationAttempted') is True
+          assert drill.get('sandboxSiteId') != drill.get('productionSiteId')
+          assert drill.get('beforeRestore',{}).get('deployId') == drill.get('candidate',{}).get('deployId')
+          assert drill.get('afterRestore',{}).get('deployId') == drill.get('knownGood',{}).get('deployId')
+          assert drill.get('restore',{}).get('httpStatus') in (200,201)
+          phases=drill.get('phases') or []
+          assert all(phase.get('ok') for phase in phases)
+          summary={
+              'ok':True,
+              'mode':'real-netlify-sandbox-restore',
+              'isolationVerified':True,
+              'productionMutationAttempted':False,
+              'sandboxMutationAttempted':True,
+              'restoreHttpStatus':drill.get('restore',{}).get('httpStatus'),
+              'phaseCount':len(phases),
+              'failedPhaseCount':sum(1 for phase in phases if not phase.get('ok')),
+          }
+          Path(sys.argv[2]).write_text(json.dumps(summary,separators=(',',':')),encoding='utf-8')
+          print(json.dumps(summary,separators=(',',':')))
+          PY
+          rm -f "$raw_file"
+          trap - EXIT
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: critical-integrations-real-netlify-rollback-${{ github.run_id }}
-          path: visual-results/critical-integration-real-rollback-drill.json
+          path: visual-results/critical-integration-real-rollback-summary.json
           retention-days: 90
           if-no-files-found: error
-      - name: Archive signed production accounting audits
+      - name: Verify signed production accounting audit availability
         shell: bash
         run: |
           set -euo pipefail
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          audit_file="visual-results/production-accounting-audits.json"
-          http_status="$(curl -sS             -o "$audit_file"             -w "%{http_code}"             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data '{"action":"read-production-accounting-audits"}'             https://koasevents.com/api/system-health/github-main-signal)"
-          cat "$audit_file"
-          python -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data.get("ok") is True; assert isinstance(data.get("accountingAudits"),list)' "$audit_file"
+          raw_file="/tmp/koa-production-accounting-audits.raw.json"
+          summary_file="visual-results/production-accounting-audits-summary.json"
+          trap 'rm -f "$raw_file"' EXIT
+          http_status="$(curl -sS -o "$raw_file" -w "%{http_code}" -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '{"action":"read-production-accounting-audits"}' https://koasevents.com/api/system-health/github-main-signal)"
           test "$http_status" = "200"
+          python - "$raw_file" "$summary_file" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          audits=data.get('accountingAudits')
+          assert data.get('ok') is True
+          assert isinstance(audits,list)
+          summary={
+              'ok':True,
+              'auditCount':len(audits),
+              'hasAuditHistory':bool(audits),
+          }
+          Path(sys.argv[2]).write_text(json.dumps(summary,separators=(',',':')),encoding='utf-8')
+          print(json.dumps(summary,separators=(',',':')))
+          PY
+          rm -f "$raw_file"
+          trap - EXIT
 
       - name: Prove isolated five-minute self-healing retrigger
         shell: bash
@@ -117,19 +170,54 @@ jobs:
           set -euo pipefail
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          report_file="visual-results/netlify-sandbox-self-heal-drill.json"
-          http_status="$(curl -sS             -o "$report_file"             -w "%{http_code}"             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data '{"action":"run-sandbox-self-heal-drill"}'             https://koasevents.com/api/system-health/github-main-signal)"
-          cat "$report_file"
-          python -c 'import json,sys; data=json.load(open(sys.argv[1])); drill=data.get("sandboxSelfHealDrill") or {}; assert data.get("ok") is True; assert drill.get("ok") is True; assert drill.get("gracePeriodSeconds")==300; assert drill.get("graceElapsed") is True; assert drill.get("exactShaPresentBefore") is False; assert drill.get("retriggered") is True; assert drill.get("sandboxMutationAttempted") is True; assert drill.get("productionMutationAttempted") is False; assert drill.get("isolationVerified") is True; assert drill.get("markerVerified") is True; assert drill.get("after",{}).get("deployId")==drill.get("retrigger",{}).get("deployId"); assert all(p.get("ok") for p in drill.get("phases",[]))' "$report_file"
+          raw_file="/tmp/koa-netlify-sandbox-self-heal.raw.json"
+          summary_file="visual-results/netlify-sandbox-self-heal-summary.json"
+          trap 'rm -f "$raw_file"' EXIT
+          http_status="$(curl -sS -o "$raw_file" -w "%{http_code}" -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data '{"action":"run-sandbox-self-heal-drill"}' https://koasevents.com/api/system-health/github-main-signal)"
           test "$http_status" = "200"
+          python - "$raw_file" "$summary_file" <<'PY'
+          import json, sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          drill=data.get('sandboxSelfHealDrill') or {}
+          assert data.get('ok') is True
+          assert drill.get('ok') is True
+          assert drill.get('gracePeriodSeconds') == 300
+          assert drill.get('graceElapsed') is True
+          assert drill.get('exactShaPresentBefore') is False
+          assert drill.get('retriggered') is True
+          assert drill.get('sandboxMutationAttempted') is True
+          assert drill.get('productionMutationAttempted') is False
+          assert drill.get('isolationVerified') is True
+          assert drill.get('markerVerified') is True
+          assert drill.get('after',{}).get('deployId') == drill.get('retrigger',{}).get('deployId')
+          phases=drill.get('phases') or []
+          assert all(phase.get('ok') for phase in phases)
+          summary={
+              'ok':True,
+              'gracePeriodSeconds':300,
+              'graceElapsed':True,
+              'retriggered':True,
+              'sandboxMutationAttempted':True,
+              'productionMutationAttempted':False,
+              'isolationVerified':True,
+              'markerVerified':True,
+              'phaseCount':len(phases),
+              'failedPhaseCount':sum(1 for phase in phases if not phase.get('ok')),
+          }
+          Path(sys.argv[2]).write_text(json.dumps(summary,separators=(',',':')),encoding='utf-8')
+          print(json.dumps(summary,separators=(',',':')))
+          PY
+          rm -f "$raw_file"
+          trap - EXIT
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: netlify-sandbox-self-heal-and-accounting-audits-${{ github.run_id }}
           path: |
-            visual-results/netlify-sandbox-self-heal-drill.json
-            visual-results/production-accounting-audits.json
+            visual-results/netlify-sandbox-self-heal-summary.json
+            visual-results/production-accounting-audits-summary.json
           retention-days: 90
           if-no-files-found: error
 
