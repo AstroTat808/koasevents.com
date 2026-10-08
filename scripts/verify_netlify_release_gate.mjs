@@ -70,6 +70,25 @@ async function resolvePullRequestHead(commit){
   };
 }
 
+function belongsToExactPullHead(run,headSha){
+  // GitHub frequently returns pull_requests: [] for previously successful
+  // workflow runs after their pull request is merged. The head_sha + event
+  // fields remain authoritative, so do not depend on that mutable association.
+  return String(run?.head_sha||'').toLowerCase()===String(headSha||'').toLowerCase()
+    &&String(run?.event||'')==='pull_request';
+}
+
+function selfTest(){
+  const sha='a'.repeat(40);
+  const associated={head_sha:sha,event:'pull_request',name:REQUIRED_WORKFLOW,status:'completed',
+    conclusion:'success',pull_requests:[]};
+  if(!belongsToExactPullHead(associated,sha))throw Error('An exact-head successful run with no PR association was rejected.');
+  if(belongsToExactPullHead({...associated,head_sha:'b'.repeat(40)},sha))throw Error('A stale SHA was accepted.');
+  if(belongsToExactPullHead({...associated,event:'push'},sha))throw Error('A push run was accepted as PR evidence.');
+  if(belongsToExactPullHead({...associated,head_sha:''},sha))throw Error('A missing workflow SHA was accepted.');
+  console.log('PASS | exact-head GitHub workflow provenance is independent of empty post-merge pull_requests arrays.');
+}
+
 function newestRun(runs){
   return [...runs].sort((a,b)=>{
     const byNumber=Number(b?.run_number||0)-Number(a?.run_number||0);
@@ -166,6 +185,17 @@ async function main(){
   if(!/^[a-f0-9]{40}$/i.test(headSha)){
     fail('Unable to resolve the pull-request head SHA for production commit '+commit+'.');
   }
+  // Preserve PR provenance through the merged PR object; individual Actions
+  // run.pull_requests associations can legitimately be emptied post-merge.
+  if(resolved?.prNumber){
+    const merged=await githubJson('/pulls/'+resolved.prNumber);
+    if(!merged?.merged_at
+      ||String(merged?.base?.ref||'')!=='main'
+      ||String(merged?.head?.sha||'').toLowerCase()!==headSha.toLowerCase()
+      ||String(merged?.merge_commit_sha||'').toLowerCase()!==commit.toLowerCase()){
+      fail('Merged PR #'+resolved.prNumber+' does not bind production commit '+commit+' to approved head '+headSha+'.');
+    }
+  }
 
   let payload;
   try{
@@ -178,9 +208,7 @@ async function main(){
   }
 
   const runs=(Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
-    .filter((run)=>String(run?.head_sha||'').toLowerCase()===headSha.toLowerCase()
-      &&run?.event==='pull_request'
-      &&(!resolved?.prNumber||(run?.pull_requests||[]).some((pr)=>Number(pr.number)===resolved.prNumber)));
+    .filter((run)=>belongsToExactPullHead(run,headSha));
   const matching=runs.filter((run)=>String(run?.name||'')===REQUIRED_WORKFLOW);
   const latest=newestRun(matching);
   if(!latest){
@@ -211,4 +239,5 @@ async function main(){
   );
 }
 
-await main();
+if(process.argv.includes('--self-test')) selfTest();
+else await main();
