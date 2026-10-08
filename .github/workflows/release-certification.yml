@@ -25,10 +25,9 @@ jobs:
       GITHUB_TOKEN: ${{ github.token }}
       RELEASE_PR_NUMBER: ${{ github.event.pull_request.number }}
       RELEASE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-      # Optional independent Netlify API cross-check; without this secret,
-      # the gate requires the provider's exact-commit status and the existing
-      # Netlify Deploy Preview build-time COMMIT_REF verification.
-      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      # Do not expose Netlify credentials to code checked out from a PR.
+      # Netlify itself rejects Deploy Previews whose COMMIT_REF differs
+      # from the current PR HEAD; GitHub checks the provider status by SHA.
     steps:
       - name: Check out the exact proposed PR HEAD
         uses: actions/checkout@v4
