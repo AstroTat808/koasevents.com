@@ -235,6 +235,14 @@ assert(
 );
 
 assert(
+  visualWorkflow.includes('production-theme-audit:')
+    && visualWorkflow.includes("name: Live Light / Dark / System audit")
+    && visualWorkflow.includes("if: github.event_name != 'pull_request'")
+    && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health'),
+  'Every non-PR production QA run, including scheduled runs, must refresh the persisted Dark Mode QA evidence in System Health.',
+);
+
+assert(
   visualWorkflow.includes("if: github.event_name == 'pull_request'")
     && visualWorkflow.includes('python -m http.server 4173 --directory dist')
     && visualWorkflow.includes('--base-url http://127.0.0.1:4173')

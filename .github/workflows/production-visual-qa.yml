@@ -393,7 +393,7 @@ jobs:
 
   production-theme-audit:
     name: Live Light / Dark / System audit
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs: source-build-audit
     runs-on: ubuntu-latest
     timeout-minutes: 30
