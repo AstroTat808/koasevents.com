@@ -67,7 +67,7 @@ const prod=productionSummary(MERGE,[{
 });
 assert.equal(prod.status,'synced');
 assert.equal(prod.health.status,'healthy');
-assert.equal(productionSummary(HEAD,[{...preview,context:'production',published_at:'2026-10-08T18:59:00Z'}],null).status,'behind');
+assert.equal(productionSummary(MERGE,[{...preview,context:'production',published_at:'2026-10-08T18:59:00Z'}],null).status,'behind');
 const pr={
   number:249,title:'Permanent release gate',state:'open',head:{sha:HEAD,ref:'release-gate'},
   base:{ref:'main'},updated_at:'2026-10-08T19:00:00Z',user:{login:'operator'},
