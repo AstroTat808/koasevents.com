@@ -2348,10 +2348,10 @@ html[data-theme="dark"] body.koa-admin-page main label[class*="font-semibold"] {
   color: var(--koa-text-strong) !important;
 }
 
-html[data-theme="dark"] body.koa-admin-page main button[class*="border-[var(--koa-line)]"]:not([class*="bg-"]):not([class*="text-"]),
-html[data-theme="dark"] body.koa-admin-page main a[class*="border-[var(--koa-line)]"]:not([class*="bg-"]):not([class*="text-"]),
-html[data-theme="dark"] body.koa-admin-page main button[class*="border-stone-300"]:not([class*="bg-"]):not([class*="text-"]),
-html[data-theme="dark"] body.koa-admin-page main a[class*="border-stone-300"]:not([class*="bg-"]):not([class*="text-"]) {
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-[var(--koa-line)]"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-[var(--koa-line)]"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-stone-300"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-stone-300"]:not([class*="bg-"]) {
   color: var(--koa-text-strong) !important;
 }
 
