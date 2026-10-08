@@ -86,6 +86,9 @@ export default async(req:Request,context:Context)=>{
   const auth=await requireCapability('health.view',req,context);
   if(auth.response)return auth.response;
   const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
+  if(!auth.tenant?.storage?.legacyDataBelongsToTenant){
+    return Response.json({error:'Koa’s Events administrator tenant required.'},{status:403,headers});
+  }
   if(req.method!=='GET')return Response.json({error:'Read-only dashboard.'},{status:405,headers});
   const u=new URL(req.url);
   const pageRaw=u.searchParams.get('page')||'1';
