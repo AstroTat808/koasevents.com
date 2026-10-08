@@ -46,13 +46,13 @@ async function downloadAttestation(runId:number,expectedHead:string,githubToken:
   const artifact=(Array.isArray(listing.artifacts)?listing.artifacts:[])
     .find((a:any)=>a?.name==='koa-release-certification-'+runId&&!a.expired&&a.size_in_bytes<=524288);
   if(!artifact)throw new Error('Exact-head certification evidence artifact is missing or expired.');
+  const archiveHeaders:Record<string,string>={
+    Accept:'application/vnd.github+json',
+    'X-GitHub-Api-Version':'2022-11-28',
+  };
+  if(githubToken)archiveHeaders.Authorization='Bearer '+githubToken;
   const response=await fetch(GH_ROOT+'/actions/artifacts/'+artifact.id+'/zip',{
-    headers:{
-      Authorization:'Bearer '+githubToken,
-      Accept:'application/vnd.github+json',
-      'X-GitHub-Api-Version':'2022-11-28',
-    },
-    redirect:'manual',signal:AbortSignal.timeout(12000),
+    headers:archiveHeaders,redirect:'manual',signal:AbortSignal.timeout(12000),
   });
   let archive=response;
   if(response.status>=300&&response.status<400){
