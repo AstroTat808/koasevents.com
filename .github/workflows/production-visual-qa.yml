@@ -8,6 +8,7 @@ on:
       - 'scripts/production_visual_qa.py'
       - 'scripts/theme_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
+      - 'scripts/test_ci_sensitive_data_guard.mjs'
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
       - 'scripts/verify_netlify_release_gate.mjs'
@@ -25,6 +26,7 @@ on:
       - 'scripts/production_visual_qa.py'
       - 'scripts/theme_visual_qa.py'
       - 'scripts/security_logic_qa.mjs'
+      - 'scripts/test_ci_sensitive_data_guard.mjs'
       - 'scripts/build_safety_check.mjs'
       - 'scripts/test_system_health_dashboard.mjs'
       - 'scripts/verify_netlify_release_gate.mjs'
@@ -83,6 +85,8 @@ jobs:
         run: npm run build
       - name: Test inquiry security rules
         run: node --experimental-strip-types scripts/security_logic_qa.mjs
+      - name: Prevent sensitive production data in CI logs and artifacts
+        run: node scripts/test_ci_sensitive_data_guard.mjs
       - name: Audit source structure
         run: python scripts/production_visual_qa.py --mode source
       - name: Install System Health responsive browser QA dependencies
@@ -197,8 +201,8 @@ jobs:
             cat /tmp/koa-health-preview.log
             exit 1
           fi
-          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
-          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.safe.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.safe.json
       - name: Verify iPhone admin bottom navigation in built PR
         if: github.event_name == 'pull_request'
         shell: bash
@@ -226,7 +230,6 @@ jobs:
         with:
           name: koa-system-health-responsive-pr-${{ github.run_id }}
           path: |
-            visual-results/system-health-dashboard.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
             visual-results/admin-mobile-chromium
@@ -267,7 +270,8 @@ jobs:
           set -euo pipefail
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          recovery_file="$(mktemp)"
+          recovery_file="/tmp/koa-production-recovery.json"
+          trap 'rm -f "$recovery_file"' EXIT
           http_status="$(curl -sS \
             -o "$recovery_file" \
             -w "%{http_code}" \
@@ -276,11 +280,18 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"self-heal-production-deploy"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          recovery="$(cat "$recovery_file")"
-          rm -f "$recovery_file"
-          echo "$recovery"
-          python -c 'import json,os,sys; data=json.load(sys.stdin); assert data.get("ok") is True; assert data.get("expectedSha")==os.environ["EXPECTED_COMMIT"]; assert data.get("triggered") is True or data.get("exactShaPresent") is True' <<<"$recovery"
           test "$http_status" = "200"
+          python - "$recovery_file" <<'PY'
+          import json, os, sys
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              data=json.load(handle)
+          assert data.get('ok') is True
+          assert data.get('expectedSha') == os.environ['EXPECTED_COMMIT']
+          assert data.get('triggered') is True or data.get('exactShaPresent') is True
+          PY
+          rm -f "$recovery_file"
+          trap - EXIT
+          echo "Production deploy self-heal response validated without emitting the response body."
       - name: Wait for exact Netlify production SHA after fallback
         if: steps.initial-netlify-wait.outcome == 'failure'
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
@@ -290,7 +301,8 @@ jobs:
           set -euo pipefail
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          verification_file="$(mktemp)"
+          verification_file="/tmp/koa-production-health-verification.json"
+          trap 'rm -f "$verification_file"' EXIT
           http_status="$(curl -sS \
             -o "$verification_file" \
             -w "%{http_code}" \
@@ -299,95 +311,46 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"verify-production-health"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          verification="$(cat "$verification_file")"
+          test "$http_status" = "200"
+          python - "$verification_file" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              data=json.load(handle)
+          accounting=data.get('accountingInvariant') or {}
+          assert data.get('auditRecorded') is True
+          assert data.get('ok') is True
+          probes=data.get('probes') or []
+          assert len(probes) == 4
+          assert all(
+              probe.get('ok')
+              and probe.get('status') == 204
+              and probe.get('source') == 'live'
+              and probe.get('marker') == probe.get('expectedMarker')
+              for probe in probes
+          )
+          assert accounting.get('ok') is True
+          assert accounting.get('status') == 200
+          assert accounting.get('expectedTotal') == accounting.get('actualTotal')
+          assert accounting.get('taxablePayload') == 0
+          assert accounting.get('liveClientStatus') == 'passed'
+          assert accounting.get('liveClientEstimateTotal') == accounting.get('actualTotal')
+          assert accounting.get('liveClientTaxableLineCount') == 0
+          assert accounting.get('historicalTaxOnTaxDetected') is False
+          assert accounting.get('dynamicClientStatus') == 'passed'
+          assert accounting.get('dynamicClientFailedCount') == 0
+          assert accounting.get('dynamicClientUnverifiedCount') == 0
+          assert accounting.get('dynamicClientPassedCount') == accounting.get('dynamicClientCount')
+          PY
           rm -f "$verification_file"
-          echo "$verification"
-          python -c 'import json,sys; data=json.load(sys.stdin); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==15706.8; assert accounting.get("actualTotal")==15706.8; assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientEstimateTotal")==15706.8; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' <<<"$verification"
-          test "$http_status" = "200"
-      - name: Capture Jesse and Dion QBO adjustment diagnostics
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p visual-results
-          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
-          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          http_status="$(curl -sS \
-            -o visual-results/accounting-adjustment-diagnostics.json \
-            -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $token" \
-            -H "Content-Type: application/json" \
-            --data '{"action":"read-accounting-adjustment-diagnostics","recordIds":["QBO-CUST-29","QBO-CUST-44"]}' \
-            https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-adjustment-diagnostics.json
-          test "$http_status" = "200"
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          data=json.loads(Path('visual-results/accounting-adjustment-diagnostics.json').read_text())
-          assert data.get('ok') is True
-          rows=data.get('diagnostics') or []
-          by_id={row.get('recordId'):row for row in rows}
-          assert set(by_id)=={'QBO-CUST-29','QBO-CUST-44'}
-          for record_id in ('QBO-CUST-29','QBO-CUST-44'):
-              row=by_id[record_id]
-              assert row.get('status')=='verified'
-              assert row.get('historicalQuickBooksImport') is True
-              assert row.get('accountingScope')=='quickbooks-history'
-              assert row.get('estimateId')
-              assert isinstance(row.get('rawFields'),dict)
-          print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
-          PY
-      - name: Capture current safe accounting repair bulk preview
-        if: github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p visual-results
-          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
-          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          http_status="$(curl -sS \
-            -o visual-results/accounting-repair-bulk-preview.json \
-            -w "%{http_code}" \
-            -X POST \
-            -H "Authorization: Bearer $token" \
-            -H "Content-Type: application/json" \
-            --data '{"action":"read-current-accounting-repair-bulk-preview"}' \
-            https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-repair-bulk-preview.json
-          test "$http_status" = "200"
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          data=json.loads(Path('visual-results/accounting-repair-bulk-preview.json').read_text())
-          assert data.get('ok') is True
-          preview=data.get('bulkPreview') or {}
-          assert preview.get('bulkPreviewId')
-          assert preview.get('approvalMode') == 'individual-write-only'
-          assert isinstance(preview.get('rows'),list)
-          assert all(row.get('status') in {'repairable','blocked','clean','error','unavailable','ineligible'} for row in preview['rows'])
-          print('Production safe repair preview:',json.dumps({
-              'bulkPreviewId':preview.get('bulkPreviewId'),
-              'requestedCount':preview.get('requestedCount'),
-              'repairableClientCount':preview.get('repairableClientCount'),
-              'writeCount':preview.get('writeCount'),
-              'blockedClientCount':preview.get('blockedClientCount'),
-              'cleanClientCount':preview.get('cleanClientCount'),
-              'errorClientCount':preview.get('errorClientCount'),
-              'rows':preview.get('rows'),
-          },separators=(',',':')))
-          PY
+          trap - EXIT
+          echo "Production health response validated without emitting client, QuickBooks, or financial detail."
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-production-smoke-${{ github.run_id }}
-          path: |
-            visual-results/production-smoke.json
-            visual-results/accounting-adjustment-diagnostics.json
-            visual-results/accounting-repair-bulk-preview.json
+          path: visual-results/production-smoke.json
           retention-days: 14
           if-no-files-found: error
 
@@ -547,7 +510,18 @@ jobs:
           PY
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          curl -fsS             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data-binary @/tmp/dark-mode-visual-quality.json             https://koasevents.com/api/system-health/github-main-signal
+          dark_mode_response="/tmp/koa-dark-mode-record-response.json"
+          trap 'rm -f "$dark_mode_response"' EXIT
+          curl -fsS -o "$dark_mode_response" -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data-binary @/tmp/dark-mode-visual-quality.json https://koasevents.com/api/system-health/github-main-signal
+          python - "$dark_mode_response" <<'PY'
+          import json, sys
+          with open(sys.argv[1], encoding='utf-8') as handle:
+              data=json.load(handle)
+          assert data.get('ok') is True
+          PY
+          rm -f "$dark_mode_response"
+          trap - EXIT
+          echo "Dark Mode QA result recorded without emitting the authenticated response body."
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -611,49 +585,125 @@ jobs:
           mkdir -p visual-results
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          raw_file="/tmp/koa-system-health-dashboard.raw.json"
+          safe_file="visual-results/system-health-dashboard.safe.json"
+          trap 'rm -f "$raw_file"' EXIT
           http_status="000"
           for attempt in 1 2 3; do
             http_status="$(curl -sS \
               --connect-timeout 15 \
               --max-time 55 \
-              -o visual-results/system-health-dashboard.json \
+              -o "$raw_file" \
               -w "%{http_code}" \
               -X POST \
               -H "Authorization: Bearer $token" \
               -H "Content-Type: application/json" \
               --data '{"action":"run-dashboard-refresh"}' \
               https://koasevents.com/api/system-health/github-main-signal || true)"
-            if [ "$http_status" = "200" ] && python -c 'import json,sys; from pathlib import Path; p=Path("visual-results/system-health-dashboard.json"); data=json.loads(p.read_text()); current=data.get("current") or {}; sys.exit(0 if data.get("ok") is True and current.get("checkedAt") else 1)'; then
+            if [ "$http_status" = "200" ] && python -c 'import json,sys; data=json.load(open(sys.argv[1])); current=data.get("current") or {}; sys.exit(0 if data.get("ok") is True and current.get("checkedAt") else 1)' "$raw_file"; then
               break
             fi
             echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
             if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
           done
-          cat visual-results/system-health-dashboard.json
           test "$http_status" = "200"
-          python - <<'PY'
-          import json
+          python - "$raw_file" "$safe_file" <<'PY'
+          import json, sys
           from pathlib import Path
-          data=json.loads(Path('visual-results/system-health-dashboard.json').read_text())
-          current=data.get('current') or {}
-          assert data.get('ok') is True
+
+          raw=json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+          current=raw.get('current') or {}
+          assert raw.get('ok') is True
           assert current.get('checkedAt')
-          assert isinstance(current.get('passed'),int)
-          assert isinstance(current.get('failed'),int)
+          assert isinstance(current.get('passed'), int)
+          assert isinstance(current.get('failed'), int)
           assert current.get('overall') in {'healthy','unhealthy'}
-          warnings=data.get('enrichmentWarnings') or []
-          print('System Health live summary:', json.dumps({
-              'overall':current.get('overall'),
-              'passed':current.get('passed'),
-              'failed':current.get('failed'),
-              'checkedAt':current.get('checkedAt'),
-              'enrichmentWarnings':warnings,
+
+          def safe_browser(value):
+              value=value if isinstance(value,dict) else {}
+              routes=[]
+              for row in value.get('routeResults') or []:
+                  if not isinstance(row,dict):
+                      continue
+                  route=str(row.get('route') or '')
+                  if not route.startswith('/'):
+                      continue
+                  routes.append({
+                      'route':route[:240],
+                      'status':'failed' if str(row.get('status') or '')=='failed' else 'passed',
+                      'cases':max(0,int(row.get('cases') or 0)),
+                      'failureCount':max(0,int(row.get('failureCount') or 0)),
+                  })
+              return {
+                  'routes':max(0,int(value.get('routes') or 0)),
+                  'cases':max(0,int(value.get('cases') or 0)),
+                  'failureCount':max(0,int(value.get('failureCount') or 0)),
+                  'failedRouteCount':max(0,int(value.get('failedRouteCount') or 0)),
+                  'routeResults':routes,
+              }
+
+          visual=raw.get('visualQuality') if isinstance(raw.get('visualQuality'),dict) else {}
+          screenshots=[]
+          for row in visual.get('screenshots') or []:
+              if not isinstance(row,dict):
+                  continue
+              screenshots.append({
+                  'key':str(row.get('key') or '')[:80],
+                  'theme':str(row.get('theme') or '')[:40],
+                  'viewport':str(row.get('viewport') or '')[:40],
+                  'browser':str(row.get('browser') or '')[:40],
+                  'route':str(row.get('route') or '')[:240],
+                  'width':max(0,int(row.get('width') or 0)),
+                  'height':max(0,int(row.get('height') or 0)),
+              })
+
+          warning_count=len(raw.get('enrichmentWarnings') or [])
+          safe={
+              'ok':True,
+              'current':{
+                  'overall':current.get('overall'),
+                  'passed':current.get('passed'),
+                  'failed':current.get('failed'),
+                  'checkedAt':current.get('checkedAt'),
+                  'checks':[],
+              },
+              'enrichmentWarnings':[
+                  {'section':'Supporting data','error':'Details withheld from CI.'}
+                  for _ in range(warning_count)
+              ],
+              'coverage':{},
+              'visualQuality':{
+                  'status':str(visual.get('status') or 'unavailable')[:40],
+                  'checkedAt':str(visual.get('checkedAt') or '')[:80],
+                  'commit':str(visual.get('commit') or '')[:80],
+                  'deployId':str(visual.get('deployId') or '')[:120],
+                  'chromium':safe_browser(visual.get('chromium')),
+                  'webkit':safe_browser(visual.get('webkit')),
+                  'screenshots':screenshots,
+              },
+              'criticalIntegrations':{},
+              'rollbackReady':{},
+              'runtime':{},
+              'accountingHealth':{},
+              'accountingReleaseAudits':[],
+              'history':[],
+          }
+          Path(sys.argv[2]).write_text(json.dumps(safe,separators=(',',':')),encoding='utf-8')
+          print(json.dumps({
+              'ok':True,
+              'overall':safe['current']['overall'],
+              'passed':safe['current']['passed'],
+              'failed':safe['current']['failed'],
+              'checkedAt':safe['current']['checkedAt'],
+              'enrichmentWarningCount':warning_count,
           },separators=(',',':')))
           PY
+          rm -f "$raw_file"
+          trap - EXIT
       - name: Verify authenticated mobile System Health in Chromium
-        run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.json
+        run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.safe.json
       - name: Verify authenticated mobile System Health in WebKit
-        run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.json
+        run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.safe.json
       - name: Publish System Health production release status
         if: always()
         shell: bash
@@ -674,7 +724,7 @@ jobs:
               except Exception:
                   return None
 
-          dashboard=load('visual-results/system-health-dashboard.json') or {}
+          dashboard=load('visual-results/system-health-dashboard.safe.json') or {}
           chromium=load('visual-results/health-mobile-chromium/report.json') or {}
           webkit=load('visual-results/health-mobile-webkit/report.json') or {}
           current=dashboard.get('current') or {}
@@ -727,11 +777,11 @@ jobs:
               'failed':current.get('failed'),
               'checkedAt':current.get('checkedAt'),
               'dashboardRefresh':expected_refresh,
-              'enrichmentWarnings':warnings,
+              'enrichmentWarningCount':len(warnings),
               'chromiumViewports':len(chromium.get('results') or []),
               'webkitViewports':len(webkit.get('results') or []),
-              'chromiumFailures':chromium.get('failures') or [],
-              'webkitFailures':webkit.get('failures') or [],
+              'chromiumFailureCount':len(chromium.get('failures') or []),
+              'webkitFailureCount':len(webkit.get('failures') or []),
           },separators=(',',':')))
           PY
           python - <<'PY'
