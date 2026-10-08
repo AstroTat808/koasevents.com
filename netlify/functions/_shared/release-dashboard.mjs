@@ -122,7 +122,7 @@ export function releaseRow({pr,runs,deploys,comparison,attestation,prod,certErro
   const behind=isOpen?(comparison&&Number.isInteger(comparison.behind_by)?comparison.behind_by:null):null;
   const failing=Object.values(checks).some(c=>c.status==='failed')||preview.status==='failed'||qa.status==='failed';
   const checked=Object.values(checks).every(c=>c.status==='passed');
-  const certified=checked&&preview.exact&&behind===0&&qa.status==='passed'&&!certError;
+  const certified=checked&&preview.exact&&qa.status==='passed'&&!certError&&(isOpen?behind===0:Boolean(attestation));
   const mergeSha=String(pr?.merge_commit_sha||'');
   const deployed=Boolean(merged&&mergeSha&&prod?.sha===mergeSha);
   const deployStatus=merged?(deployed?'live':prod?.mainSha===mergeSha?'awaiting-production':'superseded'):'not-merged';
