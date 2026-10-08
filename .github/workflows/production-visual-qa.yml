@@ -130,7 +130,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           mkdir -p visual-results
-          cat > visual-results/system-health-dashboard.json <<'JSON'
+          cat > visual-results/system-health-dashboard.safe.json <<'JSON'
           {
             "current": {
               "overall": "healthy",
@@ -805,7 +805,7 @@ jobs:
         with:
           name: koa-system-health-mobile-${{ github.run_id }}
           path: |
-            visual-results/system-health-dashboard.json
+            visual-results/system-health-dashboard.safe.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
           retention-days: 30
