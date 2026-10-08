@@ -1,0 +1,85 @@
+name: Release Certification
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  statuses: read
+
+concurrency:
+  group: koa-exact-head-release-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head-release-gate:
+    name: Exact-head release gate
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      RELEASE_PR_NUMBER: ${{ github.event.pull_request.number }}
+      RELEASE_EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+      # Do not expose Netlify credentials to code checked out from a PR.
+      # Netlify itself rejects Deploy Previews whose COMMIT_REF differs
+      # from the current PR HEAD; GitHub checks the provider status by SHA.
+    steps:
+      - name: Check out the exact proposed PR HEAD
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Test release gate failure modes
+        run: node scripts/release_certification.mjs --self-test
+
+      - name: Wait for exact-HEAD CI, current main ancestry and Netlify preview
+        id: preflight
+        run: node scripts/release_certification.mjs --preflight
+
+      - name: Download the exact-head browser QA evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: koa-theme-responsive-pr-${{ steps.preflight.outputs.qa_run_id }}
+          run-id: ${{ steps.preflight.outputs.qa_run_id }}
+          github-token: ${{ github.token }}
+          path: release-certification
+
+      - name: Verify Chromium and WebKit routes, platform viewports and health classification
+        run: node scripts/release_certification.mjs --evidence
+
+      - name: Re-read current PR HEAD and main before certifying
+        run: node scripts/release_certification.mjs --final
+
+      - name: Publish executive release evidence
+        if: always()
+        shell: bash
+        run: |
+          if [ -f release-certification/final-attestation.json ]; then
+            echo '### Exact-head release certification: PASS' >> "$GITHUB_STEP_SUMMARY"
+            node -e "const x=require('./release-certification/final-attestation.json'); console.log('PR #'+x.pr+' · Head '+x.head+' · Main '+x.main+' · Netlify '+x.preview.deployId)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '### Exact-head release certification: NOT APPROVED' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload release attestation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: koa-release-certification-${{ github.run_id }}
+          path: |
+            release-certification/candidate.json
+            release-certification/evidence.json
+            release-certification/final-attestation.json
+          if-no-files-found: warn
+          retention-days: 90
