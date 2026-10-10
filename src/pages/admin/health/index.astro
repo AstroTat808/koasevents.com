@@ -4818,6 +4818,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const chromium=value.chromium||{};
       const webkit=value.webkit||{};
       const browserText=(row)=>{
+        if(row?.reportMissing){
+          const reasons={
+            'exact-deploy-unavailable':'exact production deployment unavailable',
+            'browser-audit-skipped':'browser audit skipped',
+            'browser-audit-failed-before-report':'audit failed before report creation',
+            'browser-report-missing':'report file not generated',
+            'invalid-browser-report':'invalid or incomplete report',
+          };
+          return 'Missing report · '+(reasons[String(row?.missingReason||'')]||'browser evidence unavailable');
+        }
         const failures=Math.max(0,Number(row?.failureCount||0));
         const failedRoutes=Math.max(0,Number(row?.failedRouteCount||0));
         const cases=Math.max(0,Number(row?.cases||0));
@@ -4831,9 +4841,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           'bg-emerald-100 text-emerald-800'
         );
       }
-      if(themeQaChromiumRoutes)themeQaChromiumRoutes.textContent=available?String(Number(chromium.routes||0))+' routes':'—';
+      if(themeQaChromiumRoutes)themeQaChromiumRoutes.textContent=available?(chromium.reportMissing?'Missing report':String(Number(chromium.routes||0))+' routes'):'—';
       if(themeQaChromiumFailures)themeQaChromiumFailures.textContent=available?browserText(chromium):'No recorded audit yet.';
-      if(themeQaWebkitRoutes)themeQaWebkitRoutes.textContent=available?String(Number(webkit.routes||0))+' routes':'—';
+      if(themeQaWebkitRoutes)themeQaWebkitRoutes.textContent=available?(webkit.reportMissing?'Missing report':String(Number(webkit.routes||0))+' routes'):'—';
       if(themeQaWebkitFailures)themeQaWebkitFailures.textContent=available?browserText(webkit):'No recorded audit yet.';
       if(themeQaCommit){
         themeQaCommit.textContent=String(value.commit||'—');
