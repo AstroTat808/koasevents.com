@@ -637,8 +637,22 @@ export default async (req:Request,context:Context) => {
         const deployContext=cleanText(deploy?.context,80);
         const deployCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
         const publishedAt=cleanText(deploy?.published_at,80);
-        const liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+        let liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
         const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        let liveCommitSource=liveCommit?'netlify-runtime':'';
+        // API-triggered Netlify builds can omit COMMIT_REF from the function runtime.
+        // In that case, resolve the commit from Netlify's authoritative record for
+        // the deploy that is actually serving this request. The release policy still
+        // requires that live deploy ID to equal the exact-SHA production deploy ID.
+        if(!liveCommit&&liveDeployId){
+          const {body:liveDeploy}=await netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId));
+          const providerLiveDeployId=cleanText(liveDeploy?.id,120);
+          if(providerLiveDeployId!==liveDeployId){
+            throw new Error('Netlify live deploy lookup returned an unexpected deploy id.');
+          }
+          liveCommit=cleanText(liveDeploy?.commit_ref||liveDeploy?.commit||liveDeploy?.branch_commit,80);
+          liveCommitSource='netlify-live-deploy';
+        }
         const ok=Boolean(deploy)&&productionDeployMatchesAttestation({
           expectedSha,
           deployId,
@@ -661,6 +675,7 @@ export default async (req:Request,context:Context) => {
           deployCommit,
           publishedAt,
           liveCommit,
+          liveCommitSource,
           liveDeployId,
           matchingDeployId:Boolean(deployId&&(!liveDeployId||liveDeployId===deployId)),
         },{
