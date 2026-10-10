@@ -714,13 +714,42 @@ jobs:
           warnings=dashboard.get('enrichmentWarnings') or []
           expected_refresh='Partial' if warnings else 'Current'
 
+          expected_viewports={
+              'phone-small':(320,568),
+              'phone':(390,844),
+              'tablet':(768,1024),
+              'tablet-wide':(1024,768),
+              'desktop-small':(1280,800),
+              'desktop':(1440,900),
+              'desktop-wide':(1920,1080),
+          }
+          def complete_report(report,browser):
+              rows=report.get('results')
+              if (
+                  report.get('mode')!='health-mobile'
+                  or report.get('browser')!=browser
+                  or report.get('checkedAt')!=current.get('checkedAt')
+                  or not isinstance(rows,list)
+                  or len(rows)!=7
+                  or report.get('failures')!=[]
+              ):
+                  return False
+              found=set()
+              for row in rows:
+                  if not isinstance(row,dict):
+                      return False
+                  name=row.get('viewport')
+                  if name not in expected_viewports or name in found:
+                      return False
+                  if (row.get('width'),row.get('height'))!=expected_viewports[name]:
+                      return False
+                  if row.get('failure'):
+                      return False
+                  found.add(name)
+              return found==set(expected_viewports)
+
           reports=[chromium,webkit]
-          reports_complete=all(
-              isinstance(report.get('results'),list)
-              and len(report.get('results'))==7
-              and not (report.get('failures') or [])
-              for report in reports
-          )
+          reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')
           refresh_checks=[]
           for report in reports:
               for row in report.get('results') or []:
