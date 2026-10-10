@@ -19,6 +19,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
@@ -291,8 +292,8 @@ async function productionDeployForCommit(token:string,siteId:string,sha:string){
   return matches.sort((a:any,b:any)=>{
     const aState=cleanText(a?.state,40).toLowerCase();
     const bState=cleanText(b?.state,40).toLowerCase();
-    const aReady=['ready','current'].includes(aState)?1:0;
-    const bReady=['ready','current'].includes(bState)?1:0;
+    const aReady=isSuccessfulNetlifyState(aState)?1:0;
+    const bReady=isSuccessfulNetlifyState(bState)?1:0;
     if(aReady!==bReady)return bReady-aReady;
     return Date.parse(String(b?.published_at||b?.created_at||0))-Date.parse(String(a?.published_at||a?.created_at||0));
   })[0]||null;
@@ -325,7 +326,7 @@ async function selfHealProductionDeploy(context:Context,claims:any){
 
   const existing=await productionDeployForCommit(token,siteId,expectedSha);
   const existingState=cleanText(existing?.state,80).toLowerCase();
-  const existingReady=Boolean(existing&&['ready','current'].includes(existingState));
+  const existingReady=Boolean(existing&&isSuccessfulNetlifyState(existingState));
   if(existingReady){
     return {
       ok:true,
@@ -638,16 +639,16 @@ export default async (req:Request,context:Context) => {
         const publishedAt=cleanText(deploy?.published_at,80);
         const liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
         const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
-        const ok=Boolean(
-          deploy
-          && deployId
-          && deployCommit===expectedSha
-          && deployContext==='production'
-          && ['ready','current'].includes(deployState)
-          && publishedAt
-          && liveCommit===expectedSha
-          && liveDeployId===deployId
-        );
+        const ok=Boolean(deploy)&&productionDeployMatchesAttestation({
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveDeployId,
+        });
         return Response.json({
           ok,
           accepted:result.accepted,
