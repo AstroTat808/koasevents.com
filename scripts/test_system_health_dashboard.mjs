@@ -324,8 +324,9 @@ assert(
 );
 assert(
   visualWorkflow.includes('--wait-seconds 300')
-    && visualWorkflow.includes('self-heal-production-deploy'),
-  'Production visual QA must retain the exact-SHA five-minute Netlify self-healing gate.',
+    && visualWorkflow.includes('node scripts/production_deploy_recovery.mjs')
+    && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
+  'Production visual QA must retain the five-minute exact-SHA Netlify gate and trusted fallback.',
 );
 
 
