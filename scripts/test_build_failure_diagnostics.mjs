@@ -29,6 +29,10 @@ const events=readFileSync('netlify/functions/deployment-events.mts','utf8');
 assert(events.includes('deployFailed(event:DeployFailedEvent)')&&events.includes("'by-deploy/'+deployId"),
   'Deploy-failed event handler must promote the sanitized diagnostic to durable site-wide history.');
 const health=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
+const healthPage=readFileSync('src/pages/admin/health/index.astro','utf8');
 assert(health.includes('failureDiagnostic')&&health.includes('failingCommand'),
   'System Health deployment history must expose the exact failing command.');
-console.log('PASS | Netlify failures emit sanitized exact-stage/command diagnostics and System Health consumes them.');
+assert(healthPage.includes('data-group-command')
+    &&healthPage.includes("'Stage: '+String(group.failingStage||'build')+' · Command: '+String(group.failingCommand)"),
+  'System Health UI must render the captured failing stage and exact command.');
+console.log('PASS | Netlify failures emit sanitized exact-stage/command diagnostics and System Health displays them.');
