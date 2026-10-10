@@ -286,7 +286,8 @@ assert(
   visualWorkflow.includes('statuses: write')
     && visualWorkflow.includes('System Health production release gate')
     && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
-    && visualWorkflow.includes("len(report.get('results'))==7")
+    && visualWorkflow.includes('len(rows)!=7')
+    && visualWorkflow.includes("found==set(expected_viewports)")
     && visualWorkflow.includes('len(refresh_checks)==14'),
   'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
 );
