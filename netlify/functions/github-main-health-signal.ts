@@ -111,7 +111,7 @@ async function createSandboxStaticDeploy(token:string,siteId:string,html:string,
   };
 }
 
-async function latestPublishedSandboxDeploy(token:string,siteId:string){
+async function latestPublishedDeploy(token:string,siteId:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?latest-published=true&per_page=1');
   const row=Array.isArray(body)?body[0]:null;
   return {
@@ -125,7 +125,7 @@ async function waitForPublishedSandboxDeploy(token:string,siteId:string,expected
   const started=Date.now();
   let latest={deployId:'',state:'',publishedAt:''};
   while(Date.now()-started<timeoutMs){
-    latest=await latestPublishedSandboxDeploy(token,siteId);
+    latest=await latestPublishedDeploy(token,siteId);
     if(latest.deployId===expectedDeployId)return latest;
     await new Promise((resolve)=>setTimeout(resolve,500));
   }
@@ -205,7 +205,7 @@ async function runSandboxSelfHealDrill(context:Context,claims:any){
   if(String(site?.name||'')!==ROLLBACK_DRILL_SANDBOX_SITE_NAME)throw new Error('Sandbox self-heal drill site name mismatch.');
   if(String(site?.custom_domain||'').trim())throw new Error('Sandbox self-heal drill requires a site with no custom domain.');
 
-  const before=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  const before=await latestPublishedDeploy(token,sandboxSiteId);
   const expectedSha=cleanText(claims?.sha,80);
   const graceStartedAt=new Date(Date.now()-5*60*1000-1000).toISOString();
   const marker=cleanText('self-heal-'+String(claims?.run_id||Date.now())+'-'+expectedSha.slice(0,12),100);
@@ -763,33 +763,46 @@ export default async (req:Request,context:Context) => {
     }
 
     if(body?.action==='run-dashboard-refresh'){
-      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
-      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim().toLowerCase();
+      const requestSha=String(claims.sha||'').trim().toLowerCase();
+      if(!deployedCommit||deployedCommit!==requestSha){
         return Response.json({
-          error:'Production is not serving the requesting GitHub commit.',
-          expected:String(claims.sha||''),
+          ok:false,
+          error:'Production is not serving the requesting exact GitHub SHA.',
+          expected:requestSha,
           deployed:deployedCommit,
         },{status:409,headers:{'Cache-Control':'no-store'}});
       }
       try{
+        const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+        const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+        const deployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        if(!siteId||!token||!deployId){
+          throw new Error('Exact published Netlify deployment attestation is unavailable.');
+        }
+        const published=await latestPublishedDeploy(token,siteId);
+        const publicationMatchesPublished=Boolean(published.deployId&&published.deployId===deployId);
         const dashboard=await runHealthDashboardRefresh(context);
         const current:any=dashboard?.current||null;
         return Response.json({
-          ok:Boolean(current),
+          ok:Boolean(current&&publicationMatchesPublished),
           accepted:result.accepted,
           sha:result.signal.sha,
-          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          deployId,
+          publishedDeployId:published.deployId,
+          publicationMatchesPublished,
           source:'github-actions-oidc',
           current,
           coverage:dashboard?.coverage||{},
           enrichmentWarnings:Array.isArray(dashboard?.enrichmentWarnings)?dashboard.enrichmentWarnings:[],
           dashboard,
         },{
-          status:current?200:503,
+          status:current&&publicationMatchesPublished?200:409,
           headers:{'Cache-Control':'no-store'},
         });
       }catch(error){
         return Response.json({
+          ok:false,
           error:error instanceof Error?error.message:'System Health dashboard refresh failed.',
           accepted:result.accepted,
           sha:result.signal.sha,
