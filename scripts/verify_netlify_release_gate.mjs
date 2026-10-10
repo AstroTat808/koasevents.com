@@ -195,18 +195,36 @@ async function verifyDeployPreviewHead(commit){
   // Avoid GitHub REST rate limits on Netlify shared build infrastructure.
   // refs/pull/<number>/head is the authoritative live PR head and is readable
   // from the public Git remote without exposing a GitHub token to PR code.
+  // Netlify can start a build before GitHub has propagated a newly pushed
+  // PR ref to Git's read replicas. Retry that eventually-consistent read,
+  // but NEVER accept a nonmatching SHA, even if the preview itself builds.
   let headSha='';
-  try{
-    headSha=remoteRefSha('refs/pull/'+reviewId+'/head');
-  }catch(error){
-    fail(error instanceof Error?error.message:String(error));
+  const retryDelaysMs=[0,3_000,6_000,9_000,12_000];
+  let lastError='';
+  for(let attempt=0;attempt<retryDelaysMs.length;attempt+=1){
+    if(retryDelaysMs[attempt]){
+      await new Promise((resolve)=>setTimeout(resolve,retryDelaysMs[attempt]));
+    }
+    try{
+      headSha=remoteRefSha('refs/pull/'+reviewId+'/head');
+      if(headSha.toLowerCase()===commit.toLowerCase())break;
+      lastError='GitHub PR ref currently resolves to '+headSha;
+    }catch(error){
+      lastError=error instanceof Error?error.message:String(error);
+    }
+    if(attempt<retryDelaysMs.length-1){
+      console.warn(
+        '[koa release gate] Awaiting exact GitHub PR-head ref propagation ('+
+        (attempt+1)+'/'+retryDelaysMs.length+'): '+lastError+'.'
+      );
+    }
   }
 
   if(commit.toLowerCase()!==headSha.toLowerCase()){
     fail(
       'Deploy Preview commit '+commit+
-      ' does not exactly match current PR #'+reviewId+' head '+headSha+
-      '. Stale preview blocked.'
+      ' does not exactly match current PR #'+reviewId+' head '+(headSha||'unresolved')+
+      '. Stale preview blocked. '+lastError
     );
   }
 
