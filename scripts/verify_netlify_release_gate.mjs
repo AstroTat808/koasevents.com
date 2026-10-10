@@ -83,6 +83,25 @@ async function githubJson(path){
   throw lastError||new Error('GitHub API request failed.');
 }
 
+async function waitForExactProductionMain(commit,readBranch=()=>githubJson('/branches/main'),pause=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms))){
+  const expected=String(commit||'').toLowerCase();
+  if(!/^[a-f0-9]{40}$/.test(expected))throw new Error('Production COMMIT_REF must be a full GitHub SHA.');
+  const delays=[0,2_000,5_000,8_000,13_000];
+  let observed='';
+  for(let index=0;index<delays.length;index++){
+    if(delays[index])await pause(delays[index]);
+    const response=await readBranch();
+    observed=String(response?.commit?.sha||'').toLowerCase();
+    if(observed===expected)return observed;
+    if(index<delays.length-1){
+      console.warn('[koa release gate] Waiting for exact GitHub main SHA propagation ('+
+        (index+1)+'/'+delays.length+'); expected '+expected+'; observed '+(observed||'missing')+'.');
+    }
+  }
+  throw new Error('Production commit '+expected+' is not exact current main '+
+    (observed||'missing')+' after bounded GitHub propagation retries.');
+}
+
 function matchingMergedPulls(pulls,commit,headSha=''){
   const expectedCommit=String(commit||'').toLowerCase();
   const expectedHead=String(headSha||'').toLowerCase();
@@ -95,34 +114,33 @@ function matchingMergedPulls(pulls,commit,headSha=''){
     .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
 }
 
+async function waitForMergedPullBinding(commit,headSha='',readPulls=()=>githubJson('/commits/'+encodeURIComponent(commit)+'/pulls'),pause=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms))){
+  // Merge commits and commit->PR associations may be indexed on different
+  // GitHub replicas shortly after a push. Retry only for an exact binding.
+  const delays=[0,2_000,4_000,7_000,10_000];
+  for(let index=0;index<delays.length;index++){
+    if(delays[index])await pause(delays[index]);
+    const candidates=matchingMergedPulls(await readPulls(),commit,headSha);
+    if(candidates.length===1)return candidates[0];
+    if(candidates.length>1)throw new Error('Ambiguous merged pull-request provenance for '+commit+'.');
+    if(index<delays.length-1){
+      console.warn('[koa release gate] Waiting for exact merged-PR association ('+
+        (index+1)+'/'+delays.length+') for '+commit+'.');
+    }
+  }
+  throw new Error('Production commit '+commit+' is not yet bound to a verified merged-main pull request.');
+}
+
 async function resolvePullRequestHead(commit){
   const parentLine=git('rev-list','--parents','-n','1',commit);
   const parts=parentLine.split(/\s+/).filter(Boolean);
   const parents=parts.slice(1);
-  const pulls=await githubJson('/commits/'+encodeURIComponent(commit)+'/pulls');
-
-  if(parents.length>=2){
-    const headSha=String(parents[1]||'');
-    const candidates=matchingMergedPulls(pulls,commit,headSha);
-    if(!candidates.length){
-      throw new Error('Merge commit '+commit+' is not bound to a merged main pull request whose head is second parent '+headSha+'.');
-    }
-    return {
-      headSha,
-      source:'merge-second-parent+pull-request',
-      prNumber:Number(candidates[0].number||0),
-    };
-  }
-
-  const candidates=matchingMergedPulls(pulls,commit);
-  if(!candidates.length){
-    throw new Error('Production commit is not traceable to a merged pull request.');
-  }
-
+  const headSha=parents.length>=2?String(parents[1]||''):'';
+  const merged=await waitForMergedPullBinding(commit,headSha);
   return {
-    headSha:String(candidates[0].head.sha),
-    source:'associated-pull-request',
-    prNumber:Number(candidates[0].number||0),
+    headSha:headSha||String(merged.head.sha),
+    source:headSha?'merge-second-parent+pull-request':'associated-pull-request',
+    prNumber:Number(merged.number||0),
   };
 }
 
@@ -134,7 +152,7 @@ function belongsToExactPullHead(run,headSha){
     &&String(run?.event||'')==='pull_request';
 }
 
-function selfTest(){
+async function selfTest(){
   const sha='a'.repeat(40);
   const merge='c'.repeat(40);
   const associated={head_sha:sha,event:'pull_request',name:REQUIRED_WORKFLOW,status:'completed',
@@ -153,7 +171,25 @@ function selfTest(){
   if(parseLsRemoteSha(sha+'\trefs/pull/254/head')!==sha)throw Error('Remote PR-head SHA parser rejected a valid ref.');
   if(parseLsRemoteSha('not-a-sha\trefs/pull/254/head'))throw Error('Remote PR-head SHA parser accepted invalid data.');
 
-  console.log('PASS | exact-head workflow provenance, remote PR-head binding, and merged-PR binding reject stale or mismatched release evidence.');
+  const main='e'.repeat(40), stale='f'.repeat(40);
+  let reads=0;
+  const mainRead=async()=>({commit:{sha:++reads<3?stale:main}});
+  if(await waitForExactProductionMain(main,mainRead,async()=>{})!==main||reads!==3){
+    throw Error('A newly merged exact-main SHA was not accepted after bounded propagation.');
+  }
+  let staleAccepted=false;
+  try{await waitForExactProductionMain(main,async()=>({commit:{sha:stale}}),async()=>{});staleAccepted=true;}catch{}
+  if(staleAccepted)throw Error('A permanently stale or divergent main SHA was accepted.');
+  let assocReads=0;
+  const linked=await waitForMergedPullBinding(merge,sha,async()=>++assocReads<3?[]:[mergedPr],async()=>{});
+  if(linked.number!==251||assocReads!==3)throw Error('An eventually indexed exact merged PR was rejected.');
+  let badBindingAccepted=false;
+  try{
+    await waitForMergedPullBinding(merge,sha,async()=>[{...mergedPr,merge_commit_sha:stale}],async()=>{});
+    badBindingAccepted=true;
+  }catch{}
+  if(badBindingAccepted)throw Error('A mismatched merge association was accepted after retries.');
+  console.log('PASS | exact-main and exact-merged-PR evidence tolerate propagation delay but reject persistent mismatches.');
 }
 
 function newestRun(runs){
@@ -252,10 +288,10 @@ async function main(){
     return;
   }
 
-  const actualMain=await githubJson('/branches/main');
-  const latestMainSha=String(actualMain?.commit?.sha||'').toLowerCase();
-  if(!/^[a-f0-9]{40}$/i.test(latestMainSha) || commit.toLowerCase()!==latestMainSha){
-    fail('Production commit '+commit+' is not exact current main '+latestMainSha+'.');
+  try{
+    await waitForExactProductionMain(commit);
+  }catch(error){
+    fail(error instanceof Error?error.message:String(error));
   }
   let resolved;
   try{
@@ -323,5 +359,5 @@ async function main(){
   );
 }
 
-if(process.argv.includes('--self-test')) selfTest();
+if(process.argv.includes('--self-test')) await selfTest();
 else await main();
