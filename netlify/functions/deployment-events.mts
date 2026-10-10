@@ -38,7 +38,7 @@ export default {
   async deploySucceeded(event:DeploySucceededEvent){
     if(String(event.deploy.context||'')!=='production')return;
     try{
-      const store=getStore(STORE);
+      const store=controlPlaneStore(STORE);
       await store.setJSON('latest-success',{
         deployId:String(event.deploy.id||''),commit:String(event.deploy.commitRef||''),
         publishedAt:String(event.deploy.publishedAt||''),recordedAt:new Date().toISOString(),
