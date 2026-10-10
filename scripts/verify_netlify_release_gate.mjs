@@ -1,13 +1,7 @@
-import { execFileSync } from 'node:child_process';
-
 const REPOSITORY='AstroTat808/koasevents.com';
 const REQUIRED_WORKFLOW='Production visual QA';
 const REQUIRED_WORKFLOWS=[REQUIRED_WORKFLOW,'Branch hygiene','VenueLoom tenant isolation CI','Release Certification'];
 const PREVIEW_CONTEXT='netlify/koasevents-website/deploy-preview';
-
-function git(...args){
-  return execFileSync('git',args,{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
-}
 
 function fail(message){
   console.error('[koa release gate] '+message);
@@ -43,29 +37,26 @@ async function githubJson(path){
 }
 
 async function resolvePullRequestHead(commit){
-  const parentLine=git('rev-list','--parents','-n','1',commit);
-  const parts=parentLine.split(/\s+/).filter(Boolean);
-  const parents=parts.slice(1);
-
-  if(parents.length>=2){
-    return {
-      headSha:parents[1],
-      source:'merge-second-parent',
-    };
-  }
-
+  // Netlify's checkout may be shallow: git rev-list --parents can return no
+  // parents for a real merge. Resolve authoritative merge provenance via the
+  // GitHub commit-to-PR association, not local Git graph completeness.
   const pulls=await githubJson('/commits/'+encodeURIComponent(commit)+'/pulls');
   const candidates=(Array.isArray(pulls)?pulls:[])
-    .filter((pr)=>pr?.merged_at&&String(pr?.base?.ref||'')==='main'&&pr?.head?.sha)
+    .filter((pr)=>pr?.merged_at
+      &&String(pr?.base?.ref||'')==='main'
+      &&String(pr?.merge_commit_sha||'').toLowerCase()===commit.toLowerCase()
+      &&/^[a-f0-9]{40}$/i.test(String(pr?.head?.sha||'')))
     .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
 
-  if(!candidates.length){
-    throw new Error('Production commit is not traceable to a merged pull request.');
+  if(candidates.length!==1){
+    throw new Error(
+      'Production commit '+commit+' has '+candidates.length+
+      ' verified merged-main PR associations (exactly one required).'
+    );
   }
-
   return {
     headSha:String(candidates[0].head.sha),
-    source:'associated-pull-request',
+    source:'github-exact-merged-pull-request',
     prNumber:Number(candidates[0].number||0),
   };
 }
@@ -171,6 +162,7 @@ async function main(){
 
   const actualMain=await githubJson('/branches/main');
   const latestMainSha=String(actualMain?.commit?.sha||'').toLowerCase();
+  console.log('[koa release gate] Inspecting production commit '+commit+' against verified current main '+latestMainSha+'.');
   if(!/^[a-f0-9]{40}$/i.test(latestMainSha) || commit.toLowerCase()!==latestMainSha){
     fail('Production commit '+commit+' is not exact current main '+latestMainSha+'.');
   }
@@ -207,6 +199,7 @@ async function main(){
     fail(error instanceof Error?error.message:String(error));
   }
 
+  console.log('[koa release gate] Checking merged PR #'+resolved.prNumber+' exact head '+headSha+' and required GitHub evidence.');
   const runs=(Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
     .filter((run)=>belongsToExactPullHead(run,headSha));
   const matching=runs.filter((run)=>String(run?.name||'')===REQUIRED_WORKFLOW);
