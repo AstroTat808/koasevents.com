@@ -1,0 +1,48 @@
+name: Trusted Netlify production recovery
+
+# Runs from the protected default branch, not from untrusted PR contents.
+# This path does NOT call a Netlify function currently served in production.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Full 40-character exact GitHub main SHA to recover'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: koa-trusted-netlify-recovery-main
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Validate exact main and initiate bounded Netlify retry
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production-recovery
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Recovery policy regression tests
+        run: |
+          node scripts/test_production_deploy_recovery.mjs
+          node scripts/github_recover_netlify_production.mjs --self-test
+      - name: Recover exact main SHA directly through Netlify API
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          RECOVERY_EXPECTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RECOVERY_EXPECTED_SHA" = "$GITHUB_SHA"
+          node scripts/github_recover_netlify_production.mjs
