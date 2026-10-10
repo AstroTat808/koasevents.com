@@ -721,7 +721,22 @@ export default async (req:Request,context:Context) => {
         const routes=Math.max(0,Math.floor(Number(value?.routes||0)));
         const cases=Math.max(0,Math.floor(Number(value?.cases||0)));
         const failureCount=Math.max(0,Math.floor(Number(value?.failureCount||0)));
-        const reportMissing=Boolean(value?.reportMissing);
+        const reportMissing=Boolean(value?.reportMissing)
+          || routes===0
+          || cases===0
+          || !Array.isArray(value?.routeResults)
+          || value.routeResults.length===0;
+        const permittedMissingReasons=new Set([
+          'exact-deploy-unavailable',
+          'browser-audit-skipped',
+          'browser-audit-failed-before-report',
+          'browser-report-missing',
+          'invalid-browser-report',
+        ]);
+        const providedReason=cleanText(value?.missingReason,80);
+        const missingReason=reportMissing
+          ? (permittedMissingReasons.has(providedReason)?providedReason:'invalid-browser-report')
+          : '';
         const routeResults=(Array.isArray(value?.routeResults)?value.routeResults:[])
           .map((row:any)=>{
             const route=cleanText(row?.route,300);
@@ -750,7 +765,8 @@ export default async (req:Request,context:Context) => {
           .filter((row:any)=>row.route)
           .slice(0,250);
         const failedRouteCount=routeResults.filter((row:any)=>row.status==='failed').length;
-        return {browser,routes,cases,failureCount,failedRouteCount,reportMissing,routeResults};
+        return {browser,routes,cases,failureCount:reportMissing?Math.max(1,failureCount):failureCount,
+          failedRouteCount,reportMissing,missingReason,routeResults};
       };
 
       try{

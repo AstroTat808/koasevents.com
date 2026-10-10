@@ -397,8 +397,8 @@ jobs:
 
   production-theme-audit:
     name: Live Light / Dark / System audit
-    if: github.event_name != 'pull_request'
-    needs: source-build-audit
+    if: github.event_name != 'pull_request' && always()
+    needs: [source-build-audit, deployed-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -420,18 +420,32 @@ jobs:
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
       - name: Wait for exact Netlify production SHA
-        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
+        id: theme-exact-deploy-wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.deployed-smoke.result }}" != "success" ]; then
+            echo "Exact production deployment smoke did not succeed; required browser evidence is unavailable."
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode wait --wait-seconds 900
       - name: Verify live Light / Dark / System in Chromium
+        id: theme-chromium
         run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
       - name: Verify live Light / Dark / System in WebKit
+        id: theme-webkit
         run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
       - name: Publish Dark Mode visual-quality result to System Health
         if: always()
         shell: bash
+        env:
+          EXACT_DEPLOY_WAIT_RESULT: ${{ steps.theme-exact-deploy-wait.outcome }}
+          CHROMIUM_AUDIT_RESULT: ${{ steps.theme-chromium.outcome }}
+          WEBKIT_AUDIT_RESULT: ${{ steps.theme-webkit.outcome }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import base64, json
+          import base64, json, os
           from datetime import datetime, timezone
           from pathlib import Path
 
@@ -447,7 +461,32 @@ jobs:
 
           def summarize(browser):
               report=load_report(browser)
-              if report is None:
+              try:
+                  route_count=int(report.get('routes') or 0) if report is not None else 0
+                  case_count=int(report.get('cases') or 0) if report is not None else 0
+              except (TypeError,ValueError,OverflowError):
+                  route_count,case_count=0,0
+              complete=(
+                  report is not None
+                  and isinstance(report.get('results'),list)
+                  and len(report.get('results'))>0
+                  and route_count>0
+                  and case_count==len(report.get('results'))
+                  and isinstance(report.get('failures'),list)
+              )
+              if not complete:
+                  wait_outcome=os.environ.get('EXACT_DEPLOY_WAIT_RESULT','').strip().lower()
+                  audit_outcome=os.environ.get(browser.upper()+'_AUDIT_RESULT','').strip().lower()
+                  if report is not None or Path(f'visual-results/theme-{browser}/report.json').is_file():
+                      reason='invalid-browser-report'
+                  elif wait_outcome!='success':
+                      reason='exact-deploy-unavailable'
+                  elif audit_outcome=='skipped':
+                      reason='browser-audit-skipped'
+                  elif audit_outcome=='failure':
+                      reason='browser-audit-failed-before-report'
+                  else:
+                      reason='browser-report-missing'
                   return {
                       'browser':browser,
                       'routes':0,
@@ -455,6 +494,7 @@ jobs:
                       'failureCount':1,
                       'failedRouteCount':0,
                       'reportMissing':True,
+                      'missingReason':reason,
                       'routeResults':[],
                   }
               by_route={}
@@ -508,6 +548,7 @@ jobs:
                   'failureCount':len(report.get('failures') or []),
                   'failedRouteCount':sum(1 for row in route_results if row['status']=='failed'),
                   'reportMissing':False,
+                  'missingReason':'',
                   'routeResults':route_results,
               }
 
@@ -552,6 +593,15 @@ jobs:
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
           curl -fsS             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data-binary @/tmp/dark-mode-visual-quality.json             https://koasevents.com/api/system-health/github-main-signal
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload=json.loads(Path('/tmp/dark-mode-visual-quality.json').read_text())
+          for browser in ('chromium','webkit'):
+              report=payload.get(browser) or {}
+              if report.get('reportMissing') or report.get('failureCount') or not report.get('routeResults'):
+                  raise SystemExit('Dark Mode QA release gate blocked: '+browser+' report is missing, incomplete, or failed.')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -565,7 +615,7 @@ jobs:
   admin-startup-audit:
     name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
-    needs: source-build-audit
+    needs: [source-build-audit, deployed-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -685,13 +735,42 @@ jobs:
           warnings=dashboard.get('enrichmentWarnings') or []
           expected_refresh='Partial' if warnings else 'Current'
 
+          expected_viewports={
+              'phone-small':(320,568),
+              'phone':(390,844),
+              'tablet':(768,1024),
+              'tablet-wide':(1024,768),
+              'desktop-small':(1280,800),
+              'desktop':(1440,900),
+              'desktop-wide':(1920,1080),
+          }
+          def complete_report(report,browser):
+              rows=report.get('results')
+              if (
+                  report.get('mode')!='health-mobile'
+                  or report.get('browser')!=browser
+                  or report.get('checkedAt')!=current.get('checkedAt')
+                  or not isinstance(rows,list)
+                  or len(rows)!=7
+                  or report.get('failures')!=[]
+              ):
+                  return False
+              found=set()
+              for row in rows:
+                  if not isinstance(row,dict):
+                      return False
+                  name=row.get('viewport')
+                  if name not in expected_viewports or name in found:
+                      return False
+                  if (row.get('width'),row.get('height'))!=expected_viewports[name]:
+                      return False
+                  if row.get('failure'):
+                      return False
+                  found.add(name)
+              return found==set(expected_viewports)
+
           reports=[chromium,webkit]
-          reports_complete=all(
-              isinstance(report.get('results'),list)
-              and len(report.get('results'))==7
-              and not (report.get('failures') or [])
-              for report in reports
-          )
+          reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')
           refresh_checks=[]
           for report in reports:
               for row in report.get('results') or []:
@@ -755,6 +834,13 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/system-health-commit-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          status=json.loads(Path('/tmp/system-health-commit-status.json').read_text())
+          if status.get('state')!='success':
+              raise SystemExit('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
