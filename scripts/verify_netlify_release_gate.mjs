@@ -196,15 +196,15 @@ async function selfTest(){
     created_at:'2026-10-10T09:03:58Z'};
   const closure={...premerge,run_number:209,status:'in_progress',conclusion:null,
     created_at:'2026-10-10T09:23:31Z'};
-  const eligible=preMergeWorkflowRuns([premerge,closure],mergedPr.merged_at);
+  const eligible=preMergeWorkflowRuns([premerge,closure],'2026-10-10T09:23:29Z');
   if(eligible.length!==1||newestRun(eligible)?.run_number!==208)throw Error('Post-merge close-event run displaced successful pre-merge evidence.');
   const failing={...premerge,run_number:210,status:'completed',conclusion:'failure',
     created_at:'2026-10-10T09:23:28Z'};
-  if(newestRun(preMergeWorkflowRuns([premerge,failing,closure],mergedPr.merged_at))?.conclusion!=='failure'){
+  if(newestRun(preMergeWorkflowRuns([premerge,failing,closure],'2026-10-10T09:23:29Z'))?.conclusion!=='failure'){
     throw Error('Latest failed pre-merge workflow was incorrectly accepted.');
   }
   const pending={...failing,conclusion:null,status:'in_progress'};
-  if(newestRun(preMergeWorkflowRuns([premerge,pending,closure],mergedPr.merged_at))?.status!=='in_progress'){
+  if(newestRun(preMergeWorkflowRuns([premerge,pending,closure],'2026-10-10T09:23:29Z'))?.status!=='in_progress'){
     throw Error('Latest pending pre-merge workflow was incorrectly accepted.');
   }
   for(const invalid of ['', 'not-a-date']){
