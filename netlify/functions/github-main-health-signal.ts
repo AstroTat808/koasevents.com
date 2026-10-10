@@ -19,6 +19,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
@@ -283,11 +284,19 @@ async function productionAccountingAuditForCommit(context:Context,targetCommit:s
 async function productionDeployForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
   const rows=Array.isArray(body)?body:[];
-  return rows.find((row:any)=>{
+  const matches=rows.filter((row:any)=>{
     const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
     const context=cleanText(row?.context,80);
     return commit===sha && (!context||context==='production');
-  })||null;
+  });
+  return matches.sort((a:any,b:any)=>{
+    const aState=cleanText(a?.state,40).toLowerCase();
+    const bState=cleanText(b?.state,40).toLowerCase();
+    const aReady=isSuccessfulNetlifyState(aState)?1:0;
+    const bReady=isSuccessfulNetlifyState(bState)?1:0;
+    if(aReady!==bReady)return bReady-aReady;
+    return Date.parse(String(b?.published_at||b?.created_at||0))-Date.parse(String(a?.published_at||a?.created_at||0));
+  })[0]||null;
 }
 
 async function currentGithubMainSha(){
@@ -316,16 +325,18 @@ async function selfHealProductionDeploy(context:Context,claims:any){
   if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
 
   const existing=await productionDeployForCommit(token,siteId,expectedSha);
-  if(existing){
+  const existingState=cleanText(existing?.state,80).toLowerCase();
+  const existingReady=Boolean(existing&&isSuccessfulNetlifyState(existingState));
+  if(existingReady){
     return {
       ok:true,
       triggered:false,
       exactShaPresent:true,
       expectedSha,
       deployId:cleanText(existing?.id,120),
-      deployState:cleanText(existing?.state,80),
+      deployState:existingState,
       deployContext:cleanText(existing?.context,80),
-      reason:'The exact approved main SHA already exists in Netlify; no recovery build was triggered.',
+      reason:'The exact approved main SHA already has a successful Netlify production deploy; no recovery build was triggered.',
     };
   }
 
@@ -346,11 +357,16 @@ async function selfHealProductionDeploy(context:Context,claims:any){
     ok:true,
     triggered:true,
     exactShaPresent:false,
+    failedExactShaPresent:Boolean(existing&&!existingReady),
+    failedDeployId:cleanText(existing?.id,120),
+    failedDeployState:existingState,
     expectedSha,
     currentMainSha:mainSha,
     buildId:cleanText(body?.id,120),
     buildState:cleanText(body?.state||body?.status,80),
-    reason:'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+    reason:existing
+      ? 'The exact approved main SHA existed only as a failed Netlify deploy, so a fresh production build was retriggered.'
+      : 'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
   };
 }
 
@@ -594,6 +610,68 @@ export default async (req:Request,context:Context) => {
           exactShaPresent:false,
           expectedSha:String(claims.sha||''),
           error:error instanceof Error?error.message:'Production deployment recovery failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='verify-production-release-attestation'){
+      const expectedSha=cleanText(claims?.sha,80);
+      const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+      const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      if(!token||!siteId){
+        return Response.json({
+          ok:false,
+          error:'Netlify production attestation credentials are unavailable.',
+          expectedSha,
+          accepted:result.accepted,
+          source:'github-actions-oidc',
+        },{status:503,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const deploy=await productionDeployForCommit(token,siteId,expectedSha);
+        const deployId=cleanText(deploy?.id,120);
+        const deployState=cleanText(deploy?.state,80).toLowerCase();
+        const deployContext=cleanText(deploy?.context,80);
+        const deployCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
+        const publishedAt=cleanText(deploy?.published_at,80);
+        const liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+        const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        const ok=Boolean(deploy)&&productionDeployMatchesAttestation({
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveDeployId,
+        });
+        return Response.json({
+          ok,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveDeployId,
+          matchingDeployId:Boolean(deployId&&(!liveDeployId||liveDeployId===deployId)),
+        },{
+          status:ok?200:409,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to attest the production Netlify deployment.',
+          expectedSha,
           accepted:result.accepted,
           sha:result.signal.sha,
           source:'github-actions-oidc',
