@@ -1,6 +1,6 @@
 import { emailButton, emailGreeting, emailGreetingText, emailHeader, assertEmailInlineAssets, emailLogoAttachment, emailSignature, emailSignatureText } from './email-brand';
 import type { Context } from '@netlify/functions';
-import { tenantStoreFor } from './tenant-storage';
+import { controlPlaneDeployStore, controlPlaneStore, tenantStoreFor } from './tenant-storage';
 import { resolveTenant } from './tenant';
 import { createHmac } from 'node:crypto';
 import { creditSaverPreset, creditSaverPresets, readCreditSaverPolicy, setCreditSaverModes } from './credit-saver';
@@ -14,7 +14,6 @@ import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
-import { getDeployStore, getStore } from '@netlify/blobs';
 import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 
 export type HealthIssueType =
@@ -3772,11 +3771,11 @@ async function readBuildFailureDiagnostic(deployId:string){
   let durable:any=null;
   let scoped:any=null;
   try{
-    const store=getStore(BUILD_FAILURE_DIAGNOSTICS_STORE);
+    const store=controlPlaneStore(BUILD_FAILURE_DIAGNOSTICS_STORE);
     durable=await store.get('by-deploy/'+id,{type:'json'});
   }catch{}
   try{
-    const store=getDeployStore({name:'koa-build-diagnostics',deployID:id});
+    const store=controlPlaneDeployStore('koa-build-diagnostics',id);
     scoped=await store.get('failure.json',{type:'json'});
   }catch{}
   const candidate=scoped?.command?{...durable,...scoped}:durable||scoped;
