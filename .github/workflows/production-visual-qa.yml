@@ -686,10 +686,15 @@ jobs:
           expected_refresh='Partial' if warnings else 'Current'
 
           reports=[chromium,webkit]
+          expected_widths={320,390,768,1024,1280,1440,1920}
           reports_complete=all(
               isinstance(report.get('results'),list)
               and len(report.get('results'))==7
+              and {row.get('width') for row in report['results'] if isinstance(row,dict)}==expected_widths
+              and len({row.get('width') for row in report['results'] if isinstance(row,dict)})==7
               and not (report.get('failures') or [])
+              and all(not row.get('failure') and not row.get('pageErrors')
+                      for row in report['results'] if isinstance(row,dict))
               for report in reports
           )
           refresh_checks=[]
@@ -755,6 +760,13 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/system-health-commit-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          status=json.loads(Path('/tmp/system-health-commit-status.json').read_text())
+          if status.get('state')!='success':
+              raise SystemExit('Chromium/WebKit 14-viewport System Health audit did not meet release requirements.')
+          PY
       - name: Produce privacy-safe System Health QA evidence
         if: always()
         run: python3 scripts/production_release_evidence.py
