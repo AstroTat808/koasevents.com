@@ -316,7 +316,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"read-accounting-adjustment-diagnostics","recordIds":["QBO-CUST-29","QBO-CUST-44"]}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-adjustment-diagnostics.json
+          # Never echo raw accounting diagnostics; they may include customer PII.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -333,7 +333,7 @@ jobs:
               assert row.get('accountingScope')=='quickbooks-history'
               assert row.get('estimateId')
               assert isinstance(row.get('rawFields'),dict)
-          print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
+          print('Historical QBO adjustment audit: verified records',len(rows))
           PY
       - name: Capture current safe accounting repair bulk preview
         if: github.event_name == 'push'
@@ -351,7 +351,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"read-current-accounting-repair-bulk-preview"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-repair-bulk-preview.json
+          # Never echo the raw bulk preview; rows include financial and personal data.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -371,7 +371,6 @@ jobs:
               'blockedClientCount':preview.get('blockedClientCount'),
               'cleanClientCount':preview.get('cleanClientCount'),
               'errorClientCount':preview.get('errorClientCount'),
-              'rows':preview.get('rows'),
           },separators=(',',':')))
           PY
       - name: Check public routes and headers
@@ -382,8 +381,6 @@ jobs:
           name: koa-production-smoke-${{ github.run_id }}
           path: |
             visual-results/production-smoke.json
-            visual-results/accounting-adjustment-diagnostics.json
-            visual-results/accounting-repair-bulk-preview.json
           retention-days: 14
           if-no-files-found: error
 
@@ -625,7 +622,7 @@ jobs:
             echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
             if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
           done
-          cat visual-results/system-health-dashboard.json
+          # The signed health payload stays local for browser QA; never print raw JSON.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -894,7 +891,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"run-dashboard-refresh"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat /tmp/koa-final-health.json
+          # Do not log the unredacted production health response.
           test "$http_status" = "200"
           python - <<'PY'
           import json, os
@@ -964,7 +961,7 @@ jobs:
             target_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
           };
           writeFileSync('/tmp/koa-production-release-status.json',JSON.stringify(payload));
-          writeFileSync('/tmp/koa-production-release-decision.json',JSON.stringify({decision,workflowResults,attestation,health:healthResponse}));
+          writeFileSync('/tmp/koa-production-release-decision.json',JSON.stringify({decision,workflowResults,deployId:attestation.deployId||'',health:{overall:current.overall,passed:current.passed,failed:current.failed,checkedAt:current.checkedAt}}));
           console.log(JSON.stringify({decision,workflowResults,deployId:attestation.deployId||'',health:{overall:current.overall,failed:current.failed}},null,2));
           NODE
           curl -fsS \
