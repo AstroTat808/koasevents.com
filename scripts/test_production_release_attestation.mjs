@@ -33,11 +33,14 @@ const base={
   },
   health:{
     ok:true,
+    source:'github-actions-oidc',
     sha,
+    deployId,
     overall:'healthy',
     passed:81,
     failed:0,
-    checkedAt:'2026-10-10T06:31:00Z',
+    checkedAt:new Date().toISOString(),
+    enrichmentWarnings:[],
   },
 };
 
@@ -63,6 +66,22 @@ assert(evaluateProductionReleaseGate({
   ...base,
   netlify:{...base.netlify,liveDeployId:'fedcba9876543210fedcba98'},
 }).ok===false,'Mismatched live Netlify deploy ID could publish a green production gate.');
+
+for(const [name,health] of [
+  ['signed health different deploy',{...base.health,deployId:'another-deployment'}],
+  ['unsigned refresh',{...base.health,source:'unverified'}],
+  ['missing warnings field',(({enrichmentWarnings,...rest})=>rest)(base.health)],
+  ['partial refresh',{...base.health,enrichmentWarnings:[{kind:'partial'}]}],
+  ['stale checkedAt',{...base.health,checkedAt:'2026-01-01T00:00:00Z'}],
+  ['future checkedAt',{...base.health,checkedAt:new Date(Date.now()+3600_000).toISOString()}],
+  ['malformed checkedAt',{...base.health,checkedAt:'unknown'}],
+  ['string passed count',{...base.health,passed:'81'}],
+  ['false failed count',{...base.health,failed:false}],
+  ['zero passed',{...base.health,passed:0}],
+]){
+  assert(evaluateProductionReleaseGate({...base,health}).ok===false,
+    'Production gate accepted '+name+'.');
+}
 
 for(const state of ['building','enqueued','new','error','failed','cancelled','']){
   assert(isSuccessfulNetlifyState(state)===false,'Non-ready Netlify state '+JSON.stringify(state)+' was accepted.');
