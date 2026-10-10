@@ -496,4 +496,14 @@ assert(
   'The repair workflow must continue to have no bulk QuickBooks mutation path.',
 );
 
+assert(
+  health.includes('data-health-detail-dialog class="fixed inset-0 m-auto')
+    && health.includes('max-h-[calc(100dvh-2rem)]')
+    && visualQa.includes('explanation_dialog_geometry')
+    && visualQa.includes("viewport_name in {\"phone\",\"desktop\"}")
+    && visualQa.includes('horizontalOffset<=14&&verticalOffset<=14')
+    && visualQa.includes('system-health-explanation-dialog-{viewport_name}.png'),
+  'System Health issue explanations must be centered and viewport-tested with synthetic, PII-free iPhone/desktop evidence.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
