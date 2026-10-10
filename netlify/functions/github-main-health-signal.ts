@@ -283,11 +283,19 @@ async function productionAccountingAuditForCommit(context:Context,targetCommit:s
 async function productionDeployForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
   const rows=Array.isArray(body)?body:[];
-  return rows.find((row:any)=>{
+  const matches=rows.filter((row:any)=>{
     const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
     const context=cleanText(row?.context,80);
     return commit===sha && (!context||context==='production');
-  })||null;
+  });
+  return matches.sort((a:any,b:any)=>{
+    const aState=cleanText(a?.state,40).toLowerCase();
+    const bState=cleanText(b?.state,40).toLowerCase();
+    const aReady=['ready','current'].includes(aState)?1:0;
+    const bReady=['ready','current'].includes(bState)?1:0;
+    if(aReady!==bReady)return bReady-aReady;
+    return Date.parse(String(b?.published_at||b?.created_at||0))-Date.parse(String(a?.published_at||a?.created_at||0));
+  })[0]||null;
 }
 
 async function currentGithubMainSha(){
@@ -632,12 +640,13 @@ export default async (req:Request,context:Context) => {
         const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
         const ok=Boolean(
           deploy
+          && deployId
           && deployCommit===expectedSha
           && deployContext==='production'
           && ['ready','current'].includes(deployState)
           && publishedAt
-          && (!liveCommit||liveCommit===expectedSha)
-          && (!liveDeployId||liveDeployId===deployId)
+          && liveCommit===expectedSha
+          && liveDeployId===deployId
         );
         return Response.json({
           ok,
