@@ -84,6 +84,17 @@ jobs:
         run: npm run build:safety
       - name: Test independent exact-SHA Netlify recovery policy
         run: node scripts/test_production_deploy_recovery.mjs
+      - name: Diagnose exact-main Netlify production gate with authenticated GitHub evidence
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          CONTEXT: production
+          GITHUB_RELEASE_GATE_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=4 origin main
+          export COMMIT_REF="$(git rev-parse FETCH_HEAD)"
+          node scripts/verify_netlify_release_gate.mjs
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules
