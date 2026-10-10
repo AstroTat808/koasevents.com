@@ -34,6 +34,36 @@ env:
   VISUAL_RESULTS: visual-results
 
 jobs:
+  release-status-pending:
+    name: Mark production release pending
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish fail-closed pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          payload={
+              "state":"pending",
+              "context":"System Health production release gate",
+              "description":"Production release verification is in progress.",
+              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          open("/tmp/koa-production-release-status.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-production-release-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+
   source-build-audit:
     name: Source + Astro build audit
     runs-on: ubuntu-latest
@@ -677,7 +707,8 @@ jobs:
               and current.get('checkedAt')
               and isinstance(current.get('passed'),int)
               and isinstance(current.get('failed'),int)
-              and current.get('overall') in {'healthy','unhealthy'}
+              and current.get('overall') == 'healthy'
+              and current.get('failed') == 0
               and reports_complete
               and len(refresh_checks)==14
               and all(refresh_checks)
@@ -689,7 +720,7 @@ jobs:
           description=f'{overall} · {passed} passed · {failed} failed · Refresh {expected_refresh} · 14 responsive checks'
           payload={
               'state':'success' if ok else 'failure',
-              'context':'System Health production release gate',
+              'context':'System Health responsive audit',
               'description':description[:140],
           }
           Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
@@ -764,10 +795,163 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  production-release-attestation:
+    name: Final production release attestation
+    if: github.event_name == 'push' && always()
+    needs:
+      - release-status-pending
+      - source-build-audit
+      - deployed-smoke
+      - production-theme-audit
+      - admin-startup-audit
+      - system-health-mobile-audit
+      - visual-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify every required production QA job succeeded
+        id: workflow-gates
+        shell: bash
+        env:
+          PENDING_RESULT: ${{ needs.release-status-pending.result }}
+          SOURCE_RESULT: ${{ needs.source-build-audit.result }}
+          SMOKE_RESULT: ${{ needs.deployed-smoke.result }}
+          THEME_RESULT: ${{ needs.production-theme-audit.result }}
+          ADMIN_RESULT: ${{ needs.admin-startup-audit.result }}
+          MOBILE_RESULT: ${{ needs.system-health-mobile-audit.result }}
+          VISUAL_RESULT: ${{ needs.visual-audit.result }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          results={
+              "pending":os.environ["PENDING_RESULT"],
+              "source":os.environ["SOURCE_RESULT"],
+              "smoke":os.environ["SMOKE_RESULT"],
+              "theme":os.environ["THEME_RESULT"],
+              "admin":os.environ["ADMIN_RESULT"],
+              "mobile":os.environ["MOBILE_RESULT"],
+              "visual":os.environ["VISUAL_RESULT"],
+          }
+          ok=all(value=="success" for value in results.values())
+          print(json.dumps({"ok":ok,"results":results},separators=(",",":")))
+          with open(os.environ["GITHUB_OUTPUT"],"a") as handle:
+              handle.write("ok="+("true" if ok else "false")+"\n")
+          PY
+
+      - name: Verify exact successful Netlify production deploy and live deploy ID
+        id: netlify-attestation
+        if: steps.workflow-gates.outputs.ok == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-production-attestation.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"verify-production-release-attestation"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat /tmp/koa-production-attestation.json
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-production-attestation.json"))
+          expected=os.environ["GITHUB_SHA"]
+          assert data.get("ok") is True
+          assert data.get("expectedSha")==expected
+          assert data.get("deployCommit")==expected
+          assert data.get("liveCommit")==expected
+          assert data.get("deployContext")=="production"
+          assert data.get("deployState") in {"ready","current"}
+          assert data.get("publishedAt")
+          assert data.get("deployId")
+          assert data.get("liveDeployId")==data.get("deployId")
+          assert data.get("matchingDeployId") is True
+          with open(os.environ["GITHUB_OUTPUT"],"a") as handle:
+              handle.write("deploy_id="+str(data["deployId"])+"\n")
+          PY
+
+      - name: Require final System Health snapshot to be healthy
+        id: final-health
+        if: steps.workflow-gates.outputs.ok == 'true' && steps.netlify-attestation.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-final-health.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"run-dashboard-refresh"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat /tmp/koa-final-health.json
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-final-health.json"))
+          current=data.get("current") or {}
+          assert data.get("ok") is True
+          assert data.get("sha")==os.environ["GITHUB_SHA"]
+          assert current.get("overall")=="healthy"
+          assert current.get("failed")==0
+          assert isinstance(current.get("passed"),int)
+          assert current.get("checkedAt")
+          PY
+
+      - name: Publish final fail-closed production release status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_GATES_OK: ${{ steps.workflow-gates.outputs.ok }}
+          NETLIFY_OUTCOME: ${{ steps.netlify-attestation.outcome }}
+          HEALTH_OUTCOME: ${{ steps.final-health.outcome }}
+          DEPLOY_ID: ${{ steps.netlify-attestation.outputs.deploy_id }}
+        run: |
+          set -euo pipefail
+          state="failure"
+          description="Production release blocked: required verification did not complete successfully."
+          if [ "$WORKFLOW_GATES_OK" = "true" ] && [ "$NETLIFY_OUTCOME" = "success" ] && [ "$HEALTH_OUTCOME" = "success" ] && [ -n "$DEPLOY_ID" ]; then
+            state="success"
+            description="Exact production SHA, Netlify deploy, deploy ID, System Health, and visual QA verified."
+          fi
+          STATE="$state" DESCRIPTION="$description" python - <<'PY'
+          import json, os
+          payload={
+              "state":os.environ["STATE"],
+              "context":"System Health production release gate",
+              "description":os.environ["DESCRIPTION"][:140],
+              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          open("/tmp/koa-production-release-status.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-production-release-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          test "$state" = "success"
+
   qa-summary:
     name: Visual QA summary
     if: always()
-    needs: [source-build-audit, deployed-smoke, production-theme-audit, admin-startup-audit, system-health-mobile-audit, visual-audit]
+    needs: [source-build-audit, deployed-smoke, production-theme-audit, admin-startup-audit, system-health-mobile-audit, visual-audit, production-release-attestation]
     runs-on: ubuntu-latest
     steps:
       - name: Publish run summary
@@ -783,6 +967,7 @@ jobs:
             echo '| Protected admin post-deploy audit | ${{ needs.admin-startup-audit.result }} |'
             echo '| Authenticated System Health mobile screenshots | ${{ needs.system-health-mobile-audit.result }} |'
             echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
+            echo '| Final production release attestation | ${{ needs.production-release-attestation.result }} |'
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
           } >> "$GITHUB_STEP_SUMMARY"
