@@ -694,6 +694,104 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+
+    if(body?.action==='record-production-release-attestation'){
+      const workflowRef=cleanText(claims?.job_workflow_ref||claims?.workflow,500);
+      if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
+        return Response.json({ok:false,error:'Only Production visual QA may persist a release attestation.'},{status:403,headers:{'Cache-Control':'no-store'}});
+      }
+      const expectedSha=cleanText(claims?.sha,80);
+      const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+      const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      if(!token||!siteId){
+        return Response.json({ok:false,error:'Netlify production attestation credentials are unavailable.',expectedSha},{status:503,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const deploy=await productionDeployForCommit(token,siteId,expectedSha);
+        const deployId=cleanText(deploy?.id,120);
+        const deployState=cleanText(deploy?.state,80).toLowerCase();
+        const deployContext=cleanText(deploy?.context,80);
+        const deployCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
+        const publishedAt=cleanText(deploy?.published_at,80);
+        const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        let liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+        if(!liveCommit&&liveDeployId){
+          const {body:liveDeploy}=await netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId));
+          if(cleanText(liveDeploy?.id,120)!==liveDeployId)throw new Error('Netlify live deploy lookup returned an unexpected deploy id.');
+          liveCommit=cleanText(liveDeploy?.commit_ref||liveDeploy?.commit||liveDeploy?.branch_commit,80);
+        }
+        const netlifyOk=Boolean(deploy)&&productionDeployMatchesAttestation({
+          expectedSha,deployId,deployState,deployContext,deployCommit,publishedAt,liveCommit,liveDeployId,
+        });
+        if(!netlifyOk){
+          return Response.json({ok:false,error:'Exact production deploy attestation is not valid for release-history persistence.',expectedSha,deployId,liveDeployId},{status:409,headers:{'Cache-Control':'no-store'}});
+        }
+
+        const health:any=body?.health||{};
+        const checkedAt=cleanText(health?.checkedAt,80);
+        const checkedMs=Date.parse(checkedAt);
+        const healthOk=cleanText(health?.sha,80)===expectedSha
+          &&cleanText(health?.deployId,120)===deployId
+          &&health?.overall==='healthy'
+          &&Number.isInteger(health?.passed)&&health.passed>0
+          &&Number.isInteger(health?.failed)&&health.failed===0
+          &&Number.isFinite(checkedMs)
+          &&Math.abs(Date.now()-checkedMs)<=20*60*1000;
+        const runId=cleanText(claims?.run_id||claims?.run_number,80);
+        const visualQaRunId=cleanText(body?.visualQaRunId,80);
+        const releases=await readProductionReleases(context,100);
+        const release:any=releases.find((row:any)=>row?.deployId===deployId&&row?.commit===expectedSha)||null;
+        const visual:any=release?.visualQuality||null;
+        const visualOk=Boolean(
+          release
+          &&visual?.status==='passed'
+          &&cleanText(visual?.commit,80)===expectedSha
+          &&cleanText(visual?.deployId,120)===deployId
+          &&cleanText(visual?.runId,80)===runId
+          &&visualQaRunId===runId
+          &&body?.visualQaConclusion==='success'
+        );
+        if(!healthOk||!visualOk||body?.productionGateState!=='success'){
+          return Response.json({
+            ok:false,
+            error:'Release-history evidence is incomplete or does not match the exact production release.',
+            expectedSha,deployId,healthOk,visualOk,
+          },{status:409,headers:{'Cache-Control':'no-store'}});
+        }
+
+        const releaseAttestation={
+          status:'verified' as const,
+          verifiedAt:new Date().toISOString(),
+          expectedSha,deployId,liveDeployId,
+          matchingDeployId:liveDeployId===deployId,
+          deployState,deployContext,publishedAt,
+          visualQaRunId:runId,
+          visualQaConclusion:'success',
+          systemHealth:{overall:'healthy',passed:Number(health.passed),failed:0,checkedAt},
+          productionGateState:'success',
+          source:'github-actions-oidc' as const,
+        };
+        const recorded:any=await recordProductionRelease(context,{
+          deployId,commit:expectedSha,publishedAt,releaseAttestation,
+        });
+        const recordedOk=recorded?.releaseAttestation?.status==='verified'
+          &&recorded?.releaseAttestation?.expectedSha===expectedSha
+          &&recorded?.releaseAttestation?.deployId===deployId
+          &&recorded?.releaseAttestation?.matchingDeployId===true;
+        return Response.json({
+          ok:recordedOk,recorded:recordedOk,expectedSha,deployId,liveDeployId,
+          releaseAttestation:recorded?.releaseAttestation||releaseAttestation,
+          source:'github-actions-oidc',
+        },{status:recordedOk?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to persist production release attestation.',
+          expectedSha,source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-real-sandbox-rollback-drill'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
