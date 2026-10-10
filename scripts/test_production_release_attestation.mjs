@@ -106,7 +106,7 @@ assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|n
   'Certified PR #260 production evidence must be backfilled into permanent release history.');
 assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
-    && healthPage.includes('attestation.matchingDeployId===true'),
+    && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');
