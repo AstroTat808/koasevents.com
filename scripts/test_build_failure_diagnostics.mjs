@@ -22,7 +22,7 @@ assert.equal(pkg.scripts.prebuild,'node scripts/run_prebuild_checks.mjs','npm pr
 const netlify=readFileSync('netlify.toml','utf8');
 assert(netlify.includes('command = "node scripts/run_netlify_build.mjs"'),'Netlify must use the structured build runner.');
 assert(netlify.includes('package = "/plugins/netlify-plugin-koa-build-diagnostics"'),'Netlify build diagnostics plugin is not configured.');
-const plugin=readFileSync('plugins/netlify-plugin-koa-build-diagnostics/index.mjs','utf8');
+const plugin=readFileSync('plugins/netlify-plugin-koa-build-diagnostics/index.js','utf8');
 assert(plugin.includes("getDeployStore('koa-build-diagnostics')")&&plugin.includes("await store.setJSON('failure.json',diagnostic)"),
   'Netlify onError must persist a deploy-scoped structured diagnostic.');
 const events=readFileSync('netlify/functions/deployment-events.mts','utf8');
