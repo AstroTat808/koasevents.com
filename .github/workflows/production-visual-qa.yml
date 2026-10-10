@@ -397,8 +397,8 @@ jobs:
 
   production-theme-audit:
     name: Live Light / Dark / System audit
-    if: github.event_name != 'pull_request'
-    needs: source-build-audit
+    if: github.event_name != 'pull_request' && always()
+    needs: [source-build-audit, deployed-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -421,7 +421,14 @@ jobs:
           python -m playwright install --with-deps chromium webkit
       - name: Wait for exact Netlify production SHA
         id: theme-exact-deploy-wait
-        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.deployed-smoke.result }}" != "success" ]; then
+            echo "Exact production deployment smoke did not succeed; required browser evidence is unavailable."
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode wait --wait-seconds 900
       - name: Verify live Light / Dark / System in Chromium
         id: theme-chromium
         run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
@@ -608,7 +615,7 @@ jobs:
   admin-startup-audit:
     name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
-    needs: source-build-audit
+    needs: [source-build-audit, deployed-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
