@@ -50,6 +50,27 @@ type ListOptions = { prefix?: string };
 
 const CANONICAL_STORE = 'venueloom-data';
 
+export type ControlPlaneStoreName='koa-deploy-diagnostics'|'koa-build-diagnostics';
+const CONTROL_PLANE_STORES=new Set<ControlPlaneStoreName>(['koa-deploy-diagnostics','koa-build-diagnostics']);
+
+function assertControlPlaneStore(name:string):ControlPlaneStoreName{
+  if(!CONTROL_PLANE_STORES.has(name as ControlPlaneStoreName)){
+    throw new Error('Unapproved control-plane Blob store.');
+  }
+  return name as ControlPlaneStoreName;
+}
+
+export function controlPlaneStore(name:ControlPlaneStoreName){
+  return getStore({name:assertControlPlaneStore(name),consistency:'strong'});
+}
+
+export function controlPlaneDeployStore(name:ControlPlaneStoreName,deployID?:string){
+  const approved=assertControlPlaneStore(name);
+  return deployID
+    ? getDeployStore({name:approved,deployID})
+    : getDeployStore({name:approved});
+}
+
 function canonicalStore(context?: Context) {
   if (!context) return getStore({ name: CANONICAL_STORE, consistency: 'strong' });
   return context.deploy.context === 'production'

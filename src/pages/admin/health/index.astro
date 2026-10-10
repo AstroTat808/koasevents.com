@@ -2946,7 +2946,10 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? Number(probeAudit.healthyCount||0)+'/'+Number(probeAudit.totalCount||4)+' integrations'
           : 'Probe audit unavailable';
         const incidentCount=(release.incidents||[]).length;
-        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span><span data-release-probes class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(probeAudit?(probePassed?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800'):'bg-slate-100 text-slate-700')+'">'+probeLabel+'</span></div></div><p data-release-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/65"></p><p data-release-meta class="mt-2 text-xs text-[var(--koa-ink)]/55"></p>';
+        const certification=release.releaseAttestation||null;
+        const certified=certification?.status==='verified'&&certification?.productionGateState==='success'&&certification?.matchingDeployId===true;
+        const certificationLabel=certified?'Certified':'Not certified';
+        button.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release '+(index+1)+'</p><strong class="mt-1 block text-sm text-[var(--koa-forest)]"></strong><p class="mt-1 break-all text-xs text-[var(--koa-ink)]/45"></p></div><div class="flex flex-wrap gap-2"><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(release.qa?.conclusion==='success'?'bg-emerald-100 text-emerald-800':release.qa?.conclusion==='failure'?'bg-red-100 text-red-800':'bg-[var(--koa-sand)] text-[var(--koa-forest)]')+'">'+qaLabel+'</span><span data-release-probes class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(probeAudit?(probePassed?'bg-emerald-100 text-emerald-800':'bg-red-100 text-red-800'):'bg-slate-100 text-slate-700')+'">'+probeLabel+'</span><span class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(certified?'bg-emerald-700 text-white':'bg-slate-100 text-slate-700')+'">'+certificationLabel+'</span></div></div><p data-release-summary class="mt-3 text-sm leading-6 text-[var(--koa-ink)]/65"></p><p data-release-meta class="mt-2 text-xs text-[var(--koa-ink)]/55"></p>';
         button.querySelector('strong').textContent=release.commitTitle||'Production release';
         button.querySelector('p.text-xs').textContent=(release.commit||'').slice(0,12)+' · '+(release.deployId||'');
         button.querySelector('[data-release-summary]').textContent=release.summary||'Release summary not recorded yet.';
@@ -3074,6 +3077,40 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         card.children[0].textContent=label;card.children[1].textContent=value;metrics.appendChild(card);
       });
       releaseDetail.appendChild(metrics);
+
+      const attestation=release.releaseAttestation||null;
+      const attestationSection=document.createElement('section');
+      const attestationVerified=attestation?.status==='verified'&&attestation?.productionGateState==='success'&&attestation?.matchingDeployId===true;
+      attestationSection.className='rounded-xl border p-4 '+(attestationVerified?'border-emerald-200 bg-emerald-50':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+      attestationSection.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.56rem] font-black uppercase tracking-[.09em] text-[var(--koa-clay)]">Release certification</p><p data-attestation-title class="mt-1 text-sm font-semibold text-[var(--koa-forest)]"></p></div><span data-attestation-badge class="rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em]"></span></div><div data-attestation-grid class="mt-4 grid gap-3 sm:grid-cols-2"></div>';
+      attestationSection.querySelector('[data-attestation-title]').textContent=attestationVerified
+        ? 'Exact production SHA, live Netlify deploy, Visual QA, System Health, and final gate are permanently attested.'
+        : 'No final certified release attestation is stored for this release.';
+      const attestationBadge=attestationSection.querySelector('[data-attestation-badge]');
+      attestationBadge.textContent=attestationVerified?'Certified':'Uncertified';
+      attestationBadge.className='rounded-full px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] '+(attestationVerified?'bg-emerald-700 text-white':'bg-slate-200 text-slate-700');
+      const attestationGrid=attestationSection.querySelector('[data-attestation-grid]');
+      if(attestation){
+        const health=attestation.systemHealth||{};
+        [
+          ['Verified',attestation.verifiedAt?new Date(attestation.verifiedAt).toLocaleString():'Unavailable'],
+          ['Deploy ID match',attestation.matchingDeployId===true?'Exact match':'Mismatch'],
+          ['Live deploy ID',attestation.liveDeployId||'Unavailable'],
+          ['Visual QA',String(attestation.visualQaConclusion||'unknown')+' · run '+String(attestation.visualQaRunId||'—')],
+          ['System Health',String(health.overall||'unknown')+' · '+String(health.passed??'—')+' passed / '+String(health.failed??'—')+' failed'],
+          ['Health checked',health.checkedAt?new Date(health.checkedAt).toLocaleString():'Unavailable'],
+          ['Final release gate',String(attestation.productionGateState||'unknown')],
+          ['Originating release SHA',String(attestation.originatingReleaseSha||'—').slice(0,12)],
+        ].forEach(([label,value])=>{
+          const card=document.createElement('div');
+          card.className='rounded-lg border border-black/10 bg-white/80 p-3';
+          card.innerHTML='<p class="text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]"></p><p class="mt-1 break-all text-xs font-semibold text-[var(--koa-forest)]"></p>';
+          card.children[0].textContent=label;
+          card.children[1].textContent=value;
+          attestationGrid.appendChild(card);
+        });
+      }
+      releaseDetail.appendChild(attestationSection);
 
       const probeAudit=release.syntheticProbeVerification||null;
       const probes=document.createElement('section');
@@ -5885,12 +5922,17 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         card.className='rounded-xl border border-red-200 bg-red-50 p-4';
         const commits=(group.commits||[]).filter(Boolean);
         const titles=(group.titles||[]).filter(Boolean);
-        card.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-red-700">Same root cause</p><strong class="mt-1 block text-sm text-red-950"></strong></div><span class="rounded-full bg-red-700 px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] text-white"></span></div><p data-group-window class="mt-2 text-xs text-red-900/65"></p><details class="mt-3 rounded-lg border border-red-200 bg-white/70 p-3"><summary class="cursor-pointer text-xs font-semibold text-red-900">Affected deploys / commits</summary><pre data-group-details class="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-[.68rem] text-red-900/65"></pre></details>';
+        card.innerHTML='<div class="flex flex-wrap items-start justify-between gap-3"><div><p class="text-[.55rem] font-black uppercase tracking-[.09em] text-red-700">Same root cause</p><strong class="mt-1 block text-sm text-red-950"></strong></div><span class="rounded-full bg-red-700 px-3 py-1 text-[.56rem] font-black uppercase tracking-[.06em] text-white"></span></div><p data-group-window class="mt-2 text-xs text-red-900/65"></p><p data-group-command class="mt-2 hidden rounded-lg border border-red-200 bg-white/80 p-3 font-mono text-[.68rem] leading-5 text-red-950"></p><details class="mt-3 rounded-lg border border-red-200 bg-white/70 p-3"><summary class="cursor-pointer text-xs font-semibold text-red-900">Affected deploys / commits</summary><pre data-group-details class="mt-2 max-h-44 overflow-auto whitespace-pre-wrap text-[.68rem] text-red-900/65"></pre></details>';
         card.querySelector('strong').textContent=group.rootCause||'Unknown deployment failure';
         card.querySelector('span').textContent=String(group.count||1)+' failed deploy'+(Number(group.count||1)===1?'':'s');
         const first=group.firstAt?new Date(group.firstAt).toLocaleString():'';
         const last=group.lastAt?new Date(group.lastAt).toLocaleString():'';
         card.querySelector('[data-group-window]').textContent=(first&&last&&first!==last)?('Observed '+first+' through '+last):('Observed '+(last||first||'unknown time'));
+        const commandEl=card.querySelector('[data-group-command]');
+        if(group.failingCommand){
+          commandEl.textContent='Stage: '+String(group.failingStage||'build')+' · Command: '+String(group.failingCommand)+(group.failingExitCode==null?'':' · Exit: '+String(group.failingExitCode));
+          commandEl.classList.remove('hidden');
+        }
         card.querySelector('[data-group-details]').textContent=[
           ...commits.map((commit,index)=>String(commit||'').slice(0,12)+(titles[index]?' · '+titles[index]:'')),
           ...(group.deployIds||[]).map((id)=>'Deploy '+id),
