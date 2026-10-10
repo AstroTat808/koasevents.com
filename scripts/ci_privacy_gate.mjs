@@ -64,7 +64,8 @@ for(const file of walk(workflowsDir)){
   for(const rule of rules){
     for(const pattern of rule.patterns){
       lines.forEach((line,index)=>{
-        if(pattern.test(line)){
+        const explicitSyntheticFixture = /@example\.(?:com|invalid)\b/i.test(line);
+        if(pattern.test(line) && !(rule.id==='prohibited-pii-field' && explicitSyntheticFixture)){
           findings.push({file:rel,line:index+1,rule:rule.id,description:rule.description});
         }
         pattern.lastIndex=0;
