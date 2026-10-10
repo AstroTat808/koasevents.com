@@ -696,7 +696,7 @@ export default async (req:Request,context:Context) => {
 
 
     if(body?.action==='record-production-release-attestation'){
-      const workflowRef=cleanText(claims?.job_workflow_ref||claims?.workflow,500);
+      const workflowRef=cleanText(claims?.workflow_ref||claims?.job_workflow_ref||claims?.workflow,500);
       if(!workflowRef.includes('.github/workflows/production-visual-qa.yml')){
         return Response.json({ok:false,error:'Only Production visual QA may persist a release attestation.'},{status:403,headers:{'Cache-Control':'no-store'}});
       }
