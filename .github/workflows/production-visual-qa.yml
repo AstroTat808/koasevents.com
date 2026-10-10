@@ -52,6 +52,22 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Structural build-safety gate
         run: npm run build:safety
+      - name: Production release gate and recovery state regression tests
+        run: |
+          node scripts/verify_netlify_release_gate.mjs --self-test
+          node scripts/test_production_deploy_recovery.mjs
+          python3 scripts/production_release_health_status.py --self-test
+      - name: Read-only production gate diagnosis against exact current main
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_RELEASE_GATE_TOKEN: ${{ github.token }}
+          CONTEXT: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT_REF="$(curl -fsS -H "Authorization: Bearer $GITHUB_RELEASE_GATE_TOKEN" -H "Accept: application/vnd.github+json"             "https://api.github.com/repos/${GITHUB_REPOSITORY}/branches/main"             | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])')"
+          export COMMIT_REF
+          node scripts/verify_netlify_release_gate.mjs
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules
@@ -252,7 +268,7 @@ jobs:
           recovery="$(cat "$recovery_file")"
           rm -f "$recovery_file"
           echo "$recovery"
-          python -c 'import json,os,sys; data=json.load(sys.stdin); assert data.get("ok") is True; assert data.get("expectedSha")==os.environ["EXPECTED_COMMIT"]; assert data.get("triggered") is True or data.get("exactShaPresent") is True' <<<"$recovery"
+          python -c 'import json,os,sys; d=json.load(sys.stdin); valid=(d.get("ok") is True and d.get("expectedSha")==os.environ["EXPECTED_COMMIT"] and (d.get("triggered") is True and bool(d.get("buildId")) or d.get("exactShaPresent") is True and str(d.get("deployState") or "").lower() in {"ready","current","new","pending","queued","enqueued","building","preparing","prepared","processing","uploading","uploaded","pending_review"})); print("Replacement requested or exact-SHA active/ready:",valid); sys.exit(0 if valid else 1)' <<<"$recovery"
           test "$http_status" = "200"
       - name: Wait for exact Netlify production SHA after fallback
         if: steps.initial-netlify-wait.outcome == 'failure'
@@ -602,7 +618,7 @@ jobs:
             echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
             if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
           done
-          cat visual-results/system-health-dashboard.json
+          # No raw System Health response is printed: it may contain customer data.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -632,81 +648,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          DEPLOY_SMOKE_RESULT: ${{ needs.deployed-smoke.result }}
+          THEME_AUDIT_RESULT: ${{ needs.production-theme-audit.result }}
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          from pathlib import Path
-
-          def load(path):
-              p=Path(path)
-              if not p.is_file():
-                  return None
-              try:
-                  return json.loads(p.read_text())
-              except Exception:
-                  return None
-
-          dashboard=load('visual-results/system-health-dashboard.json') or {}
-          chromium=load('visual-results/health-mobile-chromium/report.json') or {}
-          webkit=load('visual-results/health-mobile-webkit/report.json') or {}
-          current=dashboard.get('current') or {}
-          warnings=dashboard.get('enrichmentWarnings') or []
-          expected_refresh='Partial' if warnings else 'Current'
-
-          reports=[chromium,webkit]
-          reports_complete=all(
-              isinstance(report.get('results'),list)
-              and len(report.get('results'))==7
-              and not (report.get('failures') or [])
-              for report in reports
-          )
-          refresh_checks=[]
-          for report in reports:
-              for row in report.get('results') or []:
-                  after=(row.get('metrics') or {}).get('afterRunChecksNow') or {}
-                  refresh_checks.append(
-                      after.get('passed')==str(current.get('passed'))
-                      and after.get('failed')==str(current.get('failed'))
-                      and bool(after.get('checked'))
-                      and after.get('dashboardRefresh')==expected_refresh
-                  )
-
-          ok=bool(
-              dashboard.get('ok') is True
-              and current.get('checkedAt')
-              and isinstance(current.get('passed'),int)
-              and isinstance(current.get('failed'),int)
-              and current.get('overall') in {'healthy','unhealthy'}
-              and reports_complete
-              and len(refresh_checks)==14
-              and all(refresh_checks)
-          )
-
-          overall=str(current.get('overall') or 'unknown').title()
-          passed=current.get('passed','?')
-          failed=current.get('failed','?')
-          description=f'{overall} · {passed} passed · {failed} failed · Refresh {expected_refresh} · 14 responsive checks'
-          payload={
-              'state':'success' if ok else 'failure',
-              'context':'System Health production release gate',
-              'description':description[:140],
-          }
-          Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
-          print(json.dumps({
-              'ok':ok,
-              'overall':current.get('overall'),
-              'passed':current.get('passed'),
-              'failed':current.get('failed'),
-              'checkedAt':current.get('checkedAt'),
-              'dashboardRefresh':expected_refresh,
-              'enrichmentWarnings':warnings,
-              'chromiumViewports':len(chromium.get('results') or []),
-              'webkitViewports':len(webkit.get('results') or []),
-              'chromiumFailures':chromium.get('failures') or [],
-              'webkitFailures':webkit.get('failures') or [],
-          },separators=(',',':')))
-          PY
+          python3 scripts/production_release_health_status.py
           python - <<'PY'
           import json,os
           from pathlib import Path
@@ -723,6 +669,13 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/system-health-commit-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          result=json.loads(Path('/tmp/system-health-commit-status.json').read_text())
+          if result.get('state')!='success':
+              raise SystemExit('Production release is NOT healthy; explicit failure status published.')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
