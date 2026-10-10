@@ -99,7 +99,7 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           mkdir -p visual-results
-          cat > visual-results/system-health-dashboard.json <<'JSON'
+          cat > visual-results/system-health-dashboard-synthetic.json <<'JSON'
           {
             "current": {
               "overall": "healthy",
@@ -170,8 +170,8 @@ jobs:
             cat /tmp/koa-health-preview.log
             exit 1
           fi
-          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
-          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-sanitized.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-synthetic.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard-synthetic.json
       - name: Verify iPhone admin bottom navigation in built PR
         if: github.event_name == 'pull_request'
         shell: bash
@@ -199,7 +199,7 @@ jobs:
         with:
           name: koa-system-health-responsive-pr-${{ github.run_id }}
           path: |
-            visual-results/system-health-dashboard.json
+            visual-results/system-health-dashboard-synthetic.json
             visual-results/health-mobile-chromium
             visual-results/health-mobile-webkit
             visual-results/admin-mobile-chromium
@@ -271,7 +271,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"verify-production-health"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          python -c 'import json,sys; data=json.load(open(sys.argv[1])); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==accounting.get("actualTotal"); assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' "$verification_file"
+          python -c 'import json,sys; data=json.load(open(sys.argv[1])); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' "$verification_file"
           rm -f "$verification_file"
           echo "Production health response validated without logging client, accounting, or raw response content."
           test "$http_status" = "200"
