@@ -529,7 +529,9 @@ assert(
     && visualWorkflow.includes("return found==set(expected_viewports)")
     && visualWorkflow.includes("reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')")
     && visualWorkflow.includes('len(refresh_checks)==14')
-    && visualWorkflow.includes('all(refresh_checks)'),
+    && visualWorkflow.includes('all(refresh_checks)')
+    && visualWorkflow.includes('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+    && visualWorkflow.includes('Dark Mode QA release gate blocked:'),
   'The release gate must require seven distinct named responsive viewports per browser and 14 matching live refresh results.',
 );
 
