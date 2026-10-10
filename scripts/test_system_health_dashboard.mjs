@@ -269,9 +269,10 @@ assert(
 );
 assert(
   visualWorkflow.includes('--wait-seconds 300')
-    && visualWorkflow.includes('self-heal-production-deploy')
+    && visualWorkflow.includes('node scripts/production_deploy_recovery.mjs')
+    && visualWorkflow.includes('NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}')
     && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
-  'Production QA must retrigger a missing exact-SHA deploy after the five-minute grace period and then verify the exact SHA.',
+  'Production QA must use the independent GitHub-owned exact-SHA Netlify recovery after five minutes, then verify live SHA.',
 );
 
 assert(
