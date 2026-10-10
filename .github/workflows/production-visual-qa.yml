@@ -420,18 +420,25 @@ jobs:
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
       - name: Wait for exact Netlify production SHA
+        id: theme-exact-deploy-wait
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
       - name: Verify live Light / Dark / System in Chromium
+        id: theme-chromium
         run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
       - name: Verify live Light / Dark / System in WebKit
+        id: theme-webkit
         run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
       - name: Publish Dark Mode visual-quality result to System Health
         if: always()
         shell: bash
+        env:
+          EXACT_DEPLOY_WAIT_RESULT: ${{ steps.theme-exact-deploy-wait.outcome }}
+          CHROMIUM_AUDIT_RESULT: ${{ steps.theme-chromium.outcome }}
+          WEBKIT_AUDIT_RESULT: ${{ steps.theme-webkit.outcome }}
         run: |
           set -euo pipefail
           python - <<'PY'
-          import base64, json
+          import base64, json, os
           from datetime import datetime, timezone
           from pathlib import Path
 
@@ -447,7 +454,27 @@ jobs:
 
           def summarize(browser):
               report=load_report(browser)
-              if report is None:
+              complete=(
+                  report is not None
+                  and isinstance(report.get('results'),list)
+                  and len(report.get('results'))>0
+                  and int(report.get('routes') or 0)>0
+                  and int(report.get('cases') or 0)==len(report.get('results'))
+                  and isinstance(report.get('failures'),list)
+              )
+              if not complete:
+                  wait_outcome=os.environ.get('EXACT_DEPLOY_WAIT_RESULT','').strip().lower()
+                  audit_outcome=os.environ.get(browser.upper()+'_AUDIT_RESULT','').strip().lower()
+                  if report is not None:
+                      reason='invalid-browser-report'
+                  elif wait_outcome!='success':
+                      reason='exact-deploy-unavailable'
+                  elif audit_outcome=='skipped':
+                      reason='browser-audit-skipped'
+                  elif audit_outcome=='failure':
+                      reason='browser-audit-failed-before-report'
+                  else:
+                      reason='browser-report-missing'
                   return {
                       'browser':browser,
                       'routes':0,
@@ -455,6 +482,7 @@ jobs:
                       'failureCount':1,
                       'failedRouteCount':0,
                       'reportMissing':True,
+                      'missingReason':reason,
                       'routeResults':[],
                   }
               by_route={}
@@ -508,6 +536,7 @@ jobs:
                   'failureCount':len(report.get('failures') or []),
                   'failedRouteCount':sum(1 for row in route_results if row['status']=='failed'),
                   'reportMissing':False,
+                  'missingReason':'',
                   'routeResults':route_results,
               }
 
