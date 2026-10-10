@@ -1,12 +1,12 @@
 import type { DeployFailedEvent, DeploySucceededEvent } from '@netlify/functions';
-import { getDeployStore, getStore } from '@netlify/blobs';
+import { controlPlaneDeployStore, controlPlaneStore } from './_shared/tenant-storage';
 import { normalizeBuildFailureDiagnostic } from './_shared/build-failure-diagnostic.mjs';
 
 const STORE='koa-deploy-diagnostics';
 
 async function readPluginDiagnostic(deployId:string){
   try{
-    const store=getDeployStore({name:'koa-build-diagnostics',deployID:deployId});
+    const store=controlPlaneDeployStore('koa-build-diagnostics',deployId);
     return (await store.get('failure.json',{type:'json'}))||{};
   }catch{return {};}
 }
@@ -27,7 +27,7 @@ export default {
         message:plugin?.message||event.deploy.errorMessage||'Netlify production deploy failed.',
         recordedAt:new Date().toISOString(),
       });
-      const store=getStore(STORE);
+      const store=controlPlaneStore(STORE);
       await store.setJSON('by-deploy/'+deployId,diagnostic);
       await store.setJSON('latest',diagnostic);
       console.log('[koa deploy event] recorded production failure '+deployId+' · '+(diagnostic.command||diagnostic.message));
