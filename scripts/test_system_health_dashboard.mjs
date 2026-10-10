@@ -419,13 +419,12 @@ assert(
   'Historical QuickBooks adjustments must be inspectable through a signed read-only exact-field diagnostic without entering the repair scope.',
 );
 assert(
-  visualWorkflow.includes('Capture Jesse and Dion QBO adjustment diagnostics')
-    && visualWorkflow.includes('QBO-CUST-29')
-    && visualWorkflow.includes('QBO-CUST-44')
-    && visualWorkflow.includes('accounting-adjustment-diagnostics.json')
-    && visualWorkflow.includes("historicalQuickBooksImport")
-    && visualWorkflow.includes("quickbooks-history"),
-  'The production release must archive signed raw-field evidence for Jesse Gibson and Dion Pohaku after the exact SHA is live.',
+  !visualWorkflow.includes('Capture Jesse and Dion QBO adjustment diagnostics')
+    && !visualWorkflow.includes('accounting-adjustment-diagnostics.json')
+    && !visualWorkflow.includes('accounting-repair-bulk-preview.json')
+    && !visualWorkflow.includes('cat visual-results/system-health-dashboard.json')
+    && !visualWorkflow.includes('koa-system-health-mobile-${{ github.run_id }}'),
+  'Production Visual QA must never log or archive raw production accounting diagnostics, repair previews, or raw System Health payloads.',
 );
 
 
