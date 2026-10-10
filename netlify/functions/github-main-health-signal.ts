@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { createHash } from 'node:crypto';
+import { productionDeployDisposition } from './_shared/production-deploy-recovery.mjs';
 import {
   accountingAdjustmentDiagnostics,
   applyHealthAlertPolicy,
@@ -280,14 +281,14 @@ async function productionAccountingAuditForCommit(context:Context,targetCommit:s
   };
 }
 
-async function productionDeployForCommit(token:string,siteId:string,sha:string){
+async function productionDeploysForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
-  const rows=Array.isArray(body)?body:[];
-  return rows.find((row:any)=>{
-    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
-    const context=cleanText(row?.context,80);
-    return commit===sha && (!context||context==='production');
-  })||null;
+  if(!Array.isArray(body))throw new Error('Netlify did not return a deployment list; recovery blocked.');
+  return body.filter((row:any)=>{
+    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80).toLowerCase();
+    const deployContext=cleanText(row?.context,80);
+    return commit===sha.toLowerCase() && deployContext==='production';
+  });
 }
 
 async function currentGithubMainSha(){
@@ -309,48 +310,79 @@ async function currentGithubMainSha(){
 }
 
 async function selfHealProductionDeploy(context:Context,claims:any){
-  const expectedSha=cleanText(claims?.sha,80);
+  const expectedSha=cleanText(claims?.sha,80).toLowerCase();
   const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
   const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!/^[a-f0-9]{40}$/.test(expectedSha))throw new Error('Production recovery requires a full, signed GitHub SHA.');
   if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to production deployment recovery.');
   if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
 
-  const existing=await productionDeployForCommit(token,siteId,expectedSha);
-  if(existing){
-    return {
-      ok:true,
-      triggered:false,
-      exactShaPresent:true,
-      expectedSha,
-      deployId:cleanText(existing?.id,120),
-      deployState:cleanText(existing?.state,80),
-      deployContext:cleanText(existing?.context,80),
-      reason:'The exact approved main SHA already exists in Netlify; no recovery build was triggered.',
-    };
-  }
-
+  // Inspect the current branch BEFORE trusting any existing deployment.
   const mainSha=await currentGithubMainSha();
-  if(mainSha!==expectedSha){
+  if(mainSha.toLowerCase()!==expectedSha){
     return {
-      ok:false,
-      triggered:false,
-      exactShaPresent:false,
-      expectedSha,
-      currentMainSha:mainSha,
+      ok:false, triggered:false, exactShaPresent:false, expectedSha, currentMainSha:mainSha,
       reason:'GitHub main advanced before recovery; the older SHA will not be retriggered.',
     };
   }
 
+  const deploys=await productionDeploysForCommit(token,siteId,expectedSha);
+  const byStatus=(status:string)=>deploys.find((row:any)=>productionDeployDisposition(row)===status);
+  const ready=byStatus('ready');
+  const active=byStatus('in-progress');
+  const unknown=byStatus('unknown');
+  const failures=deploys.filter((row:any)=>productionDeployDisposition(row)==='failed');
+
+  if(ready||active){
+    const existing=ready||active;
+    return {
+      ok:true, triggered:false, exactShaPresent:true, expectedSha, currentMainSha:mainSha,
+      deployId:cleanText(existing?.id,120), deployState:cleanText(existing?.state,80),
+      deployContext:'production',
+      reason:ready?'An exact-SHA ready deploy already exists; waiting for publication.':
+        'An exact-SHA production build is in progress; waiting for readiness.',
+    };
+  }
+  if(unknown){
+    return {
+      ok:false, triggered:false, exactShaPresent:true, expectedSha, currentMainSha:mainSha,
+      deployId:cleanText(unknown?.id,120), deployState:cleanText(unknown?.state,80),
+      reason:'An exact-SHA deploy has an unrecognized state; automatic recovery fails closed.',
+    };
+  }
+  // One automated retry per SHA. Never let a broken build spin forever or
+  // treat an errored deployment as successfully published.
+  if(failures.length>=2){
+    return {
+      ok:false, triggered:false, exactShaPresent:true, expectedSha, currentMainSha:mainSha,
+      deployId:cleanText(failures[0]?.id,120), deployState:cleanText(failures[0]?.state,80),
+      failedDeployCount:failures.length,
+      reason:'An exact-SHA deployment failed after the automatic retry; inspect the Netlify build log.',
+    };
+  }
+
+  // Revalidate immediately before requesting a production build. Netlify's
+  // build hook always builds the site's current main, not an arbitrary SHA.
+  const latestMainSha=await currentGithubMainSha();
+  if(latestMainSha.toLowerCase()!==expectedSha){
+    return {
+      ok:false, triggered:false, exactShaPresent:deploys.length>0, expectedSha,
+      currentMainSha:latestMainSha,
+      reason:'GitHub main advanced during recovery; no stale build was requested.',
+    };
+  }
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/builds',{method:'POST'});
+  const buildId=cleanText(body?.id,120);
+  if(!buildId)throw new Error('Netlify recovery build did not return a build ID.');
   return {
-    ok:true,
-    triggered:true,
-    exactShaPresent:false,
-    expectedSha,
-    currentMainSha:mainSha,
-    buildId:cleanText(body?.id,120),
-    buildState:cleanText(body?.state||body?.status,80),
-    reason:'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+    ok:true, triggered:true, exactShaPresent:deploys.length>0, expectedSha,
+    currentMainSha:latestMainSha,
+    previousDeployId:cleanText(failures[0]?.id,120),
+    previousDeployState:cleanText(failures[0]?.state,80),
+    buildId, buildState:cleanText(body?.state||body?.status,80),
+    reason:failures.length
+      ?'One failed exact-SHA deploy was detected; one replacement build requested.'
+      :'No exact-SHA production deploy existed after the grace period; build requested.',
   };
 }
 
