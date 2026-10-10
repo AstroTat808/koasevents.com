@@ -14,6 +14,8 @@ import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
 import { authenticationSecurityHealthSummary } from './auth-security';
+import { getDeployStore, getStore } from '@netlify/blobs';
+import { buildFailureRootCause, normalizeBuildFailureDiagnostic } from './build-failure-diagnostic.mjs';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -1189,6 +1191,9 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
   const targetDeployActive=Boolean(targetDeployState&&activeStates.has(targetDeployState));
   const targetDeployFailed=Boolean(targetDeployState&&failedStates.has(targetDeployState));
   const anyDeployActive=Boolean(activeDeployState&&activeStates.has(activeDeployState));
+  const targetFailureDiagnostic=targetDeployFailed&&targetDeployId
+    ? await readBuildFailureDiagnostic(targetDeployId)
+    : null;
 
   if(!mainCommit&&liveCommit&&githubLinked===true){
     if((targetDeployActive||targetDeployFailed)&&targetDeployCommit&&targetDeployCommit!==liveCommit){
@@ -1290,6 +1295,11 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     detail+=(detail?' ':'')+'The production deploy for the newest observed commit ended in '+targetDeployState+
       (targetDeployId?' · deploy '+targetDeployId.slice(0,12):'')+
       (targetDeployError?' · '+targetDeployError:'')+'.';
+    if(targetFailureDiagnostic?.command){
+      detail+=' Exact failing stage: '+String(targetFailureDiagnostic.stage||'build')+
+        ' · command: '+String(targetFailureDiagnostic.command)+
+        (targetFailureDiagnostic.exitCode==null?'':' · exit '+String(targetFailureDiagnostic.exitCode))+'.';
+    }
   }else if(deploymentState==='release-policy-skipped'){
     detail+=(detail?' ':'')+'Commit skipped because it needs a [release] prefix (or must be merged through a pull request). This is an intentional production-release policy decision, not a broken Netlify Git connection.';
   }else if(deploymentState==='auto-deploy-broken'&&linked&&commitsBehind!=null&&commitsBehind>0){
@@ -1361,6 +1371,7 @@ export async function inspectDeploymentSync(context:Context,seed:any={}) {
     releasePolicyReason,
     releasePolicySkipped,
     targetDeployCreatedAt,
+    targetFailureDiagnostic,
     changedFilesBetween,
     emailRenderingBehind,
     emailRenderingChangedFiles,
@@ -3010,6 +3021,24 @@ export type ProductionVisualQuality = {
   screenshots?:ProductionVisualQualityScreenshot[];
 };
 
+export type ProductionReleaseAttestation = {
+  status:'verified'|'failed';
+  verifiedAt:string;
+  expectedSha:string;
+  originatingReleaseSha?:string;
+  deployId:string;
+  liveDeployId:string;
+  matchingDeployId:boolean;
+  deployState:string;
+  deployContext:string;
+  publishedAt:string;
+  visualQaRunId:string;
+  visualQaConclusion:string;
+  systemHealth:{overall:string;passed:number;failed:number;checkedAt:string};
+  productionGateState:string;
+  source:'github-actions-oidc'|'certified-backfill';
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -3024,6 +3053,7 @@ export type ProductionRelease = {
   accountingVerification?:ProductionAccountingVerification|null;
   visualQuality?:ProductionVisualQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
+  releaseAttestation?:ProductionReleaseAttestation|null;
   authorName:string;
   authorLogin:string;
   pullRequestNumber:number|null;
@@ -3033,6 +3063,32 @@ export type ProductionRelease = {
 };
 
 const PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments/releases/audit-index';
+
+const CERTIFIED_RELEASE_ATTESTATION_BACKFILLS:Record<string,ProductionReleaseAttestation>={
+  '6aca20d60f83c2e4cae6c338':{
+    status:'verified',
+    verifiedAt:'2026-10-10T11:42:10.463Z',
+    expectedSha:'b5830d422c36a2c9c2869e228f5fa470ea650337',
+    originatingReleaseSha:'7a8b8b45b9e6aca1cc12721197659dc1f2ed1bc7',
+    deployId:'6aca20d60f83c2e4cae6c338',
+    liveDeployId:'6aca20d60f83c2e4cae6c338',
+    matchingDeployId:true,
+    deployState:'ready',
+    deployContext:'production',
+    publishedAt:'2026-10-10T11:27:12.213Z',
+    visualQaRunId:'38048036149',
+    visualQaConclusion:'success',
+    systemHealth:{overall:'healthy',passed:81,failed:0,checkedAt:'2026-10-10T11:40:26.137Z'},
+    productionGateState:'success',
+    source:'certified-backfill',
+  },
+};
+
+function certifiedReleaseAttestationBackfill(release:ProductionRelease){
+  const attestation=CERTIFIED_RELEASE_ATTESTATION_BACKFILLS[clean(release?.deployId,120)]||null;
+  if(!attestation)return null;
+  return clean(release?.commit,120)===attestation.expectedSha?attestation:null;
+}
 
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
   const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
@@ -3563,6 +3619,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
     visualQuality:input?.visualQuality||previous?.visualQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
+    releaseAttestation:input?.releaseAttestation||previous?.releaseAttestation||null,
     authorName,
     authorLogin,
     pullRequestNumber,
@@ -3667,10 +3724,14 @@ export async function hydrateProductionReleaseMetadata(context:Context,releases:
   const hydrated:ProductionRelease[]=[];
   let refreshed=0;
   for(const release of releases){
-    const missing=!release.summary||!release.authorName||!release.pullRequestUrl;
+    const backfill=certifiedReleaseAttestationBackfill(release);
+    const missing=!release.summary||!release.authorName||!release.pullRequestUrl||Boolean(backfill&&!release.releaseAttestation);
     if(missing&&refreshed<Math.max(1,Math.min(25,limit))){
       try{
-        const row=await recordProductionRelease(context,release);
+        const row=await recordProductionRelease(context,{
+          ...release,
+          releaseAttestation:release.releaseAttestation||backfill||null,
+        });
         hydrated.push((row||release) as ProductionRelease);
         refreshed+=1;
         continue;
@@ -3703,6 +3764,25 @@ export async function savePostDeployVerification(context:Context,record:any) {
   return record;
 }
 
+const BUILD_FAILURE_DIAGNOSTICS_STORE='koa-deploy-diagnostics';
+
+async function readBuildFailureDiagnostic(deployId:string){
+  const id=clean(deployId,120);
+  if(!id)return null;
+  let durable:any=null;
+  let scoped:any=null;
+  try{
+    const store=getStore(BUILD_FAILURE_DIAGNOSTICS_STORE);
+    durable=await store.get('by-deploy/'+id,{type:'json'});
+  }catch{}
+  try{
+    const store=getDeployStore({name:'koa-build-diagnostics',deployID:id});
+    scoped=await store.get('failure.json',{type:'json'});
+  }catch{}
+  const candidate=scoped?.command?{...durable,...scoped}:durable||scoped;
+  return candidate?normalizeBuildFailureDiagnostic({...candidate,deployId:id}):null;
+}
+
 function normalizedDeployRootCause(value: unknown) {
   const raw=clean(value,1000).replace(/\s+/g,' ').trim();
   if(!raw) return 'Unknown deployment failure';
@@ -3723,23 +3803,28 @@ function groupConsecutiveDeployFailures(rows:any[]) {
       active=null;
       continue;
     }
-    const rootCause=normalizedDeployRootCause(row.errorMessage||row.title||'Unknown deployment failure');
+    const diagnostic=row.failureDiagnostic||null;
+    const rootCause=diagnostic?.command
+      ? buildFailureRootCause(diagnostic)
+      : normalizedDeployRootCause(row.errorMessage||row.title||'Unknown deployment failure');
     if(active&&active.rootCause===rootCause){
       active.count+=1;
       active.firstAt=row.createdAt||active.firstAt;
       active.commits.push(row.commit);
       active.deployIds.push(row.deployId);
       active.titles.push(row.title);
+      if(diagnostic?.command&&!active.failingCommands.includes(diagnostic.command))active.failingCommands.push(diagnostic.command);
+      if(diagnostic?.stage&&!active.failingStages.includes(diagnostic.stage))active.failingStages.push(diagnostic.stage);
       continue;
     }
     active={
-      rootCause,
-      count:1,
-      firstAt:row.createdAt||'',
-      lastAt:row.createdAt||'',
-      commits:[row.commit].filter(Boolean),
-      deployIds:[row.deployId].filter(Boolean),
-      titles:[row.title].filter(Boolean),
+      rootCause,count:1,firstAt:row.createdAt||'',lastAt:row.createdAt||'',
+      commits:[row.commit].filter(Boolean),deployIds:[row.deployId].filter(Boolean),titles:[row.title].filter(Boolean),
+      failingCommand:clean(diagnostic?.command,500),failingStage:clean(diagnostic?.stage,120),
+      failingExitCode:Number.isInteger(Number(diagnostic?.exitCode))?Number(diagnostic.exitCode):null,
+      failingCommands:[clean(diagnostic?.command,500)].filter(Boolean),
+      failingStages:[clean(diagnostic?.stage,120)].filter(Boolean),
+      diagnosticSource:clean(diagnostic?.source,80),
     };
     groups.push(active);
   }
@@ -4745,6 +4830,17 @@ export async function cachedDeploymentHistory(context:Context) {
       netlifyPreviewHistory=collected
         .filter((row:any)=>clean(row?.context,40)==='deploy-preview')
         .map(normalizeDeploy);
+      const failedRows=netlifyDeployHistory
+        .filter((row:any)=>['error','failed'].includes(String(row?.state||'').toLowerCase()))
+        .slice(0,24);
+      await Promise.all(failedRows.map(async(row:any)=>{
+        const diagnostic=await readBuildFailureDiagnostic(row.deployId);
+        if(!diagnostic)return;
+        row.failureDiagnostic=diagnostic;
+        row.failingStage=diagnostic.stage;
+        row.failingCommand=diagnostic.command;
+        row.failingExitCode=diagnostic.exitCode;
+      }));
     }catch{}
   }
   if(current.deployId && netlifyToken){
