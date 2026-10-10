@@ -809,6 +809,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
       - name: Verify every required production QA job succeeded
         id: workflow-gates
         shell: bash
@@ -916,28 +920,60 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          WORKFLOW_GATES_OK: ${{ steps.workflow-gates.outputs.ok }}
-          NETLIFY_OUTCOME: ${{ steps.netlify-attestation.outcome }}
-          HEALTH_OUTCOME: ${{ steps.final-health.outcome }}
-          DEPLOY_ID: ${{ steps.netlify-attestation.outputs.deploy_id }}
+          PENDING_RESULT: ${{ needs.release-status-pending.result }}
+          SOURCE_RESULT: ${{ needs.source-build-audit.result }}
+          SMOKE_RESULT: ${{ needs.deployed-smoke.result }}
+          THEME_RESULT: ${{ needs.production-theme-audit.result }}
+          ADMIN_RESULT: ${{ needs.admin-startup-audit.result }}
+          MOBILE_RESULT: ${{ needs.system-health-mobile-audit.result }}
+          VISUAL_RESULT: ${{ needs.visual-audit.result }}
         run: |
           set -euo pipefail
-          state="failure"
-          description="Production release blocked: required verification did not complete successfully."
-          if [ "$WORKFLOW_GATES_OK" = "true" ] && [ "$NETLIFY_OUTCOME" = "success" ] && [ "$HEALTH_OUTCOME" = "success" ] && [ -n "$DEPLOY_ID" ]; then
-            state="success"
-            description="Exact production SHA, Netlify deploy, deploy ID, System Health, and visual QA verified."
-          fi
-          STATE="$state" DESCRIPTION="$description" python - <<'PY'
-          import json, os
-          payload={
-              "state":os.environ["STATE"],
-              "context":"System Health production release gate",
-              "description":os.environ["DESCRIPTION"][:140],
-              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-          }
-          open("/tmp/koa-production-release-status.json","w").write(json.dumps(payload,separators=(",",":")))
-          PY
+          node --input-type=module - <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';
+
+          const load=(path)=>{
+            try{return JSON.parse(readFileSync(path,'utf8'));}
+            catch{return {};}
+          };
+          const attestation=load('/tmp/koa-production-attestation.json');
+          const healthResponse=load('/tmp/koa-final-health.json');
+          const current=healthResponse.current||{};
+          const workflowResults={
+            pending:process.env.PENDING_RESULT,
+            source:process.env.SOURCE_RESULT,
+            smoke:process.env.SMOKE_RESULT,
+            theme:process.env.THEME_RESULT,
+            admin:process.env.ADMIN_RESULT,
+            mobile:process.env.MOBILE_RESULT,
+            visual:process.env.VISUAL_RESULT,
+          };
+          const decision=evaluateProductionReleaseGate({
+            expectedSha:process.env.GITHUB_SHA,
+            workflowResults,
+            netlify:attestation,
+            health:{
+              ok:healthResponse.ok===true,
+              sha:healthResponse.sha,
+              overall:current.overall,
+              passed:current.passed,
+              failed:current.failed,
+              checkedAt:current.checkedAt,
+            },
+          });
+          const payload={
+            state:decision.state,
+            context:'System Health production release gate',
+            description:(decision.ok
+              ? 'Exact production SHA, Netlify deploy, deploy ID, System Health, and visual QA verified.'
+              : 'Production release blocked: required verification did not complete successfully.').slice(0,140),
+            target_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+          };
+          writeFileSync('/tmp/koa-production-release-status.json',JSON.stringify(payload));
+          writeFileSync('/tmp/koa-production-release-decision.json',JSON.stringify({decision,workflowResults,attestation,health:healthResponse}));
+          console.log(JSON.stringify({decision,workflowResults,deployId:attestation.deployId||'',health:{overall:current.overall,failed:current.failed}},null,2));
+          NODE
           curl -fsS \
             -X POST \
             -H "Authorization: Bearer $GH_TOKEN" \
@@ -946,7 +982,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/koa-production-release-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
-          test "$state" = "success"
+          node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
 
   qa-summary:
     name: Visual QA summary
