@@ -22,43 +22,87 @@ async function githubJson(path){
     'X-GitHub-Api-Version':'2022-11-28',
   };
   if(token)headers.Authorization='Bearer '+token;
-  const response=await fetch('https://api.github.com/repos/'+REPOSITORY+path,{
-    headers,
-    signal:AbortSignal.timeout(15_000),
-  });
-  const text=await response.text();
-  let body={};
-  try{body=text?JSON.parse(text):{};}catch{body={message:text};}
-  if(!response.ok){
-    const remaining=response.headers.get('x-ratelimit-remaining');
-    const reset=response.headers.get('x-ratelimit-reset');
-    throw new Error(
-      'GitHub API '+path+' returned HTTP '+response.status+
-      (body?.message?' · '+String(body.message).slice(0,240):'')+
-      (remaining!=null?' · rate remaining '+remaining:'')+
-      (reset?' · reset '+reset:'')
-    );
+
+  let lastError=null;
+  for(let attempt=1;attempt<=4;attempt+=1){
+    try{
+      const response=await fetch('https://api.github.com/repos/'+REPOSITORY+path,{
+        headers,
+        signal:AbortSignal.timeout(15_000),
+      });
+      const text=await response.text();
+      let body={};
+      try{body=text?JSON.parse(text):{};}catch{body={message:text};}
+      if(response.ok)return body;
+
+      const remaining=response.headers.get('x-ratelimit-remaining');
+      const reset=response.headers.get('x-ratelimit-reset');
+      const retryable=response.status===429
+        ||response.status>=500
+        ||(response.status===403&&remaining==='0');
+      lastError=new Error(
+        'GitHub API '+path+' returned HTTP '+response.status+
+        (body?.message?' · '+String(body.message).slice(0,240):'')+
+        (remaining!=null?' · rate remaining '+remaining:'')+
+        (reset?' · reset '+reset:'')
+      );
+      if(!retryable||attempt===4)throw lastError;
+
+      let delay=Math.min(1000*(2**(attempt-1)),5000);
+      if(response.status===403&&remaining==='0'&&reset){
+        const untilReset=(Number(reset)*1000)-Date.now();
+        if(Number.isFinite(untilReset)&&untilReset>0&&untilReset<=10_000){
+          delay=Math.max(delay,untilReset+250);
+        }
+      }
+      console.warn('[koa release gate] GitHub API transient failure; retry '+attempt+'/4 in '+delay+'ms.');
+      await new Promise((resolve)=>setTimeout(resolve,delay));
+    }catch(error){
+      lastError=error instanceof Error?error:new Error(String(error));
+      const transient=error?.name==='TimeoutError'
+        ||error?.name==='AbortError'
+        ||error instanceof TypeError;
+      if(!transient||attempt===4)throw lastError;
+      const delay=Math.min(1000*(2**(attempt-1)),5000);
+      console.warn('[koa release gate] GitHub API network failure; retry '+attempt+'/4 in '+delay+'ms.');
+      await new Promise((resolve)=>setTimeout(resolve,delay));
+    }
   }
-  return body;
+  throw lastError||new Error('GitHub API request failed.');
+}
+
+function matchingMergedPulls(pulls,commit,headSha=''){
+  const expectedCommit=String(commit||'').toLowerCase();
+  const expectedHead=String(headSha||'').toLowerCase();
+  return (Array.isArray(pulls)?pulls:[])
+    .filter((pr)=>pr?.merged_at
+      &&String(pr?.base?.ref||'')==='main'
+      &&pr?.head?.sha
+      &&String(pr?.merge_commit_sha||'').toLowerCase()===expectedCommit
+      &&(!expectedHead||String(pr?.head?.sha||'').toLowerCase()===expectedHead))
+    .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
 }
 
 async function resolvePullRequestHead(commit){
   const parentLine=git('rev-list','--parents','-n','1',commit);
   const parts=parentLine.split(/\s+/).filter(Boolean);
   const parents=parts.slice(1);
+  const pulls=await githubJson('/commits/'+encodeURIComponent(commit)+'/pulls');
 
   if(parents.length>=2){
+    const headSha=String(parents[1]||'');
+    const candidates=matchingMergedPulls(pulls,commit,headSha);
+    if(!candidates.length){
+      throw new Error('Merge commit '+commit+' is not bound to a merged main pull request whose head is second parent '+headSha+'.');
+    }
     return {
-      headSha:parents[1],
-      source:'merge-second-parent',
+      headSha,
+      source:'merge-second-parent+pull-request',
+      prNumber:Number(candidates[0].number||0),
     };
   }
 
-  const pulls=await githubJson('/commits/'+encodeURIComponent(commit)+'/pulls');
-  const candidates=(Array.isArray(pulls)?pulls:[])
-    .filter((pr)=>pr?.merged_at&&String(pr?.base?.ref||'')==='main'&&pr?.head?.sha)
-    .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
-
+  const candidates=matchingMergedPulls(pulls,commit);
   if(!candidates.length){
     throw new Error('Production commit is not traceable to a merged pull request.');
   }
@@ -80,13 +124,21 @@ function belongsToExactPullHead(run,headSha){
 
 function selfTest(){
   const sha='a'.repeat(40);
+  const merge='c'.repeat(40);
   const associated={head_sha:sha,event:'pull_request',name:REQUIRED_WORKFLOW,status:'completed',
     conclusion:'success',pull_requests:[]};
   if(!belongsToExactPullHead(associated,sha))throw Error('An exact-head successful run with no PR association was rejected.');
   if(belongsToExactPullHead({...associated,head_sha:'b'.repeat(40)},sha))throw Error('A stale SHA was accepted.');
   if(belongsToExactPullHead({...associated,event:'push'},sha))throw Error('A push run was accepted as PR evidence.');
   if(belongsToExactPullHead({...associated,head_sha:''},sha))throw Error('A missing workflow SHA was accepted.');
-  console.log('PASS | exact-head GitHub workflow provenance is independent of empty post-merge pull_requests arrays.');
+
+  const mergedPr={number:251,merged_at:'2026-10-10T04:52:08Z',base:{ref:'main'},head:{sha},merge_commit_sha:merge};
+  if(matchingMergedPulls([mergedPr],merge,sha).length!==1)throw Error('Exact merged-PR binding was rejected.');
+  if(matchingMergedPulls([{...mergedPr,head:{sha:'b'.repeat(40)}}],merge,sha).length)throw Error('Wrong PR head was accepted.');
+  if(matchingMergedPulls([{...mergedPr,merge_commit_sha:'d'.repeat(40)}],merge,sha).length)throw Error('Wrong merge commit was accepted.');
+  if(matchingMergedPulls([{...mergedPr,base:{ref:'develop'}}],merge,sha).length)throw Error('Wrong base branch was accepted.');
+
+  console.log('PASS | exact-head workflow provenance and merged-PR binding reject stale or mismatched release evidence.');
 }
 
 function newestRun(runs){
@@ -187,14 +239,15 @@ async function main(){
   }
   // Preserve PR provenance through the merged PR object; individual Actions
   // run.pull_requests associations can legitimately be emptied post-merge.
-  if(resolved?.prNumber){
-    const merged=await githubJson('/pulls/'+resolved.prNumber);
-    if(!merged?.merged_at
-      ||String(merged?.base?.ref||'')!=='main'
-      ||String(merged?.head?.sha||'').toLowerCase()!==headSha.toLowerCase()
-      ||String(merged?.merge_commit_sha||'').toLowerCase()!==commit.toLowerCase()){
-      fail('Merged PR #'+resolved.prNumber+' does not bind production commit '+commit+' to approved head '+headSha+'.');
-    }
+  if(!Number.isInteger(resolved?.prNumber)||resolved.prNumber<=0){
+    fail('Production commit '+commit+' is missing authoritative merged pull-request provenance.');
+  }
+  const merged=await githubJson('/pulls/'+resolved.prNumber);
+  if(!merged?.merged_at
+    ||String(merged?.base?.ref||'')!=='main'
+    ||String(merged?.head?.sha||'').toLowerCase()!==headSha.toLowerCase()
+    ||String(merged?.merge_commit_sha||'').toLowerCase()!==commit.toLowerCase()){
+    fail('Merged PR #'+resolved.prNumber+' does not bind production commit '+commit+' to approved head '+headSha+'.');
   }
 
   let payload;
