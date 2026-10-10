@@ -86,6 +86,20 @@ jobs:
         run: |
           node scripts/test_production_deploy_recovery.mjs
           python3 scripts/production_release_evidence.py --self-test
+      - name: Diagnose Netlify production-only release gate on exact current main
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_RELEASE_GATE_TOKEN: ${{ github.token }}
+          CONTEXT: production
+        run: |
+          set -euo pipefail
+          COMMIT_REF="$(git ls-remote https://github.com/${GITHUB_REPOSITORY}.git refs/heads/main | awk '{print $1}')"
+          test "${#COMMIT_REF}" = 40
+          export COMMIT_REF
+          echo "Checking Netlify production-only gate against current main ${COMMIT_REF} (read-only)."
+          node scripts/verify_netlify_release_gate.mjs
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules
