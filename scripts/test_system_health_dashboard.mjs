@@ -498,4 +498,38 @@ assert(
   'The repair workflow must continue to have no bulk QuickBooks mutation path.',
 );
 
+assert(
+  releaseGate.includes('function preMergeWorkflowRuns(runs,mergedAt)')
+    && releaseGate.includes('merged.merged_at')
+    && releaseGate.includes('Latest failed pre-merge workflow')
+    && releaseGate.includes('Post-merge close-event run'),
+  'The production-only Netlify gate must ignore post-merge close-event reruns without accepting failed or pending pre-merge evidence.',
+);
+assert(
+  visualWorkflow.includes('EXACT_DEPLOY_WAIT_RESULT:')
+    && visualWorkflow.includes('CHROMIUM_AUDIT_RESULT:')
+    && visualWorkflow.includes('WEBKIT_AUDIT_RESULT:')
+    && visualWorkflow.includes("'missingReason':reason")
+    && visualWorkflow.includes("'invalid-browser-report'"),
+  'Dark Mode QA must publish safe, actionable missing-browser-report reason codes.',
+);
+assert(
+  healthSignal.includes('permittedMissingReasons')
+    && healthSignal.includes('missingReason')
+    && adminHealth.includes('missingDiagnostics')
+    && systemHealth.includes('missingReports')
+    && systemHealth.includes('Missing browser evidence:')
+    && health.includes('Missing report ·'),
+  'Browser report diagnostics must reach the protected System Health card, check detail, and alerts.',
+);
+assert(
+  visualWorkflow.includes("expected_viewports={")
+    && visualWorkflow.includes("def complete_report(report,browser):")
+    && visualWorkflow.includes("return found==set(expected_viewports)")
+    && visualWorkflow.includes("reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')")
+    && visualWorkflow.includes('len(refresh_checks)==14')
+    && visualWorkflow.includes('all(refresh_checks)'),
+  'The release gate must require seven distinct named responsive viewports per browser and 14 matching live refresh results.',
+);
+
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
