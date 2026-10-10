@@ -985,6 +985,89 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
 
+      - name: Persist certified release attestation history
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail_history() {
+            trap - ERR
+            python - <<'PY'
+            import json, os
+            payload={
+              "state":"failure",
+              "context":"System Health production release gate",
+              "description":"Production release blocked: certified release history could not be persisted.",
+              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+            }
+            open("/tmp/koa-release-history-failure-status.json","w").write(json.dumps(payload,separators=(",",":")))
+            PY
+            curl -sS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/koa-release-history-failure-status.json \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null || true
+            exit 1
+          }
+          trap fail_history ERR
+          python - <<'PY'
+          import json, os
+          att=json.load(open("/tmp/koa-production-attestation.json"))
+          health_response=json.load(open("/tmp/koa-final-health.json"))
+          current=health_response.get("current") or {}
+          payload={
+            "action":"record-production-release-attestation",
+            "productionGateState":"success",
+            "visualQaRunId":os.environ["GITHUB_RUN_ID"],
+            "visualQaConclusion":"success",
+            "health":{
+              "sha":health_response.get("sha"),
+              "deployId":health_response.get("deployId"),
+              "overall":current.get("overall"),
+              "passed":current.get("passed"),
+              "failed":current.get("failed"),
+              "checkedAt":current.get("checkedAt"),
+            },
+          }
+          assert att.get("deployId")==health_response.get("deployId")
+          open("/tmp/koa-release-history-request.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-release-history-response.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-release-history-request.json \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-release-history-response.json"))
+          assert data.get("ok") is True
+          assert data.get("recorded") is True
+          assert data.get("expectedSha")==os.environ["GITHUB_SHA"]
+          assert data.get("deployId")==data.get("liveDeployId")
+          att=data.get("releaseAttestation") or {}
+          assert att.get("status")=="verified"
+          assert att.get("productionGateState")=="success"
+          assert att.get("matchingDeployId") is True
+          print("Certified release history persisted:",json.dumps({
+            "commit":data.get("expectedSha"),
+            "deployId":data.get("deployId"),
+            "verifiedAt":att.get("verifiedAt"),
+          },separators=(",",":")))
+          PY
+          trap - ERR
+
   qa-summary:
     name: Visual QA summary
     if: always()
