@@ -64,6 +64,12 @@ assert(evaluateProductionReleaseGate({
   netlify:{...base.netlify,liveDeployId:'fedcba9876543210fedcba98'},
 }).ok===false,'Mismatched live Netlify deploy ID could publish a green production gate.');
 
+assert(evaluateProductionReleaseGate({
+  ...base,
+  netlify:{...base.netlify,liveCommit:''},
+}).ok===false,'Missing live commit evidence could publish a green production gate.');
+
+
 for(const state of ['building','enqueued','new','error','failed','cancelled','']){
   assert(isSuccessfulNetlifyState(state)===false,'Non-ready Netlify state '+JSON.stringify(state)+' was accepted.');
 }
@@ -84,5 +90,8 @@ assert(server.includes('isSuccessfulNetlifyState(existingState)'),
   'Production self-heal does not use the tested successful-deploy-state policy.');
 assert(server.includes('productionDeployMatchesAttestation({'),
   'Production Netlify attestation does not use the tested exact deploy policy.');
+assert(server.includes("netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId))")
+    && server.includes("liveCommitSource='netlify-live-deploy'"),
+  'API-triggered production deploys must recover live commit provenance from the exact serving Netlify deploy record.');
 
-console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, and mismatched deploy IDs.');
+console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, and mismatched deploy IDs; API builds recover commit provenance from the serving deploy record.');
