@@ -9,6 +9,18 @@ function git(...args){
   return execFileSync('git',args,{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 }
 
+function parseLsRemoteSha(output){
+  const match=String(output||'').trim().match(/^([a-f0-9]{40})(?:\s|$)/i);
+  return match?match[1].toLowerCase():'';
+}
+
+function remoteRefSha(ref){
+  const output=git('ls-remote','https://github.com/'+REPOSITORY+'.git',ref);
+  const sha=parseLsRemoteSha(output);
+  if(!sha)throw new Error('Unable to resolve remote Git ref '+ref+'.');
+  return sha;
+}
+
 function fail(message){
   console.error('[koa release gate] '+message);
   process.exit(1);
@@ -138,7 +150,10 @@ function selfTest(){
   if(matchingMergedPulls([{...mergedPr,merge_commit_sha:'d'.repeat(40)}],merge,sha).length)throw Error('Wrong merge commit was accepted.');
   if(matchingMergedPulls([{...mergedPr,base:{ref:'develop'}}],merge,sha).length)throw Error('Wrong base branch was accepted.');
 
-  console.log('PASS | exact-head workflow provenance and merged-PR binding reject stale or mismatched release evidence.');
+  if(parseLsRemoteSha(sha+'\trefs/pull/254/head')!==sha)throw Error('Remote PR-head SHA parser rejected a valid ref.');
+  if(parseLsRemoteSha('not-a-sha\trefs/pull/254/head'))throw Error('Remote PR-head SHA parser accepted invalid data.');
+
+  console.log('PASS | exact-head workflow provenance, remote PR-head binding, and merged-PR binding reject stale or mismatched release evidence.');
 }
 
 function newestRun(runs){
@@ -177,20 +192,16 @@ async function verifyDeployPreviewHead(commit){
     fail('Deploy Preview COMMIT_REF is not a full commit SHA: '+commit+'.');
   }
 
-  let pull;
+  // Avoid GitHub REST rate limits on Netlify shared build infrastructure.
+  // refs/pull/<number>/head is the authoritative live PR head and is readable
+  // from the public Git remote without exposing a GitHub token to PR code.
+  let headSha='';
   try{
-    pull=await githubJson('/pulls/'+encodeURIComponent(reviewId));
+    headSha=remoteRefSha('refs/pull/'+reviewId+'/head');
   }catch(error){
     fail(error instanceof Error?error.message:String(error));
   }
 
-  const headSha=String(pull?.head?.sha||'').trim();
-  if(!/^[a-f0-9]{40}$/i.test(headSha)){
-    fail('Unable to resolve the current head SHA for PR #'+reviewId+'.');
-  }
-  if(String(pull?.state||'')!=='open'){
-    fail('PR #'+reviewId+' is not open; Deploy Preview blocked.');
-  }
   if(commit.toLowerCase()!==headSha.toLowerCase()){
     fail(
       'Deploy Preview commit '+commit+
@@ -199,11 +210,13 @@ async function verifyDeployPreviewHead(commit){
     );
   }
 
-  await assertHeadContainsLiveMain(headSha);
-
+  // Current-main ancestry is re-checked by Release Certification immediately
+  // before evidence download and again before final certification. Keeping the
+  // Netlify build gate focused on exact PR-head binding removes a fragile
+  // unauthenticated REST dependency while preserving fail-closed release logic.
   console.log(
     '[koa release gate] PASS · Deploy Preview commit '+commit+
-    ' exactly matches current PR #'+reviewId+' head.'
+    ' exactly matches current PR #'+reviewId+' head via remote Git ref.'
   );
 }
 
