@@ -82,6 +82,10 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Structural build-safety gate
         run: npm run build:safety
+      - name: Verify bounded recovery and privacy-safe production evidence
+        run: |
+          node scripts/test_production_deploy_recovery.mjs
+          python3 scripts/production_release_evidence.py --self-test
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules
@@ -282,7 +286,7 @@ jobs:
           recovery="$(cat "$recovery_file")"
           rm -f "$recovery_file"
           echo "$recovery"
-          python -c 'import json,os,sys; data=json.load(sys.stdin); assert data.get("ok") is True; assert data.get("expectedSha")==os.environ["EXPECTED_COMMIT"]; assert data.get("triggered") is True or data.get("exactShaPresent") is True' <<<"$recovery"
+          python -c 'import json,os,sys; d=json.load(sys.stdin); s=str(d.get("deployState") or "").lower(); ok=d.get("ok") is True and d.get("expectedSha")==os.environ["EXPECTED_COMMIT"] and (d.get("triggered") is True and bool(d.get("buildId")) or d.get("exactShaPresent") is True and s in {"ready","current","new","pending","queued","enqueued","building","preparing","prepared","processing","uploading","uploaded","pending_review"}); print("Recovery accepted exact SHA and ready/active/retriggered deploy:",ok); sys.exit(0 if ok else 1)' <<<"$recovery"
           test "$http_status" = "200"
       - name: Wait for exact Netlify production SHA after fallback
         if: steps.initial-netlify-wait.outcome == 'failure'
@@ -304,7 +308,7 @@ jobs:
             https://koasevents.com/api/system-health/github-main-signal)"
           verification="$(cat "$verification_file")"
           rm -f "$verification_file"
-          echo "$verification"
+          echo 'Production synthetic probes and accounting verification returned (payload withheld).'
           python -c 'import json,sys; data=json.load(sys.stdin); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==15706.8; assert accounting.get("actualTotal")==15706.8; assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientEstimateTotal")==15706.8; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' <<<"$verification"
           test "$http_status" = "200"
       - name: Capture Jesse and Dion QBO adjustment diagnostics
@@ -323,7 +327,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"read-accounting-adjustment-diagnostics","recordIds":["QBO-CUST-29","QBO-CUST-44"]}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-adjustment-diagnostics.json
+          # Full accounting diagnostics stay only in the ephemeral runner workspace.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -340,7 +344,7 @@ jobs:
               assert row.get('accountingScope')=='quickbooks-history'
               assert row.get('estimateId')
               assert isinstance(row.get('rawFields'),dict)
-          print('Historical QBO adjustment diagnostics:',json.dumps(rows,separators=(',',':')))
+          print('Historical QBO adjustment verification: 2 records passed (client fields withheld).')
           PY
       - name: Capture current safe accounting repair bulk preview
         if: github.event_name == 'push'
@@ -358,7 +362,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"read-current-accounting-repair-bulk-preview"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat visual-results/accounting-repair-bulk-preview.json
+          # Raw client repair preview is not printed or uploaded.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -378,7 +382,6 @@ jobs:
               'blockedClientCount':preview.get('blockedClientCount'),
               'cleanClientCount':preview.get('cleanClientCount'),
               'errorClientCount':preview.get('errorClientCount'),
-              'rows':preview.get('rows'),
           },separators=(',',':')))
           PY
       - name: Check public routes and headers
@@ -389,8 +392,6 @@ jobs:
           name: koa-production-smoke-${{ github.run_id }}
           path: |
             visual-results/production-smoke.json
-            visual-results/accounting-adjustment-diagnostics.json
-            visual-results/accounting-repair-bulk-preview.json
           retention-days: 14
           if-no-files-found: error
 
@@ -632,7 +633,7 @@ jobs:
             echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
             if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
           done
-          cat visual-results/system-health-dashboard.json
+          # No raw signed dashboard JSON in public Actions logs.
           test "$http_status" = "200"
           python - <<'PY'
           import json
@@ -754,14 +755,14 @@ jobs:
             -H "Content-Type: application/json" \
             --data-binary @/tmp/system-health-commit-status.json \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+      - name: Produce privacy-safe System Health QA evidence
+        if: always()
+        run: python3 scripts/production_release_evidence.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-system-health-mobile-${{ github.run_id }}
-          path: |
-            visual-results/system-health-dashboard.json
-            visual-results/health-mobile-chromium
-            visual-results/health-mobile-webkit
+          path: visual-results/production-release-evidence.json
           retention-days: 30
           if-no-files-found: error
   visual-audit:
@@ -862,7 +863,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"verify-production-release-attestation"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat /tmp/koa-production-attestation.json
+          # Only deploy identity assertions below are logged; response stays local.
           test "$http_status" = "200"
           python - <<'PY'
           import json, os
@@ -901,7 +902,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"run-dashboard-refresh"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat /tmp/koa-final-health.json
+          # Final signed health response is verified locally without logging customer data.
           test "$http_status" = "200"
           python - <<'PY'
           import json, os
