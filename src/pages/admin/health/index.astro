@@ -4819,7 +4819,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const webkit=value.webkit||{};
       const browserText=(row)=>{
         if(row?.reportMissing){
-          const reasons={
+          const reasons:Record<string,string>={
             'exact-deploy-unavailable':'exact production deployment unavailable',
             'browser-audit-skipped':'browser audit skipped',
             'browser-audit-failed-before-report':'audit failed before report creation',
