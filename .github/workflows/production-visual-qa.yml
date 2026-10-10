@@ -454,18 +454,23 @@ jobs:
 
           def summarize(browser):
               report=load_report(browser)
+              try:
+                  route_count=int(report.get('routes') or 0) if report is not None else 0
+                  case_count=int(report.get('cases') or 0) if report is not None else 0
+              except (TypeError,ValueError,OverflowError):
+                  route_count,case_count=0,0
               complete=(
                   report is not None
                   and isinstance(report.get('results'),list)
                   and len(report.get('results'))>0
-                  and int(report.get('routes') or 0)>0
-                  and int(report.get('cases') or 0)==len(report.get('results'))
+                  and route_count>0
+                  and case_count==len(report.get('results'))
                   and isinstance(report.get('failures'),list)
               )
               if not complete:
                   wait_outcome=os.environ.get('EXACT_DEPLOY_WAIT_RESULT','').strip().lower()
                   audit_outcome=os.environ.get(browser.upper()+'_AUDIT_RESULT','').strip().lower()
-                  if report is not None:
+                  if report is not None or Path(f'visual-results/theme-{browser}/report.json').is_file():
                       reason='invalid-browser-report'
                   elif wait_outcome!='success':
                       reason='exact-deploy-unavailable'
