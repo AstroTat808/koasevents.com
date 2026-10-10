@@ -50,6 +50,16 @@ type ListOptions = { prefix?: string };
 
 const CANONICAL_STORE = 'venueloom-data';
 
+export function controlPlaneStore(name:string){
+  return getStore({name,consistency:'strong'});
+}
+
+export function controlPlaneDeployStore(name:string,deployID?:string){
+  return deployID
+    ? getDeployStore({name,deployID})
+    : getDeployStore({name});
+}
+
 function canonicalStore(context?: Context) {
   if (!context) return getStore({ name: CANONICAL_STORE, consistency: 'strong' });
   return context.deploy.context === 'production'
