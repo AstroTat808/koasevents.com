@@ -507,6 +507,13 @@ assert(
   'The production-only Netlify gate must ignore post-merge close-event reruns without accepting failed or pending pre-merge evidence.',
 );
 assert(
+  visualWorkflow.includes("needs: [source-build-audit, deployed-smoke]")
+    && visualWorkflow.includes('if [ "${{ needs.deployed-smoke.result }}" != "success" ]; then')
+    && visualWorkflow.includes('Exact production deployment smoke did not succeed')
+    && visualWorkflow.includes('admin-startup-audit:'),
+  'Live production Chromium/WebKit and protected-admin QA must wait for exact successful production smoke and fail closed if deployment is unavailable.',
+);
+assert(
   visualWorkflow.includes('EXACT_DEPLOY_WAIT_RESULT:')
     && visualWorkflow.includes('CHROMIUM_AUDIT_RESULT:')
     && visualWorkflow.includes('WEBKIT_AUDIT_RESULT:')
