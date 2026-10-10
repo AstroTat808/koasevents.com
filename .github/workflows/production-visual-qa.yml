@@ -956,11 +956,14 @@ jobs:
             netlify:attestation,
             health:{
               ok:healthResponse.ok===true,
+              source:healthResponse.source,
               sha:healthResponse.sha,
+              deployId:healthResponse.deployId,
               overall:current.overall,
               passed:current.passed,
               failed:current.failed,
               checkedAt:current.checkedAt,
+              enrichmentWarnings:healthResponse.enrichmentWarnings,
             },
           });
           const payload={
