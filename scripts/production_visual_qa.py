@@ -1408,6 +1408,47 @@ def health_mobile_mode(browser_name,health_payload_path):
     )
     page.wait_for_timeout(350)
 
+    # PR-only synthetic screenshot and geometry check: never capture live
+    # authenticated production explanation content in public CI artifacts.
+    explanation_dialog_geometry=None
+    if urlparse(BASE).hostname in {"127.0.0.1","localhost"} and viewport_name in {"phone","desktop"}:
+     explanation_dialog_geometry=page.evaluate("""() => {
+       const dialog=document.querySelector('[data-health-detail-dialog]');
+       if(!(dialog instanceof HTMLDialogElement)){
+         return {ok:false,reason:'System Health explanation dialog was not found'};
+       }
+       const setText=(selector,text)=>{
+         const node=dialog.querySelector(selector);
+         if(node)node.textContent=text;
+       };
+       setText('[data-health-detail-severity]','Critical issue');
+       setText('[data-health-detail-title]','Dark Mode QA');
+       setText('[data-health-detail-error]','Synthetic preview: Chromium and WebKit browser reports are missing. All release checks must complete.');
+       setText('[data-health-detail-cause]','The exact production deployment was unavailable during the browser audit.');
+       setText('[data-health-detail-fix]','Restore the exact release, rerun both browser suites, and require complete responsive evidence before approval.');
+       dialog.showModal();
+       const rect=dialog.getBoundingClientRect();
+       const visual=window.visualViewport;
+       const left=visual?.offsetLeft||0, top=visual?.offsetTop||0;
+       const width=visual?.width||innerWidth, height=visual?.height||innerHeight;
+       const horizontalOffset=Math.abs((rect.left+rect.right)/2-(left+width/2));
+       const verticalOffset=Math.abs((rect.top+rect.bottom)/2-(top+height/2));
+       const fits=rect.left>=left-1&&rect.right<=left+width+1
+         &&rect.top>=top-1&&rect.bottom<=top+height+1;
+       return {
+         ok:dialog.matches(':modal')&&fits&&horizontalOffset<=14&&verticalOffset<=14,
+         isModal:dialog.matches(':modal'),fits,
+         horizontalOffset,verticalOffset,
+         left:rect.left,top:rect.top,width:rect.width,height:rect.height,
+         viewportWidth:width,viewportHeight:height,
+       };
+     }""")
+     if not explanation_dialog_geometry.get("ok"):
+      detail=(detail+"; " if detail else "")+"Explanation dialog is not centered in the device viewport: "+json.dumps(explanation_dialog_geometry,separators=(",",":"))
+     else:
+      page.screenshot(path=str(root/f"system-health-explanation-dialog-{viewport_name}.png"),full_page=False,animations="disabled")
+     page.evaluate("() => document.querySelector('[data-health-detail-dialog]')?.close()")
+
     expected_passed=int(current.get("passed") or 0)
     expected_failed=int(current.get("failed") or 0)
     metrics=page.evaluate("""() => {
@@ -1683,6 +1724,8 @@ def health_mobile_mode(browser_name,health_payload_path):
      page.wait_for_timeout(100)
      page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
 
+    if explanation_dialog_geometry is not None:
+     metrics["explanationDialog"]=explanation_dialog_geometry
     if page_errors:
      detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(page_errors[:5])
    except Exception as exc:
