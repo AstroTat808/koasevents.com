@@ -80,9 +80,22 @@ assert(workflow.includes("import { evaluateProductionReleaseGate } from './netli
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
   'Mobile System Health status is not isolated from the final production release gate.');
-assert(server.includes('isSuccessfulNetlifyState(existingState)'),
-  'Production self-heal does not use the tested successful-deploy-state policy.');
+assert(server.includes('planProductionDeployRecovery(deploys)'),
+  'Production self-heal does not use the bounded recovery policy.');
+assert(server.includes('isSuccessfulNetlifyState(aState)'),
+  'Production exact-SHA attestation no longer recognizes successful Netlify states.');
 assert(server.includes('productionDeployMatchesAttestation({'),
   'Production Netlify attestation does not use the tested exact deploy policy.');
+
+assert(!workflow.includes('cat visual-results/system-health-dashboard.json'),
+  'Production Visual QA must not dump raw signed System Health payloads.');
+assert(!workflow.includes('cat /tmp/koa-final-health.json'),
+  'Production Visual QA must not dump raw final System Health payloads.');
+assert(!workflow.includes('cat visual-results/accounting-adjustment-diagnostics.json'),
+  'Production Visual QA must not dump raw accounting diagnostics.');
+assert(!workflow.includes('cat visual-results/accounting-repair-bulk-preview.json'),
+  'Production Visual QA must not dump raw repair previews.');
+assert(workflow.includes('visual-results/production-release-evidence.json'),
+  'Production QA redacted release evidence is missing from artifact upload.');
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, and mismatched deploy IDs.');
