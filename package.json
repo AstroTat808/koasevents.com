@@ -29,7 +29,7 @@
     "test:duplicate-bookings": "node scripts/test_duplicate_bookings.mjs",
     "test:health-dashboard": "node scripts/test_system_health_dashboard.mjs",
     "test:theme": "node scripts/test_theme_system.mjs",
-    "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs"
+    "test:release-gate": "node scripts/verify_netlify_release_gate.mjs --self-test && node scripts/test_production_release_attestation.mjs && node scripts/test_production_deploy_recovery.mjs && python3 scripts/production_release_evidence.py --self-test"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

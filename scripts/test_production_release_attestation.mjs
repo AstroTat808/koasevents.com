@@ -33,11 +33,14 @@ const base={
   },
   health:{
     ok:true,
+    source:'github-actions-oidc',
     sha,
+    deployId,
     overall:'healthy',
     passed:81,
     failed:0,
-    checkedAt:'2026-10-10T06:31:00Z',
+    checkedAt:new Date().toISOString(),
+    enrichmentWarnings:[],
   },
 };
 
@@ -64,6 +67,22 @@ assert(evaluateProductionReleaseGate({
   netlify:{...base.netlify,liveDeployId:'fedcba9876543210fedcba98'},
 }).ok===false,'Mismatched live Netlify deploy ID could publish a green production gate.');
 
+for(const [name,health] of [
+  ['signed health different deploy',{...base.health,deployId:'another-deployment'}],
+  ['unsigned refresh',{...base.health,source:'unverified'}],
+  ['missing warnings field',(({enrichmentWarnings,...rest})=>rest)(base.health)],
+  ['partial refresh',{...base.health,enrichmentWarnings:[{kind:'partial'}]}],
+  ['stale checkedAt',{...base.health,checkedAt:'2026-01-01T00:00:00Z'}],
+  ['future checkedAt',{...base.health,checkedAt:new Date(Date.now()+3600_000).toISOString()}],
+  ['malformed checkedAt',{...base.health,checkedAt:'unknown'}],
+  ['string passed count',{...base.health,passed:'81'}],
+  ['false failed count',{...base.health,failed:false}],
+  ['zero passed',{...base.health,passed:0}],
+]){
+  assert(evaluateProductionReleaseGate({...base,health}).ok===false,
+    'Production gate accepted '+name+'.');
+}
+
 for(const state of ['building','enqueued','new','error','failed','cancelled','']){
   assert(isSuccessfulNetlifyState(state)===false,'Non-ready Netlify state '+JSON.stringify(state)+' was accepted.');
 }
@@ -80,9 +99,37 @@ assert(workflow.includes("import { evaluateProductionReleaseGate } from './netli
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
   'Mobile System Health status is not isolated from the final production release gate.');
-assert(server.includes('isSuccessfulNetlifyState(existingState)'),
-  'Production self-heal does not use the tested successful-deploy-state policy.');
+assert(server.includes('planProductionDeployRecovery(deploys)'),
+  'Production self-heal does not use the bounded recovery policy.');
+assert(server.includes('isSuccessfulNetlifyState(aState)'),
+  'Production exact-SHA attestation no longer recognizes successful Netlify states.');
 assert(server.includes('productionDeployMatchesAttestation({'),
   'Production Netlify attestation does not use the tested exact deploy policy.');
+
+assert(!workflow.includes('cat visual-results/system-health-dashboard.json'),
+  'Production Visual QA must not dump raw signed System Health payloads.');
+assert(!workflow.includes('cat /tmp/koa-final-health.json'),
+  'Production Visual QA must not dump raw final System Health payloads.');
+assert(!workflow.includes('cat visual-results/accounting-adjustment-diagnostics.json'),
+  'Production Visual QA must not dump raw accounting diagnostics.');
+assert(!workflow.includes('cat visual-results/accounting-repair-bulk-preview.json'),
+  'Production Visual QA must not dump raw repair previews.');
+assert(workflow.includes('visual-results/production-release-evidence.json'),
+  'Production QA redacted release evidence is missing from artifact upload.');
+assert(workflow.includes('expected_widths={320,390,768,1024,1280,1440,1920}'),
+  'Production health QA must require exactly seven distinct responsive widths per browser.');
+assert(workflow.includes('Chromium/WebKit 14-viewport System Health audit did not meet release requirements.'),
+  'A failed responsive status must also fail the job before final production attestation.');
+const trustedRecovery=readFileSync('.github/workflows/trusted-netlify-production-recovery.yml','utf8');
+assert(trustedRecovery.includes('workflow_dispatch:')&&trustedRecovery.includes("environment: production-recovery"),
+  'GitHub-owned recovery must be manually dispatched through an approved environment.');
+assert(!trustedRecovery.includes('pull_request:'),
+  'Untrusted pull requests must never be allowed to run credentialed recovery.');
+const recoveryRunner=readFileSync('scripts/github_recover_netlify_production.mjs','utf8');
+assert(recoveryRunner.includes('GITHUB_REF')&&recoveryRunner.includes('refs/heads/main')
+       &&recoveryRunner.includes('planProductionDeployRecovery')
+       &&!recoveryRunner.includes('koasevents.com/api/system-health'),
+  'Trusted recovery must operate against exact main and Netlify without a deployed production function.');
+
 
 console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, and mismatched deploy IDs.');

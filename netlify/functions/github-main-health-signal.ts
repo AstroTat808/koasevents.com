@@ -20,6 +20,7 @@ import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
 import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
+import { planProductionDeployRecovery } from './_shared/production-deploy-recovery.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
@@ -281,14 +282,18 @@ async function productionAccountingAuditForCommit(context:Context,targetCommit:s
   };
 }
 
-async function productionDeployForCommit(token:string,siteId:string,sha:string){
+async function productionDeploysForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
-  const rows=Array.isArray(body)?body:[];
-  const matches=rows.filter((row:any)=>{
-    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
-    const context=cleanText(row?.context,80);
-    return commit===sha && (!context||context==='production');
+  if(!Array.isArray(body))throw new Error('Netlify deployment history unavailable; recovery blocked.');
+  return body.filter((row:any)=>{
+    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80).toLowerCase();
+    const deployContext=cleanText(row?.context,80);
+    return commit===sha.toLowerCase()&&(!deployContext||deployContext==='production');
   });
+}
+
+async function productionDeployForCommit(token:string,siteId:string,sha:string){
+  const matches=await productionDeploysForCommit(token,siteId,sha);
   return matches.sort((a:any,b:any)=>{
     const aState=cleanText(a?.state,40).toLowerCase();
     const bState=cleanText(b?.state,40).toLowerCase();
@@ -318,55 +323,68 @@ async function currentGithubMainSha(){
 }
 
 async function selfHealProductionDeploy(context:Context,claims:any){
-  const expectedSha=cleanText(claims?.sha,80);
+  const expectedSha=cleanText(claims?.sha,80).toLowerCase();
   const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
   const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!/^[a-f0-9]{40}$/.test(expectedSha))throw new Error('Production recovery requires a full signed GitHub SHA.');
   if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to production deployment recovery.');
   if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
 
-  const existing=await productionDeployForCommit(token,siteId,expectedSha);
-  const existingState=cleanText(existing?.state,80).toLowerCase();
-  const existingReady=Boolean(existing&&isSuccessfulNetlifyState(existingState));
-  if(existingReady){
-    return {
-      ok:true,
-      triggered:false,
-      exactShaPresent:true,
-      expectedSha,
-      deployId:cleanText(existing?.id,120),
-      deployState:existingState,
-      deployContext:cleanText(existing?.context,80),
-      reason:'The exact approved main SHA already has a successful Netlify production deploy; no recovery build was triggered.',
-    };
-  }
-
-  const mainSha=await currentGithubMainSha();
+  const mainSha=(await currentGithubMainSha()).toLowerCase();
   if(mainSha!==expectedSha){
     return {
-      ok:false,
-      triggered:false,
-      exactShaPresent:false,
-      expectedSha,
-      currentMainSha:mainSha,
+      ok:false, triggered:false, exactShaPresent:false, expectedSha, currentMainSha:mainSha,
       reason:'GitHub main advanced before recovery; the older SHA will not be retriggered.',
     };
   }
 
+  const deploys=await productionDeploysForCommit(token,siteId,expectedSha);
+  const plan=planProductionDeployRecovery(deploys);
+  const existing=plan.deploy||null;
+  const deployId=cleanText(existing?.id,120);
+  const deployState=cleanText(existing?.state,80).toLowerCase();
+  if(plan.action==='reuse'){
+    return {
+      ok:true, triggered:false, exactShaPresent:true, expectedSha, currentMainSha:mainSha,
+      deployId, deployState, deployContext:'production', retryDecision:plan.reason,
+      reason:plan.reason==='ready'
+        ?'The exact SHA has a ready Netlify deploy; waiting for production publication.'
+        :'The exact SHA is already being built; duplicate Netlify build suppressed.',
+    };
+  }
+  if(plan.action==='block'){
+    return {
+      ok:false, triggered:false, exactShaPresent:deploys.length>0, expectedSha,
+      currentMainSha:mainSha, deployId, deployState,
+      failedDeployCount:plan.failedCount, retryDecision:plan.reason,
+      reason:plan.reason==='automatic-retry-limit-reached'
+        ?'The exact SHA failed both the initial build and one recovery build; manual diagnosis required.'
+        :'Netlify returned an unrecognized deployment state; automatic recovery blocked.',
+    };
+  }
+
+  // /builds always builds current main, so re-check immediately before mutation.
+  const latestMainSha=(await currentGithubMainSha()).toLowerCase();
+  if(latestMainSha!==expectedSha){
+    return {
+      ok:false, triggered:false, exactShaPresent:deploys.length>0, expectedSha,
+      currentMainSha:latestMainSha,
+      reason:'GitHub main changed during recovery; no stale production build requested.',
+    };
+  }
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/builds',{method:'POST'});
+  const buildId=cleanText(body?.id,120);
+  if(!buildId)throw new Error('Netlify recovery did not return a build ID.');
   return {
-    ok:true,
-    triggered:true,
-    exactShaPresent:false,
-    failedExactShaPresent:Boolean(existing&&!existingReady),
-    failedDeployId:cleanText(existing?.id,120),
-    failedDeployState:existingState,
-    expectedSha,
-    currentMainSha:mainSha,
-    buildId:cleanText(body?.id,120),
-    buildState:cleanText(body?.state||body?.status,80),
-    reason:existing
-      ? 'The exact approved main SHA existed only as a failed Netlify deploy, so a fresh production build was retriggered.'
-      : 'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+    ok:true, triggered:true, exactShaPresent:deploys.length>0,
+    failedExactShaPresent:plan.failedCount===1,
+    failedDeployId:deployId, failedDeployState:deployState,
+    expectedSha, currentMainSha:latestMainSha,
+    buildId, buildState:cleanText(body?.state||body?.status,80),
+    retryDecision:plan.reason,
+    reason:plan.failedCount
+      ?'One failed exact-SHA deployment was found; a single replacement production build was requested.'
+      :'No exact-SHA production deployment existed; production build requested.',
   };
 }
 
