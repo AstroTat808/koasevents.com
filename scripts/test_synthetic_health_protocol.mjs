@@ -194,10 +194,10 @@ mustMatch(
   /accountingInvariant/,
   'Production QA must gate the deploy on the live accounting invariant.',
 );
-mustMatch(
+assert.doesNotMatch(
   productionQa,
-  /liveClientEstimateTotal/,
-  'Production QA must require the live Chris Sibel estimate total.',
+  /liveClientEstimateTotal|expectedTotal|actualTotal|proposalTotal|estimateTotal|transactionAdjustment|totalTax/,
+  'Production QA must not reference customer-level financial fields; only aggregate pass/fail accounting status is allowed in CI.',
 );
 mustMatch(
   systemHealth,
