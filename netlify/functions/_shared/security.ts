@@ -1,6 +1,8 @@
 import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant.ts';
 import { tenantStoreFor } from './tenant-storage.ts';
+import { appendTurnstileEvent, loadTurnstileEvents, probeTurnstileEventStore } from './turnstile-history.mjs';
+import { classifyTurnstileAlert, summarizeTurnstileActivity } from './turnstile-alerts.mjs';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
@@ -59,6 +61,7 @@ export interface TurnstileValidation {
   requestHostname: string;
   codes: string[];
   detail: string;
+  sourceHint?: 'matches-ci-smoke-pattern' | 'unclassified';
 }
 
 const DISPOSABLE_EMAIL_DOMAINS = new Set([
@@ -205,6 +208,7 @@ export async function recordTurnstileValidation(
     requestHostname?: unknown;
     codes?: unknown;
     detail?: unknown;
+    sourceHint?: unknown;
   },
 ) {
   const store = storeFor(context);
@@ -222,21 +226,12 @@ export async function recordTurnstileValidation(
     requestHostname: clean(input.requestHostname, 255).toLowerCase(),
     codes,
     detail: clean(input.detail, 500),
+    sourceHint: input.sourceHint === 'matches-ci-smoke-pattern' ? 'matches-ci-smoke-pattern' : 'unclassified',
   };
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const current = await store.getWithMetadata('turnstile/validations', { type: 'json', consistency: 'strong' });
-    const list = Array.isArray(current?.data) ? current.data as TurnstileValidation[] : [];
-    const next = [row, ...list.filter((item) => item?.id !== row.id)].slice(0, 2000);
-    const write = current
-      ? await store.setJSON('turnstile/validations', next, { onlyIfMatch: current.etag })
-      : await store.setJSON('turnstile/validations', next, { onlyIfNew: true });
-    if (write.modified) return row;
-  }
-
-  const fallback = ((await store.get('turnstile/validations', { type: 'json', consistency: 'strong' })) || []) as TurnstileValidation[];
-  await store.setJSON('turnstile/validations', [row, ...fallback].slice(0, 2000));
-  return row;
+  // Each verification is stored under an immutable key: no shared index can
+  // clobber concurrent outcomes, and no tenant-storage CAS result is assumed.
+  return appendTurnstileEvent(store, row);
 }
 
 const TURNSTILE_WIDGET_EXPECTATIONS = [
@@ -334,7 +329,11 @@ async function probeTurnstileSiteverify(secret: string) {
       : [];
     const secretRejected = codes.includes('invalid-input-secret') || codes.includes('missing-input-secret');
     const reachable = Boolean(response.status);
-    const secretAccepted = Boolean(response.ok && !secretRejected);
+    // The intentionally invalid token must actually be rejected with the
+    // expected challenge error. An HTTP 200 containing HTML, malformed JSON or
+    // an unexpected 'success' payload is NOT proof Siteverify is healthy.
+    const expectedInvalidToken = data?.success === false && codes.includes('invalid-input-response');
+    const secretAccepted = Boolean(response.ok && !secretRejected && expectedInvalidToken);
     return {
       ok: Boolean(reachable && secretAccepted),
       reachable,
@@ -361,10 +360,32 @@ async function probeTurnstileSiteverify(secret: string) {
 
 export async function getTurnstileStatus(context: Context, days = 30) {
   const store = storeFor(context);
-  const rows = ((await store.get('turnstile/validations', { type: 'json', consistency: 'strong' })) || []) as TurnstileValidation[];
   const windowDays = Math.max(1, Math.min(90, Math.round(Number(days || 30))));
+  const [oldHistory, immutableHistory, recordingWritable] = await Promise.all([
+    store.get('turnstile/validations', { type: 'json', consistency: 'strong' }),
+    loadTurnstileEvents(store, windowDays),
+    probeTurnstileEventStore(store),
+  ]);
+  // Old events stay visible for audit purposes. They may predate the reliable
+  // logger, so retaining them must never be mistaken for proof it is working.
+  const legacyRows = (Array.isArray(oldHistory) ? oldHistory : []) as TurnstileValidation[];
+  const unique = new Map<string, TurnstileValidation>();
+  for (const row of [...legacyRows, ...immutableHistory.rows] as TurnstileValidation[]) {
+    if (row && typeof row.id === 'string' && Number.isFinite(Date.parse(String(row.createdAt || '')))) {
+      unique.set(row.id, row);
+    }
+  }
+  const rows = [...unique.values()].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
   const cutoff = Date.now() - windowDays * 24 * 60 * 60 * 1000;
   const inRange = rows.filter((row) => Date.parse(row.createdAt) >= cutoff);
+  const telemetry = {
+    ok: recordingWritable && immutableHistory.unreadable === 0 && !immutableHistory.truncated,
+    writable: recordingWritable,
+    unreadable: immutableHistory.unreadable,
+    truncated: immutableHistory.truncated,
+    appendOnlyEvents: immutableHistory.rows.length,
+    legacyEvents: legacyRows.length,
+  };
   const failures = inRange.filter((row) => !row.ok);
   const successes = inRange.filter((row) => row.ok);
   const errorMap = new Map<string, { code: string; count: number; lastSeenAt: string }>();
@@ -408,8 +429,9 @@ export async function getTurnstileStatus(context: Context, days = 30) {
   );
   const lastMismatch = mismatchRows[0] || null;
   const healthyWidgets = widgets.filter((row) => row.ok).length;
+  const activity = summarizeTurnstileActivity(inRange);
 
-  return {
+  const status = {
     siteKeyConfigured: Boolean(siteKey),
     siteKeySource: siteKey ? 'environment' : '',
     secretConfigured: Boolean(secret),
@@ -420,11 +442,14 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       widgets,
     },
     siteverify,
+    telemetry,
+    activity,
     windowDays,
     totals: {
       validations: inRange.length,
       successful: successes.length,
       failed: failures.length,
+      smokePattern: failures.filter((row) => row.sourceHint === 'matches-ci-smoke-pattern').length,
     },
     mismatches: {
       hostname: hostnameMismatchRows.length,
@@ -438,6 +463,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       .sort((a, b) => b.count - a.count || Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt))
       .slice(0, 12),
   };
+  return { ...status, alert: classifyTurnstileAlert(status) };
 }
 
 export async function setSecurityReview(
