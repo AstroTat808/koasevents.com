@@ -93,7 +93,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-isolated-browser-probes:
+  isolated-browser-probes:
     name: Single-browser requests versus Netlify edge
     needs: isolated-netlify-probes
     runs-on: ubuntu-latest
