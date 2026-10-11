@@ -189,7 +189,44 @@ async function selfTest(){
     badBindingAccepted=true;
   }catch{}
   if(badBindingAccepted)throw Error('A mismatched merge association was accepted after retries.');
+  // PR #254 merged at 09:23:29, then Branch hygiene ran again at 09:23:31.
+  // Netlify must require the successful pre-merge run, not this new close-event
+  // run. A failed or pending NEWER pre-merge run must still block deployment.
+  const premerge={...associated,name:'Branch hygiene',run_number:208,
+    created_at:'2026-10-10T09:03:58Z'};
+  const closure={...premerge,run_number:209,status:'in_progress',conclusion:null,
+    created_at:'2026-10-10T09:23:31Z'};
+  const eligible=preMergeWorkflowRuns([premerge,closure],'2026-10-10T09:23:29Z');
+  if(eligible.length!==1||newestRun(eligible)?.run_number!==208)throw Error('Post-merge close-event run displaced successful pre-merge evidence.');
+  const failing={...premerge,run_number:210,status:'completed',conclusion:'failure',
+    created_at:'2026-10-10T09:23:28Z'};
+  if(newestRun(preMergeWorkflowRuns([premerge,failing,closure],'2026-10-10T09:23:29Z'))?.conclusion!=='failure'){
+    throw Error('Latest failed pre-merge workflow was incorrectly accepted.');
+  }
+  const pending={...failing,conclusion:null,status:'in_progress'};
+  if(newestRun(preMergeWorkflowRuns([premerge,pending,closure],'2026-10-10T09:23:29Z'))?.status!=='in_progress'){
+    throw Error('Latest pending pre-merge workflow was incorrectly accepted.');
+  }
+  for(const invalid of ['', 'not-a-date']){
+    let accepted=false;
+    try{preMergeWorkflowRuns([premerge],invalid);accepted=true;}catch{}
+    if(accepted)throw Error('Invalid merge timestamp accepted as release provenance.');
+  }
+  console.log('PASS | pre-merge workflow cutoff ignores closure-triggered runs but rejects failed, pending, and invalid evidence.');
   console.log('PASS | exact-main and exact-merged-PR evidence tolerate propagation delay but reject persistent mismatches.');
+}
+
+function preMergeWorkflowRuns(runs,mergedAt){
+  // pull_request.closed starts a NEW Branch hygiene run on the approved PR head.
+  // That post-merge run can still be queued while Netlify starts building the
+  // merge commit. It is not pre-merge evidence and must not invalidate valid
+  // successful checks completed before the PR merged.
+  const cutoff=Date.parse(String(mergedAt||''));
+  if(!Number.isFinite(cutoff))throw new Error('Merged pull request has no valid merge timestamp.');
+  return (Array.isArray(runs)?runs:[]).filter((run)=>{
+    const started=Date.parse(String(run?.created_at||''));
+    return Number.isFinite(started)&&started<=cutoff;
+  });
 }
 
 function newestRun(runs){
@@ -327,8 +364,11 @@ async function main(){
     fail(error instanceof Error?error.message:String(error));
   }
 
-  const runs=(Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
-    .filter((run)=>belongsToExactPullHead(run,headSha));
+  const runs=preMergeWorkflowRuns(
+    (Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
+      .filter((run)=>belongsToExactPullHead(run,headSha)),
+    merged.merged_at,
+  );
   const matching=runs.filter((run)=>String(run?.name||'')===REQUIRED_WORKFLOW);
   const latest=newestRun(matching);
   if(!latest){
