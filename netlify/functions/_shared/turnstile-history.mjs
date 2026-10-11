@@ -53,9 +53,11 @@ export async function loadTurnstileEvents(store, days = 30, nowMs = Date.now()) 
     for (let index = 0; index < values.length; index += 1) {
       const row = values[index];
       const parsed = Date.parse(String(row?.createdAt || ''));
+      let correctKey = false;
+      try { correctKey = turnstileEventKey(row) === selected[index]; } catch { /* corrupt record */ }
       if (!row || typeof row !== 'object' || typeof row.ok !== 'boolean' ||
           !Array.isArray(row.codes) || !Number.isFinite(parsed) ||
-          parsed < cutoff || parsed > nowMs || turnstileEventKey(row) !== selected[index]) {
+          parsed < cutoff || parsed > nowMs || !correctKey) {
         unreadable += 1;
         continue;
       }
