@@ -12,6 +12,11 @@ on:
       - 'netlify/functions/crm-inquiries.mts'
       - 'netlify/functions/_shared/lead-email.ts'
       - 'netlify/functions/_shared/security.ts'
+      - 'netlify/functions/_shared/credential-health.ts'
+      - 'netlify/functions/_shared/system-health.ts'
+      - 'netlify/functions/_shared/turnstile-history.mjs'
+      - 'netlify/functions/_shared/turnstile-history.d.mts'
+      - 'scripts/test_turnstile_history.mjs'
       - 'netlify/edge-functions/verify-form-turnstile.mts'
   workflow_dispatch:
 
@@ -116,6 +121,7 @@ jobs:
                       headers={
                           "Content-Type": "application/json",
                           "X-Koa-Inquiry-Capture": "1",
+                          "X-Koa-Turnstile-Smoke": "1",
                       },
                   )
                   parsed = {}
