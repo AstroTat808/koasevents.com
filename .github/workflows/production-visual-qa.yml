@@ -314,7 +314,7 @@ jobs:
           assert data.get('ok') is True and data.get('auditRecorded') is True
           probes=data.get('probes') or []
           assert len(probes)==4
-          assert all(p.get('ok') and p.get('status')==204 and p.get('source')=='live' and p.get('marker')==p.get('expectedMarker') for p in probes)
+          assert all(p.get('ok') and p.get("status")==204 and p.get('source')=='live' and p.get('marker')==p.get('expectedMarker') for p in probes)
           assert accounting.get('ok') is True and accounting.get('status')==200
           assert accounting.get('liveClientStatus')=='passed'
           assert accounting.get('dynamicClientStatus')=='passed'
@@ -533,7 +533,8 @@ jobs:
           PY
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
-          curl -fsS             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data-binary @/tmp/dark-mode-visual-quality.json             https://koasevents.com/api/system-health/github-main-signal
+          curl -fsS -o /tmp/koa-dark-mode-result.json -X POST -H "Authorization: Bearer $token" -H "Content-Type: application/json" --data-binary @/tmp/dark-mode-visual-quality.json https://koasevents.com/api/system-health/github-main-signal
+          rm -f /tmp/koa-dark-mode-result.json
           python - <<'PY'
           import json
           from pathlib import Path
