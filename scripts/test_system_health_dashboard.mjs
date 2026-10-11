@@ -234,7 +234,7 @@ assert(
 
 assert(
   visualWorkflow.includes("if: github.event_name != 'pull_request' && always()")
-    && visualWorkflow.includes('needs: [deployed-smoke, production-theme-audit]'),
+    && visualWorkflow.includes('needs: [deployed-smoke, production-theme-audit, visual-audit]'),
   'Live System Health diagnostics must still run after an unrelated deployed-smoke failure so production health values and responsive evidence are captured.',
 );
 
@@ -540,6 +540,14 @@ assert(
     && visualWorkflow.includes('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
     && visualWorkflow.includes('Dark Mode QA release gate blocked:'),
   'The release gate must require seven distinct named responsive viewports per browser and 14 matching live refresh results.',
+);
+
+
+assert(
+  visualWorkflow.includes("  visual-audit:\n    name: Responsive visual audit\n    if: github.event_name != 'pull_request' && always()\n    needs: [deployed-smoke, production-theme-audit]")
+    && visualWorkflow.includes("max-parallel: 1")
+    && visualWorkflow.includes("needs: [deployed-smoke, production-theme-audit, visual-audit]"),
+  'Production Dark Mode QA, Chromium and WebKit responsive jobs, and final System Health refresh must run sequentially; every failure remains actionable and no browser is skipped.',
 );
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
