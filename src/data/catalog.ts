@@ -339,6 +339,7 @@ export const catalogItems: CatalogItem[] = [
     description: 'Dry-bar service for beer, champagne and wine with the shared Koa’s service foundation.',
     priceType: 'starting',
     priceLabel: 'Starting at $1,500',
+    publishedMinimumPrice: 1500,
     specs: [
       { label: 'Guests included', value: 'Up to 100' },
       { label: 'Additional guests', value: '$10 / guest' },
@@ -354,6 +355,7 @@ export const catalogItems: CatalogItem[] = [
     description: 'Beer, champagne and wine plus two signature drinks with the shared Koa’s service foundation.',
     priceType: 'starting',
     priceLabel: 'Starting at $2,000',
+    publishedMinimumPrice: 2000,
     badges: [{ kind: 'popular', label: 'Recommended Start' }],
     specs: [
       { label: 'Guests included', value: 'Up to 100' },
@@ -370,6 +372,7 @@ export const catalogItems: CatalogItem[] = [
     description: 'Premium full-bar service with two signature drinks, mixed cocktails, enhanced garnish presentation, a zero-proof signature companion and custom cocktail naming + menu curation.',
     priceType: 'starting',
     priceLabel: 'Starting at $2,500',
+    publishedMinimumPrice: 2500,
     featured: true,
     badges: [{ kind: 'featured', label: 'Premium Full Bar' }],
     specs: [
