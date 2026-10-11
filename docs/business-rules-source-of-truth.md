@@ -81,6 +81,25 @@ The following commercial rules are synchronized with KoaSMobileBar.com as of 202
 | Maui | $2,000 | Oahu scope + 2 signature drinks | $12/person |
 | Big Island | $2,500 | Maui scope + mixed cocktails, enhanced garnish presentation, one zero-proof signature companion, custom cocktail naming + menu curation | $15/person |
 
+## Mobile Bar published enhancements
+
+| Enhancement | Published price |
+|---|---:|
+| Champagne toast | $150 up to 50 guests; +$3/guest thereafter |
+| Champagne tower wall | Starting at $350 |
+| Upgraded tossware | $2/guest; $100 minimum |
+| Vinyl logo | Starting at $150 |
+| Personalized stirrers | $3/guest; $175 minimum |
+| Drink accessories | Starting at $125 |
+| Balloon garland | Starting at $350 |
+| Soda station | $4/guest; $200 minimum |
+| Juice / punch station | $5/guest; $250 minimum |
+| Coffee bar | $6/guest; $300 minimum |
+| Bar décor | Starting at $250 |
+| Standard Mobile Bar glassware | $3/piece |
+| Premium / specialty Mobile Bar glassware | $4.50/piece |
+| Acrylic bar menu | Starting at $125 |
+
 ## Remaining decisions before commercial lock
 
 2. Final Plumeria vendor-provided inclusions and exact quantities.
