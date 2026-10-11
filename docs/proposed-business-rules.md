@@ -5,10 +5,7 @@ Status: **PARTIALLY APPROVED**
 The following recommendations were approved on 2026-09-17 and have moved into the active source of truth:
 
 - Venue maximum occupancy: **100 persons**.
-- Mobile Bar bartender labor: **included within standard package assumptions**.
-- Mobile Bar gratuity: **optional**.
-- Mobile Bar tip jar: **not used by default; available only on client request**.
-- Mobile Bar staffing: **custom quoted above standard package assumptions / when event complexity requires it**.
+- Mobile Bar commercial pricing and operating rules were superseded on 2026-10-10 by the synchronized KoaSMobileBar.com rules: **$1,500 / $2,000 / $2,500 packages, $65/hour/bartender labor, 10% tip-jar or 25% no-tip-jar gratuity, package-specific guest surcharges and the published travel rules**.
 
 ## Recommendations still pending approval
 
@@ -24,11 +21,8 @@ Keep the four package names but separate:
 5. optional add-ons,
 6. custom-quote requirements.
 
-### Mobile Bar guest scaling
-For events above 100 guests, use a custom service/staffing quote rather than relying only on a per-person surcharge. The legacy $8/additional-guest amount can remain as a consumables component only if it still reflects current costs.
-
-### Travel
-Define one origin and one calculation method. Preferred language: travel included within 20 miles of Koa’s operating base; additional service mileage billed at the applicable published rate.
+### Mobile Bar commercial rules
+The Mobile Bar pricing, guest scaling, labor, gratuity and travel rules are commercially locked in `docs/business-rules-source-of-truth.md` and should no longer be treated as pending recommendations.
 
 ### Add-on pricing
 Publish fixed prices only for standardized items with stable costs; use “from” or quote-only pricing for custom fabrication, décor and personalized goods.
