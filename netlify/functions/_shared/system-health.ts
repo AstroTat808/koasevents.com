@@ -2224,6 +2224,9 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       +String(Number(turnstileDiag?.windowDays||30))+'d'
       +' · '+String(Number(turnstileTelemetry?.appendOnlyEvents||0))+' append-only events'
       +' · '+String(Number(turnstileTelemetry?.legacyEvents||0))+' legacy records'
+      +(Number(turnstileTotals?.smokePattern||0)>0
+        ? ' · '+String(Number(turnstileTotals.smokePattern))+' rejections match CI smoke-test signature (untrusted hint; retained in failure totals)'
+        : '')
       +(turnstileLastSuccess?.createdAt
         ? ' · Last accepted '+String(turnstileLastSuccess.createdAt)
         : ' · No accepted production token recorded; this alone is not a service failure')
