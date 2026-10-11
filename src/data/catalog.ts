@@ -37,6 +37,8 @@ export interface CatalogItem {
   estimatedUnitPrice?: number;
   estimatedUnitLabel?: string;
   publishedUnitPrice?: number;
+  publishedMinimumPrice?: number;
+  publishedIncludedQuantity?: number;
   specs?: { label: string; value: string }[];
   keywords?: string[];
 }
@@ -237,6 +239,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: '$2 / guest · $100 minimum',
     note: 'Mobile Bar published enhancement pricing.',
     publishedUnitPrice: 2,
+    publishedMinimumPrice: 100,
     quantityMode: 'guest-count',
     quantityLabel: 'Guests',
     keywords: ['cups', 'disposable', 'drinkware'],
@@ -500,7 +503,9 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: '$150 up to 50 guests · +$3 / guest thereafter',
     note: 'Mobile Bar published enhancement pricing.',
-    publishedUnitPrice: 150,
+    publishedUnitPrice: 3,
+    publishedMinimumPrice: 150,
+    publishedIncludedQuantity: 50,
     quantityMode: 'manual',
     quantityLabel: 'Toast service',
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
@@ -718,6 +723,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $350',
     note: 'Mobile Bar published enhancement pricing; final scope depends on styling and materials.',
+    publishedMinimumPrice: 350,
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
     bundleEligible: true,
     keywords: ['champagne', 'wall', 'tower'],
@@ -730,6 +736,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $150',
     note: 'Mobile Bar published enhancement pricing; final fabrication is confirmed in the proposal.',
+    publishedMinimumPrice: 150,
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
     bundleEligible: true,
     keywords: ['logo', 'personalized', 'branding'],
@@ -743,6 +750,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: '$3 / guest · $175 minimum',
     note: 'Mobile Bar published enhancement pricing; minimum six-week lead time.',
     publishedUnitPrice: 3,
+    publishedMinimumPrice: 175,
     quantityMode: 'guest-count',
     quantityLabel: 'Guests',
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
@@ -757,6 +765,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $125',
     note: 'Mobile Bar published enhancement pricing; final materials are confirmed in the proposal.',
+    publishedMinimumPrice: 125,
     keywords: ['accessories', 'personalized', 'cocktail'],
   },
   {
@@ -767,6 +776,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $350',
     note: 'Mobile Bar published enhancement pricing; minimum two-week lead time.',
+    publishedMinimumPrice: 350,
     keywords: ['balloon', 'garland'],
   },
   {
@@ -778,6 +788,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: '$4 / guest · $200 minimum',
     note: 'Mobile Bar published enhancement pricing.',
     publishedUnitPrice: 4,
+    publishedMinimumPrice: 200,
     quantityMode: 'guest-count',
     quantityLabel: 'Guests',
     keywords: ['soda', 'soft drinks'],
@@ -791,6 +802,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: '$5 / guest · $250 minimum',
     note: 'Mobile Bar published enhancement pricing.',
     publishedUnitPrice: 5,
+    publishedMinimumPrice: 250,
     quantityMode: 'guest-count',
     quantityLabel: 'Guests',
     keywords: ['juice', 'punch', 'nonalcoholic'],
@@ -804,6 +816,7 @@ export const catalogItems: CatalogItem[] = [
     priceLabel: '$6 / guest · $300 minimum',
     note: 'Mobile Bar published enhancement pricing.',
     publishedUnitPrice: 6,
+    publishedMinimumPrice: 300,
     quantityMode: 'guest-count',
     quantityLabel: 'Guests',
     keywords: ['coffee', 'hot beverage'],
@@ -816,6 +829,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $250',
     note: 'Mobile Bar published enhancement pricing; final styling scope is confirmed in the proposal.',
+    publishedMinimumPrice: 250,
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
     bundleEligible: true,
     keywords: ['bar styling', 'decor'],
@@ -828,6 +842,7 @@ export const catalogItems: CatalogItem[] = [
     priceType: 'starting',
     priceLabel: 'Starting at $125',
     note: 'Mobile Bar published enhancement pricing; final fabrication is confirmed in the proposal.',
+    publishedMinimumPrice: 125,
     badges: [{ kind: 'deal', label: 'Mobile Bar Add-On' }],
     bundleEligible: true,
     keywords: ['menu', 'acrylic', 'personalized'],
