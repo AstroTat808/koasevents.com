@@ -1,0 +1,94 @@
+name: Netlify 503 origin and traffic isolation
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/netlify-503-origin-probes.yml
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-netlify-probes:
+    name: Low-volume, unauthenticated production HTTP probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - name: Compare primary domain, immutable deploy and Netlify control
+        shell: bash
+        env:
+          EXPECTED_PRODUCTION_SHA: e8665c00fbb4e4cf0bd698d1ea27fac1bce9432c
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import datetime, json, os, re, time
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import Request, urlopen
+
+          EXPECTED=os.environ["EXPECTED_PRODUCTION_SHA"].lower()
+          TARGETS=[
+            ("primary_html", "https://koasevents.com/signature-wedding/", True),
+            ("primary_static", "https://koasevents.com/robots.txt", False),
+            ("immutable_deploy_html", "https://6acb56a9c3af350008e2eb5e--koasevents-website.netlify.app/signature-wedding/", True),
+            ("netlify_platform_control", "https://www.netlify.com/", False),
+          ]
+          results=[]
+          for iteration in (1,2):
+            for name,url,verify_sha in TARGETS:
+              start=time.monotonic()
+              code=0; headers={}; data=b""; error_type=""
+              try:
+                req=Request(url,headers={"User-Agent":"KoaEvents-ReleaseAvailability-Probe/1.0","Accept":"text/html,text/plain;q=0.9"})
+                with urlopen(req,timeout=17) as response:
+                  code=response.status
+                  headers=response.headers
+                  data=response.read(260000)
+              except HTTPError as exc:
+                code=exc.code
+                headers=exc.headers
+                exc.close()
+              except (URLError,TimeoutError,OSError) as exc:
+                error_type=type(exc).__name__
+              marker=re.search(rb'<meta\s+name=["\x27]koa-build-commit["\x27]\s+content=["\x27]([a-f0-9]{40})["\x27]',data,re.I)
+              matched=(marker.group(1).decode().lower()==EXPECTED) if marker else False
+              item={
+                "iteration":iteration,
+                "target":name,
+                "status":code,
+                "seconds":round(time.monotonic()-start,3),
+                "cache_status":re.sub(r"[^A-Za-z0-9;=,_./ \-]","",str(headers.get("cache-status","")))[:120],
+                "server":re.sub(r"[^A-Za-z0-9._\-]","",str(headers.get("server","")))[:50],
+                "netlify_request_id_present":bool(headers.get("x-nf-request-id")),
+                "error_type":error_type,
+                "exact_sha_match":matched if code==200 and verify_sha else None,
+              }
+              results.append(item)
+              print(json.dumps(item,separators=(",",":")))
+            if iteration==1: time.sleep(8)
+          Path("netlify-503-origin-probe-results.json").write_text(json.dumps({
+            "collected_at":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "expected_sha":EXPECTED,"unauthenticated":True,"results":results
+          },indent=2),encoding="utf-8")
+          issues=[]
+          primary=[x for x in results if x["target"]=="primary_html"]
+          if any(x["status"]!=200 or x["exact_sha_match"] is not True for x in primary):
+            issues.append("Primary production HTML did not consistently serve HTTP 200 and the exact commit")
+          if any(x["status"]>=500 for x in results):
+            issues.append("One or more low-volume requests returned HTTP 5xx")
+          md=["## Unauthenticated HTTP 503 isolation","Only response metadata is recorded; no cookies, secrets, page bodies, PII or screenshots."]
+          for x in results:
+            md.append(f'- Pass {x["iteration"]} {x["target"]}: HTTP {x["status"]}, {x["seconds"]}s, exact SHA {x["exact_sha_match"]}, error {x["error_type"] or "none"}')
+          md.append(f'**Outcome:** {"FAIL CLOSED" if issues else "No 5xx observed at low volume"}')
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a",encoding="utf-8") as out:
+            out.write("\n".join(md)+"\n")
+          if issues:
+            raise SystemExit("; ".join(issues))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: netlify-503-origin-probe-metadata
+          path: netlify-503-origin-probe-results.json
+          retention-days: 7
+          if-no-files-found: warn
