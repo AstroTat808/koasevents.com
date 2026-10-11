@@ -18,8 +18,9 @@ const required=[
   [catalog,"$150 up to 50 guests · +$3 / guest thereafter"],[catalog,"Starting at $350"],[catalog,"$2 / guest · $100 minimum"],
   [catalog,"$3 / guest · $175 minimum"],[catalog,"$4 / guest · $200 minimum"],[catalog,"$5 / guest · $250 minimum"],
   [catalog,"$6 / guest · $300 minimum"],[catalog,"$3 / piece"],[catalog,"$4.50 / piece"],[catalog,"Starting at $125"],
-  [page,"$65 / hr"],[page,"10% / 25%"],[faq,"Oahu starts at $1,500"],[truth,"| Oahu | $1,500 |"],
-  [inquiry,"Oahu — $1,500"],[inquiry,"Maui — $2,000"],[inquiry,"Big Island — $2,500 premium full bar"],
+  [page,"$65 / hr"],[page,"10% / 25%"],[page,"offers: packages.map"],
+  [faq,"Oahu starts at $1,500"],[faq,"standard glassware at $3 per piece"],[truth,"| Oahu | $1,500 |"],[truth,"Premium / specialty Mobile Bar glassware | $4.50/piece"],
+  [inquiry,"Oahu — $1,500"],[inquiry,"Maui — $2,000"],[inquiry,"Big Island — $2,500 premium full bar"],[inquiry,'max="1000" name="guestCount"'],
 ];
 for(const [source,token] of required){
   if(!source.includes(token))throw new Error('Mobile Bar pricing sync missing: '+token);
