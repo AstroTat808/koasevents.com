@@ -92,3 +92,77 @@ jobs:
           path: netlify-503-origin-probe-results.json
           retention-days: 7
           if-no-files-found: warn
+
+isolated-browser-probes:
+    name: Single-browser requests versus Netlify edge
+    needs: isolated-netlify-probes
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Install isolated browser clients
+        run: |
+          python -m pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Probe one public page per browser without concurrent sessions
+        shell: bash
+        env:
+          EXPECTED_PRODUCTION_SHA: e8665c00fbb4e4cf0bd698d1ea27fac1bce9432c
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,time
+          from pathlib import Path
+          from playwright.sync_api import sync_playwright, Error
+          expected=os.environ["EXPECTED_PRODUCTION_SHA"]
+          targets=(
+            ("primary_html","https://koasevents.com/signature-wedding/"),
+            ("immutable_deploy_html","https://6acb56a9c3af350008e2eb5e--koasevents-website.netlify.app/signature-wedding/")
+          )
+          results=[]
+          with sync_playwright() as play:
+            for browser_name in ("chromium","webkit"):
+              browser=play.chromium.launch(headless=True) if browser_name=="chromium" else play.webkit.launch(headless=True)
+              try:
+                context=browser.new_context(viewport={"width":390,"height":844},service_workers="block")
+                page=context.new_page()
+                for target,url in targets:
+                  start=time.monotonic()
+                  status=0;matched=False;rid=False;server="";cache_status="";error_type=""
+                  try:
+                    response=page.goto(url,wait_until="domcontentloaded",timeout=18000)
+                    if response:
+                      status=response.status
+                      hs=response.headers
+                      server=hs.get("server","")[:50]
+                      cache_status=hs.get("cache-status","")[:120]
+                      rid=bool(hs.get("x-nf-request-id"))
+                    if status==200:
+                      marker=page.locator('meta[name="koa-build-commit"]').get_attribute("content",timeout=2000)
+                      matched=bool(marker and marker.lower()==expected)
+                  except Error as exc:
+                    error_type=type(exc).__name__
+                  row={"browser":browser_name,"target":target,"status":status,
+                       "seconds":round(time.monotonic()-start,3),
+                       "exact_sha_match":matched,"netlify_request_id_present":rid,
+                       "server":server,"cache_status":cache_status,"error_type":error_type}
+                  print(json.dumps(row,separators=(",",":")))
+                  results.append(row)
+                  time.sleep(5)
+                context.close()
+              finally:
+                browser.close()
+          Path("netlify-503-browser-probe-results.json").write_text(json.dumps(results,indent=2))
+          with open(os.environ["GITHUB_STEP_SUMMARY"],"a") as summary:
+            summary.write("## Isolated browser requests against public HTML\n")
+            for x in results:
+              summary.write(f'- {x["browser"]} {x["target"]}: HTTP {x["status"]}, SHA match {x["exact_sha_match"]}, time {x["seconds"]}s\n')
+          if len(results)!=4 or any(x["status"]!=200 or not x["exact_sha_match"] for x in results):
+            raise SystemExit("FAIL CLOSED: isolated browser traffic did not reliably serve exact production HTML")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: netlify-503-isolated-browser-probe
+          path: netlify-503-browser-probe-results.json
+          retention-days: 7
+          if-no-files-found: warn
