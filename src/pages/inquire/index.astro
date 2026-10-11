@@ -97,7 +97,7 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
                 <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="date" name="eventDate" required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Guest count
-                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" max="100" name="guestCount" value={requestedGuests} required />
+                <input class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" type="number" min="1" max="1000" name="guestCount" value={requestedGuests} required />
               </label>
               <label class="grid gap-2 text-sm font-semibold">Event type
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="eventType" required>
@@ -131,9 +131,9 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
               <label class="grid gap-2 text-sm font-semibold">Bar package interest
                 <select class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] px-4 py-3 outline-none focus:border-[var(--koa-forest)]" name="mobileBarPackage">
                   <option value="">Not sure yet</option>
-                  <option value="oahu" selected={requestedPackage === 'oahu'}>Oahu</option>
-                  <option value="maui" selected={requestedPackage === 'maui'}>Maui</option>
-                  <option value="big-island" selected={requestedPackage === 'big-island'}>Big Island</option>
+                  <option value="oahu" selected={requestedPackage === 'oahu'}>Oahu — $1,500</option>
+                  <option value="maui" selected={requestedPackage === 'maui'}>Maui — $2,000</option>
+                  <option value="big-island" selected={requestedPackage === 'big-island'}>Big Island — $2,500 premium full bar</option>
                   <option value="custom">Custom</option>
                 </select>
               </label>
@@ -241,6 +241,16 @@ const turnstileSiteKey = import.meta.env.PUBLIC_TURNSTILE_SITE_KEY || import.met
       mobileFields?.querySelectorAll('input,select,textarea').forEach((field) => {
         field.disabled = !mobileOn;
       });
+
+      const guestField = form?.querySelector('[name="guestCount"]');
+      if (guestField) {
+        guestField.max = venueOn ? '100' : '1000';
+        guestField.setCustomValidity(
+          venueOn && Number(guestField.value || 0) > 100
+            ? 'Koa’s Events venue capacity is 100 guests. Choose Mobile Bar only for service above 100 guests.'
+            : ''
+        );
+      }
     }
 
     form?.querySelectorAll('input[name="service"]').forEach((input) => {
