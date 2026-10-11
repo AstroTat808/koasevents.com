@@ -19,6 +19,7 @@ import {
 import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
@@ -283,11 +284,19 @@ async function productionAccountingAuditForCommit(context:Context,targetCommit:s
 async function productionDeployForCommit(token:string,siteId:string,sha:string){
   const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
   const rows=Array.isArray(body)?body:[];
-  return rows.find((row:any)=>{
+  const matches=rows.filter((row:any)=>{
     const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
     const context=cleanText(row?.context,80);
     return commit===sha && (!context||context==='production');
-  })||null;
+  });
+  return matches.sort((a:any,b:any)=>{
+    const aState=cleanText(a?.state,40).toLowerCase();
+    const bState=cleanText(b?.state,40).toLowerCase();
+    const aReady=isSuccessfulNetlifyState(aState)?1:0;
+    const bReady=isSuccessfulNetlifyState(bState)?1:0;
+    if(aReady!==bReady)return bReady-aReady;
+    return Date.parse(String(b?.published_at||b?.created_at||0))-Date.parse(String(a?.published_at||a?.created_at||0));
+  })[0]||null;
 }
 
 async function currentGithubMainSha(){
@@ -316,16 +325,18 @@ async function selfHealProductionDeploy(context:Context,claims:any){
   if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
 
   const existing=await productionDeployForCommit(token,siteId,expectedSha);
-  if(existing){
+  const existingState=cleanText(existing?.state,80).toLowerCase();
+  const existingReady=Boolean(existing&&isSuccessfulNetlifyState(existingState));
+  if(existingReady){
     return {
       ok:true,
       triggered:false,
       exactShaPresent:true,
       expectedSha,
       deployId:cleanText(existing?.id,120),
-      deployState:cleanText(existing?.state,80),
+      deployState:existingState,
       deployContext:cleanText(existing?.context,80),
-      reason:'The exact approved main SHA already exists in Netlify; no recovery build was triggered.',
+      reason:'The exact approved main SHA already has a successful Netlify production deploy; no recovery build was triggered.',
     };
   }
 
@@ -346,11 +357,16 @@ async function selfHealProductionDeploy(context:Context,claims:any){
     ok:true,
     triggered:true,
     exactShaPresent:false,
+    failedExactShaPresent:Boolean(existing&&!existingReady),
+    failedDeployId:cleanText(existing?.id,120),
+    failedDeployState:existingState,
     expectedSha,
     currentMainSha:mainSha,
     buildId:cleanText(body?.id,120),
     buildState:cleanText(body?.state||body?.status,80),
-    reason:'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+    reason:existing
+      ? 'The exact approved main SHA existed only as a failed Netlify deploy, so a fresh production build was retriggered.'
+      : 'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
   };
 }
 
@@ -601,6 +617,83 @@ export default async (req:Request,context:Context) => {
       }
     }
 
+    if(body?.action==='verify-production-release-attestation'){
+      const expectedSha=cleanText(claims?.sha,80);
+      const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+      const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      if(!token||!siteId){
+        return Response.json({
+          ok:false,
+          error:'Netlify production attestation credentials are unavailable.',
+          expectedSha,
+          accepted:result.accepted,
+          source:'github-actions-oidc',
+        },{status:503,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const deploy=await productionDeployForCommit(token,siteId,expectedSha);
+        const deployId=cleanText(deploy?.id,120);
+        const deployState=cleanText(deploy?.state,80).toLowerCase();
+        const deployContext=cleanText(deploy?.context,80);
+        const deployCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
+        const publishedAt=cleanText(deploy?.published_at,80);
+        let liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+        const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        let liveCommitSource=liveCommit?'netlify-runtime':'';
+        // API-triggered Netlify builds can omit COMMIT_REF from the function runtime.
+        // In that case, resolve the commit from Netlify's authoritative record for
+        // the deploy that is actually serving this request. The release policy still
+        // requires that live deploy ID to equal the exact-SHA production deploy ID.
+        if(!liveCommit&&liveDeployId){
+          const {body:liveDeploy}=await netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId));
+          const providerLiveDeployId=cleanText(liveDeploy?.id,120);
+          if(providerLiveDeployId!==liveDeployId){
+            throw new Error('Netlify live deploy lookup returned an unexpected deploy id.');
+          }
+          liveCommit=cleanText(liveDeploy?.commit_ref||liveDeploy?.commit||liveDeploy?.branch_commit,80);
+          liveCommitSource='netlify-live-deploy';
+        }
+        const ok=Boolean(deploy)&&productionDeployMatchesAttestation({
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveDeployId,
+        });
+        return Response.json({
+          ok,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveCommitSource,
+          liveDeployId,
+          matchingDeployId:Boolean(deployId&&(!liveDeployId||liveDeployId===deployId)),
+        },{
+          status:ok?200:409,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to attest the production Netlify deployment.',
+          expectedSha,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-real-sandbox-rollback-drill'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
@@ -643,7 +736,22 @@ export default async (req:Request,context:Context) => {
         const routes=Math.max(0,Math.floor(Number(value?.routes||0)));
         const cases=Math.max(0,Math.floor(Number(value?.cases||0)));
         const failureCount=Math.max(0,Math.floor(Number(value?.failureCount||0)));
-        const reportMissing=Boolean(value?.reportMissing);
+        const reportMissing=Boolean(value?.reportMissing)
+          || routes===0
+          || cases===0
+          || !Array.isArray(value?.routeResults)
+          || value.routeResults.length===0;
+        const permittedMissingReasons=new Set([
+          'exact-deploy-unavailable',
+          'browser-audit-skipped',
+          'browser-audit-failed-before-report',
+          'browser-report-missing',
+          'invalid-browser-report',
+        ]);
+        const providedReason=cleanText(value?.missingReason,80);
+        const missingReason=reportMissing
+          ? (permittedMissingReasons.has(providedReason)?providedReason:'invalid-browser-report')
+          : '';
         const routeResults=(Array.isArray(value?.routeResults)?value.routeResults:[])
           .map((row:any)=>{
             const route=cleanText(row?.route,300);
@@ -672,7 +780,8 @@ export default async (req:Request,context:Context) => {
           .filter((row:any)=>row.route)
           .slice(0,250);
         const failedRouteCount=routeResults.filter((row:any)=>row.status==='failed').length;
-        return {browser,routes,cases,failureCount,failedRouteCount,reportMissing,routeResults};
+        return {browser,routes,cases,failureCount:reportMissing?Math.max(1,failureCount):failureCount,
+          failedRouteCount,reportMissing,missingReason,routeResults};
       };
 
       try{

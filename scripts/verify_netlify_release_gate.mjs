@@ -9,6 +9,18 @@ function git(...args){
   return execFileSync('git',args,{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
 }
 
+function parseLsRemoteSha(output){
+  const match=String(output||'').trim().match(/^([a-f0-9]{40})(?:\s|$)/i);
+  return match?match[1].toLowerCase():'';
+}
+
+function remoteRefSha(ref){
+  const output=git('ls-remote','https://github.com/'+REPOSITORY+'.git',ref);
+  const sha=parseLsRemoteSha(output);
+  if(!sha)throw new Error('Unable to resolve remote Git ref '+ref+'.');
+  return sha;
+}
+
 function fail(message){
   console.error('[koa release gate] '+message);
   process.exit(1);
@@ -22,52 +34,199 @@ async function githubJson(path){
     'X-GitHub-Api-Version':'2022-11-28',
   };
   if(token)headers.Authorization='Bearer '+token;
-  const response=await fetch('https://api.github.com/repos/'+REPOSITORY+path,{
-    headers,
-    signal:AbortSignal.timeout(15_000),
-  });
-  const text=await response.text();
-  let body={};
-  try{body=text?JSON.parse(text):{};}catch{body={message:text};}
-  if(!response.ok){
-    const remaining=response.headers.get('x-ratelimit-remaining');
-    const reset=response.headers.get('x-ratelimit-reset');
-    throw new Error(
-      'GitHub API '+path+' returned HTTP '+response.status+
-      (body?.message?' · '+String(body.message).slice(0,240):'')+
-      (remaining!=null?' · rate remaining '+remaining:'')+
-      (reset?' · reset '+reset:'')
-    );
+
+  let lastError=null;
+  for(let attempt=1;attempt<=4;attempt+=1){
+    try{
+      const response=await fetch('https://api.github.com/repos/'+REPOSITORY+path,{
+        headers,
+        signal:AbortSignal.timeout(15_000),
+      });
+      const text=await response.text();
+      let body={};
+      try{body=text?JSON.parse(text):{};}catch{body={message:text};}
+      if(response.ok)return body;
+
+      const remaining=response.headers.get('x-ratelimit-remaining');
+      const reset=response.headers.get('x-ratelimit-reset');
+      const retryable=response.status===429
+        ||response.status>=500
+        ||(response.status===403&&remaining==='0');
+      lastError=new Error(
+        'GitHub API '+path+' returned HTTP '+response.status+
+        (body?.message?' · '+String(body.message).slice(0,240):'')+
+        (remaining!=null?' · rate remaining '+remaining:'')+
+        (reset?' · reset '+reset:'')
+      );
+      if(!retryable||attempt===4)throw lastError;
+
+      let delay=Math.min(1000*(2**(attempt-1)),5000);
+      if(response.status===403&&remaining==='0'&&reset){
+        const untilReset=(Number(reset)*1000)-Date.now();
+        if(Number.isFinite(untilReset)&&untilReset>0&&untilReset<=10_000){
+          delay=Math.max(delay,untilReset+250);
+        }
+      }
+      console.warn('[koa release gate] GitHub API transient failure; retry '+attempt+'/4 in '+delay+'ms.');
+      await new Promise((resolve)=>setTimeout(resolve,delay));
+    }catch(error){
+      lastError=error instanceof Error?error:new Error(String(error));
+      const transient=error?.name==='TimeoutError'
+        ||error?.name==='AbortError'
+        ||error instanceof TypeError;
+      if(!transient||attempt===4)throw lastError;
+      const delay=Math.min(1000*(2**(attempt-1)),5000);
+      console.warn('[koa release gate] GitHub API network failure; retry '+attempt+'/4 in '+delay+'ms.');
+      await new Promise((resolve)=>setTimeout(resolve,delay));
+    }
   }
-  return body;
+  throw lastError||new Error('GitHub API request failed.');
+}
+
+async function waitForExactProductionMain(commit,readBranch=()=>githubJson('/branches/main'),pause=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms))){
+  const expected=String(commit||'').toLowerCase();
+  if(!/^[a-f0-9]{40}$/.test(expected))throw new Error('Production COMMIT_REF must be a full GitHub SHA.');
+  const delays=[0,2_000,5_000,8_000,13_000];
+  let observed='';
+  for(let index=0;index<delays.length;index++){
+    if(delays[index])await pause(delays[index]);
+    const response=await readBranch();
+    observed=String(response?.commit?.sha||'').toLowerCase();
+    if(observed===expected)return observed;
+    if(index<delays.length-1){
+      console.warn('[koa release gate] Waiting for exact GitHub main SHA propagation ('+
+        (index+1)+'/'+delays.length+'); expected '+expected+'; observed '+(observed||'missing')+'.');
+    }
+  }
+  throw new Error('Production commit '+expected+' is not exact current main '+
+    (observed||'missing')+' after bounded GitHub propagation retries.');
+}
+
+function matchingMergedPulls(pulls,commit,headSha=''){
+  const expectedCommit=String(commit||'').toLowerCase();
+  const expectedHead=String(headSha||'').toLowerCase();
+  return (Array.isArray(pulls)?pulls:[])
+    .filter((pr)=>pr?.merged_at
+      &&String(pr?.base?.ref||'')==='main'
+      &&pr?.head?.sha
+      &&String(pr?.merge_commit_sha||'').toLowerCase()===expectedCommit
+      &&(!expectedHead||String(pr?.head?.sha||'').toLowerCase()===expectedHead))
+    .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
+}
+
+async function waitForMergedPullBinding(commit,headSha='',readPulls=()=>githubJson('/commits/'+encodeURIComponent(commit)+'/pulls'),pause=(ms)=>new Promise((resolve)=>setTimeout(resolve,ms))){
+  // Merge commits and commit->PR associations may be indexed on different
+  // GitHub replicas shortly after a push. Retry only for an exact binding.
+  const delays=[0,2_000,4_000,7_000,10_000];
+  for(let index=0;index<delays.length;index++){
+    if(delays[index])await pause(delays[index]);
+    const candidates=matchingMergedPulls(await readPulls(),commit,headSha);
+    if(candidates.length===1)return candidates[0];
+    if(candidates.length>1)throw new Error('Ambiguous merged pull-request provenance for '+commit+'.');
+    if(index<delays.length-1){
+      console.warn('[koa release gate] Waiting for exact merged-PR association ('+
+        (index+1)+'/'+delays.length+') for '+commit+'.');
+    }
+  }
+  throw new Error('Production commit '+commit+' is not yet bound to a verified merged-main pull request.');
 }
 
 async function resolvePullRequestHead(commit){
   const parentLine=git('rev-list','--parents','-n','1',commit);
   const parts=parentLine.split(/\s+/).filter(Boolean);
   const parents=parts.slice(1);
-
-  if(parents.length>=2){
-    return {
-      headSha:parents[1],
-      source:'merge-second-parent',
-    };
-  }
-
-  const pulls=await githubJson('/commits/'+encodeURIComponent(commit)+'/pulls');
-  const candidates=(Array.isArray(pulls)?pulls:[])
-    .filter((pr)=>pr?.merged_at&&String(pr?.base?.ref||'')==='main'&&pr?.head?.sha)
-    .sort((a,b)=>Date.parse(String(b?.merged_at||''))-Date.parse(String(a?.merged_at||'')));
-
-  if(!candidates.length){
-    throw new Error('Production commit is not traceable to a merged pull request.');
-  }
-
+  const headSha=parents.length>=2?String(parents[1]||''):'';
+  const merged=await waitForMergedPullBinding(commit,headSha);
   return {
-    headSha:String(candidates[0].head.sha),
-    source:'associated-pull-request',
-    prNumber:Number(candidates[0].number||0),
+    headSha:headSha||String(merged.head.sha),
+    source:headSha?'merge-second-parent+pull-request':'associated-pull-request',
+    prNumber:Number(merged.number||0),
   };
+}
+
+function belongsToExactPullHead(run,headSha){
+  // GitHub frequently returns pull_requests: [] for previously successful
+  // workflow runs after their pull request is merged. The head_sha + event
+  // fields remain authoritative, so do not depend on that mutable association.
+  return String(run?.head_sha||'').toLowerCase()===String(headSha||'').toLowerCase()
+    &&String(run?.event||'')==='pull_request';
+}
+
+async function selfTest(){
+  const sha='a'.repeat(40);
+  const merge='c'.repeat(40);
+  const associated={head_sha:sha,event:'pull_request',name:REQUIRED_WORKFLOW,status:'completed',
+    conclusion:'success',pull_requests:[]};
+  if(!belongsToExactPullHead(associated,sha))throw Error('An exact-head successful run with no PR association was rejected.');
+  if(belongsToExactPullHead({...associated,head_sha:'b'.repeat(40)},sha))throw Error('A stale SHA was accepted.');
+  if(belongsToExactPullHead({...associated,event:'push'},sha))throw Error('A push run was accepted as PR evidence.');
+  if(belongsToExactPullHead({...associated,head_sha:''},sha))throw Error('A missing workflow SHA was accepted.');
+
+  const mergedPr={number:251,merged_at:'2026-10-10T04:52:08Z',base:{ref:'main'},head:{sha},merge_commit_sha:merge};
+  if(matchingMergedPulls([mergedPr],merge,sha).length!==1)throw Error('Exact merged-PR binding was rejected.');
+  if(matchingMergedPulls([{...mergedPr,head:{sha:'b'.repeat(40)}}],merge,sha).length)throw Error('Wrong PR head was accepted.');
+  if(matchingMergedPulls([{...mergedPr,merge_commit_sha:'d'.repeat(40)}],merge,sha).length)throw Error('Wrong merge commit was accepted.');
+  if(matchingMergedPulls([{...mergedPr,base:{ref:'develop'}}],merge,sha).length)throw Error('Wrong base branch was accepted.');
+
+  if(parseLsRemoteSha(sha+'\trefs/pull/254/head')!==sha)throw Error('Remote PR-head SHA parser rejected a valid ref.');
+  if(parseLsRemoteSha('not-a-sha\trefs/pull/254/head'))throw Error('Remote PR-head SHA parser accepted invalid data.');
+
+  const main='e'.repeat(40), stale='f'.repeat(40);
+  let reads=0;
+  const mainRead=async()=>({commit:{sha:++reads<3?stale:main}});
+  if(await waitForExactProductionMain(main,mainRead,async()=>{})!==main||reads!==3){
+    throw Error('A newly merged exact-main SHA was not accepted after bounded propagation.');
+  }
+  let staleAccepted=false;
+  try{await waitForExactProductionMain(main,async()=>({commit:{sha:stale}}),async()=>{});staleAccepted=true;}catch{}
+  if(staleAccepted)throw Error('A permanently stale or divergent main SHA was accepted.');
+  let assocReads=0;
+  const linked=await waitForMergedPullBinding(merge,sha,async()=>++assocReads<3?[]:[mergedPr],async()=>{});
+  if(linked.number!==251||assocReads!==3)throw Error('An eventually indexed exact merged PR was rejected.');
+  let badBindingAccepted=false;
+  try{
+    await waitForMergedPullBinding(merge,sha,async()=>[{...mergedPr,merge_commit_sha:stale}],async()=>{});
+    badBindingAccepted=true;
+  }catch{}
+  if(badBindingAccepted)throw Error('A mismatched merge association was accepted after retries.');
+  // PR #254 merged at 09:23:29, then Branch hygiene ran again at 09:23:31.
+  // Netlify must require the successful pre-merge run, not this new close-event
+  // run. A failed or pending NEWER pre-merge run must still block deployment.
+  const premerge={...associated,name:'Branch hygiene',run_number:208,
+    created_at:'2026-10-10T09:03:58Z'};
+  const closure={...premerge,run_number:209,status:'in_progress',conclusion:null,
+    created_at:'2026-10-10T09:23:31Z'};
+  const eligible=preMergeWorkflowRuns([premerge,closure],'2026-10-10T09:23:29Z');
+  if(eligible.length!==1||newestRun(eligible)?.run_number!==208)throw Error('Post-merge close-event run displaced successful pre-merge evidence.');
+  const failing={...premerge,run_number:210,status:'completed',conclusion:'failure',
+    created_at:'2026-10-10T09:23:28Z'};
+  if(newestRun(preMergeWorkflowRuns([premerge,failing,closure],'2026-10-10T09:23:29Z'))?.conclusion!=='failure'){
+    throw Error('Latest failed pre-merge workflow was incorrectly accepted.');
+  }
+  const pending={...failing,conclusion:null,status:'in_progress'};
+  if(newestRun(preMergeWorkflowRuns([premerge,pending,closure],'2026-10-10T09:23:29Z'))?.status!=='in_progress'){
+    throw Error('Latest pending pre-merge workflow was incorrectly accepted.');
+  }
+  for(const invalid of ['', 'not-a-date']){
+    let accepted=false;
+    try{preMergeWorkflowRuns([premerge],invalid);accepted=true;}catch{}
+    if(accepted)throw Error('Invalid merge timestamp accepted as release provenance.');
+  }
+  console.log('PASS | pre-merge workflow cutoff ignores closure-triggered runs but rejects failed, pending, and invalid evidence.');
+  console.log('PASS | exact-main and exact-merged-PR evidence tolerate propagation delay but reject persistent mismatches.');
+}
+
+function preMergeWorkflowRuns(runs,mergedAt){
+  // pull_request.closed starts a NEW Branch hygiene run on the approved PR head.
+  // That post-merge run can still be queued while Netlify starts building the
+  // merge commit. It is not pre-merge evidence and must not invalidate valid
+  // successful checks completed before the PR merged.
+  const cutoff=Date.parse(String(mergedAt||''));
+  if(!Number.isFinite(cutoff))throw new Error('Merged pull request has no valid merge timestamp.');
+  return (Array.isArray(runs)?runs:[]).filter((run)=>{
+    const started=Date.parse(String(run?.created_at||''));
+    return Number.isFinite(started)&&started<=cutoff;
+  });
 }
 
 function newestRun(runs){
@@ -106,33 +265,49 @@ async function verifyDeployPreviewHead(commit){
     fail('Deploy Preview COMMIT_REF is not a full commit SHA: '+commit+'.');
   }
 
-  let pull;
-  try{
-    pull=await githubJson('/pulls/'+encodeURIComponent(reviewId));
-  }catch(error){
-    fail(error instanceof Error?error.message:String(error));
+  // Avoid GitHub REST rate limits on Netlify shared build infrastructure.
+  // refs/pull/<number>/head is the authoritative live PR head and is readable
+  // from the public Git remote without exposing a GitHub token to PR code.
+  // Netlify can start a build before GitHub has propagated a newly pushed
+  // PR ref to Git's read replicas. Retry that eventually-consistent read,
+  // but NEVER accept a nonmatching SHA, even if the preview itself builds.
+  let headSha='';
+  const retryDelaysMs=[0,3_000,6_000,9_000,12_000];
+  let lastError='';
+  for(let attempt=0;attempt<retryDelaysMs.length;attempt+=1){
+    if(retryDelaysMs[attempt]){
+      await new Promise((resolve)=>setTimeout(resolve,retryDelaysMs[attempt]));
+    }
+    try{
+      headSha=remoteRefSha('refs/pull/'+reviewId+'/head');
+      if(headSha.toLowerCase()===commit.toLowerCase())break;
+      lastError='GitHub PR ref currently resolves to '+headSha;
+    }catch(error){
+      lastError=error instanceof Error?error.message:String(error);
+    }
+    if(attempt<retryDelaysMs.length-1){
+      console.warn(
+        '[koa release gate] Awaiting exact GitHub PR-head ref propagation ('+
+        (attempt+1)+'/'+retryDelaysMs.length+'): '+lastError+'.'
+      );
+    }
   }
 
-  const headSha=String(pull?.head?.sha||'').trim();
-  if(!/^[a-f0-9]{40}$/i.test(headSha)){
-    fail('Unable to resolve the current head SHA for PR #'+reviewId+'.');
-  }
-  if(String(pull?.state||'')!=='open'){
-    fail('PR #'+reviewId+' is not open; Deploy Preview blocked.');
-  }
   if(commit.toLowerCase()!==headSha.toLowerCase()){
     fail(
       'Deploy Preview commit '+commit+
-      ' does not exactly match current PR #'+reviewId+' head '+headSha+
-      '. Stale preview blocked.'
+      ' does not exactly match current PR #'+reviewId+' head '+(headSha||'unresolved')+
+      '. Stale preview blocked. '+lastError
     );
   }
 
-  await assertHeadContainsLiveMain(headSha);
-
+  // Current-main ancestry is re-checked by Release Certification immediately
+  // before evidence download and again before final certification. Keeping the
+  // Netlify build gate focused on exact PR-head binding removes a fragile
+  // unauthenticated REST dependency while preserving fail-closed release logic.
   console.log(
     '[koa release gate] PASS · Deploy Preview commit '+commit+
-    ' exactly matches current PR #'+reviewId+' head.'
+    ' exactly matches current PR #'+reviewId+' head via remote Git ref.'
   );
 }
 
@@ -150,10 +325,10 @@ async function main(){
     return;
   }
 
-  const actualMain=await githubJson('/branches/main');
-  const latestMainSha=String(actualMain?.commit?.sha||'').toLowerCase();
-  if(!/^[a-f0-9]{40}$/i.test(latestMainSha) || commit.toLowerCase()!==latestMainSha){
-    fail('Production commit '+commit+' is not exact current main '+latestMainSha+'.');
+  try{
+    await waitForExactProductionMain(commit);
+  }catch(error){
+    fail(error instanceof Error?error.message:String(error));
   }
   let resolved;
   try{
@@ -166,6 +341,18 @@ async function main(){
   if(!/^[a-f0-9]{40}$/i.test(headSha)){
     fail('Unable to resolve the pull-request head SHA for production commit '+commit+'.');
   }
+  // Preserve PR provenance through the merged PR object; individual Actions
+  // run.pull_requests associations can legitimately be emptied post-merge.
+  if(!Number.isInteger(resolved?.prNumber)||resolved.prNumber<=0){
+    fail('Production commit '+commit+' is missing authoritative merged pull-request provenance.');
+  }
+  const merged=await githubJson('/pulls/'+resolved.prNumber);
+  if(!merged?.merged_at
+    ||String(merged?.base?.ref||'')!=='main'
+    ||String(merged?.head?.sha||'').toLowerCase()!==headSha.toLowerCase()
+    ||String(merged?.merge_commit_sha||'').toLowerCase()!==commit.toLowerCase()){
+    fail('Merged PR #'+resolved.prNumber+' does not bind production commit '+commit+' to approved head '+headSha+'.');
+  }
 
   let payload;
   try{
@@ -177,10 +364,11 @@ async function main(){
     fail(error instanceof Error?error.message:String(error));
   }
 
-  const runs=(Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
-    .filter((run)=>String(run?.head_sha||'').toLowerCase()===headSha.toLowerCase()
-      &&run?.event==='pull_request'
-      &&(!resolved?.prNumber||(run?.pull_requests||[]).some((pr)=>Number(pr.number)===resolved.prNumber)));
+  const runs=preMergeWorkflowRuns(
+    (Array.isArray(payload?.workflow_runs)?payload.workflow_runs:[])
+      .filter((run)=>belongsToExactPullHead(run,headSha)),
+    merged.merged_at,
+  );
   const matching=runs.filter((run)=>String(run?.name||'')===REQUIRED_WORKFLOW);
   const latest=newestRun(matching);
   if(!latest){
@@ -211,4 +399,5 @@ async function main(){
   );
 }
 
-await main();
+if(process.argv.includes('--self-test')) await selfTest();
+else await main();

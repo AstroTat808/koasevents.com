@@ -235,6 +235,12 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
       verifiedHostname === requestHostname
     );
     const codes = Array.isArray(data?.['error-codes']) ? [...data['error-codes']] : [];
+    // These server-side outcomes must be counted as infrastructure failures,
+    // never conflated with a legitimately rejected invalid challenge.
+    if (!result.ok) codes.push('siteverify-http-error');
+    if (result.ok && (typeof data?.success !== 'boolean' || (!data.success && codes.length === 0))) {
+      codes.push('siteverify-invalid-response');
+    }
     if (data?.success && verifiedAction !== expectedAction) codes.push('action-mismatch');
     if (data?.success && verifiedHostname !== requestHostname) codes.push('hostname-mismatch');
     return {
@@ -435,6 +441,14 @@ export default async (req: Request, context: Context) => {
 
   if (expectedTurnstileAction) {
     const turnstile = await verifyTurnstile(req, payload.turnstileToken, expectedTurnstileAction);
+    // This request signature is diagnostic only: client headers are spoofable.
+    // Never skip Siteverify, suppress a rejection or relax abuse-blocking.
+    const matchesCiSmokePattern =
+      req.headers.get('x-koa-turnstile-smoke') === '1' &&
+      req.headers.get('user-agent') === 'KoaEvents-Turnstile-QA/1.0' &&
+      cleanText(payload.customer?.email, 240).toLowerCase() === 'qa-turnstile@example.com' &&
+      cleanText(payload.inquiry?.service, 80).toLowerCase() === 'qa' &&
+      (!payload.turnstileToken || payload.turnstileToken === 'not-a-valid-turnstile-token');
     const validationRecord = {
       ok: turnstile.ok,
       action: turnstile.verifiedAction || '',
@@ -443,6 +457,7 @@ export default async (req: Request, context: Context) => {
       requestHostname: turnstile.requestHostname || new URL(req.url).hostname,
       codes: turnstile.codes || [],
       detail: turnstile.detail || turnstile.error || '',
+      sourceHint: matchesCiSmokePattern ? 'matches-ci-smoke-pattern' : 'unclassified',
     };
 
     if (!turnstile.ok) {

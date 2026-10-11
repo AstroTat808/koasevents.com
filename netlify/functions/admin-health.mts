@@ -524,6 +524,18 @@ function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId
     || Boolean(chromium?.reportMissing||webkit?.reportMissing)
     || failures>0
     || failedRoutes>0;
+  const missingReasons:Record<string,string>={
+    'exact-deploy-unavailable':'exact production SHA was not deployed',
+    'browser-audit-skipped':'browser audit was skipped',
+    'browser-audit-failed-before-report':'browser audit failed before report creation',
+    'browser-report-missing':'browser report was not written',
+    'invalid-browser-report':'browser report is invalid or incomplete',
+  };
+  const missingDiagnostics=([
+    {name:'Chromium',result:chromium},
+    {name:'WebKit',result:webkit},
+  ]).filter(({result})=>Boolean(result?.reportMissing))
+    .map(({name,result})=>name+': '+(missingReasons[String(result?.missingReason||'')]||'report unavailable'));
   const screenshots=(Array.isArray(visual?.screenshots)?visual.screenshots:[]).map((shot:any)=>({
     ...shot,
     url:'/api/admin/health?action=dark-mode-qa-screenshot&deployId='+encodeURIComponent(qaDeployId)+'&key='+encodeURIComponent(String(shot?.key||'')),
@@ -540,7 +552,8 @@ function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId
     mismatch,
     screenshots,
     detail:failed
-      ? (failedRoutes||failures)+' Dark Mode QA failure'+((failedRoutes||failures)===1?'':'s')+' recorded in the latest production theme audit.'
+      ? (missingDiagnostics.length?'Missing browser evidence — '+missingDiagnostics.join('; ')+'. ':'')
+        +(failedRoutes||failures)+' Dark Mode QA failure'+((failedRoutes||failures)===1?'':'s')+' recorded in the latest production theme audit.'
       : mismatch
         ? 'Dark Mode QA evidence does not match the current production commit or deploy.'
         : 'Latest production Light / Dark / System audit passed in Chromium and WebKit and matches the current production release.',
