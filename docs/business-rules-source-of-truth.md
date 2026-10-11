@@ -2,7 +2,7 @@
 
 Status: **ACTIVE WORKING SOURCE OF TRUTH FOR WEBSITE REBUILD**
 
-Last updated: 2026-09-17 Hawaiʻi time.
+Last updated: 2026-10-10 Hawaiʻi time.
 
 ## Status definitions
 
@@ -102,8 +102,7 @@ The following commercial rules are synchronized with KoaSMobileBar.com as of 202
 
 ## Remaining decisions before commercial lock
 
-2. Final Plumeria vendor-provided inclusions and exact quantities.
-5. Which Mobile Bar add-ons get fixed public prices vs. quote-only pricing.
-6. Kamaʻāina benefit/discount strategy.
-7. Whether the reservation retainer remains 10% for future bookings or is increased.
-8. Whether the 75 dB rule should be added to the controlling agreement rather than living only in the checklist.
+1. Final Plumeria vendor-provided inclusions and exact quantities.
+2. Kamaʻāina benefit/discount strategy.
+3. Whether the reservation retainer remains 10% for future bookings or is increased.
+4. Whether the 75 dB rule should be added to the controlling agreement rather than living only in the checklist.
