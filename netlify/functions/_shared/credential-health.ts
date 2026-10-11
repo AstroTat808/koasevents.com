@@ -350,11 +350,13 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
   const siteverify = turnstile?.siteverify || {};
   const mismatches = turnstile?.mismatches || {};
   const validations = turnstile?.totals || {};
+  const recorder = turnstile?.telemetry || {};
+  const recordingOk = Boolean(recorder?.ok);
   const configured = siteKeyConfigured && secretConfigured;
   const widgetOk = Boolean(widget?.ok);
   const siteverifyOk = Boolean(siteverify?.ok);
   const mismatchCount = Number(mismatches?.total || 0);
-  const ok = Boolean(configured && widgetOk && siteverifyOk && mismatchCount === 0);
+  const ok = Boolean(configured && widgetOk && siteverifyOk && mismatchCount === 0 && recordingOk);
   const status = Number(siteverify?.status || 0);
   const issueType = ok ? null : classifyCredentialFailure({
     configured,
@@ -367,11 +369,12 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
           ? 'One or more protected forms are not rendering the configured Turnstile widget correctly.'
           : !siteverifyOk
             ? clean(siteverify?.detail || 'Cloudflare Siteverify verification failed.', 800)
-            : 'Turnstile hostname or action mismatch detected.',
+            : mismatchCount ? 'Turnstile hostname or action mismatch detected.'
+              : 'Turnstile validation-history storage cannot reliably read and write events.',
   });
   const severity: CredentialHealthRow['severity'] = ok
     ? 'green'
-    : (!configured || siteverify?.reachable === false || Number(siteverify?.status || 0) >= 500 || Number(siteverify?.status || 0) === 429)
+    : (!configured || !recordingOk || siteverify?.reachable === false || Number(siteverify?.status || 0) >= 500 || Number(siteverify?.status || 0) === 429)
       ? 'yellow'
       : 'red';
   const lastSuccess = turnstile?.lastSuccess || null;
@@ -383,6 +386,7 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
     siteverifyOk ? 'Siteverify reachable + secret accepted' : clean(siteverify?.detail || 'Siteverify not healthy', 260),
     String(Number(validations?.successful || 0)) + ' successful validations / ' + String(Number(validations?.failed || 0)) + ' failures in ' + String(Number(turnstile?.windowDays || 30)) + 'd',
     mismatchCount ? String(mismatchCount) + ' hostname/action mismatches' : 'No hostname/action mismatches',
+    recordingOk ? 'Append-only validation recording verified' : 'Validation recording needs repair',
     lastSuccess?.createdAt ? 'Last success ' + lastSuccess.createdAt : 'No successful validation recorded yet',
     lastFailure?.createdAt ? 'Last failure ' + lastFailure.createdAt : 'No failed validation recorded',
   ].join(' · ');
@@ -392,6 +396,7 @@ function turnstileRow(turnstile: any): CredentialHealthRow {
   if (widgetOk) verifiedPermissions.push('All protected widgets rendering');
   if (siteverifyOk) verifiedPermissions.push('Cloudflare Siteverify reachable');
   if (mismatchCount === 0) verifiedPermissions.push('Hostname + action match');
+  if (recordingOk) verifiedPermissions.push('Validation-history storage verified');
 
   const row: CredentialHealthRow = {
     id: 'turnstile',
