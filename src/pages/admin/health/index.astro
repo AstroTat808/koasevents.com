@@ -1788,6 +1788,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Cloudflare Siteverify rejected the configured Turnstile secret.'
           : 'Cloudflare Siteverify could not be reached or did not accept the health probe.';
         fix='Verify the production secret against the existing Cloudflare widget and rerun System Health. If Cloudflare is temporarily unavailable, the check will recover automatically.';
+      }else if(row?.id==='turnstile-infrastructure-events'){
+        cause='The server recorded a recent Cloudflare Siteverify network, upstream HTTP, invalid-response, or server-secret infrastructure failure. Incorrectly completed challenges are tracked separately and are not treated as outages.';
+        fix='Review the Turnstile provider-health, history integrity, and recent infrastructure-error counts. Check server-side Cloudflare connectivity and secret configuration, then rerun System Health. Keep rejected challenge blocking enabled.';
       }else if(row?.id==='turnstile-validation-history'){
         cause='Append-only Turnstile history recording failed its storage read/write/delete probe, returned corrupted records, or exceeded its safe history window. A lack of accepted customer tokens alone is not a storage failure.';
         fix='Review Netlify Blobs security storage availability and event-read diagnostics, then rerun System Health. Do not weaken server-side Siteverify or invent a successful customer submission.';
