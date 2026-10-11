@@ -9,6 +9,7 @@ export interface TurnstileHistoryEvent {
   requestHostname: string;
   codes: string[];
   detail: string;
+  sourceHint?: 'matches-ci-smoke-pattern' | 'unclassified';
 }
 export const TURNSTILE_EVENT_ROOT: string;
 export function turnstileEventKey(row: TurnstileHistoryEvent): string;
