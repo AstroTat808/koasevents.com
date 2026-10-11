@@ -644,7 +644,7 @@ jobs:
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
-    needs: [deployed-smoke, production-theme-audit]
+    needs: [deployed-smoke, production-theme-audit, visual-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -853,12 +853,13 @@ jobs:
           if-no-files-found: error
   visual-audit:
     name: Responsive visual audit
-    if: github.event_name != 'pull_request'
-    needs: deployed-smoke
+    if: github.event_name != 'pull_request' && always()
+    needs: [deployed-smoke, production-theme-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         browser: [chromium, webkit]
     steps:
