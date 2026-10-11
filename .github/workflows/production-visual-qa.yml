@@ -1,34 +1,13 @@
 name: Production visual QA
 
+# Full release evidence is required on every PR, including docs/config-only PRs.
+# This workflow also performs the authenticated System Health audit on every
+# production main push, with no path-based blind spots.
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/production-visual-qa.yml'
-      - 'scripts/production_visual_qa.py'
-      - 'scripts/security_logic_qa.mjs'
-      - 'scripts/build_safety_check.mjs'
-      - 'src/**'
-      - 'netlify/**'
-      - 'public/**'
-      - 'astro.config.mjs'
-      - 'netlify.toml'
-      - 'package.json'
-      - 'package-lock.json'
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/production-visual-qa.yml'
-      - 'scripts/production_visual_qa.py'
-      - 'scripts/security_logic_qa.mjs'
-      - 'scripts/build_safety_check.mjs'
-      - 'src/**'
-      - 'netlify/**'
-      - 'public/**'
-      - 'astro.config.mjs'
-      - 'netlify.toml'
-      - 'package.json'
-      - 'package-lock.json'
   schedule:
     - cron: '23 15 * * *'
   workflow_dispatch:
@@ -44,6 +23,7 @@ concurrency:
 
 permissions:
   contents: read
+  statuses: write
   id-token: write
 
 env:
@@ -54,10 +34,40 @@ env:
   VISUAL_RESULTS: visual-results
 
 jobs:
+  release-status-pending:
+    name: Mark production release pending
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish fail-closed pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          payload={
+              "state":"pending",
+              "context":"System Health production release gate",
+              "description":"Production release verification is in progress.",
+              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+          }
+          open("/tmp/koa-production-release-status.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-production-release-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+
   source-build-audit:
     name: Source + Astro build audit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,17 +82,180 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Structural build-safety gate
         run: npm run build:safety
+      - name: Test independent exact-SHA Netlify recovery policy
+        run: node scripts/test_production_deploy_recovery.mjs
+      - name: Diagnose exact-main Netlify production gate with authenticated GitHub evidence
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          CONTEXT: production
+          GITHUB_RELEASE_GATE_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=4 origin main
+          export COMMIT_REF="$(git rev-parse FETCH_HEAD)"
+          node scripts/verify_netlify_release_gate.mjs
       - name: Build production site
         run: npm run build
       - name: Test inquiry security rules
         run: node --experimental-strip-types scripts/security_logic_qa.mjs
       - name: Audit source structure
         run: python scripts/production_visual_qa.py --mode source
+      - name: Install System Health responsive browser QA dependencies
+        if: github.event_name == 'pull_request'
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Verify site-wide Light / Dark / System themes in Chromium and WebKit
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4174 --directory dist > /tmp/koa-theme-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4174/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-theme-preview.log
+            exit 1
+          fi
+          python scripts/theme_visual_qa.py --browser chromium --base-url http://127.0.0.1:4174
+          python scripts/theme_visual_qa.py --browser webkit --base-url http://127.0.0.1:4174
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && always()
+        with:
+          name: koa-theme-responsive-pr-${{ github.run_id }}
+          path: |
+            visual-results/theme-source-audit.json
+            visual-results/theme-chromium
+            visual-results/theme-webkit
+          retention-days: 30
+          if-no-files-found: error
+      - name: Create local System Health QA snapshot
+        if: github.event_name == 'pull_request'
+        run: |
+          mkdir -p visual-results
+          cat > visual-results/system-health-dashboard.json <<'JSON'
+          {
+            "current": {
+              "overall": "healthy",
+              "passed": 78,
+              "failed": 0,
+              "checkedAt": "2026-10-01T19:13:40-10:00",
+              "checks": []
+            },
+            "coverage": {},
+            "criticalIntegrations": {},
+            "rollbackReady": {},
+            "runtime": {},
+            "deployments": {},
+            "office365": {},
+            "emailHealth": {},
+            "credentialHealth": {},
+            "weeklyExecutiveSummary": {},
+            "accountingHealth": {},
+            "visualQuality": {
+              "status": "passed",
+              "checkedAt": "2026-10-01T19:13:41-10:00",
+              "source": "production-visual-qa",
+              "runId": "pr-preview",
+              "commit": "preview",
+              "deployId": "preview",
+              "chromium": {
+                "browser":"chromium","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "webkit": {
+                "browser":"webkit","routes":69,"cases":283,"failureCount":0,"failedRouteCount":0,"reportMissing":false,
+                "routeResults":[
+                  {"route":"/","status":"passed","cases":4,"failureCount":0,"failures":[]},
+                  {"route":"/admin/health/","status":"passed","cases":4,"failureCount":0,"failures":[]}
+                ]
+              },
+              "screenshots":[
+                {"key":"light-phone","theme":"light","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-phone"},
+                {"key":"dark-phone","theme":"dark","viewport":"phone","browser":"chromium","route":"/admin/health/","width":390,"height":844,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-phone"},
+                {"key":"light-desktop","theme":"light","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=light-desktop"},
+                {"key":"dark-desktop","theme":"dark","viewport":"desktop","browser":"chromium","route":"/admin/health/","width":1440,"height":900,"contentType":"image/jpeg","url":"/api/admin/health?action=dark-mode-qa-screenshot&deployId=preview&key=dark-desktop"}
+              ],
+              "detail": "Preview visual-quality fixture."
+            },
+            "enrichmentWarnings": []
+          }
+          JSON
+      - name: Verify System Health responsive layout in Chromium and WebKit
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4173 --directory dist > /tmp/koa-health-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/admin/health/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-health-preview.log
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode health-mobile --browser chromium --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+          python scripts/production_visual_qa.py --mode health-mobile --browser webkit --base-url http://127.0.0.1:4173 --health-payload visual-results/system-health-dashboard.json
+      - name: Verify iPhone admin bottom navigation in built PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4175 --directory dist > /tmp/koa-admin-mobile-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4175/admin/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            cat /tmp/koa-admin-mobile-preview.log
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode admin-mobile --browser chromium --base-url http://127.0.0.1:4175
+          python scripts/production_visual_qa.py --mode admin-mobile --browser webkit --base-url http://127.0.0.1:4175
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && always()
+        with:
+          name: koa-system-health-responsive-pr-${{ github.run_id }}
+          path: |
+            visual-results/system-health-dashboard.json
+            visual-results/health-mobile-chromium
+            visual-results/health-mobile-webkit
+            visual-results/admin-mobile-chromium
+            visual-results/admin-mobile-webkit
+          retention-days: 30
+          if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-source-audit-${{ github.run_id }}
-          path: visual-results/source-audit.json
+          path: |
+            visual-results/source-audit.json
+            visual-results/theme-source-audit.json
           retention-days: 14
           if-no-files-found: error
 
@@ -170,7 +343,24 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Wait for Netlify staging deploy
+      - name: Wait five minutes for exact Netlify production SHA
+        id: initial-netlify-wait
+        continue-on-error: true
+        run: python scripts/production_visual_qa.py --mode wait --wait-seconds 300
+      - name: Recover failed or missing exact-SHA deployment from GitHub Actions
+        if: github.event_name == 'push' && steps.initial-netlify-wait.outcome == 'failure'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: d1f3ab06-be2a-41c4-b770-59e6a6acd1b9
+        run: |
+          set -euo pipefail
+          # Crucially this runs outside the older published Netlify function,
+          # which cannot execute fixes from a failed (unpublished) deploy.
+          node scripts/production_deploy_recovery.mjs
+      - name: Wait for exact Netlify production SHA after fallback
+        if: github.event_name == 'push' && steps.initial-netlify-wait.outcome == 'failure'
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 600
       - name: Verify production health and guard the release
         shell: bash
@@ -192,20 +382,311 @@ jobs:
           echo "$verification"
           python -c 'import json,sys; data=json.load(sys.stdin); accounting=data.get("accountingInvariant") or {}; assert data.get("auditRecorded") is True; assert data.get("ok") is True; assert len(data.get("probes",[])) == 4; assert all(p.get("ok") and p.get("status")==204 and p.get("source")=="live" and p.get("marker")==p.get("expectedMarker") for p in data["probes"]); assert accounting.get("ok") is True; assert accounting.get("status")==200; assert accounting.get("expectedTotal")==15706.8; assert accounting.get("actualTotal")==15706.8; assert accounting.get("taxablePayload")==0; assert accounting.get("liveClientStatus")=="passed"; assert accounting.get("liveClientEstimateTotal")==15706.8; assert accounting.get("liveClientTaxableLineCount")==0; assert accounting.get("historicalTaxOnTaxDetected") is False; assert accounting.get("dynamicClientStatus")=="passed"; assert accounting.get("dynamicClientFailedCount")==0; assert accounting.get("dynamicClientUnverifiedCount")==0; assert accounting.get("dynamicClientPassedCount")==accounting.get("dynamicClientCount")' <<<"$verification"
           test "$http_status" = "200"
+      - name: Capture Jesse and Dion QBO adjustment diagnostics
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-results
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            -o visual-results/accounting-adjustment-diagnostics.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"read-accounting-adjustment-diagnostics","recordIds":["QBO-CUST-29","QBO-CUST-44"]}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          # Never echo raw accounting diagnostics; they may include customer PII.
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('visual-results/accounting-adjustment-diagnostics.json').read_text())
+          assert data.get('ok') is True
+          rows=data.get('diagnostics') or []
+          by_id={row.get('recordId'):row for row in rows}
+          assert set(by_id)=={'QBO-CUST-29','QBO-CUST-44'}
+          for record_id in ('QBO-CUST-29','QBO-CUST-44'):
+              row=by_id[record_id]
+              assert row.get('status')=='verified'
+              assert row.get('historicalQuickBooksImport') is True
+              assert row.get('accountingScope')=='quickbooks-history'
+              assert row.get('estimateId')
+              assert isinstance(row.get('rawFields'),dict)
+          print('Historical QBO adjustment audit: verified records',len(rows))
+          PY
+      - name: Capture current safe accounting repair bulk preview
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-results
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            -o visual-results/accounting-repair-bulk-preview.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"read-current-accounting-repair-bulk-preview"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          # Never echo the raw bulk preview; rows include financial and personal data.
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('visual-results/accounting-repair-bulk-preview.json').read_text())
+          assert data.get('ok') is True
+          preview=data.get('bulkPreview') or {}
+          assert preview.get('bulkPreviewId')
+          assert preview.get('approvalMode') == 'individual-write-only'
+          assert isinstance(preview.get('rows'),list)
+          assert all(row.get('status') in {'repairable','blocked','clean','error','unavailable','ineligible'} for row in preview['rows'])
+          print('Production safe repair preview:',json.dumps({
+              'bulkPreviewId':preview.get('bulkPreviewId'),
+              'requestedCount':preview.get('requestedCount'),
+              'repairableClientCount':preview.get('repairableClientCount'),
+              'writeCount':preview.get('writeCount'),
+              'blockedClientCount':preview.get('blockedClientCount'),
+              'cleanClientCount':preview.get('cleanClientCount'),
+              'errorClientCount':preview.get('errorClientCount'),
+          },separators=(',',':')))
+          PY
       - name: Check public routes and headers
         run: python scripts/production_visual_qa.py --mode smoke
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: koa-production-smoke-${{ github.run_id }}
-          path: visual-results/production-smoke.json
+          path: |
+            visual-results/production-smoke.json
           retention-days: 14
+          if-no-files-found: error
+
+  production-theme-audit:
+    name: Live Light / Dark / System audit
+    if: github.event_name != 'pull_request' && always()
+    needs: [source-build-audit, deployed-smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build route inventory
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Install browser QA dependencies
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Wait for exact Netlify production SHA
+        id: theme-exact-deploy-wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ needs.deployed-smoke.result }}" != "success" ]; then
+            echo "Exact production deployment smoke did not succeed; required browser evidence is unavailable."
+            exit 1
+          fi
+          python scripts/production_visual_qa.py --mode wait --wait-seconds 900
+      - name: Verify live Light / Dark / System in Chromium
+        id: theme-chromium
+        run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
+      - name: Verify live Light / Dark / System in WebKit
+        id: theme-webkit
+        run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
+      - name: Publish Dark Mode visual-quality result to System Health
+        if: always()
+        shell: bash
+        env:
+          EXACT_DEPLOY_WAIT_RESULT: ${{ steps.theme-exact-deploy-wait.outcome }}
+          CHROMIUM_AUDIT_RESULT: ${{ steps.theme-chromium.outcome }}
+          WEBKIT_AUDIT_RESULT: ${{ steps.theme-webkit.outcome }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import base64, json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          def load_report(browser):
+              path=Path(f'visual-results/theme-{browser}/report.json')
+              if not path.is_file():
+                  return None
+              try:
+                  value=json.loads(path.read_text())
+                  return value if isinstance(value,dict) else None
+              except Exception:
+                  return None
+
+          def summarize(browser):
+              report=load_report(browser)
+              try:
+                  route_count=int(report.get('routes') or 0) if report is not None else 0
+                  case_count=int(report.get('cases') or 0) if report is not None else 0
+              except (TypeError,ValueError,OverflowError):
+                  route_count,case_count=0,0
+              complete=(
+                  report is not None
+                  and isinstance(report.get('results'),list)
+                  and len(report.get('results'))>0
+                  and route_count>0
+                  and case_count==len(report.get('results'))
+                  and isinstance(report.get('failures'),list)
+              )
+              if not complete:
+                  wait_outcome=os.environ.get('EXACT_DEPLOY_WAIT_RESULT','').strip().lower()
+                  audit_outcome=os.environ.get(browser.upper()+'_AUDIT_RESULT','').strip().lower()
+                  if report is not None or Path(f'visual-results/theme-{browser}/report.json').is_file():
+                      reason='invalid-browser-report'
+                  elif wait_outcome!='success':
+                      reason='exact-deploy-unavailable'
+                  elif audit_outcome=='skipped':
+                      reason='browser-audit-skipped'
+                  elif audit_outcome=='failure':
+                      reason='browser-audit-failed-before-report'
+                  else:
+                      reason='browser-report-missing'
+                  return {
+                      'browser':browser,
+                      'routes':0,
+                      'cases':0,
+                      'failureCount':1,
+                      'failedRouteCount':0,
+                      'reportMissing':True,
+                      'missingReason':reason,
+                      'routeResults':[],
+                  }
+              by_route={}
+              for row in report.get('results') or []:
+                  if not isinstance(row,dict):
+                      continue
+                  route=str(row.get('route') or '').strip()
+                  if not route:
+                      continue
+                  target=by_route.setdefault(route,{'route':route,'cases':0,'failureCount':0,'failures':[],'failedCases':[]})
+                  target['cases']+=1
+                  failure=str(row.get('failure') or '').strip()
+                  if failure:
+                      target['failureCount']+=1
+                      preference=str(row.get('preference') or '').strip()
+                      resolved=str(row.get('resolved') or '').strip()
+                      os_scheme=str(row.get('osScheme') or '').strip()
+                      surface=str(row.get('surface') or '').strip()
+                      viewport=str(row.get('viewport') or '').strip()
+                      theme=preference or resolved or 'unknown'
+                      if preference=='system' and os_scheme:
+                          theme='system → '+resolved+' (OS '+os_scheme+')'
+                      elif preference in {'account-dark','navbar-toggle'}:
+                          theme=preference+' → '+resolved
+                      label=' / '.join(value for value in (theme,viewport,surface) if value)
+                      message=(label+': ' if label else '')+failure
+                      if message not in target['failures'] and len(target['failures'])<12:
+                          target['failures'].append(message[:500])
+                      failed_case={
+                          'theme':theme[:120],
+                          'viewport':viewport[:80] or 'unknown',
+                          'detail':failure[:500],
+                      }
+                      if failed_case not in target['failedCases'] and len(target['failedCases'])<24:
+                          target['failedCases'].append(failed_case)
+              route_results=[]
+              for route in sorted(by_route):
+                  row=by_route[route]
+                  route_results.append({
+                      'route':route,
+                      'status':'failed' if row['failureCount'] else 'passed',
+                      'cases':row['cases'],
+                      'failureCount':row['failureCount'],
+                      'failures':row['failures'],
+                      'failedCases':row['failedCases'],
+                  })
+              return {
+                  'browser':browser,
+                  'routes':int(report.get('routes') or 0),
+                  'cases':int(report.get('cases') or 0),
+                  'failureCount':len(report.get('failures') or []),
+                  'failedRouteCount':sum(1 for row in route_results if row['status']=='failed'),
+                  'reportMissing':False,
+                  'missingReason':'',
+                  'routeResults':route_results,
+              }
+
+          def screenshots():
+              rows=[]
+              sizes={'phone':(390,844),'desktop':(1440,900)}
+              for theme in ('light','dark'):
+                  for viewport in ('phone','desktop'):
+                      for browser in ('chromium','webkit'):
+                          report=load_report(browser)
+                          path=Path(f'visual-results/theme-{browser}/thumbnail-{theme}-{viewport}.jpg')
+                          if report is None or not path.is_file():
+                              continue
+                          width,height=sizes[viewport]
+                          rows.append({
+                              'key':f'{theme}-{viewport}',
+                              'theme':theme,
+                              'viewport':viewport,
+                              'browser':browser,
+                              'route':str(report.get('thumbnailRoute') or '/admin/health/'),
+                              'width':width,
+                              'height':height,
+                              'dataBase64':base64.b64encode(path.read_bytes()).decode('ascii'),
+                          })
+                          break
+              return rows
+
+          payload={
+              'action':'record-dark-mode-visual-quality',
+              'checkedAt':datetime.now(timezone.utc).isoformat(),
+              'chromium':summarize('chromium'),
+              'webkit':summarize('webkit'),
+              'screenshots':screenshots(),
+          }
+          Path('/tmp/dark-mode-visual-quality.json').write_text(json.dumps(payload,separators=(',',':')))
+          print(json.dumps({
+              'chromium':payload['chromium'],
+              'webkit':payload['webkit'],
+              'screenshots':[{key:value for key,value in row.items() if key!='dataBase64'} for row in payload['screenshots']],
+          },separators=(',',':')))
+          PY
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          curl -fsS             -X POST             -H "Authorization: Bearer $token"             -H "Content-Type: application/json"             --data-binary @/tmp/dark-mode-visual-quality.json             https://koasevents.com/api/system-health/github-main-signal
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload=json.loads(Path('/tmp/dark-mode-visual-quality.json').read_text())
+          for browser in ('chromium','webkit'):
+              report=payload.get(browser) or {}
+              if report.get('reportMissing') or report.get('failureCount') or not report.get('routeResults'):
+                  raise SystemExit('Dark Mode QA release gate blocked: '+browser+' report is missing, incomplete, or failed.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-live-theme-${{ github.run_id }}
+          path: |
+            visual-results/theme-chromium
+            visual-results/theme-webkit
+          retention-days: 30
           if-no-files-found: error
 
   admin-startup-audit:
     name: Protected admin post-deploy audit
     if: github.event_name != 'pull_request'
-    needs: source-build-audit
+    needs: [source-build-audit, deployed-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -231,14 +712,225 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  system-health-mobile-audit:
+    name: System Health authenticated mobile screenshots
+    if: github.event_name != 'pull_request' && always()
+    needs: [deployed-smoke, production-theme-audit, visual-audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install mobile browser QA dependencies
+        run: |
+          pip install playwright==1.55.0
+          python -m playwright install --with-deps chromium webkit
+      - name: Run signed live System Health dashboard refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-results
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="000"
+          for attempt in 1 2 3; do
+            http_status="$(curl -sS \
+              --connect-timeout 15 \
+              --max-time 55 \
+              -o visual-results/system-health-dashboard.json \
+              -w "%{http_code}" \
+              -X POST \
+              -H "Authorization: Bearer $token" \
+              -H "Content-Type: application/json" \
+              --data '{"action":"run-dashboard-refresh"}' \
+              https://koasevents.com/api/system-health/github-main-signal || true)"
+            if [ "$http_status" = "200" ] && python -c 'import json,sys; from pathlib import Path; p=Path("visual-results/system-health-dashboard.json"); data=json.loads(p.read_text()); current=data.get("current") or {}; sys.exit(0 if data.get("ok") is True and current.get("checkedAt") else 1)'; then
+              break
+            fi
+            echo "Signed System Health refresh attempt ${attempt}/3 failed with HTTP ${http_status}."
+            if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
+          done
+          # The signed health payload stays local for browser QA; never print raw JSON.
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path('visual-results/system-health-dashboard.json').read_text())
+          current=data.get('current') or {}
+          assert data.get('ok') is True
+          assert current.get('checkedAt')
+          assert isinstance(current.get('passed'),int)
+          assert isinstance(current.get('failed'),int)
+          assert current.get('overall') in {'healthy','unhealthy'}
+          warnings=data.get('enrichmentWarnings') or []
+          print('System Health live summary:', json.dumps({
+              'overall':current.get('overall'),
+              'passed':current.get('passed'),
+              'failed':current.get('failed'),
+              'checkedAt':current.get('checkedAt'),
+              'enrichmentWarnings':warnings,
+          },separators=(',',':')))
+          PY
+      - name: Verify authenticated mobile System Health in Chromium
+        run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard.json
+      - name: Verify authenticated mobile System Health in WebKit
+        run: python scripts/production_visual_qa.py --mode health-mobile --browser webkit --health-payload visual-results/system-health-dashboard.json
+      - name: Publish System Health production release status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load(path):
+              p=Path(path)
+              if not p.is_file():
+                  return None
+              try:
+                  return json.loads(p.read_text())
+              except Exception:
+                  return None
+
+          dashboard=load('visual-results/system-health-dashboard.json') or {}
+          chromium=load('visual-results/health-mobile-chromium/report.json') or {}
+          webkit=load('visual-results/health-mobile-webkit/report.json') or {}
+          current=dashboard.get('current') or {}
+          warnings=dashboard.get('enrichmentWarnings') or []
+          expected_refresh='Partial' if warnings else 'Current'
+
+          expected_viewports={
+              'phone-small':(320,568),
+              'phone':(390,844),
+              'tablet':(768,1024),
+              'tablet-wide':(1024,768),
+              'desktop-small':(1280,800),
+              'desktop':(1440,900),
+              'desktop-wide':(1920,1080),
+          }
+          def complete_report(report,browser):
+              rows=report.get('results')
+              if (
+                  report.get('mode')!='health-mobile'
+                  or report.get('browser')!=browser
+                  or report.get('checkedAt')!=current.get('checkedAt')
+                  or not isinstance(rows,list)
+                  or len(rows)!=7
+                  or report.get('failures')!=[]
+              ):
+                  return False
+              found=set()
+              for row in rows:
+                  if not isinstance(row,dict):
+                      return False
+                  name=row.get('viewport')
+                  if name not in expected_viewports or name in found:
+                      return False
+                  if (row.get('width'),row.get('height'))!=expected_viewports[name]:
+                      return False
+                  if row.get('failure'):
+                      return False
+                  found.add(name)
+              return found==set(expected_viewports)
+
+          reports=[chromium,webkit]
+          reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')
+          refresh_checks=[]
+          for report in reports:
+              for row in report.get('results') or []:
+                  after=(row.get('metrics') or {}).get('afterRunChecksNow') or {}
+                  refresh_checks.append(
+                      after.get('passed')==str(current.get('passed'))
+                      and after.get('failed')==str(current.get('failed'))
+                      and bool(after.get('checked'))
+                      and after.get('dashboardRefresh')==expected_refresh
+                  )
+
+          ok=bool(
+              dashboard.get('ok') is True
+              and current.get('checkedAt')
+              and isinstance(current.get('passed'),int)
+              and isinstance(current.get('failed'),int)
+              and current.get('overall') == 'healthy'
+              and current.get('failed') == 0
+              and reports_complete
+              and len(refresh_checks)==14
+              and all(refresh_checks)
+          )
+
+          overall=str(current.get('overall') or 'unknown').title()
+          passed=current.get('passed','?')
+          failed=current.get('failed','?')
+          description=f'{overall} · {passed} passed · {failed} failed · Refresh {expected_refresh} · 14 responsive checks'
+          payload={
+              'state':'success' if ok else 'failure',
+              'context':'System Health responsive audit',
+              'description':description[:140],
+          }
+          Path('/tmp/system-health-commit-status.json').write_text(json.dumps(payload,separators=(',',':')))
+          print(json.dumps({
+              'ok':ok,
+              'overall':current.get('overall'),
+              'passed':current.get('passed'),
+              'failed':current.get('failed'),
+              'checkedAt':current.get('checkedAt'),
+              'dashboardRefresh':expected_refresh,
+              'enrichmentWarnings':warnings,
+              'chromiumViewports':len(chromium.get('results') or []),
+              'webkitViewports':len(webkit.get('results') or []),
+              'chromiumFailures':chromium.get('failures') or [],
+              'webkitFailures':webkit.get('failures') or [],
+          },separators=(',',':')))
+          PY
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          p=Path('/tmp/system-health-commit-status.json')
+          data=json.loads(p.read_text())
+          data['target_url']=f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
+          p.write_text(json.dumps(data,separators=(',',':')))
+          PY
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/system-health-commit-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          status=json.loads(Path('/tmp/system-health-commit-status.json').read_text())
+          if status.get('state')!='success':
+              raise SystemExit('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: koa-system-health-mobile-${{ github.run_id }}
+          path: |
+            visual-results/system-health-dashboard.json
+            visual-results/health-mobile-chromium
+            visual-results/health-mobile-webkit
+          retention-days: 30
+          if-no-files-found: error
   visual-audit:
     name: Responsive visual audit
-    if: github.event_name != 'pull_request'
-    needs: deployed-smoke
+    if: github.event_name != 'pull_request' && always()
+    needs: [deployed-smoke, production-theme-audit]
     runs-on: ubuntu-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         browser: [chromium, webkit]
     steps:
@@ -262,10 +954,199 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
+  production-release-attestation:
+    name: Final production release attestation
+    if: github.event_name == 'push' && always()
+    needs:
+      - release-status-pending
+      - source-build-audit
+      - deployed-smoke
+      - production-theme-audit
+      - admin-startup-audit
+      - system-health-mobile-audit
+      - visual-audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify every required production QA job succeeded
+        id: workflow-gates
+        shell: bash
+        env:
+          PENDING_RESULT: ${{ needs.release-status-pending.result }}
+          SOURCE_RESULT: ${{ needs.source-build-audit.result }}
+          SMOKE_RESULT: ${{ needs.deployed-smoke.result }}
+          THEME_RESULT: ${{ needs.production-theme-audit.result }}
+          ADMIN_RESULT: ${{ needs.admin-startup-audit.result }}
+          MOBILE_RESULT: ${{ needs.system-health-mobile-audit.result }}
+          VISUAL_RESULT: ${{ needs.visual-audit.result }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json, os
+          results={
+              "pending":os.environ["PENDING_RESULT"],
+              "source":os.environ["SOURCE_RESULT"],
+              "smoke":os.environ["SMOKE_RESULT"],
+              "theme":os.environ["THEME_RESULT"],
+              "admin":os.environ["ADMIN_RESULT"],
+              "mobile":os.environ["MOBILE_RESULT"],
+              "visual":os.environ["VISUAL_RESULT"],
+          }
+          ok=all(value=="success" for value in results.values())
+          print(json.dumps({"ok":ok,"results":results},separators=(",",":")))
+          with open(os.environ["GITHUB_OUTPUT"],"a") as handle:
+              handle.write("ok="+("true" if ok else "false")+"\n")
+          PY
+
+      - name: Verify exact successful Netlify production deploy and live deploy ID
+        id: netlify-attestation
+        if: steps.workflow-gates.outputs.ok == 'true'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-production-attestation.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"verify-production-release-attestation"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          cat /tmp/koa-production-attestation.json
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-production-attestation.json"))
+          expected=os.environ["GITHUB_SHA"]
+          assert data.get("ok") is True
+          assert data.get("expectedSha")==expected
+          assert data.get("deployCommit")==expected
+          assert data.get("liveCommit")==expected
+          assert data.get("deployContext")=="production"
+          assert data.get("deployState") in {"ready","current"}
+          assert data.get("publishedAt")
+          assert data.get("deployId")
+          assert data.get("liveDeployId")==data.get("deployId")
+          assert data.get("matchingDeployId") is True
+          with open(os.environ["GITHUB_OUTPUT"],"a") as handle:
+              handle.write("deploy_id="+str(data["deployId"])+"\n")
+          PY
+
+      - name: Require final System Health snapshot to be healthy
+        id: final-health
+        if: steps.workflow-gates.outputs.ok == 'true' && steps.netlify-attestation.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-final-health.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data '{"action":"run-dashboard-refresh"}' \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          # Do not log the unredacted production health response.
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-final-health.json"))
+          current=data.get("current") or {}
+          assert data.get("ok") is True
+          assert data.get("sha")==os.environ["GITHUB_SHA"]
+          assert current.get("overall")=="healthy"
+          assert current.get("failed")==0
+          assert isinstance(current.get("passed"),int)
+          assert current.get("checkedAt")
+          PY
+
+      - name: Publish final fail-closed production release status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PENDING_RESULT: ${{ needs.release-status-pending.result }}
+          SOURCE_RESULT: ${{ needs.source-build-audit.result }}
+          SMOKE_RESULT: ${{ needs.deployed-smoke.result }}
+          THEME_RESULT: ${{ needs.production-theme-audit.result }}
+          ADMIN_RESULT: ${{ needs.admin-startup-audit.result }}
+          MOBILE_RESULT: ${{ needs.system-health-mobile-audit.result }}
+          VISUAL_RESULT: ${{ needs.visual-audit.result }}
+        run: |
+          set -euo pipefail
+          node --input-type=module - <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';
+
+          const load=(path)=>{
+            try{return JSON.parse(readFileSync(path,'utf8'));}
+            catch{return {};}
+          };
+          const attestation=load('/tmp/koa-production-attestation.json');
+          const healthResponse=load('/tmp/koa-final-health.json');
+          const current=healthResponse.current||{};
+          const workflowResults={
+            pending:process.env.PENDING_RESULT,
+            source:process.env.SOURCE_RESULT,
+            smoke:process.env.SMOKE_RESULT,
+            theme:process.env.THEME_RESULT,
+            admin:process.env.ADMIN_RESULT,
+            mobile:process.env.MOBILE_RESULT,
+            visual:process.env.VISUAL_RESULT,
+          };
+          const decision=evaluateProductionReleaseGate({
+            expectedSha:process.env.GITHUB_SHA,
+            workflowResults,
+            netlify:attestation,
+            health:{
+              ok:healthResponse.ok===true,
+              sha:healthResponse.sha,
+              overall:current.overall,
+              passed:current.passed,
+              failed:current.failed,
+              checkedAt:current.checkedAt,
+            },
+          });
+          const payload={
+            state:decision.state,
+            context:'System Health production release gate',
+            description:(decision.ok
+              ? 'Exact production SHA, Netlify deploy, deploy ID, System Health, and visual QA verified.'
+              : 'Production release blocked: required verification did not complete successfully.').slice(0,140),
+            target_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+          };
+          writeFileSync('/tmp/koa-production-release-status.json',JSON.stringify(payload));
+          writeFileSync('/tmp/koa-production-release-decision.json',JSON.stringify({decision,workflowResults,deployId:attestation.deployId||'',health:{overall:current.overall,passed:current.passed,failed:current.failed,checkedAt:current.checkedAt}}));
+          console.log(JSON.stringify({decision,workflowResults,deployId:attestation.deployId||'',health:{overall:current.overall,failed:current.failed}},null,2));
+          NODE
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-production-release-status.json \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
+          node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
+
   qa-summary:
     name: Visual QA summary
     if: always()
-    needs: [source-build-audit, deployed-smoke, admin-startup-audit, visual-audit]
+    needs: [source-build-audit, deployed-smoke, production-theme-audit, admin-startup-audit, system-health-mobile-audit, visual-audit, production-release-attestation]
     runs-on: ubuntu-latest
     steps:
       - name: Publish run summary
@@ -277,8 +1158,11 @@ jobs:
             echo '| --- | --- |'
             echo '| Source + Astro build | ${{ needs.source-build-audit.result }} |'
             echo '| Live production route smoke | ${{ needs.deployed-smoke.result }} |'
+            echo '| Live Light / Dark / System audit | ${{ needs.production-theme-audit.result }} |'
             echo '| Protected admin post-deploy audit | ${{ needs.admin-startup-audit.result }} |'
+            echo '| Authenticated System Health mobile screenshots | ${{ needs.system-health-mobile-audit.result }} |'
             echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
+            echo '| Final production release attestation | ${{ needs.production-release-attestation.result }} |'
             echo
             echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
           } >> "$GITHUB_STEP_SUMMARY"

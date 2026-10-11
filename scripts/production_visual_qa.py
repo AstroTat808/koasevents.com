@@ -32,12 +32,17 @@ VIEWPORTS=[
 ]
 ADMIN_ROUTES=[
  ("admin-home","/admin/"),
+ ("admin-actions","/admin/actions/"),
  ("admin-business-crm","/admin/crm/"),
+ ("admin-clients","/admin/clients/"),
  ("admin-sales-crm","/admin/quotes/"),
  ("admin-catalog-manager","/admin/catalog/"),
+ ("admin-email","/admin/email/"),
+ ("admin-email-preview","/admin/email-preview/"),
  ("admin-wedding-profitability","/admin/profitability/"),
  ("admin-events","/admin/events/"),
  ("admin-calendar","/admin/calendar/"),
+ ("admin-mobile-bar-workforce","/admin/mobile-bar-workforce/"),
  ("admin-blog","/admin/blog/"),
  ("admin-staff","/admin/staff/"),
  ("admin-quickbooks","/admin/quickbooks/"),
@@ -45,6 +50,8 @@ ADMIN_ROUTES=[
  ("admin-security","/admin/security/"),
  ("admin-seo","/admin/seo/"),
  ("admin-health","/admin/health/"),
+ ("admin-organization","/admin/organization/"),
+ ("admin-payroll","/admin/payroll/"),
  ("admin-platform","/admin/platform/"),
  ("admin-insurance","/admin/insurance/"),
  ("admin-vendors","/admin/vendors/")
@@ -622,6 +629,92 @@ def admin_mode(browser_name):
   except Exception:pass
   results.append({"name":"platform-authorized-startup","path":"/admin/platform/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail)},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
   if detail:failures.append({"route":"/admin/platform/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
+  page.close()
+
+  # Live trusted-browser account-menu regression. This loads the deployed workspace
+  # navigation JavaScript, but mocks account APIs so CI can exercise trust / expiry UI
+  # without creating or changing any production Identity or device records.
+  page=ctx.new_page()
+  page_errors=[];console_errors=[]
+  page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+  page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+  mock_authorized_shell(page)
+  account_session_fixture={
+   "email":"qa-admin@koasevents.test","displayName":"QA Admin","role":"admin","roles":["admin"],"isAdmin":True,
+   "permissions":["admin.dashboard.view","health.view"],"capabilities":["admin.dashboard.view","health.view"],
+   "accessBlocked":False,
+   "app_metadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view"]},
+   "appMetadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view"]}
+  }
+  account_state={"trusted":False,"expiryDays":0}
+  def account_security_fixture():
+   now="2026-10-02T06:00:00.000Z"
+   expires="2026-11-01T06:00:00.000Z" if account_state["expiryDays"]==30 else ""
+   devices=[] if not account_state["trusted"] else [{
+    "id":"qa-opaque-device-handle","name":"QA’s iPhone","device":"Safari on iPhone",
+    "trustedAt":now,"trustedBy":"qa-admin@koasevents.test","lastSeenAt":now,
+    "lastUsedAt":now,"expiresAt":expires,"current":True
+   }]
+   return {
+    "forcePasswordChange":False,"passwordChangedAt":"","sessionVersion":0,"passwordExpiryDays":180,
+    "trustedDeviceExpiryDays":account_state["expiryDays"],
+    "currentDevice":{
+     "trusted":account_state["trusted"],
+     "name":"QA’s iPhone" if account_state["trusted"] else "",
+     "device":"Safari on iPhone","tracked":True
+    },
+    "trustedDevices":devices,
+   }
+  def account_security_handler(route):
+   req=route.request
+   if req.method=="GET":
+    route.fulfill(status=200,content_type="application/json",body=json.dumps(account_security_fixture()))
+    return
+   try: body=json.loads(req.post_data or "{}")
+   except Exception: body={}
+   action=str(body.get("action") or "")
+   if action=="trust-current-browser":
+    account_state["trusted"]=True
+    device=account_security_fixture()["trustedDevices"][0]
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"message":"QA’s iPhone is now trusted.","device":device}))
+   elif action=="save-trusted-device-expiry":
+    days=int(body.get("expiryDays") or 0)
+    account_state["expiryDays"]=days if days in (0,30,60,90) else 0
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True,"message":"Trusted browsers will auto-revoke after 30 days without use.","trustedDeviceExpiryDays":account_state["expiryDays"]}))
+   else:
+    route.fulfill(status=200,content_type="application/json",body=json.dumps({"ok":True}))
+  page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(account_session_fixture)))
+  page.route("**/api/account/security**",account_security_handler)
+  detail=""
+  try:
+   response=page.goto(BASE+"/admin/health/",wait_until="domcontentloaded",timeout=45000)
+   page.wait_for_selector("[data-workspace-account-toggle]",state="visible",timeout=8000)
+   page.locator("[data-workspace-account-toggle]").click()
+   page.wait_for_selector("[data-workspace-account-panel][data-open='true']",state="visible",timeout=5000)
+   heading=page.locator("[data-workspace-account-panel] h2").inner_text().strip()
+   if heading!="Account settings":
+    detail="Account panel heading was not Account settings: "+heading
+   else:
+    page.locator("[data-workspace-trust-current]").click()
+    page.wait_for_function("() => document.querySelector('[data-workspace-current-device]')?.textContent?.includes('QA’s iPhone')",timeout=5000)
+    page.locator("[data-workspace-trusted-expiry]").select_option("30")
+    page.locator("[data-workspace-save-trusted-expiry]").click()
+    page.wait_for_function(
+     "() => document.querySelector('[data-workspace-trusted-devices]')?.innerText?.includes('Auto-revokes')",
+     timeout=5000,
+    )
+    device_text=page.locator("[data-workspace-trusted-devices]").inner_text()
+    if "Last used" not in device_text or "Auto-revokes" not in device_text:
+     detail="Trusted-device panel did not render last-used and auto-revoke timestamps. Text: "+device_text[:500]
+    elif page_errors:
+     detail="Trusted-browser account-menu JavaScript errors: "+" | ".join(page_errors[:5])
+  except Exception as exc:
+   detail="Trusted-browser live account-menu regression: "+str(exc)
+  shot=root/"trusted-browser-account-menu.png"
+  try:page.screenshot(path=str(shot),full_page=True,animations="disabled",caret="hide")
+  except Exception:pass
+  results.append({"name":"trusted-browser-account-menu","path":"/admin/health/","status":response.status if 'response' in locals() and response else 0,"state":{"visible":not bool(detail),"trusted":account_state["trusted"],"expiryDays":account_state["expiryDays"]},"pageErrors":page_errors,"consoleErrors":console_errors,"requestFailed":[],"failure":detail,"screenshot":str(shot)})
+  if detail:failures.append({"route":"/admin/health/","detail":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10]})
   page.close()
 
   # Authorized-style Business CRM boot regression test. The protected API is mocked
@@ -1232,6 +1325,575 @@ def admin_mode(browser_name):
  print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
  return 1 if failures else 0
 
+
+def health_mobile_mode(browser_name,health_payload_path):
+ try:from playwright.sync_api import sync_playwright
+ except ImportError:
+  print("Install Playwright: pip install playwright && python -m playwright install chromium",file=sys.stderr);return 2
+
+ payload_path=Path(health_payload_path)
+ if not payload_path.is_file():
+  print("System Health dashboard payload is missing: "+str(payload_path),file=sys.stderr);return 2
+ envelope=json.loads(payload_path.read_text(encoding="utf-8"))
+ dashboard=envelope.get("dashboard") if isinstance(envelope,dict) and isinstance(envelope.get("dashboard"),dict) else envelope
+ current=dashboard.get("current") if isinstance(dashboard,dict) else None
+ if not isinstance(current,dict):
+  print("System Health dashboard payload has no current snapshot.",file=sys.stderr);return 2
+ visual_quality=dashboard.get("visualQuality") if isinstance(dashboard,dict) and isinstance(dashboard.get("visualQuality"),dict) else {}
+
+ root=OUT/("health-mobile-"+browser_name);root.mkdir(parents=True,exist_ok=True)
+ session_fixture={
+  "email":"qa-system-health@koasevents.test",
+  "displayName":"System Health QA",
+  "jobTitle":"Release QA",
+  "pronouns":"",
+  "roleDescription":"Automated protected-workspace regression",
+  "photoUrl":"",
+  "signature":{"showTitle":True,"showTeamTitle":True,"showPronouns":False,"showRoleDescription":False},
+  "role":"admin","roles":["admin"],"isAdmin":True,
+  "permissions":["admin.dashboard.view","health.view","health.manage"],
+  "capabilities":["admin.dashboard.view","health.view","health.manage"],
+  "accessBlocked":False,"blockReason":"",
+  "security":{"forcePasswordChange":False,"passwordChangedAt":"","passwordExpiresAt":"","passwordExpired":False,"passwordExpiryDays":180,"sessionVersion":0,"tokenSessionVersion":0,"sessionRevoked":False},
+  "tenant":{"id":"koa","slug":"koa","displayName":"Koa's Events","locale":"en-US","currency":"USD","timezone":"Pacific/Honolulu"},
+  "organization":None,"membership":None,
+  "app_metadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
+  "appMetadata":{"roles":["admin"],"permissions":["admin.dashboard.view","health.view","health.manage"],"tenantId":"koa","membershipId":"qa"},
+ }
+ viewports=[("phone-small",320,568,2),("phone",390,844,2),("tablet",768,1024,1),("tablet-wide",1024,768,1),("desktop-small",1280,800,1),("desktop",1440,900,1),("desktop-wide",1920,1080,1)]
+ results=[];failures=[]
+ with sync_playwright() as p:
+  browser=getattr(p,browser_name).launch()
+  for viewport_name,width,height,dpr in viewports:
+   ctx=browser.new_context(
+    viewport={"width":width,"height":height},
+    device_scale_factor=dpr,
+    is_mobile=width<768,
+    has_touch=width<768,
+    reduced_motion="reduce",
+    color_scheme="light",
+   )
+   page=ctx.new_page();page_errors=[];console_errors=[];request_failed=[]
+   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+   page.on("requestfailed",lambda r,t=request_failed:t.append(r.url) if urlparse(r.url).netloc==urlparse(BASE).netloc else None)
+
+   # Load the real production document, CSS, and JavaScript while supplying an
+   # authorized admin session and the signed live dashboard snapshot produced
+   # immediately before this browser test. Background admin-shell APIs receive a
+   # harmless empty JSON response so no human session secret is stored in CI.
+   page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   def fulfill_health(route):
+    if "action=dark-mode-qa-screenshot" in route.request.url:
+     route.fulfill(
+      status=200,
+      content_type="image/svg+xml",
+      body='<svg xmlns="http://www.w3.org/2000/svg" width="160" height="100"><rect width="160" height="100" fill="#173d30"/></svg>',
+     )
+     return
+    route.fulfill(status=200,content_type="application/json",body=json.dumps(dashboard))
+   page.route("**/api/admin/health**",fulfill_health)
+
+   detail=""
+   metrics={}
+   try:
+    response=page.goto(BASE+"/admin/health/",wait_until="domcontentloaded",timeout=45000)
+    if not response or response.status>=400:
+     raise RuntimeError("System Health document returned HTTP "+str(response.status if response else 0))
+    page.wait_for_selector("[data-app]:not(.hidden)",state="visible",timeout=10000)
+    page.wait_for_function(
+     """() => {
+       const overall=String(document.querySelector('[data-overall]')?.textContent||'').trim();
+       const checked=String(document.querySelector('[data-checked]')?.textContent||'').trim();
+       return overall && overall!=='—' && overall!=='No data' && overall!=='Check failed' && checked && checked!=='—';
+     }""",
+     timeout=10000,
+    )
+    page.wait_for_timeout(350)
+
+    expected_passed=int(current.get("passed") or 0)
+    expected_failed=int(current.get("failed") or 0)
+    metrics=page.evaluate("""() => {
+      const visible=(el)=>{
+        if(!el)return false;
+        const style=getComputedStyle(el),rect=el.getBoundingClientRect();
+        return style.display!=='none'&&style.visibility!=='hidden'&&Number(style.opacity)!==0&&rect.width>0&&rect.height>0;
+      };
+      const rect=(el)=>{
+        const box=el.getBoundingClientRect();
+        return {x:box.x,y:box.y,w:box.width,h:box.height};
+      };
+      const nav=document.querySelector('[data-workspace-nav]');
+      const bottom=document.querySelector('[data-workspace-bottom-nav]');
+      const main=document.querySelector('main[data-system-health-page]');
+      const title=main?.querySelector('h1');
+      const navRect=nav?.getBoundingClientRect();
+      const bottomRect=bottom?.getBoundingClientRect();
+      const titleRect=title?.getBoundingClientRect();
+      const mainRect=main?.getBoundingClientRect();
+      const tableCells=[...document.querySelectorAll('main[data-system-health-page] table.koa-mobile-card-table tbody td')];
+      const summary=[...document.querySelectorAll('[data-health-summary-grid] > *')].filter(visible);
+      const summaryRects=summary.map((el)=>rect(el));
+      const summaryGrid=document.querySelector('[data-health-summary-grid]');
+      const summaryGridRect=summaryGrid?.getBoundingClientRect();
+      return {
+        overall:String(document.querySelector('[data-overall]')?.textContent||'').trim(),
+        passed:String(document.querySelector('[data-passed]')?.textContent||'').trim(),
+        failed:String(document.querySelector('[data-failed]')?.textContent||'').trim(),
+        checked:String(document.querySelector('[data-checked]')?.textContent||'').trim(),
+        dashboardRefresh:String(document.querySelector('[data-dashboard-refresh-status]')?.textContent||'').trim(),
+        themeQaStatus:String(document.querySelector('[data-theme-qa-status]')?.textContent||'').trim(),
+        themeQaChromiumRoutes:String(document.querySelector('[data-theme-qa-chromium-routes]')?.textContent||'').trim(),
+        themeQaChromiumFailures:String(document.querySelector('[data-theme-qa-chromium-failures]')?.textContent||'').trim(),
+        themeQaWebkitRoutes:String(document.querySelector('[data-theme-qa-webkit-routes]')?.textContent||'').trim(),
+        themeQaWebkitFailures:String(document.querySelector('[data-theme-qa-webkit-failures]')?.textContent||'').trim(),
+        themeQaCommit:String(document.querySelector('[data-theme-qa-commit]')?.textContent||'').trim(),
+        themeQaDeploy:String(document.querySelector('[data-theme-qa-deploy]')?.textContent||'').trim(),
+        headerPosition:nav?getComputedStyle(nav).position:'',
+        headerVisible:visible(nav),
+        headerBottom:navRect?.bottom??null,
+        titleTop:titleRect?.top??null,
+        mainTop:mainRect?.top??null,
+        bottomPosition:bottom?getComputedStyle(bottom).position:'',
+        bottomVisible:visible(bottom),
+        bottomTop:bottomRect?.top??null,
+        bottomBottom:bottomRect?.bottom??null,
+        viewportHeight:innerHeight,
+        viewportWidth:innerWidth,
+        documentScrollWidth:document.documentElement.scrollWidth,
+        summaryGridLeft:summaryGridRect?.left??null,
+        summaryGridRight:summaryGridRect?.right??null,
+        summaryRects,
+        summaryCardCount:summaryRects.length,
+        summaryHeightSpread:summaryRects.length?Math.max(...summaryRects.map((r)=>r.h))-Math.min(...summaryRects.map((r)=>r.h)):null,
+        mobileTableCells:tableCells.length,
+        unlabeledMobileTableCells:tableCells.filter((cell)=>!String(cell.dataset.mobileLabel||'').trim()).length,
+      };
+    }""")
+
+    summary_rects=metrics.get("summaryRects") or []
+    summary_in_view=all(
+     float(rect.get("x") or 0)>=-1
+     and float(rect.get("x") or 0)+float(rect.get("w") or 0)<=float(metrics.get("viewportWidth") or 0)+1
+     for rect in summary_rects
+    )
+    checks=[
+     (metrics.get("overall") not in {"","—","No data","Check failed"},"Overall is a real live health state"),
+     (metrics.get("passed")==str(expected_passed),"Passed total matches the live production snapshot"),
+     (metrics.get("failed")==str(expected_failed),"Failed total matches the live production snapshot"),
+     (metrics.get("checked") not in {"","—"},"Last Checked is populated"),
+     (float(metrics.get("documentScrollWidth") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"System Health has no horizontal page overflow"),
+     (int(metrics.get("summaryCardCount") or 0)==4,"System Health renders all four summary cards"),
+     (summary_in_view,"All four summary cards remain inside the viewport"),
+     (float(metrics.get("summaryGridRight") or 0)<=float(metrics.get("viewportWidth") or 0)+1,"Summary grid right edge stays inside the viewport"),
+     (int(metrics.get("unlabeledMobileTableCells") or 0)==0,"Converted mobile table cells retain labels"),
+    ]
+    if visual_quality and str(visual_quality.get("status") or "")!="unavailable":
+     chromium=visual_quality.get("chromium") or {}
+     webkit=visual_quality.get("webkit") or {}
+     checks.extend([
+      (metrics.get("themeQaStatus") in {"Passed","Failed"},"Dark Mode QA status is populated"),
+      (metrics.get("themeQaChromiumRoutes")==str(int(chromium.get("routes") or 0))+" routes","Chromium Dark Mode route count matches the release audit"),
+      (str(int(chromium.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaChromiumFailures") or ""),"Chromium Dark Mode failure count matches the release audit"),
+      (metrics.get("themeQaWebkitRoutes")==str(int(webkit.get("routes") or 0))+" routes","WebKit Dark Mode route count matches the release audit"),
+      (str(int(webkit.get("failureCount") or 0))+" failed case" in str(metrics.get("themeQaWebkitFailures") or ""),"WebKit Dark Mode failure count matches the release audit"),
+      (metrics.get("themeQaCommit")==str(visual_quality.get("commit") or ""),"Dark Mode QA commit matches the retained release audit"),
+      (metrics.get("themeQaDeploy")==str(visual_quality.get("deployId") or ""),"Dark Mode QA deploy id matches the retained release audit"),
+     ])
+
+    if width>=1100:
+     checks.append((float(metrics.get("summaryHeightSpread") or 0)<=2,"Desktop summary cards have consistent height"))
+    if width<768:
+     checks.extend([
+      (metrics.get("headerVisible") is True,"Mobile workspace header is visible"),
+      (metrics.get("headerPosition") not in {"fixed","sticky"},"Mobile workspace header remains in document flow"),
+      (metrics.get("bottomVisible") is True,"Mobile bottom navigation is visible"),
+      (metrics.get("bottomPosition")=="fixed","Mobile bottom navigation remains fixed to the viewport"),
+      (float(metrics.get("titleTop") or -1)>=float(metrics.get("headerBottom") or 0)-1,"System Health title is not covered by the top header"),
+      (float(metrics.get("bottomBottom") or 0)<=float(metrics.get("viewportHeight") or 0)+1,"Bottom navigation stays inside the viewport"),
+     ])
+    failed_checks=[label for ok,label in checks if not ok]
+    if failed_checks:
+     detail="; ".join(failed_checks)
+
+    top_shot=root/f"system-health-{viewport_name}-top.png"
+    page.screenshot(path=str(top_shot),full_page=False,animations="disabled",caret="hide")
+
+    if visual_quality and str(visual_quality.get("status") or "")!="unavailable":
+     chromium=visual_quality.get("chromium") or {}
+     webkit=visual_quality.get("webkit") or {}
+     expected_routes=sorted(set(
+      [str(row.get("route") or "") for row in (chromium.get("routeResults") or []) if isinstance(row,dict) and str(row.get("route") or "")]
+      +[str(row.get("route") or "") for row in (webkit.get("routeResults") or []) if isinstance(row,dict) and str(row.get("route") or "")]
+     ))
+     expected_screenshots=len(visual_quality.get("screenshots") or [])
+     card=page.locator("[data-theme-qa-card]")
+     toggle=page.locator("[data-theme-qa-toggle]")
+     if expected_routes:
+      toggle.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded') === 'true' && !document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')",
+       timeout=5000,
+      )
+     if expected_screenshots:
+      page.wait_for_function(
+       "(count) => [...document.querySelectorAll('[data-theme-qa-screenshots] img')].filter((img)=>img.complete&&img.naturalWidth>0).length === count",
+       arg=expected_screenshots,
+       timeout=5000,
+      )
+     theme_detail=page.evaluate("""() => ({
+       expanded:document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded')||'',
+       detailsHidden:document.querySelector('[data-theme-qa-details]')?.classList.contains('hidden')??true,
+       routeResultCount:document.querySelector('[data-theme-qa-route-results]')?.children.length||0,
+       screenshotCount:document.querySelectorAll('[data-theme-qa-screenshots] img').length,
+       loadedScreenshotCount:[...document.querySelectorAll('[data-theme-qa-screenshots] img')].filter((img)=>img.complete&&img.naturalWidth>0).length,
+     })""")
+     metrics["themeQaDetail"]=theme_detail
+     detail_checks=[]
+     if expected_routes:
+      detail_checks.extend([
+       (theme_detail.get("expanded")=="true","Dark Mode QA card expands on click"),
+       (theme_detail.get("detailsHidden") is False,"Dark Mode QA route detail becomes visible"),
+       (int(theme_detail.get("routeResultCount") or 0)==len(expected_routes),"Dark Mode QA renders every retained route result"),
+      ])
+     if expected_screenshots:
+      detail_checks.extend([
+       (int(theme_detail.get("screenshotCount") or 0)==expected_screenshots,"Dark Mode QA renders every retained screenshot thumbnail"),
+       (int(theme_detail.get("loadedScreenshotCount") or 0)==expected_screenshots,"Dark Mode QA screenshot thumbnails load successfully"),
+      ])
+      first_opener=page.locator("[data-theme-qa-screenshot-open]").first
+      thumbnail_src=first_opener.locator("img").get_attribute("src") or ""
+      first_opener.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-screenshot-dialog]')?.open === true && document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.complete === true && document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.naturalWidth > 0",
+       timeout=5000,
+      )
+      modal_metrics=page.evaluate("""() => ({
+       open:document.querySelector('[data-theme-qa-screenshot-dialog]')?.open===true,
+       src:document.querySelector('[data-theme-qa-screenshot-dialog-image]')?.getAttribute('src')||'',
+       title:String(document.querySelector('[data-theme-qa-screenshot-dialog-title]')?.textContent||'').trim(),
+       meta:String(document.querySelector('[data-theme-qa-screenshot-dialog-meta]')?.textContent||'').trim(),
+      })""")
+      metrics["themeQaScreenshotModal"]=modal_metrics
+      detail_checks.extend([
+       (modal_metrics.get("open") is True,"Dark Mode QA screenshot opens in an in-page modal"),
+       (modal_metrics.get("src")==thumbnail_src and bool(thumbnail_src),"Dark Mode QA modal uses the protected native-dimension screenshot asset"),
+       (bool(modal_metrics.get("title")) and bool(modal_metrics.get("meta")),"Dark Mode QA screenshot modal labels the render"),
+      ])
+      page.locator("[data-theme-qa-screenshot-dialog-close]").click()
+      page.wait_for_function("() => document.querySelector('[data-theme-qa-screenshot-dialog]')?.open === false",timeout=5000)
+     failed_detail_checks=[label for ok,label in detail_checks if not ok]
+     if failed_detail_checks:
+      detail=(detail+"; " if detail else "")+"; ".join(failed_detail_checks)
+     if expected_routes:
+      toggle.click()
+      page.wait_for_function(
+       "() => document.querySelector('[data-theme-qa-toggle]')?.getAttribute('aria-expanded') === 'false'",
+       timeout=5000,
+      )
+
+    # Exercise the same client interaction staff use. Both POST and follow-up GET
+    # receive the signed production dashboard payload captured for this run.
+    refresh_button=page.locator("[data-refresh]")
+    refresh_button.click()
+    page.wait_for_function(
+     """() => {
+       const button=document.querySelector('[data-refresh]');
+       return button && !button.disabled && String(button.textContent||'').trim()==='Run checks now';
+     }""",
+     timeout=10000,
+    )
+    refreshed=page.evaluate("""() => ({
+      overall:String(document.querySelector('[data-overall]')?.textContent||'').trim(),
+      passed:String(document.querySelector('[data-passed]')?.textContent||'').trim(),
+      failed:String(document.querySelector('[data-failed]')?.textContent||'').trim(),
+      checked:String(document.querySelector('[data-checked]')?.textContent||'').trim(),
+      dashboardRefresh:String(document.querySelector('[data-dashboard-refresh-status]')?.textContent||'').trim(),
+    })""")
+    metrics["afterRunChecksNow"]=refreshed
+    expected_refresh="Partial" if dashboard.get("enrichmentWarnings") else "Current"
+    actual_refresh=str(refreshed.get("dashboardRefresh") or "")
+    if refreshed.get("passed")!=str(expected_passed) or refreshed.get("failed")!=str(expected_failed) or refreshed.get("checked") in {"","—"}:
+     detail=(detail+"; " if detail else "")+"Run checks now did not preserve the live summary totals"
+    refresh_matches=actual_refresh==expected_refresh or (expected_refresh=="Partial" and actual_refresh.startswith("Partial · "))
+    if not refresh_matches:
+     detail=(detail+"; " if detail else "")+"Dashboard Refresh expected "+expected_refresh+" after Run checks now, got "+actual_refresh
+
+    bottom_metrics={"ok":True}
+    live_production=urlparse(BASE).netloc.lower() in {"koasevents.com","www.koasevents.com"}
+    if width<768 and live_production:
+     bottom_metrics=page.evaluate("""async () => {
+      const main=document.querySelector('main[data-system-health-page]');
+      const bottom=document.querySelector('[data-workspace-bottom-nav]');
+      if(!main||!bottom)return {ok:false,reason:'Missing System Health main or bottom navigation.'};
+      let sentinel=document.querySelector('[data-health-mobile-qa-sentinel]');
+      if(!sentinel){
+        sentinel=document.createElement('div');
+        sentinel.dataset.healthMobileQaSentinel='';
+        sentinel.style.cssText='height:2px;width:2px;pointer-events:none;';
+        main.appendChild(sentinel);
+      }
+      sentinel.scrollIntoView({block:'end'});
+      await new Promise((resolve)=>setTimeout(resolve,250));
+      const sentinelRect=sentinel.getBoundingClientRect();
+      const bottomRect=bottom.getBoundingClientRect();
+      const history=document.querySelector('[data-health-history]');
+      const lastHistory=history?.lastElementChild;
+      if(lastHistory instanceof HTMLElement){
+        lastHistory.scrollIntoView({block:'end'});
+        await new Promise((resolve)=>setTimeout(resolve,250));
+      }
+      const targetRect=(lastHistory instanceof HTMLElement?lastHistory:sentinel).getBoundingClientRect();
+      const freshBottom=bottom.getBoundingClientRect();
+      return {
+        ok:true,
+        sentinelBottom:sentinelRect.bottom,
+        bottomTop:bottomRect.top,
+        targetBottom:targetRect.bottom,
+        targetTop:targetRect.top,
+        freshBottomTop:freshBottom.top,
+        targetHeight:targetRect.height,
+        viewportHeight:innerHeight,
+      };
+     }""")
+     if not bottom_metrics.get("ok"):
+      detail=(detail+"; " if detail else "")+str(bottom_metrics.get("reason") or "Bottom-navigation geometry check failed")
+     else:
+      sentinel_clear=float(bottom_metrics.get("sentinelBottom") or 99999)<=float(bottom_metrics.get("bottomTop") or -1)-2
+      target_clear=float(bottom_metrics.get("targetBottom") or 99999)<=float(bottom_metrics.get("freshBottomTop") or -1)-2
+      if not sentinel_clear:
+       detail=(detail+"; " if detail else "")+"Scroll targets can land behind the fixed bottom navigation"
+      if not target_clear:
+       detail=(detail+"; " if detail else "")+"Last Health history content is covered by the fixed bottom navigation"
+
+    bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
+    page.screenshot(path=str(bottom_shot),full_page=False,animations="disabled",caret="hide")
+    full_shot=root/f"system-health-{viewport_name}-full.png"
+    document_height=int(page.evaluate("() => Math.max(document.documentElement.scrollHeight,document.body?.scrollHeight||0)"))
+    metrics["documentScrollHeight"]=document_height
+    # WebKit cannot capture a single image larger than 32767 px on either
+    # dimension. Very data-heavy System Health snapshots can exceed that limit
+    # even when layout geometry is valid. Keep geometry as the release gate and
+    # fall back to a viewport artifact instead of treating the browser's image
+    # encoder limit as a responsive-layout failure.
+    max_full_page_css_height=max(1,int(15000/max(1,dpr)))
+    if document_height<=max_full_page_css_height:
+     metrics["fullScreenshotMode"]="full"
+     page.screenshot(path=str(full_shot),full_page=True,animations="disabled",caret="hide")
+    else:
+     metrics["fullScreenshotMode"]="viewport-fallback"
+     page.evaluate("window.scrollTo(0,0)")
+     page.wait_for_timeout(100)
+     page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
+
+    if page_errors:
+     detail=(detail+"; " if detail else "")+"JavaScript errors: "+" | ".join(page_errors[:5])
+   except Exception as exc:
+    detail=(detail+"; " if detail else "")+str(exc)
+    top_shot=root/f"system-health-{viewport_name}-top.png"
+    bottom_shot=root/f"system-health-{viewport_name}-bottom.png"
+    full_shot=root/f"system-health-{viewport_name}-full.png"
+    try:
+     page.evaluate("window.scrollTo(0,0)")
+     page.screenshot(path=str(full_shot),full_page=False,animations="disabled",caret="hide")
+    except Exception:pass
+
+   result={
+    "viewport":viewport_name,"width":width,"height":height,
+    "expected":{"passed":int(current.get("passed") or 0),"failed":int(current.get("failed") or 0),"checkedAt":current.get("checkedAt"),"overall":current.get("overall")},
+    "metrics":metrics,"failure":detail,
+    "pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"requestFailed":request_failed[:10],
+    "screenshots":{"top":str(top_shot),"bottom":str(bottom_shot),"full":str(full_shot)},
+   }
+   results.append(result)
+   if detail:failures.append({"viewport":viewport_name,"detail":detail,"metrics":metrics})
+   page.close();ctx.close()
+  browser.close()
+
+ report={
+  "mode":"health-mobile","baseUrl":BASE,"browser":browser_name,
+  "checkedAt":current.get("checkedAt"),"overall":current.get("overall"),
+  "passed":current.get("passed"),"failed":current.get("failed"),
+  "enrichmentWarnings":dashboard.get("enrichmentWarnings",[]) if isinstance(dashboard,dict) else [],
+  "results":results,"failures":failures,
+ }
+ (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+ print(json.dumps({
+  "baseUrl":BASE,"browser":browser_name,"checked":len(results),
+  "overall":current.get("overall"),"passed":current.get("passed"),"failed":current.get("failed"),"checkedAt":current.get("checkedAt"),
+  "dashboardRefreshWarnings":report["enrichmentWarnings"],"failures":failures,"report":str(root/"report.json")
+ },indent=2))
+ return 1 if failures else 0
+
+
+
+def admin_mobile_nav_mode(browser_name):
+ try:from playwright.sync_api import sync_playwright
+ except ImportError:
+  print("Install Playwright: pip install playwright && python -m playwright install chromium webkit",file=sys.stderr);return 2
+
+ root=OUT/("admin-mobile-"+browser_name);root.mkdir(parents=True,exist_ok=True)
+ all_capabilities=[
+  "admin.dashboard.view","crm.view","sales.view","email.view","sales.profit_settings",
+  "events.view","calendar.view","vendors.view","insurance.view","quickbooks.view",
+  "security.view","health.view","health.manage","users.manage","gallery.view",
+  "blog.view","blog.manage","seo.view","seo.manage","organization.view","organization.manage",
+  "payroll.view","platform.view",
+ ]
+ session_fixture={
+  "email":"qa-mobile-nav@koasevents.test","displayName":"Mobile Nav QA","jobTitle":"Release QA",
+  "pronouns":"","roleDescription":"","appearancePreference":"light","photoUrl":"",
+  "signature":{"showTitle":True,"showTeamTitle":True,"showPronouns":False,"showRoleDescription":False},
+  "role":"admin","roles":["admin"],"isAdmin":True,
+  "permissions":all_capabilities,"capabilities":all_capabilities,
+  "accessBlocked":False,"blockReason":"",
+  "security":{"forcePasswordChange":False,"passwordChangedAt":"","passwordExpiresAt":"","passwordExpired":False,"passwordExpiryDays":180,"sessionVersion":0,"tokenSessionVersion":0,"sessionRevoked":False},
+  "tenant":{"id":"koa","slug":"koa","displayName":"Koa's Events","locale":"en-US","currency":"USD","timezone":"Pacific/Honolulu"},
+  "organization":None,"membership":None,
+  "app_metadata":{"roles":["admin"],"permissions":all_capabilities,"tenantId":"koa","membershipId":"qa"},
+  "appMetadata":{"roles":["admin"],"permissions":all_capabilities,"tenantId":"koa","membershipId":"qa"},
+ }
+ expected_default=[
+  {"id":"home","label":"Home","href":"/admin/"},
+  {"id":"crm","label":"CRM","href":"/admin/crm/"},
+  {"id":"calendar","label":"Calendar","href":"/admin/calendar/"},
+  {"id":"health","label":"Health","href":"/admin/health/"},
+ ]
+ custom_nav=["events","quickbooks","gallery","staff"]
+ custom_labels=["Events","Books","Gallery","Staff"]
+ viewports=[("iphone-390",390,844,3),("iphone-430",430,932,3)]
+ results=[];failures=[]
+
+ def normalize(path):
+  value=str(path or "/").split("?")[0].split("#")[0]
+  return value if value.endswith("/") else value+"/"
+
+ def expected_active(path,items):
+  current=normalize(path)
+  for item in items:
+   if normalize(item["href"])==current:return item["label"]
+  return "More"
+
+ with sync_playwright() as p:
+  browser=getattr(p,browser_name).launch()
+  for viewport_name,width,height,dpr in viewports:
+   ctx=browser.new_context(
+    viewport={"width":width,"height":height},device_scale_factor=dpr,
+    is_mobile=True,has_touch=True,reduced_motion="reduce",color_scheme="light",
+   )
+   for name,path in ADMIN_ROUTES:
+    page=ctx.new_page();page_errors=[];console_errors=[]
+    page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+    page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+    page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+    page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+    page.route("**/api/account/profile**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"mobileNav":[]})))
+    detail="";metrics={}
+    try:
+     response=page.goto(BASE+path,wait_until="domcontentloaded",timeout=45000)
+     if response and response.status>=400:detail="Document returned HTTP "+str(response.status)
+     page.wait_for_function(
+      "() => document.querySelectorAll('[data-workspace-bottom-slot][data-mobile-slot-id]').length===4",
+      timeout=8000,
+     )
+     metrics=page.evaluate("""() => {
+       const visible=(el)=>{
+        if(!el)return false;
+        const s=getComputedStyle(el),r=el.getBoundingClientRect();
+        return s.display!=='none'&&s.visibility!=='hidden'&&+s.opacity!==0&&r.width>0&&r.height>0;
+       };
+       const bottom=document.querySelector('[data-workspace-bottom-nav]');
+       const slots=[...document.querySelectorAll('[data-workspace-bottom-slot]')];
+       const more=document.querySelector('[data-workspace-more-toggle]');
+       return {
+        bottomVisible:visible(bottom),
+        labels:slots.map((slot)=>String(slot.querySelector('[data-mobile-slot-label]')?.textContent||'').trim()),
+        ids:slots.map((slot)=>String(slot.dataset.mobileSlotId||'')),
+        hrefs:slots.map((slot)=>new URL(slot.href,location.href).pathname),
+        iconPaths:slots.map((slot)=>String(slot.querySelector('[data-mobile-slot-icon] path')?.getAttribute('d')||'')),
+        active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>{
+          const label=node.querySelector('[data-mobile-slot-label]')||node.querySelector(':scope > span:last-child');
+          return String(label?.textContent||'').trim();
+        }),
+        moreVisible:visible(more),
+        moreExpanded:String(more?.getAttribute('aria-expanded')||''),
+       };
+     }""")
+     expected_labels=[item["label"] for item in expected_default]
+     expected_ids=[item["id"] for item in expected_default]
+     expected_hrefs=[item["href"] for item in expected_default]
+     active_expected=expected_active(path,expected_default)
+     checks=[
+      (metrics.get("bottomVisible") is True,"Bottom navigation is not visible"),
+      (metrics.get("labels")==expected_labels,"Default labels were not Home, CRM, Calendar, Health: "+repr(metrics.get("labels"))),
+      (metrics.get("ids")==expected_ids,"Default slot ids were not home, crm, calendar, health: "+repr(metrics.get("ids"))),
+      (metrics.get("hrefs")==expected_hrefs,"Default hrefs did not match expected modules: "+repr(metrics.get("hrefs"))),
+      (len(set(metrics.get("iconPaths") or []))==4 and all(metrics.get("iconPaths") or []),"Default module icons were not four distinct hydrated icons"),
+      (metrics.get("moreVisible") is True,"More button is not visible"),
+      (metrics.get("active")==[active_expected],"Active bottom-navigation control expected "+active_expected+", got "+repr(metrics.get("active"))),
+     ]
+     failed=[message for ok,message in checks if not ok]
+     if failed:detail=("; ".join(failed) if not detail else detail+"; "+"; ".join(failed))
+     if not detail:
+      page.locator("[data-workspace-more-toggle]").click()
+      page.wait_for_function("() => document.querySelector('[data-workspace-links]')?.dataset.open==='true'",timeout=3000)
+      opened=page.get_attribute("[data-workspace-more-toggle]","aria-expanded")
+      metrics["moreAfterClick"]=opened
+      if opened!="true":detail="More button did not open the workspace menu"
+      page.locator("[data-workspace-more-toggle]").click()
+    except Exception as exc:
+     detail=(detail+"; " if detail else "")+str(exc)
+
+    shot=root/f"{name}-{viewport_name}.png"
+    try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
+    except Exception:pass
+    result={"name":name,"path":path,"viewport":viewport_name,"metrics":metrics,"failure":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"screenshot":str(shot)}
+    results.append(result)
+    if detail:failures.append({"route":path,"viewport":viewport_name,"detail":detail,"metrics":metrics})
+    page.close()
+
+   # Prove that a saved per-user customization still overrides the default.
+   page=ctx.new_page();page_errors=[];console_errors=[]
+   page.on("pageerror",lambda e,t=page_errors:t.append(str(e)))
+   page.on("console",lambda m,t=console_errors:t.append(m.text) if m.type=="error" else None)
+   page.route("**/api/**",lambda route:route.fulfill(status=200,content_type="application/json",body="{}"))
+   page.route("**/api/admin/session**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps(session_fixture)))
+   page.route("**/api/account/profile**",lambda route:route.fulfill(status=200,content_type="application/json",body=json.dumps({"mobileNav":custom_nav})))
+   detail="";metrics={}
+   try:
+    page.goto(BASE+"/admin/events/",wait_until="domcontentloaded",timeout=45000)
+    page.wait_for_function(
+     "() => document.querySelectorAll('[data-workspace-bottom-slot][data-mobile-slot-id]').length===4",
+     timeout=8000,
+    )
+    metrics=page.evaluate("""() => ({
+      labels:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.querySelector('[data-mobile-slot-label]')?.textContent||'').trim()),
+      ids:[...document.querySelectorAll('[data-workspace-bottom-slot]')].map((slot)=>String(slot.dataset.mobileSlotId||'')),
+      active:[...document.querySelectorAll('[data-workspace-bottom-nav] [aria-current="page"]')].map((node)=>{
+        const label=node.querySelector('[data-mobile-slot-label]')||node.querySelector(':scope > span:last-child');
+        return String(label?.textContent||'').trim();
+      }),
+    })""")
+    if metrics.get("labels")!=custom_labels or metrics.get("ids")!=custom_nav or metrics.get("active")!=["Events"]:
+     detail="Saved user customization did not override defaults correctly: "+repr(metrics)
+   except Exception as exc:
+    detail=str(exc)
+   shot=root/f"customized-events-{viewport_name}.png"
+   try:page.screenshot(path=str(shot),full_page=False,animations="disabled",caret="hide")
+   except Exception:pass
+   result={"name":"customized-events","path":"/admin/events/","viewport":viewport_name,"metrics":metrics,"failure":detail,"pageErrors":page_errors[:10],"consoleErrors":console_errors[:10],"screenshot":str(shot)}
+   results.append(result)
+   if detail:failures.append({"route":"/admin/events/","viewport":viewport_name,"detail":detail,"metrics":metrics})
+   page.close();ctx.close()
+  browser.close()
+
+ report={"mode":"admin-mobile","baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"results":results}
+ (root/"report.json").write_text(json.dumps(report,indent=2),encoding="utf-8")
+ print(json.dumps({"baseUrl":BASE,"browser":browser_name,"checked":len(results),"failures":failures,"report":str(root/"report.json")},indent=2))
+ return 1 if failures else 0
+
+
 def browser_mode(browser_name):
  try:from playwright.sync_api import sync_playwright
  except ImportError:
@@ -1302,15 +1964,17 @@ def browser_mode(browser_name):
 
 def main():
  p=argparse.ArgumentParser(description="Koa's Events production visual QA")
- p.add_argument("--mode",choices=("source","wait","smoke","browser","admin"),required=True)
+ p.add_argument("--mode",choices=("source","wait","smoke","browser","admin","admin-mobile","health-mobile"),required=True)
  p.add_argument("--browser",choices=("chromium","webkit"),default="chromium")
- p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);a=p.parse_args()
+ p.add_argument("--base-url");p.add_argument("--wait-seconds",type=int,default=600);p.add_argument("--health-payload",default="visual-results/system-health-dashboard.json");a=p.parse_args()
  global BASE
  if a.base_url:BASE=a.base_url.rstrip("/")
  if a.mode=="source":return source_mode()
  if a.mode=="wait":return wait_mode(a.wait_seconds)
  if a.mode=="smoke":return smoke_mode()
  if a.mode=="admin":return admin_mode(a.browser)
+ if a.mode=="admin-mobile":return admin_mobile_nav_mode(a.browser)
+ if a.mode=="health-mobile":return health_mobile_mode(a.browser,a.health_payload)
  return browser_mode(a.browser)
 
 if __name__=="__main__":sys.exit(main())

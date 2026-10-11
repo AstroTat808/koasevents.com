@@ -1,5 +1,6 @@
 import type { Config, Context } from '@netlify/functions';
 import { hasCapability, requireCapability } from './_shared/admin';
+import { resolveTenant } from './_shared/tenant';
 import {
   applyHealthAlertPolicy,
   beginCreditSaverMeasurement,
@@ -19,6 +20,7 @@ import {
   readLatestHourlyHealth,
   readProductionReleases,
   readAllProductionReleaseAudits,
+  readProductionVisualThumbnail,
   rollbackReadySummary,
   runSafeCriticalIntegrationRollbackDrill,
   readUptimeHistory,
@@ -420,10 +422,225 @@ function accountingHealthSummary(latest:any,history:any[],persistentIncidents:an
   };
 }
 
+
+function accountingRepairCategory(row:any){
+  const status=String(row?.status||'unverified');
+  const reason=String(row?.failureReason||row?.detail||'').toLowerCase();
+  if(status==='unverified')return 'unverified';
+  if(!String(row?.estimateId||'')||reason.includes('no linked quickbooks estimate')||reason.includes('estimate is missing'))return 'missing-estimate';
+  if(Number(row?.taxableLines??row?.taxableLineCount??0)>0||reason.includes('taxable sales lines'))return 'taxable-lines';
+  if(reason.includes('sales lines do not equal'))return 'sales-line-mismatch';
+  return status==='failed'?'other-failure':'passed';
+}
+
+function accountingReleaseAudits(releases:any[]){
+  return (Array.isArray(releases)?releases:[])
+    .map((release:any)=>{
+      const verification=release?.accountingVerification||null;
+      const invariant=verification?.invariant||null;
+      if(!verification||!invariant)return null;
+      const rows=Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[];
+      return {
+        deployId:String(release?.deployId||''),
+        commit:String(release?.commit||''),
+        checkedAt:String(verification?.checkedAt||release?.recordedAt||''),
+        status:String(verification?.status||'unverified'),
+        accountingVerified:Boolean(verification?.accountingVerified),
+        clientCount:Number(invariant?.dynamicClientCount||rows.length||0),
+        passedCount:Number(invariant?.dynamicClientPassedCount||0),
+        failedCount:Number(invariant?.dynamicClientFailedCount||0),
+        unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+        rows:rows.map((row:any)=>({
+          recordId:String(row?.recordId||''),
+          client:String(row?.client||row?.clientName||row?.recordId||''),
+          crmTotal:Number(row?.crmTotal??row?.proposalTotal??0),
+          qboEstimate:row?.qboEstimate==null?(row?.estimateTotal==null?null:Number(row.estimateTotal)):Number(row.qboEstimate),
+          lineTotal:row?.lineTotal==null?null:Number(row.lineTotal),
+          transactionAdjustment:row?.transactionAdjustment==null?null:Number(row.transactionAdjustment),
+          adjustmentTotal:row?.adjustmentTotal==null?null:Number(row.adjustmentTotal),
+          discountAmtField:row?.discountAmtField==null?null:Number(row.discountAmtField),
+          discountLineAmount:row?.discountLineAmount==null?null:Number(row.discountLineAmount),
+          totalTax:row?.totalTax==null?null:Number(row.totalTax),
+          applyTaxAfterDiscount:row?.applyTaxAfterDiscount==null?null:Boolean(row.applyTaxAfterDiscount),
+          nonSalesAdjustments:Array.isArray(row?.nonSalesAdjustments)?row.nonSalesAdjustments:[],
+          estimateId:String(row?.estimateId||''),
+          estimateDocNumber:String(row?.estimateDocNumber||''),
+          taxableLines:row?.taxableLines==null?(row?.taxableLineCount==null?null:Number(row.taxableLineCount)):Number(row.taxableLines),
+          status:String(row?.status||'unverified'),
+          failureReason:String(
+            row?.failureReason
+            || (Array.isArray(row?.failures)&&row.failures.length?row.failures.join('; '):'')
+            || row?.detail
+            || ''
+          ),
+          repairCategory:accountingRepairCategory(row),
+        })),
+      };
+    })
+    .filter(Boolean)
+    .slice(0,20);
+}
+
+function darkModeVisualQualitySummary(releases:any[],current:any,runtimeDeployId='',runtimeCommit=''){
+  const rows=Array.isArray(releases)?releases:[];
+  const deployId=String(runtimeDeployId||current?.deployId||'').trim();
+  const commit=String(runtimeCommit||current?.commit||'').trim();
+  const release=rows.find((row:any)=>row?.visualQuality&&deployId&&String(row?.deployId||'')===deployId)
+    || rows.find((row:any)=>row?.visualQuality&&commit&&String(row?.commit||'')===commit)
+    || rows.find((row:any)=>row?.visualQuality);
+  const visual:any=release?.visualQuality||null;
+  if(!visual){
+    return {
+      status:'unavailable',
+      checkedAt:'',
+      source:'production-visual-qa',
+      runId:'',
+      commit:'',
+      deployId:'',
+      productionCommit:commit,
+      productionDeployId:deployId,
+      commitMatchesProduction:false,
+      deployMatchesProduction:false,
+      mismatch:false,
+      chromium:{browser:'chromium',routes:0,cases:0,failureCount:0,failedRouteCount:0,reportMissing:true,routeResults:[]},
+      webkit:{browser:'webkit',routes:0,cases:0,failureCount:0,failedRouteCount:0,reportMissing:true,routeResults:[]},
+      screenshots:[],
+      detail:'No production Dark Mode visual-quality result has been recorded yet.',
+    };
+  }
+  const chromium=visual?.chromium||{};
+  const webkit=visual?.webkit||{};
+  const failures=Number(chromium?.failureCount||0)+Number(webkit?.failureCount||0);
+  const failedRoutes=Number(chromium?.failedRouteCount||0)+Number(webkit?.failedRouteCount||0);
+  const qaCommit=String(visual?.commit||release?.commit||'').trim();
+  const qaDeployId=String(visual?.deployId||release?.deployId||'').trim();
+  const commitMatchesProduction=Boolean(commit&&qaCommit&&commit===qaCommit);
+  const deployMatchesProduction=Boolean(deployId&&qaDeployId&&deployId===qaDeployId);
+  const mismatch=Boolean(
+    (commit&&qaCommit&&!commitMatchesProduction)
+    || (deployId&&qaDeployId&&!deployMatchesProduction)
+  );
+  const failed=String(visual?.status||'')==='failed'
+    || Boolean(chromium?.reportMissing||webkit?.reportMissing)
+    || failures>0
+    || failedRoutes>0;
+  const missingReasons:Record<string,string>={
+    'exact-deploy-unavailable':'exact production SHA was not deployed',
+    'browser-audit-skipped':'browser audit was skipped',
+    'browser-audit-failed-before-report':'browser audit failed before report creation',
+    'browser-report-missing':'browser report was not written',
+    'invalid-browser-report':'browser report is invalid or incomplete',
+  };
+  const missingDiagnostics=([
+    {name:'Chromium',result:chromium},
+    {name:'WebKit',result:webkit},
+  ]).filter(({result})=>Boolean(result?.reportMissing))
+    .map(({name,result})=>name+': '+(missingReasons[String(result?.missingReason||'')]||'report unavailable'));
+  const screenshots=(Array.isArray(visual?.screenshots)?visual.screenshots:[]).map((shot:any)=>({
+    ...shot,
+    url:'/api/admin/health?action=dark-mode-qa-screenshot&deployId='+encodeURIComponent(qaDeployId)+'&key='+encodeURIComponent(String(shot?.key||'')),
+  }));
+  return {
+    ...visual,
+    status:failed||mismatch?'failed':'passed',
+    commit:qaCommit,
+    deployId:qaDeployId,
+    productionCommit:commit,
+    productionDeployId:deployId,
+    commitMatchesProduction,
+    deployMatchesProduction,
+    mismatch,
+    screenshots,
+    detail:failed
+      ? (missingDiagnostics.length?'Missing browser evidence — '+missingDiagnostics.join('; ')+'. ':'')
+        +(failedRoutes||failures)+' Dark Mode QA failure'+((failedRoutes||failures)===1?'':'s')+' recorded in the latest production theme audit.'
+      : mismatch
+        ? 'Dark Mode QA evidence does not match the current production commit or deploy.'
+        : 'Latest production Light / Dark / System audit passed in Chromium and WebKit and matches the current production release.',
+  };
+}
+
+export async function runHealthDashboardRefresh(context:Context){
+  const runWarnings:Array<{section:string;error:string}>=[];
+  const [previous,previousHourly]=await Promise.all([
+    safeHealthSection(runWarnings,'Previous health snapshot',()=>readLatestHealth(context),null as any),
+    safeHealthSection(runWarnings,'Previous hourly snapshot',()=>readLatestHourlyHealth(context),null as any),
+  ]);
+
+  const current=await runSystemHealth(context,'manual');
+
+  await safeHealthSection(runWarnings,'Alert policy application',()=>applyHealthAlertPolicy(context,current,previousHourly),null as any);
+  await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
+  await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
+
+  const [uptimeHistory,healthHistory,accountingInvariantIncidents,policy,deployments,releases]=await Promise.all([
+    safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
+    safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
+    safeHealthSection(runWarnings,'Accounting invariant timeline',()=>readAccountingInvariantIncidents(context,500),[] as any),
+    safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
+    safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
+    safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
+  ]);
+  const enrichmentWarnings=runWarnings;
+  const [office365,emailHealth]=await Promise.all([
+    safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
+    safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
+  ]);
+  const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
+  const credentialHealth=await safeHealthSection(
+    enrichmentWarnings,
+    'Credential Health',
+    ()=>credentialHealthSummary(context,{emailHealth}),
+    cachedCredentialHealth||{},
+  );
+  const uptime=calculateUptime(uptimeHistory);
+  const incidents=calculateIncidents(uptimeHistory);
+  const hydratedReleases=await safeHealthSection(
+    enrichmentWarnings,
+    'Release metadata',
+    ()=>hydrateProductionReleaseMetadata(context,releases,12),
+    releases,
+  );
+  deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,current,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
+  const weeklyExecutiveSummary=await safeHealthSection(
+    enrichmentWarnings,
+    'Weekly executive summary',
+    ()=>weeklySystemHealthExecutiveSummary(context),
+    {} as any,
+  );
+  return {
+    ok:true,
+    current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,visualQuality,
+    accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
+    accountingReleaseAudits:accountingReleaseAudits(hydratedReleases),
+    enrichmentWarnings,
+  };
+}
+
 export default async (req:Request,context:Context) => {
   const auth=await requireCapability('health.view', req);
   if(auth.response) return auth.response;
   const admin=hasCapability(auth.user,'health.manage');
+  const requestUrl=new URL(req.url);
+
+  if(req.method==='GET'&&requestUrl.searchParams.get('action')==='dark-mode-qa-screenshot'){
+    const deployId=String(requestUrl.searchParams.get('deployId')||'').trim();
+    const key=String(requestUrl.searchParams.get('key')||'').trim();
+    if(!deployId||!key)return Response.json({error:'Dark Mode QA screenshot id is required.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+    const shot=await readProductionVisualThumbnail(context,deployId,key);
+    if(!shot)return Response.json({error:'Dark Mode QA screenshot was not found.'},{status:404,headers:{'Cache-Control':'private, no-store'}});
+    const bytes=Uint8Array.from(atob(String(shot.dataBase64||'')),(char)=>char.charCodeAt(0));
+    return new Response(bytes,{
+      status:200,
+      headers:{
+        'Content-Type':'image/jpeg',
+        'Content-Disposition':'inline; filename="koa-dark-mode-qa-'+key+'.jpg"',
+        'Cache-Control':'private, max-age=300',
+        'X-Content-Type-Options':'nosniff',
+      },
+    });
+  }
 
   if(req.method==='POST'){
     if(!admin) return Response.json({error:'System Health management permission required.'},{status:403});
@@ -720,62 +937,8 @@ export default async (req:Request,context:Context) => {
       return Response.json({ok:true,policy},{headers:{'Cache-Control':'private, no-store'}});
     }
 
-    const runWarnings:Array<{section:string;error:string}>=[];
-    const [previous,previousHourly]=await Promise.all([
-      safeHealthSection(runWarnings,'Previous health snapshot',()=>readLatestHealth(context),null as any),
-      safeHealthSection(runWarnings,'Previous hourly snapshot',()=>readLatestHourlyHealth(context),null as any),
-    ]);
-
-    // The manual check result is the authoritative outcome for this request.
-    // Everything after this point is bookkeeping or dashboard enrichment and must
-    // never turn a successful 41/41 health run into an HTTP failure.
-    const current=await runSystemHealth(context,'manual');
-
-    await safeHealthSection(runWarnings,'Alert policy application',()=>applyHealthAlertPolicy(context,current,previousHourly),null as any);
-    await safeHealthSection(runWarnings,'Health snapshot persistence',()=>persistHealth(context,current),null as any);
-    await safeHealthSection(runWarnings,'Transition alerts',()=>sendHealthTransitionAlerts(previous,current),null as any);
-
-    const [uptimeHistory,healthHistory,accountingInvariantIncidents,policy,deployments,releases]=await Promise.all([
-      safeHealthSection(runWarnings,'Uptime history',()=>readUptimeHistory(context,2300),[] as any),
-      safeHealthSection(runWarnings,'Health history',()=>readHealthHistory(context,120),[] as any),
-      safeHealthSection(runWarnings,'Accounting invariant timeline',()=>readAccountingInvariantIncidents(context,500),[] as any),
-      safeHealthSection(runWarnings,'Health alert policy',()=>readHealthAlertPolicy(context),{} as any),
-      safeHealthSection(runWarnings,'Deployment history',()=>cachedDeploymentHistory(context),{history:[],current:{},connectionHealth:{}} as any),
-      safeHealthSection(runWarnings,'Production releases',()=>readProductionReleases(context,50),[] as any),
-    ]);
-    const enrichmentWarnings=runWarnings;
-    const [office365,emailHealth]=await Promise.all([
-      safeHealthSection(enrichmentWarnings,'Office 365',()=>office365HealthSummary(context,deployments),{} as any),
-      safeHealthSection(enrichmentWarnings,'Email Health',()=>emailHealthSummary(context),{} as any),
-    ]);
-    const cachedCredentialHealth=await safeHealthSection(enrichmentWarnings,'Credential Health cache',()=>readCredentialHealthSummary(context),null as any);
-    const credentialHealth=await safeHealthSection(
-      enrichmentWarnings,
-      'Credential Health',
-      ()=>credentialHealthSummary(context,{emailHealth}),
-      cachedCredentialHealth||{},
-    );
-    const uptime=calculateUptime(uptimeHistory);
-    const incidents=calculateIncidents(uptimeHistory);
-    const hydratedReleases=await safeHealthSection(
-      enrichmentWarnings,
-      'Release metadata',
-      ()=>hydrateProductionReleaseMetadata(context,releases,12),
-      releases,
-    );
-    deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
-    const weeklyExecutiveSummary=await safeHealthSection(
-      enrichmentWarnings,
-      'Weekly executive summary',
-      ()=>weeklySystemHealthExecutiveSummary(context),
-      {} as any,
-    );
-    return Response.json({
-      ok:true,
-      current,uptime,incidents,policy,components:healthComponents(),coverage:healthCoverageSummary(current),criticalIntegrations:criticalIntegrationsSummary(current),rollbackReady:await rollbackReadySummary(context,String(current?.deployId||'')),runtime:{deployContext:String(context.deploy?.context||''),deployId:String(context.deploy?.id||'')},deployments,office365,emailHealth,credentialHealth,weeklyExecutiveSummary,
-      accountingHealth:accountingHealthSummary(current,healthHistory,accountingInvariantIncidents),
-      enrichmentWarnings,
-    },{headers:{'Cache-Control':'private, no-store'}});
+    const dashboard=await runHealthDashboardRefresh(context);
+    return Response.json(dashboard,{headers:{'Cache-Control':'private, no-store'}});
   }
 
   if(req.method!=='GET') return new Response('Method not allowed',{status:405});
@@ -869,6 +1032,7 @@ export default async (req:Request,context:Context) => {
     releases,
   );
   deployments.releaseTimeline=releaseTimelineWithIncidents(hydratedReleases,deployments.history||[],incidents);
+  const visualQuality=darkModeVisualQualitySummary(hydratedReleases,latest,String(context.deploy?.id||''),String(Netlify.env.get('COMMIT_REF')||''));
   return Response.json({
     current:latest,
     history,
@@ -885,6 +1049,7 @@ export default async (req:Request,context:Context) => {
     emailHealth,
     credentialHealth,
     weeklyExecutiveSummary,
+    visualQuality,
     accountingHealth:accountingHealthSummary(latest,history,accountingInvariantIncidents),
     enrichmentWarnings,
   },{headers:{'Cache-Control':'private, no-store'}});

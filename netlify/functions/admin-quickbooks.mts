@@ -6,7 +6,7 @@ import { tenantStoreFor } from './_shared/tenant-storage';
 import { buildQuickBooksEstimateLines, quickBooksEstimateLineFingerprint } from './_shared/quickbooks-estimate-lines.mjs';
 import { buildQuickBooksMilestoneInvoiceLine } from './_shared/quickbooks-accounting-invariant.mjs';
 import { evaluateInvoiceRepairCandidate, invoicePaymentProtection } from './_shared/quickbooks-accounting-repair-safety.mjs';
-import { quickBooksAccountingScope } from './_shared/quickbooks-accounting-scope.mjs';
+import { currentBookingStatus, quickBooksAccountingScope } from './_shared/quickbooks-accounting-scope.mjs';
 import {
   continueQuickBooksCrmTwoWaySyncJob,
   getCurrentQuickBooksCrmSyncJob,
@@ -15,6 +15,7 @@ import {
   startQuickBooksCrmTwoWaySyncJob,
 } from './_shared/quickbooks-crm-sync';
 import { buildQuickBooksCrmPreviewCsv, buildQuickBooksCrmPreviewPdf } from './_shared/quickbooks-crm-sync-export';
+import { buildAccountingRepairBulkPreviewCsv, buildAccountingRepairBulkPreviewPdf } from './_shared/quickbooks-accounting-repair-export';
 import {
   buildQuickBooksCrmSyncPreview,
   getLastQuickBooksCrmSyncPreview,
@@ -775,7 +776,12 @@ function accountingRepairState(record: any, itemId: string) {
     dueDate: isoDate(entry.dueDate),
     label: clean(entry.label, 180),
   }));
+  const lifecycle=currentBookingStatus(record);
+  const scope=quickBooksAccountingScope(record);
   return {
+    lifecycle,
+    accountingScope:scope.mode,
+    accountingActionable:Boolean(scope.actionable),
     proposalTotal: roundMoney(record?.proposal?.total || 0),
     proposalDiscount: roundMoney(record?.proposal?.discountAmount || 0),
     expectedLines: quickBooksEstimateLineFingerprint(expectedLines),
@@ -794,6 +800,68 @@ function accountingRepairFingerprint(record: any, itemId: string) {
 
 function repairPreviewKey(previewId: string) {
   return 'quickbooks/accounting-repair-previews/' + clean(previewId, 120);
+}
+
+function bulkRepairPreviewAuditKey(bulkPreviewId: string) {
+  return 'quickbooks/accounting-repair-bulk-previews/' + clean(bulkPreviewId, 140);
+}
+
+async function readBulkRepairPreviewAudit(context: Context, bulkPreviewId: string) {
+  if (!clean(bulkPreviewId, 140)) return null;
+  return await integrationStoreFor(context).get(bulkRepairPreviewAuditKey(bulkPreviewId), { type:'json' }) as any;
+}
+
+async function saveBulkRepairPreviewAudit(context: Context, audit: any) {
+  if (!audit?.bulkPreviewId) throw new Error('Bulk repair preview id is missing.');
+  audit.updatedAt = new Date().toISOString();
+  const store = integrationStoreFor(context);
+  await store.setJSON(bulkRepairPreviewAuditKey(audit.bulkPreviewId), audit);
+  const index = ((await store.get('quickbooks/accounting-repair-bulk-previews/index', { type:'json' })) || []) as any[];
+  const summary = {
+    bulkPreviewId: clean(audit.bulkPreviewId,140),
+    generatedAt: clean(audit.generatedAt,80),
+    updatedAt: clean(audit.updatedAt,80),
+    actor: clean(audit.actor,240),
+    requestedCount: Number(audit.requestedCount||0),
+    repairableClientCount: Number(audit.repairableClientCount||0),
+    writeCount: Number(audit.writeCount||0),
+    blockedClientCount: Number(audit.blockedClientCount||0),
+    cleanClientCount: Number(audit.cleanClientCount||0),
+    errorClientCount: Number(audit.errorClientCount||0),
+    decisionCount: Array.isArray(audit.decisions)?audit.decisions.length:0,
+  };
+  await store.setJSON(
+    'quickbooks/accounting-repair-bulk-previews/index',
+    [summary, ...index.filter((row:any)=>clean(row?.bulkPreviewId,140)!==summary.bulkPreviewId)].slice(0,100),
+  );
+  return audit;
+}
+
+async function appendBulkRepairDecision(context: Context, bulkPreviewId: string, decision: any) {
+  const audit = await readBulkRepairPreviewAudit(context, bulkPreviewId);
+  if (!audit?.bulkPreviewId) throw new Error('Bulk repair preview audit was not found.');
+  const row = (Array.isArray(audit.rows)?audit.rows:[]).find((entry:any)=>clean(entry?.recordId,120)===clean(decision?.recordId,120));
+  const change = (Array.isArray(row?.changes)?row.changes:[]).find((entry:any)=>clean(entry?.id,180)===clean(decision?.changeId,180));
+  if (!row || !change) throw new Error('That client/write is not part of this bulk repair preview.');
+  const entry = {
+    decisionId:'ARD-'+idSuffix(),
+    decision:clean(decision?.decision,40),
+    decidedAt:new Date().toISOString(),
+    decidedBy:clean(decision?.decidedBy,240)||'staff',
+    recordId:clean(row.recordId,120),
+    clientName:clean(row.clientName||row.recordId,240),
+    changeId:clean(change.id,180),
+    previewId:clean(decision?.previewId,140),
+    reason:clean(decision?.reason,1200),
+    resolved:decision?.resolved==null?null:Boolean(decision.resolved),
+    remainingIssues:Array.isArray(decision?.remainingIssues)?decision.remainingIssues:[],
+    before:decision?.before??change?.before??null,
+    after:decision?.after??change?.after??null,
+    documents:Array.isArray(decision?.documents)?decision.documents:[],
+  };
+  audit.decisions=[entry,...(Array.isArray(audit.decisions)?audit.decisions:[])].slice(0,500);
+  await saveBulkRepairPreviewAudit(context,audit);
+  return {entry,audit};
 }
 
 async function appendClientAccountingActivity(
@@ -1051,6 +1119,189 @@ async function buildAccountingRepairPreview(
   return { preview, accountingAudit };
 }
 
+function compactAccountingRepairPreview(preview: any) {
+  const changes = (Array.isArray(preview?.changes) ? preview.changes : []).map((change: any) => ({
+    id: clean(change?.id, 180),
+    type: clean(change?.type, 80),
+    documentType: clean(change?.documentType, 40),
+    target: clean(change?.target, 240),
+    invoiceId: clean(change?.invoiceId, 120),
+    docNumber: clean(change?.docNumber || change?.before?.docNumber, 120),
+    before: {
+      total: change?.before?.total == null ? null : roundMoney(change.before.total),
+      balance: change?.before?.balance == null ? null : roundMoney(change.before.balance),
+      paymentState: clean(change?.before?.paymentState, 40),
+      lineCount: Array.isArray(change?.before?.lines) ? change.before.lines.length : 0,
+    },
+    after: {
+      total: change?.after?.total == null ? null : roundMoney(change.after.total),
+      balance: change?.after?.balance == null ? null : roundMoney(change.after.balance),
+      paymentState: clean(change?.after?.paymentState, 40),
+      discountAmount: change?.after?.discountAmount == null ? null : roundMoney(change.after.discountAmount),
+      lineCount: Array.isArray(change?.after?.lines) ? change.after.lines.length : 0,
+      taxHandling: clean(change?.after?.taxHandling, 500),
+    },
+  }));
+  return {
+    previewId: clean(preview?.previewId, 140),
+    recordId: clean(preview?.recordId, 120),
+    clientName: clean(preview?.clientName, 180),
+    createdAt: clean(preview?.createdAt, 80),
+    expiresAt: clean(preview?.expiresAt, 80),
+    canApply: Boolean(preview?.canApply),
+    noChangesNeeded: Boolean(preview?.noChangesNeeded),
+    changes,
+    blockedIssues: Array.isArray(preview?.blockedIssues) ? preview.blockedIssues : [],
+  };
+}
+
+export async function buildBulkAccountingRepairPreview(
+  context: Context,
+  tenant: any,
+  records: any[],
+  itemId: string,
+  actor: string,
+  requestedRecordIds: unknown[],
+) {
+  const requestedIds = [...new Set((Array.isArray(requestedRecordIds) ? requestedRecordIds : [])
+    .map((value) => clean(value, 120))
+    .filter(Boolean))];
+  const currentActionableIds = records
+    .filter((entry:any)=>entry?.kind==='proposal'&&currentBookingStatus(entry)&&quickBooksAccountingScope(entry).actionable)
+    .map((entry:any)=>clean(entry?.id,120))
+    .filter(Boolean);
+  const recordIds = (requestedIds.length ? requestedIds : currentActionableIds).slice(0, 30);
+
+  const integrationStore = integrationStoreFor(context);
+  const previewOne = async (recordId: string) => {
+    const source = records.find((entry: any) => String(entry?.id || '') === recordId && entry?.kind === 'proposal');
+    if (!source) return { recordId, status:'unavailable', error:'Proposal record not found.' };
+
+    const lifecycle = currentBookingStatus(source);
+    if (!lifecycle) {
+      return {
+        recordId,
+        clientName: clean(source?.customer?.name || recordId, 180),
+        status:'ineligible',
+        error:'The record is no longer accepted/booked, so it is outside the current repair population.',
+      };
+    }
+    const scope = quickBooksAccountingScope(source);
+    if (!scope.actionable) {
+      return {
+        recordId,
+        clientName: clean(source?.customer?.name || recordId, 180),
+        status:'ineligible',
+        error:scope.reason,
+      };
+    }
+
+    try {
+      // Isolate preview-only state mutations to this candidate. No CRM record is saved.
+      const record = structuredClone(source);
+      const isolatedRecords = records.map((entry: any) => String(entry?.id || '') === recordId ? record : entry);
+      const result = await buildAccountingRepairPreview(context, tenant, record, isolatedRecords, itemId, actor);
+      const preview = result.preview;
+      const compact = compactAccountingRepairPreview(preview);
+      // Bulk preview must never leave an approval-capable bulk token behind.
+      await integrationStore.delete(repairPreviewKey(preview.previewId));
+      return {
+        ...compact,
+        status: compact.canApply ? 'repairable' : compact.noChangesNeeded ? 'clean' : 'blocked',
+        lifecycle,
+      };
+    } catch (error) {
+      return {
+        recordId,
+        clientName: clean(source?.customer?.name || recordId, 180),
+        status:'error',
+        error:error instanceof Error ? clean(error.message, 1000) : 'Unable to generate this live repair preview.',
+      };
+    }
+  };
+
+  // QuickBooks previewing is I/O-heavy. Bound concurrency so the current 20-client
+  // population completes quickly without launching an unbounded burst at QBO.
+  const rows: any[] = new Array(recordIds.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(4, recordIds.length) }, async () => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= recordIds.length) return;
+      rows[index] = await previewOne(recordIds[index]);
+    }
+  });
+  await Promise.all(workers);
+
+  const repairableRows = rows.filter((row) => row.status === 'repairable');
+  const audit = {
+    bulkPreviewId:'ARB-'+idSuffix()+'-'+Date.now().toString(36).toUpperCase(),
+    generatedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    actor:clean(actor,240)||'staff',
+    requestedCount: recordIds.length,
+    repairableClientCount: repairableRows.length,
+    writeCount: repairableRows.reduce((sum, row) => sum + (Array.isArray(row.changes) ? row.changes.length : 0), 0),
+    blockedClientCount: rows.filter((row) => row.status === 'blocked').length,
+    cleanClientCount: rows.filter((row) => row.status === 'clean').length,
+    errorClientCount: rows.filter((row) => ['error','unavailable','ineligible'].includes(String(row.status))).length,
+    rows,
+    decisions:[],
+    approvalMode:'individual-write-only',
+  };
+  await saveBulkRepairPreviewAudit(context,audit);
+  return audit;
+}
+
+async function buildAccountingRepairWritePreview(
+  context: Context,
+  tenant: any,
+  record: any,
+  records: any[],
+  itemId: string,
+  actor: string,
+  changeId: string,
+  bulkPreviewId = '',
+) {
+  const result = await buildAccountingRepairPreview(context, tenant, record, records, itemId, actor);
+  const parent = result.preview;
+  if (!parent?.canApply) {
+    await integrationStoreFor(context).delete(repairPreviewKey(parent?.previewId || ''));
+    throw new Error('The fresh live repair preview is not eligible to apply. Review its blocked protections before trying again.');
+  }
+  const change = (Array.isArray(parent?.changes) ? parent.changes : [])
+    .find((entry: any) => String(entry?.id || '') === changeId);
+  if (!change) {
+    await integrationStoreFor(context).delete(repairPreviewKey(parent.previewId));
+    throw new Error('That QuickBooks write is no longer present in the fresh live preview. Generate the consolidated preview again.');
+  }
+
+  const previewId = 'ARPW-' + idSuffix() + '-' + Date.now().toString(36).toUpperCase();
+  if (bulkPreviewId) {
+    const audit = await readBulkRepairPreviewAudit(context, bulkPreviewId);
+    const auditRow = (Array.isArray(audit?.rows)?audit.rows:[]).find((entry:any)=>clean(entry?.recordId,120)===clean(record?.id,120));
+    const auditChange = (Array.isArray(auditRow?.changes)?auditRow.changes:[]).find((entry:any)=>clean(entry?.id,180)===clean(change?.id,180));
+    if (!audit?.bulkPreviewId || !auditRow || !auditChange) {
+      await integrationStoreFor(context).delete(repairPreviewKey(parent.previewId));
+      throw new Error('The consolidated preview no longer contains this exact write. Generate Preview all safe repairs again.');
+    }
+  }
+  const writePreview = {
+    ...parent,
+    previewId,
+    parentPreviewId: parent.previewId,
+    bulkPreviewId:clean(bulkPreviewId,140),
+    bulkChangeId:clean(change?.id,180),
+    changes:[change],
+    canApply:true,
+    approvalMode:'single-write',
+  };
+  const integrationStore = integrationStoreFor(context);
+  await integrationStore.setJSON(repairPreviewKey(previewId), writePreview);
+  await integrationStore.delete(repairPreviewKey(parent.previewId));
+  return { preview:writePreview, accountingAudit:result.accountingAudit };
+}
+
 async function applyAccountingRepair(
   context: Context,
   tenant: any,
@@ -1070,6 +1321,13 @@ async function applyAccountingRepair(
   let records = await readQuickBooksSalesRecords(context);
   const record = records.find((entry: any) => entry.id === clean(preview.recordId, 100) && entry.kind === 'proposal');
   if (!record) throw new Error('Proposal record not found.');
+  const lifecycle=currentBookingStatus(record);
+  const scope=quickBooksAccountingScope(record);
+  if(!lifecycle||!scope.actionable){
+    throw new Error(!lifecycle
+      ? 'This record is no longer accepted/booked. The approved repair is invalid and no QuickBooks write was attempted.'
+      : scope.reason+' The approved repair is invalid and no QuickBooks write was attempted.');
+  }
   const settings = await getQuickBooksSettings(context);
   const itemId = clean(settings?.serviceItemId, 80);
 
@@ -1161,6 +1419,22 @@ async function applyAccountingRepair(
   });
   await integrationStore.delete(repairPreviewKey(previewId));
 
+  let bulkPreviewAudit:any=null;
+  if (clean(preview?.bulkPreviewId,140) && clean(preview?.bulkChangeId,180)) {
+    const decision = await appendBulkRepairDecision(context, clean(preview.bulkPreviewId,140), {
+      decision:'approved',
+      decidedBy:actor,
+      recordId:record.id,
+      changeId:clean(preview.bulkChangeId,180),
+      previewId,
+      resolved,
+      remainingIssues,
+      before:preview?.changes?.[0]?.before||null,
+      after:preview?.changes?.[0]?.after||null,
+      documents,
+    });
+    bulkPreviewAudit=decision.audit;
+  }
   return {
     repair: repairEntry,
     activity,
@@ -1168,6 +1442,7 @@ async function applyAccountingRepair(
     accountingAudit: afterAudit,
     resolved,
     remainingIssues,
+    bulkPreviewAudit,
   };
 }
 
@@ -1247,6 +1522,34 @@ export default async (req: Request, context: Context) => {
       }
       if (format === 'pdf') {
         return new Response(buildQuickBooksCrmPreviewPdf(preview), {
+          headers:{
+            'Content-Type':'application/pdf',
+            'Content-Disposition':'attachment; filename="' + baseName + '.pdf"',
+            'Cache-Control':'private, no-store',
+          },
+        });
+      }
+      return Response.json({ error:'Choose CSV or PDF export format.' }, { status:400 });
+    }
+
+    if (view === 'accounting-repair-bulk-export') {
+      const bulkPreviewId = clean(url.searchParams.get('bulkPreviewId'), 140);
+      const format = clean(url.searchParams.get('format'), 12).toLowerCase();
+      const audit = await readBulkRepairPreviewAudit(context, bulkPreviewId);
+      if (!audit?.bulkPreviewId) return Response.json({ error:'Bulk repair preview audit not found.' }, { status:404 });
+      const stamp = clean(audit.generatedAt,40).replace(/[^0-9TZ-]/g,'').replace(/[:.]/g,'').slice(0,24) || 'preview';
+      const baseName = 'quickbooks-accounting-repair-preview-' + stamp;
+      if (format === 'csv') {
+        return new Response(buildAccountingRepairBulkPreviewCsv(audit), {
+          headers:{
+            'Content-Type':'text/csv; charset=utf-8',
+            'Content-Disposition':'attachment; filename="' + baseName + '.csv"',
+            'Cache-Control':'private, no-store',
+          },
+        });
+      }
+      if (format === 'pdf') {
+        return new Response(buildAccountingRepairBulkPreviewPdf(audit), {
           headers:{
             'Content-Type':'application/pdf',
             'Content-Disposition':'attachment; filename="' + baseName + '.pdf"',
@@ -1356,11 +1659,84 @@ export default async (req: Request, context: Context) => {
   const actor = clean((auth.user as any)?.email || (auth.user as any)?.user_metadata?.email || 'staff', 240) || 'staff';
 
 
+  if (action === 'preview-all-safe-accounting-repairs') {
+    const records = await readQuickBooksSalesRecords(context);
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    try {
+      const bulkPreview = await buildBulkAccountingRepairPreview(
+        context,
+        tenant,
+        records,
+        itemId,
+        actor,
+        Array.isArray(payload?.recordIds) ? payload.recordIds : [],
+      );
+      return Response.json({ ok:true, bulkPreview }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview safe accounting repairs.' }, { status:409 });
+    }
+  }
+
+  if (action === 'reject-accounting-repair-write') {
+    try {
+      const result = await appendBulkRepairDecision(context, clean(payload?.bulkPreviewId,140), {
+        decision:'rejected',
+        decidedBy:actor,
+        recordId:clean(payload?.recordId,120),
+        changeId:clean(payload?.changeId,180),
+        reason:clean(payload?.reason,1200)||'Rejected from the consolidated repair preview.',
+      });
+      return Response.json({ ok:true, decision:result.entry, bulkPreviewAudit:result.audit }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to record the repair rejection.' }, { status:409 });
+    }
+  }
+
+  if (action === 'preview-accounting-repair-write') {
+    const recordId = clean(payload?.recordId, 120);
+    const changeId = clean(payload?.changeId, 180);
+    const records = await readQuickBooksSalesRecords(context);
+    const source = records.find((entry: any) => entry.id === recordId && entry.kind === 'proposal');
+    if (!source) return Response.json({ error:'Proposal record not found.' }, { status:404 });
+    if (!currentBookingStatus(source) || !quickBooksAccountingScope(source).actionable) {
+      return Response.json({ error:'This record is no longer eligible for an accounting repair.' }, { status:409 });
+    }
+    const settings = await getQuickBooksSettings(context);
+    const itemId = clean(settings?.serviceItemId, 80);
+    try {
+      const record = structuredClone(source);
+      const isolatedRecords = records.map((entry: any) => entry.id === recordId ? record : entry);
+      const result = await buildAccountingRepairWritePreview(
+        context,
+        tenant,
+        record,
+        isolatedRecords,
+        itemId,
+        actor,
+        changeId,
+        clean(payload?.bulkPreviewId,140),
+      );
+      return Response.json({ ok:true, ...result }, { headers:{ 'Cache-Control':'private, no-store' } });
+    } catch (error) {
+      return Response.json({ error:error instanceof Error ? error.message : 'Unable to preview that individual QuickBooks write.' }, { status:409 });
+    }
+  }
+
   if (action === 'preview-accounting-repair') {
     const recordId = clean(payload?.recordId, 100);
     const records = await readQuickBooksSalesRecords(context);
     const record = records.find((entry: any) => entry.id === recordId && entry.kind === 'proposal');
     if (!record) return Response.json({ error:'Proposal record not found.' }, { status:404 });
+    const lifecycle = currentBookingStatus(record);
+    const scope = quickBooksAccountingScope(record);
+    if (!lifecycle || !scope.actionable) {
+      return Response.json({
+        error:!lifecycle
+          ? 'This record is no longer accepted/booked and is outside the current repair population.'
+          : scope.reason,
+      }, { status:409 });
+    }
     const settings = await getQuickBooksSettings(context);
     const itemId = clean(settings?.serviceItemId, 80);
     try {

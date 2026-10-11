@@ -15,23 +15,52 @@
   --koa-champagne: #c5a36d;
   --koa-line: rgba(20, 58, 45, 0.15);
   --koa-line-warm: rgba(184, 117, 63, 0.22);
+  --koa-canvas: #fbf8f1;
+  --koa-surface: #ffffff;
+  --koa-surface-2: #f6f0e4;
+  --koa-surface-muted: #eee5d4;
+  --koa-text: #0a211a;
+  --koa-text-strong: #143a2d;
+  --koa-text-muted: #52645b;
+  --koa-accent-text: #93502d;
+  --koa-theme-color: #173d30;
   --shadow-soft: 0 24px 70px rgba(10, 33, 26, 0.10);
   --shadow-nav: 0 18px 55px rgba(7, 30, 23, 0.16);
   --font-display: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
   --font-sans: Inter, "Avenir Next", Avenir, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
+html[data-theme="light"] {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --koa-canvas: #08130f;
+  --koa-surface: #0e1d17;
+  --koa-surface-2: #13261e;
+  --koa-surface-muted: #183127;
+  --koa-text: #edf4f0;
+  --koa-text-strong: #f7fbf8;
+  --koa-text-muted: #b1c0b8;
+  --koa-accent-text: #e3aa78;
+  --koa-line: rgba(226, 238, 232, 0.16);
+  --koa-line-warm: rgba(227, 170, 120, 0.28);
+  --shadow-soft: 0 24px 70px rgba(0, 0, 0, 0.36);
+  --shadow-nav: 0 18px 55px rgba(0, 0, 0, 0.46);
+  color-scheme: dark;
+}
+
 html {
   scroll-behavior: smooth;
-  background: var(--koa-ivory);
+  background: var(--koa-canvas);
 }
 
 body {
   margin: 0;
-  color: var(--koa-ink);
+  color: var(--koa-text);
   background:
     radial-gradient(circle at 85% 6%, rgba(210,160,95,.07), transparent 24rem),
-    var(--koa-ivory);
+    var(--koa-canvas);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -498,20 +527,20 @@ main p.text-sm {
 /* Quote builder item-state system */
 .quote-item-included {
   border-color: rgba(20, 58, 45, .24) !important;
-  background: linear-gradient(180deg, rgba(239, 229, 210, .72), rgba(255,255,255,.96)) !important;
+  background: linear-gradient(180deg, rgba(239, 229, 210, .72), color-mix(in srgb, var(--koa-surface) 96%, transparent)) !important;
   box-shadow: inset 4px 0 0 rgba(20,58,45,.78);
 }
 
 .quote-item-suggested {
   border-color: rgba(197, 163, 109, .64) !important;
-  background: linear-gradient(180deg, rgba(244, 224, 181, .28), rgba(255,255,255,.98)) !important;
+  background: linear-gradient(180deg, rgba(244, 224, 181, .28), color-mix(in srgb, var(--koa-surface) 98%, transparent)) !important;
   box-shadow: 0 14px 38px rgba(10,33,26,.08), inset 4px 0 0 rgba(197,163,109,.95);
 }
 
 .quote-item-customer,
 .quote-item-selected {
   border-color: rgba(147, 80, 45, .46) !important;
-  background: linear-gradient(180deg, rgba(184,117,63,.08), rgba(255,255,255,.98)) !important;
+  background: linear-gradient(180deg, rgba(184,117,63,.08), color-mix(in srgb, var(--koa-surface) 98%, transparent)) !important;
   box-shadow: 0 14px 38px rgba(10,33,26,.10), inset 4px 0 0 rgba(147,80,45,.82);
 }
 
@@ -742,7 +771,7 @@ main p.text-sm {
     overflow: hidden;
     border: 1px solid var(--koa-line);
     border-radius: .95rem;
-    background: white;
+    background: var(--koa-surface);
     box-shadow: 0 8px 24px rgba(10,33,26,.055);
   }
 
@@ -821,7 +850,7 @@ main p.text-sm {
     margin-top: .7rem;
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .55rem .8rem;
     color: var(--koa-forest);
     font-size: .56rem;
@@ -910,7 +939,7 @@ main p.text-sm {
     margin-top: .65rem;
     border: 1px solid var(--koa-line);
     border-radius: 9999px;
-    background: white;
+    background: var(--koa-surface);
     padding: .52rem .78rem;
     color: var(--koa-forest);
     font-size: .55rem;
@@ -998,7 +1027,7 @@ main p.text-sm {
   }
 
   body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="green"][data-mobile-collapsed="true"] {
-    background: white;
+    background: var(--koa-surface);
   }
 }
 
@@ -1059,7 +1088,7 @@ main p.text-sm {
   }
 
   body.koa-admin-page main .health-section-mobile-summary:active {
-    background: rgba(255,255,255,.48);
+    background: color-mix(in srgb, var(--koa-surface) 48%, transparent);
   }
 
   body.koa-admin-page main .health-all-good-banner {
@@ -1174,7 +1203,7 @@ main p.text-sm {
 
   body.koa-admin-page main .health-collapse-all-button {
     border: 1px solid color-mix(in srgb, var(--koa-line) 82%, var(--koa-forest));
-    background: white;
+    background: var(--koa-surface);
     color: var(--koa-forest);
   }
 
@@ -1237,7 +1266,7 @@ main p.text-sm {
   body.koa-admin-page main .health-all-good-detail > div {
     min-width: 0;
     border-radius: .65rem;
-    background: rgba(255,255,255,.58);
+    background: color-mix(in srgb, var(--koa-surface) 58%, transparent);
     padding: .55rem .5rem;
   }
 
@@ -1270,7 +1299,7 @@ main p.text-sm {
   display: block;
   border: 1px solid var(--koa-line);
   border-radius: .85rem;
-  background: white;
+  background: var(--koa-surface);
   padding: .75rem;
 }
 
@@ -1346,7 +1375,7 @@ main p.text-sm {
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--koa-line) 82%, transparent);
   border-radius: .55rem;
-  background: white;
+  background: var(--koa-surface);
   color: var(--koa-forest);
   box-shadow: 0 2px 8px rgba(7,30,23,.05);
 }
@@ -1404,7 +1433,7 @@ main p.text-sm {
   gap: .38rem;
   border: 1px solid var(--koa-line);
   border-radius: 9999px;
-  background: white;
+  background: var(--koa-surface);
   padding: .45rem .65rem;
   color: var(--koa-forest);
   font-size: .52rem;
@@ -1590,3 +1619,747 @@ main p.text-sm {
     outline-width: 3px;
   }
 }
+
+
+/* System Health responsive summary layout */
+body.koa-admin-page main[data-system-health-page] {
+  width: 100%;
+  max-width: 100vw;
+  min-width: 0;
+  overflow-x: clip;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] > .container-shell {
+  width: calc(100% - 2rem) !important;
+  max-width: 84rem !important;
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] [data-app] {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] [data-app] > section {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-page-header-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-page-header-actions > div {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+  width: 100% !important;
+  max-width: 100% !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  align-items: stretch;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card {
+  display: flex;
+  min-width: 0;
+  min-height: 11.5rem;
+  flex-direction: column;
+  overflow-wrap: anywhere;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
+  min-height: 11.5rem;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card--checked {
+  justify-content: flex-start;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-summary],
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-section-hints] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-summary] > *,
+body.koa-admin-page main[data-system-health-page] .health-summary-card [data-severity-section-hints] > * {
+  max-width: 100%;
+  white-space: normal;
+}
+
+body.koa-admin-page main[data-system-health-page] .health-summary-support {
+  margin-top: auto;
+  padding-top: .75rem;
+}
+
+@media (max-width: 1099px) {
+  body.koa-admin-page main[data-system-health-page] .health-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 639px) {
+  body.koa-admin-page main[data-system-health-page] [data-app] > section[data-health-summary-grid]:first-child {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+
+  body.koa-admin-page main[data-system-health-page] .health-summary-card,
+  body.koa-admin-page main[data-system-health-page] .health-summary-card--overall {
+    min-height: 0;
+  }
+
+  body.koa-admin-page main[data-system-health-page] .health-summary-support {
+    margin-top: .5rem;
+    padding-top: 0;
+  }
+}
+
+/* System Health mobile viewport clearance */
+@media (max-width: 767px) {
+  html:has(body.koa-admin-page main[data-system-health-page]) {
+    scroll-padding-top: 1rem;
+    scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom));
+  }
+
+  body.koa-admin-page main[data-system-health-page] {
+    padding-top: 1.25rem !important;
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  body.koa-admin-page main[data-system-health-page] [data-app] > section,
+  body.koa-admin-page main[data-system-health-page] [data-health-run-warning],
+  body.koa-admin-page main[data-system-health-page] [data-health-coverage] {
+    scroll-margin-top: 1rem;
+    scroll-margin-bottom: calc(6.4rem + env(safe-area-inset-bottom));
+  }
+
+  body.koa-admin-page main[data-system-health-page] .health-warning-tools {
+    top: .65rem;
+  }
+}
+
+/* Site-wide appearance system.
+   Utility compatibility lives here so existing and future pages inherit Dark Mode
+   without duplicating page-level theme selectors. Intentional media overlays using
+   bg-black, text-white, and border-white remain untouched. */
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background-color: var(--koa-canvas);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] body.koa-admin-page {
+  background: var(--koa-canvas);
+}
+
+html[data-theme="dark"] .bg-white,
+html[data-theme="dark"] [class*="bg-white/"] {
+  background-color: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] [class*="bg-[var(--koa-ivory)]"] {
+  background-color: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] [class*="bg-[var(--koa-sand)]"] {
+  background-color: var(--koa-surface-2) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-ink)]/"],
+html[data-theme="dark"] [class*="text-[var(--koa-moss)]"],
+html[data-theme="dark"] [class*="text-[var(--koa-sage)]"] {
+  color: var(--koa-text-muted) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-ink)]"]:not([class*="text-[var(--koa-ink)]/"]) {
+  color: var(--koa-text) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-forest)]"] {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] [class*="text-[var(--koa-clay)]"] {
+  color: var(--koa-accent-text) !important;
+}
+
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] [contenteditable="true"] {
+  border-color: var(--koa-line);
+  background-color: var(--koa-surface);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: var(--koa-text-muted);
+  opacity: .72;
+}
+
+html[data-theme="dark"] select option {
+  background: var(--koa-surface);
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] table {
+  color: var(--koa-text);
+}
+
+html[data-theme="dark"] ::selection {
+  background: var(--koa-amber);
+  color: #08130f;
+}
+
+/* Dark-mode visual polish from rendered admin QA. */
+html[data-theme="dark"] .bg-red-50,
+html[data-theme="dark"] .bg-red-100 {
+  background-color: color-mix(in srgb, #7f1d1d 30%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-red-200 {
+  border-color: color-mix(in srgb, #fca5a5 32%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-red-700,
+html[data-theme="dark"] .text-red-800,
+html[data-theme="dark"] .text-red-900 {
+  color: #fecaca !important;
+}
+
+html[data-theme="dark"] .bg-amber-50,
+html[data-theme="dark"] .bg-amber-100 {
+  background-color: color-mix(in srgb, #92400e 28%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-amber-200 {
+  border-color: color-mix(in srgb, #fcd34d 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-amber-700,
+html[data-theme="dark"] .text-amber-800,
+html[data-theme="dark"] .text-amber-900 {
+  color: #fde68a !important;
+}
+
+html[data-theme="dark"] .bg-sky-50,
+html[data-theme="dark"] .bg-sky-100 {
+  background-color: color-mix(in srgb, #075985 27%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-sky-200 {
+  border-color: color-mix(in srgb, #7dd3fc 28%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-sky-700,
+html[data-theme="dark"] .text-sky-800,
+html[data-theme="dark"] .text-sky-900 {
+  color: #bae6fd !important;
+}
+
+html[data-theme="dark"] .bg-emerald-50,
+html[data-theme="dark"] .bg-emerald-100 {
+  background-color: color-mix(in srgb, #065f46 27%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-emerald-200 {
+  border-color: color-mix(in srgb, #6ee7b7 28%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-emerald-700,
+html[data-theme="dark"] .text-emerald-800,
+html[data-theme="dark"] .text-emerald-900 {
+  color: #a7f3d0 !important;
+}
+
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .week-day-head,
+html[data-theme="dark"] .staff-schedule-head {
+  background: var(--koa-surface-2) !important;
+}
+html[data-theme="dark"] .calendar-day.is-weekend:not(.is-other),
+html[data-theme="dark"] .staff-schedule-cell.is-weekend {
+  background: color-mix(in srgb, var(--koa-surface-2) 72%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .calendar-day.is-other {
+  background: color-mix(in srgb, var(--koa-surface-muted) 52%, var(--koa-surface)) !important;
+  color: var(--koa-text-muted) !important;
+}
+html[data-theme="dark"] .calendar-day.is-today {
+  background: color-mix(in srgb, var(--koa-amber) 13%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .staff-schedule-cell.has-overload {
+  background: color-mix(in srgb, #f59e0b 13%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .calendar-options-toggle[aria-expanded="true"],
+html[data-theme="dark"] .legend-staff,
+html[data-theme="dark"] .calendar-item.staffing {
+  background: color-mix(in srgb, var(--koa-forest) 28%, var(--koa-surface-2)) !important;
+}
+html[data-theme="dark"] .legend-office,
+html[data-theme="dark"] .calendar-item.office365 {
+  background: color-mix(in srgb, var(--koa-amber-light) 16%, var(--koa-surface-2)) !important;
+}
+
+
+
+/* Dark-mode contrast hardening for admin controls, status surfaces, and legacy VenueLoom stone/slate utilities. */
+html[data-theme="dark"] .bg-stone-50,
+html[data-theme="dark"] .bg-stone-100,
+html[data-theme="dark"] .bg-stone-200,
+html[data-theme="dark"] .bg-slate-50,
+html[data-theme="dark"] .bg-slate-100,
+html[data-theme="dark"] .bg-slate-200,
+html[data-theme="dark"] .bg-gray-50,
+html[data-theme="dark"] .bg-gray-100,
+html[data-theme="dark"] .bg-gray-200 {
+  background-color: var(--koa-surface-2) !important;
+}
+
+html[data-theme="dark"] [class*="bg-stone-50/"],
+html[data-theme="dark"] [class*="bg-stone-100/"],
+html[data-theme="dark"] [class*="bg-slate-50/"],
+html[data-theme="dark"] [class*="bg-slate-100/"],
+html[data-theme="dark"] [class*="bg-gray-50/"],
+html[data-theme="dark"] [class*="bg-gray-100/"] {
+  background-color: color-mix(in srgb, var(--koa-surface-2) 88%, transparent) !important;
+}
+
+html[data-theme="dark"] .border-stone-200,
+html[data-theme="dark"] .border-stone-300,
+html[data-theme="dark"] .border-slate-200,
+html[data-theme="dark"] .border-slate-300,
+html[data-theme="dark"] .border-gray-200,
+html[data-theme="dark"] .border-gray-300 {
+  border-color: var(--koa-line) !important;
+}
+
+html[data-theme="dark"] .text-stone-900,
+html[data-theme="dark"] .text-slate-900,
+html[data-theme="dark"] .text-gray-900 {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] .text-stone-800,
+html[data-theme="dark"] .text-stone-700,
+html[data-theme="dark"] .text-stone-600,
+html[data-theme="dark"] .text-stone-500,
+html[data-theme="dark"] .text-stone-400,
+html[data-theme="dark"] .text-stone-300,
+html[data-theme="dark"] .text-slate-800,
+html[data-theme="dark"] .text-slate-700,
+html[data-theme="dark"] .text-slate-600,
+html[data-theme="dark"] .text-slate-500,
+html[data-theme="dark"] .text-slate-400,
+html[data-theme="dark"] .text-slate-300,
+html[data-theme="dark"] .text-gray-800,
+html[data-theme="dark"] .text-gray-700,
+html[data-theme="dark"] .text-gray-600,
+html[data-theme="dark"] .text-gray-500,
+html[data-theme="dark"] .text-gray-400,
+html[data-theme="dark"] .text-gray-300 {
+  color: var(--koa-text-muted) !important;
+}
+
+html[data-theme="dark"] .bg-blue-50,
+html[data-theme="dark"] .bg-blue-100 {
+  background-color: color-mix(in srgb, #1d4ed8 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-blue-200 {
+  border-color: color-mix(in srgb, #93c5fd 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-blue-700,
+html[data-theme="dark"] .text-blue-800,
+html[data-theme="dark"] .text-blue-900,
+html[data-theme="dark"] .text-blue-950 {
+  color: #bfdbfe !important;
+}
+
+html[data-theme="dark"] .bg-violet-50,
+html[data-theme="dark"] .bg-violet-100 {
+  background-color: color-mix(in srgb, #6d28d9 25%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-violet-200 {
+  border-color: color-mix(in srgb, #c4b5fd 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-violet-700,
+html[data-theme="dark"] .text-violet-800,
+html[data-theme="dark"] .text-violet-900,
+html[data-theme="dark"] .text-violet-950 {
+  color: #ddd6fe !important;
+}
+
+html[data-theme="dark"] .bg-rose-50,
+html[data-theme="dark"] .bg-rose-100 {
+  background-color: color-mix(in srgb, #9f1239 25%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-rose-200,
+html[data-theme="dark"] .border-rose-300 {
+  border-color: color-mix(in srgb, #fda4af 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-rose-700,
+html[data-theme="dark"] .text-rose-800,
+html[data-theme="dark"] .text-rose-900,
+html[data-theme="dark"] .text-rose-950 {
+  color: #fecdd3 !important;
+}
+
+html[data-theme="dark"] .bg-yellow-50,
+html[data-theme="dark"] .bg-yellow-100 {
+  background-color: color-mix(in srgb, #a16207 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-yellow-200,
+html[data-theme="dark"] .border-yellow-300 {
+  border-color: color-mix(in srgb, #fde047 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-yellow-700,
+html[data-theme="dark"] .text-yellow-800,
+html[data-theme="dark"] .text-yellow-900,
+html[data-theme="dark"] .text-yellow-950 {
+  color: #fef08a !important;
+}
+
+html[data-theme="dark"] .bg-orange-50,
+html[data-theme="dark"] .bg-orange-100 {
+  background-color: color-mix(in srgb, #c2410c 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] .border-orange-200,
+html[data-theme="dark"] .border-orange-300 {
+  border-color: color-mix(in srgb, #fdba74 30%, var(--koa-line)) !important;
+}
+html[data-theme="dark"] .text-orange-700,
+html[data-theme="dark"] .text-orange-800,
+html[data-theme="dark"] .text-orange-900,
+html[data-theme="dark"] .text-orange-950 {
+  color: #fed7aa !important;
+}
+
+
+html[data-theme="dark"] [class*="bg-red-50/"],
+html[data-theme="dark"] [class*="bg-red-100/"] {
+  background-color: color-mix(in srgb, #7f1d1d 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-amber-50/"],
+html[data-theme="dark"] [class*="bg-amber-100/"] {
+  background-color: color-mix(in srgb, #92400e 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-emerald-50/"],
+html[data-theme="dark"] [class*="bg-emerald-100/"] {
+  background-color: color-mix(in srgb, #065f46 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-sky-50/"],
+html[data-theme="dark"] [class*="bg-sky-100/"] {
+  background-color: color-mix(in srgb, #075985 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-blue-50/"],
+html[data-theme="dark"] [class*="bg-blue-100/"] {
+  background-color: color-mix(in srgb, #1d4ed8 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-violet-50/"],
+html[data-theme="dark"] [class*="bg-violet-100/"] {
+  background-color: color-mix(in srgb, #6d28d9 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-rose-50/"],
+html[data-theme="dark"] [class*="bg-rose-100/"] {
+  background-color: color-mix(in srgb, #9f1239 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-yellow-50/"],
+html[data-theme="dark"] [class*="bg-yellow-100/"] {
+  background-color: color-mix(in srgb, #a16207 24%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class*="bg-orange-50/"],
+html[data-theme="dark"] [class*="bg-orange-100/"] {
+  background-color: color-mix(in srgb, #c2410c 24%, var(--koa-surface)) !important;
+}
+
+html[data-theme="dark"] .text-red-950 { color: #fecaca !important; }
+html[data-theme="dark"] .text-amber-950 { color: #fde68a !important; }
+html[data-theme="dark"] .text-emerald-950 { color: #a7f3d0 !important; }
+html[data-theme="dark"] .text-sky-950 { color: #bae6fd !important; }
+
+html[data-theme="dark"] [class~="hover:bg-red-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-red-100"]:hover {
+  background-color: color-mix(in srgb, #7f1d1d 38%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-amber-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-amber-100"]:hover {
+  background-color: color-mix(in srgb, #92400e 36%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-emerald-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-emerald-100"]:hover {
+  background-color: color-mix(in srgb, #065f46 35%, var(--koa-surface)) !important;
+}
+html[data-theme="dark"] [class~="hover:bg-sky-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-sky-100"]:hover,
+html[data-theme="dark"] [class~="hover:bg-blue-50"]:hover,
+html[data-theme="dark"] [class~="hover:bg-blue-100"]:hover {
+  background-color: color-mix(in srgb, #075985 35%, var(--koa-surface)) !important;
+}
+
+html[data-theme="dark"] .koa-admin-back-to-top,
+html[data-theme="dark"] body.koa-admin-page main .health-warning-tools {
+  border-color: var(--koa-line);
+  background: color-mix(in srgb, var(--koa-surface) 94%, transparent);
+  color: var(--koa-text-strong);
+  box-shadow: 0 12px 32px rgba(0,0,0,.34);
+}
+
+html[data-theme="dark"] body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="yellow"][data-mobile-collapsed="true"] {
+  border-color: color-mix(in srgb, #f59e0b 42%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface));
+}
+html[data-theme="dark"] body.koa-admin-page main [data-mobile-collapsible][data-health-section-status="red"] {
+  border-color: color-mix(in srgb, #ef4444 38%, var(--koa-line));
+  background: color-mix(in srgb, #7f1d1d 22%, var(--koa-surface));
+}
+html[data-theme="dark"] body.koa-admin-page main .health-all-good-banner {
+  border-color: color-mix(in srgb, #34d399 34%, var(--koa-line));
+  background: color-mix(in srgb, #065f46 22%, var(--koa-surface));
+  color: #a7f3d0;
+  box-shadow: 0 8px 22px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] body.koa-admin-page main .health-expand-warnings-button {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 24%, var(--koa-surface));
+  color: #fde68a;
+}
+html[data-theme="dark"] body.koa-admin-page main .health-collapse-healthy-button {
+  border-color: color-mix(in srgb, #10b981 34%, var(--koa-line));
+  background: color-mix(in srgb, #065f46 24%, var(--koa-surface));
+  color: #a7f3d0;
+}
+html[data-theme="dark"] body.koa-admin-page main .health-section-mobile-summary {
+  color: var(--koa-text-muted);
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="red"] .health-section-mobile-summary {
+  color: #fecaca;
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="yellow"] .health-section-mobile-summary {
+  color: #fde68a;
+}
+html[data-theme="dark"] body.koa-admin-page main [data-health-section-status="green"] .health-section-mobile-summary {
+  color: #a7f3d0;
+}
+
+html[data-theme="dark"] .workspace-alert-row[data-severity="urgent"] {
+  border-color: color-mix(in srgb, #ef4444 55%, var(--koa-line));
+  background:
+    linear-gradient(90deg, rgba(185,28,28,.17), transparent 28%),
+    color-mix(in srgb, #7f1d1d 20%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-row[data-severity="upcoming"] {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line));
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-row[data-severity="info"] {
+  border-color: color-mix(in srgb, #38bdf8 34%, var(--koa-line));
+  background: color-mix(in srgb, #075985 22%, var(--koa-surface));
+}
+html[data-theme="dark"] .workspace-alert-category-icon {
+  background: var(--koa-surface-2) !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,.22);
+}
+html[data-theme="dark"] .workspace-alert-action.is-snooze {
+  background: var(--koa-surface-2);
+  color: var(--koa-text-strong);
+}
+html[data-theme="dark"] .workspace-alert-action.is-dismiss {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--koa-line));
+  background: color-mix(in srgb, #7f1d1d 20%, var(--koa-surface));
+  color: #fecaca;
+}
+html[data-theme="dark"] .workspace-alert-action.is-seen {
+  border-color: color-mix(in srgb, #60a5fa 34%, var(--koa-line));
+  background: color-mix(in srgb, #1d4ed8 20%, var(--koa-surface));
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .calendar-item.staffing,
+html[data-theme="dark"] .calendar-item.office365,
+html[data-theme="dark"] .staff-schedule-pill.project,
+html[data-theme="dark"] .calendar-day:hover {
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] .staff-availability.available {
+  background: color-mix(in srgb, #065f46 32%, var(--koa-surface)) !important;
+  color: #a7f3d0 !important;
+}
+html[data-theme="dark"] .staff-availability.tentative,
+html[data-theme="dark"] .staff-overload-badge {
+  background: color-mix(in srgb, #92400e 32%, var(--koa-surface)) !important;
+  color: #fde68a !important;
+}
+html[data-theme="dark"] .staff-availability.unavailable,
+html[data-theme="dark"] .mobile-day-preview-conflict {
+  border-color: color-mix(in srgb, #ef4444 34%, var(--koa-line)) !important;
+  background: color-mix(in srgb, #7f1d1d 24%, var(--koa-surface)) !important;
+  color: #fecaca !important;
+}
+html[data-theme="dark"] .staff-availability.pto {
+  background: color-mix(in srgb, #1d4ed8 28%, var(--koa-surface)) !important;
+  color: #bfdbfe !important;
+}
+html[data-theme="dark"] .staff-mobile-day.has-overload {
+  border-color: color-mix(in srgb, #f59e0b 38%, var(--koa-line)) !important;
+  background: color-mix(in srgb, #92400e 22%, var(--koa-surface)) !important;
+}
+
+
+/* Dark-mode fixes surfaced by the strict rendered contrast audit. */
+html[data-theme="dark"] .site-nav-shell,
+html[data-theme="dark"] .site-menu-panel {
+  border-color: color-mix(in srgb, var(--koa-champagne) 30%, var(--koa-line));
+  background: color-mix(in srgb, var(--koa-surface) 96%, transparent);
+  color: var(--koa-text);
+  box-shadow: var(--shadow-nav);
+}
+html[data-theme="dark"] .site-brand,
+html[data-theme="dark"] .site-nav-link,
+html[data-theme="dark"] .site-menu-trigger {
+  color: var(--koa-text-strong);
+}
+html[data-theme="dark"] .site-brand-meta {
+  color: var(--koa-text-muted);
+}
+html[data-theme="dark"] .brand-medallion {
+  /* Keep the public brand mark visually identical across themes. The warm,
+     light medallion preserves the logo artwork's intended contrast while a
+     restrained champagne ring separates it from the dark navbar. */
+  border-color: rgba(197,163,109,.52);
+  background: linear-gradient(145deg, #fffdf8, #efe5d2);
+  box-shadow:
+    inset 0 0 0 4px rgba(255,255,255,.55),
+    0 0 0 1px rgba(197,163,109,.14),
+    0 5px 18px rgba(0,0,0,.18);
+}
+
+@media (max-width: 767px) {
+  html[data-theme="dark"] .workspace-bottom-nav {
+    border-color: color-mix(in srgb, var(--koa-champagne) 34%, var(--koa-line));
+    background: color-mix(in srgb, var(--koa-surface) 96%, transparent);
+    box-shadow: 0 18px 50px rgba(0,0,0,.46);
+  }
+  html[data-theme="dark"] .workspace-bottom-item {
+    color: var(--koa-text-muted);
+  }
+}
+
+html[data-theme="dark"] .action-filter,
+html[data-theme="dark"] .action-scope,
+html[data-theme="dark"] .calendar-nav,
+html[data-theme="dark"] .calendar-utility-button,
+html[data-theme="dark"] .calendar-options-toggle,
+html[data-theme="dark"] .calendar-filter,
+html[data-theme="dark"] .calendar-today,
+html[data-theme="dark"] body.koa-admin-page main .koa-admin-mobile-section-toggle,
+html[data-theme="dark"] .health-warning-tool-button {
+  border-color: var(--koa-line);
+  background: var(--koa-surface);
+  color: var(--koa-text-strong);
+}
+html[data-theme="dark"] .calendar-view-switch {
+  border-color: var(--koa-line);
+  background: var(--koa-surface-2);
+}
+html[data-theme="dark"] .calendar-filter:hover,
+html[data-theme="dark"] .calendar-nav:hover {
+  background: var(--koa-surface-2);
+}
+html[data-theme="dark"] .action-filter.is-active,
+html[data-theme="dark"] .action-scope.is-active,
+html[data-theme="dark"] .calendar-filter.is-active,
+html[data-theme="dark"] .calendar-density-button.is-active {
+  border-color: var(--koa-accent-text);
+  background: color-mix(in srgb, var(--koa-clay) 72%, var(--koa-surface));
+  color: #fff;
+}
+html[data-theme="dark"] .kpi span {
+  color: var(--koa-accent-text);
+}
+html[data-theme="dark"] .kpi strong {
+  color: var(--koa-text-strong);
+}
+
+html[data-theme="dark"] [class*="bg-[var(--koa-amber-light)]"][class*="text-[var(--koa-forest)]"],
+html[data-theme="dark"] [class*="bg-[var(--koa-amber-light)]"][class*="text-[var(--koa-ink)]"] {
+  color: #08130f !important;
+}
+
+
+/* Follow-up fixes from the strict 69-route Chromium dark audit. */
+html[data-theme="dark"] .hero-detail-card,
+html[data-theme="dark"] .catalog-filter-bar {
+  border-color: var(--koa-line) !important;
+  background: color-mix(in srgb, var(--koa-surface) 95%, transparent) !important;
+  color: var(--koa-text) !important;
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme="dark"] body.koa-admin-page .calendar-view-button,
+html[data-theme="dark"] body.koa-admin-page .calendar-view-label-mobile,
+html[data-theme="dark"] body.koa-admin-page .calendar-view-label-desktop {
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .calendar-view-button.is-active {
+  background: color-mix(in srgb, var(--koa-clay) 72%, var(--koa-surface)) !important;
+  color: #fff !important;
+}
+html[data-theme="dark"] body.koa-admin-page .mobile-today-schedule-empty {
+  border: 1px solid var(--koa-line);
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-muted) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .legend-vendor,
+html[data-theme="dark"] body.koa-admin-page .legend-staff,
+html[data-theme="dark"] body.koa-admin-page .legend-office {
+  border-color: var(--koa-line) !important;
+  background: var(--koa-surface-2) !important;
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle,
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button *,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle * {
+  color: var(--koa-text-strong) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .health-warning-tool-button,
+html[data-theme="dark"] body.koa-admin-page .health-mobile-detail-toggle {
+  border-color: var(--koa-line) !important;
+  background: var(--koa-surface) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page .kpi span {
+  color: var(--koa-accent-text) !important;
+}
+html[data-theme="dark"] body.koa-admin-page .kpi strong {
+  color: var(--koa-text-strong) !important;
+}
+
+/* Safari/WebKit dark-mode inherited-color hardening for neutral admin controls. */
+html[data-theme="dark"] body.koa-admin-page main label[class*="font-semibold"] {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-[var(--koa-line)]"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-[var(--koa-line)]"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main button[class*="border-stone-300"]:not([class*="bg-"]),
+html[data-theme="dark"] body.koa-admin-page main a[class*="border-stone-300"]:not([class*="bg-"]) {
+  color: var(--koa-text-strong) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main .link-arrow {
+  color: var(--koa-accent-text) !important;
+}
+
+html[data-theme="dark"] body.koa-admin-page main .display.mt-2.text-4xl {
+  color: var(--koa-text-strong) !important;
+}
+

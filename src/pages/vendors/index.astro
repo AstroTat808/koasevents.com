@@ -15,7 +15,7 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 <section><div data-grid class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"></div></section>
 </div></div></main>
 <dialog data-dialog class="w-[min(58rem,92vw)] rounded-[1.5rem] border-0 p-0 backdrop:bg-black/50"><div data-dialog-body class="max-h-[85vh] overflow-auto bg-white p-6 sm:p-8"></div></dialog>
-<style>.field{min-height:2.8rem;width:100%;border:1px solid var(--koa-line);border-radius:.7rem;background:white;padding:.7rem .8rem;font-size:.82rem}</style>
+<style>.field{min-height:2.8rem;width:100%;border:1px solid var(--koa-line);border-radius:.7rem;background:var(--koa-surface);padding:.7rem .8rem;font-size:.82rem}</style>
 <script>
  const token=new URLSearchParams(location.search).get('token')||'';let data=null;
  const grid=document.querySelector('[data-grid]'),dialog=document.querySelector('[data-dialog]'),body=document.querySelector('[data-dialog-body]');

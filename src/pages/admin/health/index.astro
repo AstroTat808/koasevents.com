@@ -2,7 +2,7 @@
 import BaseLayout from '../../../layouts/BaseLayout.astro';
 ---
 <BaseLayout noindex title="Koa’s Admin Health" description="System health, monitoring, and deployment history for Koa’s protected workspaces." canonical="https://koasevents.com/admin/health/">
-  <main class="min-h-screen bg-[var(--koa-sand)] py-12">
+  <main data-system-health-page class="min-h-screen bg-[var(--koa-sand)] py-12">
     <div class="container-shell max-w-7xl">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -10,7 +10,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           <h1 class="display mt-3 text-5xl">System Health</h1>
           <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/58">Hourly monitoring, transition-only alerts, protected page/API status, and deployment QA history in one place.</p>
         </div>
-        <div class="flex flex-col items-start gap-2 lg:items-end">
+        <div class="health-page-header-actions flex flex-col items-start gap-2 lg:items-end">
           <button data-refresh type="button" class="rounded-full bg-[var(--koa-forest)] px-5 py-3 text-xs font-black uppercase tracking-[.1em] text-white">Run checks now</button>
           <div class="flex flex-wrap gap-2 text-[.54rem] font-black uppercase tracking-[.08em]">
             <span class="inline-flex items-center gap-1.5 rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[var(--koa-ink)]/55">
@@ -32,8 +32,8 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       </div>
 
       <div data-app class="mt-8 hidden grid gap-6">
-        <section class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <article data-overall-card class="rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg">
+        <section data-health-summary-grid class="health-summary-grid grid gap-4">
+          <article data-overall-card class="health-summary-card health-summary-card--overall rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg">
             <button data-overall-action type="button" class="block w-full text-left focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)] disabled:cursor-default" aria-label="Show health issues">
               <p class="eyebrow text-[var(--koa-clay)]">Overall</p>
               <p data-overall class="display mt-3 text-4xl text-[var(--koa-forest)]">—</p>
@@ -46,13 +46,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <div data-severity-section-hints class="mt-2 hidden grid gap-1 text-[.56rem] leading-4 text-[var(--koa-ink)]/55"></div>
             <p data-overall-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View issues ↓</p>
           </article>
-          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Passed</p><p data-passed class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
-          <button data-failed-card type="button" class="rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-700 disabled:cursor-default disabled:hover:translate-y-0" aria-label="Show failed health checks">
+          <article class="health-summary-card rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Passed</p><p data-passed class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p><p class="health-summary-support mt-2 text-xs leading-5 text-[var(--koa-ink)]/48">Checks currently passing.</p></article>
+          <button data-failed-card type="button" class="health-summary-card rounded-[1.3rem] bg-white p-5 text-left shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-red-700 disabled:cursor-default disabled:hover:translate-y-0" aria-label="Show failed health checks">
             <p class="eyebrow text-[var(--koa-clay)]">Failed</p>
             <p data-failed class="display mt-3 text-4xl text-red-800">0</p>
             <p data-failed-hint class="mt-2 hidden text-[.62rem] font-black uppercase tracking-[.08em] text-red-700">View failed checks ↓</p>
+            <p class="health-summary-support mt-2 text-xs leading-5 text-[var(--koa-ink)]/48">Checks currently failing.</p>
           </button>
-          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p></article>
+          <article class="health-summary-card health-summary-card--checked rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-amber-light)]">Last checked</p><p data-checked class="mt-3 text-sm font-semibold">—</p><p class="health-summary-support mt-2 text-xs leading-5 text-white/55">Latest completed System Health snapshot.</p></article>
         </section>
 
         <section data-health-coverage class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
@@ -71,6 +72,80 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           </div>
           <p data-coverage-detail class="mt-3 text-xs leading-5 text-[var(--koa-ink)]/50">Coverage is calculated from the registered health-check inventory and the most recent completed snapshot.</p>
         </section>
+
+        <section data-dark-mode-visual-quality data-theme-qa-card class="cursor-pointer rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">
+          <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Release visual quality</p>
+              <h2 class="display mt-1 text-3xl text-[var(--koa-forest)]">Dark Mode QA</h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/55">Latest production Light / Dark / System release audit across Chromium and WebKit. Counts come from the same browser gate that can block deployment.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button data-theme-qa-toggle type="button" aria-expanded="false" aria-controls="dark-mode-qa-details" class="rounded-full px-2 py-1 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]">View route results ↓</button>
+              <span data-theme-qa-status class="rounded-full bg-slate-100 px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-slate-700">Loading</span>
+            </div>
+          </div>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Chromium</p>
+              <strong data-theme-qa-chromium-routes class="display mt-2 block text-3xl text-[var(--koa-forest)]">—</strong>
+              <p data-theme-qa-chromium-failures class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">WebKit</p>
+              <strong data-theme-qa-webkit-routes class="display mt-2 block text-3xl text-[var(--koa-forest)]">—</strong>
+              <p data-theme-qa-webkit-failures class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/50">—</p>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Commit</p>
+              <code data-theme-qa-commit class="mt-2 block break-all text-[.68rem] font-semibold leading-5 text-[var(--koa-forest)]">—</code>
+            </article>
+            <article class="rounded-xl bg-[var(--koa-ivory)] p-4">
+              <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Netlify deploy</p>
+              <code data-theme-qa-deploy class="mt-2 block break-all text-[.68rem] font-semibold leading-5 text-[var(--koa-forest)]">—</code>
+            </article>
+          </div>
+          <div class="mt-4 flex flex-col gap-1 text-xs leading-5 text-[var(--koa-ink)]/52 sm:flex-row sm:items-center sm:justify-between">
+            <p data-theme-qa-detail>Waiting for the latest production visual audit.</p>
+            <p data-theme-qa-checked class="shrink-0">Last visual audit —</p>
+          </div>
+          <div class="mt-5 border-t border-[var(--koa-line)] pt-5">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Latest screenshot evidence</p>
+                <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Light and Dark · iPhone 390×844 and desktop 1440×900.</p>
+              </div>
+              <span data-theme-qa-screenshot-summary class="text-[.58rem] font-bold text-[var(--koa-ink)]/45">Waiting for screenshots</span>
+            </div>
+            <div data-theme-qa-screenshots class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"></div>
+          </div>
+          <div id="dark-mode-qa-details" data-theme-qa-details class="mt-5 hidden border-t border-[var(--koa-line)] pt-5">
+            <div class="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Route detail</p>
+                <h3 class="display mt-1 text-2xl text-[var(--koa-forest)]">Every tested route</h3>
+              </div>
+              <span data-theme-qa-route-summary class="text-[.58rem] font-bold text-[var(--koa-ink)]/45">—</span>
+            </div>
+            <div data-theme-qa-route-results class="mt-3 grid gap-2"></div>
+          </div>
+        </section>
+
+        <dialog id="dark-mode-qa-screenshot-dialog" data-theme-qa-screenshot-dialog class="w-[min(96vw,1500px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/60">
+          <div class="flex max-h-[94vh] flex-col p-4 sm:p-6">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="eyebrow text-[var(--koa-clay)]">Dark Mode QA screenshot</p>
+                <h3 data-theme-qa-screenshot-dialog-title class="display mt-2 text-3xl text-[var(--koa-forest)]">Production render</h3>
+                <p data-theme-qa-screenshot-dialog-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Protected production QA evidence.</p>
+              </div>
+              <button data-theme-qa-screenshot-dialog-close type="button" class="rounded-full px-3 py-1 text-3xl leading-none text-[var(--koa-ink)]/45 transition hover:bg-[var(--koa-ivory)] hover:text-[var(--koa-forest)] focus:outline-none focus:ring-2 focus:ring-[var(--koa-clay)]" aria-label="Close Dark Mode QA screenshot">×</button>
+            </div>
+            <div class="mt-4 min-h-0 overflow-auto rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-2 sm:p-4">
+              <img data-theme-qa-screenshot-dialog-image alt="" class="mx-auto block h-auto max-h-[78vh] max-w-full object-contain shadow-sm" />
+            </div>
+          </div>
+        </dialog>
 
         <section data-critical-integrations-card class="rounded-[1.3rem] border border-[var(--koa-line)] bg-white p-5 shadow-[var(--shadow-soft)]">
           <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -167,6 +242,87 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Last successful check</p><strong data-accounting-last-success class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p data-accounting-sample-count class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">—</p></article>
             <article class="rounded-xl bg-[var(--koa-ivory)] p-4"><p class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Current taxable payload</p><strong data-accounting-taxable-payload class="mt-2 block text-lg text-[var(--koa-forest)]">—</strong><p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Must remain $0.00 to prevent tax-on-tax.</p></article>
           </div>
+          <div class="mt-5 rounded-xl border border-[var(--koa-line)] p-4" data-accounting-invariant-table-panel>
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <strong class="text-sm text-[var(--koa-forest)]">Client invariant audit</strong>
+                <p data-accounting-invariant-table-meta class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/48">Waiting for production accounting audit rows.</p>
+              </div>
+              <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <label class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Status
+                  <select data-accounting-filter-status class="mt-1 w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--koa-forest)]">
+                    <option value="all">All statuses</option><option value="passed">Passed</option><option value="failed">Failed</option><option value="unverified">Unverified</option>
+                  </select>
+                </label>
+                <label class="flex items-center gap-2 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]"><input data-accounting-filter-taxable type="checkbox" class="h-4 w-4" /> Taxable lines only</label>
+                <label class="flex items-center gap-2 rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-semibold text-[var(--koa-forest)]"><input data-accounting-filter-missing-estimate type="checkbox" class="h-4 w-4" /> Missing QBO estimate</label>
+                <label class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)] sm:col-span-2 lg:col-span-2">Release
+                  <select data-accounting-release-select class="mt-1 w-full rounded-lg border border-[var(--koa-line)] bg-white px-3 py-2 text-xs font-medium normal-case tracking-normal text-[var(--koa-forest)]"></select>
+                </label>
+              </div>
+            </div>
+            <div class="mt-4 rounded-xl bg-[var(--koa-ivory)] p-4" data-accounting-repair-queue>
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <strong class="text-sm text-[var(--koa-forest)]">Safe repair queue</strong>
+                  <p class="mt-1 text-xs leading-5 text-[var(--koa-ink)]/50">Every QuickBooks write requires a fresh live preview, explicit approval, and a fingerprint recheck before anything changes.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  <button data-accounting-preview-all-safe type="button" class="w-fit rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-white disabled:cursor-not-allowed disabled:opacity-40">Preview all safe repairs</button>
+                  <button data-accounting-filter-clear type="button" class="w-fit rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Clear queue filter</button>
+                </div>
+              </div>
+              <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                <button data-accounting-queue-filter="missing-estimate" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Missing QBO estimate</span><strong data-accounting-queue-count="missing-estimate" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="taxable-lines" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Taxable lines</span><strong data-accounting-queue-count="taxable-lines" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="adjustment" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">QBO adjustments</span><strong data-accounting-queue-count="adjustment" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+                <button data-accounting-queue-filter="unverified" type="button" class="rounded-lg border border-[var(--koa-line)] bg-white p-3 text-left"><span class="text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">Unverified</span><strong data-accounting-queue-count="unverified" class="mt-1 block text-xl text-[var(--koa-forest)]">0</strong></button>
+              </div>
+            </div>
+            <div class="mt-4 overflow-x-auto">
+              <table class="w-full min-w-[1460px] border-collapse text-xs">
+                <thead><tr class="border-b border-[var(--koa-line)] text-left text-[.54rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">
+                  <th class="py-3 pr-4">Client</th><th class="py-3 pr-4">CRM total</th><th class="py-3 pr-4">Sales lines</th><th class="py-3 pr-4">QBO adjustment</th><th class="py-3 pr-4">QBO estimate</th><th class="py-3 pr-4">Estimate</th><th class="py-3 pr-4">Taxable lines</th><th class="py-3 pr-4">Queue</th><th class="py-3 pr-4">Status</th><th class="py-3 pr-4">Failure reason</th><th class="py-3">Action</th>
+                </tr></thead>
+                <tbody data-accounting-invariant-table-body></tbody>
+              </table>
+            </div>
+            <p data-accounting-invariant-table-empty class="mt-3 hidden text-xs text-[var(--koa-ink)]/50">No client invariant rows match these filters.</p>
+          </div>
+          <dialog data-accounting-bulk-preview-dialog class="w-[min(96vw,1050px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+            <div class="p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <p class="eyebrow text-[var(--koa-clay)]">Read-only consolidated preview</p>
+                  <h3 class="display mt-2 text-3xl text-[var(--koa-forest)]">All safe accounting repairs</h3>
+                  <p data-accounting-bulk-preview-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">No QuickBooks writes occur from this report.</p>
+                </div>
+                <button data-accounting-bulk-preview-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close consolidated repair preview">×</button>
+              </div>
+              <div data-accounting-bulk-preview-summary class="mt-5 grid gap-2 sm:grid-cols-2 lg:grid-cols-5"></div>
+              <div data-accounting-bulk-preview-exports class="mt-4 hidden flex-wrap items-center gap-2">
+                <button data-accounting-bulk-preview-csv type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export CSV</button>
+                <button data-accounting-bulk-preview-pdf type="button" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2 text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Export PDF</button>
+                <span class="text-[.62rem] leading-5 text-[var(--koa-ink)]/50">Exports always read the latest approval/rejection audit for this preview ID.</span>
+              </div>
+              <div data-accounting-bulk-preview-body class="mt-5 grid gap-3"></div>
+              <p data-accounting-bulk-preview-message class="mt-4 text-xs font-semibold text-[var(--koa-ink)]/55"></p>
+            </div>
+          </dialog>
+          <dialog data-accounting-repair-dialog class="w-[min(94vw,900px)] rounded-[1.4rem] border-0 bg-white p-0 shadow-2xl backdrop:bg-black/40">
+            <div class="p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div><p class="eyebrow text-[var(--koa-clay)]">Preview before change</p><h3 data-accounting-repair-title class="display mt-2 text-3xl text-[var(--koa-forest)]">Accounting repair preview</h3><p data-accounting-repair-meta class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55"></p></div>
+                <button data-accounting-repair-close type="button" class="text-2xl leading-none text-[var(--koa-ink)]/40" aria-label="Close repair preview">×</button>
+              </div>
+              <div data-accounting-repair-body class="mt-5 grid gap-3"></div>
+              <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
+                <button data-accounting-repair-cancel type="button" class="rounded-full border border-[var(--koa-line)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Cancel</button>
+                <button data-accounting-repair-approve type="button" class="rounded-full bg-[var(--koa-forest)] px-4 py-2 text-xs font-black uppercase tracking-[.08em] text-white disabled:opacity-40">Approve exact preview</button>
+              </div>
+              <p data-accounting-repair-message class="mt-3 text-xs font-semibold text-[var(--koa-ink)]/55"></p>
+            </div>
+          </dialog>
           <div class="mt-5 grid gap-4 lg:grid-cols-2">
             <div class="rounded-xl border border-[var(--koa-line)] p-4">
               <div class="flex items-center justify-between gap-3"><strong class="text-sm text-[var(--koa-forest)]">Recent failures</strong><span data-accounting-failure-count class="text-xs text-[var(--koa-ink)]/45">0</span></div>
@@ -1004,6 +1160,27 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const coverageIntegrations=document.querySelector('[data-coverage-integrations]');
     const coveragePercent=document.querySelector('[data-coverage-percent]');
     const coverageDetail=document.querySelector('[data-coverage-detail]');
+    const themeQaCard=document.querySelector('[data-theme-qa-card]');
+    const themeQaToggle=document.querySelector('[data-theme-qa-toggle]');
+    const themeQaStatus=document.querySelector('[data-theme-qa-status]');
+    const themeQaChromiumRoutes=document.querySelector('[data-theme-qa-chromium-routes]');
+    const themeQaChromiumFailures=document.querySelector('[data-theme-qa-chromium-failures]');
+    const themeQaWebkitRoutes=document.querySelector('[data-theme-qa-webkit-routes]');
+    const themeQaWebkitFailures=document.querySelector('[data-theme-qa-webkit-failures]');
+    const themeQaCommit=document.querySelector('[data-theme-qa-commit]');
+    const themeQaDeploy=document.querySelector('[data-theme-qa-deploy]');
+    const themeQaDetail=document.querySelector('[data-theme-qa-detail]');
+    const themeQaChecked=document.querySelector('[data-theme-qa-checked]');
+    const themeQaScreenshots=document.querySelector('[data-theme-qa-screenshots]');
+    const themeQaScreenshotSummary=document.querySelector('[data-theme-qa-screenshot-summary]');
+    const themeQaDetails=document.querySelector('[data-theme-qa-details]');
+    const themeQaRouteSummary=document.querySelector('[data-theme-qa-route-summary]');
+    const themeQaRouteResults=document.querySelector('[data-theme-qa-route-results]');
+    const themeQaScreenshotDialog=document.querySelector('[data-theme-qa-screenshot-dialog]');
+    const themeQaScreenshotDialogTitle=document.querySelector('[data-theme-qa-screenshot-dialog-title]');
+    const themeQaScreenshotDialogMeta=document.querySelector('[data-theme-qa-screenshot-dialog-meta]');
+    const themeQaScreenshotDialogImage=document.querySelector('[data-theme-qa-screenshot-dialog-image]');
+    const themeQaScreenshotDialogClose=document.querySelector('[data-theme-qa-screenshot-dialog-close]');
     const criticalIntegrationsStatus=document.querySelector('[data-critical-integrations-status]');
     const criticalIntegrationsCount=document.querySelector('[data-critical-integrations-count]');
     const criticalIntegrationsLastLive=document.querySelector('[data-critical-integrations-last-live]');
@@ -1039,6 +1216,35 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     const accountingFailures=document.querySelector('[data-accounting-failures]');
     const accountingAlertCount=document.querySelector('[data-accounting-alert-count]');
     const accountingAlertHistory=document.querySelector('[data-accounting-alert-history]');
+    const accountingInvariantTableMeta=document.querySelector('[data-accounting-invariant-table-meta]');
+    const accountingInvariantTableBody=document.querySelector('[data-accounting-invariant-table-body]');
+    const accountingInvariantTableEmpty=document.querySelector('[data-accounting-invariant-table-empty]');
+    const accountingFilterStatus=document.querySelector('[data-accounting-filter-status]');
+    const accountingFilterTaxable=document.querySelector('[data-accounting-filter-taxable]');
+    const accountingFilterMissingEstimate=document.querySelector('[data-accounting-filter-missing-estimate]');
+    const accountingReleaseSelect=document.querySelector('[data-accounting-release-select]');
+    const accountingQueueButtons=[...document.querySelectorAll('[data-accounting-queue-filter]')];
+    const accountingQueueCounts=[...document.querySelectorAll('[data-accounting-queue-count]')];
+    const accountingFilterClear=document.querySelector('[data-accounting-filter-clear]');
+    const accountingPreviewAllSafe=document.querySelector('[data-accounting-preview-all-safe]');
+    const accountingBulkPreviewDialog=document.querySelector('[data-accounting-bulk-preview-dialog]');
+    const accountingBulkPreviewMeta=document.querySelector('[data-accounting-bulk-preview-meta]');
+    const accountingBulkPreviewSummary=document.querySelector('[data-accounting-bulk-preview-summary]');
+    const accountingBulkPreviewBody=document.querySelector('[data-accounting-bulk-preview-body]');
+    const accountingBulkPreviewMessage=document.querySelector('[data-accounting-bulk-preview-message]');
+    const accountingBulkPreviewExports=document.querySelector('[data-accounting-bulk-preview-exports]');
+    const accountingBulkPreviewCsv=document.querySelector('[data-accounting-bulk-preview-csv]');
+    const accountingBulkPreviewPdf=document.querySelector('[data-accounting-bulk-preview-pdf]');
+    const accountingRepairDialog=document.querySelector('[data-accounting-repair-dialog]');
+    const accountingRepairTitle=document.querySelector('[data-accounting-repair-title]');
+    const accountingRepairMeta=document.querySelector('[data-accounting-repair-meta]');
+    const accountingRepairBody=document.querySelector('[data-accounting-repair-body]');
+    const accountingRepairApprove=document.querySelector('[data-accounting-repair-approve]');
+    const accountingRepairMessage=document.querySelector('[data-accounting-repair-message]');
+    let accountingRepairPreview=null;
+    let accountingBulkPreviewReport=null;
+    let accountingQueueFilter='all';
+    let accountingReleaseAudits=[];
     const healthRunWarning=document.querySelector('[data-health-run-warning]');
     const healthRunWarningTitle=document.querySelector('[data-health-run-warning-title]');
     const healthRunWarningDetail=document.querySelector('[data-health-run-warning-detail]');
@@ -1302,6 +1508,24 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       setCompactStatus(dashboardRefreshStatus,'running','Rendering · '+currentDashboardRenderPanel);
     }
 
+    let latestDashboardRenderWarnings=[];
+
+    function renderDashboardPanel(label,renderPanel){
+      markDashboardRenderPanel(label);
+      try{
+        renderPanel();
+        return true;
+      }catch(error){
+        const warning={
+          section:'Dashboard rendering · '+String(label||'Dashboard'),
+          error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
+        };
+        latestDashboardRenderWarnings.push(warning);
+        console.error('[system-health] '+warning.section+':',error);
+        return false;
+      }
+    }
+
     function setCompactStatus(node,state,label){
       if(!(node instanceof HTMLElement))return;
       const states:Record<string,string>={
@@ -1441,41 +1665,53 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       renderHealthRunWarningDialog();
     }
 
+    function prepareMobileHealthTables(){
+      document.querySelectorAll('main[data-system-health-page] table').forEach((table)=>{
+        if(!(table instanceof HTMLTableElement))return;
+        table.classList.add('koa-mobile-card-table');
+        const labels=[...table.querySelectorAll('thead th')].map((cell)=>String(cell.textContent||'').trim());
+        table.querySelectorAll('tbody tr').forEach((row)=>{
+          [...row.children].forEach((cell,index)=>{
+            if(cell instanceof HTMLElement)cell.dataset.mobileLabel=labels[index]||'';
+          });
+        });
+      });
+    }
+
     function renderHealthPayload(payload,source='System Health'){
       clearHealthRunWarning();
       updateCoreCheckStatus(payload?.current);
-      const warnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
+      const backendWarnings=normalizeHealthRunWarnings(payload?.enrichmentWarnings);
+      latestDashboardRenderWarnings=[];
       updateDashboardRefreshStatus('running');
       currentDashboardRenderPanel='Starting';
+      let unexpectedRenderFailure=false;
       try{
         render(payload||{});
       }catch(error){
         console.error('[system-health] '+source+' detail rendering failed in '+currentDashboardRenderPanel+':',error);
-        if(payload?.current){
-          const renderWarnings=[...warnings,{
-            section:'Dashboard rendering · '+currentDashboardRenderPanel,
-            error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
-          }];
-          updateDashboardRefreshStatus('partial',renderWarnings.length);
-          showHealthRunWarning(
-            'Core checks completed; a detail panel could not refresh.',
-            '',
-            renderWarnings
-          );
-          return false;
-        }
-        throw error;
+        if(!payload?.current)throw error;
+        unexpectedRenderFailure=true;
+        latestDashboardRenderWarnings.push({
+          section:'Dashboard rendering · '+currentDashboardRenderPanel,
+          error:error instanceof Error?error.message:'A secondary System Health panel failed to render.',
+        });
       }
 
+      prepareMobileHealthTables();
+
+      const warnings=[...backendWarnings,...latestDashboardRenderWarnings];
       updateDashboardRefreshStatus(warnings.length?'partial':'current',warnings.length);
       if(warnings.length){
         showHealthRunWarning(
-          'Core checks completed; supporting data needs attention.',
+          latestDashboardRenderWarnings.length
+            ? 'Core checks completed; a detail panel could not refresh.'
+            : 'Core checks completed; supporting data needs attention.',
           '',
           warnings
         );
       }
-      return true;
+      return !unexpectedRenderFailure&&latestDashboardRenderWarnings.length===0;
     }
 
     function normalizedSeverity(row){
@@ -1536,7 +1772,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             : 'The dedicated Resend monitoring credential could not read delivery history.';
         fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
       }else if(row?.id==='credential-turnstile'){
-        cause='The Turnstile site key, server secret, widget rendering, Siteverify probe, or recent hostname/action validation is not healthy.';
+        cause='The Turnstile site key, server secret, widget rendering, Siteverify probe, append-only history storage, or hostname/action validation is not healthy.';
         fix='Open the Turnstile credential card below to see the failing layer. Verify the Netlify site/secret variables and Cloudflare widget hostname configuration, then re-test Turnstile only.';
       }else if(row?.id==='turnstile-site-key'){
         cause='The production runtime cannot see the configured public Turnstile site key.';
@@ -1552,9 +1788,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Cloudflare Siteverify rejected the configured Turnstile secret.'
           : 'Cloudflare Siteverify could not be reached or did not accept the health probe.';
         fix='Verify the production secret against the existing Cloudflare widget and rerun System Health. If Cloudflare is temporarily unavailable, the check will recover automatically.';
+      }else if(row?.id==='turnstile-infrastructure-events'){
+        cause='The server recorded a recent Cloudflare Siteverify network, upstream HTTP, invalid-response, or server-secret infrastructure failure. Incorrectly completed challenges are tracked separately and are not treated as outages.';
+        fix='Review the Turnstile provider-health, history integrity, and recent infrastructure-error counts. Check server-side Cloudflare connectivity and secret configuration, then rerun System Health. Keep rejected challenge blocking enabled.';
       }else if(row?.id==='turnstile-validation-history'){
-        cause='No successful production Turnstile validation has been recorded yet in the current security history.';
-        fix='Submit one protected production form normally, then rerun System Health to establish a verified validation record.';
+        cause='Append-only Turnstile history recording failed its storage read/write/delete probe, returned corrupted records, or exceeded its safe history window. A lack of accepted customer tokens alone is not a storage failure.';
+        fix='Review Netlify Blobs security storage availability and event-read diagnostics, then rerun System Health. Do not weaken server-side Siteverify or invent a successful customer submission.';
       }else if(row?.id==='turnstile-hostname-action'){
         cause='Cloudflare accepted one or more tokens whose returned hostname or action did not match the Koa’s Events request.';
         fix='Check the latest mismatch detail in Security + Spam, confirm the widget hostname is koasevents.com and each form uses its expected data-action, then retest.';
@@ -4139,6 +4378,13 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function accountingMoney(value){
+      const amount=Number(value);
+      return Number.isFinite(amount)
+        ? new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(amount)
+        : '—';
+    }
+
     function accountingHistoryRow(title,detail,at,tone='slate'){
       const row=document.createElement('article');
       const tones={
@@ -4158,8 +4404,323 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       return row;
     }
 
-    function renderAccountingHealth(summary){
+    function accountingQueueLabel(category){
+      return ({'missing-estimate':'Missing estimate','taxable-lines':'Taxable lines','sales-line-mismatch':'Legacy line mismatch','adjustment':'QBO adjustment','unverified':'Unverified','other-failure':'Other failure','passed':'Passed'})[String(category||'')]||'Other';
+    }
+
+    function closeAccountingRepairDialog(){
+      accountingRepairPreview=null;
+      if(accountingRepairMessage)accountingRepairMessage.textContent='';
+      accountingRepairDialog?.close();
+    }
+
+    function setAccountingRepairDialogPreview(data,row){
+      accountingRepairPreview=data?.preview||null;
+      if(accountingRepairTitle)accountingRepairTitle.textContent='Repair preview · '+String(data?.preview?.clientName||row?.client||row?.clientName||row?.recordId||'Client');
+      if(accountingRepairMeta)accountingRepairMeta.textContent='Preview '+String(data?.preview?.previewId||'')+' · expires '+(data?.preview?.expiresAt?new Date(data.preview.expiresAt).toLocaleString():'soon')+' · no changes have been made.';
+      if(accountingRepairBody){
+        accountingRepairBody.innerHTML='';
+        const changes=Array.isArray(data?.preview?.changes)?data.preview.changes:[];
+        const blocked=Array.isArray(data?.preview?.blockedIssues)?data.preview.blockedIssues:[];
+        if(!changes.length&&!blocked.length){
+          const p=document.createElement('p');p.className='rounded-xl bg-emerald-50 p-4 text-sm text-emerald-900';p.textContent='No repair changes are needed for the current live state.';accountingRepairBody.appendChild(p);
+        }
+        changes.forEach((change)=>{
+          const card=document.createElement('article');card.className='rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-4';
+          const before=change?.before||{},after=change?.after||{};
+          const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=String(change?.target||change?.type||'QuickBooks change');
+          const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-[var(--koa-ink)]/60';detail.textContent='Type: '+String(change?.type||'')+' · Before total: '+accountingMoney(before?.total)+' · After total: '+accountingMoney(after?.total)+'. '+String(after?.taxHandling||'');
+          card.append(title,detail);accountingRepairBody.appendChild(card);
+        });
+        blocked.forEach((issue)=>{
+          const card=document.createElement('article');card.className='rounded-xl border border-amber-200 bg-amber-50 p-4';
+          const title=document.createElement('strong');title.className='text-sm text-amber-950';title.textContent='Protected / blocked';
+          const detail=document.createElement('p');detail.className='mt-2 text-xs leading-5 text-amber-900/75';detail.textContent=String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'This item is not eligible for an automatic write.');
+          card.append(title,detail);accountingRepairBody.appendChild(card);
+        });
+      }
+      if(accountingRepairMessage)accountingRepairMessage.textContent=data?.preview?.canApply?'Review the exact before/after write above. Approval applies only this preview.':'This preview has no eligible automatic write.';
+      if(data?.preview?.canApply)accountingRepairApprove?.removeAttribute('disabled');
+      else accountingRepairApprove?.setAttribute('disabled','');
+    }
+
+    async function previewAccountingRepairWrite(recordId,changeId,clientName,bulkPreviewId=''){
+      if(!recordId||!changeId)return;
+      if(accountingRepairMessage)accountingRepairMessage.textContent='Loading a fresh single-write QuickBooks preview…';
+      if(accountingRepairBody)accountingRepairBody.innerHTML='';
+      accountingRepairApprove?.setAttribute('disabled','');
+      accountingRepairDialog?.showModal();
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-accounting-repair-write',recordId:String(recordId),changeId:String(changeId),bulkPreviewId:String(bulkPreviewId||'')})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to preview this QuickBooks write.');
+        setAccountingRepairDialogPreview(data,{recordId,clientName});
+      }catch(error){
+        if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to preview this QuickBooks write.';
+      }
+    }
+
+    function exportAccountingBulkPreview(format){
+      const id=String(accountingBulkPreviewReport?.bulkPreviewId||'');
+      if(!id)return;
+      window.location.assign('/api/admin/quickbooks?view=accounting-repair-bulk-export&bulkPreviewId='+encodeURIComponent(id)+'&format='+encodeURIComponent(format));
+    }
+
+    async function rejectAccountingRepairWrite(bulkPreviewId,recordId,changeId,button){
+      if(!bulkPreviewId||!recordId||!changeId)return;
+      button?.setAttribute('disabled','');
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+          action:'reject-accounting-repair-write',
+          bulkPreviewId:String(bulkPreviewId),
+          recordId:String(recordId),
+          changeId:String(changeId),
+          reason:'Rejected from the consolidated repair preview.',
+        })});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to record this rejection.');
+        accountingBulkPreviewReport=data?.bulkPreviewAudit||accountingBulkPreviewReport;
+        if(button){button.textContent='Rejected';button.classList.add('opacity-50');}
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent='Rejection recorded in the preview audit. No QuickBooks write occurred. CSV/PDF exports now include this decision.';
+      }catch(error){
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent=error instanceof Error?error.message:'Unable to record this rejection.';
+        button?.removeAttribute('disabled');
+      }
+    }
+
+    function bulkSummaryCard(label,value){
+      const card=document.createElement('article');card.className='rounded-xl bg-[var(--koa-ivory)] p-3';
+      const l=document.createElement('span');l.className='text-[.52rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]';l.textContent=label;
+      const v=document.createElement('strong');v.className='mt-1 block text-xl text-[var(--koa-forest)]';v.textContent=String(value);
+      card.append(l,v);return card;
+    }
+
+    async function previewAllSafeAccountingRepairs(){
+      const latest=accountingReleaseAudits[0]||null;
+      const rows=Array.isArray(latest?.rows)?latest.rows:[];
+      const recordIds=rows.filter((row)=>String(row?.status||'')==='failed'&&String(row?.recordId||'')).map((row)=>String(row.recordId));
+      if(!recordIds.length){
+        if(accountingInvariantTableMeta)accountingInvariantTableMeta.textContent='There are no failed current client invariants to preview.';
+        return;
+      }
+      accountingPreviewAllSafe?.setAttribute('disabled','');
+      accountingBulkPreviewReport=null;
+      if(accountingBulkPreviewBody)accountingBulkPreviewBody.innerHTML='';
+      if(accountingBulkPreviewSummary)accountingBulkPreviewSummary.innerHTML='';
+      accountingBulkPreviewExports?.classList.add('hidden');
+      if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent='Running fresh live, read-only QuickBooks previews for '+recordIds.length+' failed clients…';
+      accountingBulkPreviewDialog?.showModal();
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-all-safe-accounting-repairs',recordIds})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to build the consolidated repair preview.');
+        const report=data?.bulkPreview||{};
+        accountingBulkPreviewReport=report;
+        if(report?.bulkPreviewId)accountingBulkPreviewExports?.classList.remove('hidden');
+        if(accountingBulkPreviewMeta)accountingBulkPreviewMeta.textContent='Preview '+String(report?.bulkPreviewId||'')+' · generated '+(report?.generatedAt?new Date(report.generatedAt).toLocaleString():'now')+' · preview only · no bulk approval token exists.';
+        if(accountingBulkPreviewSummary){
+          accountingBulkPreviewSummary.innerHTML='';
+          accountingBulkPreviewSummary.append(
+            bulkSummaryCard('Requested',report.requestedCount||0),
+            bulkSummaryCard('Repairable clients',report.repairableClientCount||0),
+            bulkSummaryCard('Individual writes',report.writeCount||0),
+            bulkSummaryCard('Blocked / clean',(report.blockedClientCount||0)+(report.cleanClientCount||0)),
+            bulkSummaryCard('Errors',report.errorClientCount||0),
+          );
+        }
+        if(accountingBulkPreviewBody){
+          accountingBulkPreviewBody.innerHTML='';
+          (Array.isArray(report?.rows)?report.rows:[]).forEach((row)=>{
+            const card=document.createElement('article');
+            const repairable=String(row?.status||'')==='repairable';
+            card.className='rounded-xl border p-4 '+(repairable?'border-[var(--koa-line)] bg-white':'border-amber-200 bg-amber-50');
+            const top=document.createElement('div');top.className='flex flex-wrap items-start justify-between gap-2';
+            const title=document.createElement('strong');title.className='text-sm text-[var(--koa-forest)]';title.textContent=String(row?.clientName||row?.recordId||'Client');
+            const status=document.createElement('span');status.className='rounded-full bg-[var(--koa-ivory)] px-2 py-1 text-[.52rem] font-black uppercase tracking-[.06em]';status.textContent=String(row?.status||'unknown').replaceAll('-',' ');
+            top.append(title,status);card.appendChild(top);
+            if(row?.error){const p=document.createElement('p');p.className='mt-2 text-xs leading-5 text-amber-900/75';p.textContent=String(row.error);card.appendChild(p);}
+            const changes=Array.isArray(row?.changes)?row.changes:[];
+            changes.forEach((change)=>{
+              const item=document.createElement('div');item.className='mt-3 rounded-lg border border-[var(--koa-line)] bg-[var(--koa-ivory)] p-3';
+              const label=document.createElement('strong');label.className='text-xs text-[var(--koa-forest)]';label.textContent=String(change?.target||change?.type||'QuickBooks write');
+              const detail=document.createElement('p');detail.className='mt-1 text-[.64rem] leading-5 text-[var(--koa-ink)]/60';detail.textContent='Before '+accountingMoney(change?.before?.total)+' → after '+accountingMoney(change?.after?.total)+' · '+String(change?.after?.taxHandling||'');
+              const actions=document.createElement('div');actions.className='mt-2 flex flex-wrap gap-2';
+              const button=document.createElement('button');button.type='button';button.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';button.textContent='Preview exact write';button.addEventListener('click',()=>previewAccountingRepairWrite(String(row?.recordId||''),String(change?.id||''),String(row?.clientName||''),String(report?.bulkPreviewId||'')));
+              const reject=document.createElement('button');reject.type='button';reject.className='rounded-full border border-rose-200 bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-rose-800';reject.textContent='Reject write';reject.addEventListener('click',()=>rejectAccountingRepairWrite(String(report?.bulkPreviewId||''),String(row?.recordId||''),String(change?.id||''),reject));
+              actions.append(button,reject);item.append(label,detail,actions);card.appendChild(item);
+            });
+            const blocked=Array.isArray(row?.blockedIssues)?row.blockedIssues:[];
+            blocked.forEach((issue)=>{const p=document.createElement('p');p.className='mt-2 text-xs leading-5 text-amber-900/75';p.textContent='Blocked: '+String(issue?.label||issue?.code||'Issue')+' · '+String(issue?.protection||'Not eligible for automatic repair.');card.appendChild(p);});
+            accountingBulkPreviewBody.appendChild(card);
+          });
+        }
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent='This report cannot write to QuickBooks. Use “Preview exact write” and approve each document change separately.';
+      }catch(error){
+        if(accountingBulkPreviewMessage)accountingBulkPreviewMessage.textContent=error instanceof Error?error.message:'Unable to build the consolidated repair preview.';
+      }finally{
+        accountingPreviewAllSafe?.removeAttribute('disabled');
+      }
+    }
+
+    async function previewAccountingRepair(row){
+      if(!row?.recordId)return;
+      if(accountingRepairMessage)accountingRepairMessage.textContent='Loading a fresh live QuickBooks preview…';
+      if(accountingRepairBody)accountingRepairBody.innerHTML='';
+      accountingRepairApprove?.setAttribute('disabled','');
+      accountingRepairDialog?.showModal();
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'preview-accounting-repair',recordId:String(row.recordId)})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to preview this repair.');
+        setAccountingRepairDialogPreview(data,row);
+      }catch(error){
+        if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to preview this repair.';
+      }
+    }
+
+    async function approveAccountingRepair(){
+      const previewId=String(accountingRepairPreview?.previewId||'');
+      if(!previewId)return;
+      accountingRepairApprove?.setAttribute('disabled','');
+      if(accountingRepairMessage)accountingRepairMessage.textContent='Rechecking the live fingerprint and applying only the approved preview…';
+      try{
+        const response=await fetch('/api/admin/quickbooks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'apply-accounting-repair',previewId,approved:true})});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data?.error||'Unable to apply this repair.');
+        if(data?.bulkPreviewAudit)accountingBulkPreviewReport=data.bulkPreviewAudit;
+        if(accountingRepairMessage)accountingRepairMessage.textContent=data?.resolved?'Repair applied and reconciliation is clean. Approval was added to the bulk-preview audit.':'Repair applied; remaining accounting issues still require review. Approval was added to the bulk-preview audit.';
+        setTimeout(()=>{closeAccountingRepairDialog();document.querySelector('[data-refresh]')?.click();},800);
+      }catch(error){
+        if(accountingRepairMessage)accountingRepairMessage.textContent=error instanceof Error?error.message:'Unable to apply this repair.';
+        accountingRepairApprove?.removeAttribute('disabled');
+      }
+    }
+
+    accountingQueueButtons.forEach((button)=>button.addEventListener('click',()=>{accountingQueueFilter=String(button.dataset.accountingQueueFilter||'all');renderAccountingInvariantTable();}));
+    accountingFilterClear?.addEventListener('click',()=>{accountingQueueFilter='all';if(accountingFilterStatus)accountingFilterStatus.value='all';if(accountingFilterTaxable)accountingFilterTaxable.checked=false;if(accountingFilterMissingEstimate)accountingFilterMissingEstimate.checked=false;renderAccountingInvariantTable();});
+    accountingPreviewAllSafe?.addEventListener('click',previewAllSafeAccountingRepairs);
+    accountingBulkPreviewCsv?.addEventListener('click',()=>exportAccountingBulkPreview('csv'));
+    accountingBulkPreviewPdf?.addEventListener('click',()=>exportAccountingBulkPreview('pdf'));
+    document.querySelector('[data-accounting-bulk-preview-close]')?.addEventListener('click',()=>accountingBulkPreviewDialog?.close());
+    accountingBulkPreviewDialog?.addEventListener('click',(event)=>{if(event.target===accountingBulkPreviewDialog)accountingBulkPreviewDialog.close();});
+    document.querySelector('[data-accounting-repair-close]')?.addEventListener('click',closeAccountingRepairDialog);
+    document.querySelector('[data-accounting-repair-cancel]')?.addEventListener('click',closeAccountingRepairDialog);
+    accountingRepairApprove?.addEventListener('click',approveAccountingRepair);
+    accountingRepairDialog?.addEventListener('click',(event)=>{if(event.target===accountingRepairDialog)closeAccountingRepairDialog();});
+
+    function renderAccountingInvariantTable(){
+      if(!accountingInvariantTableBody)return;
+      const release=accountingReleaseAudits.find((row)=>String(row.commit||'')===String(accountingReleaseSelect?.value||''))||accountingReleaseAudits[0]||null;
+      const rows=Array.isArray(release?.rows)?release.rows:[];
+      const status=String(accountingFilterStatus?.value||'all');
+      const taxableOnly=Boolean(accountingFilterTaxable?.checked);
+      const missingEstimateOnly=Boolean(accountingFilterMissingEstimate?.checked);
+      accountingQueueCounts.forEach((node)=>{
+        const category=String(node.dataset.accountingQueueCount||'');
+        const count=category==='adjustment'
+          ? rows.filter((row)=>Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01).length
+          : rows.filter((row)=>String(row?.repairCategory||'')===category).length;
+        node.textContent=String(count);
+      });
+      if(accountingPreviewAllSafe){
+        const latestRows=Array.isArray(accountingReleaseAudits[0]?.rows)?accountingReleaseAudits[0].rows:[];
+        const failedLatest=latestRows.filter((row)=>String(row?.status||'')==='failed').length;
+        accountingPreviewAllSafe.disabled=failedLatest===0;
+        accountingPreviewAllSafe.textContent=failedLatest?'Preview all safe repairs · '+failedLatest:'No failed repairs to preview';
+      }
+      const filtered=rows.filter((row)=>{
+        if(status!=='all'&&String(row?.status||'unverified')!==status)return false;
+        if(taxableOnly&&!(Number(row?.taxableLines||0)>0))return false;
+        if(missingEstimateOnly&&row?.qboEstimate!=null&&String(row?.estimateId||''))return false;
+        if(accountingQueueFilter==='adjustment'&&Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))<0.01)return false;
+        if(accountingQueueFilter!=='all'&&accountingQueueFilter!=='adjustment'&&String(row?.repairCategory||'')!==accountingQueueFilter)return false;
+        return true;
+      });
+      accountingInvariantTableBody.innerHTML='';
+      for(const row of filtered){
+        const tr=document.createElement('tr');
+        tr.className='border-b border-[var(--koa-line)]/70 align-top';
+        const statusValue=String(row?.status||'unverified');
+        const statusClass=statusValue==='passed'?'text-emerald-800':statusValue==='failed'?'text-red-800':'text-amber-800';
+        const rawCategory=String(row?.repairCategory||'');
+        const hasAdjustment=Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01;
+        const category=rawCategory==='passed'&&hasAdjustment?'adjustment':rawCategory;
+        const cells=[
+          String(row?.client||row?.recordId||'—'),
+          accountingMoney(row?.crmTotal),
+          row?.lineTotal==null?'—':accountingMoney(row.lineTotal),
+          row?.lineTotal==null||row?.qboEstimate==null?'—':accountingMoney(Number(row.qboEstimate)-Number(row.lineTotal)),
+          row?.qboEstimate==null?'—':accountingMoney(row.qboEstimate),
+          row?.estimateDocNumber?'#'+String(row.estimateDocNumber):(row?.estimateId?String(row.estimateId):'—'),
+          row?.taxableLines==null?'—':String(row.taxableLines),
+          accountingQueueLabel(category),
+          statusValue,
+          String(row?.failureReason||''),
+        ];
+        cells.forEach((value,index)=>{
+          const td=document.createElement('td');
+          td.className='py-3 pr-4 '+(index===8?statusClass+' font-semibold':'text-[var(--koa-ink)]/70')+(index===9?' max-w-[360px] leading-5':'');
+          td.textContent=value||'—';
+          if(index===3&&row?.qboEstimate!=null){
+            const parts=[
+              row?.discountAmtField!=null?'DiscountAmt '+accountingMoney(row.discountAmtField):'',
+              row?.discountLineAmount!=null&&Number(row.discountLineAmount)!==0?'DiscountLine '+accountingMoney(row.discountLineAmount):'',
+              row?.totalTax!=null?'TxnTaxDetail.TotalTax '+accountingMoney(row.totalTax):'',
+              row?.applyTaxAfterDiscount!=null?'ApplyTaxAfterDiscount '+String(row.applyTaxAfterDiscount):'',
+            ].filter(Boolean);
+            if(parts.length)td.title=parts.join(' · ');
+            const explanation=String(row?.adjustmentExplanation||'');
+            if(explanation&&Math.abs(Number(row?.transactionAdjustment??row?.adjustmentTotal??0))>=0.01){
+              const note=document.createElement('p');
+              note.className='mt-1 max-w-[340px] text-[.6rem] leading-4 text-[var(--koa-ink)]/50';
+              note.textContent=explanation;
+              td.appendChild(note);
+            }
+          }
+          if(index===7&&['missing-estimate','taxable-lines','sales-line-mismatch','adjustment','unverified'].includes(category)){
+            td.classList.add('cursor-pointer','underline','underline-offset-2');
+            td.title='Filter the repair queue to '+accountingQueueLabel(category);
+            td.addEventListener('click',()=>{accountingQueueFilter=category;renderAccountingInvariantTable();});
+          }
+          tr.appendChild(td);
+        });
+        const actionTd=document.createElement('td');actionTd.className='py-3';
+        const action=document.createElement('button');action.type='button';action.className='rounded-full border border-[var(--koa-line)] bg-white px-3 py-2 text-[.54rem] font-black uppercase tracking-[.06em] text-[var(--koa-forest)]';
+        if(statusValue==='passed'){action.textContent='Clean';action.disabled=true;action.classList.add('opacity-40');}
+        else if(statusValue==='unverified'){action.textContent='Recheck';action.addEventListener('click',()=>document.querySelector('[data-refresh]')?.click());}
+        else{action.textContent='Preview repair';action.addEventListener('click',()=>previewAccountingRepair(row));}
+        actionTd.appendChild(action);tr.appendChild(actionTd);
+        accountingInvariantTableBody.appendChild(tr);
+      }
+      if(accountingInvariantTableEmpty)accountingInvariantTableEmpty.classList.toggle('hidden',filtered.length>0);
+      if(accountingInvariantTableMeta){
+        accountingInvariantTableMeta.textContent=release
+          ? filtered.length+' of '+rows.length+' rows shown · commit '+String(release.commit||'').slice(0,12)+' · '+String(release.status||'unverified')+' · '+(release.checkedAt?new Date(release.checkedAt).toLocaleString():'time unavailable')
+          : 'No signed production accounting release audit is available yet.';
+      }
+    }
+
+    function setAccountingReleaseAudits(audits){
+      accountingReleaseAudits=Array.isArray(audits)?audits:[];
+      if(accountingReleaseSelect){
+        accountingReleaseSelect.innerHTML='';
+        accountingReleaseAudits.forEach((row,index)=>{
+          const option=document.createElement('option');
+          option.value=String(row?.commit||'');
+          option.textContent=(index===0?'Latest · ':'')+String(row?.commit||'').slice(0,12)+' · '+String(row?.clientCount||0)+' clients · '+String(row?.status||'unverified');
+          accountingReleaseSelect.appendChild(option);
+        });
+      }
+      renderAccountingInvariantTable();
+    }
+
+    [accountingFilterStatus,accountingFilterTaxable,accountingFilterMissingEstimate,accountingReleaseSelect].forEach((node)=>{
+      node?.addEventListener('change',renderAccountingInvariantTable);
+    });
+
+    function renderAccountingHealth(summary,releaseAudits=[]){
       const data=summary||{};
+      setAccountingReleaseAudits(releaseAudits);
       const latest=data.latest||null;
       const healthy=Boolean(latest?.ok)&&String(latest?.severity||'')!=='red';
       const warning=Boolean(latest?.ok)&&String(latest?.severity||'')==='yellow';
@@ -4253,11 +4814,186 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       }
     }
 
+    function renderDarkModeVisualQuality(visualQuality){
+      const value=visualQuality&&typeof visualQuality==='object'?visualQuality:{};
+      const available=String(value.status||'')!=='unavailable'&&Boolean(value.checkedAt||value.commit||value.deployId);
+      const failed=String(value.status||'')==='failed';
+      const chromium=value.chromium||{};
+      const webkit=value.webkit||{};
+      const browserText=(row)=>{
+        if(row?.reportMissing){
+          const reasons:Record<string,string>={
+            'exact-deploy-unavailable':'exact production deployment unavailable',
+            'browser-audit-skipped':'browser audit skipped',
+            'browser-audit-failed-before-report':'audit failed before report creation',
+            'browser-report-missing':'report file not generated',
+            'invalid-browser-report':'invalid or incomplete report',
+          };
+          return 'Missing report · '+(reasons[String(row?.missingReason||'')]||'browser evidence unavailable');
+        }
+        const failures=Math.max(0,Number(row?.failureCount||0));
+        const failedRoutes=Math.max(0,Number(row?.failedRouteCount||0));
+        const cases=Math.max(0,Number(row?.cases||0));
+        return failedRoutes+' failed route'+(failedRoutes===1?'':'s')+' · '+failures+' failed case'+(failures===1?'':'s')+' · '+cases+' cases';
+      };
+      if(themeQaStatus){
+        themeQaStatus.textContent=!available?'Not recorded':failed?'Failed':'Passed';
+        themeQaStatus.className='rounded-full px-3 py-2 text-[.56rem] font-black uppercase tracking-[.08em] '+(
+          !available?'bg-slate-100 text-slate-700':
+          failed?'bg-red-100 text-red-800':
+          'bg-emerald-100 text-emerald-800'
+        );
+      }
+      if(themeQaChromiumRoutes)themeQaChromiumRoutes.textContent=available?(chromium.reportMissing?'Missing report':String(Number(chromium.routes||0))+' routes'):'—';
+      if(themeQaChromiumFailures)themeQaChromiumFailures.textContent=available?browserText(chromium):'No recorded audit yet.';
+      if(themeQaWebkitRoutes)themeQaWebkitRoutes.textContent=available?(webkit.reportMissing?'Missing report':String(Number(webkit.routes||0))+' routes'):'—';
+      if(themeQaWebkitFailures)themeQaWebkitFailures.textContent=available?browserText(webkit):'No recorded audit yet.';
+      if(themeQaCommit){
+        themeQaCommit.textContent=String(value.commit||'—');
+        themeQaCommit.title=String(value.commit||'');
+      }
+      if(themeQaDeploy){
+        themeQaDeploy.textContent=String(value.deployId||'—');
+        themeQaDeploy.title=String(value.deployId||'');
+      }
+      if(themeQaDetail)themeQaDetail.textContent=String(value.detail||(!available
+        ? 'No production Dark Mode visual-quality result has been recorded yet.'
+        : failed
+          ? 'The latest production theme audit recorded one or more browser failures or does not match the current production release.'
+          : 'Latest production Light / Dark / System audit passed in Chromium and WebKit and matches current production.'));
+      if(themeQaChecked)themeQaChecked.textContent='Last visual audit '+(value.checkedAt?new Date(value.checkedAt).toLocaleString():'—');
+
+      const screenshots=Array.isArray(value.screenshots)?value.screenshots:[];
+      const shotByKey=new Map(screenshots.map((row)=>[String(row?.key||''),row]));
+      const expectedShots=[
+        ['light-phone','Light · iPhone'],
+        ['dark-phone','Dark · iPhone'],
+        ['light-desktop','Light · desktop'],
+        ['dark-desktop','Dark · desktop'],
+      ];
+      if(themeQaScreenshots){
+        themeQaScreenshots.innerHTML='';
+        expectedShots.forEach(([key,label])=>{
+          const shot=shotByKey.get(key);
+          const card=document.createElement('article');
+          card.className='overflow-hidden rounded-xl border border-[var(--koa-line)] bg-[var(--koa-ivory)]';
+          if(shot?.url){
+            const opener=document.createElement('button');
+            opener.type='button';
+            opener.dataset.themeQaScreenshotOpen=String(key);
+            opener.className='group block w-full text-left focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[var(--koa-clay)]';
+            opener.setAttribute('aria-label','Open full-resolution Dark Mode QA screenshot · '+label);
+            opener.setAttribute('aria-haspopup','dialog');
+            opener.setAttribute('aria-controls','dark-mode-qa-screenshot-dialog');
+            const image=document.createElement('img');
+            image.src=String(shot.url);
+            image.alt='Dark Mode QA screenshot · '+label+' · '+String(shot.route||'/admin/health/');
+            image.loading='lazy';
+            image.className='aspect-[16/10] w-full object-cover object-top transition group-hover:scale-[1.01]';
+            opener.appendChild(image);
+            opener.addEventListener('click',(event)=>{
+              event.stopPropagation();
+              openThemeQaScreenshot(shot,label);
+            });
+            card.appendChild(opener);
+          }else{
+            const placeholder=document.createElement('div');
+            placeholder.className='flex aspect-[16/10] items-center justify-center px-3 text-center text-xs font-semibold text-[var(--koa-ink)]/45';
+            placeholder.textContent=available?'Screenshot not recorded':'Waiting for production QA';
+            card.appendChild(placeholder);
+          }
+          const caption=document.createElement('div');
+          caption.className='p-3';
+          const title=document.createElement('strong');
+          title.className='block text-xs text-[var(--koa-forest)]';
+          title.textContent=label;
+          const meta=document.createElement('p');
+          meta.className='mt-1 text-[.62rem] leading-4 text-[var(--koa-ink)]/48';
+          meta.textContent=shot
+            ? String(shot.browser||'browser')+' · '+String(shot.width||'—')+'×'+String(shot.height||'—')+' · '+String(shot.route||'')
+            : 'Protected release evidence';
+          caption.append(title,meta);
+          card.appendChild(caption);
+          themeQaScreenshots.appendChild(card);
+        });
+      }
+      if(themeQaScreenshotSummary){
+        themeQaScreenshotSummary.textContent=screenshots.length
+          ? screenshots.length+'/4 screenshots retained'
+          : available?'No screenshots retained':'Waiting for screenshots';
+      }
+
+      const chromiumRows=Array.isArray(chromium.routeResults)?chromium.routeResults:[];
+      const webkitRows=Array.isArray(webkit.routeResults)?webkit.routeResults:[];
+      const routeMap=new Map();
+      for(const row of chromiumRows){
+        const route=String(row?.route||'');
+        if(route)routeMap.set(route,{...(routeMap.get(route)||{}),route,chromium:row});
+      }
+      for(const row of webkitRows){
+        const route=String(row?.route||'');
+        if(route)routeMap.set(route,{...(routeMap.get(route)||{}),route,webkit:row});
+      }
+      const routeRows=[...routeMap.values()].sort((a,b)=>a.route.localeCompare(b.route));
+      if(themeQaRouteSummary){
+        const failedRoutes=routeRows.filter((row)=>row.chromium?.status==='failed'||row.webkit?.status==='failed').length;
+        themeQaRouteSummary.textContent=routeRows.length+' routes · '+failedRoutes+' failed';
+      }
+      if(themeQaRouteResults){
+        themeQaRouteResults.innerHTML='';
+        if(!routeRows.length){
+          const empty=document.createElement('p');
+          empty.className='rounded-xl bg-[var(--koa-ivory)] p-4 text-xs leading-5 text-[var(--koa-ink)]/50';
+          empty.textContent=available?'Route-level evidence was not retained for this release.':'No Dark Mode QA route evidence has been recorded yet.';
+          themeQaRouteResults.appendChild(empty);
+        }else{
+          routeRows.forEach((row)=>{
+            const item=document.createElement('article');
+            const failedRoute=row.chromium?.status==='failed'||row.webkit?.status==='failed';
+            item.className='rounded-xl border p-3 '+(failedRoute?'border-red-200 bg-red-50/60':'border-[var(--koa-line)] bg-[var(--koa-ivory)]');
+            const top=document.createElement('div');
+            top.className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between';
+            const route=document.createElement('code');
+            route.className='break-all text-[.68rem] font-bold text-[var(--koa-forest)]';
+            route.textContent=row.route;
+            const badges=document.createElement('div');
+            badges.className='flex flex-wrap gap-2 text-[.56rem] font-black uppercase tracking-[.06em]';
+            const badge=(browser,result)=>{
+              const el=document.createElement('span');
+              const state=String(result?.status||'missing');
+              el.className='rounded-full px-2.5 py-1 '+(state==='passed'?'bg-emerald-100 text-emerald-800':state==='failed'?'bg-red-100 text-red-800':'bg-slate-100 text-slate-600');
+              el.textContent=browser+' · '+(state==='passed'?'Passed':state==='failed'?'Failed':'Missing');
+              return el;
+            };
+            badges.append(badge('Chromium',row.chromium),badge('WebKit',row.webkit));
+            top.append(route,badges);
+            item.appendChild(top);
+            const detail=document.createElement('p');
+            detail.className='mt-2 text-[.62rem] leading-5 text-[var(--koa-ink)]/50';
+            detail.textContent='Chromium '+Number(row.chromium?.cases||0)+' cases · WebKit '+Number(row.webkit?.cases||0)+' cases';
+            item.appendChild(detail);
+            const failures=[
+              ...(Array.isArray(row.chromium?.failures)?row.chromium.failures.map((text)=>'Chromium · '+String(text)):[]),
+              ...(Array.isArray(row.webkit?.failures)?row.webkit.failures.map((text)=>'WebKit · '+String(text)):[]),
+            ];
+            if(failures.length){
+              const failureList=document.createElement('div');
+              failureList.className='mt-2 grid gap-1 text-[.62rem] leading-5 text-red-800';
+              failures.slice(0,24).forEach((text)=>{
+                const line=document.createElement('p');
+                line.textContent=text;
+                failureList.appendChild(line);
+              });
+              item.appendChild(failureList);
+            }
+            themeQaRouteResults.appendChild(item);
+          });
+        }
+      }
+    }
+
     function render(data){
       markDashboardRenderPanel('Core summary');
-      renderCoverage(data.coverage||{});
-      renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{});
-      renderAccountingHealth(data.accountingHealth||{});
       const current=data.current;
       if(current){
         const bad=current.overall==='unhealthy';
@@ -4360,6 +5096,14 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         results.innerHTML='<p class="text-sm text-[var(--koa-ink)]/50">No health snapshot has been recorded yet. Run checks now.</p>';
       }
 
+      // Hydrate the authoritative core summary first. Optional dashboard panels
+      // are isolated so one enrichment/rendering defect cannot leave Passed,
+      // Failed, Overall, or Last checked at their placeholder values.
+      renderDashboardPanel('Monitoring coverage',()=>renderCoverage(data.coverage||{}));
+      renderDashboardPanel('Dark Mode visual quality',()=>renderDarkModeVisualQuality(data.visualQuality||{}));
+      renderDashboardPanel('Critical Integrations',()=>renderCriticalIntegrations(data.criticalIntegrations||{},data.rollbackReady||{},data.runtime||{}));
+      renderDashboardPanel('Accounting Health',()=>renderAccountingHealth(data.accountingHealth||{},data.accountingReleaseAudits||[]));
+
       markDashboardRenderPanel('Health history');
       historyEl.innerHTML='';
       (data.history||[]).slice(0,20).forEach(row=>{
@@ -4369,12 +5113,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
         historyEl.appendChild(card);
       });
 
-      markDashboardRenderPanel('Email Health');
-      renderEmailHealth(data.emailHealth||{},data.current||null);
-      markDashboardRenderPanel('Credential Health');
-      renderCredentialHealth(data.credentialHealth||{});
-      markDashboardRenderPanel('Weekly executive summary');
-      renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{});
+      renderDashboardPanel('Email Health',()=>renderEmailHealth(data.emailHealth||{},data.current||null));
+      renderDashboardPanel('Credential Health',()=>renderCredentialHealth(data.credentialHealth||{}));
+      renderDashboardPanel('Weekly executive summary',()=>renderWeeklyExecutiveSummary(data.weeklyExecutiveSummary||{}));
       markDashboardRenderPanel('Office 365');
       const office365=data.office365||{};
       if(office365Operational){
@@ -5514,6 +6255,50 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
     window.addEventListener('focus',()=>{void maybeRetestPendingCredential();});
     document.addEventListener('visibilitychange',()=>{
       if(document.visibilityState==='visible')void maybeRetestPendingCredential();
+    });
+
+    function openThemeQaScreenshot(shot,label){
+      if(!themeQaScreenshotDialog||!themeQaScreenshotDialogImage||!shot?.url)return;
+      const title=String(label||'Production render');
+      themeQaScreenshotDialogTitle.textContent=title;
+      themeQaScreenshotDialogMeta.textContent=[
+        String(shot.browser||'browser'),
+        String(shot.width||'—')+'×'+String(shot.height||'—'),
+        String(shot.route||'/admin/health/'),
+      ].join(' · ');
+      themeQaScreenshotDialogImage.src=String(shot.url);
+      themeQaScreenshotDialogImage.alt='Full-resolution Dark Mode QA screenshot · '+title+' · '+String(shot.route||'/admin/health/');
+      themeQaScreenshotDialog.showModal();
+    }
+
+    function closeThemeQaScreenshot(){
+      if(themeQaScreenshotDialog?.open)themeQaScreenshotDialog.close();
+    }
+
+    function setThemeQaExpanded(expanded){
+      if(!themeQaCard||!themeQaDetails)return;
+      themeQaCard.dataset.expanded=expanded?'true':'false';
+      themeQaDetails.classList.toggle('hidden',!expanded);
+      if(themeQaToggle){
+        themeQaToggle.setAttribute('aria-expanded',expanded?'true':'false');
+        themeQaToggle.textContent=expanded?'Hide route results ↑':'View route results ↓';
+      }
+    }
+
+    themeQaToggle?.addEventListener('click',(event)=>{
+      event.stopPropagation();
+      setThemeQaExpanded(themeQaToggle.getAttribute('aria-expanded')!=='true');
+    });
+    themeQaCard?.addEventListener('click',(event)=>{
+      const target=event.target;
+      if(target instanceof Element&&target.closest('[data-theme-qa-screenshot-open],[data-theme-qa-toggle]'))return;
+      if(target instanceof Node&&themeQaDetails?.contains(target))return;
+      setThemeQaExpanded(themeQaCard.dataset.expanded!=='true');
+    });
+
+    themeQaScreenshotDialogClose?.addEventListener('click',closeThemeQaScreenshot);
+    themeQaScreenshotDialog?.addEventListener('click',(event)=>{
+      if(event.target===themeQaScreenshotDialog)closeThemeQaScreenshot();
     });
 
     async function load(){

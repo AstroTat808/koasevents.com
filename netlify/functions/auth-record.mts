@@ -4,9 +4,11 @@ import {
   appendAuthEvent,
   evaluateLoginRisk,
   registerManagedSession,
+  recordLoginFailureSignal,
   requestDeviceFingerprint,
   requestUserAgent,
   sendSuspiciousLoginAlert,
+  TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS,
 } from './_shared/auth-security';
 import { ipFingerprint } from './_shared/security';
 
@@ -27,6 +29,7 @@ export default async(req:Request,context:Context)=>{
 
   if(action==='failure'){
     if(!email.includes('@'))return Response.json({ok:true});
+    await recordLoginFailureSignal(email);
     const risk=await evaluateLoginRisk(email,ip,ua);
     await appendAuthEvent(context,{
       type:'login_failed',
@@ -112,7 +115,7 @@ export default async(req:Request,context:Context)=>{
       alert:{sent:alert.sent,suppressed:alert.suppressed,reason:alert.reason||''},
       session,
     });
-    if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000');
+    if(session?.id)response.headers.append('Set-Cookie','koa_sid='+encodeURIComponent(session.id)+'; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age='+TRUSTED_DEVICE_COOKIE_MAX_AGE_SECONDS);
     return response;
   }
 

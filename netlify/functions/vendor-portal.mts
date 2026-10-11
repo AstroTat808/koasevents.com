@@ -3,6 +3,7 @@ import { resolveTenant, resolveTenantAsync, runWithTenant } from './_shared/tena
 import { tenantStoreFor } from './_shared/tenant-storage';
 function storeFor(c:Context,req?:Request){return tenantStoreFor(c,resolveTenant(req),'vendors');}
 function clean(v:unknown,max=4000){return String(v??'').trim().slice(0,max);}
+function appearance(v:unknown){const x=clean(v,20).toLowerCase();return ['light','dark','system'].includes(x)?x:'light';}
 async function list(store:any,key:string){return ((await store.get(key,{type:'json'}))||[]) as any[];}
 function arr(v:unknown,max=40){return Array.isArray(v)?v.map(x=>clean(x,300)).filter(Boolean).slice(0,max):[];}
 export default async(req:Request,context:Context)=>{
@@ -16,11 +17,17 @@ export default async(req:Request,context:Context)=>{
   const requests=await list(store,'requests/index');
   if(req.method==='GET'){
     return Response.json({vendor:{
-      id:vendor.id,name:vendor.name,legalName:vendor.legalName,category:vendor.category,additionalCategories:vendor.additionalCategories||[],headline:vendor.headline,description:vendor.description,specialties:vendor.specialties||[],styles:vendor.styles||[],serviceAreas:vendor.serviceAreas||[],contactName:vendor.contactName,email:vendor.email,phone:vendor.phone,website:vendor.website,instagram:vendor.instagram,facebook:vendor.facebook,startingPrice:vendor.startingPrice,priceNotes:vendor.priceNotes,travelFees:vendor.travelFees,responseTime:vendor.responseTime,logoUrl:vendor.logoUrl,coverImage:vendor.coverImage,insurance:vendor.insurance||{}
+      id:vendor.id,name:vendor.name,legalName:vendor.legalName,category:vendor.category,additionalCategories:vendor.additionalCategories||[],headline:vendor.headline,description:vendor.description,specialties:vendor.specialties||[],styles:vendor.styles||[],serviceAreas:vendor.serviceAreas||[],contactName:vendor.contactName,email:vendor.email,phone:vendor.phone,website:vendor.website,instagram:vendor.instagram,facebook:vendor.facebook,startingPrice:vendor.startingPrice,priceNotes:vendor.priceNotes,travelFees:vendor.travelFees,responseTime:vendor.responseTime,logoUrl:vendor.logoUrl,coverImage:vendor.coverImage,appearancePreference:appearance(vendor?.portalPreferences?.appearancePreference),insurance:vendor.insurance||{}
     },requests:requests.filter(r=>r.vendorId===vendor.id).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))},{headers:{'Cache-Control':'private, no-store'}});
   }
   if(req.method!=='POST')return new Response('Method not allowed',{status:405});
   const body:any=await req.json().catch(()=>null);const action=clean(body?.action,50);
+  if(action==='save-appearance-preference'){
+    const appearancePreference=appearance(body?.appearancePreference);
+    vendor.portalPreferences={...(vendor.portalPreferences||{}),appearancePreference,updatedAt:new Date().toISOString()};
+    await store.setJSON('vendors/index',vendors);
+    return Response.json({ok:true,appearancePreference});
+  }
   if(action==='save-profile'){
     vendor.legalName=clean(body?.legalName,180);vendor.headline=clean(body?.headline,240);vendor.description=clean(body?.description,6000);vendor.specialties=arr(body?.specialties);vendor.styles=arr(body?.styles);vendor.serviceAreas=arr(body?.serviceAreas);vendor.contactName=clean(body?.contactName,180);vendor.email=clean(body?.email,240);vendor.phone=clean(body?.phone,80);vendor.website=clean(body?.website,600);vendor.instagram=clean(body?.instagram,600);vendor.facebook=clean(body?.facebook,600);vendor.startingPrice=clean(body?.startingPrice,120);vendor.priceNotes=clean(body?.priceNotes,800);vendor.travelFees=clean(body?.travelFees,500);vendor.responseTime=clean(body?.responseTime,120);vendor.logoUrl=clean(body?.logoUrl,1000);vendor.coverImage=clean(body?.coverImage,1000);vendor.updatedAt=new Date().toISOString();
     await store.setJSON('vendors/index',vendors);return Response.json({ok:true});

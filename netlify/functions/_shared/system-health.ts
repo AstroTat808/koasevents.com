@@ -9,10 +9,11 @@ import { emailRenderingFiles } from './email-health';
 import { credentialHealthSummary } from './credential-health';
 import { qboGet, qboQuery, quickBooksWebhookVerifierToken } from './quickbooks';
 import { CHRIS_SIBEL_ACCOUNTING_INVARIANT, evaluateAccountingTaxInvariant, evaluateChrisSibelLiveInvariant, evaluateLiveClientAccountingInvariant, inspectQuickBooksNonTaxCode } from './quickbooks-accounting-invariant.mjs';
-import { quickBooksAccountingScope } from './quickbooks-accounting-scope.mjs';
+import { currentBookingStatus, quickBooksAccountingScope } from './quickbooks-accounting-scope.mjs';
 import { syntheticHealthToken } from './synthetic-health';
 import { tenantEnv } from './tenant-env';
 import { runCriticalIntegrationRollbackDrill, selectRollbackTargetFromReleases } from './critical-integration-release-guard.mjs';
+import { authenticationSecurityHealthSummary } from './auth-security';
 
 export type HealthIssueType =
   | 'Service Failure'
@@ -76,6 +77,29 @@ export type HealthCheck = {
         estimateDocNumber: string;
         proposalTotal: number;
         estimateTotal: number | null;
+        lineTotal?: number | null;
+        transactionAdjustment?: number | null;
+        adjustmentExplanation?: string;
+        salesLineDetails?: Array<{
+          id: string;
+          description: string;
+          amount: number;
+          itemId: string;
+          itemName: string;
+          taxCode: string;
+        }>;
+        adjustmentTotal?: number | null;
+        discountAmtField?: number | null;
+        discountLineAmount?: number | null;
+        totalTax?: number | null;
+        applyTaxAfterDiscount?: boolean | null;
+        nonSalesAdjustments?: Array<{
+          detailType: string;
+          amount: number;
+          discountPercent: number | null;
+          percentBased: boolean | null;
+          taxRateRef: string;
+        }>;
         taxableLineCount: number | null;
         failures: string[];
         detail: string;
@@ -108,6 +132,37 @@ export type HealthCheck = {
     returnedMarker: string;
     expectedMarker: string;
     expectedStatus: 204;
+  };
+  authSecurityDetails?: {
+    failureThresholdOk: boolean;
+    failureThreshold: number;
+    failureWindowMinutes: number;
+    trustedDeviceStorageOk: boolean;
+    cooldownStorageOk: boolean;
+    cooldownHours: number;
+    lastHighRiskAlert: {
+      sentAt: string;
+      device: string;
+      reasons: string[];
+    } | null;
+    lastDuplicateSuppressedAt: string;
+  };
+  visualQaDetails?: {
+    productionCommit: string;
+    productionDeployId: string;
+    recordedQaCommit: string;
+    recordedQaDeployId: string;
+    commitMismatch: boolean;
+    deployMismatch: boolean;
+    reportMissing: boolean;
+    missingReports?: Array<{browser: 'chromium' | 'webkit'; reason: string}>;
+    failures: Array<{
+      route: string;
+      browser: 'chromium' | 'webkit';
+      viewport: string;
+      theme: string;
+      detail: string;
+    }>;
   };
 };
 
@@ -193,6 +248,7 @@ const PAGE_CHECKS = [
 const API_CHECKS = [
   ['admin-session','Admin session API','/api/admin/session'],
   ['account-profile-api','Account Profile API','/api/account/profile'],
+  ['account-security-api','Account Security API','/api/account/security'],
   ['workspace-alerts-api','Action Center API','/api/admin/workspace-alerts'],
   ['business-crm-api','Business CRM API','/api/admin/crm'],
   ['sales-crm-api','Sales CRM API','/api/admin/quotes'],
@@ -330,6 +386,29 @@ export function productionAccountingVerification(snapshot:HealthSnapshot):Produc
     dynamicClientPassedCount:Number(liveClients?.passedCount||0),
     dynamicClientFailedCount:Number(liveClients?.failedCount||0),
     dynamicClientUnverifiedCount:Number(liveClients?.unverifiedCount||0),
+    dynamicClientRows:(Array.isArray(liveClients?.rows)?liveClients.rows:[]).map((row:any)=>({
+      recordId:String(row?.recordId||''),
+      client:String(row?.clientName||row?.recordId||''),
+      crmTotal:Math.round(Number(row?.proposalTotal||0)*100)/100,
+      qboEstimate:row?.estimateTotal==null?null:Math.round(Number(row.estimateTotal||0)*100)/100,
+      lineTotal:row?.lineTotal==null?null:Math.round(Number(row.lineTotal||0)*100)/100,
+      transactionAdjustment:row?.transactionAdjustment==null?null:Math.round(Number(row.transactionAdjustment||0)*100)/100,
+      adjustmentExplanation:String(row?.adjustmentExplanation||''),
+      salesLineDetails:Array.isArray(row?.salesLineDetails)?row.salesLineDetails:[],
+      adjustmentTotal:row?.adjustmentTotal==null?null:Math.round(Number(row.adjustmentTotal||0)*100)/100,
+      discountAmtField:row?.discountAmtField==null?null:Math.round(Number(row.discountAmtField||0)*100)/100,
+      discountLineAmount:row?.discountLineAmount==null?null:Math.round(Number(row.discountLineAmount||0)*100)/100,
+      totalTax:row?.totalTax==null?null:Math.round(Number(row.totalTax||0)*100)/100,
+      applyTaxAfterDiscount:row?.applyTaxAfterDiscount==null?null:Boolean(row.applyTaxAfterDiscount),
+      nonSalesAdjustments:Array.isArray(row?.nonSalesAdjustments)?row.nonSalesAdjustments:[],
+      estimateId:String(row?.estimateId||''),
+      estimateDocNumber:String(row?.estimateDocNumber||''),
+      taxableLines:row?.taxableLineCount==null?null:Number(row.taxableLineCount),
+      status:String(row?.status||'unverified'),
+      failureReason:Array.isArray(row?.failures)&&row.failures.length
+        ? row.failures.map((value:any)=>String(value)).join('; ')
+        : (String(row?.status||'')==='passed'?'':String(row?.detail||'')),
+    })),
     detail:String(accountingCheck?.detail||''),
   };
   const accountingVerified=Boolean(
@@ -360,7 +439,9 @@ export function healthComponents() {
     ...PAGE_CHECKS.map(([id,name,path])=>({id,name,path,kind:'page' as const})),
     {id:'business-crm-startup',name:'Business CRM startup',path:'/admin/crm/',kind:'page' as const},
     {id:'netlify-github-sync',name:'Netlify ↔ GitHub deployment',path:'main → production',kind:'api' as const},
+    {id:'dark-mode-qa',name:'Dark Mode QA',path:'Light / Dark / System · Chromium + WebKit',kind:'api' as const},
     {id:'quickbooks-tax-invariant',name:'QuickBooks tax-on-tax invariant',path:'$15,000.00 + $706.80 tax = $15,706.80',kind:'api' as const},
+    {id:'login-alert-policy',name:'Sign-in alert policy',path:'3 failures / 30 min · trusted devices · 24h cooldown',kind:'api' as const},
     {id:'credential-quickbooks',name:'QuickBooks credential',path:'Credential Health · QuickBooks',kind:'api' as const},
     {id:'credential-microsoft-graph',name:'Microsoft Graph credential',path:'Credential Health · Microsoft Graph',kind:'api' as const},
     {id:'credential-github',name:'GitHub credential',path:'Credential Health · GitHub',kind:'api' as const},
@@ -371,6 +452,7 @@ export function healthComponents() {
     {id:'turnstile-secret',name:'Turnstile server secret',path:'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET',kind:'api' as const},
     {id:'turnstile-widgets',name:'Turnstile widget rendering',path:'4 protected public forms',kind:'api' as const},
     {id:'turnstile-siteverify',name:'Turnstile Siteverify',path:'Cloudflare /siteverify',kind:'api' as const},
+    {id:'turnstile-infrastructure-events',name:'Turnstile infrastructure failure events',path:'Recent server-side verification infrastructure failures',kind:'api' as const},
     {id:'turnstile-validation-history',name:'Turnstile validation history',path:'Recent successful + failed validations',kind:'api' as const},
     {id:'turnstile-hostname-action',name:'Turnstile hostname + action matching',path:'Recent validation mismatches',kind:'api' as const},
     {id:'signwell-webhook-registration',name:'SignWell webhook registration',path:'SignWell GET /hooks',kind:'api' as const},
@@ -411,12 +493,12 @@ export function healthCoverageSummary(snapshot:HealthSnapshot|null|undefined=nul
 
 function defaultAlertAfter(id:string):1|2 {
   const immediate=new Set([
-    'action-center','business-crm','business-crm-startup','netlify-github-sync','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
-    'admin-session','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
+    'action-center','business-crm','business-crm-startup','netlify-github-sync','dark-mode-qa','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
+    'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
-    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
+    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-infrastructure-events','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
-    'quickbooks-tax-invariant',
+    'quickbooks-tax-invariant','login-alert-policy',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
     'synthetic-event-documents','synthetic-vendor-insurance-document','synthetic-quickbooks-webhook','synthetic-signwell-webhook',
   ]);
@@ -527,6 +609,11 @@ export function classifyHealthIssue(row: HealthCheck): HealthIssueType | null {
     || status===403
     || /permission|forbidden|consent|access denied|insufficient scope|restricted to only send|authorization denied|github.*http 404|private repositories return 404/.test(detail)
   ) return 'Permission Problem';
+
+  if(
+    id==='dark-mode-qa'
+    && (row?.severity==='red'||!row?.ok)
+  ) return 'Service Failure';
 
   if(
     status===408
@@ -1415,9 +1502,11 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
   const tenant=resolveTenant();
   const now=new Date().toISOString();
   const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
-  const candidates=records
+  const acceptedBooked=records
     .filter((record:any)=>record?.kind==='proposal'&&record?.proposal&&record?.archived!==true)
-    .filter((record:any)=>['accepted','booked'].includes(String(record?.proposal?.status||record?.status||'').trim().toLowerCase()))
+    .filter((record:any)=>Boolean(currentBookingStatus(record)));
+  const historicalRows=acceptedBooked.filter((record:any)=>quickBooksAccountingScope(record).historicalQuickBooksImport);
+  const candidates=acceptedBooked
     .filter((record:any)=>quickBooksAccountingScope(record).actionable)
     .sort((a:any,b:any)=>String(a?.customer?.eventDate||'9999').localeCompare(String(b?.customer?.eventDate||'9999'))||String(a?.id||'').localeCompare(String(b?.id||'')));
 
@@ -1429,10 +1518,11 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
       recordId:String(record?.id||''),
       clientName:String(record?.customer?.name||record?.id||''),
       eventDate:String(record?.customer?.eventDate||'').slice(0,10),
-      proposalStatus:String(record?.proposal?.status||record?.status||''),
+      proposalStatus:currentBookingStatus(record),
       estimateId,
       estimateDocNumber:String(qbo?.estimateDocNumber||''),
       proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
+      accountingScope:quickBooksAccountingScope(record).mode,
     };
     if(!estimateId){
       return {
@@ -1466,6 +1556,14 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
         estimateDocNumber:String(evaluation.estimateDocNumber||base.estimateDocNumber),
         proposalTotal:Number(evaluation.proposalTotal||0),
         estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        lineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
+        transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        adjustmentTotal:evaluation.adjustmentTotal==null?null:Number(evaluation.adjustmentTotal),
+        discountAmtField:evaluation.discountAmtField==null?null:Number(evaluation.discountAmtField),
+        discountLineAmount:evaluation.discountLineAmount==null?null:Number(evaluation.discountLineAmount),
+        totalTax:evaluation.totalTax==null?null:Number(evaluation.totalTax),
+        applyTaxAfterDiscount:evaluation.applyTaxAfterDiscount==null?null:Boolean(evaluation.applyTaxAfterDiscount),
+        nonSalesAdjustments:Array.isArray(evaluation.nonSalesAdjustments)?evaluation.nonSalesAdjustments:[],
         taxableLineCount:Number(evaluation.taxableLineCount||0),
         failures:Array.isArray(evaluation.failures)?evaluation.failures.map((value:any)=>String(value)):[],
         detail:evaluation.ok
@@ -1498,12 +1596,93 @@ async function acceptedBookedLiveAccountingInvariants(context:Context) {
     failedCount,
     unverifiedCount,
     rows,
+    historicalClientCount:historicalRows.length,
     detail:rows.length===0
-      ? 'No accepted/booked proposals currently require a live CRM ↔ QuickBooks invariant.'
+      ? 'No CRM-managed accepted/booked proposals currently require a live CRM ↔ QuickBooks invariant. '+historicalRows.length+' imported QuickBooks-history booking(s) remain visible as non-blocking accounting context.'
       : failedCount||unverifiedCount
         ? passedCount+' of '+rows.length+' accepted/booked client invariants passed. '+problemRows.map((row:any)=>row.clientName+': '+row.detail).join(' ')
-        : 'All '+rows.length+' accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines.',
+        : 'All '+rows.length+' CRM-managed accepted/booked client invariants passed against live QuickBooks estimates with zero taxable sales lines. '+historicalRows.length+' imported QuickBooks-history booking(s) are non-blocking.',
   };
+}
+
+export async function accountingAdjustmentDiagnostics(context:Context,requestedRecordIds:unknown[]=[]){
+  const tenant=resolveTenant();
+  const recordIds=[...new Set((Array.isArray(requestedRecordIds)?requestedRecordIds:[])
+    .map((value)=>clean(value,120))
+    .filter(Boolean))].slice(0,20);
+  if(!recordIds.length)throw new Error('At least one accounting record id is required.');
+  const records=((await tenantStoreFor(context,tenant,'sales').get('records/index',{type:'json'}))||[]) as any[];
+  return mapWithConcurrency(recordIds,4,async(recordId)=>{
+    const record=records.find((entry:any)=>String(entry?.id||'')===recordId&&entry?.kind==='proposal');
+    if(!record)return {recordId,status:'missing' as const,error:'Proposal record not found.'};
+    const qbo=record?.accounting?.quickbooks||{};
+    const estimateId=String(qbo?.estimateId||'').trim();
+    const base={
+      recordId,
+      clientName:clean(record?.customer?.name||recordId,180),
+      eventDate:String(record?.customer?.eventDate||'').slice(0,10),
+      proposalStatus:currentBookingStatus(record),
+      accountingScope:quickBooksAccountingScope(record).mode,
+      historicalQuickBooksImport:Boolean(quickBooksAccountingScope(record).historicalQuickBooksImport),
+      estimateId,
+      estimateDocNumber:clean(qbo?.estimateDocNumber,120),
+      proposalTotal:Math.round(Number(record?.proposal?.total||0)*100)/100,
+    };
+    if(!estimateId)return {...base,status:'missing-estimate' as const,error:'No linked QuickBooks estimate.'};
+    try{
+      const data:any=await qboGet(context,'estimate',estimateId);
+      const estimate=data?.Estimate||null;
+      if(!estimate)return {...base,status:'missing-estimate' as const,error:'QuickBooks did not return the linked estimate.'};
+      const evaluation:any=evaluateLiveClientAccountingInvariant(record,estimate);
+      const lines=Array.isArray(estimate?.Line)?estimate.Line:[];
+      const salesLines=lines.filter((line:any)=>line?.DetailType==='SalesItemLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        itemId:clean(line?.SalesItemLineDetail?.ItemRef?.value,120),
+        itemName:clean(line?.SalesItemLineDetail?.ItemRef?.name,240),
+        taxCode:clean(line?.SalesItemLineDetail?.TaxCodeRef?.value,80),
+      }));
+      const discountLines=lines.filter((line:any)=>line?.DetailType==='DiscountLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        percentBased:line?.DiscountLineDetail?.PercentBased==null?null:Boolean(line.DiscountLineDetail.PercentBased),
+        discountPercent:line?.DiscountLineDetail?.DiscountPercent==null?null:Number(line.DiscountLineDetail.DiscountPercent),
+        discountAccountRef:clean(line?.DiscountLineDetail?.DiscountAccountRef?.value,120),
+      }));
+      const taxLines=lines.filter((line:any)=>line?.DetailType==='TaxLineDetail').map((line:any)=>({
+        id:clean(line?.Id,120),
+        amount:Math.round(Number(line?.Amount||0)*100)/100,
+        taxRateRef:clean(line?.TaxLineDetail?.TaxRateRef?.value,120),
+        percentBased:line?.TaxLineDetail?.PercentBased==null?null:Boolean(line.TaxLineDetail.PercentBased),
+        taxPercent:line?.TaxLineDetail?.TaxPercent==null?null:Number(line.TaxLineDetail.TaxPercent),
+        netAmountTaxable:line?.TaxLineDetail?.NetAmountTaxable==null?null:Math.round(Number(line.TaxLineDetail.NetAmountTaxable||0)*100)/100,
+      }));
+      const hasOwn=(key:string)=>Object.prototype.hasOwnProperty.call(estimate,key);
+      return {
+        ...base,
+        status:'verified' as const,
+        estimateDocNumber:clean(estimate?.DocNumber||base.estimateDocNumber,120),
+        estimateTotal:evaluation.estimateTotal==null?null:Number(evaluation.estimateTotal),
+        salesLineTotal:evaluation.lineTotal==null?null:Number(evaluation.lineTotal),
+        transactionAdjustment:evaluation.transactionAdjustment==null?null:Number(evaluation.transactionAdjustment),
+        adjustmentExplanation:String(evaluation.adjustmentExplanation||''),
+        taxableLineCount:Number(evaluation.taxableLineCount||0),
+        rawFields:{
+          discountAmtPresent:hasOwn('DiscountAmt'),
+          discountAmt:hasOwn('DiscountAmt')?Math.round(Number(estimate.DiscountAmt||0)*100)/100:null,
+          applyTaxAfterDiscountPresent:hasOwn('ApplyTaxAfterDiscount'),
+          applyTaxAfterDiscount:hasOwn('ApplyTaxAfterDiscount')?Boolean(estimate.ApplyTaxAfterDiscount):null,
+          txnTaxDetailPresent:Boolean(estimate?.TxnTaxDetail),
+          txnTaxDetailTotalTax:estimate?.TxnTaxDetail?.TotalTax==null?null:Math.round(Number(estimate.TxnTaxDetail.TotalTax||0)*100)/100,
+          discountLines,
+          taxLines,
+        },
+        salesLines,
+      };
+    }catch(error){
+      return {...base,status:'error' as const,error:error instanceof Error?clean(error.message,1000):'QuickBooks estimate read failed.'};
+    }
+  });
 }
 
 async function quickBooksTaxInvariantHealthCheck(context:Context):Promise<HealthCheck> {
@@ -1681,7 +1860,9 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   );
   const syntheticChecksPromise=syntheticIntegrationChecks(context,origin,source!=='hourly');
   const accountingInvariantPromise=quickBooksTaxInvariantHealthCheck(context);
-  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck]=await Promise.all([
+  const authSecurityHealthPromise=authenticationSecurityHealthSummary(context);
+  const darkModeQaHealthPromise=darkModeQaHealthCheck(context);
+  const [baseChecks,startupSignal,deploymentSync,emailHealth,credentialHealth,syntheticChecks,accountingInvariantCheck,authSecurityHealth,darkModeQaCheck]=await Promise.all([
     Promise.all([...pageChecks,...apiChecks]),
     readCrmStartupSignal(context),
     inspectDeploymentSync(context),
@@ -1689,6 +1870,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     credentialHealthPromise,
     syntheticChecksPromise,
     accountingInvariantPromise,
+    authSecurityHealthPromise,
+    darkModeQaHealthPromise,
   ]);
   const deployId=clean(Netlify.env.get('DEPLOY_ID'),120);
   const commit=clean(Netlify.env.get('COMMIT_REF'),120);
@@ -1712,6 +1895,45 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
         ? 'Logged-in staff browser confirmed the CRM interface initialized successfully'
         : 'No logged-in browser startup failure has been reported for the current deploy',
   };
+  const authLastHighRisk=authSecurityHealth.lastHighRiskAlert;
+  const authSecurityCheck:HealthCheck={
+    id:'login-alert-policy',
+    name:'Sign-in alert policy',
+    kind:'api',
+    path:'3 failures / 30 min · trusted devices · 24h cooldown',
+    ok:Boolean(authSecurityHealth.ok),
+    status:authSecurityHealth.ok?200:503,
+    ms:Number(authSecurityHealth.ms||0),
+    severity:authSecurityHealth.ok?'green':'red',
+    detail:clean(
+      'Alert threshold '+(authSecurityHealth.failureThresholdOk?'passed':'failed')
+      +' · email only after '+authSecurityHealth.failureThreshold+' failed sign-ins within '+authSecurityHealth.failureWindowMinutes+' minutes'
+      +' · trusted-device storage '+(authSecurityHealth.trustedDeviceStorageOk?'healthy':'failed')
+      +' · duplicate-alert cooldown storage '+(authSecurityHealth.cooldownStorageOk?'healthy':'failed')
+      +' · cooldown '+authSecurityHealth.cooldownHours+'h'
+      +' · last high-risk email '+(authLastHighRisk?.sentAt
+        ? authLastHighRisk.sentAt+(authLastHighRisk.device?' · '+authLastHighRisk.device:'')
+        : 'none recorded under the current policy')
+      +(authSecurityHealth.lastDuplicateSuppressedAt?' · last duplicate suppressed '+authSecurityHealth.lastDuplicateSuppressedAt:'')
+      +(authSecurityHealth.errors?.length?' · '+authSecurityHealth.errors.join(' · '):''),
+      1400,
+    ),
+    authSecurityDetails:{
+      failureThresholdOk:Boolean(authSecurityHealth.failureThresholdOk),
+      failureThreshold:Number(authSecurityHealth.failureThreshold||3),
+      failureWindowMinutes:Number(authSecurityHealth.failureWindowMinutes||30),
+      trustedDeviceStorageOk:Boolean(authSecurityHealth.trustedDeviceStorageOk),
+      cooldownStorageOk:Boolean(authSecurityHealth.cooldownStorageOk),
+      cooldownHours:Number(authSecurityHealth.cooldownHours||24),
+      lastHighRiskAlert:authLastHighRisk?{
+        sentAt:clean(authLastHighRisk.sentAt,80),
+        device:clean(authLastHighRisk.device,160),
+        reasons:Array.isArray(authLastHighRisk.reasons)?authLastHighRisk.reasons.map((reason)=>clean(reason,300)).slice(0,10):[],
+      }:null,
+      lastDuplicateSuppressedAt:clean(authSecurityHealth.lastDuplicateSuppressedAt,80),
+    },
+  };
+
   const deploymentSyncCheck:HealthCheck={
     id:'netlify-github-sync',
     name:'Netlify ↔ GitHub deployment',
@@ -1917,6 +2139,11 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const turnstileMismatches=turnstileDiag?.mismatches||{};
   const turnstileLastSuccess=turnstileDiag?.lastSuccess||null;
   const turnstileLastFailure=turnstileDiag?.lastFailure||null;
+  const turnstileTelemetry=turnstileDiag?.telemetry||{};
+  const turnstileRecordingHealthy=Boolean(turnstileTelemetry?.ok);
+  const turnstileActivity=turnstileDiag?.activity||{};
+  const recentInfrastructureRejections=Number(turnstileActivity?.infrastructureRejected15m||0);
+  const expectedChallengeRejections=Number(turnstileActivity?.expectedRejected24h||0);
 
   const turnstileSiteKeyCheck:HealthCheck={
     id:'turnstile-site-key',
@@ -1981,22 +2208,53 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     detail:clean(turnstileSiteverify?.detail||'Cloudflare Siteverify status is unavailable.',1200),
   };
 
+  const turnstileInfrastructureEventCheck:HealthCheck={
+    id:'turnstile-infrastructure-events',
+    name:'Turnstile infrastructure failure events',
+    kind:'api',
+    path:'Recent server-side Siteverify infrastructure failures',
+    ok:recentInfrastructureRejections===0,
+    status:recentInfrastructureRejections===0?200:503,
+    ms:0,
+    severity:recentInfrastructureRejections===0?'green':'red',
+    detail:clean(
+      String(recentInfrastructureRejections)+' server-side infrastructure verification errors in 15 min · '
+      +String(expectedChallengeRejections)+' invalid/missing/expired challenge rejections in 24h are informational, not outages'
+      +' · '+String(Number(turnstileActivity?.unclassifiedRejected24h||0))+' unclassified rejections need review',
+      1200,
+    ),
+  };
+
   const turnstileValidationHistoryCheck:HealthCheck={
     id:'turnstile-validation-history',
     name:'Turnstile validation history',
     kind:'api',
     path:'Recent successful + failed validations',
-    ok:true,
-    status:turnstileLastSuccess?200:0,
+    ok:turnstileRecordingHealthy,
+    status:turnstileRecordingHealthy?200:503,
     ms:0,
-    severity:turnstileLastSuccess?'green':'yellow',
+    severity:turnstileRecordingHealthy?'green':'red',
     detail:clean(
-      String(Number(turnstileTotals?.successful||0))+' successful · '
-      +String(Number(turnstileTotals?.failed||0))+' failed · '
+      (turnstileRecordingHealthy
+        ? 'Append-only validation recording verified by independent write/read/delete probe'
+        : 'Validation recording unhealthy: '+(!turnstileTelemetry?.writable
+          ? 'storage round-trip failed'
+          : 'unreadable event records or truncated history'))
+      +' · '+String(Number(turnstileTotals?.successful||0))+' accepted · '
+      +String(Number(turnstileTotals?.failed||0))+' rejected · '
       +String(Number(turnstileTotals?.validations||0))+' total in '
       +String(Number(turnstileDiag?.windowDays||30))+'d'
-      +(turnstileLastSuccess?.createdAt?' · Last success '+String(turnstileLastSuccess.createdAt):' · No successful validation recorded yet')
-      +(turnstileLastFailure?.createdAt?' · Last failure '+String(turnstileLastFailure.createdAt):' · No failed validation recorded'),
+      +' · '+String(Number(turnstileTelemetry?.appendOnlyEvents||0))+' append-only events'
+      +' · '+String(Number(turnstileTelemetry?.legacyEvents||0))+' legacy records'
+      +' · '+String(expectedChallengeRejections)+' expected challenge rejections (24h, informational)'
+      +' · '+String(recentInfrastructureRejections)+' infrastructure verification errors (15m)'
+      +(Number(turnstileTotals?.smokePattern||0)>0
+        ? ' · '+String(Number(turnstileTotals.smokePattern))+' rejections match CI smoke-test signature (untrusted hint; retained in failure totals)'
+        : '')
+      +(turnstileLastSuccess?.createdAt
+        ? ' · Last accepted '+String(turnstileLastSuccess.createdAt)
+        : ' · No accepted production token recorded; this alone is not a service failure')
+      +(turnstileLastFailure?.createdAt?' · Last rejected '+String(turnstileLastFailure.createdAt):' · No rejected validation recorded'),
       1200,
     ),
   };
@@ -2146,7 +2404,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,accountingInvariantCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileInfrastructureEventCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
@@ -2515,6 +2773,71 @@ function esc(value:unknown){
   return String(value??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
+function darkModeQaAlertDiagnostics(current:HealthSnapshot){
+  if(!(current.alertFailedIds||[]).includes('dark-mode-qa'))return null;
+  const check=current.checks.find((row)=>row.id==='dark-mode-qa');
+  const details=check?.visualQaDetails;
+  if(!details)return null;
+  const failures=(Array.isArray(details.failures)?details.failures:[]).map((row)=>({
+    route:clean(row?.route,300)||'unknown route',
+    browser:row?.browser==='webkit'?'webkit' as const:'chromium' as const,
+    viewport:clean(row?.viewport,80)||'unknown',
+    theme:clean(row?.theme,120)||'unknown',
+    detail:clean(row?.detail,500),
+  }));
+  return {
+    productionCommit:clean(details.productionCommit,120)||'unknown',
+    recordedQaCommit:clean(details.recordedQaCommit,120)||'unknown',
+    productionDeployId:clean(details.productionDeployId,120)||'unknown',
+    recordedQaDeployId:clean(details.recordedQaDeployId,120)||'unknown',
+    commitMismatch:Boolean(details.commitMismatch),
+    deployMismatch:Boolean(details.deployMismatch),
+    reportMissing:Boolean(details.reportMissing),
+    missingReports:(Array.isArray(details.missingReports)?details.missingReports:[])
+      .map((row)=>({
+        browser:row?.browser==='webkit'?'webkit' as const:'chromium' as const,
+        reason:clean(row?.reason,180)||'browser report unavailable',
+      }))
+      .slice(0,2),
+    failures,
+  };
+}
+
+function darkModeQaAlertLines(current:HealthSnapshot){
+  const diagnostic=darkModeQaAlertDiagnostics(current);
+  if(!diagnostic)return [] as string[];
+  const lines=[
+    'Production commit: '+diagnostic.productionCommit,
+    'Recorded QA commit: '+diagnostic.recordedQaCommit,
+    'Production deploy: '+diagnostic.productionDeployId,
+    'Recorded QA deploy: '+diagnostic.recordedQaDeployId,
+  ];
+  if(diagnostic.commitMismatch)lines.push('Commit mismatch: yes');
+  if(diagnostic.deployMismatch)lines.push('Deploy mismatch: yes');
+  if(diagnostic.reportMissing)lines.push('Browser report missing: yes');
+  for(const row of diagnostic.missingReports){
+    lines.push('Missing '+row.browser+' QA report: '+row.reason);
+  }
+  if(diagnostic.failures.length){
+    const groups=new Map<string,{browser:string;viewport:string;theme:string;routes:Set<string>;details:Set<string>}>();
+    for(const row of diagnostic.failures){
+      const key=[row.browser,row.viewport,row.theme].join('|');
+      const group=groups.get(key)||{browser:row.browser,viewport:row.viewport,theme:row.theme,routes:new Set<string>(),details:new Set<string>()};
+      group.routes.add(row.route);
+      if(row.detail)group.details.add(row.detail);
+      groups.set(key,group);
+    }
+    for(const group of groups.values()){
+      const routes=[...group.routes].sort().join(', ');
+      const details=[...group.details].slice(0,3).join(' / ');
+      lines.push('Failed routes · '+group.browser+' · '+group.viewport+' · '+group.theme+' · '+routes+(details?' · '+details:''));
+    }
+  }else{
+    lines.push('Failed routes: none recorded; the alert is caused by release mismatch or missing browser evidence.');
+  }
+  return lines;
+}
+
 async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames:string[],recoveredNames:string[],brokenNames:string[]) {
   const apiKey=clean(tenantEnv(resolveTenant(),'RESEND_API_KEY'),500);
   if(!apiKey) return {channel:'email',sent:false,reason:'resend-not-configured'};
@@ -2535,6 +2858,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
   const summary=fullyRecovered
     ? 'All monitored Koa’s admin/staff services are healthy again.'
     : 'The health monitor detected a change in system health.';
+  const darkModeLines=darkModeQaAlertLines(current);
   const html='<!DOCTYPE html><html lang="en" dir="ltr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="format-detection" content="telephone=no,date=no,address=no,email=no,url=no"><title>Koa’s System Health alert</title></head><body style="margin:0;padding:0;background:#f5f0e7;font-family:Arial,Helvetica,sans-serif;color:#173d30">'
     +'<table role="presentation" lang="en" dir="ltr" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="padding-top:20px;padding-right:10px;padding-bottom:20px;padding-left:10px">'
     +'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:680px;background:#fff;border:1px solid #e7dfd0;border-radius:20px">'
@@ -2545,6 +2869,12 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     +(brokenNames.length?'<p><strong>Newly failing:</strong> '+brokenNames.map(esc).join(', ')+'</p>':'')
     +(recoveredNames.length?'<p><strong>Recovered:</strong> '+recoveredNames.map(esc).join(', ')+'</p>':'')
     +(failedNames.length?'<p><strong>Still failing:</strong> '+failedNames.map(esc).join(', ')+'</p>':'')
+    +(darkModeLines.length
+      ? '<div style="margin-top:18px;padding:14px;border:1px solid #e7dfd0;border-radius:14px;background:#fbf8f2">'
+        +'<p style="margin-top:0"><strong>Dark Mode QA diagnostics</strong></p>'
+        +'<ul style="margin-bottom:0;padding-left:20px">'+darkModeLines.map((line)=>'<li style="margin:6px 0;line-height:1.45">'+esc(line)+'</li>').join('')+'</ul>'
+        +'</div>'
+      : '')
     +'<p style="font-size:12px;color:#66736d">Checked '+esc(current.checkedAt)+' · '+failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s')+'</p>'
     +emailButton({href:'https://koasevents.com/admin/health/',label:'Open System Health',marginTop:20})
     +emailSignature()
@@ -2555,6 +2885,7 @@ async function sendHealthEmail(current:HealthSnapshot,transition:any,failedNames
     brokenNames.length?'Newly failing: '+brokenNames.join(', '):'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', '):'',
     failedNames.length?'Still failing: '+failedNames.join(', '):'',
+    ...(darkModeLines.length?['Dark Mode QA diagnostics:',...darkModeLines]:[]),
     'Checked: '+current.checkedAt,
     'System Health: https://koasevents.com/admin/health/','',
     emailSignatureText(),
@@ -2580,11 +2911,13 @@ async function sendHealthSlack(current:HealthSnapshot,failedNames:string[],recov
   const webhook=clean(Netlify.env.get('KOA_HEALTH_SLACK_WEBHOOK_URL'),1000);
   if(!webhook) return {channel:'slack',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
+  const darkModeLines=darkModeQaAlertLines(current);
   const lines=[
     recovered?'✅ *Koa’s System Health recovered*':'🚨 *Koa’s System Health changed*',
     brokenNames.length?'*Newly failing:* '+brokenNames.join(', '):'',
     recoveredNames.length?'*Recovered:* '+recoveredNames.join(', '):'',
     failedNames.length?'*Still failing:* '+failedNames.join(', '):'',
+    ...(darkModeLines.length?['*Dark Mode QA diagnostics:*',...darkModeLines.map((line)=>'• '+line)]:[]),
     failedNames.length+' confirmed alert condition'+(failedNames.length===1?'':'s'),
     '<https://koasevents.com/admin/health/|Open System Health>',
   ].filter(Boolean);
@@ -2608,11 +2941,13 @@ async function sendHealthSms(current:HealthSnapshot,failedNames:string[],recover
   const recipients=clean(Netlify.env.get('KOA_HEALTH_SMS_TO'),500).split(',').map(v=>v.trim()).filter(Boolean);
   if(!sid||!token||!from||!recipients.length) return {channel:'sms',sent:false,reason:'not-configured'};
   const recovered=(current.alertFailedIds||[]).length===0;
+  const darkModeLines=darkModeQaAlertLines(current);
   const parts=[
     recovered?'Koa’s System Health recovered.':'Koa’s System Health alert.',
     brokenNames.length?'New failing: '+brokenNames.join(', ')+'.':'',
     recoveredNames.length?'Recovered: '+recoveredNames.join(', ')+'.':'',
     failedNames.length?'Still failing: '+failedNames.join(', ')+'.':'',
+    darkModeLines.length?'Dark Mode QA: '+darkModeLines.join(' | ')+'.':'',
     'https://koasevents.com/admin/health/',
   ].filter(Boolean);
   const body=parts.join(' ').slice(0,1200);
@@ -2676,6 +3011,52 @@ export type ProductionAccountingVerification = {
   invariant:any;
 };
 
+export type ProductionVisualQualityRouteResult = {
+  route:string;
+  status:'passed'|'failed';
+  cases:number;
+  failureCount:number;
+  failures:string[];
+  failedCases?:Array<{
+    theme:string;
+    viewport:string;
+    detail:string;
+  }>;
+};
+
+export type ProductionVisualQualityBrowser = {
+  browser:'chromium'|'webkit';
+  routes:number;
+  cases:number;
+  failureCount:number;
+  failedRouteCount:number;
+  reportMissing:boolean;
+  routeResults:ProductionVisualQualityRouteResult[];
+};
+
+export type ProductionVisualQualityScreenshot = {
+  key:string;
+  theme:'light'|'dark';
+  viewport:'phone'|'desktop';
+  browser:'chromium'|'webkit';
+  route:string;
+  width:number;
+  height:number;
+  contentType:'image/jpeg';
+};
+
+export type ProductionVisualQuality = {
+  checkedAt:string;
+  status:'passed'|'failed';
+  source:'production-visual-qa';
+  runId:string;
+  commit:string;
+  deployId:string;
+  chromium:ProductionVisualQualityBrowser;
+  webkit:ProductionVisualQualityBrowser;
+  screenshots?:ProductionVisualQualityScreenshot[];
+};
+
 export type ProductionRelease = {
   deployId:string;
   commit:string;
@@ -2688,6 +3069,7 @@ export type ProductionRelease = {
   verification:any;
   syntheticProbeVerification?:SyntheticProbeReleaseVerification|null;
   accountingVerification?:ProductionAccountingVerification|null;
+  visualQuality?:ProductionVisualQuality|null;
   rollbackProtection?:ProductionRollbackProtection|null;
   authorName:string;
   authorLogin:string;
@@ -2702,6 +3084,182 @@ const PRODUCTION_RELEASE_AUDIT_INDEX_KEY='deployments/releases/audit-index';
 export async function readProductionReleases(context:Context,limit=50):Promise<ProductionRelease[]> {
   const rows=((await healthStore(context).get('deployments/releases',{type:'json'})) || []) as ProductionRelease[];
   return rows.slice(0,Math.max(1,Math.min(100,limit)));
+}
+
+function productionVisualThumbnailStorageKey(deployId:string,key:string){
+  const cleanDeploy=clean(deployId,120);
+  const cleanKey=clean(key,64);
+  if(!cleanDeploy||!/^(light|dark)-(phone|desktop)$/.test(cleanKey)) throw new Error('Invalid Dark Mode QA screenshot key.');
+  return 'deployments/visual-quality/screenshots/'+cleanDeploy+'/'+cleanKey;
+}
+
+export async function recordProductionVisualThumbnail(context:Context,deployId:string,input:any):Promise<ProductionVisualQualityScreenshot>{
+  const key=clean(input?.key,64);
+  const theme=input?.theme==='dark'?'dark':'light';
+  const viewport=input?.viewport==='desktop'?'desktop':'phone';
+  const browser=input?.browser==='webkit'?'webkit':'chromium';
+  const route=clean(input?.route,300)||'/admin/health/';
+  const width=Math.max(1,Math.min(1600,Math.floor(Number(input?.width||0)||1)));
+  const height=Math.max(1,Math.min(1200,Math.floor(Number(input?.height||0)||1)));
+  const dataBase64=String(input?.dataBase64||'').replace(/\s+/g,'');
+  if(key!==theme+'-'+viewport) throw new Error('Dark Mode QA screenshot key does not match its theme and viewport.');
+  if(!dataBase64||dataBase64.length>900000||!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64)){
+    throw new Error('Dark Mode QA screenshot payload is invalid or too large.');
+  }
+  const contentType:'image/jpeg'='image/jpeg';
+  await healthStore(context).setJSON(productionVisualThumbnailStorageKey(deployId,key),{
+    key,theme,viewport,browser,route,width,height,contentType,dataBase64,recordedAt:new Date().toISOString(),
+  });
+  return {key,theme,viewport,browser,route,width,height,contentType};
+}
+
+export async function readProductionVisualThumbnail(context:Context,deployId:string,key:string){
+  try{
+    const value:any=await healthStore(context).get(productionVisualThumbnailStorageKey(deployId,key),{type:'json'});
+    if(!value?.dataBase64)return null;
+    return {
+      key:clean(value.key,64),
+      theme:value.theme==='dark'?'dark':'light',
+      viewport:value.viewport==='desktop'?'desktop':'phone',
+      browser:value.browser==='webkit'?'webkit':'chromium',
+      route:clean(value.route,300),
+      width:Number(value.width||0),
+      height:Number(value.height||0),
+      contentType:'image/jpeg',
+      dataBase64:String(value.dataBase64||''),
+    };
+  }catch{
+    return null;
+  }
+}
+
+export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck>{
+  const started=Date.now();
+  const productionDeployId=clean(Netlify.env.get('DEPLOY_ID'),120);
+  const productionCommit=clean(Netlify.env.get('COMMIT_REF'),120);
+  let releases:ProductionRelease[]=[];
+  try{
+    releases=await readProductionReleases(context,50);
+  }catch(error){
+    return {
+      id:'dark-mode-qa',
+      name:'Dark Mode QA',
+      kind:'api',
+      path:'Light / Dark / System · Chromium + WebKit',
+      ok:true,
+      status:0,
+      ms:Date.now()-started,
+      severity:'yellow',
+      detail:'Dark Mode QA release evidence could not be read: '+clean(error instanceof Error?error.message:'unknown storage error',600),
+    };
+  }
+  const release=releases.find((row)=>row?.visualQuality&&productionDeployId&&clean(row?.deployId,120)===productionDeployId)
+    || releases.find((row)=>row?.visualQuality&&productionCommit&&clean(row?.commit,120)===productionCommit)
+    || releases.find((row)=>row?.visualQuality)
+    || null;
+  const visual=release?.visualQuality||null;
+  if(!visual){
+    return {
+      id:'dark-mode-qa',
+      name:'Dark Mode QA',
+      kind:'api',
+      path:'Light / Dark / System · Chromium + WebKit',
+      ok:true,
+      status:204,
+      ms:Date.now()-started,
+      severity:'yellow',
+      detail:'No production Dark Mode QA result has been recorded yet. The next production visual audit will populate route-by-route Chromium/WebKit evidence.',
+    };
+  }
+  const chromium:any=visual.chromium||{};
+  const webkit:any=visual.webkit||{};
+  const failureCount=Math.max(0,Number(chromium.failureCount||0))+Math.max(0,Number(webkit.failureCount||0));
+  const failedRouteCount=Math.max(0,Number(chromium.failedRouteCount||0))+Math.max(0,Number(webkit.failedRouteCount||0));
+  const reportMissing=Boolean(chromium.reportMissing||webkit.reportMissing);
+  const reasonLabels:Record<string,string>={
+    'exact-deploy-unavailable':'the exact production SHA was not deployed, so browser QA did not run',
+    'browser-audit-skipped':'the browser audit step was skipped',
+    'browser-audit-failed-before-report':'the browser audit failed before writing its report',
+    'browser-report-missing':'the browser audit did not produce a report file',
+    'invalid-browser-report':'the report file was missing required results or was invalid',
+  };
+  const missingReports=([
+    {browser:'chromium' as const,value:chromium},
+    {browser:'webkit' as const,value:webkit},
+  ]).filter((row)=>Boolean(row.value.reportMissing)).map(({browser,value})=>({
+    browser,
+    reason:reasonLabels[clean(value.missingReason,80)]||'browser report unavailable',
+  }));
+  const qaCommit=clean(visual.commit||release?.commit,120);
+  const qaDeployId=clean(visual.deployId||release?.deployId,120);
+  const commitMismatch=Boolean(productionCommit&&qaCommit&&productionCommit!==qaCommit);
+  const deployMismatch=Boolean(productionDeployId&&qaDeployId&&productionDeployId!==qaDeployId);
+  const mismatch=commitMismatch||deployMismatch;
+  const failed=String(visual.status||'')==='failed'||reportMissing||failureCount>0||failedRouteCount>0;
+  const collectFailedCases=(browser:'chromium'|'webkit',rows:any[])=>rows.flatMap((row:any)=>{
+    const route=clean(row?.route,300);
+    if(!route||String(row?.status||'')!=='failed')return [];
+    const cases=Array.isArray(row?.failedCases)?row.failedCases:[];
+    if(cases.length){
+      return cases.map((item:any)=>({
+        route,
+        browser,
+        viewport:clean(item?.viewport,80)||'unknown',
+        theme:clean(item?.theme,120)||'unknown',
+        detail:clean(item?.detail,500)||'Dark Mode QA browser case failed.',
+      }));
+    }
+    const fallback=(Array.isArray(row?.failures)?row.failures:[]).slice(0,12);
+    return fallback.length
+      ? fallback.map((message:any)=>({route,browser,viewport:'unknown',theme:'unknown',detail:clean(message,500)}))
+      : [{route,browser,viewport:'unknown',theme:'unknown',detail:'Dark Mode QA browser case failed.'}];
+  });
+  const failedCases=[
+    ...collectFailedCases('chromium',Array.isArray(chromium.routeResults)?chromium.routeResults:[]),
+    ...collectFailedCases('webkit',Array.isArray(webkit.routeResults)?webkit.routeResults:[]),
+  ].slice(0,240);
+  const ok=!failed&&!mismatch;
+  let detail='';
+  if(failed){
+    detail='Dark Mode QA failed: '+failedRouteCount+' failed route result'+(failedRouteCount===1?'':'s')
+      +' · '+failureCount+' failed browser case'+(failureCount===1?'':'s')
+      +' · Chromium '+Math.max(0,Number(chromium.failedRouteCount||0))+' failed routes'
+      +' · WebKit '+Math.max(0,Number(webkit.failedRouteCount||0))+' failed routes'
+      +(reportMissing?' · Missing browser evidence: '+missingReports.map((row)=>row.browser+' — '+row.reason).join('; '):'')+'.';
+  }else if(mismatch){
+    detail='Dark Mode QA evidence is stale for production: recorded commit '+(qaCommit||'unknown')
+      +' / deploy '+(qaDeployId||'unknown')+' does not match current production commit '+(productionCommit||'unknown')
+      +' / deploy '+(productionDeployId||'unknown')+'.';
+  }else{
+    detail='Dark Mode QA passed for current production · Chromium '+Number(chromium.routes||0)+' routes'
+      +' · WebKit '+Number(webkit.routes||0)+' routes · commit '+(qaCommit||'unknown')+' · deploy '+(qaDeployId||'unknown')+'.';
+  }
+  if(failed&&mismatch){
+    detail+=' Recorded QA commit/deploy also does not match current production.';
+  }
+  return {
+    id:'dark-mode-qa',
+    name:'Dark Mode QA',
+    kind:'api',
+    path:'Light / Dark / System · Chromium + WebKit',
+    ok,
+    // A failed visual regression is an application QA assertion failure, not an upstream outage.
+    status:ok?200:mismatch?409:422,
+    ms:Date.now()-started,
+    severity:ok?'green':'red',
+    detail:clean(detail,1400),
+    visualQaDetails:{
+      productionCommit,
+      productionDeployId,
+      recordedQaCommit:qaCommit,
+      recordedQaDeployId:qaDeployId,
+      commitMismatch,
+      deployMismatch,
+      reportMissing,
+      missingReports,
+      failures:failedCases,
+    },
+  };
 }
 
 export async function readAllProductionReleaseAudits(context:Context):Promise<ProductionRelease[]> {
@@ -3065,6 +3623,7 @@ export async function recordProductionRelease(context:Context,input:any) {
     verification:input?.verification||previous?.verification||null,
     syntheticProbeVerification:input?.syntheticProbeVerification||previous?.syntheticProbeVerification||null,
     accountingVerification:input?.accountingVerification||previous?.accountingVerification||null,
+    visualQuality:input?.visualQuality||previous?.visualQuality||null,
     rollbackProtection:input?.rollbackProtection||previous?.rollbackProtection||null,
     authorName,
     authorLogin,

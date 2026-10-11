@@ -20,6 +20,8 @@ export default async (req:Request) => {
   const jobTitle = clean(metadata?.job_title || metadata?.jobTitle || '',120);
   const pronouns = clean(metadata?.pronouns || '',80);
   const roleDescription = clean(metadata?.role_description || metadata?.roleDescription || '',220);
+  const appearancePreferenceRaw=clean(metadata?.appearance_preference || '',20).toLowerCase();
+  const appearancePreference=['light','dark','system'].includes(appearancePreferenceRaw)?appearancePreferenceRaw:'';
   const photoUrl = metadata?.has_profile_photo===true
     ? '/api/staff/photo/'+encodeURIComponent(clean(ctx.user?.id,120))+(metadata?.profile_photo_version?'?v='+encodeURIComponent(clean(metadata.profile_photo_version,80)):'')
     : '';
@@ -47,6 +49,7 @@ export default async (req:Request) => {
     jobTitle,
     pronouns,
     roleDescription,
+    appearancePreference,
     photoUrl,
     signature:{
       showTitle:metadata?.signature_show_title!==false,

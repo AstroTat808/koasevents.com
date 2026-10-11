@@ -12,6 +12,11 @@ function userMetadataFor(user:any){
   return user?.userMetadata||user?.user_metadata||{};
 }
 
+function cleanAppearancePreference(value:unknown,fallback=''){
+  const normalized=clean(value,20).toLowerCase();
+  return ['light','dark','system'].includes(normalized)?normalized:fallback;
+}
+
 function cleanMobileNav(value:unknown){
   const allowed=new Set([
     'home','actions','crm','sales','email','events','calendar','quickbooks','health','staff','vendors','insurance','profitability','gallery',
@@ -111,6 +116,7 @@ export default async(req:Request,context:Context)=>{
       },
       photoUrl:meta?.has_profile_photo===true?('/api/staff/photo/'+encodeURIComponent(clean(user?.id,120))+(meta?.profile_photo_version?'?v='+encodeURIComponent(clean(meta.profile_photo_version,80)):'')):'',
       email:clean(user?.email,240).toLowerCase(),
+      appearancePreference:cleanAppearancePreference(meta?.appearance_preference),
       mobileNav:cleanMobileNav(meta?.mobile_nav_items),
       actionCenterPreferences:cleanActionCenterPreferences(meta?.action_center_preferences),
       adminHomeLayout,
@@ -175,6 +181,31 @@ export default async(req:Request,context:Context)=>{
       adminHomeLayout,
       personalAdminHomeLayout:adminHomeLayout,
       message:'My Layout saved for this account.',
+    },{headers:{'Cache-Control':'private, no-store'}});
+  }
+
+  if(clean(body.action,60)==='save-appearance-preference'){
+    const appearancePreference=cleanAppearancePreference(body.appearancePreference);
+    if(!appearancePreference)return Response.json({error:'Appearance must be Light, Dark, or System.'},{status:400});
+    const currentMeta=userMetadataFor(user);
+    await admin.updateUser(user.id,{
+      user_metadata:{
+        ...currentMeta,
+        appearance_preference:appearancePreference,
+      },
+    });
+    await appendStaffAudit(context,{
+      actor:clean(user?.email,240).toLowerCase(),
+      action:'self_appearance_preference_updated',
+      subjectId:clean(user?.id,120),
+      subjectEmail:clean(user?.email,240).toLowerCase(),
+      detail:'Updated personal Light / Dark / System appearance preference.',
+      metadata:{appearancePreference},
+    });
+    return Response.json({
+      ok:true,
+      appearancePreference,
+      message:'Appearance synced to your account.',
     },{headers:{'Cache-Control':'private, no-store'}});
   }
 

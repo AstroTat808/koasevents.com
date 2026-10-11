@@ -1,0 +1,169 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+---
+<BaseLayout noindex title="Mobile Bar Conversion Analytics" description="Koa’s Mobile Bar package selection, quote funnel and completed-inquiry analytics." canonical="https://koasevents.com/admin/mobile-bar-conversion/">
+  <main class="min-h-screen bg-[var(--koa-sand)] py-10 sm:py-12">
+    <div class="container-shell grid gap-6">
+      <header class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+        <div>
+          <p class="eyebrow text-[var(--koa-clay)]">Koa’s Mobile Bar</p>
+          <h1 class="display mt-3 text-4xl text-[var(--koa-forest)] sm:text-5xl">Conversion Analytics</h1>
+          <p class="mt-3 max-w-3xl text-sm leading-6 text-[var(--koa-ink)]/60">See which package experiences attract clicks, where quote sessions stop, and which package produces completed CRM inquiries.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/crm/" class="rounded-full border border-[var(--koa-line)] bg-white px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">Business CRM</a>
+          <a href="/admin/" class="rounded-full bg-[var(--koa-forest)] px-4 py-2.5 text-xs font-black uppercase tracking-[.08em] text-white">Admin Home</a>
+        </div>
+      </header>
+
+      <section data-conversion-status class="rounded-[1.4rem] border border-[var(--koa-line)] bg-white p-6 shadow-[var(--shadow-soft)]">
+        <p class="eyebrow text-[var(--koa-clay)]">Mobile Bar funnel</p>
+        <p data-conversion-status-message class="mt-2 text-sm font-semibold text-[var(--koa-forest)]">Loading conversion analytics…</p>
+      </section>
+
+      <section data-conversion-unauthorized class="hidden rounded-[1.4rem] bg-white p-8 shadow-[var(--shadow-soft)]">
+        <strong class="text-[var(--koa-forest)]">Business CRM access required.</strong>
+        <p class="mt-2 text-sm text-[var(--koa-ink)]/60">Your current admin role does not include CRM analytics access.</p>
+      </section>
+
+      <div data-conversion-ui class="hidden grid gap-6">
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Reporting window</p>
+              <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Quote journey</h2>
+              <p data-window-meta class="mt-2 text-xs text-[var(--koa-ink)]/50"></p>
+            </div>
+            <div class="flex gap-2" role="group" aria-label="Analytics date range">
+              <button data-range="7" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">7 days</button>
+              <button data-range="30" class="rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white">30 days</button>
+              <button data-range="90" class="rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]">90 days</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Tracked sessions</p><p data-kpi-sessions class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Package-card clicks</p><p data-kpi-card-clicks class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-white p-5 shadow-[var(--shadow-soft)]"><p class="eyebrow text-[var(--koa-clay)]">Comparison clicks</p><p data-kpi-comparison-clicks class="display mt-3 text-4xl text-[var(--koa-forest)]">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-forest)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Quote starts</p><p data-kpi-starts class="display mt-3 text-4xl">0</p></article>
+          <article class="rounded-[1.3rem] bg-[var(--koa-ink)] p-5 text-white"><p class="eyebrow text-[var(--koa-amber-light)]">Completed inquiries</p><p data-kpi-completed class="display mt-3 text-4xl">0</p></article>
+          <article class="rounded-[1.3rem] border border-amber-200 bg-amber-50 p-5"><p class="eyebrow text-amber-800">Abandonment</p><p data-kpi-abandonment class="display mt-3 text-4xl text-amber-950">—</p></article>
+        </section>
+
+        <section class="grid gap-6 xl:grid-cols-[.82fr_1.18fr]">
+          <article class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+            <p class="eyebrow text-[var(--koa-clay)]">Quote funnel</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Where sessions progress</h2>
+            <div data-funnel class="mt-6 grid gap-3"></div>
+          </article>
+
+          <article class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+            <p class="eyebrow text-[var(--koa-clay)]">Package performance</p>
+            <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Clicks → completed inquiries</h2>
+            <p class="mt-2 text-xs leading-5 text-[var(--koa-ink)]/55">Completed inquiries come from CRM records. Tracked conversion uses post-rollout sessions so historical inquiries do not distort the percentage.</p>
+            <div class="mt-5 overflow-x-auto">
+              <table class="w-full min-w-[760px] border-collapse text-left text-sm">
+                <thead>
+                  <tr class="border-b border-[var(--koa-line)] text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">
+                    <th class="py-3 pr-4">Package</th>
+                    <th class="px-3 py-3 text-right">Card clicks</th>
+                    <th class="px-3 py-3 text-right">Compare clicks</th>
+                    <th class="px-3 py-3 text-right">Selecting sessions</th>
+                    <th class="px-3 py-3 text-right">CRM inquiries</th>
+                    <th class="py-3 pl-3 text-right">Tracked conversion</th>
+                  </tr>
+                </thead>
+                <tbody data-package-table></tbody>
+              </table>
+            </div>
+          </article>
+        </section>
+
+        <section class="rounded-[1.5rem] bg-white p-5 shadow-[var(--shadow-soft)] sm:p-6">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p class="eyebrow text-[var(--koa-clay)]">Abandonment detail</p>
+              <h2 class="display mt-2 text-3xl text-[var(--koa-forest)]">Last recorded quote stage</h2>
+            </div>
+            <p class="max-w-xl text-xs leading-5 text-[var(--koa-ink)]/50">Sessions that later produced a tracked successful submission are excluded from abandonment.</p>
+          </div>
+          <div data-abandonment class="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-3"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script is:inline>
+    (() => {
+      const $ = (selector) => document.querySelector(selector);
+      const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[char]));
+      let days = 30;
+
+      function activeRange() {
+        document.querySelectorAll('[data-range]').forEach((button) => {
+          const active = Number(button.dataset.range) === days;
+          button.className = active
+            ? 'rounded-full bg-[var(--koa-forest)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-white'
+            : 'rounded-full border border-[var(--koa-line)] px-3 py-2 text-[.62rem] font-black uppercase tracking-[.08em] text-[var(--koa-forest)]';
+        });
+      }
+
+      function render(data) {
+        const metrics = data.metrics || {};
+        $('[data-kpi-sessions]').textContent = metrics.trackedSessions ?? 0;
+        $('[data-kpi-card-clicks]').textContent = metrics.packageCardClicks ?? 0;
+        $('[data-kpi-comparison-clicks]').textContent = metrics.comparisonClicks ?? 0;
+        $('[data-kpi-starts]').textContent = metrics.quoteStarts ?? 0;
+        $('[data-kpi-completed]').textContent = metrics.completedInquiries ?? 0;
+        $('[data-kpi-abandonment]').textContent = metrics.abandonmentRate == null ? '—' : metrics.abandonmentRate + '%';
+        $('[data-window-meta]').textContent = 'Last ' + data.days + ' days · refreshed ' + new Date(data.generatedAt).toLocaleString();
+
+        const funnel = Array.isArray(data.funnel) ? data.funnel : [];
+        const max = Math.max(1, ...funnel.map((row) => Number(row.count || 0)));
+        $('[data-funnel]').innerHTML = funnel.map((row) => {
+          const width = Math.max(3, Math.round((Number(row.count || 0) / max) * 100));
+          return '<div><div class="flex items-center justify-between gap-4 text-sm"><strong class="text-[var(--koa-forest)]">'+esc(row.label)+'</strong><span class="font-black">'+Number(row.count || 0)+'</span></div><div class="mt-2 h-2 overflow-hidden rounded-full bg-[var(--koa-sand)]"><div class="h-full rounded-full bg-[var(--koa-clay)]" style="width:'+width+'%"></div></div></div>';
+        }).join('');
+
+        $('[data-package-table]').innerHTML = (data.packages || []).map((row) => '<tr class="border-b border-[var(--koa-line)]/70"><th class="py-4 pr-4 font-black text-[var(--koa-forest)]">'+esc(row.label)+'</th><td class="px-3 py-4 text-right">'+Number(row.cardClicks || 0)+'</td><td class="px-3 py-4 text-right">'+Number(row.comparisonClicks || 0)+'</td><td class="px-3 py-4 text-right">'+Number(row.selectionSessions || 0)+'</td><td class="px-3 py-4 text-right font-black">'+Number(row.completedInquiries || 0)+'</td><td class="py-4 pl-3 text-right">'+(row.trackedConversionRate == null ? '—' : row.trackedConversionRate + '%')+'</td></tr>').join('');
+
+        const abandoned = Array.isArray(data.abandonment) ? data.abandonment : [];
+        $('[data-abandonment]').innerHTML = abandoned.length
+          ? abandoned.map((row) => '<article class="rounded-xl border border-[var(--koa-line)] bg-[var(--koa-sand)] p-4"><p class="text-[.58rem] font-black uppercase tracking-[.08em] text-[var(--koa-clay)]">'+esc(row.label)+'</p><p class="display mt-2 text-3xl text-[var(--koa-forest)]">'+Number(row.count || 0)+'</p></article>').join('')
+          : '<p class="text-sm text-[var(--koa-ink)]/55">No tracked abandonment in this reporting window.</p>';
+      }
+
+      async function load() {
+        activeRange();
+        const status = $('[data-conversion-status]');
+        const message = $('[data-conversion-status-message]');
+        status?.classList.remove('hidden');
+        if (message) message.textContent = 'Loading conversion analytics…';
+        try {
+          const response = await fetch('/api/admin-mobile-bar-conversion?days=' + days, { cache:'no-store' });
+          if (response.status === 401 || response.status === 403) {
+            status?.classList.add('hidden');
+            $('[data-conversion-ui]')?.classList.add('hidden');
+            $('[data-conversion-unauthorized]')?.classList.remove('hidden');
+            return;
+          }
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || 'Analytics service unavailable.');
+          $('[data-conversion-unauthorized]')?.classList.add('hidden');
+          $('[data-conversion-ui]')?.classList.remove('hidden');
+          status?.classList.add('hidden');
+          render(data);
+        } catch (error) {
+          if (message) message.textContent = error instanceof Error ? error.message : 'Conversion analytics could not load.';
+        }
+      }
+
+      document.querySelectorAll('[data-range]').forEach((button) => button.addEventListener('click', () => {
+        days = Number(button.dataset.range) || 30;
+        load();
+      }));
+      load();
+    })();
+  </script>
+</BaseLayout>

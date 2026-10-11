@@ -1,0 +1,553 @@
+import { readFile } from 'node:fs/promises';
+
+const health = await readFile(new URL('../src/pages/admin/health/index.astro', import.meta.url), 'utf8');
+const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
+const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
+const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
+const systemHealth = await readFile(new URL('../netlify/functions/_shared/system-health.ts', import.meta.url), 'utf8');
+const adminQuickBooks = await readFile(new URL('../netlify/functions/admin-quickbooks.mts', import.meta.url), 'utf8');
+const accountingInvariantSource = await readFile(new URL('../netlify/functions/_shared/quickbooks-accounting-invariant.mjs', import.meta.url), 'utf8');
+const accountingRepairExport = await readFile(new URL('../netlify/functions/_shared/quickbooks-accounting-repair-export.ts', import.meta.url), 'utf8');
+const { explainQuickBooksTransactionAdjustment } = await import(new URL('../netlify/functions/_shared/quickbooks-accounting-invariant.mjs', import.meta.url));
+const githubHealthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
+const healthSignal = await readFile(new URL('../netlify/functions/github-main-health-signal.ts', import.meta.url), 'utf8');
+const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta.url), 'utf8');
+const themeVisualQa = await readFile(new URL('./theme_visual_qa.py', import.meta.url), 'utf8');
+const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
+const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
+const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+assert(
+  health.includes('function accountingMoney(value)'),
+  'System Health must define the accountingMoney formatter used by the permanent accounting timeline.',
+);
+
+const renderStart = health.indexOf('function render(data)');
+const renderEnd = health.indexOf('\n    async function load', renderStart);
+assert(renderStart >= 0 && renderEnd > renderStart, 'System Health render function could not be located.');
+const renderBody = health.slice(renderStart, renderEnd);
+
+const passedHydration = renderBody.indexOf("passed.textContent=String(current.passed||0)");
+const accountingPanel = renderBody.indexOf("renderDashboardPanel('Accounting Health'");
+assert(
+  passedHydration >= 0 && accountingPanel > passedHydration,
+  'Authoritative Passed/Failed/Last checked hydration must occur before optional Accounting Health rendering.',
+);
+
+for (const panel of ['Monitoring coverage', 'Dark Mode visual quality', 'Critical Integrations', 'Accounting Health', 'Email Health', 'Credential Health', 'Weekly executive summary']) {
+  assert(
+    renderBody.includes("renderDashboardPanel('" + panel + "'"),
+    panel + ' must be isolated so a secondary rendering failure cannot blank the core summary.',
+  );
+}
+
+assert(
+  health.includes('data-system-health-page'),
+  'System Health must expose the page marker used by mobile viewport-clearance rules.',
+);
+assert(
+  health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
+  'Wide System Health tables must be converted into labeled mobile cards after each dashboard render.',
+);
+assert(
+  nav.includes('position: relative !important;') && nav.includes('top: auto !important;'),
+  'The mobile workspace utility header must remain in normal flow instead of covering page content.',
+);
+const workspaceNavClose = nav.indexOf('</nav>');
+const bottomNavMarkup = nav.indexOf('data-workspace-bottom-nav');
+assert(
+  workspaceNavClose >= 0 && bottomNavMarkup > workspaceNavClose,
+  'The fixed mobile workspace bottom navigation must live outside the sticky workspace navigation containing block.',
+);
+assert(
+  nav.includes("const bottomNav = document.querySelector('[data-workspace-bottom-nav]');")
+    && nav.includes("bottomNav?.querySelectorAll('[data-workspace-bottom-slot]')")
+    && nav.includes("bottomNav?.querySelector('[data-workspace-more-toggle]')"),
+  'Mobile bottom-nav hydration and More interactions must query the bottom-nav root instead of the separate workspace nav.',
+);
+assert(
+  !nav.includes("nav?.querySelectorAll('[data-workspace-bottom-slot]')")
+    && !nav.includes("nav?.querySelector('[data-workspace-more-toggle]')"),
+  'Mobile bottom-nav controls must not be queried through the workspace nav because the fixed bar intentionally lives outside it.',
+);
+assert(
+  nav.includes("const defaultMobileNav = ['home','crm','calendar','health'];")
+    && nav.includes("let currentMobileNav = [...defaultMobileNav];")
+    && nav.includes("...requested,...defaultMobileNav"),
+  'Mobile navigation must default to Home, CRM, Calendar, and Health while preserving saved per-user overrides.',
+);
+assert(
+  visualQa.includes('def admin_mobile_nav_mode(browser_name):')
+    && visualQa.includes('custom_nav=["events","quickbooks","gallery","staff"]')
+    && visualQa.includes('ADMIN_ROUTES')
+    && visualQa.includes('"iphone-390",390,844,3')
+    && visualQa.includes('"iphone-430",430,932,3'),
+  'Visual QA must exercise default and customized mobile navigation across every major admin route at iPhone sizes.',
+);
+assert(
+  visualWorkflow.includes('Verify iPhone admin bottom navigation in built PR')
+    && visualWorkflow.includes('--mode admin-mobile --browser chromium')
+    && visualWorkflow.includes('--mode admin-mobile --browser webkit')
+    && visualWorkflow.includes('http://127.0.0.1:4175'),
+  'Pull requests must verify the built mobile admin bottom navigation in Chromium and WebKit without weakening Netlify preview SSO.',
+);
+assert(
+  css.includes('/* System Health mobile viewport clearance */')
+    && css.includes('scroll-padding-bottom: calc(6.4rem + env(safe-area-inset-bottom))')
+    && css.includes('padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important'),
+  'System Health must preserve bottom-navigation clearance and anchor/focus scroll padding on mobile.',
+);
+
+assert(
+  health.includes('data-health-summary-grid')
+    && health.includes('health-summary-card--overall')
+    && health.includes('health-summary-card--checked'),
+  'System Health must expose the responsive summary grid and balanced summary-card hooks.',
+);
+assert(
+  css.includes('/* System Health responsive summary layout */')
+    && css.includes('grid-template-columns: repeat(4, minmax(0, 1fr))')
+    && css.includes('@media (max-width: 1099px)')
+    && css.includes('@media (max-width: 639px)'),
+  'System Health summary cards must use zero-minimum responsive grid tracks with desktop, tablet, and phone breakpoints.',
+);
+
+assert(
+  css.includes('width: calc(100% - 2rem) !important;')
+    && css.includes('max-width: 84rem !important;')
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] {')
+    && css.includes('body.koa-admin-page main[data-system-health-page] [data-app] > section {')
+    && css.includes('section[data-health-summary-grid]:first-child')
+    && css.includes('grid-template-columns: minmax(0, 1fr) !important;'),
+  'System Health content and section widths must stay bounded at every breakpoint, with a one-column phone fallback.',
+);
+assert(
+  visualQa.includes('("tablet",768,1024,1)')
+    && visualQa.includes('("desktop-small",1280,800,1)')
+    && visualQa.includes('("desktop-wide",1920,1080,1)')
+    && visualQa.includes('summaryHeightSpread')
+    && visualQa.includes('All four summary cards remain inside the viewport'),
+  'Authenticated System Health visual QA must cover phone, tablet, and desktop widths and enforce summary-card geometry.',
+);
+
+assert(
+  adminHealth.includes('export async function runHealthDashboardRefresh(context:Context)')
+    && adminHealth.includes('const dashboard=await runHealthDashboardRefresh(context);'),
+  'Manual System Health checks must reuse the exported dashboard-refresh implementation used by signed production QA.',
+);
+assert(
+  healthSignal.includes("body?.action==='run-dashboard-refresh'")
+    && healthSignal.includes("import { runHealthDashboardRefresh } from './admin-health.mts';"),
+  'The signed GitHub OIDC control plane must expose the same full dashboard refresh for production verification.',
+);
+
+assert(
+  health.includes('data-dark-mode-visual-quality')
+    && health.includes('data-theme-qa-card')
+    && health.includes('data-theme-qa-toggle')
+    && health.includes('data-theme-qa-chromium-routes')
+    && health.includes('data-theme-qa-webkit-routes')
+    && health.includes('data-theme-qa-commit')
+    && health.includes('data-theme-qa-deploy')
+    && health.includes('data-theme-qa-route-results')
+    && health.includes('data-theme-qa-screenshots')
+    && health.includes('data-theme-qa-screenshot-dialog')
+    && health.includes('data-theme-qa-screenshot-dialog-image')
+    && health.includes('data-theme-qa-screenshot-open')
+    && health.includes('function renderDarkModeVisualQuality(visualQuality)')
+    && health.includes('function openThemeQaScreenshot(shot,label)')
+    && health.includes('function setThemeQaExpanded(expanded)')
+    && adminHealth.includes('darkModeVisualQualitySummary')
+    && adminHealth.includes("action')==='dark-mode-qa-screenshot")
+    && adminHealth.includes('visualQuality,'),
+  'System Health must display a clickable Dark Mode QA card with retained browser counts, route results, screenshots, commit, and deploy id.',
+);
+assert(
+  systemHealth.includes('ProductionVisualQualityRouteResult')
+    && systemHealth.includes('ProductionVisualQualityScreenshot')
+    && systemHealth.includes('recordProductionVisualThumbnail')
+    && systemHealth.includes('darkModeQaHealthCheck')
+    && systemHealth.includes("id:'dark-mode-qa'")
+    && systemHealth.includes("id==='dark-mode-qa'")
+    && systemHealth.includes('status:ok?200:mismatch?409:422')
+    && systemHealth.includes("'netlify-github-sync','dark-mode-qa'")
+    && systemHealth.includes('visualQuality?:ProductionVisualQuality|null')
+    && systemHealth.includes('visualQuality:input?.visualQuality||previous?.visualQuality||null')
+    && healthSignal.includes("body?.action==='record-dark-mode-visual-quality'")
+    && healthSignal.includes('recordProductionVisualThumbnail')
+    && healthSignal.includes('routeResults')
+    && healthSignal.includes('failedCases')
+    && systemHealth.includes('visualQaDetails?:')
+    && systemHealth.includes('darkModeQaAlertLines(current')
+    && systemHealth.includes('Production commit: ')
+    && systemHealth.includes('Recorded QA commit: ')
+    && systemHealth.includes('Failed routes · ')
+    && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health')
+    && visualWorkflow.includes("'action':'record-dark-mode-visual-quality'")
+    && visualWorkflow.includes("'failedRouteCount'")
+    && visualWorkflow.includes("'failedCases'")
+    && visualWorkflow.includes("'screenshots':screenshots()")
+    && themeVisualQa.includes('thumbnail_route="/admin/health/"')
+    && themeVisualQa.includes('thumbnail-{preference}-{viewport}.jpg'),
+  'Production theme QA must persist route-level Chromium/WebKit evidence and four protected screenshots, and Dark Mode QA must be an immediate System Health alert check.',
+);
+assert(
+  visualQa.includes('def health_mobile_mode(browser_name,health_payload_path):')
+    && visualQa.includes("headerPosition")
+    && visualQa.includes("bottomPosition")
+    && visualQa.includes("system-health-{viewport_name}-top.png")
+    && visualQa.includes("system-health-{viewport_name}-bottom.png")
+    && visualQa.includes("action=dark-mode-qa-screenshot")
+    && visualQa.includes("[data-theme-qa-card]")
+    && visualQa.includes("[data-theme-qa-toggle]")
+    && visualQa.includes("Dark Mode QA renders every retained route result")
+    && visualQa.includes("Dark Mode QA screenshot thumbnails load successfully")
+    && visualQa.includes("Dark Mode QA screenshot opens in an in-page modal")
+    && visualQa.includes("Dark Mode QA modal uses the protected native-dimension screenshot asset"),
+  'Authenticated System Health QA must capture responsive evidence and exercise the clickable Dark Mode QA drilldown and retained thumbnails.',
+);
+
+assert(
+  visualQa.includes('documentScrollHeight')
+    && visualQa.includes('fullScreenshotMode')
+    && visualQa.includes('viewport-fallback')
+    && visualQa.includes('15000/max(1,dpr)'),
+  'Tall live System Health pages must fall back to bounded viewport screenshots so WebKit image-size limits cannot create false responsive failures.',
+);
+assert(
+  visualWorkflow.includes('system-health-mobile-audit:')
+    && visualWorkflow.includes('{"action":"run-dashboard-refresh"}')
+    && visualWorkflow.includes('for attempt in 1 2 3; do')
+    && visualWorkflow.includes('--connect-timeout 15')
+    && visualWorkflow.includes('--max-time 55')
+    && visualWorkflow.includes('Signed System Health refresh attempt')
+    && visualWorkflow.includes("python -c 'import json,sys; from pathlib import Path;")
+    && !visualWorkflow.includes("&& python - <<'PY'")
+    && visualWorkflow.includes('--mode health-mobile --browser chromium')
+    && visualWorkflow.includes('--mode health-mobile --browser webkit'),
+  'Production visual QA must retry transient signed System Health refresh timeouts without a shell-heredoc syntax trap and execute the mobile screenshot gate in both browser engines.',
+);
+
+assert(
+  visualWorkflow.includes("if: github.event_name != 'pull_request' && always()")
+    && visualWorkflow.includes('needs: [deployed-smoke, production-theme-audit, visual-audit]'),
+  'Live System Health diagnostics must still run after an unrelated deployed-smoke failure so production health values and responsive evidence are captured.',
+);
+
+assert(
+  visualWorkflow.includes('production-theme-audit:')
+    && visualWorkflow.includes("name: Live Light / Dark / System audit")
+    && visualWorkflow.includes("if: github.event_name != 'pull_request'")
+    && visualWorkflow.includes('Publish Dark Mode visual-quality result to System Health'),
+  'Every non-PR production QA run, including scheduled runs, must refresh the persisted Dark Mode QA evidence in System Health.',
+);
+
+assert(
+  visualWorkflow.includes("if: github.event_name == 'pull_request'")
+    && visualWorkflow.includes('python -m http.server 4173 --directory dist')
+    && visualWorkflow.includes('--base-url http://127.0.0.1:4173')
+    && visualWorkflow.includes('koa-system-health-responsive-pr-'),
+  'Pull requests that change System Health must run the responsive authenticated dashboard QA against the built branch in Chromium and WebKit.',
+);
+
+
+assert(
+  systemHealth.includes('dynamicClientRows:')
+    && systemHealth.includes('failureReason:')
+    && systemHealth.includes('currentBookingStatus(record)'),
+  'Signed production accounting verification must include every normalized client invariant row and select clients from authoritative booking lifecycle status.',
+);
+assert(
+  healthSignal.includes("body?.action==='self-heal-production-deploy'")
+    && healthSignal.includes("'/builds'")
+    && healthSignal.includes('currentGithubMainSha()'),
+  'The signed GitHub OIDC control plane must fail closed on current main SHA and expose Netlify production self-healing.',
+);
+assert(
+  visualWorkflow.includes('--wait-seconds 300')
+    && visualWorkflow.includes('node scripts/production_deploy_recovery.mjs')
+    && visualWorkflow.includes('NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}')
+    && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
+  'Production QA must use the independent GitHub-owned exact-SHA Netlify recovery after five minutes, then verify live SHA.',
+);
+
+assert(
+  netlifyConfig.includes('node scripts/verify_netlify_release_gate.mjs')
+    && releaseGate.includes("const REQUIRED_WORKFLOW='Production visual QA'")
+    && releaseGate.includes('&event=pull_request&per_page=50')
+    && releaseGate.includes("String(latest?.conclusion||'')!=='success'"),
+  'Netlify production builds must fail closed unless the exact merged PR head passed Production visual QA.',
+);
+assert(
+  visualWorkflow.includes('statuses: write')
+    && visualWorkflow.includes('System Health production release gate')
+    && visualWorkflow.includes('/statuses/${GITHUB_SHA}')
+    && visualWorkflow.includes('len(rows)!=7')
+    && visualWorkflow.includes("found==set(expected_viewports)")
+    && visualWorkflow.includes('len(refresh_checks)==14'),
+  'Live production System Health QA must publish a commit status only after seven Chromium and seven WebKit viewport checks and Run checks now hydration pass.',
+);
+
+assert(
+  systemHealth.includes("id:'login-alert-policy'")
+    && systemHealth.includes("name:'Sign-in alert policy'")
+    && systemHealth.includes('authenticationSecurityHealthSummary(context)')
+    && systemHealth.includes('authSecurityDetails'),
+  'System Health must include the structured sign-in alert policy check and authentication storage probes.',
+);
+
+
+assert(
+  health.includes('data-accounting-invariant-table-body')
+    && health.includes('data-accounting-filter-status')
+    && health.includes('data-accounting-filter-taxable')
+    && health.includes('data-accounting-filter-missing-estimate')
+    && health.includes('data-accounting-release-select')
+    && health.includes('function renderAccountingInvariantTable()'),
+  'System Health must expose a filterable full client accounting invariant table with status, taxable-line, missing-estimate, and release filters.',
+);
+assert(
+  adminHealth.includes('function accountingReleaseAudits(releases:any[])')
+    && adminHealth.includes('accountingReleaseAudits:accountingReleaseAudits(hydratedReleases)'),
+  'Authorized System Health dashboard data must include retained production accounting release audits for historical row inspection.',
+);
+assert(
+  healthSignal.includes("body?.action==='read-production-accounting-audits'")
+    && healthSignal.includes("body?.action==='read-production-accounting-audit'")
+    && healthSignal.includes("body?.action==='run-sandbox-self-heal-drill'")
+    && healthSignal.includes("productionMutationAttempted:false")
+    && healthSignal.includes("gracePeriodSeconds:300"),
+  'Signed production control plane must expose read-only accounting audit retrieval and an isolated five-minute sandbox self-heal drill.',
+);
+assert(
+  visualWorkflow.includes('--wait-seconds 300')
+    && visualWorkflow.includes('node scripts/production_deploy_recovery.mjs')
+    && visualWorkflow.includes('Wait for exact Netlify production SHA after fallback'),
+  'Production visual QA must retain the five-minute exact-SHA Netlify gate and trusted fallback.',
+);
+
+
+assert(
+  systemHealth.includes('lineTotal:row?.lineTotal')
+    && adminHealth.includes('function accountingRepairCategory(row:any)')
+    && adminHealth.includes("return 'missing-estimate'")
+    && adminHealth.includes("return 'taxable-lines'")
+    && adminHealth.includes("return 'sales-line-mismatch'")
+    && adminHealth.includes("return 'unverified'"),
+  'Accounting release audits must retain sales-line totals and classify every repair-queue failure without changing QuickBooks.',
+);
+assert(
+  health.includes('data-accounting-repair-queue')
+    && health.includes('data-accounting-queue-filter="missing-estimate"')
+    && health.includes('data-accounting-queue-filter="taxable-lines"')
+    && health.includes('data-accounting-queue-filter="adjustment"')
+    && health.includes('data-accounting-queue-filter="unverified"')
+    && health.includes('Preview repair')
+    && health.includes("action:'preview-accounting-repair'")
+    && health.includes("action:'apply-accounting-repair'")
+    && health.includes('Approve exact preview'),
+  'System Health must provide grouped one-click accounting repair filters plus transaction-adjustment diagnostics and enforce preview-before-approval for row repairs.',
+);
+assert(
+  health.includes("if(statusValue==='unverified'){action.textContent='Recheck'")
+    && health.includes("if(statusValue==='passed'){action.textContent='Clean'"),
+  'Unverified accounting rows must recheck instead of attempting a write, while passing rows remain non-actionable.',
+);
+
+
+assert(
+  systemHealth.includes('discountAmtField')
+    && systemHealth.includes('discountLineAmount')
+    && systemHealth.includes('totalTax')
+    && systemHealth.includes('nonSalesAdjustments')
+    && adminHealth.includes('discountAmtField:row?.discountAmtField')
+    && adminHealth.includes('totalTax:row?.totalTax'),
+  'Signed accounting audits must retain raw QuickBooks discount, tax, and non-sales adjustment diagnostics.',
+);
+assert(
+  adminQuickBooks.includes("action === 'preview-all-safe-accounting-repairs'")
+    && adminQuickBooks.includes("action === 'preview-accounting-repair-write'")
+    && adminQuickBooks.includes("approvalMode:'individual-write-only'")
+    && adminQuickBooks.includes("approvalMode:'single-write'")
+    && !adminQuickBooks.includes("action === 'apply-all-safe-accounting-repairs'"),
+  'Bulk accounting repair must remain preview-only and require a fresh single-write preview before each QuickBooks mutation.',
+);
+assert(
+  adminQuickBooks.includes('await integrationStore.delete(repairPreviewKey(preview.previewId))')
+    && adminQuickBooks.includes('changes:[change]'),
+  'The consolidated bulk preview must discard bulk approval tokens and narrow individual approvals to one exact write.',
+);
+assert(
+  health.includes('data-accounting-preview-all-safe')
+    && health.includes('data-accounting-bulk-preview-dialog')
+    && health.includes('Preview exact write')
+    && health.includes("action:'preview-all-safe-accounting-repairs'")
+    && health.includes("action:'preview-accounting-repair-write'"),
+  'System Health must expose a consolidated read-only repair report with per-write preview actions and no bulk approval control.',
+);
+
+
+assert(
+  adminQuickBooks.includes("const scope = quickBooksAccountingScope(record)")
+    && adminQuickBooks.includes("if (!lifecycle || !scope.actionable)")
+    && adminQuickBooks.includes("if (!parent?.canApply)"),
+  'Both row and bulk accounting repair previews must fail closed when the record is outside the current CRM-managed repair scope or the live preview is blocked.',
+);
+
+
+assert(
+  adminQuickBooks.includes("Math.min(4, recordIds.length)")
+    && adminQuickBooks.includes("await Promise.all(workers)"),
+  'Bulk QuickBooks repair previews must use bounded concurrency rather than serial or unbounded live QBO requests.',
+);
+assert(
+  health.includes('QBO adjustments')
+    && health.includes("accountingQueueFilter==='adjustment'")
+    && health.includes("rawCategory==='passed'&&hasAdjustment?'adjustment':rawCategory"),
+  'System Health must treat transaction-level QBO adjustments as diagnostic context rather than an automatic repair failure.',
+);
+
+
+assert(
+  systemHealth.includes('export async function accountingAdjustmentDiagnostics')
+    && systemHealth.includes("discountAmtPresent")
+    && systemHealth.includes("applyTaxAfterDiscountPresent")
+    && systemHealth.includes("txnTaxDetailPresent")
+    && githubHealthSignal.includes("read-accounting-adjustment-diagnostics")
+    && githubHealthSignal.includes("accountingAdjustmentDiagnostics(context,recordIds)"),
+  'Historical QuickBooks adjustments must be inspectable through a signed read-only exact-field diagnostic without entering the repair scope.',
+);
+assert(
+  visualWorkflow.includes('Capture Jesse and Dion QBO adjustment diagnostics')
+    && visualWorkflow.includes('QBO-CUST-29')
+    && visualWorkflow.includes('QBO-CUST-44')
+    && visualWorkflow.includes('accounting-adjustment-diagnostics.json')
+    && visualWorkflow.includes("historicalQuickBooksImport")
+    && visualWorkflow.includes("quickbooks-history"),
+  'The production release must archive signed raw-field evidence for Jesse Gibson and Dion Pohaku after the exact SHA is live.',
+);
+
+
+assert(
+  adminQuickBooks.includes('accountingScope:scope.mode')
+    && adminQuickBooks.includes('accountingActionable:Boolean(scope.actionable)')
+    && adminQuickBooks.includes('const lifecycle=currentBookingStatus(record);')
+    && adminQuickBooks.includes('const scope=quickBooksAccountingScope(record);')
+    && adminQuickBooks.includes('no QuickBooks write was attempted.'),
+  'Accounting repair fingerprints and final apply must both revalidate lifecycle and writable accounting scope before any QuickBooks mutation.',
+);
+
+
+const jesseAdjustmentExplanation = explainQuickBooksTransactionAdjustment({
+  lineTotal:3500,
+  estimateTotal:3141.36,
+  transactionAdjustment:-358.64,
+  discountLineAmount:500,
+  discountAmtField:null,
+  totalTax:141.36,
+  applyTaxAfterDiscount:true,
+  nonSalesAdjustments:[{detailType:'DiscountLineDetail',amount:500}],
+  salesLineDetails:[
+    {itemName:'Inactive:Inactive1',amount:2500},
+    {itemName:'Mirror X Photo Booth',amount:1000},
+  ],
+});
+assert(
+  jesseAdjustmentExplanation.includes('Sales lines total $3500.00')
+    && jesseAdjustmentExplanation.includes('DiscountLineDetail')
+    && jesseAdjustmentExplanation.includes('TxnTaxDetail.TotalTax')
+    && jesseAdjustmentExplanation.includes('ApplyTaxAfterDiscount=true')
+    && jesseAdjustmentExplanation.includes('net transaction adjustment is -$358.64'),
+  'Adjustment explanations must reconcile exact sales-line, discount, tax, and transaction-adjustment fields in plain English.',
+);
+assert(
+  accountingInvariantSource.includes('adjustmentExplanation')
+    && systemHealth.includes('adjustmentExplanation:String(row?.adjustmentExplanation')
+    && health.includes("String(row?.adjustmentExplanation||'')"),
+  'Plain-English QBO adjustment explanations must flow from the live invariant into signed System Health rows and the visible repair queue.',
+);
+assert(
+  adminQuickBooks.includes("bulkRepairPreviewAuditKey")
+    && adminQuickBooks.includes("decision:'approved'")
+    && adminQuickBooks.includes("action === 'reject-accounting-repair-write'")
+    && adminQuickBooks.includes("view === 'accounting-repair-bulk-export'")
+    && accountingRepairExport.includes('buildAccountingRepairBulkPreviewCsv')
+    && accountingRepairExport.includes('buildAccountingRepairBulkPreviewPdf'),
+  'Bulk repair previews must persist an immutable audit identity with individual approval/rejection history and CSV/PDF exports.',
+);
+assert(
+  githubHealthSignal.includes("body?.action==='read-current-accounting-repair-bulk-preview'")
+    && githubHealthSignal.includes('buildBulkAccountingRepairPreview(')
+    && githubHealthSignal.includes("'github-actions:'+cleanText(claims.actor"),
+  'GitHub OIDC must expose the current production repair population through the same read-only bulk preview logic used by System Health.',
+);
+assert(
+  health.includes('data-accounting-bulk-preview-csv')
+    && health.includes('data-accounting-bulk-preview-pdf')
+    && health.includes('Reject write')
+    && health.includes("action:'reject-accounting-repair-write'")
+    && health.includes('accounting-repair-bulk-export'),
+  'System Health must expose CSV/PDF audit exports and per-write rejection without adding any bulk apply control.',
+);
+assert(
+  !adminQuickBooks.includes("action === 'apply-all-safe-accounting-repairs'")
+    && !health.includes('Approve all repairs'),
+  'The repair workflow must continue to have no bulk QuickBooks mutation path.',
+);
+
+assert(
+  releaseGate.includes('function preMergeWorkflowRuns(runs,mergedAt)')
+    && releaseGate.includes('merged.merged_at')
+    && releaseGate.includes('Latest failed pre-merge workflow')
+    && releaseGate.includes('Post-merge close-event run'),
+  'The production-only Netlify gate must ignore post-merge close-event reruns without accepting failed or pending pre-merge evidence.',
+);
+assert(
+  visualWorkflow.includes("needs: [source-build-audit, deployed-smoke]")
+    && visualWorkflow.includes('if [ "${{ needs.deployed-smoke.result }}" != "success" ]; then')
+    && visualWorkflow.includes('Exact production deployment smoke did not succeed')
+    && visualWorkflow.includes('admin-startup-audit:'),
+  'Live production Chromium/WebKit and protected-admin QA must wait for exact successful production smoke and fail closed if deployment is unavailable.',
+);
+assert(
+  visualWorkflow.includes('EXACT_DEPLOY_WAIT_RESULT:')
+    && visualWorkflow.includes('CHROMIUM_AUDIT_RESULT:')
+    && visualWorkflow.includes('WEBKIT_AUDIT_RESULT:')
+    && visualWorkflow.includes("'missingReason':reason")
+    && visualWorkflow.includes("'invalid-browser-report'"),
+  'Dark Mode QA must publish safe, actionable missing-browser-report reason codes.',
+);
+assert(
+  healthSignal.includes('permittedMissingReasons')
+    && healthSignal.includes('missingReason')
+    && adminHealth.includes('missingDiagnostics')
+    && systemHealth.includes('missingReports')
+    && systemHealth.includes('Missing browser evidence:')
+    && health.includes('Missing report ·'),
+  'Browser report diagnostics must reach the protected System Health card, check detail, and alerts.',
+);
+assert(
+  visualWorkflow.includes("expected_viewports={")
+    && visualWorkflow.includes("def complete_report(report,browser):")
+    && visualWorkflow.includes("return found==set(expected_viewports)")
+    && visualWorkflow.includes("reports_complete=complete_report(chromium,'chromium') and complete_report(webkit,'webkit')")
+    && visualWorkflow.includes('len(refresh_checks)==14')
+    && visualWorkflow.includes('all(refresh_checks)')
+    && visualWorkflow.includes('Production release blocked: all 14 exact-size Chromium/WebKit responsive checks are mandatory.')
+    && visualWorkflow.includes('Dark Mode QA release gate blocked:'),
+  'The release gate must require seven distinct named responsive viewports per browser and 14 matching live refresh results.',
+);
+
+
+assert(
+  visualWorkflow.includes("  visual-audit:\n    name: Responsive visual audit\n    if: github.event_name != 'pull_request' && always()\n    needs: [deployed-smoke, production-theme-audit]")
+    && visualWorkflow.includes("max-parallel: 1")
+    && visualWorkflow.includes("needs: [deployed-smoke, production-theme-audit, visual-audit]"),
+  'Production Dark Mode QA, Chromium and WebKit responsive jobs, and final System Health refresh must run sequentially; every failure remains actionable and no browser is skipped.',
+);
+
+console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');

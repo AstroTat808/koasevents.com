@@ -8,6 +8,7 @@ import {
   readTrustedDevices,
   revokeAllManagedSessions,
   revokeManagedSession,
+  summarizeSecurityActivity,
   trustKnownDevice,
   untrustKnownDevice,
 } from './_shared/auth-security';
@@ -47,6 +48,7 @@ export default async(req:Request,context:Context)=>{
         trustedDevices,
         events:userEvents,
         policyAudit:auditHistoricalLoginAlerts(userEvents),
+        activitySummary:[7,30,90].map((days)=>summarizeSecurityActivity(userEvents,trustedDevices.length,days)),
       },{headers:{'Cache-Control':'private, no-store'}});
     }
 
@@ -69,10 +71,12 @@ export default async(req:Request,context:Context)=>{
         suspiciousEvents:userEvents.filter((event)=>event.suspicious&&!(event.deviceFingerprint&&trusted.has(event.deviceFingerprint))).length,
       };
     }));
+    const trustedDeviceCount=summaries.reduce((sum,row)=>sum+Number(row.trustedDevices||0),0);
     return Response.json({
       users:summaries,
       events:events.slice(0,500),
       policyAudit:auditHistoricalLoginAlerts(events),
+      activitySummary:[7,30,90].map((days)=>summarizeSecurityActivity(events,trustedDeviceCount,days)),
       mfa:{
         status:'readiness_only',
         provider:'Netlify Identity',

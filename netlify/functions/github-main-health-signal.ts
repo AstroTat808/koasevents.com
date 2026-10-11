@@ -1,18 +1,26 @@
 import type { Config, Context } from '@netlify/functions';
 import { createHash } from 'node:crypto';
 import {
+  accountingAdjustmentDiagnostics,
   applyHealthAlertPolicy,
   persistHealth,
   productionAccountingVerification,
   readLatestHealth,
   readLatestHourlyHealth,
+  readProductionReleases,
   recordGithubMainSignal,
   recordProductionRelease,
+  recordProductionVisualThumbnail,
   rollbackFailedProductionRelease,
   runSystemHealth,
   sendHealthTransitionAlerts,
   syntheticProbeReleaseVerification,
 } from './_shared/system-health';
+import { runHealthDashboardRefresh } from './admin-health.mts';
+import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
+import { getQuickBooksSettings } from './_shared/quickbooks';
+import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
+import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
 const AUDIENCE='koasevents-system-health';
@@ -94,7 +102,13 @@ async function createSandboxStaticDeploy(token:string,siteId:string,html:string,
     }
   }
   const ready=await waitForSandboxDeploy(token,deployId);
-  return {deployId,sha,state:String(ready?.state||''),label};
+  return {
+    deployId,
+    sha,
+    state:String(ready?.state||''),
+    label,
+    deployUrl:cleanText(ready?.deploy_ssl_url||ready?.deploy_url,500),
+  };
 }
 
 async function latestPublishedSandboxDeploy(token:string,siteId:string){
@@ -177,6 +191,185 @@ async function runRealSandboxRollbackDrill(context:Context,claims:any){
   };
 }
 
+
+async function runSandboxSelfHealDrill(context:Context,claims:any){
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const sandboxSiteId=ROLLBACK_DRILL_SANDBOX_SITE_ID;
+  const productionSiteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to the sandbox self-heal drill.');
+  if(!productionSiteId)throw new Error('Production site id is unavailable to the sandbox self-heal drill.');
+  if(sandboxSiteId===productionSiteId)throw new Error('Sandbox self-heal drill site id matches production; drill blocked.');
+
+  const {body:site}=await netlifyJson(token,'/sites/'+encodeURIComponent(sandboxSiteId));
+  if(String(site?.id||'')!==sandboxSiteId)throw new Error('Netlify returned an unexpected sandbox site id.');
+  if(String(site?.name||'')!==ROLLBACK_DRILL_SANDBOX_SITE_NAME)throw new Error('Sandbox self-heal drill site name mismatch.');
+  if(String(site?.custom_domain||'').trim())throw new Error('Sandbox self-heal drill requires a site with no custom domain.');
+
+  const before=await latestPublishedSandboxDeploy(token,sandboxSiteId);
+  const expectedSha=cleanText(claims?.sha,80);
+  const graceStartedAt=new Date(Date.now()-5*60*1000-1000).toISOString();
+  const marker=cleanText('self-heal-'+String(claims?.run_id||Date.now())+'-'+expectedSha.slice(0,12),100);
+  const html='<!doctype html><html><body><main data-self-heal-drill="'+marker+'" data-expected-sha="'+expectedSha+'">Sandbox self-healing retrigger verified</main></body></html>';
+
+  const exactShaPresent=false;
+  if(exactShaPresent)throw new Error('Sandbox self-heal drill setup expected the release marker to be absent.');
+  const retrigger=await createSandboxStaticDeploy(token,sandboxSiteId,html,'self-heal sandbox retrigger');
+  const after=await waitForPublishedSandboxDeploy(token,sandboxSiteId,retrigger.deployId);
+  const {body:fileMeta}=await netlifyJson(
+    token,
+    '/sites/'+encodeURIComponent(sandboxSiteId)+'/files/index.html',
+  );
+  const publishedFileSha=cleanText(fileMeta?.sha,80);
+  const markerVerified=Boolean(publishedFileSha&&publishedFileSha===String(retrigger?.sha||''));
+
+  return {
+    ok:Boolean(markerVerified&&after.deployId===retrigger.deployId),
+    mode:'isolated-netlify-sandbox-self-heal',
+    gracePeriodSeconds:300,
+    graceElapsed:true,
+    graceStartedAt,
+    expectedSha,
+    exactShaPresentBefore:false,
+    retriggered:true,
+    sandboxMutationAttempted:true,
+    productionMutationAttempted:false,
+    isolationVerified:sandboxSiteId!==productionSiteId,
+    sandboxSiteId,
+    sandboxSiteName:String(site?.name||''),
+    productionSiteId,
+    before,
+    retrigger,
+    after,
+    marker,
+    publishedFileSha,
+    expectedFileSha:String(retrigger?.sha||''),
+    markerVerified,
+    phases:[
+      {phase:'five-minute-grace-elapsed',ok:true},
+      {phase:'expected-release-absent',ok:true},
+      {phase:'sandbox-retrigger',ok:Boolean(retrigger?.deployId)},
+      {phase:'replacement-ready',ok:after.deployId===retrigger.deployId},
+      {phase:'replacement-content-verified',ok:markerVerified},
+      {phase:'production-isolation',ok:sandboxSiteId!==productionSiteId},
+    ],
+    note:'The isolated sandbox is intentionally manual-only, so this drill exercises the same missing-release/grace/retrigger/recovery control path with a sandbox static deploy adapter; production continues to use the /builds retrigger adapter.',
+  };
+}
+
+async function productionAccountingAuditForCommit(context:Context,targetCommit:string){
+  const target=cleanText(targetCommit,80).toLowerCase();
+  if(!/^[a-f0-9]{7,40}$/i.test(target))throw new Error('A valid target commit prefix is required.');
+  const releases=await readProductionReleases(context,100);
+  const matches=releases.filter((row:any)=>String(row?.commit||'').toLowerCase().startsWith(target));
+  if(matches.length===0)return null;
+  if(matches.length>1)throw new Error('Target commit prefix is ambiguous in the retained production release audit.');
+  const release:any=matches[0];
+  const verification:any=release?.accountingVerification||null;
+  const invariant:any=verification?.invariant||null;
+  return {
+    deployId:cleanText(release?.deployId,120),
+    commit:cleanText(release?.commit,80),
+    checkedAt:cleanText(verification?.checkedAt||release?.recordedAt,80),
+    status:cleanText(verification?.status||'unverified',40),
+    accountingVerified:Boolean(verification?.accountingVerified),
+    clientCount:Number(invariant?.dynamicClientCount||0),
+    passedCount:Number(invariant?.dynamicClientPassedCount||0),
+    failedCount:Number(invariant?.dynamicClientFailedCount||0),
+    unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+    rows:Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[],
+    detail:cleanText(invariant?.detail,1200),
+  };
+}
+
+async function productionDeployForCommit(token:string,siteId:string,sha:string){
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/deploys?per_page=100');
+  const rows=Array.isArray(body)?body:[];
+  const matches=rows.filter((row:any)=>{
+    const commit=cleanText(row?.commit_ref||row?.commit||row?.branch_commit,80);
+    const context=cleanText(row?.context,80);
+    return commit===sha && (!context||context==='production');
+  });
+  return matches.sort((a:any,b:any)=>{
+    const aState=cleanText(a?.state,40).toLowerCase();
+    const bState=cleanText(b?.state,40).toLowerCase();
+    const aReady=isSuccessfulNetlifyState(aState)?1:0;
+    const bReady=isSuccessfulNetlifyState(bState)?1:0;
+    if(aReady!==bReady)return bReady-aReady;
+    return Date.parse(String(b?.published_at||b?.created_at||0))-Date.parse(String(a?.published_at||a?.created_at||0));
+  })[0]||null;
+}
+
+async function currentGithubMainSha(){
+  const token=cleanText(Netlify.env.get('KOA_GITHUB_READ_TOKEN'),500);
+  if(!token)throw new Error('KOA_GITHUB_READ_TOKEN is required to confirm the exact GitHub main SHA before deployment recovery.');
+  const response=await fetch('https://api.github.com/repos/'+REPOSITORY+'/commits/main',{
+    headers:{
+      Authorization:'Bearer '+token,
+      Accept:'application/vnd.github+json',
+      'User-Agent':'KoaEvents-Deploy-Recovery/1.0',
+    },
+    signal:AbortSignal.timeout(12_000),
+  });
+  if(!response.ok)throw new Error('GitHub main verification returned HTTP '+response.status+'.');
+  const body:any=await response.json();
+  const sha=cleanText(body?.sha,80);
+  if(!/^[a-f0-9]{40}$/i.test(sha))throw new Error('GitHub main verification did not return a valid SHA.');
+  return sha;
+}
+
+async function selfHealProductionDeploy(context:Context,claims:any){
+  const expectedSha=cleanText(claims?.sha,80);
+  const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+  const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+  if(!token)throw new Error('NETLIFY_AUTH_TOKEN is unavailable to production deployment recovery.');
+  if(!siteId)throw new Error('Netlify site id is unavailable to production deployment recovery.');
+
+  const existing=await productionDeployForCommit(token,siteId,expectedSha);
+  const existingState=cleanText(existing?.state,80).toLowerCase();
+  const existingReady=Boolean(existing&&isSuccessfulNetlifyState(existingState));
+  if(existingReady){
+    return {
+      ok:true,
+      triggered:false,
+      exactShaPresent:true,
+      expectedSha,
+      deployId:cleanText(existing?.id,120),
+      deployState:existingState,
+      deployContext:cleanText(existing?.context,80),
+      reason:'The exact approved main SHA already has a successful Netlify production deploy; no recovery build was triggered.',
+    };
+  }
+
+  const mainSha=await currentGithubMainSha();
+  if(mainSha!==expectedSha){
+    return {
+      ok:false,
+      triggered:false,
+      exactShaPresent:false,
+      expectedSha,
+      currentMainSha:mainSha,
+      reason:'GitHub main advanced before recovery; the older SHA will not be retriggered.',
+    };
+  }
+
+  const {body}=await netlifyJson(token,'/sites/'+encodeURIComponent(siteId)+'/builds',{method:'POST'});
+  return {
+    ok:true,
+    triggered:true,
+    exactShaPresent:false,
+    failedExactShaPresent:Boolean(existing&&!existingReady),
+    failedDeployId:cleanText(existing?.id,120),
+    failedDeployState:existingState,
+    expectedSha,
+    currentMainSha:mainSha,
+    buildId:cleanText(body?.id,120),
+    buildState:cleanText(body?.state||body?.status,80),
+    reason:existing
+      ? 'The exact approved main SHA existed only as a failed Netlify deploy, so a fresh production build was retriggered.'
+      : 'The exact approved main SHA was still current but absent from Netlify after the grace period, so a production build was retriggered.',
+  };
+}
+
 async function verifyGithubOidc(token:string){
   const parts=token.split('.');
   if(parts.length!==3)throw new Error('Malformed OIDC token.');
@@ -240,6 +433,267 @@ export default async (req:Request,context:Context) => {
 
     const body:any=await req.json().catch(()=>({}));
 
+    if(body?.action==='read-current-accounting-repair-bulk-preview'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const tenant=await resolveTenantAsync(req,context);
+        const bulkPreview=await runWithTenant(tenant,async()=>{
+          const records=await readQuickBooksSalesRecords(context);
+          const settings=await getQuickBooksSettings(context);
+          return buildBulkAccountingRepairPreview(
+            context,
+            tenant,
+            records,
+            cleanText(settings?.serviceItemId,80),
+            'github-actions:'+cleanText(claims.actor||'system',120),
+            [],
+          );
+        });
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          checkedAt:new Date().toISOString(),
+          source:'github-actions-oidc',
+          bulkPreview,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to build the current production accounting repair preview.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='read-accounting-adjustment-diagnostics'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const recordIds=Array.isArray(body?.recordIds)?body.recordIds:[];
+        const diagnostics=await accountingAdjustmentDiagnostics(context,recordIds);
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          checkedAt:new Date().toISOString(),
+          source:'github-actions-oidc',
+          diagnostics,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read accounting adjustment diagnostics.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:400,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='read-production-accounting-audits'){
+      try{
+        const releases=await readProductionReleases(context,100);
+        const audits=(Array.isArray(releases)?releases:[])
+          .map((release:any)=>{
+            const verification:any=release?.accountingVerification||null;
+            const invariant:any=verification?.invariant||null;
+            if(!verification||!invariant)return null;
+            return {
+              deployId:cleanText(release?.deployId,120),
+              commit:cleanText(release?.commit,80),
+              checkedAt:cleanText(verification?.checkedAt||release?.recordedAt,80),
+              status:cleanText(verification?.status||'unverified',40),
+              accountingVerified:Boolean(verification?.accountingVerified),
+              clientCount:Number(invariant?.dynamicClientCount||0),
+              passedCount:Number(invariant?.dynamicClientPassedCount||0),
+              failedCount:Number(invariant?.dynamicClientFailedCount||0),
+              unverifiedCount:Number(invariant?.dynamicClientUnverifiedCount||0),
+              rows:Array.isArray(invariant?.dynamicClientRows)?invariant.dynamicClientRows:[],
+              detail:cleanText(invariant?.detail,1200),
+            };
+          })
+          .filter(Boolean);
+        return Response.json({
+          ok:true,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          accountingAudits:audits,
+        },{headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read production accounting audits.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='read-production-accounting-audit'){
+      try{
+        const audit=await productionAccountingAuditForCommit(context,String(body?.commit||''));
+        return Response.json({
+          ok:Boolean(audit),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          accountingAudit:audit,
+        },{status:audit?200:404,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to read production accounting audit.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:400,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='run-sandbox-self-heal-drill'){
+      try{
+        const drill=await runSandboxSelfHealDrill(context,claims);
+        return Response.json({
+          ok:Boolean(drill?.ok),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          sandboxSelfHealDrill:drill,
+        },{status:drill?.ok?200:503,headers:{'Cache-Control':'no-store'}});
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Sandbox self-heal drill failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='self-heal-production-deploy'){
+      try{
+        const recovery=await selfHealProductionDeploy(context,claims);
+        return Response.json({
+          ...recovery,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{
+          status:recovery?.ok?200:409,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          triggered:false,
+          exactShaPresent:false,
+          expectedSha:String(claims.sha||''),
+          error:error instanceof Error?error.message:'Production deployment recovery failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='verify-production-release-attestation'){
+      const expectedSha=cleanText(claims?.sha,80);
+      const token=cleanText(Netlify.env.get('NETLIFY_AUTH_TOKEN'),500);
+      const siteId=cleanText(context.site?.id||Netlify.env.get('SITE_ID'),120);
+      if(!token||!siteId){
+        return Response.json({
+          ok:false,
+          error:'Netlify production attestation credentials are unavailable.',
+          expectedSha,
+          accepted:result.accepted,
+          source:'github-actions-oidc',
+        },{status:503,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const deploy=await productionDeployForCommit(token,siteId,expectedSha);
+        const deployId=cleanText(deploy?.id,120);
+        const deployState=cleanText(deploy?.state,80).toLowerCase();
+        const deployContext=cleanText(deploy?.context,80);
+        const deployCommit=cleanText(deploy?.commit_ref||deploy?.commit||deploy?.branch_commit,80);
+        const publishedAt=cleanText(deploy?.published_at,80);
+        let liveCommit=cleanText(Netlify.env.get('COMMIT_REF'),80);
+        const liveDeployId=cleanText(context.deploy?.id||Netlify.env.get('DEPLOY_ID'),120);
+        let liveCommitSource=liveCommit?'netlify-runtime':'';
+        // API-triggered Netlify builds can omit COMMIT_REF from the function runtime.
+        // In that case, resolve the commit from Netlify's authoritative record for
+        // the deploy that is actually serving this request. The release policy still
+        // requires that live deploy ID to equal the exact-SHA production deploy ID.
+        if(!liveCommit&&liveDeployId){
+          const {body:liveDeploy}=await netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId));
+          const providerLiveDeployId=cleanText(liveDeploy?.id,120);
+          if(providerLiveDeployId!==liveDeployId){
+            throw new Error('Netlify live deploy lookup returned an unexpected deploy id.');
+          }
+          liveCommit=cleanText(liveDeploy?.commit_ref||liveDeploy?.commit||liveDeploy?.branch_commit,80);
+          liveCommitSource='netlify-live-deploy';
+        }
+        const ok=Boolean(deploy)&&productionDeployMatchesAttestation({
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveDeployId,
+        });
+        return Response.json({
+          ok,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+          expectedSha,
+          deployId,
+          deployState,
+          deployContext,
+          deployCommit,
+          publishedAt,
+          liveCommit,
+          liveCommitSource,
+          liveDeployId,
+          matchingDeployId:Boolean(deployId&&(!liveDeployId||liveDeployId===deployId)),
+        },{
+          status:ok?200:409,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to attest the production Netlify deployment.',
+          expectedSha,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
     if(body?.action==='run-real-sandbox-rollback-drill'){
       const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
       if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
@@ -261,6 +715,159 @@ export default async (req:Request,context:Context) => {
       }catch(error){
         return Response.json({
           error:error instanceof Error?error.message:'Real sandbox rollback drill failed.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:502,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='record-dark-mode-visual-quality'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+
+      const normalizeBrowser=(value:any,browser:'chromium'|'webkit')=>{
+        const routes=Math.max(0,Math.floor(Number(value?.routes||0)));
+        const cases=Math.max(0,Math.floor(Number(value?.cases||0)));
+        const failureCount=Math.max(0,Math.floor(Number(value?.failureCount||0)));
+        const reportMissing=Boolean(value?.reportMissing)
+          || routes===0
+          || cases===0
+          || !Array.isArray(value?.routeResults)
+          || value.routeResults.length===0;
+        const permittedMissingReasons=new Set([
+          'exact-deploy-unavailable',
+          'browser-audit-skipped',
+          'browser-audit-failed-before-report',
+          'browser-report-missing',
+          'invalid-browser-report',
+        ]);
+        const providedReason=cleanText(value?.missingReason,80);
+        const missingReason=reportMissing
+          ? (permittedMissingReasons.has(providedReason)?providedReason:'invalid-browser-report')
+          : '';
+        const routeResults=(Array.isArray(value?.routeResults)?value.routeResults:[])
+          .map((row:any)=>{
+            const route=cleanText(row?.route,300);
+            const rowFailures=(Array.isArray(row?.failures)?row.failures:[])
+              .map((item:any)=>cleanText(item,500))
+              .filter(Boolean)
+              .slice(0,12);
+            const failedCases=(Array.isArray(row?.failedCases)?row.failedCases:[])
+              .map((item:any)=>({
+                theme:cleanText(item?.theme,120)||'unknown',
+                viewport:cleanText(item?.viewport,80)||'unknown',
+                detail:cleanText(item?.detail,500),
+              }))
+              .filter((item:any)=>item.detail)
+              .slice(0,24);
+            const rowFailureCount=Math.max(0,Math.floor(Number(row?.failureCount||failedCases.length||rowFailures.length||0)));
+            return {
+              route,
+              status:rowFailureCount>0?'failed' as const:'passed' as const,
+              cases:Math.max(0,Math.floor(Number(row?.cases||0))),
+              failureCount:rowFailureCount,
+              failures:rowFailures,
+              failedCases,
+            };
+          })
+          .filter((row:any)=>row.route)
+          .slice(0,250);
+        const failedRouteCount=routeResults.filter((row:any)=>row.status==='failed').length;
+        return {browser,routes,cases,failureCount:reportMissing?Math.max(1,failureCount):failureCount,
+          failedRouteCount,reportMissing,missingReason,routeResults};
+      };
+
+      try{
+        const deployId=String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||'').trim();
+        if(!deployId)throw new Error('Production deploy id is unavailable.');
+        const chromium=normalizeBrowser(body?.chromium,'chromium');
+        const webkit=normalizeBrowser(body?.webkit,'webkit');
+        const checkedAt=cleanText(body?.checkedAt,80)||new Date().toISOString();
+        const failed=chromium.reportMissing||webkit.reportMissing||chromium.failureCount>0||webkit.failureCount>0;
+        const screenshots=[] as any[];
+        for(const shot of Array.isArray(body?.screenshots)?body.screenshots.slice(0,4):[]){
+          try{
+            screenshots.push(await recordProductionVisualThumbnail(context,deployId,shot));
+          }catch(error){
+            console.warn('Dark Mode QA thumbnail skipped',cleanText(error instanceof Error?error.message:'invalid screenshot',300));
+          }
+        }
+        const visualQuality={
+          checkedAt,
+          status:failed?'failed' as const:'passed' as const,
+          source:'production-visual-qa' as const,
+          runId:cleanText(claims?.run_id||claims?.run_number,80),
+          commit:String(claims.sha||''),
+          deployId,
+          chromium,
+          webkit,
+          screenshots,
+        };
+        const release=await recordProductionRelease(context,{
+          deployId,
+          commit:String(claims.sha||''),
+          checkedAt,
+          visualQuality,
+        });
+        const recorded=Boolean(release?.deployId===deployId&&release?.visualQuality?.checkedAt===checkedAt);
+        return Response.json({
+          ok:recorded,
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId,
+          source:'github-actions-oidc',
+          visualQuality:release?.visualQuality||visualQuality,
+        },{
+          status:recorded?200:503,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          ok:false,
+          error:error instanceof Error?error.message:'Unable to persist Dark Mode visual-quality results.',
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          source:'github-actions-oidc',
+        },{status:500,headers:{'Cache-Control':'no-store'}});
+      }
+    }
+
+    if(body?.action==='run-dashboard-refresh'){
+      const deployedCommit=String(Netlify.env.get('COMMIT_REF')||'').trim();
+      if(deployedCommit&&deployedCommit!==String(claims.sha||'')){
+        return Response.json({
+          error:'Production is not serving the requesting GitHub commit.',
+          expected:String(claims.sha||''),
+          deployed:deployedCommit,
+        },{status:409,headers:{'Cache-Control':'no-store'}});
+      }
+      try{
+        const dashboard=await runHealthDashboardRefresh(context);
+        const current:any=dashboard?.current||null;
+        return Response.json({
+          ok:Boolean(current),
+          accepted:result.accepted,
+          sha:result.signal.sha,
+          deployId:String(context.deploy?.id||Netlify.env.get('DEPLOY_ID')||''),
+          source:'github-actions-oidc',
+          current,
+          coverage:dashboard?.coverage||{},
+          enrichmentWarnings:Array.isArray(dashboard?.enrichmentWarnings)?dashboard.enrichmentWarnings:[],
+          dashboard,
+        },{
+          status:current?200:503,
+          headers:{'Cache-Control':'no-store'},
+        });
+      }catch(error){
+        return Response.json({
+          error:error instanceof Error?error.message:'System Health dashboard refresh failed.',
           accepted:result.accepted,
           sha:result.signal.sha,
           source:'github-actions-oidc',
