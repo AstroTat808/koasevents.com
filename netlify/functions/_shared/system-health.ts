@@ -2137,6 +2137,8 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const turnstileMismatches=turnstileDiag?.mismatches||{};
   const turnstileLastSuccess=turnstileDiag?.lastSuccess||null;
   const turnstileLastFailure=turnstileDiag?.lastFailure||null;
+  const turnstileTelemetry=turnstileDiag?.telemetry||{};
+  const turnstileRecordingHealthy=Boolean(turnstileTelemetry?.ok);
 
   const turnstileSiteKeyCheck:HealthCheck={
     id:'turnstile-site-key',
@@ -2206,17 +2208,26 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     name:'Turnstile validation history',
     kind:'api',
     path:'Recent successful + failed validations',
-    ok:true,
-    status:turnstileLastSuccess?200:0,
+    ok:turnstileRecordingHealthy,
+    status:turnstileRecordingHealthy?200:503,
     ms:0,
-    severity:turnstileLastSuccess?'green':'yellow',
+    severity:turnstileRecordingHealthy?'green':'red',
     detail:clean(
-      String(Number(turnstileTotals?.successful||0))+' successful · '
-      +String(Number(turnstileTotals?.failed||0))+' failed · '
+      (turnstileRecordingHealthy
+        ? 'Append-only validation recording verified by independent write/read/delete probe'
+        : 'Validation recording unhealthy: '+(!turnstileTelemetry?.writable
+          ? 'storage round-trip failed'
+          : 'unreadable event records or truncated history'))
+      +' · '+String(Number(turnstileTotals?.successful||0))+' accepted · '
+      +String(Number(turnstileTotals?.failed||0))+' rejected · '
       +String(Number(turnstileTotals?.validations||0))+' total in '
       +String(Number(turnstileDiag?.windowDays||30))+'d'
-      +(turnstileLastSuccess?.createdAt?' · Last success '+String(turnstileLastSuccess.createdAt):' · No successful validation recorded yet')
-      +(turnstileLastFailure?.createdAt?' · Last failure '+String(turnstileLastFailure.createdAt):' · No failed validation recorded'),
+      +' · '+String(Number(turnstileTelemetry?.appendOnlyEvents||0))+' append-only events'
+      +' · '+String(Number(turnstileTelemetry?.legacyEvents||0))+' legacy records'
+      +(turnstileLastSuccess?.createdAt
+        ? ' · Last accepted '+String(turnstileLastSuccess.createdAt)
+        : ' · No accepted production token recorded; this alone is not a service failure')
+      +(turnstileLastFailure?.createdAt?' · Last rejected '+String(turnstileLastFailure.createdAt):' · No rejected validation recorded'),
       1200,
     ),
   };
