@@ -235,6 +235,12 @@ async function verifyTurnstile(req: Request, token: unknown, expectedAction: str
       verifiedHostname === requestHostname
     );
     const codes = Array.isArray(data?.['error-codes']) ? [...data['error-codes']] : [];
+    // These server-side outcomes must be counted as infrastructure failures,
+    // never conflated with a legitimately rejected invalid challenge.
+    if (!result.ok) codes.push('siteverify-http-error');
+    if (result.ok && (typeof data?.success !== 'boolean' || (!data.success && codes.length === 0))) {
+      codes.push('siteverify-invalid-response');
+    }
     if (data?.success && verifiedAction !== expectedAction) codes.push('action-mismatch');
     if (data?.success && verifiedHostname !== requestHostname) codes.push('hostname-mismatch');
     return {
