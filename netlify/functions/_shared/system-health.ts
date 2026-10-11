@@ -155,6 +155,7 @@ export type HealthCheck = {
     commitMismatch: boolean;
     deployMismatch: boolean;
     reportMissing: boolean;
+    missingReports?: Array<{browser: 'chromium' | 'webkit'; reason: string}>;
     failures: Array<{
       route: string;
       browser: 'chromium' | 'webkit';
@@ -2755,6 +2756,12 @@ function darkModeQaAlertDiagnostics(current:HealthSnapshot){
     commitMismatch:Boolean(details.commitMismatch),
     deployMismatch:Boolean(details.deployMismatch),
     reportMissing:Boolean(details.reportMissing),
+    missingReports:(Array.isArray(details.missingReports)?details.missingReports:[])
+      .map((row)=>({
+        browser:row?.browser==='webkit'?'webkit' as const:'chromium' as const,
+        reason:clean(row?.reason,180)||'browser report unavailable',
+      }))
+      .slice(0,2),
     failures,
   };
 }
@@ -2771,6 +2778,9 @@ function darkModeQaAlertLines(current:HealthSnapshot){
   if(diagnostic.commitMismatch)lines.push('Commit mismatch: yes');
   if(diagnostic.deployMismatch)lines.push('Deploy mismatch: yes');
   if(diagnostic.reportMissing)lines.push('Browser report missing: yes');
+  for(const row of diagnostic.missingReports){
+    lines.push('Missing '+row.browser+' QA report: '+row.reason);
+  }
   if(diagnostic.failures.length){
     const groups=new Map<string,{browser:string;viewport:string;theme:string;routes:Set<string>;details:Set<string>}>();
     for(const row of diagnostic.failures){
@@ -3129,6 +3139,20 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
   const failureCount=Math.max(0,Number(chromium.failureCount||0))+Math.max(0,Number(webkit.failureCount||0));
   const failedRouteCount=Math.max(0,Number(chromium.failedRouteCount||0))+Math.max(0,Number(webkit.failedRouteCount||0));
   const reportMissing=Boolean(chromium.reportMissing||webkit.reportMissing);
+  const reasonLabels:Record<string,string>={
+    'exact-deploy-unavailable':'the exact production SHA was not deployed, so browser QA did not run',
+    'browser-audit-skipped':'the browser audit step was skipped',
+    'browser-audit-failed-before-report':'the browser audit failed before writing its report',
+    'browser-report-missing':'the browser audit did not produce a report file',
+    'invalid-browser-report':'the report file was missing required results or was invalid',
+  };
+  const missingReports=([
+    {browser:'chromium' as const,value:chromium},
+    {browser:'webkit' as const,value:webkit},
+  ]).filter((row)=>Boolean(row.value.reportMissing)).map(({browser,value})=>({
+    browser,
+    reason:reasonLabels[clean(value.missingReason,80)]||'browser report unavailable',
+  }));
   const qaCommit=clean(visual.commit||release?.commit,120);
   const qaDeployId=clean(visual.deployId||release?.deployId,120);
   const commitMismatch=Boolean(productionCommit&&qaCommit&&productionCommit!==qaCommit);
@@ -3164,7 +3188,7 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
       +' · '+failureCount+' failed browser case'+(failureCount===1?'':'s')
       +' · Chromium '+Math.max(0,Number(chromium.failedRouteCount||0))+' failed routes'
       +' · WebKit '+Math.max(0,Number(webkit.failedRouteCount||0))+' failed routes'
-      +(reportMissing?' · one or more browser reports are missing':'')+'.';
+      +(reportMissing?' · Missing browser evidence: '+missingReports.map((row)=>row.browser+' — '+row.reason).join('; '):'')+'.';
   }else if(mismatch){
     detail='Dark Mode QA evidence is stale for production: recorded commit '+(qaCommit||'unknown')
       +' / deploy '+(qaDeployId||'unknown')+' does not match current production commit '+(productionCommit||'unknown')
@@ -3195,6 +3219,7 @@ export async function darkModeQaHealthCheck(context:Context):Promise<HealthCheck
       commitMismatch,
       deployMismatch,
       reportMissing,
+      missingReports,
       failures:failedCases,
     },
   };
