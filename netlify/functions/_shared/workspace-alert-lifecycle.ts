@@ -38,13 +38,18 @@ export function credentialWorkspaceAlert(row: any): WorkspaceAlertDetail {
   const provider = clean(row?.provider || row?.id || 'Credential', 100);
   const credential = clean(row?.credential || 'Credential', 120);
   const issueType = clean(row?.issueType || 'Credential problem', 100);
+  const turnstileIncident = row?.id === 'turnstile' &&
+    ['infrastructure_failure', 'security_mismatch'].includes(String(row?.diagnostics?.alert?.kind || ''));
+  const turnstileAlert = turnstileIncident ? row.diagnostics.alert : null;
   return {
     id: 'credential:' + clean(row?.id || provider, 100),
     category: 'healthWarnings',
-    severity,
-    title: provider + ' credential problem',
-    context: credential + ' · ' + issueType,
-    detail: clean(row?.detail || 'Credential verification failed.', 220),
+    severity: turnstileIncident ? 'urgent' : severity,
+    title: turnstileIncident ? clean(turnstileAlert?.title, 160) : provider + ' credential problem',
+    context: turnstileIncident ? 'Cloudflare Turnstile · verified server-side diagnostics' : credential + ' · ' + issueType,
+    detail: turnstileIncident
+      ? clean(turnstileAlert?.detail || row?.detail, 220)
+      : clean(row?.detail || 'Credential verification failed.', 220),
     href: '/admin/health/#credential-health',
   };
 }

@@ -418,6 +418,28 @@ async function computeAlerts(context:Context,tenant:any,user:any){
         }))
     : [];
 
+  // Invalid/expired challenge rejections are security telemetry, NOT outages.
+  // A stable informational alert makes them visible without multiplying cards
+  // or invoking infrastructure-failure notification channels.
+  const turnstileRow=canHealth && credentialHealth
+    ? (Array.isArray(credentialHealth?.rows) ? credentialHealth.rows : []).find((row:any)=>row?.id==='turnstile')
+    : null;
+  const turnstileAdvisory=turnstileRow?.diagnostics?.alert || {};
+  const turnstileActivity=turnstileRow?.diagnostics?.activity || {};
+  const visibleChallengeActivity=['expected_rejections','unclassified_rejections'].includes(String(turnstileAdvisory?.kind||''));
+  const turnstileActivityDetails:AlertDetail[]=visibleChallengeActivity ? [{
+    id:'turnstile:rejected-challenge-activity',
+    category:'healthWarnings',
+    severity:turnstileAdvisory.kind==='expected_rejections'?'info':'upcoming',
+    title:clip(turnstileAdvisory.title,120),
+    context:'Cloudflare Turnstile · '+String(Number(turnstileActivity.rejected24h||0))+' rejected in 24h',
+    detail:clip(String(turnstileAdvisory.detail||'')+' · '+String(Number(turnstileActivity.expectedRejected24h||0))
+      +' expected invalid-token rejections · '+String(Number(turnstileActivity.unclassifiedRejected24h||0))
+      +' unclassified · '+String(Number(turnstileActivity.smokePattern24h||0))
+      +' matched CI smoke-test pattern (untrusted diagnostic only)',220),
+    href:'/admin/health/#credential-health',
+  }] : [];
+
   const securityDetails:AlertDetail[]=[];
   if(canStaffSecurity&&Array.isArray(staffUsers)&&staffPolicy){
     for(const staff of staffUsers){
@@ -473,7 +495,7 @@ async function computeAlerts(context:Context,tenant:any,user:any){
     unansweredLeads:unansweredLeadDetails,
     vendorInsurance:insuranceDetails,
     accountingMismatches:accountingDetails,
-    healthWarnings:[...credentialDetails,...healthDetails],
+    healthWarnings:[...credentialDetails,...healthDetails,...turnstileActivityDetails],
     securityWarnings:securityDetails,
   } as Record<AlertCategory,AlertDetail[]>;
 }

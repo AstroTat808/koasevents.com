@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/critical-integrations-rollback-drill.yml'
+      - '.github/workflows/production-visual-qa.yml'
       - 'netlify/functions/_shared/critical-integration-release-guard.mjs'
       - 'netlify/functions/_shared/critical-integration-audit.mjs'
       - 'netlify/functions/_shared/system-health.ts'
@@ -19,6 +20,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/critical-integrations-rollback-drill.yml'
+      - '.github/workflows/production-visual-qa.yml'
       - 'netlify/functions/_shared/critical-integration-release-guard.mjs'
       - 'netlify/functions/_shared/critical-integration-audit.mjs'
       - 'netlify/functions/_shared/system-health.ts'

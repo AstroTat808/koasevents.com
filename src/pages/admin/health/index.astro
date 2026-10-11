@@ -1772,7 +1772,7 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
             : 'The dedicated Resend monitoring credential could not read delivery history.';
         fix='Verify RESEND_MONITORING_API_KEY is configured in Netlify functions/runtime with a Resend credential that can read email history. This does not mean outbound sending is broken.';
       }else if(row?.id==='credential-turnstile'){
-        cause='The Turnstile site key, server secret, widget rendering, Siteverify probe, or recent hostname/action validation is not healthy.';
+        cause='The Turnstile site key, server secret, widget rendering, Siteverify probe, append-only history storage, or hostname/action validation is not healthy.';
         fix='Open the Turnstile credential card below to see the failing layer. Verify the Netlify site/secret variables and Cloudflare widget hostname configuration, then re-test Turnstile only.';
       }else if(row?.id==='turnstile-site-key'){
         cause='The production runtime cannot see the configured public Turnstile site key.';
@@ -1788,9 +1788,12 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           ? 'Cloudflare Siteverify rejected the configured Turnstile secret.'
           : 'Cloudflare Siteverify could not be reached or did not accept the health probe.';
         fix='Verify the production secret against the existing Cloudflare widget and rerun System Health. If Cloudflare is temporarily unavailable, the check will recover automatically.';
+      }else if(row?.id==='turnstile-infrastructure-events'){
+        cause='The server recorded a recent Cloudflare Siteverify network, upstream HTTP, invalid-response, or server-secret infrastructure failure. Incorrectly completed challenges are tracked separately and are not treated as outages.';
+        fix='Review the Turnstile provider-health, history integrity, and recent infrastructure-error counts. Check server-side Cloudflare connectivity and secret configuration, then rerun System Health. Keep rejected challenge blocking enabled.';
       }else if(row?.id==='turnstile-validation-history'){
-        cause='No successful production Turnstile validation has been recorded yet in the current security history.';
-        fix='Submit one protected production form normally, then rerun System Health to establish a verified validation record.';
+        cause='Append-only Turnstile history recording failed its storage read/write/delete probe, returned corrupted records, or exceeded its safe history window. A lack of accepted customer tokens alone is not a storage failure.';
+        fix='Review Netlify Blobs security storage availability and event-read diagnostics, then rerun System Health. Do not weaken server-side Siteverify or invent a successful customer submission.';
       }else if(row?.id==='turnstile-hostname-action'){
         cause='Cloudflare accepted one or more tokens whose returned hostname or action did not match the Koa’s Events request.';
         fix='Check the latest mismatch detail in Security + Spam, confirm the widget hostname is koasevents.com and each form uses its expected data-action, then retest.';
@@ -4818,6 +4821,16 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
       const chromium=value.chromium||{};
       const webkit=value.webkit||{};
       const browserText=(row)=>{
+        if(row?.reportMissing){
+          const reasons:Record<string,string>={
+            'exact-deploy-unavailable':'exact production deployment unavailable',
+            'browser-audit-skipped':'browser audit skipped',
+            'browser-audit-failed-before-report':'audit failed before report creation',
+            'browser-report-missing':'report file not generated',
+            'invalid-browser-report':'invalid or incomplete report',
+          };
+          return 'Missing report · '+(reasons[String(row?.missingReason||'')]||'browser evidence unavailable');
+        }
         const failures=Math.max(0,Number(row?.failureCount||0));
         const failedRoutes=Math.max(0,Number(row?.failedRouteCount||0));
         const cases=Math.max(0,Number(row?.cases||0));
@@ -4831,9 +4844,9 @@ import BaseLayout from '../../../layouts/BaseLayout.astro';
           'bg-emerald-100 text-emerald-800'
         );
       }
-      if(themeQaChromiumRoutes)themeQaChromiumRoutes.textContent=available?String(Number(chromium.routes||0))+' routes':'—';
+      if(themeQaChromiumRoutes)themeQaChromiumRoutes.textContent=available?(chromium.reportMissing?'Missing report':String(Number(chromium.routes||0))+' routes'):'—';
       if(themeQaChromiumFailures)themeQaChromiumFailures.textContent=available?browserText(chromium):'No recorded audit yet.';
-      if(themeQaWebkitRoutes)themeQaWebkitRoutes.textContent=available?String(Number(webkit.routes||0))+' routes':'—';
+      if(themeQaWebkitRoutes)themeQaWebkitRoutes.textContent=available?(webkit.reportMissing?'Missing report':String(Number(webkit.routes||0))+' routes'):'—';
       if(themeQaWebkitFailures)themeQaWebkitFailures.textContent=available?browserText(webkit):'No recorded audit yet.';
       if(themeQaCommit){
         themeQaCommit.textContent=String(value.commit||'—');
