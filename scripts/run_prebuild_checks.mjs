@@ -10,6 +10,7 @@ const checks=[
   ['build-diagnostics-regression','Build diagnostics regression','npm',['run','test:build-diagnostics']],
   ['theme-regression','Theme regression','npm',['run','test:theme']],
   ['health-dashboard-regression','System Health dashboard regression','npm',['run','test:health-dashboard']],
+  ['turnstile-history-regression','Turnstile append-only history regression','npm',['run','test:turnstile-history']],
   ['synthetic-health-regression','Synthetic health regression','npm',['run','test:synthetic-health']],
   ['critical-integrations-regression','Critical Integrations regression','npm',['run','test:critical-integrations']],
   ['tenant-hardcoding-audit','Tenant hardcoding audit','npm',['run','audit:tenant:strict']],
