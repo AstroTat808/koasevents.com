@@ -452,6 +452,7 @@ export function healthComponents() {
     {id:'turnstile-secret',name:'Turnstile server secret',path:'TURNSTILE_SECRET_KEY / TURNSTILE_SECRET',kind:'api' as const},
     {id:'turnstile-widgets',name:'Turnstile widget rendering',path:'4 protected public forms',kind:'api' as const},
     {id:'turnstile-siteverify',name:'Turnstile Siteverify',path:'Cloudflare /siteverify',kind:'api' as const},
+    {id:'turnstile-infrastructure-events',name:'Turnstile infrastructure failure events',path:'Recent server-side verification infrastructure failures',kind:'api' as const},
     {id:'turnstile-validation-history',name:'Turnstile validation history',path:'Recent successful + failed validations',kind:'api' as const},
     {id:'turnstile-hostname-action',name:'Turnstile hostname + action matching',path:'Recent validation mismatches',kind:'api' as const},
     {id:'signwell-webhook-registration',name:'SignWell webhook registration',path:'SignWell GET /hooks',kind:'api' as const},
@@ -495,7 +496,7 @@ function defaultAlertAfter(id:string):1|2 {
     'action-center','business-crm','business-crm-startup','netlify-github-sync','dark-mode-qa','sales-crm','wedding-profitability','event-ops','master-calendar','email-admin','staff-home',
     'admin-session','account-security-api','workspace-alerts-api','business-crm-api','sales-crm-api','wedding-profitability-api','event-ops-api','calendar-api','email-routing-api',
     'credential-quickbooks','credential-microsoft-graph','credential-github','credential-netlify','credential-signwell','credential-turnstile',
-    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-hostname-action',
+    'turnstile-site-key','turnstile-secret','turnstile-widgets','turnstile-siteverify','turnstile-infrastructure-events','turnstile-hostname-action',
     'signwell-webhook-registration','signwell-webhook-delivery','signwell-signed-pdf',
     'quickbooks-tax-invariant','login-alert-policy',
     'email-logo','email-send-access','email-delivery','resend-webhook','email-template-compatibility','email-release-sync',
@@ -2138,6 +2139,11 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
   const turnstileMismatches=turnstileDiag?.mismatches||{};
   const turnstileLastSuccess=turnstileDiag?.lastSuccess||null;
   const turnstileLastFailure=turnstileDiag?.lastFailure||null;
+  const turnstileTelemetry=turnstileDiag?.telemetry||{};
+  const turnstileRecordingHealthy=Boolean(turnstileTelemetry?.ok);
+  const turnstileActivity=turnstileDiag?.activity||{};
+  const recentInfrastructureRejections=Number(turnstileActivity?.infrastructureRejected15m||0);
+  const expectedChallengeRejections=Number(turnstileActivity?.expectedRejected24h||0);
 
   const turnstileSiteKeyCheck:HealthCheck={
     id:'turnstile-site-key',
@@ -2202,22 +2208,53 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
     detail:clean(turnstileSiteverify?.detail||'Cloudflare Siteverify status is unavailable.',1200),
   };
 
+  const turnstileInfrastructureEventCheck:HealthCheck={
+    id:'turnstile-infrastructure-events',
+    name:'Turnstile infrastructure failure events',
+    kind:'api',
+    path:'Recent server-side Siteverify infrastructure failures',
+    ok:recentInfrastructureRejections===0,
+    status:recentInfrastructureRejections===0?200:503,
+    ms:0,
+    severity:recentInfrastructureRejections===0?'green':'red',
+    detail:clean(
+      String(recentInfrastructureRejections)+' server-side infrastructure verification errors in 15 min · '
+      +String(expectedChallengeRejections)+' invalid/missing/expired challenge rejections in 24h are informational, not outages'
+      +' · '+String(Number(turnstileActivity?.unclassifiedRejected24h||0))+' unclassified rejections need review',
+      1200,
+    ),
+  };
+
   const turnstileValidationHistoryCheck:HealthCheck={
     id:'turnstile-validation-history',
     name:'Turnstile validation history',
     kind:'api',
     path:'Recent successful + failed validations',
-    ok:true,
-    status:turnstileLastSuccess?200:0,
+    ok:turnstileRecordingHealthy,
+    status:turnstileRecordingHealthy?200:503,
     ms:0,
-    severity:turnstileLastSuccess?'green':'yellow',
+    severity:turnstileRecordingHealthy?'green':'red',
     detail:clean(
-      String(Number(turnstileTotals?.successful||0))+' successful · '
-      +String(Number(turnstileTotals?.failed||0))+' failed · '
+      (turnstileRecordingHealthy
+        ? 'Append-only validation recording verified by independent write/read/delete probe'
+        : 'Validation recording unhealthy: '+(!turnstileTelemetry?.writable
+          ? 'storage round-trip failed'
+          : 'unreadable event records or truncated history'))
+      +' · '+String(Number(turnstileTotals?.successful||0))+' accepted · '
+      +String(Number(turnstileTotals?.failed||0))+' rejected · '
       +String(Number(turnstileTotals?.validations||0))+' total in '
       +String(Number(turnstileDiag?.windowDays||30))+'d'
-      +(turnstileLastSuccess?.createdAt?' · Last success '+String(turnstileLastSuccess.createdAt):' · No successful validation recorded yet')
-      +(turnstileLastFailure?.createdAt?' · Last failure '+String(turnstileLastFailure.createdAt):' · No failed validation recorded'),
+      +' · '+String(Number(turnstileTelemetry?.appendOnlyEvents||0))+' append-only events'
+      +' · '+String(Number(turnstileTelemetry?.legacyEvents||0))+' legacy records'
+      +' · '+String(expectedChallengeRejections)+' expected challenge rejections (24h, informational)'
+      +' · '+String(recentInfrastructureRejections)+' infrastructure verification errors (15m)'
+      +(Number(turnstileTotals?.smokePattern||0)>0
+        ? ' · '+String(Number(turnstileTotals.smokePattern))+' rejections match CI smoke-test signature (untrusted hint; retained in failure totals)'
+        : '')
+      +(turnstileLastSuccess?.createdAt
+        ? ' · Last accepted '+String(turnstileLastSuccess.createdAt)
+        : ' · No accepted production token recorded; this alone is not a service failure')
+      +(turnstileLastFailure?.createdAt?' · Last rejected '+String(turnstileLastFailure.createdAt):' · No rejected validation recorded'),
       1200,
     ),
   };
@@ -2367,7 +2404,7 @@ export async function runSystemHealth(context:Context,source:'hourly'|'manual'|'
       1200,
     ),
   };
-  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
+  const checks=[...baseChecks,startupCheck,deploymentSyncCheck,darkModeQaCheck,accountingInvariantCheck,authSecurityCheck,...credentialChecks,turnstileSiteKeyCheck,turnstileSecretCheck,turnstileWidgetCheck,turnstileSiteverifyCheck,turnstileInfrastructureEventCheck,turnstileValidationHistoryCheck,turnstileMismatchCheck,signWellRegistrationCheck,signWellDeliveryCheck,signWellPdfCheck,emailReleaseCheck,emailLogoCheck,emailInlineLogoCheck,emailSendAccessCheck,emailMonitoringAccessCheck,emailDeliveryCheck,resendWebhookCheck,emailTemplateCheck,...syntheticChecks]
     .map((row)=>({...row,issueType:classifyHealthIssue(row)}));
   const failedIds=checks.filter(row=>!row.ok).map(row=>row.id).sort();
   return {
