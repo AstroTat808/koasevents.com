@@ -2,6 +2,7 @@ import type { Context } from '@netlify/functions';
 import { resolveTenant } from './tenant.ts';
 import { tenantStoreFor } from './tenant-storage.ts';
 import { appendTurnstileEvent, loadTurnstileEvents, probeTurnstileEventStore } from './turnstile-history.mjs';
+import { classifyTurnstileAlert, summarizeTurnstileActivity } from './turnstile-alerts.mjs';
 
 export type SecurityDisposition = 'allowed' | 'flagged' | 'blocked';
 
@@ -328,7 +329,11 @@ async function probeTurnstileSiteverify(secret: string) {
       : [];
     const secretRejected = codes.includes('invalid-input-secret') || codes.includes('missing-input-secret');
     const reachable = Boolean(response.status);
-    const secretAccepted = Boolean(response.ok && !secretRejected);
+    // The intentionally invalid token must actually be rejected with the
+    // expected challenge error. An HTTP 200 containing HTML, malformed JSON or
+    // an unexpected 'success' payload is NOT proof Siteverify is healthy.
+    const expectedInvalidToken = data?.success === false && codes.includes('invalid-input-response');
+    const secretAccepted = Boolean(response.ok && !secretRejected && expectedInvalidToken);
     return {
       ok: Boolean(reachable && secretAccepted),
       reachable,
@@ -424,8 +429,9 @@ export async function getTurnstileStatus(context: Context, days = 30) {
   );
   const lastMismatch = mismatchRows[0] || null;
   const healthyWidgets = widgets.filter((row) => row.ok).length;
+  const activity = summarizeTurnstileActivity(inRange);
 
-  return {
+  const status = {
     siteKeyConfigured: Boolean(siteKey),
     siteKeySource: siteKey ? 'environment' : '',
     secretConfigured: Boolean(secret),
@@ -437,6 +443,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
     },
     siteverify,
     telemetry,
+    activity,
     windowDays,
     totals: {
       validations: inRange.length,
@@ -456,6 +463,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       .sort((a, b) => b.count - a.count || Date.parse(b.lastSeenAt) - Date.parse(a.lastSeenAt))
       .slice(0, 12),
   };
+  return { ...status, alert: classifyTurnstileAlert(status) };
 }
 
 export async function setSecurityReview(
