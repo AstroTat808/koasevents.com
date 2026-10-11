@@ -60,6 +60,7 @@ export interface TurnstileValidation {
   requestHostname: string;
   codes: string[];
   detail: string;
+  sourceHint?: 'matches-ci-smoke-pattern' | 'unclassified';
 }
 
 const DISPOSABLE_EMAIL_DOMAINS = new Set([
@@ -206,6 +207,7 @@ export async function recordTurnstileValidation(
     requestHostname?: unknown;
     codes?: unknown;
     detail?: unknown;
+    sourceHint?: unknown;
   },
 ) {
   const store = storeFor(context);
@@ -223,6 +225,7 @@ export async function recordTurnstileValidation(
     requestHostname: clean(input.requestHostname, 255).toLowerCase(),
     codes,
     detail: clean(input.detail, 500),
+    sourceHint: input.sourceHint === 'matches-ci-smoke-pattern' ? 'matches-ci-smoke-pattern' : 'unclassified',
   };
 
   // Each verification is stored under an immutable key: no shared index can
@@ -439,6 +442,7 @@ export async function getTurnstileStatus(context: Context, days = 30) {
       validations: inRange.length,
       successful: successes.length,
       failed: failures.length,
+      smokePattern: failures.filter((row) => row.sourceHint === 'matches-ci-smoke-pattern').length,
     },
     mismatches: {
       hostname: hostnameMismatchRows.length,
