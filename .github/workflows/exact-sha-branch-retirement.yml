@@ -1,0 +1,51 @@
+name: Exact-SHA branch retirement after certified production release
+
+# One-time scoped authorization: the 195 eligible refs in branch-hygiene run
+# 38237894943, pinned by the SHA256 of its report.json. No rolling queue.
+# Only a successful main Production visual QA run may trigger the destructive job.
+on:
+  workflow_run:
+    workflows: ["Production visual QA"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: koa-certified-branch-retirement-20261012
+  cancel-in-progress: false
+
+jobs:
+  exact-sha-retirement:
+    name: Compare-and-delete approved branch tips with permanent audit
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Checkout only the trusted current default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Test atomic-lease cleanup safety logic
+        run: python3 scripts/delete_sha_pinned_branches.py --self-test
+      - name: Verify exact certified release and retire only approved branches
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          python3 scripts/delete_sha_pinned_branches.py --execute
+      - name: Summarize audit ledger
+        if: always()
+        shell: bash
+        run: |
+          echo 'The exact-SHA retirement ledger is persisted as a GitHub issue.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No branch is deleted without checking a verified pinned tip, a current seven-day rule, and a Git force-with-lease.' >> "$GITHUB_STEP_SUMMARY"
