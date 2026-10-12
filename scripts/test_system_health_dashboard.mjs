@@ -77,6 +77,11 @@ assert(
   'System Health sections must default collapsed across viewports while critical sections remain forced open.',
 );
 assert(
+  !healthCollapse.includes("toggle.addEventListener('click'")
+    && health.includes("button.addEventListener('click',(event)=>{"),
+  'Accordion button must have exactly one toggle listener; duplicate desktop listeners reverse an open or close click.',
+);
+assert(
   health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
   'Wide System Health tables must be converted into labeled mobile cards after each dashboard render.',
 );
