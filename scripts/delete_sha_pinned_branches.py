@@ -116,12 +116,19 @@ def verify_release_trigger():
         raise RuntimeError("Main moved after production certification; do not delete")
     if git("merge-base", "--is-ancestor", SNAPSHOT_MAIN, "HEAD", check=False).returncode:
         raise RuntimeError("Approved main SHA is not an ancestor of the current release")
-    p266 = gh(f"/repos/{REPO}/pulls/266")
-    if p266.get("merged") is not True:
-        raise RuntimeError("PR #266 has not merged and released")
     prod261 = gh(f"/repos/{REPO}/actions/runs/{PRODUCTION_RUN_261}")
-    if prod261.get("conclusion") != "success":
-        raise RuntimeError("PR #261 production certification has not completed successfully")
+    if prod261.get("status") != "completed":
+        raise RuntimeError("Original PR #261 production workflow is still unresolved")
+    # The original #261 run failed in an indented Bash heredoc despite green
+    # functional QA. Its immutable SHA cannot be retroactively patched. A later
+    # fully certified production release must contain both the #268 repair and #266.
+    for pr_number in (268, 266):
+        pr = gh(f"/repos/{REPO}/pulls/{pr_number}")
+        if pr.get("merged") is not True:
+            raise RuntimeError(f"PR #{pr_number} must merge before retirement")
+        merged_sha = check_sha(pr.get("merge_commit_sha"))
+        if git("merge-base", "--is-ancestor", merged_sha, "HEAD", check=False).returncode:
+            raise RuntimeError(f"PR #{pr_number} merge is missing from certified main")
     commit_status = gh(f"/repos/{REPO}/commits/{event_sha}/status")
     newest = {}
     for status in commit_status.get("statuses", []):
