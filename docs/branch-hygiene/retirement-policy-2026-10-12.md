@@ -4,7 +4,7 @@
 
 ## Release preconditions
 
-PR #266 must be merged to main. PR #261's original production run (#38237525321) and the latest main Production Visual QA must both be successful. The exact main commit must have successful `System Health production release gate` and `System Health responsive audit` statuses. If any check is failed, pending, missing, or stale, no deletion runs.
+PR #268 (fixing the release-history Bash heredoc) and PR #266 must both be merged and reachable from current main. The original #261 production run (#38237525321) must have completed; its historical failure cannot be erased by changing a later commit. Instead, the **latest exact-current-main** Production Visual QA (including persistence of certified release history, Catalog Manager, Chromium/WebKit, and signed System Health) must fully succeed. The exact main commit must also have successful `System Health production release gate` and `System Health responsive audit` statuses. If any current check is failed, pending, missing, or stale, no deletion runs.
 
 ## Deletion safety
 
