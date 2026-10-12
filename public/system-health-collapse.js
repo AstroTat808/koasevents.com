@@ -120,14 +120,8 @@
       setCollapsed(section, section.dataset.mobileCollapsed !== 'true');
     });
 
-    const toggle = section.querySelector('[data-mobile-collapse-toggle]');
-    if (toggle instanceof HTMLButtonElement) {
-      toggle.addEventListener('click', (event) => {
-        if (!desktopQuery.matches) return;
-        event.stopPropagation();
-        setCollapsed(section, section.dataset.mobileCollapsed !== 'true');
-      });
-    }
+    // The page's original button listener already handles toggling at every width.
+    // Installing a second listener here would immediately reverse each desktop click.
 
     section.dataset.koaDesktopCollapseReady = 'true';
   }
