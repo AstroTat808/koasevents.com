@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
 const health = await readFile(new URL('../src/pages/admin/health/index.astro', import.meta.url), 'utf8');
+const baseLayout = await readFile(new URL('../src/layouts/BaseLayout.astro', import.meta.url), 'utf8');
+const healthCollapse = await readFile(new URL('../public/system-health-collapse.js', import.meta.url), 'utf8');
 const nav = await readFile(new URL('../src/components/StaffUtilityNav.astro', import.meta.url), 'utf8');
 const css = await readFile(new URL('../src/styles/global.css', import.meta.url), 'utf8');
 const adminHealth = await readFile(new URL('../netlify/functions/admin-health.mts', import.meta.url), 'utf8');
@@ -48,6 +50,17 @@ for (const panel of ['Monitoring coverage', 'Dark Mode visual quality', 'Critica
 assert(
   health.includes('data-system-health-page'),
   'System Health must expose the page marker used by mobile viewport-clearance rules.',
+);
+assert(
+  baseLayout.includes('<script is:inline src="/system-health-collapse.js"></script>'),
+  'The shared layout must load the System Health collapse controller.',
+);
+assert(
+  healthCollapse.includes("section.dataset.healthSectionStatus === 'red'")
+    && healthCollapse.includes('const nextCollapsed = critical ? false : Boolean(collapsed);')
+    && healthCollapse.includes('syncAll({ initial: true })')
+    && healthCollapse.includes('.koa-mobile-collapsed-content'),
+  'System Health sections must default collapsed across viewports while critical sections remain forced open.',
 );
 assert(
   health.includes('function prepareMobileHealthTables()') && health.includes("table.classList.add('koa-mobile-card-table')"),
