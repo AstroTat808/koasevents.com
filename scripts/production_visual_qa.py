@@ -1025,6 +1025,10 @@ def admin_mode(browser_name):
    usage_button=page.get_by_role("button",name="Usage",exact=True).first
    usage_button.click()
    page.wait_for_selector("[data-item-usage]:not(.hidden)",state="visible",timeout=5000)
+   page.wait_for_function(
+    "() => document.querySelector('[data-item-usage-loading]')?.textContent?.trim() === 'Live usage checked'",
+    timeout=5000,
+   )
    usage_text=page.locator("[data-item-usage]").inner_text()
    if "2" not in usage_text or "3" not in usage_text or "1" not in usage_text or "EST-QA" not in usage_text:
     raise RuntimeError("Catalog usage impact did not render proposal, website and QuickBooks transaction usage.")
