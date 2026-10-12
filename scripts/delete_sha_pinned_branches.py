@@ -15,6 +15,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.parse
 
 REPO = "AstroTat808/koasevents.com"
@@ -204,6 +205,38 @@ def ensure_ledger(approved, release_sha):
     return issue["number"], False
 
 
+def test_git_lease_deletion():
+    # This exercise operates only on a temporary local bare Git repository.
+    # A stale expected SHA must never delete a newer pushed branch tip.
+    with tempfile.TemporaryDirectory(prefix="koa-branch-lease-") as root:
+        remote = str(Path(root) / "remote.git")
+        work = str(Path(root) / "client")
+        run(["git", "init", "--bare", remote])
+        run(["git", "clone", remote, work])
+        run(["git", "-C", work, "config", "user.name", "Koa branch lease test"])
+        run(["git", "-C", work, "config", "user.email", "lease-test@koasevents.test"])
+        (Path(work) / "sample.txt").write_text("one\\n")
+        run(["git", "-C", work, "add", "sample.txt"])
+        run(["git", "-C", work, "commit", "-m", "first"])
+        run(["git", "-C", work, "branch", "lease-test"])
+        run(["git", "-C", work, "push", "origin", "lease-test"])
+        old_tip = run(["git", "-C", work, "rev-parse", "lease-test"]).stdout.strip()
+        (Path(work) / "sample.txt").write_text("two\\n")
+        run(["git", "-C", work, "commit", "-am", "second"])
+        run(["git", "-C", work, "branch", "-f", "lease-test", "HEAD"])
+        run(["git", "-C", work, "push", "origin", "lease-test"])
+        stale = run(["git", "-C", work, "push", f"--force-with-lease=refs/heads/lease-test:{old_tip}",
+                     "origin", ":refs/heads/lease-test"], check=False)
+        assert stale.returncode != 0, "A moved branch was deleted despite stale expected SHA"
+        ref = run(["git", "-C", work, "ls-remote", "--heads", "origin", "refs/heads/lease-test"]).stdout.strip()
+        actual = ref.split()[0]
+        assert actual != old_tip and SHA.fullmatch(actual), "Remote ref changed unexpectedly"
+        run(["git", "-C", work, "push", f"--force-with-lease=refs/heads/lease-test:{actual}",
+             "origin", ":refs/heads/lease-test"])
+        after = run(["git", "-C", work, "ls-remote", "--heads", "origin", "refs/heads/lease-test"]).stdout.strip()
+        assert not after, "Exact expected SHA did not permit conditional ref deletion"
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--execute", action="store_true", help="Only in certified production workflow_run")
@@ -216,7 +249,8 @@ def main():
         assert gate_current_candidate(sample, {**sample, "sha": "b"*40})
         assert gate_current_candidate(sample, {**sample, "flag_after_7_days": False})
         assert gate_current_candidate(sample, {**sample, "group": "keep"})
-        print("Exact-SHA, seven-day, and preservation-gate unit tests passed")
+        test_git_lease_deletion()
+        print("Exact-SHA, seven-day, preservation, and atomic Git lease tests passed")
         return
 
     if not args.execute:
