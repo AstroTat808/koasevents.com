@@ -101,12 +101,12 @@ assert(workflow.includes('Persist certified release attestation history')
   'A green release must persist its certified attestation and fail closed if persistence fails.');
 
 const persistStep=workflow.indexOf('      - name: Persist certified release attestation history');
-const shellStart=workflow.indexOf('        run: |\\n'.replace('\\n','\\n'),persistStep);
-const shellEnd=workflow.indexOf('\\n  qa-summary:',shellStart);
+const shellStart=workflow.indexOf('        run: |\n',persistStep);
+const shellEnd=workflow.indexOf('\n  qa-summary:',shellStart);
 assert(persistStep>=0&&shellStart>persistStep&&shellEnd>shellStart,
   'Release history persistence shell step was not found.');
-const rawShell=workflow.slice(shellStart+'        run: |\\n'.length,shellEnd);
-const persistShell=rawShell.split('\\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\\n');
+const rawShell=workflow.slice(shellStart+'        run: |\n'.length,shellEnd);
+const persistShell=rawShell.split('\n').map(line=>line.startsWith('          ')?line.slice(10):line).join('\n');
 const bashSyntax=spawnSync('bash',['-n'],{input:persistShell,encoding:'utf8'});
 assert(bashSyntax.status===0,
   'Release history persistence shell must pass bash -n: '+String(bashSyntax.stderr||'').slice(0,350));
