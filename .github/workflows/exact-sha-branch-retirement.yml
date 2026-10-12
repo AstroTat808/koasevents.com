@@ -4,22 +4,41 @@ name: Exact-SHA branch retirement after certified production release
 # 38237894943, pinned by the SHA256 of its report.json. No rolling queue.
 # Only a successful main Production visual QA run may trigger the destructive job.
 on:
+  pull_request:
+    branches: [main]
   workflow_run:
     workflows: ["Production visual QA"]
     types: [completed]
 
+# PR checks receive no write privileges; only the trusted post-release job can mutate refs.
 permissions:
-  actions: read
-  contents: write
-  issues: write
+  contents: read
 
 concurrency:
   group: koa-certified-branch-retirement-20261012
   cancel-in-progress: false
 
 jobs:
+  retirement-safety-tests:
+    name: Syntax and exact-lease safety tests (read-only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate branch retirement source
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/delete_sha_pinned_branches.py
+          python3 scripts/delete_sha_pinned_branches.py --self-test
+
   exact-sha-retirement:
     name: Compare-and-delete approved branch tips with permanent audit
+    permissions:
+      actions: read
+      contents: write
+      issues: write
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
