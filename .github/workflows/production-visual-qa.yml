@@ -1081,16 +1081,8 @@ jobs:
           set -euo pipefail
           fail_history() {
             trap - ERR
-            python - <<'PY'
-            import json, os
-            payload={
-              "state":"failure",
-              "context":"System Health production release gate",
-              "description":"Production release blocked: certified release history could not be persisted.",
-              "target_url":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-            }
-            open("/tmp/koa-release-history-failure-status.json","w").write(json.dumps(payload,separators=(",",":")))
-            PY
+            # Inline payload generation avoids an indented Bash heredoc terminator.
+            python -c 'import json,os; payload={"state":"failure","context":"System Health production release gate","description":"Production release blocked: certified release history could not be persisted.","target_url":"https://github.com/{}/actions/runs/{}".format(os.environ["GITHUB_REPOSITORY"],os.environ["GITHUB_RUN_ID"])}; open("/tmp/koa-release-history-failure-status.json","w").write(json.dumps(payload,separators=(",",":")))'
             curl -sS -X POST \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
