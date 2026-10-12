@@ -4,6 +4,68 @@
 
   const desktopQuery = window.matchMedia('(min-width: 768px)');
 
+  const style = document.createElement('style');
+  style.dataset.koaSystemHealthCollapseStyles = '';
+  style.textContent = `
+    @media (min-width: 768px) {
+      body.koa-admin-page main[data-system-health-page] .koa-mobile-collapsed-content {
+        display: none !important;
+      }
+      body.koa-admin-page main[data-system-health-page] .health-section-mobile-controls {
+        display: flex !important;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .45rem;
+        margin-top: .7rem;
+      }
+      body.koa-admin-page main[data-system-health-page] .health-mobile-detail-toggle {
+        display: inline-flex !important;
+        min-height: 2.4rem;
+        align-items: center;
+        justify-content: center;
+        margin-top: 0;
+        gap: .35rem;
+        border: 1px solid var(--koa-line);
+        border-radius: 9999px;
+        background: var(--koa-surface);
+        padding: .55rem .8rem;
+        color: var(--koa-forest);
+        font-size: .56rem;
+        font-weight: 900;
+        letter-spacing: .07em;
+        line-height: 1.1;
+        text-transform: uppercase;
+      }
+      body.koa-admin-page main[data-system-health-page] .health-section-mobile-summary {
+        display: block;
+        flex: 1 0 100%;
+        width: 100%;
+        min-height: 2.2rem;
+        margin: .05rem 0 0;
+        overflow: hidden;
+        border: 0;
+        border-radius: .55rem;
+        background: transparent;
+        padding: .32rem .2rem;
+        color: color-mix(in srgb, var(--koa-ink) 64%, transparent);
+        font-size: .72rem;
+        font-weight: 650;
+        line-height: 1.35;
+        text-align: left;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+      body.koa-admin-page main[data-system-health-page] [data-mobile-collapsed="false"] .health-section-mobile-summary {
+        display: none !important;
+      }
+      body.koa-admin-page main[data-system-health-page] .health-section-mobile-header {
+        cursor: pointer;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
   function sectionContent(section) {
     return [...section.children].filter((child, index) =>
       index > 0 &&
