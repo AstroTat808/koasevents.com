@@ -225,6 +225,18 @@ def main():
 
     outcomes = []
     for index, row in enumerate(approved, 1):
+        if (index - 1) % 15 == 0:
+            planned = approved[index - 1:index + 14]
+            intent = "\\n".join(
+                f"- \`{candidate['branch']}\` at \`{candidate['sha']}\`"
+                for candidate in planned
+            )
+            issue_comment(
+                ledger_num,
+                f"## Pre-deletion intent (batch {index}–{index + len(planned) - 1})\\n\\n"
+                "Only refs that still satisfy every current gate and exact Git lease may be deleted.\\n\\n"
+                + intent,
+            )
         branch, expected = row["branch"], check_sha(row["sha"])
         result = {"branch": branch, "expected_sha": expected, "outcome": "", "detail": ""}
         reason = gate_current_candidate(row, current.get(branch))
