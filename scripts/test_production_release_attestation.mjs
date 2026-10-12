@@ -79,9 +79,11 @@ for(const state of ['ready','current']){
 
 const workflow=readFileSync('.github/workflows/production-visual-qa.yml','utf8');
 const server=readFileSync('netlify/functions/github-main-health-signal.ts','utf8');
+const healthShared=readFileSync('netlify/functions/_shared/system-health.ts','utf8');
+const healthPage=readFileSync('src/pages/admin/health/index.astro','utf8');
 const gateContextOccurrences=(workflow.match(/System Health production release gate/g)||[]).length;
-assert(gateContextOccurrences===2,
-  'Production release gate context must appear only in initial pending and final attestation publishers; found '+gateContextOccurrences+'.');
+assert(gateContextOccurrences===3,
+  'Production release gate context must appear only in initial pending, final attestation, and release-history failure override publishers; found '+gateContextOccurrences+'.');
 assert(workflow.includes("import { evaluateProductionReleaseGate } from './netlify/functions/_shared/production-release-policy.mjs';"),
   'Final workflow status does not use the tested shared release policy.');
 assert(workflow.includes("'context':'System Health responsive audit'"),
@@ -93,5 +95,18 @@ assert(server.includes('productionDeployMatchesAttestation({'),
 assert(server.includes("netlifyJson(token,'/deploys/'+encodeURIComponent(liveDeployId))")
     && server.includes("liveCommitSource='netlify-live-deploy'"),
   'API-triggered production deploys must recover live commit provenance from the exact serving Netlify deploy record.');
+assert(workflow.includes('Persist certified release attestation history')
+    && workflow.includes('record-production-release-attestation'),
+  'A green release must persist its certified attestation and fail closed if persistence fails.');
+assert(server.includes("body?.action==='record-production-release-attestation'"),
+  'The OIDC control plane must expose exact-release attestation persistence.');
+assert(healthShared.includes('releaseAttestation?:ProductionReleaseAttestation|null')
+    && healthShared.includes('6aca20d60f83c2e4cae6c338')
+    && healthShared.includes('b5830d422c36a2c9c2869e228f5fa470ea650337'),
+  'Certified PR #260 production evidence must be backfilled into permanent release history.');
+assert(healthPage.includes('Release certification')
+    && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
+    && healthPage.includes('attestation?.matchingDeployId===true'),
+  'The Site Quality release timeline must visibly render certified production attestation history.');
 
-console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, and mismatched deploy IDs; API builds recover commit provenance from the serving deploy record.');
+console.log('PASS | production release gate rejects errored deploys, cancelled visual QA, unhealthy System Health, missing live commit evidence, mismatched deploy IDs, and non-durable certification; API builds recover exact live deploy provenance.');
