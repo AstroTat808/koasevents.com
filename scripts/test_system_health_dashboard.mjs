@@ -52,7 +52,7 @@ assert(
   'System Health must expose the page marker used by mobile viewport-clearance rules.',
 );
 assert(
-  baseLayout.includes('<script is:inline src="/system-health-collapse.js"></script>'),
+  baseLayout.includes("healthCollapseScript.src = '/system-health-collapse.js';"),
   'The shared layout must load the System Health collapse controller.',
 );
 assert(
