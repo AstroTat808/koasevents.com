@@ -110,6 +110,16 @@ assert(healthPage.includes('Release certification')
     && healthPage.includes("certificationLabel=certified?'Certified':'Not certified'")
     && healthPage.includes('attestation?.matchingDeployId===true'),
   'The Site Quality release timeline must visibly render certified production attestation history.');
+assert(healthPage.includes('data-release-verification-overview') === false
+    && healthPage.includes("overview.dataset.releaseVerificationOverview=''")
+    && healthPage.includes('data-release-verification-fields')
+    && healthPage.includes('data-release-browser-results')
+    && healthPage.includes('data-release-browser=name')
+    && healthPage.includes('exactCertification')
+    && healthPage.includes('exactVisual')
+    && healthPage.includes('exactAccordion')
+    && healthPage.includes("certification?.liveDeployId||'Not recorded'"),
+  'One Release History dialog must distinguish exact certified Netlify IDs, browser results, and four accordion screenshots without inventing missing evidence.');
 
 
 const accordionImage=Buffer.concat([Buffer.from([255,216,255]),Buffer.alloc(1300,3)]);
