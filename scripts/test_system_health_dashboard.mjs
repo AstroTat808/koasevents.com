@@ -15,6 +15,7 @@ const visualQa = await readFile(new URL('./production_visual_qa.py', import.meta
 const themeVisualQa = await readFile(new URL('./theme_visual_qa.py', import.meta.url), 'utf8');
 const visualWorkflow = await readFile(new URL('../.github/workflows/production-visual-qa.yml', import.meta.url), 'utf8');
 const netlifyConfig = await readFile(new URL('../netlify.toml', import.meta.url), 'utf8');
+const netlifyBuildRunner = await readFile(new URL('./run_netlify_build.mjs', import.meta.url), 'utf8');
 const releaseGate = await readFile(new URL('./verify_netlify_release_gate.mjs', import.meta.url), 'utf8');
 
 function assert(condition, message) {
@@ -276,11 +277,13 @@ assert(
 );
 
 assert(
-  netlifyConfig.includes('node scripts/verify_netlify_release_gate.mjs')
+  netlifyConfig.includes('command = "node scripts/run_netlify_build.mjs"')
+    && netlifyBuildRunner.includes("['production-release-gate','Production release gate','node',['scripts/verify_netlify_release_gate.mjs'],false]")
+    && netlifyBuildRunner.indexOf("scripts/verify_netlify_release_gate.mjs") < netlifyBuildRunner.indexOf("scripts/run_prebuild_checks.mjs")
     && releaseGate.includes("const REQUIRED_WORKFLOW='Production visual QA'")
     && releaseGate.includes('&event=pull_request&per_page=50')
     && releaseGate.includes("String(latest?.conclusion||'')!=='success'"),
-  'Netlify production builds must fail closed unless the exact merged PR head passed Production visual QA.',
+  'Netlify production builds must run the exact merged-PR Production visual QA release gate before any prebuild or Astro build step.',
 );
 assert(
   visualWorkflow.includes('statuses: write')
@@ -549,5 +552,17 @@ assert(
     && visualWorkflow.includes("needs: [deployed-smoke, production-theme-audit, visual-audit]"),
   'Production Dark Mode QA, Chromium and WebKit responsive jobs, and final System Health refresh must run sequentially; every failure remains actionable and no browser is skipped.',
 );
+
+assert(
+  health.includes('data-health-detail-dialog class="fixed inset-0 m-auto')
+    && health.includes('max-h-[calc(100dvh-2rem)]')
+    && visualQa.includes('explanation_dialog_geometry')
+    && visualQa.includes("viewport_name in {\"phone\",\"desktop\"}")
+    && visualQa.includes('horizontalOffset<=14&&verticalOffset<=14')
+    && visualQa.includes('system-health-explanation-dialog-{viewport_name}.png'),
+  'System Health issue explanations must be centered and viewport-tested with synthetic, PII-free iPhone/desktop evidence.',
+);
+
+
 
 console.log('System Health dashboard hydration, responsive layout, and viewport-clearance regression checks passed.');
