@@ -1,5 +1,5 @@
 import type { Config, Context } from '@netlify/functions';
-import { evaluateReleaseHistoryPersistence } from './_shared/release-history-integrity.mjs';
+import { evaluateReleaseHistoryPersistence, releaseHistoryStatusEndpoint } from './_shared/release-history-integrity.mjs';
 import { hasCapability, requireCapability } from './_shared/admin';
 import { resolveTenant } from './_shared/tenant';
 import {
@@ -572,7 +572,7 @@ async function independentReleaseHistoryPersistence(context:Context,deployments:
   let statuses:any[]=[];
   if(/^[a-f0-9]{40}$/.test(sha)){
     const githubToken=String(Netlify.env.get('KOA_GITHUB_READ_TOKEN')||'').trim();
-    const res=await fetch('https://api.github.com/repos/AstroTat808/koasevents.com/commits/'+sha+'/statuses?per_page=100',{
+    const res=await fetch(releaseHistoryStatusEndpoint(deployments,sha),{
       headers:{
         Accept:'application/vnd.github+json',
         'User-Agent':'KoaEvents-ReleaseHistory/1.0',
