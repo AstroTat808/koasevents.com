@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { deflateRawSync } from 'node:zlib';
 import {
   latestRun,checkSummary,netlifyPreview,extractAttestationZip,qaFromAttestation,
-  releaseRow,productionSummary,dashboardTotals,RELEASE_WORKFLOWS,
+  releaseRow,productionSummary,dashboardTotals,RELEASE_WORKFLOWS,NETLIFY_SITE_ID,
 } from '../netlify/functions/_shared/release-dashboard.mjs';
 
 function archive(name,content){
@@ -58,16 +58,18 @@ const workflowRuns=RELEASE_WORKFLOWS.map((name,i)=>({
 assert.equal(checkSummary(latestRun(workflowRuns,'Release Certification',HEAD)).status,'passed');
 assert.equal(checkSummary(latestRun(workflowRuns,'Release Certification',MERGE)).status,'missing');
 assert.equal(checkSummary({status:'completed',conclusion:'failure'}).status,'failed');
-const prod=productionSummary(MERGE,[{
-  id:'e'.repeat(24),commit_ref:MERGE,context:'production',state:'ready',
+const published={
+  id:'e'.repeat(24),site_id:NETLIFY_SITE_ID,commit_ref:MERGE,context:'production',state:'ready',
   published_at:'2026-10-08T18:59:00Z',
-}],{
+};
+const prod=productionSummary(MERGE,[published],{
   checkedAt:'2026-10-08T19:13:36Z',overall:'healthy',passed:81,failed:0,
   checks:[{id:'netlify-github-sync',deploymentDetails:{netlifyCommit:MERGE,netlifyDeployId:'e'.repeat(24)}}],
-});
+},published);
 assert.equal(prod.status,'synced');
 assert.equal(prod.health.status,'healthy');
-assert.equal(productionSummary(MERGE,[{...preview,context:'production',published_at:'2026-10-08T18:59:00Z'}],null).status,'behind');
+const previousPublished={...published,id:preview.id,commit_ref:HEAD};
+assert.equal(productionSummary(MERGE,[previousPublished],null,previousPublished).status,'behind');
 const pr={
   number:249,title:'Permanent release gate',state:'open',head:{sha:HEAD,ref:'release-gate'},
   base:{ref:'main'},updated_at:'2026-10-08T19:00:00Z',user:{login:'operator'},
@@ -114,4 +116,14 @@ for(const [ok,label] of [
   [health.includes('href="/admin/releases/"'),'System Health must link executive release view'],
 ])assert(ok,label);
 assert(!api.includes('Access-Control-Allow-Origin'),'Protected API must not enable public CORS.');
+assert(api.includes('await boundedArtifactBytes(archive)')&&!api.includes('archive.arrayBuffer()'),
+  'Attestation downloads must enforce the byte limit before buffering.');
+assert(api.includes("redirect:'error'")&&api.includes('url.username||url.password'),
+  'A signed artifact location may not introduce an unchecked second redirect or embedded credentials.');
+assert(api.includes("netlify('/sites/'+NETLIFY_SITE_ID,netlifyToken)")
+  &&api.includes('productionSummary(mainSha,deploys,healthContext.snapshot,site?.published_deploy||null)'),
+  'Production must use the authoritative Netlify site pointer, never historical publication sorting.');
+assert(api.includes('production.health?.failed??null'),
+  'Missing health totals must remain unknown, not silently become zero.');
+await import('./test_release_dashboard_evidence_boundaries.mjs');
 console.log('PASS | release dashboard parser, stale/failure cases, tenant/auth guards, production sync, current/main and all admin navigation.');

@@ -33,7 +33,7 @@ export function netlifyPreview(deploys,number,head){
   const status=exact?'ready':d.commit_ref!==head?'stale':d.state==='error'?'failed':'pending';
   return {status,id:String(d.id||''),sha:String(d.commit_ref||''),
     url:String(d.deploy_ssl_url||d.deploy_url||''),exact,
-    error:String(d.error_message||'').slice(0,200)};
+    error:d.state==='error'?'Netlify preview failed; inspect protected deployment diagnostics.':''};
 }
 export function extractAttestationZip(bytes){
   const zip=Buffer.from(bytes);
@@ -55,16 +55,45 @@ export function extractAttestationZip(bytes){
     const name=zip.subarray(cursor+46,cursor+46+fileNameLen).toString('utf8');
     cursor+=46+fileNameLen+extra+comment;
     if(name!=='final-attestation.json')continue;
-    if(uncompressed>150000||compressed>180000||local+30>zip.length||zip.readUInt32LE(local)!==0x04034b50)
+    if(uncompressed<1||uncompressed>150000||compressed>180000||local+30>zip.length||zip.readUInt32LE(local)!==0x04034b50)
       throw new Error('Invalid or oversized release attestation entry.');
     const start=local+30+zip.readUInt16LE(local+26)+zip.readUInt16LE(local+28);
     if(start+compressed>zip.length)throw new Error('Attestation exceeds archive boundaries.');
     const payload=zip.subarray(start,start+compressed);
-    const decoded=method===8?inflateRawSync(payload):method===0?payload:null;
+    // ZIP headers are untrusted. Enforce the limit during inflation, not afterward.
+    const decoded=method===8?inflateRawSync(payload,{maxOutputLength:uncompressed}):method===0?payload:null;
     if(!decoded||decoded.length!==uncompressed)throw new Error('Attestation decompression failed.');
-    return JSON.parse(decoded.toString('utf8'));
+    try{return JSON.parse(decoded.toString('utf8'));}
+    catch{throw new Error('Release attestation JSON is malformed.');}
   }
   throw new Error('final-attestation.json is missing.');
+}
+export async function boundedArtifactBytes(response,limit=524288){
+  if(!Number.isSafeInteger(limit)||limit<1||limit>524288)throw new Error('Invalid archive byte budget.');
+  if(Number(response.headers.get('content-length')||0)>limit){
+    await response.body?.cancel().catch(()=>{});
+    throw new Error('Certification evidence exceeds size budget.');
+  }
+  if(!response.body)throw new Error('Certification evidence body is missing.');
+  const reader=response.body.getReader(),chunks=[];
+  let total=0,complete=false;
+  try{
+    for(;;){
+      const {done,value}=await reader.read();
+      if(done){complete=true;break;}
+      if(!(value instanceof Uint8Array))throw new Error('Invalid archive byte stream.');
+      total+=value.byteLength;
+      if(total>limit)throw new Error('Certification evidence exceeds size budget.');
+      chunks.push(value);
+    }
+    const bytes=new Uint8Array(total);
+    let offset=0;
+    for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+    return bytes;
+  }finally{
+    if(!complete)await reader.cancel().catch(()=>{});
+    reader.releaseLock();
+  }
 }
 export function qaFromAttestation(attestation,head){
   const empty={status:'unknown',chromium:null,webkit:null,platform:'unknown'};
@@ -86,30 +115,41 @@ export function qaFromAttestation(attestation,head){
     platform:pass?'passed':'failed',certifiedMain:String(attestation.main||''),
     verifiedAt:String(attestation.checkedAt||attestation.evidence.verifiedAt||'')};
 }
-export function productionSummary(mainSha,deploys,health){
-  if(!Array.isArray(deploys))return {
-    status:'unavailable',mainSha,deployId:'',sha:'',publishedAt:'',health:null,
-  };
-  const prod=deploys.filter(d=>d.context==='production'&&d.published_at&&d.state==='ready')
-    .sort((a,b)=>Date.parse(b.published_at||0)-Date.parse(a.published_at||0))[0];
-  if(!prod)return {status:'unavailable',mainSha,deployId:'',sha:'',publishedAt:'',health:null};
-  const deploymentCheck=(health?.checks||[]).find(x=>x.id==='netlify-github-sync');
+export function productionSummary(mainSha,deploys,health,publishedDeploy=null){
+  const unavailable={status:'unavailable',mainSha,deployId:'',sha:'',publishedAt:'',health:null};
+  // A historically published ready build is not proof that it is serving now.
+  // Only the site's authoritative published_deploy record may select production.
+  const prod=publishedDeploy;
+  if(!prod||prod.site_id!==NETLIFY_SITE_ID||prod.context!=='production'
+      ||!['ready','current'].includes(prod.state)||!Number.isFinite(Date.parse(prod.published_at||''))
+      ||!/^[a-f0-9]{24}$/.test(String(prod.id||''))||!/^[a-f0-9]{40}$/.test(String(prod.commit_ref||'')))return unavailable;
+  const checks=Array.isArray(health?.checks)?health.checks:[];
+  const deploymentCheck=checks.find(x=>x?.id==='netlify-github-sync');
   const healthCommit=String(deploymentCheck?.deploymentDetails?.netlifyCommit||'');
   const healthDeploy=String(deploymentCheck?.deploymentDetails?.netlifyDeployId||'');
-  const checkedAt=String(health?.checkedAt||'');
+  const checkedAt=Number.isFinite(Date.parse(health?.checkedAt||''))?String(health.checkedAt):'';
   const healthAligned=Boolean(checkedAt&&healthCommit===prod.commit_ref&&healthDeploy===prod.id
     &&Date.parse(checkedAt)>=Date.parse(prod.published_at));
-  const unhealthy=(Array.isArray(health?.checks)?health.checks:[])
-    .filter(x=>x?.ok===false||x?.severity==='red')
-    .slice(0,15).map(x=>({id:String(x.id||''),name:String(x.name||''),detail:String(x.detail||'').slice(0,180)}));
+  const count=value=>Number.isSafeInteger(value)&&value>=0?value:null;
+  const passed=count(health?.passed),failed=count(health?.failed);
+  const known={
+    'dark-mode-qa':'Dark Mode QA',
+    'netlify-github-sync':'Netlify / GitHub synchronization',
+  };
+  // Release metadata must not republish arbitrary operational or accounting text.
+  const unhealthy=checks.filter(x=>x?.ok===false||x?.severity==='red').slice(0,15).map((x,index)=>{
+    const trusted=Object.hasOwn(known,x.id);
+    return {id:trusted?x.id:'failed-check-'+(index+1),name:trusted?known[x.id]:'System Health check',
+      detail:'Failed check; inspect the authorized System Health view for details.'};
+  });
   return {
     status:prod.commit_ref===mainSha?'synced':'behind',
-    mainSha,sha:String(prod.commit_ref||''),deployId:String(prod.id||''),
-    publishedAt:String(prod.published_at||''),url:String(prod.deploy_ssl_url||prod.deploy_url||''),
+    mainSha,sha:String(prod.commit_ref),deployId:String(prod.id),
+    publishedAt:String(prod.published_at),url:String(prod.deploy_ssl_url||prod.deploy_url||''),
     health:{
-      checkedAt,aligned:healthAligned,status:!health?'unavailable':!healthAligned?'stale':health.overall==='healthy'&&health.failed===0?'healthy':'unhealthy',
-      overall:String(health?.overall||'unknown'),passed:Number(health?.passed||0),
-      failed:Number(health?.failed||0),unhealthy,
+      checkedAt,aligned:healthAligned,status:!health?'unavailable':!healthAligned?'stale':health.overall==='healthy'&&failed===0&&passed!==null&&unhealthy.length===0?'healthy':'unhealthy',
+      overall:['healthy','unhealthy','degraded','unknown'].includes(health?.overall)?health.overall:'unknown',passed,
+      failed,unhealthy,
     },
   };
 }

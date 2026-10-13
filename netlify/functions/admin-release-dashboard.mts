@@ -4,7 +4,7 @@ import { runWithTenant } from './_shared/tenant';
 import { readLatestHealth, readProductionReleases } from './_shared/system-health';
 import {
   RELEASE_WORKFLOWS, NETLIFY_SITE_ID, RULESET_ID,
-  latestRun, netlifyPreview, extractAttestationZip,
+  latestRun, netlifyPreview, extractAttestationZip, boundedArtifactBytes,
   productionSummary, releaseRow, dashboardTotals,
 } from './_shared/release-dashboard.mjs';
 
@@ -30,7 +30,7 @@ async function getJson(url:string,token:string,provider:'GitHub'|'Netlify'){
   const json:any=await response.json().catch(()=>({}));
   if(!response.ok){
     throw new Error(provider+' request failed (HTTP '+response.status+
-      (response.status===403?' · permissions or rate limit':'')+').');
+      (response.status===403?' \u00b7 permissions or rate limit':'')+').');
   }
   return json;
 }
@@ -58,14 +58,13 @@ async function downloadAttestation(runId:number,expectedHead:string,githubToken:
   if(response.status>=300&&response.status<400){
     const location=response.headers.get('location')||'';
     const url=new URL(location);
-    if(url.protocol!=='https:'||(!url.hostname.endsWith('.blob.core.windows.net')&&!url.hostname.endsWith('.githubusercontent.com')&&!url.hostname.endsWith('.actions.githubusercontent.com'))){
+    if(url.protocol!=='https:'||url.username||url.password||(!url.hostname.endsWith('.blob.core.windows.net')&&!url.hostname.endsWith('.githubusercontent.com')&&!url.hostname.endsWith('.actions.githubusercontent.com'))){
       throw new Error('Artifact redirect host is not trusted.');
     }
-    archive=await fetch(url,{headers:{Accept:'application/zip'},signal:AbortSignal.timeout(12000)});
+    archive=await fetch(url,{headers:{Accept:'application/zip'},redirect:'error',signal:AbortSignal.timeout(12000)});
   }
   if(!archive.ok)throw new Error('Release evidence artifact download HTTP '+archive.status+'.');
-  if(Number(archive.headers.get('content-length')||0)>524288)throw new Error('Certification evidence exceeds size budget.');
-  const data=new Uint8Array(await archive.arrayBuffer());
+  const data=await boundedArtifactBytes(archive);
   const attestation=extractAttestationZip(data);
   if(attestation?.head!==expectedHead)throw new Error('Certification artifact belongs to a different commit SHA.');
   if(!attestation?.evidence?.browsers)throw new Error('Certification artifact lacks browser QA evidence.');
@@ -87,7 +86,7 @@ export default async(req:Request,context:Context)=>{
   if(auth.response)return auth.response;
   const headers={'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'};
   if(!auth.tenant?.storage?.legacyDataBelongsToTenant){
-    return Response.json({error:'Koa’s Events administrator tenant required.'},{status:403,headers});
+    return Response.json({error:'Koa\u2019s Events administrator tenant required.'},{status:403,headers});
   }
   if(req.method!=='GET')return Response.json({error:'Read-only dashboard.'},{status:405,headers});
   const u=new URL(req.url);
@@ -101,7 +100,7 @@ export default async(req:Request,context:Context)=>{
   const netlifyToken=String(Netlify.env.get('NETLIFY_AUTH_TOKEN')||'').trim();
   const warnings:string[]=[];
   try{
-    const [prList,mainBranch,netlifyResponse,ruleSet,healthContext]=await Promise.all([
+    const [prList,mainBranch,netlifyResponse,ruleSet,healthContext,site]=await Promise.all([
       github('/pulls?state=all&sort=updated&direction=desc&per_page='+PER_PAGE+'&page='+page,githubToken),
       github('/branches/main',githubToken),
       netlify('/sites/'+NETLIFY_SITE_ID+'/deploys?per_page=100',netlifyToken).catch((error)=>{
@@ -117,12 +116,16 @@ export default async(req:Request,context:Context)=>{
         ]);
         return {snapshot,releases};
       }),
+      // The site pointer, not publication-date sorting, identifies the serving build.
+      netlify('/sites/'+NETLIFY_SITE_ID,netlifyToken).catch((error)=>{
+        warnings.push('Published production deploy unavailable: '+errorText(error));return null;
+      }),
     ]);
     const mainSha=String(mainBranch?.commit?.sha||'');
     if(!/^[a-f0-9]{40}$/i.test(mainSha))throw new Error('GitHub current main SHA is unavailable.');
     if(!Array.isArray(prList))throw new Error('GitHub pull request listing is unavailable.');
     const deploys=Array.isArray(netlifyResponse)?netlifyResponse:null;
-    const production=productionSummary(mainSha,deploys,healthContext.snapshot);
+    const production=productionSummary(mainSha,deploys,healthContext.snapshot,site?.published_deploy||null);
     const rule=Array.isArray(ruleSet?.rules)
       ?ruleSet.rules.find((r:any)=>r.type==='required_status_checks'):null;
     const required=Array.isArray(rule?.parameters?.required_status_checks)
@@ -159,8 +162,8 @@ export default async(req:Request,context:Context)=>{
         :row.deployStatus==='awaiting-production'?'pending-deploy'
         :row.deployStatus==='superseded'?'historical':'not-applicable')||'unavailable';
       row.healthCheckedAt=row.deployStatus==='live'?(production.health?.checkedAt||''):'';
-      row.healthPassed=row.deployStatus==='live'?Number(production.health?.passed||0):null;
-      row.healthFailed=row.deployStatus==='live'?Number(production.health?.failed||0):null;
+      row.healthPassed=row.deployStatus==='live'?(production.health?.passed??null):null;
+      row.healthFailed=row.deployStatus==='live'?(production.health?.failed??null):null;
       if(row.qa.status==='unknown'&&row.state==='merged'){
         const history=healthContext.releases.find((release:any)=>
           release?.commit===row.mergeSha&&release?.visualQuality?.commit===row.mergeSha);
