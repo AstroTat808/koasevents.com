@@ -1,12 +1,15 @@
 # Release marker: QuickBooks audit relink + automatic safe repair preview
 # Production release: 2026-09-29 PR #166 QuickBooks accounting reconciliation repair
 [build]
-  command = "node scripts/verify_netlify_release_gate.mjs && python3 scripts/production_visual_qa.py --mode source && npm run build"
+  command = "node scripts/run_netlify_build.mjs"
   publish = "dist"
   ignore = "node scripts/netlify_ignore_build.mjs"
 
 [build.environment]
   NODE_VERSION = "22"
+
+[[plugins]]
+  package = "/plugins/netlify-plugin-koa-build-diagnostics"
 
 # Content Admin authorization is enforced in the admin UI and server-side functions.
 # Approved administrators are restricted to the allowlist in netlify/functions/_shared/admin.ts.

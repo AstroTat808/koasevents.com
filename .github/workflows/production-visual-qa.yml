@@ -106,6 +106,27 @@ jobs:
         run: |
           pip install playwright==1.55.0
           python -m playwright install --with-deps chromium webkit
+      - name: Fail closed if Netlify Image CDN outage breaks the tablet homepage image
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m http.server 4176 --directory dist > /tmp/koa-image-fallback-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4176/ >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'Image fallback preview server failed to start'
+            exit 1
+          fi
+          python scripts/test_image_cdn_fallback.py --base-url http://127.0.0.1:4176
       - name: Verify site-wide Light / Dark / System themes in Chromium and WebKit
         if: github.event_name == 'pull_request'
         shell: bash
@@ -307,6 +328,7 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"verify-production-health"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
+          node scripts/private_release_evidence.mjs verify-health "$verification_file"
           python - "$verification_file" <<'PY'
           import json,sys
           data=json.load(open(sys.argv[1]))
@@ -372,10 +394,28 @@ jobs:
           python scripts/production_visual_qa.py --mode wait --wait-seconds 900
       - name: Verify live Light / Dark / System in Chromium
         id: theme-chromium
-        run: python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python scripts/theme_visual_qa.py --browser chromium --base-url "$PRODUCTION_BASE_URL" > /tmp/theme-chromium.private.log 2>&1; then
+            echo 'Authenticated browser audit passed; private output withheld.'
+          else
+            result=$?
+            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
+            exit "$result"
+          fi
       - name: Verify live Light / Dark / System in WebKit
         id: theme-webkit
-        run: python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python scripts/theme_visual_qa.py --browser webkit --base-url "$PRODUCTION_BASE_URL" > /tmp/theme-webkit.private.log 2>&1; then
+            echo 'Authenticated browser audit passed; private output withheld.'
+          else
+            result=$?
+            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
+            exit "$result"
+          fi
       - name: Publish Dark Mode visual-quality result to System Health
         if: always()
         shell: bash
@@ -526,9 +566,8 @@ jobs:
           }
           Path('/tmp/dark-mode-visual-quality.json').write_text(json.dumps(payload,separators=(',',':')))
           print(json.dumps({
-              'chromium':payload['chromium'],
-              'webkit':payload['webkit'],
-              'screenshots':[{key:value for key,value in row.items() if key!='dataBase64'} for row in payload['screenshots']],
+              browser:{key:payload[browser][key] for key in ('routes','cases','failureCount','failedRouteCount','reportMissing')}
+              for browser in ('chromium','webkit')
           },separators=(',',':')))
           PY
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
@@ -564,7 +603,16 @@ jobs:
       - name: Wait for this exact Netlify deploy
         run: python scripts/production_visual_qa.py --mode wait --wait-seconds 900
       - name: Verify every protected admin page and API
-        run: python scripts/production_visual_qa.py --mode admin --browser chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python scripts/production_visual_qa.py --mode admin --browser chromium > /tmp/admin-chromium.private.log 2>&1; then
+            echo 'Authenticated browser audit passed; private output withheld.'
+          else
+            result=$?
+            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
+            exit "$result"
+          fi
   system-health-mobile-audit:
     name: System Health authenticated mobile screenshots
     if: github.event_name != 'pull_request' && always()
@@ -589,6 +637,7 @@ jobs:
           mkdir -p visual-results
           response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
           token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          trap 'rm -f /tmp/system-health-dashboard.raw.json' EXIT
           http_status="000"
           for attempt in 1 2 3; do
             http_status="$(curl -sS \
@@ -608,54 +657,8 @@ jobs:
             if [ "$attempt" != "3" ]; then sleep $((attempt * 5)); fi
           done
           test "$http_status" = "200"
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          raw=Path('/tmp/system-health-dashboard.raw.json')
-          data=json.loads(raw.read_text())
-          current=data.get('current') or {}
-          assert data.get('ok') is True
-          assert current.get('checkedAt')
-          assert isinstance(current.get('passed'),int)
-          assert isinstance(current.get('failed'),int)
-          assert current.get('overall') in {'healthy','unhealthy'}
-          warning_count=len(data.get('enrichmentWarnings') or [])
-          safe={
-              'ok': True,
-              'current': {
-                  'overall': current.get('overall'),
-                  'passed': current.get('passed'),
-                  'failed': current.get('failed'),
-                  'checkedAt': current.get('checkedAt'),
-                  'checks': [],
-              },
-              'coverage': {},
-              'criticalIntegrations': {},
-              'rollbackReady': {},
-              'runtime': {},
-              'deployments': {},
-              'office365': {},
-              'emailHealth': {},
-              'credentialHealth': {},
-              'weeklyExecutiveSummary': {},
-              'accountingHealth': {},
-              'visualQuality': {},
-              'enrichmentWarnings': [
-                  {'message':'Enrichment warning details redacted from CI.'}
-                  for _ in range(warning_count)
-              ],
-          }
-          Path('visual-results/system-health-dashboard-sanitized.json').write_text(json.dumps(safe,separators=(',',':')))
-          raw.unlink(missing_ok=True)
-          print(json.dumps({
-              'ok': True,
-              'overall': current.get('overall'),
-              'passed': current.get('passed'),
-              'failed': current.get('failed'),
-              'checkedAt': current.get('checkedAt'),
-              'enrichmentWarningCount': warning_count,
-          },separators=(',',':')))
-          PY
+          node scripts/private_release_evidence.mjs sanitize-dashboard /tmp/system-health-dashboard.raw.json visual-results/system-health-dashboard-sanitized.json "$GITHUB_SHA"
+          rm -f /tmp/system-health-dashboard.raw.json
       - name: Verify authenticated mobile System Health in Chromium
         run: python scripts/production_visual_qa.py --mode health-mobile --browser chromium --health-payload visual-results/system-health-dashboard-sanitized.json
       - name: Verify authenticated mobile System Health in WebKit
@@ -766,8 +769,8 @@ jobs:
               'enrichmentWarnings':warnings,
               'chromiumViewports':len(chromium.get('results') or []),
               'webkitViewports':len(webkit.get('results') or []),
-              'chromiumFailures':chromium.get('failures') or [],
-              'webkitFailures':webkit.get('failures') or [],
+              'chromiumFailureCount':len(chromium.get('failures') or []),
+              'webkitFailureCount':len(webkit.get('failures') or []),
           },separators=(',',':')))
           PY
           python - <<'PY'
@@ -816,7 +819,16 @@ jobs:
           pip install playwright==1.55.0
           python -m playwright install --with-deps ${{ matrix.browser }}
       - name: Audit responsive staging experience
-        run: python scripts/production_visual_qa.py --mode browser --browser ${{ matrix.browser }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python scripts/production_visual_qa.py --mode browser --browser ${{ matrix.browser }} > /tmp/responsive-${{ matrix.browser }}.private.log 2>&1; then
+            echo 'Authenticated browser audit passed; private output withheld.'
+          else
+            result=$?
+            echo '::error::Authenticated browser audit failed; raw response and screenshot output withheld.'
+            exit "$result"
+          fi
   production-release-attestation:
     name: Final production release attestation
     if: github.event_name == 'push' && always()
@@ -884,7 +896,6 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"action":"verify-production-release-attestation"}' \
             https://koasevents.com/api/system-health/github-main-signal)"
-          cat /tmp/koa-production-attestation.json
           test "$http_status" = "200"
           python - <<'PY'
           import json, os
@@ -1006,6 +1017,81 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}"
           node -e "const x=require('/tmp/koa-production-release-status.json'); process.exit(x.state==='success'?0:1)"
 
+      - name: Persist certified release attestation history
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          fail_history() {
+            trap - ERR
+            # Inline payload generation avoids an indented Bash heredoc terminator.
+            python -c 'import json,os; payload={"state":"failure","context":"System Health production release gate","description":"Production release blocked: certified release history could not be persisted.","target_url":"https://github.com/{}/actions/runs/{}".format(os.environ["GITHUB_REPOSITORY"],os.environ["GITHUB_RUN_ID"])}; open("/tmp/koa-release-history-failure-status.json","w").write(json.dumps(payload,separators=(",",":")))'
+            curl -sS -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              -H "Content-Type: application/json" \
+              --data-binary @/tmp/koa-release-history-failure-status.json \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" >/dev/null || true
+            exit 1
+          }
+          trap fail_history ERR
+          python - <<'PY'
+          import json, os
+          att=json.load(open("/tmp/koa-production-attestation.json"))
+          health_response=json.load(open("/tmp/koa-final-health.json"))
+          current=health_response.get("current") or {}
+          payload={
+            "action":"record-production-release-attestation",
+            "productionGateState":"success",
+            "visualQaRunId":os.environ["GITHUB_RUN_ID"],
+            "visualQaConclusion":"success",
+            "health":{
+              "sha":health_response.get("sha"),
+              "deployId":health_response.get("deployId"),
+              "overall":current.get("overall"),
+              "passed":current.get("passed"),
+              "failed":current.get("failed"),
+              "checkedAt":current.get("checkedAt"),
+            },
+          }
+          assert att.get("deployId")==health_response.get("deployId")
+          open("/tmp/koa-release-history-request.json","w").write(json.dumps(payload,separators=(",",":")))
+          PY
+          response="$(curl -fsSL -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=koasevents-system-health")"
+          token="$(python -c 'import json,sys; print(json.load(sys.stdin)["value"])' <<<"$response")"
+          http_status="$(curl -sS \
+            --connect-timeout 15 \
+            --max-time 60 \
+            -o /tmp/koa-release-history-response.json \
+            -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer $token" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/koa-release-history-request.json \
+            https://koasevents.com/api/system-health/github-main-signal)"
+          test "$http_status" = "200"
+          python - <<'PY'
+          import json, os
+          data=json.load(open("/tmp/koa-release-history-response.json"))
+          assert data.get("ok") is True
+          assert data.get("recorded") is True
+          assert data.get("expectedSha")==os.environ["GITHUB_SHA"]
+          assert data.get("deployId")==data.get("liveDeployId")
+          att=data.get("releaseAttestation") or {}
+          assert att.get("status")=="verified"
+          assert att.get("productionGateState")=="success"
+          assert att.get("matchingDeployId") is True
+          print("Certified release history persisted:",json.dumps({
+            "commit":data.get("expectedSha"),
+            "deployId":data.get("deployId"),
+            "verifiedAt":att.get("verifiedAt"),
+          },separators=(",",":")))
+          PY
+          trap - ERR
+
   qa-summary:
     name: Visual QA summary
     if: always()
@@ -1027,5 +1113,5 @@ jobs:
             echo '| Live responsive visual audit | ${{ needs.visual-audit.result }} |'
             echo '| Final production release attestation | ${{ needs.production-release-attestation.result }} |'
             echo
-            echo 'The browser artifacts contain full-page screenshots, report.json, and a human-readable report.html.'
+            echo 'Only synthetic PR browser artifacts are retained publicly; authenticated production evidence remains private.'
           } >> "$GITHUB_STEP_SUMMARY"

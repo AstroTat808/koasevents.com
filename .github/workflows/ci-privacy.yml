@@ -21,5 +21,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Scan workflow definitions for prohibited production-data handling
-        run: node scripts/ci_privacy_gate.mjs
+      - name: Scan workflow definitions and prove private evidence handling
+        run: npm run test:ci-privacy
