@@ -21,6 +21,7 @@ import {
   readProductionReleases,
   readAllProductionReleaseAudits,
   readProductionVisualThumbnail,
+  readAccordionReleaseScreenshot,
   rollbackReadySummary,
   runSafeCriticalIntegrationRollbackDrill,
   readUptimeHistory,
@@ -623,6 +624,27 @@ export default async (req:Request,context:Context) => {
   if(auth.response) return auth.response;
   const admin=hasCapability(auth.user,'health.manage');
   const requestUrl=new URL(req.url);
+
+  if(req.method==='GET'&&requestUrl.searchParams.get('action')==='accordion-qa-screenshot'){
+    const deployId=String(requestUrl.searchParams.get('deployId')||'').trim();
+    const key=String(requestUrl.searchParams.get('key')||'').trim();
+    if(!/^[a-zA-Z0-9_-]{8,120}$/.test(deployId)||!/^(chromium|webkit)-(phone|desktop)$/.test(key)){
+      return Response.json({error:'Invalid screenshot reference.'},{status:400,headers:{'Cache-Control':'private, no-store'}});
+    }
+    const shot=await readAccordionReleaseScreenshot(context,deployId,key);
+    if(!shot)return Response.json({error:'Accordion release screenshot not found.'},{status:404,headers:{'Cache-Control':'private, no-store'}});
+    const bytes=Uint8Array.from(atob(String(shot.dataBase64)),char=>char.charCodeAt(0));
+    return new Response(bytes,{
+      status:200,
+      headers:{
+        'Content-Type':'image/jpeg',
+        'Content-Disposition':'inline; filename="koa-accordion-'+key+'.jpg"',
+        'Cache-Control':'private, no-store',
+        'X-Content-Type-Options':'nosniff',
+        'Content-Security-Policy':"default-src 'none'",
+      },
+    });
+  }
 
   if(req.method==='GET'&&requestUrl.searchParams.get('action')==='dark-mode-qa-screenshot'){
     const deployId=String(requestUrl.searchParams.get('deployId')||'').trim();
