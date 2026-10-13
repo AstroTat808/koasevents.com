@@ -8,6 +8,7 @@ import {
   readLatestHealth,
   readLatestHourlyHealth,
   readProductionReleases,
+  persistAccordionReleaseEvidence,
   recordGithubMainSignal,
   recordProductionRelease,
   recordProductionVisualThumbnail,
@@ -20,6 +21,7 @@ import { runHealthDashboardRefresh } from './admin-health.mts';
 import { buildBulkAccountingRepairPreview, readQuickBooksSalesRecords } from './admin-quickbooks.mts';
 import { getQuickBooksSettings } from './_shared/quickbooks';
 import { isSuccessfulNetlifyState, productionDeployMatchesAttestation } from './_shared/production-release-policy.mjs';
+import { validateAccordionReleaseEvidence } from './_shared/accordion-release-evidence.mjs';
 import { resolveTenantAsync, runWithTenant } from './_shared/tenant';
 
 const ISSUER='https://token.actions.githubusercontent.com';
@@ -759,6 +761,16 @@ export default async (req:Request,context:Context) => {
           },{status:409,headers:{'Cache-Control':'no-store'}});
         }
 
+        const accordionEvidence=validateAccordionReleaseEvidence(body?.accordionEvidence,{
+          commit:expectedSha,deployId,runId,
+        });
+        for(const shot of accordionEvidence.results){
+          const actualDigest=createHash('sha256').update(Buffer.from(shot.dataBase64,'base64')).digest('hex');
+          if(actualDigest!==shot.sha256)throw new Error('Accordion screenshot integrity mismatch.');
+        }
+        // Record each mocked-session image durably before the release is certified.
+        const durableAccordion=await persistAccordionReleaseEvidence(context,deployId,accordionEvidence);
+
         const releaseAttestation={
           status:'verified' as const,
           verifiedAt:new Date().toISOString(),
@@ -770,14 +782,21 @@ export default async (req:Request,context:Context) => {
           systemHealth:{overall:'healthy',passed:Number(health.passed),failed:0,checkedAt},
           productionGateState:'success',
           source:'github-actions-oidc' as const,
+          accordionEvidence:durableAccordion,
         };
         const recorded:any=await recordProductionRelease(context,{
           deployId,commit:expectedSha,publishedAt,releaseAttestation,
         });
+        const persisted=(await readProductionReleases(context,100)).find(
+          (row:any)=>row?.deployId===deployId&&row?.commit===expectedSha,
+        );
         const recordedOk=recorded?.releaseAttestation?.status==='verified'
-          &&recorded?.releaseAttestation?.expectedSha===expectedSha
-          &&recorded?.releaseAttestation?.deployId===deployId
-          &&recorded?.releaseAttestation?.matchingDeployId===true;
+          &&persisted?.releaseAttestation?.status==='verified'
+          &&persisted?.releaseAttestation?.expectedSha===expectedSha
+          &&persisted?.releaseAttestation?.deployId===deployId
+          &&persisted?.releaseAttestation?.matchingDeployId===true
+          &&persisted?.releaseAttestation?.accordionEvidence?.status==='passed'
+          &&persisted?.releaseAttestation?.accordionEvidence?.results?.length===4;
         return Response.json({
           ok:recordedOk,recorded:recordedOk,expectedSha,deployId,liveDeployId,
           releaseAttestation:recorded?.releaseAttestation||releaseAttestation,
