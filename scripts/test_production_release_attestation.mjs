@@ -156,11 +156,17 @@ const healthApi=readFileSync('netlify/functions/admin-health.mts','utf8');
 const qaScript=readFileSync('scripts/production_visual_qa.py','utf8');
 assert(workflow.includes('Download exact-run synthetic System Health browser evidence')
     &&workflow.includes('actions/download-artifact@v4')
+    &&workflow.includes('name: koa-accordion-synthetic-')
+    &&!workflow.includes('name: koa-system-health-mobile-')
+    &&workflow.includes('python scripts/prepare_accordion_release_evidence.py --collect')
     &&workflow.includes('python scripts/prepare_accordion_release_evidence.py')
     &&workflow.includes('payload["accordionEvidence"]')
     &&workflow.includes('assert len(accordion.get("results") or [])==4'),
   'Production final attestation must refuse missing exact-run accordion screenshots.');
-assert(accordionPrep.includes('sectionCollapse')
+assert(accordionPrep.includes('accordion-synthetic')
+    &&accordionPrep.includes('staged_names')
+    &&accordionPrep.includes('no raw health snapshot staged')
+    &&accordionPrep.includes('sectionCollapse')
     &&accordionPrep.includes('hashlib.sha256')
     &&qaScript.includes('accordion-{viewport_name}.jpg')
     &&qaScript.includes('SYNTHETIC SYSTEM HEALTH QA'),
