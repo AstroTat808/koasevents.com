@@ -93,7 +93,7 @@ for(const file of walk(workflowsDir)){
     const dest=outputMatch[1]||outputMatch[2]||outputMatch[3]||'';
     const variable=dest.match(/^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/)?.[1]||'';
     const assignments=variable?lines.slice(0,i).filter(line=>
-      new RegExp('^\\\\s*'+variable+'\\\\s*=').test(line)
+      new RegExp('^\\s*'+variable+'\\s*=').test(line)
     ):[];
     const last=assignments[assignments.length-1]||'';
     const privateOutput=dest.startsWith('/tmp/')
